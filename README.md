@@ -13,8 +13,10 @@ The official Laravel AI SDK.
 
 - [Installation](#installation)
 - [Agents](#agents)
-    - [Streaming](#streaming)
+    - [Conversation Context](#conversation-context)
+    - [Tools](#tools)
     - [Structured Output](#structured-output)
+    - [Streaming](#streaming)
 
 ## Installation
 
@@ -57,23 +59,94 @@ $response = (new SalesCoach)->prompt('Analyze this sales transcript...');
 return (string) $response;
 ```
 
-### Streaming
+### Conversation Context
 
-You may stream an agent's response by invoking the `stream` method. The returned `StreamableAgentResponse` may be returned from a route to automatically send a streaming response to the client:
+If your agent implements the `Conversational` interface, you may use the `messages` method to return the previous conversation context, if applicable:
 
 ```php
-Route::get('/coach', function () {
-    return (new SalesCoach)->stream('Analyze this sales transcript...');
-});
+use App\Models\History;
+use Laravel\Ai\Messages\Message;
+
+/**
+ * Get the list of messages comprising the conversation so far.
+ */
+public function messages(): iterable
+{
+    return History::where('user_id', $this->user->id)
+        ->latest()
+        ->limit(50)
+        ->get()
+        ->reverse()
+        ->map(function ($message) {
+            return new Message($message->role, $message->content);
+        })->all();
+}
 ```
 
-Alternatively, you may iterate through the streamed events manually:
+### Tools
+
+Tools may be used to give agents additional functionality that they can utilize while responding to prompts. Tools can be created using the `make:tool` Artisan command:
+
+```shell
+php artisan make:tool RandomNumberGenerator
+```
+
+The generated tool will be placed in your application's `app/Ai/Tools` directory. Each tool contains a `handle` method that will be invoked by the agent when it needs to utilize the tool:
 
 ```php
-$stream (new SalesCoach)->stream('Analyze this sales transcript...');
+<?php
 
-foreach ($stream as $event) {
-    // ...
+namespace App\Ai\Tools;
+
+use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Laravel\Ai\Contracts\Tool;
+
+class RandomNumberGenerator implements Tool
+{
+    /**
+     * Get the description of the tool's purpose.
+     */
+    public function description(): string
+    {
+        return 'This tool may be used to generate cryptographically secure random numbers.';
+    }
+
+    /**
+     * Execute the tool.
+     */
+    public function handle(array $input): string
+    {
+        return (string) random_int($input['min'], $input['max']);
+    }
+
+    /**
+     * Get the tool's schema definition.
+     */
+    public function schema(JsonSchema $schema): array
+    {
+        return [
+            'min' => $schema->integer()->min(0)->required(),
+            'max' => $schema->integer()->required(),
+        ];
+    }
+}
+```
+
+Once you have defined your tool, you may return it from the `tools` method of any of your agents:
+
+```php
+use App\Ai\Tools\RandomNumberGenerator;
+
+/**
+ * Get the tools available to the agent.
+ *
+ * @return Tool[]
+ */
+public function tools(): iterable
+{
+    return [
+        new RandomNumberGenerator,
+    ];
 }
 ```
 
@@ -115,6 +188,26 @@ When prompting an agent that returns structured output, you can access the retur
 $response = (new SalesCoach)->prompt('Analyze this sales transcript...');
 
 return $response['score'];
+```
+
+### Streaming
+
+You may stream an agent's response by invoking the `stream` method. The returned `StreamableAgentResponse` may be returned from a route to automatically send a streaming response to the client:
+
+```php
+Route::get('/coach', function () {
+    return (new SalesCoach)->stream('Analyze this sales transcript...');
+});
+```
+
+Alternatively, you may iterate through the streamed events manually:
+
+```php
+$stream (new SalesCoach)->stream('Analyze this sales transcript...');
+
+foreach ($stream as $event) {
+    // ...
+}
 ```
 
 ## Contributing
