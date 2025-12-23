@@ -68,15 +68,14 @@ The default models used for text, images, audio, transcription, and embeddings m
 
 ### Provider Support
 
-**Text:** OpenAI, Anthropic, Gemini, Groq, xAI
-
-**Images:** OpenAI, Gemini, xAI
-
-**TTS:** OpenAI, ElevenLabs
-
-**STT:** OpenAI, ElevenLabs
-
-**Embeddings:** OpenAI, Gemini
+| Provider     | Text | Images | TTS | STT | Embeddings |
+|--------------|------|--------|-----|-----|------------|
+| OpenAI       | ✓    | ✓      | ✓   | ✓   | ✓          |
+| Anthropic    | ✓    | ×      | ×   | ×   | ×          |
+| Gemini       | ✓    | ✓      | ×   | ×   | ✓          |
+| Groq         | ✓    | ×      | ×   | ×   | ×          |
+| xAI          | ✓    | ✓      | ×   | ×   | ×          |
+| ElevenLabs   | ×    | ×      | ✓   | ✓   | ×          |
 
 ## Agents
 
