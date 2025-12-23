@@ -23,7 +23,7 @@ class Error extends StreamEvent
         return [
             'id' => $this->id,
             'invocation_id' => $this->invocationId,
-            'type' => $this->errorType,
+            'type' => $this->type,
             'message' => $this->message,
             'recoverable' => $this->recoverable,
             'timestamp' => $this->timestamp,
