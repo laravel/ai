@@ -22,6 +22,7 @@ The official Laravel AI SDK.
     - [Attachments](#attachments)
     - [Streaming](#streaming)
     - [Queueing](#queueing)
+    - [Anonymous Agents](#anonymous-agents)
 - [Images](#images)
 - [Audio (TTS)](#audio)
 - [Transcription (STT)](#transcription)
@@ -399,6 +400,34 @@ Route::post('/coach', function (Request $request) {
 
     return back();
 });
+```
+
+### Anonymous Agents
+
+Sometimes you may want to quickly interact with a model without creating a dedicated agent class. You can create an ad-hoc, anonymous agent using the `agent` function:
+
+```php
+use function Laravel\Ai\{agent};
+
+$response = agent(
+    instructions: 'You are an expert at software development.',
+    messages: [],
+    tools: [],
+)->prompt('Tell me about Laravel')
+```
+
+Anonymous agents may also produce structured output:
+
+```php
+use Illuminate\Contracts\JsonSchema\JsonSchema;
+
+use function Laravel\Ai\{agent};
+
+$response = agent(
+    schema: fn (JsonSchema $schema) => [
+        'number' => $schema->integer()->required(),
+    ],
+)->prompt('Generate a random number less than 100')
 ```
 
 ## Images
