@@ -9,6 +9,9 @@ class GeneratedImage
 {
     use Storable;
 
+    /**
+     * @param  string  $image  The Base64 representation of the image.
+     */
     public function __construct(
         public string $image,
         public ?string $mime = null,
@@ -33,5 +36,13 @@ class GeneratedImage
     public function raw(): string
     {
         return base64_decode($this->image);
+    }
+
+    /**
+     * Get the raw string content of the image.
+     */
+    public function __toString(): string
+    {
+        return $this->raw();
     }
 }

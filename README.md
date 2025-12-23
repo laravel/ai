@@ -13,6 +13,7 @@ The official Laravel AI SDK.
 
 - [Installation](#installation)
     - [Configuration](#configuration)
+    - [Provider Support](#provider-support)
 - [Agents](#agents)
     - [Prompting](#prompting)
     - [Conversation Context](#conversation-context)
@@ -21,6 +22,10 @@ The official Laravel AI SDK.
     - [Attachments](#attachments)
     - [Streaming](#streaming)
     - [Queueing](#queueing)
+- [Images](#images)
+- [Audio (TTS)](#audio)
+- [Transcription (STT)](#transcription)
+- [Embeddings](#embeddings)
 
 ## Installation
 
@@ -55,6 +60,14 @@ OPENAI_API_KEY=
 XAI_API_KEY=
 ```
 
+### Provider Support
+
+**Text:** OpenAI, Anthropic, Gemini, Groq, xAI
+**Images:**: OpenAI, Gemini, xAI
+**TTS:**: OpenAI, ElevenLabs
+**STT:**: OpenAI, ElevenLabs
+**Embeddings:**: OpenAI, Gemini
+
 ## Agents
 
 You can create an agent via the package's Artisan commands:
@@ -65,7 +78,76 @@ php artisan make:agent SalesCoach
 php artisan make:agent SalesCoach --structured
 ```
 
-Within the generated agent class, you can define the system prompt / instructions, message context, available tools, and output schema (if applicable).
+Within the generated agent class, you can define the system prompt / instructions, message context, available tools, and output schema (if applicable):
+
+```php
+<?php
+
+namespace App\Ai\Agents;
+
+use App\Ai\Tools\RetrievePreviousTranscripts;
+use App\Models\History;
+use App\Models\User;
+use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\Conversational;
+use Laravel\Ai\Contracts\HasStructuredOutput;
+use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Promptable;
+
+class SalesCoach implements Agent, Conversational, HasTools, HasStructuredOutput
+{
+    use Promptable;
+
+    public function __construct(public User $user) {}
+
+    /**
+     * Get the instructions that the agent should follow.
+     */
+    public function instructions(): string
+    {
+        return 'You are a sales coach, analyzing transcripts and providing feedback and an overall sales strength score .';
+    }
+
+    /**
+     * Get the list of messages comprising the conversation so far.
+     */
+    public function messages(): iterable
+    {
+        return History::where('user_id', $this->user->id)
+            ->latest()
+            ->limit(50)
+            ->get()
+            ->reverse()
+            ->map(function ($message) {
+                return new Message($message->role, $message->content);
+            })->all();
+    }
+
+    /**
+     * Get the tools available to the agent.
+     *
+     * @return Tool[]
+     */
+    public function tools(): iterable
+    {
+        return [
+            new RetrievePreviousTranscripts,
+        ];
+    }
+
+    /**
+     * Get the agent's structured output schema definition.
+     */
+    public function schema(JsonSchema $schema): array
+    {
+        return [
+            'feedback' => $schema->string()->required(),
+            'score' => $schema->integer()->min(1)->max(10)->required(),
+        ];
+    }
+}
+```
 
 ### Prompting
 
@@ -284,6 +366,117 @@ Route::post('/coach', function (Request $request) {
     return back();
 });
 ```
+
+## Images
+
+The `Laravel\Ai\Image` class may be used to generate images using the `openai`, `gemini`, or `xai` providers:
+
+```php
+use Laravel\Ai\Image;
+
+$image = Image::of('A donut sitting on the kitchen counter')->generate();
+
+$rawContent = (string) $image;
+```
+
+The `square`, `portrait`, and `landscape` methods may be used to control the aspect ratio of the image, while the `quality` method may be used to guide the model on final image quality (`high`, `medium`, `low`):
+
+```php
+use Laravel\Ai\Image;
+
+$image = Image::of('A donut sitting on the kitchen counter')
+    ->quality('high')
+    ->landscape()
+    ->generate();
+```
+
+Generated images may be easily stored on the default disk configured in your application's `config/filesystems.php` configuration file:
+
+```php
+$image = Image::of('A donut sitting on the kitchen counter');
+
+$path = $image->store();
+$path = $image->storeAs('image.jpg');
+$path = $image->storePublicly();
+$path = $image->storePubliclyAs('image.jpg');
+```
+
+Image generation may also be queued:
+
+```php
+use Laravel\Ai\Image;
+use Laravel\Ai\Responses\ImageResponse;
+
+Image::of('A donut sitting on the kitchen counter')
+    ->portrait()
+    ->queue(function (ImageResponse $image) {
+        $path = $image->store();
+
+        // ...
+    });
+```
+
+## Audio
+
+The `Laravel\Ai\Audio` class may be used to generate audio from the given text:
+
+```php
+use Laravel\Ai\Audio;
+
+$audio = Audio::of('I love coding with Laravel.')->generate();
+
+$rawContent = (string) $audio;
+```
+
+The `male`, `female`, and `voice` methods may be used to determine the voice of the generated audio:
+
+```php
+$audio = Audio::of('I love coding with Laravel.')
+    ->female()
+    ->generate();
+
+$audio = Audio::of('I love coding with Laravel.')
+    ->voice('voice-id-or-name')
+    ->generate();
+```
+
+Similarly, the `instructions` method may be used to dynamically coach the model on how the generated audio should sound:
+
+```php
+$audio = Audio::of('I love coding with Laravel.')
+    ->female()
+    ->instructions('Said like a pirate')
+    ->generate();
+```
+
+Generated audio may be easily stored on the default disk configured in your application's `config/filesystems.php` configuration file:
+
+```php
+$audio = Audio::of('I love coding with Laravel.')->generate();
+
+$path = $audio->store();
+$path = $audio->storeAs('audio.mp3');
+$path = $audio->storePublicly();
+$path = $audio->storePubliclyAs('audio.mp3');
+```
+
+Audio generation may also be queued:
+
+```php
+use Laravel\Ai\Audio;
+use Laravel\Ai\Responses\AudioResponse;
+
+Audio::of('I love coding with Laravel.')
+    ->queue(function (AudioResponse $audio) {
+        $path = $image->store();
+
+        // ...
+    });
+```
+
+## Transcriptions
+
+## Embeddings
 
 ## Contributing
 
