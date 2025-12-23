@@ -424,6 +424,20 @@ $image = Image::of('A donut sitting on the kitchen counter')
     ->generate();
 ```
 
+You may attach reference images using the `attachments` method:
+
+```php
+use Laravel\Ai\Image;
+use Laravel\Ai\Messages\Attachments\Image;
+
+$image = Image::of('Update this photo of me to be in the style of a impressionist painting.')
+    ->attachments([
+        Image::fromStorage('photo.jpg'),
+    ])
+    ->landscape()
+    ->generate();
+```
+
 Generated images may be easily stored on the default disk configured in your application's `config/filesystems.php` configuration file:
 
 ```php
