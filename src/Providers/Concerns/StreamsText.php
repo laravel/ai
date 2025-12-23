@@ -12,7 +12,7 @@ use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Data\Meta;
 use Laravel\Ai\Events\AgentStreamed;
 use Laravel\Ai\Events\StreamingAgent;
-use Laravel\Ai\Messages\Message;
+use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 
@@ -21,11 +21,11 @@ trait StreamsText
     /**
      * Stream the response from the given agent.
      */
-    public function stream(Agent $agent, string $prompt, string $model): StreamableAgentResponse
+    public function stream(Agent $agent, string $prompt, array $attachments, string $model): StreamableAgentResponse
     {
         $invocationId = (string) Str::uuid7();
 
-        return new StreamableAgentResponse($invocationId, function () use ($invocationId, $agent, $prompt, $model) {
+        return new StreamableAgentResponse($invocationId, function () use ($invocationId, $agent, $prompt, $attachments, $model) {
             if ($agent instanceof HasStructuredOutput) {
                 throw new InvalidArgumentException('Streaming structured output is not currently supported.');
             }
@@ -36,7 +36,7 @@ trait StreamsText
 
             $messages = $agent instanceof Conversational ? $agent->messages() : [];
 
-            $messages[] = new Message('user', $prompt);
+            $messages[] = new UserMessage($prompt, $attachments);
 
             $events = [];
 

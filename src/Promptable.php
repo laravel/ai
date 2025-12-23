@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Queue\SerializesModels;
 use Laravel\Ai\Exceptions\FailoverableException;
+use Laravel\Ai\Jobs\BroadcastAgent;
 use Laravel\Ai\Jobs\InvokeAgent;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\AgentResponse;
@@ -32,10 +33,10 @@ trait Promptable
     /**
      * Invoke the agent with a given prompt and return a streamable response.
      */
-    public function stream(string $prompt, ?string $provider = null, ?string $model = null): StreamableAgentResponse
+    public function stream(string $prompt, array $attachments = [], ?string $provider = null, ?string $model = null): StreamableAgentResponse
     {
         return $this->withModelFailover(
-            fn ($provider, $model) => $provider->stream($this, $prompt, $model),
+            fn ($provider, $model) => $provider->stream($this, $prompt, $attachments, $model),
             $provider,
             $model,
         );
@@ -54,9 +55,9 @@ trait Promptable
     /**
      * Invoke the agent with a given prompt and broadcast the streamed events.
      */
-    public function broadcast(string $prompt, Channel|array $channels, bool $now = false, ?string $provider = null, ?string $model = null): StreamableAgentResponse
+    public function broadcast(string $prompt, Channel|array $channels, array $attachments = [], bool $now = false, ?string $provider = null, ?string $model = null): StreamableAgentResponse
     {
-        return $this->stream($prompt, $provider, $model)
+        return $this->stream($prompt, $attachments, $provider, $model)
             ->each(function (StreamEvent $event) use ($channels, $now) {
                 $event->{$now ? 'broadcastNow' : 'broadcast'}($channels);
             });
@@ -65,9 +66,19 @@ trait Promptable
     /**
      * Invoke the agent with a given prompt and broadcast the streamed events immediately.
      */
-    public function broadcastNow(string $prompt, Channel|array $channels, ?string $provider = null, ?string $model = null): StreamableAgentResponse
+    public function broadcastNow(string $prompt, Channel|array $channels, array $attachments = [], ?string $provider = null, ?string $model = null): StreamableAgentResponse
     {
-        return $this->broadcast($prompt, $channels, now: true, provider: $provider, model: $model);
+        return $this->broadcast($prompt, $channels, $attachments, now: true, provider: $provider, model: $model);
+    }
+
+    /**
+     * Invoke the agent with a given prompt and broadcast the streamed events.
+     */
+    public function broadcastOnQueue(string $prompt, Channel|array $channels, array $attachments = [], ?string $provider = null, ?string $model = null): QueuedAgentResponse
+    {
+        return new QueuedAgentResponse(
+            BroadcastAgent::dispatch($this, $prompt, $channels, $attachments, $provider, $model)
+        );
     }
 
     /**

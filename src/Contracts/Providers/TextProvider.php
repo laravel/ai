@@ -16,7 +16,7 @@ interface TextProvider
     /**
      * Stream the response from the given agent.
      */
-    public function stream(Agent $agent, string $prompt, string $model): StreamableAgentResponse;
+    public function stream(Agent $agent, string $prompt, array $attachments, string $model): StreamableAgentResponse;
 
     /**
      * Get the name of the default text model.
