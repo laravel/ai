@@ -33,4 +33,16 @@ class ToolResult extends StreamEvent
             'timestamp' => $this->timestamp,
         ];
     }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function toVercelProtocolArray(): ?array
+    {
+        return [
+            'type' => 'tool-output-available',
+            'toolCallId' => $this->toolResult->id,
+            'output' => $this->toolResult->result,
+        ];
+    }
 }

@@ -4,6 +4,8 @@ namespace Laravel\Ai\Responses\Concerns;
 
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
+use Laravel\Ai\Streaming\Events\ToolCall;
+use Laravel\Ai\Streaming\Events\ToolResult;
 
 trait CanStreamUsingVercelProtocol
 {
@@ -19,6 +21,8 @@ trait CanStreamUsingVercelProtocol
         {
             public bool $streamStarted = false;
 
+            public array $toolCalls = [];
+
             public ?array $lastStreamEndEvent = null;
         };
 
@@ -33,6 +37,17 @@ trait CanStreamUsingVercelProtocol
                     }
 
                     $state->streamStarted = true;
+                }
+
+                // Store initaited tool calls...
+                if ($event instanceof ToolCall) {
+                    $state->toolCalls[$event->toolCall->id] = true;
+                }
+
+                // Skip tool results if no prior associated tool call...
+                if ($event instanceof ToolResult &&
+                    ! isset($state->toolCalls[$event->toolResult->id])) {
+                    continue;
                 }
 
                 // Save the last stream end event until the very end...
