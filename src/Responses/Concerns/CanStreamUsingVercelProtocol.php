@@ -15,8 +15,10 @@ trait CanStreamUsingVercelProtocol
      */
     protected function toVercelProtocolResponse()
     {
-        $state = new class {
+        $state = new class
+        {
             public $streamStarted = false;
+
             public ?array $lastStreamEndEvent = null;
         };
 
