@@ -36,7 +36,7 @@ class MakeAgentCommandTest extends TestCase
             '--force' => true,
         ])->assertExitCode(0)->run();
 
-        $this->assertFileExists(base_path('stubs/ai/agent.stub'));
-        $this->assertFileExists(base_path('stubs/ai/structured-agent.stub'));
+        $this->assertFileExists(base_path('stubs/agent.stub'));
+        $this->assertFileExists(base_path('stubs/structured-agent.stub'));
     }
 }

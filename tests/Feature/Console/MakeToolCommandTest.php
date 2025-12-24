@@ -24,6 +24,6 @@ class MakeToolCommandTest extends TestCase
             '--force' => true,
         ])->assertExitCode(0)->run();
 
-        $this->assertFileExists(base_path('stubs/ai/tool.stub'));
+        $this->assertFileExists(base_path('stubs/tool.stub'));
     }
 }
