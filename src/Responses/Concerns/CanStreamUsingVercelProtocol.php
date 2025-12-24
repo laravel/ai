@@ -17,7 +17,7 @@ trait CanStreamUsingVercelProtocol
     {
         $state = new class
         {
-            public $streamStarted = false;
+            public bool $streamStarted = false;
 
             public ?array $lastStreamEndEvent = null;
         };
