@@ -70,6 +70,8 @@ trait CanStreamUsingVercelProtocol
 
             yield "data: [DONE]\n\n";
         }, headers: [
+            'Content-Type' => 'text/plain; charset=utf-8',
+            'Cache-Control' => 'no-cache, no-transform',
             'x-vercel-ai-ui-message-stream' => 'v1',
         ]);
     }
