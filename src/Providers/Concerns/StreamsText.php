@@ -46,7 +46,7 @@ trait StreamsText
                 $invocationId,
                 $this,
                 $model,
-                $agent->instructions(),
+                (string) $agent->instructions(),
                 $messages,
                 $agent instanceof HasTools ? $agent->tools() : [],
                 $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null,

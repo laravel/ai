@@ -6,13 +6,14 @@ use Illuminate\Broadcasting\Channel;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\QueuedAgentResponse;
 use Laravel\Ai\Responses\StreamableAgentResponse;
+use Stringable;
 
 interface Agent
 {
     /**
      * Get the instructions that the agent should follow.
      */
-    public function instructions(): string;
+    public function instructions(): Stringable|string;
 
     /**
      * Invoke the agent with a given prompt.

@@ -104,6 +104,7 @@ use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Promptable;
+use Stringable;
 
 class SalesCoach implements Agent, Conversational, HasTools, HasStructuredOutput
 {
@@ -114,7 +115,7 @@ class SalesCoach implements Agent, Conversational, HasTools, HasStructuredOutput
     /**
      * Get the instructions that the agent should follow.
      */
-    public function instructions(): string
+    public function instructions(): Stringable|string
     {
         return 'You are a sales coach, analyzing transcripts and providing feedback and an overall sales strength score .';
     }
@@ -219,13 +220,14 @@ namespace App\Ai\Tools;
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
+use Stringable;
 
 class RandomNumberGenerator implements Tool
 {
     /**
      * Get the description of the tool's purpose.
      */
-    public function description(): string
+    public function description(): Stringable|string
     {
         return 'This tool may be used to generate cryptographically secure random numbers.';
     }
@@ -233,7 +235,7 @@ class RandomNumberGenerator implements Tool
     /**
      * Execute the tool.
      */
-    public function handle(array $input): string
+    public function handle(array $input): Stringable|string
     {
         return (string) random_int($input['min'], $input['max']);
     }

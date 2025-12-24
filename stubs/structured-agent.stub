@@ -8,6 +8,7 @@ use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Promptable;
+use Stringable;
 
 class {{ class }} implements Agent, Conversational, HasTools, HasStructuredOutput
 {
@@ -16,7 +17,7 @@ class {{ class }} implements Agent, Conversational, HasTools, HasStructuredOutpu
     /**
      * Get the instructions that the agent should follow.
      */
-    public function instructions(): string
+    public function instructions(): Stringable|string
     {
         return 'You are a helpful assistant.';
     }

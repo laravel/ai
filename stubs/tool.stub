@@ -4,13 +4,14 @@ namespace {{ namespace }};
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
+use Stringable;
 
 class {{ class }} implements Tool
 {
     /**
      * Get the description of the tool's purpose.
      */
-    public function description(): string
+    public function description(): Stringable|string
     {
         return 'A description of the tool.';
     }
@@ -18,7 +19,7 @@ class {{ class }} implements Tool
     /**
      * Execute the tool.
      */
-    public function handle(array $input): string
+    public function handle(array $input): Stringable|string
     {
         //
     }

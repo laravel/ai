@@ -147,7 +147,7 @@ class PrismGateway implements Gateway
             ->withTools(collect($tools)->map(function ($tool) {
                 return (new PrismTool)
                     ->as(class_basename($tool))
-                    ->for($tool->description())
+                    ->for((string) $tool->description())
                     ->when(
                         ! empty($tool->schema(new JsonSchemaTypeFactory)),
                         fn ($prismTool) => $prismTool->withParameter(
@@ -159,7 +159,7 @@ class PrismGateway implements Gateway
 
                         call_user_func($this->invokingToolCallback, $tool, $arguments);
 
-                        return tap($tool->handle($arguments), function ($result) use ($tool, $arguments) {
+                        return (string) tap($tool->handle($arguments), function ($result) use ($tool, $arguments) {
                             call_user_func($this->toolInvokedCallback, $tool, $arguments, $result);
                         });
                     })
