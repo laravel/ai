@@ -30,6 +30,7 @@ class AiServiceProvider extends ServiceProvider
     {
         if ($this->app->runningInConsole()) {
             $this->registerCommands();
+            $this->registerPublishing();
         }
 
         Stringable::macro('toEmbeddings', function (
@@ -52,5 +53,17 @@ class AiServiceProvider extends ServiceProvider
             MakeAgentCommand::class,
             MakeToolCommand::class,
         ]);
+    }
+
+    /**
+     * Register the package's publishable resources.
+     */
+    protected function registerPublishing(): void
+    {
+        $this->publishes([
+            __DIR__.'/../stubs/agent.stub' => base_path('stubs/agent.stub'),
+            __DIR__.'/../stubs/structured-agent.stub' => base_path('stubs/structured-agent.stub'),
+            __DIR__.'/../stubs/tool.stub' => base_path('stubs/tool.stub'),
+        ], 'ai-stubs');
     }
 }
