@@ -61,6 +61,10 @@ class AiServiceProvider extends ServiceProvider
     protected function registerPublishing(): void
     {
         $this->publishes([
+            __DIR__.'/../config/ai.php' => config_path('ai.php'),
+        ], ['ai', 'ai-config']);
+
+        $this->publishes([
             __DIR__.'/../stubs/agent.stub' => base_path('stubs/agent.stub'),
             __DIR__.'/../stubs/structured-agent.stub' => base_path('stubs/structured-agent.stub'),
             __DIR__.'/../stubs/tool.stub' => base_path('stubs/tool.stub'),
