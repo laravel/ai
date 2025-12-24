@@ -14,7 +14,7 @@ class AiServiceProvider extends ServiceProvider
      *
      * @return void
      */
-    public function register()
+    public function register(): void
     {
         $this->app->singleton(fn ($app): AiManager => new AiManager($app));
 
@@ -26,10 +26,11 @@ class AiServiceProvider extends ServiceProvider
      *
      * @return void
      */
-    public function boot()
+    public function boot(): void
     {
         if ($this->app->runningInConsole()) {
             $this->registerCommands();
+            $this->registerPublishing();
         }
 
         Stringable::macro('toEmbeddings', function (
@@ -52,5 +53,17 @@ class AiServiceProvider extends ServiceProvider
             MakeAgentCommand::class,
             MakeToolCommand::class,
         ]);
+    }
+
+    /**
+     * Register the package's publishable resources.
+     */
+    protected function registerPublishing(): void
+    {
+        $this->publishes([
+            __DIR__.'/../stubs/agent.stub' => base_path('stubs/ai/agent.stub'),
+            __DIR__.'/../stubs/structured-agent.stub' => base_path('stubs/ai/structured-agent.stub'),
+            __DIR__.'/../stubs/tool.stub' => base_path('stubs/ai/tool.stub'),
+        ], 'ai-stubs');
     }
 }
