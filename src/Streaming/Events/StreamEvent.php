@@ -54,6 +54,14 @@ abstract class StreamEvent
     }
 
     /**
+     * Get the array representation of the event that is compatible with the Vercel AI SDK.
+     */
+    public function toVercelProtocolArray(): ?array
+    {
+        return null;
+    }
+
+    /**
      * Get the string representation of the event.
      */
     public function __toString(): string

@@ -29,4 +29,15 @@ class StreamStart extends StreamEvent
             'metadata' => $this->metadata,
         ];
     }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function toVercelProtocolArray(): ?array
+    {
+        return [
+            'type' => 'start',
+            'messageId' => $this->id,
+        ];
+    }
 }

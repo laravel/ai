@@ -47,4 +47,14 @@ class StreamEnd extends StreamEvent
             'timestamp' => $this->timestamp,
         ];
     }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function toVercelProtocolArray(): ?array
+    {
+        return [
+            'type' => 'finish',
+        ];
+    }
 }

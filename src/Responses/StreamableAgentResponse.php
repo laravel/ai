@@ -13,6 +13,8 @@ use Traversable;
 
 class StreamableAgentResponse implements IteratorAggregate, Responsable
 {
+    use Concerns\CanStreamUsingVercelProtocol;
+
     public ?string $text;
 
     public ?Usage $usage;
@@ -20,6 +22,8 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     public Collection $events;
 
     protected array $thenCallbacks = [];
+
+    protected bool $usesVercelProtocol = false;
 
     public function __construct(public string $invocationId, protected Closure $generator)
     {
@@ -51,6 +55,18 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     }
 
     /**
+     * Stream the response using Vercel's AI SDK stream protocol.
+     *
+     * See: https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol
+     */
+    public function usingVercelProtocol(bool $value = true): self
+    {
+        $this->usesVercelProtocol = $value;
+
+        return $this;
+    }
+
+    /**
      * Create an HTTP response that represents the object.
      *
      * @param  \Illuminate\Http\Request  $request
@@ -58,6 +74,10 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
      */
     public function toResponse($request)
     {
+        if ($this->usesVercelProtocol) {
+            return $this->toVercelProtocolResponse();
+        }
+
         return response()->stream(function () {
             foreach ($this as $event) {
                 yield (string) $event;
