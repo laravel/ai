@@ -14,7 +14,7 @@ class AiServiceProvider extends ServiceProvider
      *
      * @return void
      */
-    public function register(): void
+    public function register()
     {
         $this->app->singleton(fn ($app): AiManager => new AiManager($app));
 
@@ -26,7 +26,7 @@ class AiServiceProvider extends ServiceProvider
      *
      * @return void
      */
-    public function boot(): void
+    public function boot()
     {
         if ($this->app->runningInConsole()) {
             $this->registerCommands();
