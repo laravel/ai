@@ -27,7 +27,7 @@ use function Laravel\Ai\ulid;
 
 class FakeProvider extends Provider implements TextProvider
 {
-    protected ?Provider $originalProvider = null;
+    protected ?TextProvider $originalProvider = null;
 
     protected ?string $originalModel = null;
 
