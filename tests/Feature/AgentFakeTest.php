@@ -29,7 +29,7 @@ class AgentFakeTest extends TestCase
     {
         AssistantAgent::fake([
             'First response',
-            'Second response',
+            new AgentResponse((string) Str::uuid7(), 'Second response', new Usage, new Meta),
         ]);
 
         $response = (new AssistantAgent)->stream('Test prompt');
