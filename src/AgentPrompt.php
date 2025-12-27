@@ -10,7 +10,7 @@ class AgentPrompt extends Prompt
 {
     public readonly Agent $agent;
 
-    public Collection $attachments;
+    public readonly Collection $attachments;
 
     public function __construct(
         Agent $agent,
