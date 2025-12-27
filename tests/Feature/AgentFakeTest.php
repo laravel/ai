@@ -35,9 +35,11 @@ class AgentFakeTest extends TestCase
         $response = (new AssistantAgent)->stream('Test prompt');
         $response->each(fn () => true);
         $this->assertEquals('First response', $response->text);
+        $this->assertCount(6, $response->events);
 
         $response = (new AssistantAgent)->stream('Test prompt');
         $response->each(fn () => true);
         $this->assertEquals('Second response', $response->text);
+        $this->assertCount(6, $response->events);
     }
 }
