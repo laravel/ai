@@ -4,6 +4,7 @@ namespace Laravel\Ai;
 
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\MultipleInstanceManager;
+use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
@@ -12,9 +13,9 @@ use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Gateway\Prism\PrismGateway;
 use Laravel\Ai\Providers\AnthropicProvider;
 use Laravel\Ai\Providers\ElevenLabsProvider;
+use Laravel\Ai\Providers\FakeProvider;
 use Laravel\Ai\Providers\GeminiProvider;
 use Laravel\Ai\Providers\GroqProvider;
-use Laravel\Ai\Providers\LoopbackProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\XaiProvider;
@@ -22,6 +23,11 @@ use LogicException;
 
 class AiManager extends MultipleInstanceManager
 {
+    /**
+     * All of the registered fake agent responses.
+     */
+    protected array $fakeAgentResponses = [];
+
     /**
      * The key name of the "driver" equivalent configuration option.
      *
@@ -159,17 +165,6 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
-     * Create a loopback provider instance, primarily used for testing.
-     */
-    public function createLoopbackDriver(array $config): LoopbackProvider
-    {
-        return new LoopbackProvider(
-            $config,
-            $this->app->make(Dispatcher::class)
-        );
-    }
-
-    /**
      * Create an xAI powered instance.
      */
     public function createXaiDriver(array $config): XaiProvider
@@ -178,6 +173,38 @@ class AiManager extends MultipleInstanceManager
             new PrismGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Fake the responses returned by the given agent.
+     */
+    public function fakeAgent(string $agent, array $responses): void
+    {
+        $this->fakeAgentResponses[$agent] = $responses;
+    }
+
+    /**
+     * Determine if the given agent has been faked.
+     */
+    public function hasFakeAgent(Agent|string $agent): bool
+    {
+        return array_key_exists(
+            is_string($agent) ? $agent : get_class($agent),
+            $this->fakeAgentResponses
+        );
+    }
+
+    /**
+     * Get a fake provider instance for the given agent.
+     */
+    public function fakeProviderFor(Agent $agent, Provider $originalProvider, string $originalModel): FakeProvider
+    {
+        return new FakeProvider(
+            $this->fakeAgentResponses[get_class($agent)] ?? [],
+            $originalProvider,
+            $originalModel,
+            $this->app['events']
         );
     }
 

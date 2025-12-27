@@ -12,7 +12,7 @@ class AgentPrompt extends Prompt
         public readonly Agent $agent,
         public string $prompt,
         public Collection $attachments,
-        public readonly string $provider,
+        public readonly TextProvider $provider,
         public readonly string $model
     ) {}
 
@@ -21,7 +21,7 @@ class AgentPrompt extends Prompt
      */
     public function provider(): TextProvider
     {
-        return Ai::textProvider($this->provider);
+        return $this->provider;
     }
 
     /**

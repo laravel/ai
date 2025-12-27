@@ -103,6 +103,10 @@ trait Promptable
 
             $model ??= $provider->defaultTextModel();
 
+            if (static::isFaked()) {
+                $provider = Ai::fakeProviderFor($this, $provider, $model);
+            }
+
             try {
                 return $callback($provider, $model);
             } catch (FailoverableException $e) {
@@ -123,7 +127,7 @@ trait Promptable
                 $this,
                 $prompt,
                 new Collection($attachments),
-                $provider->providerName(),
+                $provider,
                 $model
             ))
             ->through($this instanceof HasMiddleware ? $this->middleware() : [])
@@ -146,5 +150,21 @@ trait Promptable
         return Provider::formatProviderAndModelList(
             $provider ?? config('ai.default'), $model
         );
+    }
+
+    /**
+     * Fake the responses returned by the agent.
+     */
+    public static function fake(array $responses): void
+    {
+        Ai::fakeAgent(static::class, $responses);
+    }
+
+    /**
+     * Determine if the agent is currently faked.
+     */
+    public static function isFaked(): bool
+    {
+        return Ai::hasFakeAgent(static::class);
     }
 }

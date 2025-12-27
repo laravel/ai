@@ -17,7 +17,6 @@ use Laravel\Ai\Events\StreamingAgent;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
-use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
@@ -26,9 +25,17 @@ use Laravel\Ai\Streaming\Events\TextStart;
 
 use function Laravel\Ai\ulid;
 
-class LoopbackProvider extends Provider implements TextProvider
+class FakeProvider extends Provider implements TextProvider
 {
-    public function __construct(protected array $config, protected Dispatcher $events) {}
+    protected array $config = ['driver' => 'fake'];
+
+    protected int $currentResponseIndex = 0;
+
+    public function __construct(
+        protected array $responses,
+        protected Provider $originalProvider,
+        protected string $originalModel,
+        protected Dispatcher $events) {}
 
     /**
      * Invoke the given agent.
@@ -41,20 +48,7 @@ class LoopbackProvider extends Provider implements TextProvider
             new InvokingAgent($invocationId, $this, $model, $agent, $prompt)
         );
 
-        $response = $agent instanceof HasStructuredOutput
-            ? new StructuredAgentResponse(
-                $invocationId,
-                ['output' => $prompt],
-                $prompt,
-                new Usage,
-                new Meta($this->providerName(), $model)
-            )
-            : new AgentResponse(
-                $invocationId,
-                $prompt,
-                new Usage,
-                new Meta($this->providerName(), $model)
-            );
+        $response = $this->responses[$this->currentResponseIndex];
 
         $this->events->dispatch(
             new AgentInvoked($invocationId, $this, $model, $agent, $prompt, $response)
@@ -84,7 +78,9 @@ class LoopbackProvider extends Provider implements TextProvider
             yield new StreamStart(ulid(), $this->providerName(), $model, time());
             yield new TextStart(ulid(), $messageId, time());
 
-            $events = Str::of($prompt)
+            $fakeResponse = $this->responses[$this->currentResponseIndex];
+
+            $events = Str::of($fakeResponse->text)
                 ->explode(' ')
                 ->map(fn ($word, $index) => new TextDelta(
                     ulid(),
@@ -117,6 +113,6 @@ class LoopbackProvider extends Provider implements TextProvider
      */
     public function defaultTextModel(): string
     {
-        return 'laravel/loopback-text';
+        return 'laravel/fake-text';
     }
 }
