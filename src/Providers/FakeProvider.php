@@ -156,7 +156,7 @@ class FakeProvider extends Provider implements TextProvider
             ),
             $response instanceof Closure => $this->marshalResponse(
                 $response(new AgentPrompt(
-                    $agent, $prompt, new Collection($attachments), $this, $model
+                    $agent, $prompt, $attachments, $this, $model
                 ), $invocationId),
                 $invocationId,
                 $agent,

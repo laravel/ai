@@ -126,7 +126,7 @@ trait Promptable
             ->send(new AgentPrompt(
                 $this,
                 $prompt,
-                new Collection($attachments),
+                $attachments,
                 $provider,
                 $model
             ))
