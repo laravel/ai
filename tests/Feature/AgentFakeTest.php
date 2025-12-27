@@ -24,4 +24,20 @@ class AgentFakeTest extends TestCase
         $response = (new AssistantAgent)->prompt('Test prompt');
         $this->assertEquals('Second response', $response->text);
     }
+
+    public function test_agent_streams_can_be_faked(): void
+    {
+        AssistantAgent::fake([
+            new AgentResponse((string) Str::uuid7(), 'First response', new Usage, new Meta),
+            new AgentResponse((string) Str::uuid7(), 'Second response', new Usage, new Meta),
+        ]);
+
+        $response = (new AssistantAgent)->stream('Test prompt');
+        $response->each(fn () => true);
+        $this->assertEquals('First response', $response->text);
+
+        $response = (new AssistantAgent)->stream('Test prompt');
+        $response->each(fn () => true);
+        $this->assertEquals('Second response', $response->text);
+    }
 }

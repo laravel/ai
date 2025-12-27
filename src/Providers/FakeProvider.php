@@ -50,9 +50,7 @@ class FakeProvider extends Provider implements TextProvider
             new InvokingAgent($invocationId, $this, $model, $agent, $prompt)
         );
 
-        $response = $this->responses[$this->currentResponseIndex];
-
-        $this->currentResponseIndex++;
+        $response = $this->nextResponse();
 
         $this->events->dispatch(
             new AgentInvoked($invocationId, $this, $model, $agent, $prompt, $response)
@@ -82,9 +80,7 @@ class FakeProvider extends Provider implements TextProvider
             yield new StreamStart(ulid(), $this->providerName(), $model, time());
             yield new TextStart(ulid(), $messageId, time());
 
-            $fakeResponse = $this->responses[$this->currentResponseIndex];
-
-            $this->currentResponseIndex++;
+            $fakeResponse = $this->nextResponse();
 
             $events = Str::of($fakeResponse->text)
                 ->explode(' ')
@@ -111,6 +107,16 @@ class FakeProvider extends Provider implements TextProvider
             $this->events->dispatch(
                 new AgentStreamed($invocationId, $this, $model, $agent, $prompt, $response)
             );
+        });
+    }
+
+    /**
+     * Get the next response instance.
+     */
+    protected function nextResponse(): mixed
+    {
+        return tap($this->responses[$this->currentResponseIndex], function () {
+            $this->currentResponseIndex++;
         });
     }
 
