@@ -3,11 +3,7 @@
 namespace Tests\Feature;
 
 use Closure;
-use Illuminate\Support\Str;
 use Laravel\Ai\AgentPrompt;
-use Laravel\Ai\Data\Meta;
-use Laravel\Ai\Data\Usage;
-use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\TestCase;
@@ -17,7 +13,7 @@ class AgentMiddlewareTest extends TestCase
     public function test_agent_middleware_is_invoked(): void
     {
         AssistantAgent::fake([
-            new AgentResponse((string) Str::uuid7(), 'Fake response', new Usage, new Meta),
+            'Fake response',
         ]);
 
         $response = (new AssistantAgent)
@@ -33,7 +29,7 @@ class AgentMiddlewareTest extends TestCase
     public function test_agent_middleware_is_invoked_when_streaming(): void
     {
         AssistantAgent::fake([
-            new AgentResponse((string) Str::uuid7(), 'Fake response', new Usage, new Meta),
+            'Fake response',
         ]);
 
         $response = (new AssistantAgent)

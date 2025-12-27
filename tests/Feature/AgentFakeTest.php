@@ -14,7 +14,7 @@ class AgentFakeTest extends TestCase
     public function test_agents_can_be_faked(): void
     {
         AssistantAgent::fake([
-            new AgentResponse((string) Str::uuid7(), 'First response', new Usage, new Meta),
+            'First response',
             new AgentResponse((string) Str::uuid7(), 'Second response', new Usage, new Meta),
         ]);
 
@@ -28,8 +28,8 @@ class AgentFakeTest extends TestCase
     public function test_agent_streams_can_be_faked(): void
     {
         AssistantAgent::fake([
-            new AgentResponse((string) Str::uuid7(), 'First response', new Usage, new Meta),
-            new AgentResponse((string) Str::uuid7(), 'Second response', new Usage, new Meta),
+            'First response',
+            'Second response',
         ]);
 
         $response = (new AssistantAgent)->stream('Test prompt');

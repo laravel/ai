@@ -49,7 +49,7 @@ class FakeProvider extends Provider implements TextProvider
             new InvokingAgent($invocationId, $this, $model, $agent, $prompt)
         );
 
-        $response = $this->nextResponse();
+        $response = $this->nextResponse($invocationId, $model);
 
         $this->events->dispatch(
             new AgentInvoked($invocationId, $this, $model, $agent, $prompt, $response)
@@ -79,7 +79,7 @@ class FakeProvider extends Provider implements TextProvider
             yield new StreamStart(ulid(), $this->providerName(), $model, time());
             yield new TextStart(ulid(), $messageId, time());
 
-            $fakeResponse = $this->nextResponse();
+            $fakeResponse = $this->nextResponse($invocationId, $model);
 
             $events = Str::of($fakeResponse->text)
                 ->explode(' ')
@@ -112,11 +112,24 @@ class FakeProvider extends Provider implements TextProvider
     /**
      * Get the next response instance.
      */
-    protected function nextResponse(): mixed
+    protected function nextResponse(string $invocationId, string $model): mixed
     {
-        return tap($this->responses[$this->currentResponseIndex], function () {
+        $response = $this->responses[$this->currentResponseIndex];
+
+        return tap(match (true) {
+            is_string($response) => new AgentResponse($invocationId, $response, new Usage, $this->meta()),
+            default => $response,
+        }, function () {
             $this->currentResponseIndex++;
         });
+    }
+
+    /**
+     * Get a new Meta instance for the provider.
+     */
+    protected function meta(): Meta
+    {
+        return new Meta($this->providerName(), $this->defaultTextModel());
     }
 
     /**
