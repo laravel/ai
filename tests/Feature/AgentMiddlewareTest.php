@@ -25,9 +25,9 @@ class AgentMiddlewareTest extends TestCase
             ->prompt('Test prompt');
 
         $this->assertEquals('Fake response', $response->text);
-        $this->assertInstanceOf(AgentPrompt::class, $_SERVER['__testing.prompt']);
+        $this->assertInstanceOf(AgentPrompt::class, $_SERVER['__testing.middleware-prompt']);
 
-        unset($_SERVER['__testing.prompt']);
+        unset($_SERVER['__testing.middleware-prompt']);
     }
 
     public function test_agent_middleware_is_invoked_when_streaming(): void
@@ -47,10 +47,10 @@ class AgentMiddlewareTest extends TestCase
             });
 
         $this->assertEquals('Fake response', $_SERVER['__testing.text']);
-        $this->assertInstanceOf(AgentPrompt::class, $_SERVER['__testing.prompt']);
+        $this->assertInstanceOf(AgentPrompt::class, $_SERVER['__testing.middleware-prompt']);
 
         unset($_SERVER['__testing.text']);
-        unset($_SERVER['__testing.prompt']);
+        unset($_SERVER['__testing.middleware-prompt']);
     }
 
     protected function middleware(): object
@@ -59,7 +59,7 @@ class AgentMiddlewareTest extends TestCase
         {
             public function handle(AgentPrompt $prompt, Closure $next)
             {
-                $_SERVER['__testing.prompt'] = $prompt;
+                $_SERVER['__testing.middleware-prompt'] = $prompt;
 
                 return $next($prompt);
             }
