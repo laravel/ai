@@ -190,7 +190,7 @@ class AiManager extends MultipleInstanceManager
     public function hasFakeAgent(Agent|string $agent): bool
     {
         return array_key_exists(
-            is_string($agent) ? $agent : get_class($agent),
+            is_object($agent) ? get_class($agent) : $agent,
             $this->fakeAgentResponses
         );
     }
