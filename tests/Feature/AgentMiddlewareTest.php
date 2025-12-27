@@ -20,17 +20,9 @@ class AgentMiddlewareTest extends TestCase
             new AgentResponse((string) Str::uuid7(), 'Fake response', new Usage, new Meta),
         ]);
 
-        $response = (new AssistantAgent)->withMiddleware([
-            new class
-            {
-                public function handle(AgentPrompt $prompt, Closure $next)
-                {
-                    $_SERVER['__testing.prompt'] = $prompt;
-
-                    return $next($prompt);
-                }
-            },
-        ])->prompt('Test prompt');
+        $response = (new AssistantAgent)
+            ->withMiddleware([$this->middleware()])
+            ->prompt('Test prompt');
 
         $this->assertEquals('Fake response', $response->text);
         $this->assertInstanceOf(AgentPrompt::class, $_SERVER['__testing.prompt']);
@@ -44,26 +36,33 @@ class AgentMiddlewareTest extends TestCase
             new AgentResponse((string) Str::uuid7(), 'Fake response', new Usage, new Meta),
         ]);
 
-        $response = (new AssistantAgent)->withMiddleware([
-            new class
-            {
-                public function handle(AgentPrompt $prompt, Closure $next)
-                {
-                    $_SERVER['__testing.prompt'] = $prompt;
-
-                    return $next($prompt);
-                }
-            },
-        ])->stream('Test prompt');
+        $response = (new AssistantAgent)
+            ->withMiddleware([$this->middleware()])
+            ->stream('Test prompt');
 
         $response
             ->each(fn () => true)
             ->then(function (StreamableAgentResponse $response) {
-                $this->assertEquals('Fake response', $response->text);
+                $_SERVER['__testing.text'] = $response->text;
             });
 
+        $this->assertEquals('Fake response', $_SERVER['__testing.text']);
         $this->assertInstanceOf(AgentPrompt::class, $_SERVER['__testing.prompt']);
 
+        unset($_SERVER['__testing.text']);
         unset($_SERVER['__testing.prompt']);
+    }
+
+    protected function middleware(): object
+    {
+        return new class
+        {
+            public function handle(AgentPrompt $prompt, Closure $next)
+            {
+                $_SERVER['__testing.prompt'] = $prompt;
+
+                return $next($prompt);
+            }
+        };
     }
 }
