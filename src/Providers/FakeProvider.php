@@ -122,7 +122,7 @@ class FakeProvider extends Provider implements TextProvider
     /**
      * Set the original provider and model.
      */
-    public function withOriginalProvider(Provider $provider, string $model): self
+    public function withOriginalProvider(TextProvider $provider, string $model): self
     {
         $this->originalProvider = $provider;
         $this->originalModel = $model;
