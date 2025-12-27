@@ -8,13 +8,22 @@ use Laravel\Ai\Contracts\Providers\TextProvider;
 
 class AgentPrompt extends Prompt
 {
+    public readonly Agent $agent;
+
+    public Collection $attachments;
+
     public function __construct(
-        public readonly Agent $agent,
-        public string $prompt,
-        public Collection $attachments,
-        public readonly TextProvider $provider,
-        public readonly string $model
-    ) {}
+        Agent $agent,
+        $prompt,
+        Collection|array $attachments,
+        TextProvider $provider,
+        string $model
+    ) {
+        parent::__construct($prompt, $provider, $model);
+
+        $this->agent = $agent;
+        $this->attachments = Collection::make($attachments);
+    }
 
     /**
      * Get the provider instance.
