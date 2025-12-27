@@ -5,7 +5,6 @@ namespace Laravel\Ai;
 use Closure;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Jobs\BroadcastAgent;

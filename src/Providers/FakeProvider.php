@@ -4,7 +4,6 @@ namespace Laravel\Ai\Providers;
 
 use Closure;
 use Illuminate\Contracts\Events\Dispatcher;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\AgentPrompt;
