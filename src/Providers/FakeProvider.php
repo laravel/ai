@@ -2,9 +2,12 @@
 
 namespace Laravel\Ai\Providers;
 
+use Closure;
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use Laravel\Ai\AgentPrompt;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -50,7 +53,7 @@ class FakeProvider extends Provider implements TextProvider
             new InvokingAgent($invocationId, $this, $model, $agent, $prompt)
         );
 
-        $response = $this->nextResponse($invocationId, $model);
+        $response = $this->nextResponse($invocationId, $agent, $prompt, $attachments, $model);
 
         $this->events->dispatch(
             new AgentInvoked($invocationId, $this, $model, $agent, $prompt, $response)
@@ -66,7 +69,7 @@ class FakeProvider extends Provider implements TextProvider
     {
         $invocationId = (string) Str::uuid7();
 
-        return new StreamableAgentResponse($invocationId, function () use ($invocationId, $agent, $prompt, $model) {
+        return new StreamableAgentResponse($invocationId, function () use ($invocationId, $agent, $prompt, $attachments, $model) {
             if ($agent instanceof HasStructuredOutput) {
                 throw new InvalidArgumentException('Streaming structured output is not currently supported.');
             }
@@ -80,7 +83,7 @@ class FakeProvider extends Provider implements TextProvider
             yield new StreamStart(ulid(), $this->providerName(), $model, time());
             yield new TextStart(ulid(), $messageId, time());
 
-            $fakeResponse = $this->nextResponse($invocationId, $model);
+            $fakeResponse = $this->nextResponse($invocationId, $agent, $prompt, $attachments, $model);
 
             $events = Str::of($fakeResponse->text)
                 ->explode(' ')
@@ -113,7 +116,12 @@ class FakeProvider extends Provider implements TextProvider
     /**
      * Get the next response instance.
      */
-    protected function nextResponse(string $invocationId, string $model): mixed
+    protected function nextResponse(
+        string $invocationId,
+        Agent $agent,
+        string $prompt,
+        array $attachments,
+        string $model): mixed
     {
         $response = $this->responses[$this->currentResponseIndex] ?? null;
 
@@ -121,17 +129,43 @@ class FakeProvider extends Provider implements TextProvider
             // ???
         }
 
-        return tap(match (true) {
+        return tap($this->marshalResponse(
+            $response, $invocationId, $agent, $prompt, $attachments, $model,
+        ), function () {
+            $this->currentResponseIndex++;
+        });
+    }
+
+    /**
+     * Marshal the given response into a full response instance.
+     */
+    protected function marshalResponse(
+        mixed $response,
+        string $invocationId,
+        Agent $agent,
+        string $prompt,
+        array $attachments,
+        string $model): mixed
+    {
+        return match (true) {
             is_string($response) => new AgentResponse(
                 $invocationId, $response, new Usage, $this->meta()
             ),
             is_array($response) => new StructuredAgentResponse(
                 $invocationId, $response, json_encode($response), new Usage, $this->meta()
             ),
+            $response instanceof Closure => $this->marshalResponse(
+                $response(new AgentPrompt(
+                    $agent, $prompt, new Collection($attachments), $this, $model
+                ), $invocationId),
+                $invocationId,
+                $agent,
+                $prompt,
+                $attachments,
+                $model,
+            ),
             default => $response,
-        }, function () {
-            $this->currentResponseIndex++;
-        });
+        };
     }
 
     /**

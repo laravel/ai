@@ -3,9 +3,11 @@
 namespace Tests\Feature;
 
 use Illuminate\Support\Str;
+use Laravel\Ai\AgentPrompt;
 use Laravel\Ai\Data\Meta;
 use Laravel\Ai\Data\Usage;
 use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Responses\StructuredAgentResponse;
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\Feature\Agents\StructuredAgent;
 use Tests\TestCase;
@@ -30,13 +32,23 @@ class AgentFakeTest extends TestCase
     {
         StructuredAgent::fake([
             ['symbol' => 'Au'],
-            ['symbol' => 'Pb'],
+            fn (AgentPrompt $prompt) => ['symbol' => 'Ag ('.$prompt->prompt.')'],
+            new StructuredAgentResponse(
+                (string) Str::uuid7(),
+                ['symbol' => 'Pb'],
+                json_encode(['symbol' => 'Pb']),
+                new Usage,
+                new Meta,
+            ),
         ]);
 
-        $response = (new StructuredAgent)->prompt('Test prompt');
+        $response = (new StructuredAgent)->prompt('Gold prompt');
         $this->assertEquals('Au', $response['symbol']);
 
-        $response = (new StructuredAgent)->prompt('Test prompt');
+        $response = (new StructuredAgent)->prompt('Silver prompt');
+        $this->assertEquals('Ag (Silver prompt)', $response['symbol']);
+
+        $response = (new StructuredAgent)->prompt('Lead prompt');
         $this->assertEquals('Pb', $response['symbol']);
     }
 
