@@ -7,6 +7,7 @@ use Laravel\Ai\Data\Meta;
 use Laravel\Ai\Data\Usage;
 use Laravel\Ai\Responses\AgentResponse;
 use Tests\Feature\Agents\AssistantAgent;
+use Tests\Feature\Agents\StructuredAgent;
 use Tests\TestCase;
 
 class AgentFakeTest extends TestCase
@@ -23,6 +24,20 @@ class AgentFakeTest extends TestCase
 
         $response = (new AssistantAgent)->prompt('Test prompt');
         $this->assertEquals('Second response', $response->text);
+    }
+
+    public function test_agents_with_structured_output_can_be_faked(): void
+    {
+        StructuredAgent::fake([
+            ['symbol' => 'Au'],
+            ['symbol' => 'Pb'],
+        ]);
+
+        $response = (new StructuredAgent)->prompt('Test prompt');
+        $this->assertEquals('Au', $response['symbol']);
+
+        $response = (new StructuredAgent)->prompt('Test prompt');
+        $this->assertEquals('Pb', $response['symbol']);
     }
 
     public function test_agent_streams_can_be_faked(): void

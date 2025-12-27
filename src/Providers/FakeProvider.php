@@ -17,12 +17,12 @@ use Laravel\Ai\Events\StreamingAgent;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
+use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
-
 use function Laravel\Ai\ulid;
 
 class FakeProvider extends Provider implements TextProvider
@@ -117,7 +117,12 @@ class FakeProvider extends Provider implements TextProvider
         $response = $this->responses[$this->currentResponseIndex];
 
         return tap(match (true) {
-            is_string($response) => new AgentResponse($invocationId, $response, new Usage, $this->meta()),
+            is_string($response) => new AgentResponse(
+                $invocationId, $response, new Usage, $this->meta()
+            ),
+            is_array($response) => new StructuredAgentResponse(
+                $invocationId, $response, json_encode($response), new Usage, $this->meta()
+            ),
             default => $response,
         }, function () {
             $this->currentResponseIndex++;
