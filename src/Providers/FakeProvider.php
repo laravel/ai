@@ -35,7 +35,8 @@ class FakeProvider extends Provider implements TextProvider
 
     public function __construct(
         protected array $responses,
-        protected Dispatcher $events) {}
+        protected Dispatcher $events
+    ) {}
 
     /**
      * Invoke the given agent.
