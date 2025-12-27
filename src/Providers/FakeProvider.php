@@ -33,8 +33,6 @@ class FakeProvider extends Provider implements TextProvider
 
     protected int $currentResponseIndex = 0;
 
-    protected array $config = ['driver' => 'fake'];
-
     public function __construct(
         protected array $responses,
         protected Dispatcher $events) {}
@@ -137,5 +135,21 @@ class FakeProvider extends Provider implements TextProvider
     public function defaultTextModel(): string
     {
         return 'laravel/fake-text';
+    }
+
+    /**
+     * Get the name of the underlying AI provider.
+     */
+    public function providerName(): string
+    {
+        return 'fake';
+    }
+
+    /**
+     * Get the credentials for the underlying AI provider.
+     */
+    public function providerCredentials(): array
+    {
+        return [];
     }
 }
