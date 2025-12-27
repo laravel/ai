@@ -18,14 +18,18 @@ class AgentFakeTest extends TestCase
     {
         AssistantAgent::fake([
             'First response',
-            new AgentResponse((string) Str::uuid7(), 'Second response', new Usage, new Meta),
+            fn (AgentPrompt $prompt) => 'Second response ('.$prompt->prompt.')',
+            new AgentResponse((string) Str::uuid7(), 'Third response', new Usage, new Meta),
         ]);
 
-        $response = (new AssistantAgent)->prompt('Test prompt');
+        $response = (new AssistantAgent)->prompt('First prompt');
         $this->assertEquals('First response', $response->text);
 
-        $response = (new AssistantAgent)->prompt('Test prompt');
-        $this->assertEquals('Second response', $response->text);
+        $response = (new AssistantAgent)->prompt('Second prompt');
+        $this->assertEquals('Second response (Second prompt)', $response->text);
+
+        $response = (new AssistantAgent)->prompt('Third prompt');
+        $this->assertEquals('Third response', $response->text);
     }
 
     public function test_agents_with_structured_output_can_be_faked(): void
@@ -56,17 +60,23 @@ class AgentFakeTest extends TestCase
     {
         AssistantAgent::fake([
             'First response',
-            new AgentResponse((string) Str::uuid7(), 'Second response', new Usage, new Meta),
+            fn (AgentPrompt $prompt) => 'Second response ('.$prompt->prompt.')',
+            new AgentResponse((string) Str::uuid7(), 'Third response', new Usage, new Meta),
         ]);
 
-        $response = (new AssistantAgent)->stream('Test prompt');
+        $response = (new AssistantAgent)->stream('First prompt');
         $response->each(fn () => true);
         $this->assertEquals('First response', $response->text);
         $this->assertCount(6, $response->events);
 
-        $response = (new AssistantAgent)->stream('Test prompt');
+        $response = (new AssistantAgent)->stream('Second prompt');
         $response->each(fn () => true);
-        $this->assertEquals('Second response', $response->text);
+        $this->assertEquals('Second response (Second prompt)', $response->text);
+        $this->assertCount(8, $response->events);
+
+        $response = (new AssistantAgent)->stream('Third prompt');
+        $response->each(fn () => true);
+        $this->assertEquals('Third response', $response->text);
         $this->assertCount(6, $response->events);
     }
 }
