@@ -14,11 +14,14 @@ class AgentFakeTest extends TestCase
     public function test_agents_can_be_faked(): void
     {
         AssistantAgent::fake([
-            new AgentResponse((string) Str::uuid7(), 'Fake text', new Usage, new Meta),
+            new AgentResponse((string) Str::uuid7(), 'First response', new Usage, new Meta),
+            new AgentResponse((string) Str::uuid7(), 'Second response', new Usage, new Meta),
         ]);
 
         $response = (new AssistantAgent)->prompt('Test prompt');
+        $this->assertEquals('First response', $response->text);
 
-        $this->assertEquals('Fake text', $response->text);
+        $response = (new AssistantAgent)->prompt('Test prompt');
+        $this->assertEquals('Second response', $response->text);
     }
 }

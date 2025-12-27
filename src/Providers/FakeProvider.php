@@ -27,14 +27,16 @@ use function Laravel\Ai\ulid;
 
 class FakeProvider extends Provider implements TextProvider
 {
-    protected array $config = ['driver' => 'fake'];
+    protected ?Provider $originalProvider = null;
+
+    protected ?string $originalModel = null;
 
     protected int $currentResponseIndex = 0;
 
+    protected array $config = ['driver' => 'fake'];
+
     public function __construct(
         protected array $responses,
-        protected Provider $originalProvider,
-        protected string $originalModel,
         protected Dispatcher $events) {}
 
     /**
@@ -49,6 +51,8 @@ class FakeProvider extends Provider implements TextProvider
         );
 
         $response = $this->responses[$this->currentResponseIndex];
+
+        $this->currentResponseIndex++;
 
         $this->events->dispatch(
             new AgentInvoked($invocationId, $this, $model, $agent, $prompt, $response)
@@ -80,6 +84,8 @@ class FakeProvider extends Provider implements TextProvider
 
             $fakeResponse = $this->responses[$this->currentResponseIndex];
 
+            $this->currentResponseIndex++;
+
             $events = Str::of($fakeResponse->text)
                 ->explode(' ')
                 ->map(fn ($word, $index) => new TextDelta(
@@ -106,6 +112,17 @@ class FakeProvider extends Provider implements TextProvider
                 new AgentStreamed($invocationId, $this, $model, $agent, $prompt, $response)
             );
         });
+    }
+
+    /**
+     * Set the original provider and model.
+     */
+    public function withOriginalProvider(Provider $provider, string $model): self
+    {
+        $this->originalProvider = $provider;
+        $this->originalModel = $model;
+
+        return $this;
     }
 
     /**

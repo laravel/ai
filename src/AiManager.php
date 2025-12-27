@@ -4,6 +4,7 @@ namespace Laravel\Ai;
 
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\MultipleInstanceManager;
+use InvalidArgumentException;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
@@ -24,9 +25,9 @@ use LogicException;
 class AiManager extends MultipleInstanceManager
 {
     /**
-     * All of the registered fake agent responses.
+     * All of the registered fake agent providers.
      */
-    protected array $fakeAgentResponses = [];
+    protected array $fakeAgentProviders = [];
 
     /**
      * The key name of the "driver" equivalent configuration option.
@@ -181,7 +182,10 @@ class AiManager extends MultipleInstanceManager
      */
     public function fakeAgent(string $agent, array $responses): void
     {
-        $this->fakeAgentResponses[$agent] = $responses;
+        $this->fakeAgentProviders[$agent] = new FakeProvider(
+            $responses,
+            $this->app['events']
+        );
     }
 
     /**
@@ -191,21 +195,24 @@ class AiManager extends MultipleInstanceManager
     {
         return array_key_exists(
             is_object($agent) ? get_class($agent) : $agent,
-            $this->fakeAgentResponses
+            $this->fakeAgentProviders
         );
     }
 
     /**
      * Get a fake provider instance for the given agent.
      */
-    public function fakeProviderFor(Agent $agent, Provider $originalProvider, string $originalModel): FakeProvider
+    public function fakeProviderFor(
+        Agent $agent,
+        Provider $originalProvider,
+        string $originalModel): FakeProvider
     {
-        return new FakeProvider(
-            $this->fakeAgentResponses[get_class($agent)] ?? [],
-            $originalProvider,
-            $originalModel,
-            $this->app['events']
-        );
+        if (! $this->hasFakeAgent($agent)) {
+            throw new InvalidArgumentException('Agent ['.get_class($agent).'] has not been faked.');
+        }
+
+        return $this->fakeAgentProviders[get_class($agent)]
+            ->withOriginalProvider($originalProvider, $originalModel);
     }
 
     /**
