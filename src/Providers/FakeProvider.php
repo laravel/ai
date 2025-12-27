@@ -23,6 +23,7 @@ use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
+
 use function Laravel\Ai\ulid;
 
 class FakeProvider extends Provider implements TextProvider
