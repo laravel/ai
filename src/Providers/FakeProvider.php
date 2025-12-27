@@ -115,7 +115,11 @@ class FakeProvider extends Provider implements TextProvider
      */
     protected function nextResponse(string $invocationId, string $model): mixed
     {
-        $response = $this->responses[$this->currentResponseIndex];
+        $response = $this->responses[$this->currentResponseIndex] ?? null;
+
+        if (is_null($response)) {
+            // ???
+        }
 
         return tap(match (true) {
             is_string($response) => new AgentResponse(
