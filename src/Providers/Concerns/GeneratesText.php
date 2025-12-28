@@ -4,6 +4,7 @@ namespace Laravel\Ai\Providers\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Str;
+use Laravel\Ai\AgentPrompt;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\Gateway\Gateway;
@@ -27,9 +28,11 @@ trait GeneratesText
     {
         $invocationId = (string) Str::uuid7();
 
-        $this->events->dispatch(
-            new InvokingAgent($invocationId, $this, $model, $agent, $prompt)
+        $agentPrompt = new AgentPrompt(
+            $agent, $prompt, $attachments, $this, $model
         );
+
+        $this->events->dispatch(new InvokingAgent($invocationId, $agentPrompt));
 
         $messages = $agent instanceof Conversational ? $agent->messages() : [];
 
@@ -53,7 +56,7 @@ trait GeneratesText
                 ->withMessages($response->messages);
 
         $this->events->dispatch(
-            new AgentInvoked($invocationId, $this, $model, $agent, $prompt, $response)
+            new AgentInvoked($invocationId, $agentResponse, $response)
         );
 
         return $response;
