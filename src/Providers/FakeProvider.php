@@ -129,9 +129,7 @@ class FakeProvider extends Provider implements TextProvider
 
         return tap($this->marshalResponse(
             $response, $invocationId, $prompt
-        ), function () {
-            $this->currentResponseIndex++;
-        });
+        ), fn () => $this->currentResponseIndex++);
     }
 
     /**
