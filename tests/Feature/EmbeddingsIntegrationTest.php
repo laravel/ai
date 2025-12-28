@@ -9,9 +9,9 @@ use Laravel\Ai\Events\GeneratingEmbeddings;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Tests\TestCase;
 
-class ProviderTest extends TestCase
+class EmbeddingsIntegrationTest extends TestCase
 {
-    public function test_can_generate_embeddings(): void
+    public function test_embeddings_can_be_generated(): void
     {
         Event::fake();
 
