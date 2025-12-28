@@ -25,6 +25,7 @@ use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
+use RuntimeException;
 
 use function Laravel\Ai\ulid;
 
@@ -35,6 +36,8 @@ class FakeProvider extends Provider implements TextProvider
     protected ?string $originalModel = null;
 
     protected int $currentResponseIndex = 0;
+
+    protected bool $preventStrayPrompts = false;
 
     public function __construct(
         protected array $responses,
@@ -125,7 +128,17 @@ class FakeProvider extends Provider implements TextProvider
         $response = $this->responses[$this->currentResponseIndex] ?? null;
 
         if (is_null($response)) {
-            // ???
+            if ($this->preventStrayPrompts) {
+                throw new RuntimeException('Attempted prompt ['.Str::words($prompt, 10).'] without a fake agent response.');
+            }
+
+            if ($agent instanceof HasStructuredOutput) {
+                throw new RuntimeException('Unable to automatically determine fake response for agents with structured output.');
+            }
+
+            return new AgentResponse(
+                $invocationId, 'Fake response for prompt: '.Str::words($prompt, 10), new Usage, $this->meta()
+            );
         }
 
         return tap($this->marshalResponse(
@@ -182,6 +195,16 @@ class FakeProvider extends Provider implements TextProvider
     {
         $this->originalProvider = $provider;
         $this->originalModel = $model;
+
+        return $this;
+    }
+
+    /**
+     * Indicate that an exception should be thrown if any prompt is not faked.
+     */
+    public function preventStrayPrompts(bool $prevent = true): self
+    {
+        $this->preventStrayPrompts = $prevent;
 
         return $this;
     }

@@ -9,6 +9,7 @@ use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Jobs\BroadcastAgent;
 use Laravel\Ai\Jobs\InvokeAgent;
+use Laravel\Ai\Providers\FakeProvider;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\QueuedAgentResponse;
@@ -154,9 +155,9 @@ trait Promptable
     /**
      * Fake the responses returned by the agent.
      */
-    public static function fake(array $responses): void
+    public static function fake(array $responses = []): FakeProvider
     {
-        Ai::fakeAgent(static::class, $responses);
+        return Ai::fakeAgent(static::class, $responses);
     }
 
     /**

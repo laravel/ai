@@ -180,12 +180,14 @@ class AiManager extends MultipleInstanceManager
     /**
      * Fake the responses returned by the given agent.
      */
-    public function fakeAgent(string $agent, array $responses): void
+    public function fakeAgent(string $agent, array $responses = []): FakeProvider
     {
         $this->fakeAgentProviders[$agent] = new FakeProvider(
             $responses,
             $this->app['events']
         );
+
+        return $this->fakeAgentProviders[$agent];
     }
 
     /**

@@ -8,6 +8,7 @@ use Laravel\Ai\Data\Meta;
 use Laravel\Ai\Data\Usage;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StructuredAgentResponse;
+use RuntimeException;
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\Feature\Agents\StructuredAgent;
 use Tests\TestCase;
@@ -30,6 +31,26 @@ class AgentFakeTest extends TestCase
 
         $response = (new AssistantAgent)->prompt('Third prompt');
         $this->assertEquals('Third response', $response->text);
+    }
+
+    public function test_agents_can_be_faked_with_no_predefined_responses(): void
+    {
+        AssistantAgent::fake();
+
+        $response = (new AssistantAgent)->prompt('First prompt');
+        $this->assertEquals('Fake response for prompt: First prompt', $response->text);
+
+        $response = (new AssistantAgent)->prompt('Second prompt');
+        $this->assertEquals('Fake response for prompt: Second prompt', $response->text);
+    }
+
+    public function test_agents_can_prevent_stray_prompts(): void
+    {
+        $this->expectException(RuntimeException::class);
+
+        AssistantAgent::fake()->preventStrayPrompts();
+
+        $response = (new AssistantAgent)->prompt('First prompt');
     }
 
     public function test_agents_with_structured_output_can_be_faked(): void
