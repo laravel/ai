@@ -121,15 +121,11 @@ class FakeProvider extends Provider implements TextProvider
     /**
      * Get the next response instance.
      */
-    protected function nextResponse(
-        string $invocationId,
-        AgentPrompt $prompt): mixed
+    protected function nextResponse(string $invocationId, AgentPrompt $prompt): mixed
     {
-        if (is_array($this->responses)) {
-            $response = $this->responses[$this->currentResponseIndex] ?? null;
-        } else {
-            $response = call_user_func($this->responses, $prompt, $invocationId);
-        }
+        $response = is_array($this->responses)
+            ? ($this->responses[$this->currentResponseIndex] ?? null)
+            : call_user_func($this->responses, $prompt, $invocationId);
 
         return tap($this->marshalResponse(
             $response, $invocationId, $prompt
