@@ -5,11 +5,11 @@ namespace Laravel\Ai;
 use Closure;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Jobs\BroadcastAgent;
 use Laravel\Ai\Jobs\InvokeAgent;
+use Laravel\Ai\Providers\FakeProvider;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\QueuedAgentResponse;
@@ -103,6 +103,10 @@ trait Promptable
 
             $model ??= $provider->defaultTextModel();
 
+            if (static::isFaked()) {
+                $provider = Ai::fakeProviderFor($this, $provider, $model);
+            }
+
             try {
                 return $callback($provider, $model);
             } catch (FailoverableException $e) {
@@ -122,8 +126,8 @@ trait Promptable
             ->send(new AgentPrompt(
                 $this,
                 $prompt,
-                new Collection($attachments),
-                $provider->providerName(),
+                $attachments,
+                $provider,
                 $model
             ))
             ->through($this instanceof HasMiddleware ? $this->middleware() : [])
@@ -146,5 +150,21 @@ trait Promptable
         return Provider::formatProviderAndModelList(
             $provider ?? config('ai.default'), $model
         );
+    }
+
+    /**
+     * Fake the responses returned by the agent.
+     */
+    public static function fake(Closure|array $responses = []): FakeProvider
+    {
+        return Ai::fakeAgent(static::class, $responses);
+    }
+
+    /**
+     * Determine if the agent is currently faked.
+     */
+    public static function isFaked(): bool
+    {
+        return Ai::hasFakeAgent(static::class);
     }
 }
