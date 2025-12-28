@@ -54,7 +54,7 @@ trait GeneratesText
                 ->withMessages($response->messages);
 
         $this->events->dispatch(
-            new AgentInvoked($invocationId, $agentResponse, $response)
+            new AgentInvoked($invocationId, $agentPrompt, $response)
         );
 
         return $response;
