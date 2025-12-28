@@ -44,7 +44,7 @@ class AgentFakeTest extends TestCase
         $this->assertEquals('Fake response for prompt: Second prompt', $response->text);
     }
 
-    public function test_agents_can_be_faked_with_a_single_closure(): void
+    public function test_agents_can_be_faked_with_a_single_closure_that_is_invoked_for_every_prompt(): void
     {
         AssistantAgent::fake(function (AgentPrompt $prompt) {
             return 'Fake response for prompt: '.$prompt->prompt;
