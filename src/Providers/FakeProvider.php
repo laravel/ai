@@ -55,7 +55,7 @@ class FakeProvider extends Provider implements TextProvider
             $agent, $prompt, $attachments, $this, $model
         )));
 
-        $response = $this->nextResponse($invocationId, $agent, $prompt, $attachments, $model);
+        $response = $this->nextResponse($invocationId, $agentPrompt);
 
         $this->events->dispatch(
             new AgentInvoked($invocationId, $agentPrompt, $response)
@@ -85,7 +85,7 @@ class FakeProvider extends Provider implements TextProvider
             yield new StreamStart(ulid(), $this->providerName(), $model, time());
             yield new TextStart(ulid(), $messageId, time());
 
-            $fakeResponse = $this->nextResponse($invocationId, $agent, $prompt, $attachments, $model);
+            $fakeResponse = $this->nextResponse($invocationId, $agentPrompt);
 
             $events = Str::of($fakeResponse->text)
                 ->explode(' ')
@@ -120,21 +120,16 @@ class FakeProvider extends Provider implements TextProvider
      */
     protected function nextResponse(
         string $invocationId,
-        Agent $agent,
-        string $prompt,
-        array $attachments,
-        string $model): mixed
+        AgentPrompt $prompt): mixed
     {
         if (is_array($this->responses)) {
             $response = $this->responses[$this->currentResponseIndex] ?? null;
         } else {
-            $response = call_user_func($this->responses, new AgentPrompt(
-                $agent, $prompt, $attachments, $this, $model
-            ), $invocationId);
+            $response = call_user_func($this->responses, $prompt, $invocationId);
         }
 
         return tap($this->marshalResponse(
-            $response, $invocationId, $agent, $prompt, $attachments, $model,
+            $response, $invocationId, $prompt
         ), function () {
             $this->currentResponseIndex++;
         });
@@ -146,21 +141,18 @@ class FakeProvider extends Provider implements TextProvider
     protected function marshalResponse(
         mixed $response,
         string $invocationId,
-        Agent $agent,
-        string $prompt,
-        array $attachments,
-        string $model): mixed
+        AgentPrompt $prompt): mixed
     {
         if (is_null($response)) {
             if ($this->preventStrayPrompts) {
-                throw new RuntimeException('Attempted prompt ['.Str::words($prompt, 10).'] without a fake agent response.');
+                throw new RuntimeException('Attempted prompt ['.Str::words($prompt->prompt, 10).'] without a fake agent response.');
             }
 
-            if ($agent instanceof HasStructuredOutput) {
+            if ($prompt->agent instanceof HasStructuredOutput) {
                 throw new RuntimeException('Unable to automatically determine fake response for agents with structured output.');
             }
 
-            $response = 'Fake response for prompt: '.Str::words($prompt, 10);
+            $response = 'Fake response for prompt: '.Str::words($prompt->prompt, 10);
         }
 
         return match (true) {
@@ -171,14 +163,9 @@ class FakeProvider extends Provider implements TextProvider
                 $invocationId, $response, json_encode($response), new Usage, $this->meta()
             ),
             $response instanceof Closure => $this->marshalResponse(
-                $response(new AgentPrompt(
-                    $agent, $prompt, $attachments, $this, $model
-                ), $invocationId),
+                $response($prompt, $invocationId),
                 $invocationId,
-                $agent,
                 $prompt,
-                $attachments,
-                $model,
             ),
             default => $response,
         };
