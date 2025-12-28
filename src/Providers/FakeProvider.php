@@ -40,7 +40,7 @@ class FakeProvider extends Provider implements TextProvider
     protected bool $preventStrayPrompts = false;
 
     public function __construct(
-        protected array $responses,
+        protected Closure|array $responses,
         protected Dispatcher $events
     ) {}
 
@@ -125,20 +125,12 @@ class FakeProvider extends Provider implements TextProvider
         array $attachments,
         string $model): mixed
     {
-        $response = $this->responses[$this->currentResponseIndex] ?? null;
-
-        if (is_null($response)) {
-            if ($this->preventStrayPrompts) {
-                throw new RuntimeException('Attempted prompt ['.Str::words($prompt, 10).'] without a fake agent response.');
-            }
-
-            if ($agent instanceof HasStructuredOutput) {
-                throw new RuntimeException('Unable to automatically determine fake response for agents with structured output.');
-            }
-
-            return new AgentResponse(
-                $invocationId, 'Fake response for prompt: '.Str::words($prompt, 10), new Usage, $this->meta()
-            );
+        if (is_array($this->responses)) {
+            $response = $this->responses[$this->currentResponseIndex] ?? null;
+        } else {
+            $response = call_user_func($this->responses, new AgentPrompt(
+                $agent, $prompt, $attachments, $this, $model
+            ), $invocationId);
         }
 
         return tap($this->marshalResponse(
@@ -159,6 +151,18 @@ class FakeProvider extends Provider implements TextProvider
         array $attachments,
         string $model): mixed
     {
+        if (is_null($response)) {
+            if ($this->preventStrayPrompts) {
+                throw new RuntimeException('Attempted prompt ['.Str::words($prompt, 10).'] without a fake agent response.');
+            }
+
+            if ($agent instanceof HasStructuredOutput) {
+                throw new RuntimeException('Unable to automatically determine fake response for agents with structured output.');
+            }
+
+            $response = 'Fake response for prompt: '.Str::words($prompt, 10);
+        }
+
         return match (true) {
             is_string($response) => new AgentResponse(
                 $invocationId, $response, new Usage, $this->meta()

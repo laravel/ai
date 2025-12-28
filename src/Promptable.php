@@ -155,7 +155,7 @@ trait Promptable
     /**
      * Fake the responses returned by the agent.
      */
-    public static function fake(array $responses = []): FakeProvider
+    public static function fake(Closure|array $responses = []): FakeProvider
     {
         return Ai::fakeAgent(static::class, $responses);
     }

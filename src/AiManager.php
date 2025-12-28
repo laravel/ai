@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai;
 
+use Closure;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\MultipleInstanceManager;
 use InvalidArgumentException;
@@ -180,7 +181,7 @@ class AiManager extends MultipleInstanceManager
     /**
      * Fake the responses returned by the given agent.
      */
-    public function fakeAgent(string $agent, array $responses = []): FakeProvider
+    public function fakeAgent(string $agent, Closure|array $responses = []): FakeProvider
     {
         $this->fakeAgentProviders[$agent] = new FakeProvider(
             $responses,
