@@ -82,6 +82,7 @@ class FakeProvider extends Provider implements TextProvider
 
             $messageId = ulid();
 
+            // Fake the stream and text starting...
             yield new StreamStart(ulid(), $this->providerName(), $model, time());
             yield new TextStart(ulid(), $messageId, time());
 
@@ -96,10 +97,12 @@ class FakeProvider extends Provider implements TextProvider
                     time(),
                 ))->all();
 
+            // Fake the text delta events...
             foreach ($events as $event) {
                 yield $event;
             }
 
+            // Fake the stream and text ending...
             yield new TextEnd(ulid(), $messageId, time());
             yield new StreamEnd(ulid(), 'stop', new Usage, time());
 
