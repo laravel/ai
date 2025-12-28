@@ -28,11 +28,9 @@ trait GeneratesText
     {
         $invocationId = (string) Str::uuid7();
 
-        $agentPrompt = new AgentPrompt(
+        $this->events->dispatch(new InvokingAgent($invocationId, $agentPrompt = new AgentPrompt(
             $agent, $prompt, $attachments, $this, $model
-        );
-
-        $this->events->dispatch(new InvokingAgent($invocationId, $agentPrompt));
+        )));
 
         $messages = $agent instanceof Conversational ? $agent->messages() : [];
 

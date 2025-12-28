@@ -48,11 +48,9 @@ class FakeProvider extends Provider implements TextProvider
     {
         $invocationId = (string) Str::uuid7();
 
-        $agentPrompt = new AgentPrompt(
+        $this->events->dispatch(new InvokingAgent($invocationId, $agentPrompt = new AgentPrompt(
             $agent, $prompt, $attachments, $this, $model
-        );
-
-        $this->events->dispatch(new InvokingAgent($invocationId, $agentPrompt));
+        )));
 
         $response = $this->nextResponse($invocationId, $agent, $prompt, $attachments, $model);
 
@@ -75,11 +73,9 @@ class FakeProvider extends Provider implements TextProvider
                 throw new InvalidArgumentException('Streaming structured output is not currently supported.');
             }
 
-            $agentPrompt = new AgentPrompt(
+            $this->events->dispatch(new StreamingAgent($invocationId, $agentPrompt = new AgentPrompt(
                 $agent, $prompt, $attachments, $this, $model
-            );
-
-            $this->events->dispatch(new StreamingAgent($invocationId, $agentPrompt));
+            )));
 
             $messageId = ulid();
 

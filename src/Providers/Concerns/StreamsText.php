@@ -31,11 +31,9 @@ trait StreamsText
                 throw new InvalidArgumentException('Streaming structured output is not currently supported.');
             }
 
-            $agentPrompt = new AgentPrompt(
+            $this->events->dispatch(new StreamingAgent($invocationId, $agentPrompt = new AgentPrompt(
                 $agent, $prompt, $attachments, $this, $model
-            );
-
-            $this->events->dispatch(new StreamingAgent($invocationId, $agentPrompt));
+            )));
 
             $messages = $agent instanceof Conversational ? $agent->messages() : [];
 
