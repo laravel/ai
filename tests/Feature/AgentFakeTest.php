@@ -8,6 +8,8 @@ use Laravel\Ai\Data\Meta;
 use Laravel\Ai\Data\Usage;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StructuredAgentResponse;
+use Laravel\Ai\Responses\StructuredTextResponse;
+use Laravel\Ai\Responses\TextResponse;
 use RuntimeException;
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\Feature\Agents\StructuredAgent;
@@ -19,8 +21,8 @@ class AgentFakeTest extends TestCase
     {
         AssistantAgent::fake([
             'First response',
-            fn (AgentPrompt $prompt) => 'Second response ('.$prompt->prompt.')',
-            new AgentResponse((string) Str::uuid7(), 'Third response', new Usage, new Meta),
+            fn (string $prompt) => 'Second response ('.$prompt.')',
+            new TextResponse('Third response', new Usage, new Meta),
         ]);
 
         $response = (new AssistantAgent)->prompt('First prompt');
@@ -46,8 +48,8 @@ class AgentFakeTest extends TestCase
 
     public function test_agents_can_be_faked_with_a_single_closure_that_is_invoked_for_every_prompt(): void
     {
-        AssistantAgent::fake(function (AgentPrompt $prompt) {
-            return 'Fake response for prompt: '.$prompt->prompt;
+        AssistantAgent::fake(function (string $prompt) {
+            return 'Fake response for prompt: '.$prompt;
         });
 
         $response = (new AssistantAgent)->prompt('First prompt');
@@ -70,9 +72,8 @@ class AgentFakeTest extends TestCase
     {
         StructuredAgent::fake([
             ['symbol' => 'Au'],
-            fn (AgentPrompt $prompt) => ['symbol' => 'Ag ('.$prompt->prompt.')'],
-            new StructuredAgentResponse(
-                (string) Str::uuid7(),
+            fn (string $prompt) => ['symbol' => 'Ag ('.$prompt.')'],
+            new StructuredTextResponse(
                 ['symbol' => 'Pb'],
                 json_encode(['symbol' => 'Pb']),
                 new Usage,
@@ -94,8 +95,8 @@ class AgentFakeTest extends TestCase
     {
         AssistantAgent::fake([
             'First response',
-            fn (AgentPrompt $prompt) => 'Second response ('.$prompt->prompt.')',
-            new AgentResponse((string) Str::uuid7(), 'Third response', new Usage, new Meta),
+            fn (string $prompt) => 'Second response ('.$prompt.')',
+            new TextResponse('Third response', new Usage, new Meta),
         ]);
 
         $response = (new AssistantAgent)->stream('First prompt');

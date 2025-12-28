@@ -7,9 +7,9 @@ use Illuminate\Broadcasting\Channel;
 use Illuminate\Queue\SerializesModels;
 use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Exceptions\FailoverableException;
+use Laravel\Ai\Gateway\FakeGateway;
 use Laravel\Ai\Jobs\BroadcastAgent;
 use Laravel\Ai\Jobs\InvokeAgent;
-use Laravel\Ai\Providers\FakeProvider;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\QueuedAgentResponse;
@@ -104,7 +104,9 @@ trait Promptable
             $model ??= $provider->defaultTextModel();
 
             if (static::isFaked()) {
-                $provider = Ai::fakeProviderFor($this, $provider, $model);
+                $provider = clone $provider;
+
+                $provider->useTextGateway(Ai::fakeGatewayFor($this));
             }
 
             try {
@@ -155,7 +157,7 @@ trait Promptable
     /**
      * Fake the responses returned by the agent.
      */
-    public static function fake(Closure|array $responses = []): FakeProvider
+    public static function fake(Closure|array $responses = []): FakeGateway
     {
         return Ai::fakeAgent(static::class, $responses);
     }

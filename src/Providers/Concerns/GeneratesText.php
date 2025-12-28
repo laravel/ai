@@ -38,7 +38,7 @@ trait GeneratesText
 
         $this->listenForToolInvocations($invocationId, $agent);
 
-        $response = $this->gateway->generateText(
+        $response = $this->textGateway()->generateText(
             $this,
             $model,
             (string) $agent->instructions(),
@@ -65,7 +65,7 @@ trait GeneratesText
      */
     protected function listenForToolInvocations(string $invocationId, Agent $agent): void
     {
-        $this->gateway->onToolInvocation(
+        $this->textGateway()->onToolInvocation(
             invoking: function (Tool $tool, array $arguments) use ($invocationId, $agent) {
                 $this->currentToolInvocationId = (string) Str::uuid7();
 

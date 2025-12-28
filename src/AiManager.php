@@ -12,10 +12,10 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Gateway\FakeGateway;
 use Laravel\Ai\Gateway\Prism\PrismGateway;
 use Laravel\Ai\Providers\AnthropicProvider;
 use Laravel\Ai\Providers\ElevenLabsProvider;
-use Laravel\Ai\Providers\FakeProvider;
 use Laravel\Ai\Providers\GeminiProvider;
 use Laravel\Ai\Providers\GroqProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
@@ -26,9 +26,9 @@ use LogicException;
 class AiManager extends MultipleInstanceManager
 {
     /**
-     * All of the registered fake agent providers.
+     * All of the registered fake agent gateways.
      */
-    protected array $fakeAgentProviders = [];
+    protected array $fakeAgentGateways = [];
 
     /**
      * The key name of the "driver" equivalent configuration option.
@@ -181,14 +181,13 @@ class AiManager extends MultipleInstanceManager
     /**
      * Fake the responses returned by the given agent.
      */
-    public function fakeAgent(string $agent, Closure|array $responses = []): FakeProvider
+    public function fakeAgent(string $agent, Closure|array $responses = []): FakeGateway
     {
-        $this->fakeAgentProviders[$agent] = new FakeProvider(
+        $this->fakeAgentGateways[$agent] = new FakeGateway(
             $responses,
-            $this->app['events']
         );
 
-        return $this->fakeAgentProviders[$agent];
+        return $this->fakeAgentGateways[$agent];
     }
 
     /**
@@ -198,24 +197,20 @@ class AiManager extends MultipleInstanceManager
     {
         return array_key_exists(
             is_object($agent) ? get_class($agent) : $agent,
-            $this->fakeAgentProviders
+            $this->fakeAgentGateways
         );
     }
 
     /**
-     * Get a fake provider instance for the given agent.
+     * Get a fake gateway instance for the given agent.
      */
-    public function fakeProviderFor(
-        Agent $agent,
-        Provider $originalProvider,
-        string $originalModel): FakeProvider
+    public function fakeGatewayFor(Agent $agent): FakeGateway
     {
         if (! $this->hasFakeAgent($agent)) {
             throw new InvalidArgumentException('Agent ['.get_class($agent).'] has not been faked.');
         }
 
-        return $this->fakeAgentProviders[get_class($agent)]
-            ->withOriginalProvider($originalProvider, $originalModel);
+        return $this->fakeAgentGateways[get_class($agent)];
     }
 
     /**

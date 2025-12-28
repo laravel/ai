@@ -18,6 +18,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     use Concerns\GeneratesImages;
     use Concerns\GeneratesText;
     use Concerns\GeneratesTranscriptions;
+    use Concerns\HasTextGateway;
     use Concerns\StreamsText;
 
     /**

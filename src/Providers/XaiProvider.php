@@ -12,6 +12,7 @@ class XaiProvider extends Provider implements ImageProvider, TextProvider
 {
     use Concerns\GeneratesImages;
     use Concerns\GeneratesText;
+    use Concerns\HasTextGateway;
     use Concerns\StreamsText;
 
     /**

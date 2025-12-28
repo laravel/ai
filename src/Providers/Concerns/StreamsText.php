@@ -43,7 +43,7 @@ trait StreamsText
 
             $this->listenForToolInvocations($invocationId, $agent);
 
-            foreach ($this->gateway->streamText(
+            foreach ($this->textGateway()->streamText(
                 $invocationId,
                 $this,
                 $model,

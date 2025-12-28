@@ -7,6 +7,7 @@ use Generator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
+use Laravel\Ai\Data\Meta;
 use Laravel\Ai\Data\Usage;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Providers\Provider;
@@ -44,7 +45,7 @@ class FakeGateway implements TextGateway
         array $tools = [],
         ?array $schema = null
     ): TextResponse {
-        $message = (new Collection)->last(function ($message) {
+        $message = (new Collection($messages))->last(function ($message) {
             return $message instanceof UserMessage;
         });
 
@@ -73,7 +74,13 @@ class FakeGateway implements TextGateway
         yield new StreamStart(ulid(), $provider->providerName(), $model, time());
         yield new TextStart(ulid(), $messageId, time());
 
-        $fakeResponse = $this->nextResponse($provider, $model, $prompt, $attachments, $schema);
+        $message = (new Collection($messages))->last(function ($message) {
+            return $message instanceof UserMessage;
+        });
+
+        $fakeResponse = $this->nextResponse(
+            $provider, $model, $message->content, $message->attachments, $schema
+        );
 
         $events = Str::of($fakeResponse->text)
             ->explode(' ')
@@ -133,10 +140,10 @@ class FakeGateway implements TextGateway
 
         return match (true) {
             is_string($response) => new TextResponse(
-                $response, new Usage, $this->meta()
+                $response, new Usage, new Meta($provider->providerName(), $model)
             ),
             is_array($response) => new StructuredTextResponse(
-                $response, json_encode($response), new Usage, $this->meta()
+                $response, json_encode($response), new Usage, new Meta($provider->providerName(), $model)
             ),
             $response instanceof Closure => $this->marshalResponse(
                 $response($prompt, $attachments, $provider, $model),

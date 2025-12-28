@@ -7,6 +7,7 @@ use Laravel\Ai\Contracts\Providers\TextProvider;
 class GroqProvider extends Provider implements TextProvider
 {
     use Concerns\GeneratesText;
+    use Concerns\HasTextGateway;
     use Concerns\StreamsText;
 
     /**
