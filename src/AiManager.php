@@ -92,13 +92,9 @@ class AiManager extends MultipleInstanceManager
     {
         $provider = $this->textProvider($name);
 
-        if ($this->hasFakeAgent($agent)) {
-            $provider = clone $provider;
-
-            $provider->useTextGateway($this->fakeGatewayFor($agent));
-        }
-
-        return $provider;
+        return $this->hasFakeAgent($agent)
+            ? (clone $provider)->useTextGateway($this->fakeGatewayFor($agent))
+            : $provider;
     }
 
     /**
