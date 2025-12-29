@@ -86,7 +86,7 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
-     * Get a provider instance by name.
+     * Get a provider instance for an agent by name.
      */
     public function textProviderFor(Agent $agent, ?string $name = null): TextProvider
     {
