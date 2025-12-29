@@ -2,12 +2,8 @@
 
 namespace Tests\Feature;
 
-use Illuminate\Support\Str;
-use Laravel\Ai\AgentPrompt;
 use Laravel\Ai\Data\Meta;
 use Laravel\Ai\Data\Usage;
-use Laravel\Ai\Responses\AgentResponse;
-use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
 use RuntimeException;

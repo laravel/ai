@@ -99,15 +99,9 @@ trait Promptable
         $providers = $this->getProvidersAndModels($provider, $model);
 
         foreach ($providers as $provider => $model) {
-            $provider = Ai::textProvider($provider);
+            $provider = Ai::textProviderFor($this, $provider);
 
             $model ??= $provider->defaultTextModel();
-
-            if (static::isFaked()) {
-                $provider = clone $provider;
-
-                $provider->useTextGateway(Ai::fakeGatewayFor($this));
-            }
 
             try {
                 return $callback($provider, $model);

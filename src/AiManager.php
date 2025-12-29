@@ -39,10 +39,8 @@ class AiManager extends MultipleInstanceManager
 
     /**
      * Get a provider instance by name.
-     *
-     * @param  string|null  $name
      */
-    public function audioProvider($name = null): AudioProvider
+    public function audioProvider(?string $name = null): AudioProvider
     {
         return tap($this->instance($name), function ($instance) {
             if (! $instance instanceof AudioProvider) {
@@ -53,10 +51,8 @@ class AiManager extends MultipleInstanceManager
 
     /**
      * Get a provider instance by name.
-     *
-     * @param  string|null  $name
      */
-    public function embeddingProvider($name = null): EmbeddingProvider
+    public function embeddingProvider(?string $name = null): EmbeddingProvider
     {
         return tap($this->instance($name), function ($instance) {
             if (! $instance instanceof EmbeddingProvider) {
@@ -67,10 +63,8 @@ class AiManager extends MultipleInstanceManager
 
     /**
      * Get a provider instance by name.
-     *
-     * @param  string|null  $name
      */
-    public function imageProvider($name = null): ImageProvider
+    public function imageProvider(?string $name = null): ImageProvider
     {
         return tap($this->instance($name), function ($instance) {
             if (! $instance instanceof ImageProvider) {
@@ -81,10 +75,8 @@ class AiManager extends MultipleInstanceManager
 
     /**
      * Get a provider instance by name.
-     *
-     * @param  string|null  $name
      */
-    public function textProvider($name = null): TextProvider
+    public function textProvider(?string $name = null): TextProvider
     {
         return tap($this->instance($name), function ($instance) {
             if (! $instance instanceof TextProvider) {
@@ -95,10 +87,24 @@ class AiManager extends MultipleInstanceManager
 
     /**
      * Get a provider instance by name.
-     *
-     * @param  string|null  $name
      */
-    public function transcriptionProvider($name = null): TranscriptionProvider
+    public function textProviderFor(Agent $agent, ?string $name = null): TextProvider
+    {
+        $provider = $this->textProvider($name);
+
+        if ($this->hasFakeAgent($agent)) {
+            $provider = clone $provider;
+
+            $provider->useTextGateway($this->fakeGatewayFor($agent));
+        }
+
+        return $provider;
+    }
+
+    /**
+     * Get a provider instance by name.
+     */
+    public function transcriptionProvider(?string $name = null): TranscriptionProvider
     {
         return tap($this->instance($name), function ($instance) {
             if (! $instance instanceof TranscriptionProvider) {
@@ -183,11 +189,10 @@ class AiManager extends MultipleInstanceManager
      */
     public function fakeAgent(string $agent, Closure|array $responses = []): FakeGateway
     {
-        $this->fakeAgentGateways[$agent] = new FakeGateway(
-            $responses,
+        return tap(
+            new FakeGateway($responses),
+            fn ($gateway) => $this->fakeAgentGateways[$agent] = $gateway
         );
-
-        return $this->fakeAgentGateways[$agent];
     }
 
     /**
@@ -206,11 +211,9 @@ class AiManager extends MultipleInstanceManager
      */
     public function fakeGatewayFor(Agent $agent): FakeGateway
     {
-        if (! $this->hasFakeAgent($agent)) {
-            throw new InvalidArgumentException('Agent ['.get_class($agent).'] has not been faked.');
-        }
-
-        return $this->fakeAgentGateways[get_class($agent)];
+        return $this->hasFakeAgent($agent)
+            ? $this->fakeAgentGateways[get_class($agent)]
+            : throw new InvalidArgumentException('Agent ['.get_class($agent).'] has not been faked.');
     }
 
     /**
