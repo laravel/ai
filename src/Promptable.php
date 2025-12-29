@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Queue\SerializesModels;
 use Laravel\Ai\Contracts\HasMiddleware;
+use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Gateway\FakeGateway;
 use Laravel\Ai\Jobs\BroadcastAgent;
@@ -106,6 +107,8 @@ trait Promptable
             try {
                 return $callback($provider, $model);
             } catch (FailoverableException $e) {
+                event(new AgentFailedOver($this, $provider, $model, $e));
+
                 continue;
             }
         }
