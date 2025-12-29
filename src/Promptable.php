@@ -161,6 +161,6 @@ trait Promptable
      */
     public static function isFaked(): bool
     {
-        return Ai::hasFakeAgent(static::class);
+        return Ai::hasFakeGatewayFor(static::class);
     }
 }

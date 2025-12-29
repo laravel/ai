@@ -92,7 +92,7 @@ class AiManager extends MultipleInstanceManager
     {
         $provider = $this->textProvider($name);
 
-        return $this->hasFakeAgent($agent)
+        return $this->hasFakeGatewayFor($agent)
             ? (clone $provider)->useTextGateway($this->fakeGatewayFor($agent))
             : $provider;
     }
@@ -194,7 +194,7 @@ class AiManager extends MultipleInstanceManager
     /**
      * Determine if the given agent has been faked.
      */
-    public function hasFakeAgent(Agent|string $agent): bool
+    public function hasFakeGatewayFor(Agent|string $agent): bool
     {
         return array_key_exists(
             is_object($agent) ? get_class($agent) : $agent,
@@ -207,7 +207,7 @@ class AiManager extends MultipleInstanceManager
      */
     public function fakeGatewayFor(Agent $agent): FakeGateway
     {
-        return $this->hasFakeAgent($agent)
+        return $this->hasFakeGatewayFor($agent)
             ? $this->fakeAgentGateways[get_class($agent)]
             : throw new InvalidArgumentException('Agent ['.get_class($agent).'] has not been faked.');
     }
