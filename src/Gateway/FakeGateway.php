@@ -132,7 +132,7 @@ class FakeGateway implements TextGateway
             }
 
             if (! is_null($schema)) {
-                throw new RuntimeException('Unable to automatically determine fake response for structured output.');
+                throw new RuntimeException('Unable to automatically generate fake responses for structured output.');
             }
 
             $response = 'Fake response for prompt: '.Str::words($prompt, 10);
