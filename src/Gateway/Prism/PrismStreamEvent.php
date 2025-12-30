@@ -43,9 +43,9 @@ class PrismStreamEvent
             PrismStreamEventType::ToolResult => static::toToolResultEvent($event),
             PrismStreamEventType::StreamEnd => static::toStreamEndEvent($event),
             PrismStreamEventType::Error => new Error($event->id, $event->type, $event->message, $event->recoverable, $event->timestamp, $event->metadata),
-            default => $event,
+            default => null
         }, function ($event) use ($invocationId) {
-            $event->withInvocationId($invocationId);
+            $event?->withInvocationId($invocationId);
         });
     }
 

@@ -130,9 +130,11 @@ class PrismGateway implements Gateway
                 ->asStream();
 
             foreach ($events as $event) {
-                yield PrismStreamEvent::toLaravelStreamEvent(
+                if (! is_null($event = PrismStreamEvent::toLaravelStreamEvent(
                     $invocationId, $event, $provider->providerName(), $model
-                );
+                ))) {
+                    yield $event;
+                }
             }
         } catch (PrismVendorException $e) {
             throw PrismException::toAiException($e, $provider, $model);
