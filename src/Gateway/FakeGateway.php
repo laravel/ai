@@ -71,7 +71,7 @@ class FakeGateway implements TextGateway
         $messageId = ulid();
 
         // Fake the stream and text starting...
-        yield new StreamStart(ulid(), $provider->providerName(), $model, time());
+        yield new StreamStart(ulid(), $provider->name(), $model, time());
         yield new TextStart(ulid(), $messageId, time());
 
         $message = (new Collection($messages))->last(function ($message) {
@@ -140,10 +140,10 @@ class FakeGateway implements TextGateway
 
         return match (true) {
             is_string($response) => new TextResponse(
-                $response, new Usage, new Meta($provider->providerName(), $model)
+                $response, new Usage, new Meta($provider->name(), $model)
             ),
             is_array($response) => new StructuredTextResponse(
-                $response, json_encode($response), new Usage, new Meta($provider->providerName(), $model)
+                $response, json_encode($response), new Usage, new Meta($provider->name(), $model)
             ),
             $response instanceof Closure => $this->marshalResponse(
                 $response($prompt, $attachments, $provider, $model),

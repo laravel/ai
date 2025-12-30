@@ -241,8 +241,12 @@ class AiManager extends MultipleInstanceManager
      */
     public function getInstanceConfig($name)
     {
-        return $this->app['config']->get(
+        $config = $this->app['config']->get(
             'ai.providers.'.$name, ['driver' => $name],
         );
+
+        $config['name'] = $name;
+
+        return $config;
     }
 }

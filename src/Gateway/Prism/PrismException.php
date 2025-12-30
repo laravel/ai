@@ -18,13 +18,13 @@ class PrismException
     {
         if ($e instanceof PrismRateLimitedException) {
             throw RateLimitedException::forProvider(
-                $provider->providerName(), $e->getCode(), $e->getPrevious()
+                $provider->name(), $e->getCode(), $e->getPrevious()
             );
         }
 
         if ($e instanceof PrismProviderOverloadedException) {
             throw new ProviderOverloadedException(
-                'AI provider ['.$provider->providerName().'] is overloaded.',
+                'AI provider ['.$provider->name().'] is overloaded.',
                 code: $e->getCode(),
                 previous: $e->getPrevious());
         }

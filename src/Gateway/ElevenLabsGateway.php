@@ -46,7 +46,7 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
         } catch (RequestException $e) {
             if ($e->status() === 429) {
                 throw RateLimitedException::forProvider(
-                    $provider->providerName(), $e->getCode(), $e
+                    $provider->name(), $e->getCode(), $e
                 );
             }
 
@@ -55,7 +55,7 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
 
         return new AudioResponse(
             base64_encode((string) $response),
-            new Meta($provider->providerName(), $model),
+            new Meta($provider->name(), $model),
             'audio/mpeg'
         );
     }
@@ -93,7 +93,7 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
         } catch (RequestException $e) {
             if ($e->status() === 429) {
                 throw RateLimitedException::forProvider(
-                    $provider->providerName(), $e->getCode(), $e
+                    $provider->name(), $e->getCode(), $e
                 );
             }
 
@@ -117,7 +117,7 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
                 );
             })->filter()->values(),
             new Usage,
-            new Meta($provider->providerName(), $model),
+            new Meta($provider->name(), $model),
         );
     }
 }

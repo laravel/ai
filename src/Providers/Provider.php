@@ -15,7 +15,15 @@ abstract class Provider
     /**
      * Get the name of the underlying AI provider.
      */
-    public function providerName(): string
+    public function name(): string
+    {
+        return $this->config['name'];
+    }
+
+    /**
+     * Get the name of the underlying AI driver.
+     */
+    public function driver(): string
     {
         return $this->config['driver'];
     }

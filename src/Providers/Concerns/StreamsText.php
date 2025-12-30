@@ -60,7 +60,7 @@ trait StreamsText
             $response = new StreamedAgentResponse(
                 $invocationId,
                 collect($events),
-                new Meta($this->providerName(), $model),
+                new Meta($this->name(), $model),
             );
 
             $this->events->dispatch(

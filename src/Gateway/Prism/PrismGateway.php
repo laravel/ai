@@ -87,7 +87,7 @@ class PrismGateway implements Gateway
                 $response->structured,
                 $response->text,
                 PrismUsage::toLaravelUsage($response->usage),
-                new Meta($provider->providerName(), $response->meta->model),
+                new Meta($provider->name(), $response->meta->model),
             ))->withToolCallsAndResults(
                 toolCalls: collect($response->toolCalls)->map(PrismTool::toLaravelToolCall(...)),
                 toolResults: collect($response->toolResults)->map(PrismTool::toLaravelToolResult(...)),
@@ -95,7 +95,7 @@ class PrismGateway implements Gateway
             : (new TextResponse(
                 $response->text,
                 PrismUsage::toLaravelUsage($response->usage),
-                new Meta($provider->providerName(), $response->meta->model),
+                new Meta($provider->name(), $response->meta->model),
             ))->withMessages(PrismMessages::toLaravelMessages($response->messages));
     }
 
@@ -131,7 +131,7 @@ class PrismGateway implements Gateway
 
             foreach ($events as $event) {
                 if (! is_null($event = PrismStreamEvent::toLaravelStreamEvent(
-                    $invocationId, $event, $provider->providerName(), $model
+                    $invocationId, $event, $provider->name(), $model
                 ))) {
                     yield $event;
                 }
@@ -196,10 +196,10 @@ class PrismGateway implements Gateway
             ]);
         }
 
-        if ($schema && $provider instanceof AnthropicProvider) {
-            $request = $request->withProviderOptions([
-                'use_tool_calling' => true,
-            ]);
+        if ($provider instanceof AnthropicProvider) {
+            $request = $request->withProviderOptions(array_filter([
+                'use_tool_calling' => $schema ? true : null,
+            ]))->withMaxTokens(50_000);
         }
 
         return $request;
@@ -246,7 +246,7 @@ class PrismGateway implements Gateway
                 return new GeneratedImage($image->base64, $image->mimeType);
             }),
             PrismUsage::toLaravelUsage($response->usage),
-            new Meta($provider->providerName(), $model),
+            new Meta($provider->name(), $model),
         );
     }
 
@@ -308,7 +308,7 @@ class PrismGateway implements Gateway
 
         return new AudioResponse(
             $response->audio->base64,
-            new Meta($provider->providerName(), $model),
+            new Meta($provider->name(), $model),
             'audio/mpeg',
         );
     }
@@ -324,7 +324,7 @@ class PrismGateway implements Gateway
         bool $diarize = false,
     ): TranscriptionResponse {
         try {
-            if ($provider->providerName() === 'openai' && ! $diarize) {
+            if ($provider->driver() === 'openai' && ! $diarize) {
                 $model = str_replace('-diarize', '', $model);
             }
 
@@ -337,7 +337,7 @@ class PrismGateway implements Gateway
                     $audio instanceof UploadedFile => Audio::fromBase64(base64_encode($audio->get()), $audio->getClientMimeType()),
                 });
 
-            if ($provider->providerName() === 'openai') {
+            if ($provider->driver() === 'openai') {
                 $request->withProviderOptions(array_filter([
                     'language' => $language,
                     'response_format' => $diarize ? 'diarized_json' : null,
@@ -360,7 +360,7 @@ class PrismGateway implements Gateway
                 );
             }),
             PrismUsage::toLaravelUsage($response->usage),
-            new Meta($provider->providerName(), $model),
+            new Meta($provider->name(), $model),
         );
     }
 
@@ -385,7 +385,7 @@ class PrismGateway implements Gateway
         return new EmbeddingsResponse(
             collect($response->embeddings)->map->embedding->all(),
             $response->usage->tokens,
-            new Meta($provider->providerName(), $model),
+            new Meta($provider->name(), $model),
         );
     }
 
@@ -406,7 +406,7 @@ class PrismGateway implements Gateway
      */
     protected static function toPrismProvider(Provider $provider): PrismProvider
     {
-        return match ($provider->providerName()) {
+        return match ($provider->driver()) {
             'openai' => PrismProvider::OpenAI,
             'anthropic' => PrismProvider::Anthropic,
             'gemini' => PrismProvider::Gemini,
