@@ -121,6 +121,12 @@ trait Promptable
      */
     private function withinMiddlewarePipeline(Closure $callback, string $prompt, array $attachments): Closure
     {
+        $baseMiddleware = static::isFaked() ? [function (AgentPrompt $prompt, Closure $next) {
+            Ai::recordPrompt($prompt);
+
+            return $next($prompt);
+        }] : [];
+
         return fn (Provider $provider, string $model) => pipeline()
             ->send(new AgentPrompt(
                 $this,
@@ -129,7 +135,11 @@ trait Promptable
                 $provider,
                 $model
             ))
-            ->through($this instanceof HasMiddleware ? $this->middleware() : [])
+            ->through(
+                $this instanceof HasMiddleware
+                    ? [...$baseMiddleware, ...$this->middleware()]
+                    : $baseMiddleware
+            )
             ->then($callback);
     }
 

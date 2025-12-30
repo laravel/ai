@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\MultipleInstanceManager;
 use InvalidArgumentException;
+use Laravel\Ai\AgentPrompt;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
@@ -29,6 +30,11 @@ class AiManager extends MultipleInstanceManager
      * All of the registered fake agent gateways.
      */
     protected array $fakeAgentGateways = [];
+
+    /**
+     * All of the recorded fake agent prompts.
+     */
+    protected array $fakeAgentPrompts = [];
 
     /**
      * The key name of the "driver" equivalent configuration option.
@@ -189,6 +195,16 @@ class AiManager extends MultipleInstanceManager
             new FakeGateway($responses),
             fn ($gateway) => $this->fakeAgentGateways[$agent] = $gateway
         );
+    }
+
+    /**
+     * Record the given prompt for the faked agent.
+     */
+    public function recordPrompt(AgentPrompt $prompt): self
+    {
+        $this->fakeAgentPrompts[get_class($prompt->agent)][] = $prompt;
+
+        return $this;
     }
 
     /**
