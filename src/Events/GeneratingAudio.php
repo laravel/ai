@@ -2,7 +2,7 @@
 
 namespace Laravel\Ai\Events;
 
-use Laravel\Ai\AudioPrompt;
+use Laravel\Ai\Prompts\AudioPrompt;
 use Laravel\Ai\Providers\Provider;
 
 class GeneratingAudio

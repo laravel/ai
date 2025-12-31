@@ -5,7 +5,7 @@ namespace Laravel\Ai\Providers\Concerns;
 use Illuminate\Support\Str;
 use Laravel\Ai\Events\GeneratingImage;
 use Laravel\Ai\Events\ImageGenerated;
-use Laravel\Ai\ImagePrompt;
+use Laravel\Ai\Prompts\ImagePrompt;
 use Laravel\Ai\Responses\ImageResponse;
 
 trait GeneratesImages

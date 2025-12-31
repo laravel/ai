@@ -3,10 +3,10 @@
 namespace Laravel\Ai\PendingResponses;
 
 use Laravel\Ai\Ai;
-use Laravel\Ai\AudioPrompt;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Jobs\GenerateAudio;
+use Laravel\Ai\Prompts\AudioPrompt;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\QueuedAudioResponse;

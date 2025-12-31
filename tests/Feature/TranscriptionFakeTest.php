@@ -4,12 +4,12 @@ namespace Tests\Feature;
 
 use Exception;
 use Illuminate\Support\Collection;
+use Laravel\Ai\Prompts\TranscriptionPrompt;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\TranscriptionResponse;
 use Laravel\Ai\Transcription;
-use Laravel\Ai\TranscriptionPrompt;
 use RuntimeException;
 use Tests\TestCase;
 

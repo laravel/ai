@@ -1,6 +1,6 @@
 <?php
 
-namespace Laravel\Ai;
+namespace Laravel\Ai\Prompts;
 
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;

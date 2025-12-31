@@ -4,11 +4,11 @@ namespace Laravel\Ai\Concerns;
 
 use Closure;
 use Illuminate\Support\Collection;
+use Laravel\Ai\Prompts\TranscriptionPrompt;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\TranscriptionResponse;
-use Laravel\Ai\TranscriptionPrompt;
 use PHPUnit\Framework\Assert as PHPUnit;
 use RuntimeException;
 

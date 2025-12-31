@@ -2,7 +2,7 @@
 
 namespace Laravel\Ai\Events;
 
-use Laravel\Ai\ImagePrompt;
+use Laravel\Ai\Prompts\ImagePrompt;
 use Laravel\Ai\Providers\Provider;
 
 class GeneratingImage

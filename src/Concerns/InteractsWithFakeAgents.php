@@ -5,9 +5,9 @@ namespace Laravel\Ai\Concerns;
 use Closure;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
-use Laravel\Ai\AgentPrompt;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Gateway\FakeGateway;
+use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\QueuedAgentPrompt;
 use PHPUnit\Framework\Assert as PHPUnit;
 

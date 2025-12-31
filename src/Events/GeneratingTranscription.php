@@ -2,8 +2,8 @@
 
 namespace Laravel\Ai\Events;
 
+use Laravel\Ai\Prompts\TranscriptionPrompt;
 use Laravel\Ai\Providers\Provider;
-use Laravel\Ai\TranscriptionPrompt;
 
 class GeneratingTranscription
 {

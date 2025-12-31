@@ -4,7 +4,7 @@ namespace Laravel\Ai\Concerns;
 
 use Closure;
 use Illuminate\Support\Collection;
-use Laravel\Ai\AudioPrompt;
+use Laravel\Ai\Prompts\AudioPrompt;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use PHPUnit\Framework\Assert as PHPUnit;

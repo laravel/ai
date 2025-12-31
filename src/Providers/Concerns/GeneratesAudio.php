@@ -3,9 +3,9 @@
 namespace Laravel\Ai\Providers\Concerns;
 
 use Illuminate\Support\Str;
-use Laravel\Ai\AudioPrompt;
 use Laravel\Ai\Events\AudioGenerated;
 use Laravel\Ai\Events\GeneratingAudio;
+use Laravel\Ai\Prompts\AudioPrompt;
 use Laravel\Ai\Responses\AudioResponse;
 
 trait GeneratesAudio

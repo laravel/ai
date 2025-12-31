@@ -2,7 +2,7 @@
 
 namespace Laravel\Ai\Events;
 
-use Laravel\Ai\AgentPrompt;
+use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 

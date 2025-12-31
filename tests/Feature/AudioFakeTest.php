@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use Exception;
 use Laravel\Ai\Audio;
-use Laravel\Ai\AudioPrompt;
+use Laravel\Ai\Prompts\AudioPrompt;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use RuntimeException;

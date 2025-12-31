@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 use Exception;
-use Laravel\Ai\AgentPrompt;
+use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\QueuedAgentPrompt;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;

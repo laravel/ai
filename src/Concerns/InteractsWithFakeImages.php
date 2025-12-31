@@ -4,7 +4,7 @@ namespace Laravel\Ai\Concerns;
 
 use Closure;
 use Illuminate\Support\Collection;
-use Laravel\Ai\ImagePrompt;
+use Laravel\Ai\Prompts\ImagePrompt;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;

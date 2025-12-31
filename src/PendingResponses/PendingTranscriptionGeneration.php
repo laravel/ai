@@ -10,10 +10,10 @@ use Laravel\Ai\Jobs\GenerateTranscription;
 use Laravel\Ai\Messages\Attachments\LocalAudio;
 use Laravel\Ai\Messages\Attachments\StoredAudio;
 use Laravel\Ai\Messages\Attachments\TranscribableAudio;
+use Laravel\Ai\Prompts\TranscriptionPrompt;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\QueuedTranscriptionResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
-use Laravel\Ai\TranscriptionPrompt;
 use LogicException;
 
 class PendingTranscriptionGeneration
