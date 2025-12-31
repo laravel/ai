@@ -50,6 +50,12 @@ class PendingTranscriptionGeneration
      */
     public function generate(array|string|null $provider = null, ?string $model = null): TranscriptionResponse
     {
+        if (Ai::areTranscriptionsFaked()) {
+            Ai::recordTranscriptionGeneration($this->audio, $this->language, $this->diarize);
+
+            return Ai::nextFakeTranscriptionResponse($this->audio, $this->language, $this->diarize);
+        }
+
         $providers = Provider::formatProviderAndModelList(
             $provider ?? config('ai.default_for_transcription'), $model
         );

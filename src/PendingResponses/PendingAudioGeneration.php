@@ -65,6 +65,12 @@ class PendingAudioGeneration
      */
     public function generate(array|string|null $provider = null, ?string $model = null): AudioResponse
     {
+        if (Ai::isAudioFaked()) {
+            Ai::recordAudioGeneration($this->text, $this->voice, $this->instructions);
+
+            return Ai::nextFakeAudioResponse($this->text, $this->voice, $this->instructions);
+        }
+
         $providers = Provider::formatProviderAndModelList(
             $provider ?? config('ai.default_for_audio'), $model
         );

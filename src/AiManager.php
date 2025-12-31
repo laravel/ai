@@ -23,6 +23,9 @@ use LogicException;
 class AiManager extends MultipleInstanceManager
 {
     use Concerns\InteractsWithFakeAgents;
+    use Concerns\InteractsWithFakeAudio;
+    use Concerns\InteractsWithFakeImages;
+    use Concerns\InteractsWithFakeTranscriptions;
 
     /**
      * The key name of the "driver" equivalent configuration option.

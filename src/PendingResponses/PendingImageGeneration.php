@@ -96,6 +96,12 @@ class PendingImageGeneration
      */
     public function generate(array|string|null $provider = null, ?string $model = null): ImageResponse
     {
+        if (Ai::areImagesFaked()) {
+            Ai::recordImageGeneration($this->prompt, $this->attachments, $this->size, $this->quality);
+
+            return Ai::nextFakeImageResponse($this->prompt, $this->attachments, $this->size, $this->quality);
+        }
+
         $providers = Provider::formatProviderAndModelList(
             $provider ?? config('ai.default_for_images'), $model
         );
