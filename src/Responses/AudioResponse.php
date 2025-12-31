@@ -10,6 +10,9 @@ class AudioResponse
 {
     use Storable;
 
+    /**
+     * @param  string  $audio  The Base64 representation of the audio.
+     */
     public function __construct(
         public string $audio,
         public Meta $meta,
