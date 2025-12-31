@@ -11,7 +11,7 @@ class QueuedAgentResponse
 {
     use Concerns\HasQueuedResponseCallbacks;
 
-    public function __construct(public PendingDispatch $dispatchable) {}
+    public function __construct(protected PendingDispatch $dispatchable) {}
 
     /**
      * Proxy missing method calls to the pending dispatch instance.
