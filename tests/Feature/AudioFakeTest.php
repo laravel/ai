@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use Exception;
 use Laravel\Ai\Audio;
 use Laravel\Ai\Prompts\AudioPrompt;
+use Laravel\Ai\Prompts\QueuedAudioPrompt;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use RuntimeException;
@@ -99,6 +100,44 @@ class AudioFakeTest extends TestCase
             return $prompt->text === 'Hello world'
                 && $prompt->voice === 'alloy'
                 && $prompt->instructions === 'Speak slowly';
+        });
+    }
+
+    public function test_queued_audio_can_be_faked(): void
+    {
+        Audio::fake();
+
+        Audio::of('First text')->queue();
+
+        Audio::assertQueued(fn (QueuedAudioPrompt $prompt) => $prompt->text === 'First text');
+        Audio::assertNotQueued(fn (QueuedAudioPrompt $prompt) => $prompt->contains('Second text'));
+
+        Audio::assertQueued(function (QueuedAudioPrompt $prompt) {
+            return $prompt->text === 'First text';
+        });
+
+        Audio::assertNotQueued(function (QueuedAudioPrompt $prompt) {
+            return $prompt->text === 'Second text';
+        });
+    }
+
+    public function test_can_assert_no_audio_was_queued(): void
+    {
+        Audio::fake();
+
+        Audio::assertNothingQueued();
+    }
+
+    public function test_queued_audio_voice_and_instructions_are_recorded(): void
+    {
+        Audio::fake();
+
+        Audio::of('Hello world')->male()->instructions('Speak quickly')->queue();
+
+        Audio::assertQueued(function (QueuedAudioPrompt $prompt) {
+            return $prompt->text === 'Hello world'
+                && $prompt->voice === 'default-male'
+                && $prompt->instructions === 'Speak quickly';
         });
     }
 }

@@ -57,6 +57,30 @@ class Audio
     }
 
     /**
+     * Assert that a queued audio generation was recorded matching a given truth test.
+     */
+    public static function assertQueued(Closure $callback): void
+    {
+        Ai::assertAudioQueued($callback);
+    }
+
+    /**
+     * Assert that a queued audio generation was not recorded matching a given truth test.
+     */
+    public static function assertNotQueued(Closure $callback): void
+    {
+        Ai::assertAudioNotQueued($callback);
+    }
+
+    /**
+     * Assert that no queued audio generations were recorded.
+     */
+    public static function assertNothingQueued(): void
+    {
+        Ai::assertNoAudioQueued();
+    }
+
+    /**
      * Determine if audio generation is faked.
      */
     public static function isFaked(): bool
