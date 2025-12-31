@@ -3,6 +3,7 @@
 namespace Laravel\Ai;
 
 use Closure;
+use Laravel\Ai\Gateway\FakeImageGateway;
 use Laravel\Ai\PendingResponses\PendingImageGeneration;
 
 class Image
@@ -18,7 +19,7 @@ class Image
     /**
      * Fake image generation.
      */
-    public static function fake(Closure|array $responses = []): AiManager
+    public static function fake(Closure|array $responses = []): FakeImageGateway
     {
         return Ai::fakeImages($responses);
     }
@@ -52,6 +53,6 @@ class Image
      */
     public static function isFaked(): bool
     {
-        return Ai::areImagesFaked();
+        return Ai::imagesAreFaked();
     }
 }

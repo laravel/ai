@@ -3,14 +3,17 @@
 namespace Laravel\Ai\Prompts;
 
 use Illuminate\Http\UploadedFile;
+use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Messages\Attachments\TranscribableAudio;
 
 class TranscriptionPrompt
 {
     public function __construct(
         public readonly TranscribableAudio|UploadedFile $audio,
-        public readonly ?string $language = null,
-        public readonly bool $diarize = false,
+        public readonly ?string $language,
+        public readonly bool $diarize,
+        public readonly TranscriptionProvider $provider,
+        public readonly string $model,
     ) {}
 
     /**

@@ -28,6 +28,11 @@ interface ImageProvider
     public function imageGateway(): ImageGateway;
 
     /**
+     * Set the provider's image gateway.
+     */
+    public function useImageGateway(ImageGateway $gateway): self;
+
+    /**
      * Get the name of the default image model.
      */
     public function defaultImageModel(): string;

@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Providers\Concerns;
 
 use Illuminate\Support\Str;
+use Laravel\Ai\Ai;
 use Laravel\Ai\Events\AudioGenerated;
 use Laravel\Ai\Events\GeneratingAudio;
 use Laravel\Ai\Prompts\AudioPrompt;
@@ -23,7 +24,11 @@ trait GeneratesAudio
 
         $model ??= $this->defaultAudioModel();
 
-        $prompt = new AudioPrompt($text, $voice, $instructions);
+        $prompt = new AudioPrompt($text, $voice, $instructions, $this, $model);
+
+        if (Ai::audioIsFaked()) {
+            Ai::recordAudioGeneration($prompt);
+        }
 
         $this->events->dispatch(new GeneratingAudio(
             $invocationId, $this, $model, $prompt,

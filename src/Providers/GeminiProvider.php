@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Providers;
 
-use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -12,6 +11,7 @@ class GeminiProvider extends Provider implements EmbeddingProvider, ImageProvide
     use Concerns\GeneratesEmbeddings;
     use Concerns\GeneratesImages;
     use Concerns\GeneratesText;
+    use Concerns\HasImageGateway;
     use Concerns\HasTextGateway;
     use Concerns\StreamsText;
 
@@ -21,14 +21,6 @@ class GeminiProvider extends Provider implements EmbeddingProvider, ImageProvide
     public function defaultTextModel(): string
     {
         return 'gemini-3-flash-preview';
-    }
-
-    /**
-     * Get the provider's image gateway.
-     */
-    public function imageGateway(): ImageGateway
-    {
-        return $this->gateway;
     }
 
     /**

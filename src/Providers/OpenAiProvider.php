@@ -2,9 +2,6 @@
 
 namespace Laravel\Ai\Providers;
 
-use Laravel\Ai\Contracts\Gateway\AudioGateway;
-use Laravel\Ai\Contracts\Gateway\ImageGateway;
-use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
@@ -18,7 +15,10 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     use Concerns\GeneratesImages;
     use Concerns\GeneratesText;
     use Concerns\GeneratesTranscriptions;
+    use Concerns\HasAudioGateway;
+    use Concerns\HasImageGateway;
     use Concerns\HasTextGateway;
+    use Concerns\HasTranscriptionGateway;
     use Concerns\StreamsText;
 
     /**
@@ -27,14 +27,6 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     public function defaultTextModel(): string
     {
         return 'gpt-5-mini';
-    }
-
-    /**
-     * Get the provider's image gateway.
-     */
-    public function imageGateway(): ImageGateway
-    {
-        return $this->gateway;
     }
 
     /**
@@ -64,27 +56,11 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     }
 
     /**
-     * Get the provider's audio gateway.
-     */
-    public function audioGateway(): AudioGateway
-    {
-        return $this->gateway;
-    }
-
-    /**
      * Get the name of the default audio (TTS) model.
      */
     public function defaultAudioModel(): string
     {
         return 'gpt-4o-mini-tts';
-    }
-
-    /**
-     * Get the provider's transcription gateway.
-     */
-    public function transcriptionGateway(): TranscriptionGateway
-    {
-        return $this->gateway;
     }
 
     /**

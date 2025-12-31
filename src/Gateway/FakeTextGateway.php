@@ -7,8 +7,8 @@ use Generator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
+use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Messages\UserMessage;
-use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StructuredTextResponse;
@@ -22,7 +22,7 @@ use RuntimeException;
 
 use function Laravel\Ai\ulid;
 
-class FakeGateway implements TextGateway
+class FakeTextGateway implements TextGateway
 {
     protected int $currentResponseIndex = 0;
 
@@ -38,7 +38,7 @@ class FakeGateway implements TextGateway
      * @param  array<string, \Illuminate\JsonSchema\Types\Type>|null  $schema
      */
     public function generateText(
-        Provider $provider,
+        TextProvider $provider,
         string $model,
         ?string $instructions,
         array $messages = [],
@@ -61,7 +61,7 @@ class FakeGateway implements TextGateway
      */
     public function streamText(
         string $invocationId,
-        Provider $provider,
+        TextProvider $provider,
         string $model,
         ?string $instructions,
         array $messages = [],
@@ -104,7 +104,7 @@ class FakeGateway implements TextGateway
     /**
      * Get the next response instance.
      */
-    protected function nextResponse(Provider $provider, string $model, string $prompt, Collection $attachments, ?array $schema): mixed
+    protected function nextResponse(TextProvider $provider, string $model, string $prompt, Collection $attachments, ?array $schema): mixed
     {
         $response = is_array($this->responses)
             ? ($this->responses[$this->currentResponseIndex] ?? null)
@@ -120,7 +120,7 @@ class FakeGateway implements TextGateway
      */
     protected function marshalResponse(
         mixed $response,
-        Provider $provider,
+        TextProvider $provider,
         string $model,
         string $prompt,
         Collection $attachments,

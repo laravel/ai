@@ -4,6 +4,7 @@ namespace Laravel\Ai;
 
 use Closure;
 use Illuminate\Http\UploadedFile;
+use Laravel\Ai\Gateway\FakeTranscriptionGateway;
 use Laravel\Ai\Messages\Attachments\Base64Audio;
 use Laravel\Ai\Messages\Attachments\LocalAudio;
 use Laravel\Ai\Messages\Attachments\StoredAudio;
@@ -51,7 +52,7 @@ class Transcription
     /**
      * Fake transcription generation.
      */
-    public static function fake(Closure|array $responses = []): AiManager
+    public static function fake(Closure|array $responses = []): FakeTranscriptionGateway
     {
         return Ai::fakeTranscriptions($responses);
     }
@@ -85,6 +86,6 @@ class Transcription
      */
     public static function isFaked(): bool
     {
-        return Ai::areTranscriptionsFaked();
+        return Ai::transcriptionsAreFaked();
     }
 }

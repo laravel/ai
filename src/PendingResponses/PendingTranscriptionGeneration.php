@@ -10,7 +10,6 @@ use Laravel\Ai\Jobs\GenerateTranscription;
 use Laravel\Ai\Messages\Attachments\LocalAudio;
 use Laravel\Ai\Messages\Attachments\StoredAudio;
 use Laravel\Ai\Messages\Attachments\TranscribableAudio;
-use Laravel\Ai\Prompts\TranscriptionPrompt;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\QueuedTranscriptionResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
@@ -51,20 +50,12 @@ class PendingTranscriptionGeneration
      */
     public function generate(array|string|null $provider = null, ?string $model = null): TranscriptionResponse
     {
-        if (Ai::areTranscriptionsFaked()) {
-            $prompt = new TranscriptionPrompt($this->audio, $this->language, $this->diarize);
-
-            Ai::recordTranscriptionGeneration($prompt);
-
-            return Ai::nextFakeTranscriptionResponse($prompt);
-        }
-
         $providers = Provider::formatProviderAndModelList(
             $provider ?? config('ai.default_for_transcription'), $model
         );
 
         foreach ($providers as $provider => $model) {
-            $provider = Ai::transcriptionProvider($provider);
+            $provider = Ai::transcriptionProviderWithFake($provider);
 
             $model ??= $provider->defaultTranscriptionModel();
 

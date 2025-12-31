@@ -4,6 +4,7 @@ namespace Laravel\Ai\Providers\Concerns;
 
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
+use Laravel\Ai\Ai;
 use Laravel\Ai\Events\GeneratingTranscription;
 use Laravel\Ai\Events\TranscriptionGenerated;
 use Laravel\Ai\Messages\Attachments\TranscribableAudio;
@@ -25,7 +26,11 @@ trait GeneratesTranscriptions
 
         $model ??= $this->defaultTranscriptionModel();
 
-        $prompt = new TranscriptionPrompt($audio, $language, $diarize);
+        $prompt = new TranscriptionPrompt($audio, $language, $diarize, $this, $model);
+
+        if (Ai::transcriptionsAreFaked()) {
+            Ai::recordTranscriptionGeneration($prompt);
+        }
 
         $this->events->dispatch(new GeneratingTranscription(
             $invocationId, $this, $model, $prompt,

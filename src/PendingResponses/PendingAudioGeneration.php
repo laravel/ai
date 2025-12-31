@@ -6,7 +6,6 @@ use Laravel\Ai\Ai;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Jobs\GenerateAudio;
-use Laravel\Ai\Prompts\AudioPrompt;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\QueuedAudioResponse;
@@ -66,20 +65,12 @@ class PendingAudioGeneration
      */
     public function generate(array|string|null $provider = null, ?string $model = null): AudioResponse
     {
-        if (Ai::isAudioFaked()) {
-            $prompt = new AudioPrompt($this->text, $this->voice, $this->instructions);
-
-            Ai::recordAudioGeneration($prompt);
-
-            return Ai::nextFakeAudioResponse($prompt);
-        }
-
         $providers = Provider::formatProviderAndModelList(
             $provider ?? config('ai.default_for_audio'), $model
         );
 
         foreach ($providers as $provider => $model) {
-            $provider = Ai::audioProvider($provider);
+            $provider = Ai::audioProviderWithFake($provider);
 
             $model ??= $provider->defaultAudioModel();
 

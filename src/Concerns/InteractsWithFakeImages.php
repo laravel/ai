@@ -4,25 +4,16 @@ namespace Laravel\Ai\Concerns;
 
 use Closure;
 use Illuminate\Support\Collection;
+use Laravel\Ai\Gateway\FakeImageGateway;
 use Laravel\Ai\Prompts\ImagePrompt;
-use Laravel\Ai\Responses\Data\GeneratedImage;
-use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
-use Laravel\Ai\Responses\ImageResponse;
 use PHPUnit\Framework\Assert as PHPUnit;
-use RuntimeException;
 
 trait InteractsWithFakeImages
 {
     /**
-     * Indicates if image generation is faked.
+     * The fake image gateway instance.
      */
-    protected bool $imagesFaked = false;
-
-    /**
-     * The faked image responses.
-     */
-    protected Closure|array $fakeImageResponses = [];
+    protected ?FakeImageGateway $fakeImageGateway = null;
 
     /**
      * All of the recorded image generations.
@@ -30,24 +21,11 @@ trait InteractsWithFakeImages
     protected array $recordedImageGenerations = [];
 
     /**
-     * The current index of the faked image responses.
-     */
-    protected int $fakeImageResponseIndex = 0;
-
-    /**
-     * Indicates if stray image generations should be prevented.
-     */
-    protected bool $preventStrayImageGenerations = false;
-
-    /**
      * Fake image generation.
      */
-    public function fakeImages(Closure|array $responses = []): self
+    public function fakeImages(Closure|array $responses = []): FakeImageGateway
     {
-        $this->imagesFaked = true;
-        $this->fakeImageResponses = $responses;
-
-        return $this;
+        return $this->fakeImageGateway = new FakeImageGateway($responses);
     }
 
     /**
@@ -58,48 +36,6 @@ trait InteractsWithFakeImages
         $this->recordedImageGenerations[] = $prompt;
 
         return $this;
-    }
-
-    /**
-     * Get the next fake image response.
-     */
-    public function nextFakeImageResponse(ImagePrompt $prompt): ImageResponse
-    {
-        $response = is_array($this->fakeImageResponses)
-            ? ($this->fakeImageResponses[$this->fakeImageResponseIndex] ?? null)
-            : call_user_func($this->fakeImageResponses, $prompt);
-
-        $this->fakeImageResponseIndex++;
-
-        return $this->marshalImageResponse($response, $prompt);
-    }
-
-    /**
-     * Marshal the given response into an ImageResponse instance.
-     */
-    protected function marshalImageResponse(mixed $response, ImagePrompt $prompt): ImageResponse
-    {
-        if ($response instanceof Closure) {
-            $response = $response($prompt);
-        }
-
-        if (is_null($response)) {
-            if ($this->preventStrayImageGenerations) {
-                throw new RuntimeException('Attempted image generation without a fake response.');
-            }
-
-            $response = base64_encode('fake-image-content');
-        }
-
-        if (is_string($response)) {
-            return new ImageResponse(
-                new Collection([new GeneratedImage($response)]),
-                new Usage,
-                new Meta,
-            );
-        }
-
-        return $response;
     }
 
     /**
@@ -146,20 +82,18 @@ trait InteractsWithFakeImages
     }
 
     /**
-     * Indicate that an exception should be thrown if any image generation is not faked.
+     * Determine if image generation is faked.
      */
-    public function preventStrayImageGenerations(bool $prevent = true): self
+    public function imagesAreFaked(): bool
     {
-        $this->preventStrayImageGenerations = $prevent;
-
-        return $this;
+        return $this->fakeImageGateway !== null;
     }
 
     /**
-     * Determine if image generation is faked.
+     * Get the fake image gateway.
      */
-    public function areImagesFaked(): bool
+    public function fakeImageGateway(): ?FakeImageGateway
     {
-        return $this->imagesFaked;
+        return $this->fakeImageGateway;
     }
 }

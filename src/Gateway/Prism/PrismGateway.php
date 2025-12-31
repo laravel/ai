@@ -11,6 +11,11 @@ use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Gateway\Gateway;
 use Laravel\Ai\Contracts\Prompt;
+use Laravel\Ai\Contracts\Providers\AudioProvider;
+use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
+use Laravel\Ai\Contracts\Providers\ImageProvider;
+use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Messages\Attachments\Attachment;
 use Laravel\Ai\Messages\Attachments\Image as ImageAttachment;
 use Laravel\Ai\Messages\Attachments\LocalImage;
@@ -54,7 +59,7 @@ class PrismGateway implements Gateway
      * {@inheritdoc}
      */
     public function generateText(
-        Provider $provider,
+        TextProvider $provider,
         string $model,
         ?string $instructions,
         array $messages = [],
@@ -104,7 +109,7 @@ class PrismGateway implements Gateway
      */
     public function streamText(
         string $invocationId,
-        Provider $provider,
+        TextProvider $provider,
         string $model,
         ?string $instructions,
         array $messages = [],
@@ -221,7 +226,7 @@ class PrismGateway implements Gateway
      * @param  'low'|'medium'|'high'  $quality
      */
     public function generateImage(
-        Provider $provider,
+        ImageProvider $provider,
         string $model,
         string $prompt,
         array $attachments = [],
@@ -281,7 +286,7 @@ class PrismGateway implements Gateway
      * Generate audio from the given text.
      */
     public function generateAudio(
-        Provider $provider,
+        AudioProvider $provider,
         string $model,
         string $text,
         string $voice,
@@ -317,7 +322,7 @@ class PrismGateway implements Gateway
      * Generate text from the given audio.
      */
     public function generateTranscription(
-        Provider $provider,
+        TranscriptionProvider $provider,
         string $model,
         TranscribableAudio|UploadedFile $audio,
         ?string $language = null,
@@ -368,7 +373,7 @@ class PrismGateway implements Gateway
      * {@inheritdoc}
      */
     public function generateEmbeddings(
-        Provider $provider,
+        EmbeddingProvider $provider,
         string $model,
         array $inputs,
         int $dimensions): EmbeddingsResponse

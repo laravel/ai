@@ -4,23 +4,16 @@ namespace Laravel\Ai\Concerns;
 
 use Closure;
 use Illuminate\Support\Collection;
+use Laravel\Ai\Gateway\FakeAudioGateway;
 use Laravel\Ai\Prompts\AudioPrompt;
-use Laravel\Ai\Responses\AudioResponse;
-use Laravel\Ai\Responses\Data\Meta;
 use PHPUnit\Framework\Assert as PHPUnit;
-use RuntimeException;
 
 trait InteractsWithFakeAudio
 {
     /**
-     * Indicates if audio generation is faked.
+     * The fake audio gateway instance.
      */
-    protected bool $audioFaked = false;
-
-    /**
-     * The faked audio responses.
-     */
-    protected Closure|array $fakeAudioResponses = [];
+    protected ?FakeAudioGateway $fakeAudioGateway = null;
 
     /**
      * All of the recorded audio generations.
@@ -28,24 +21,11 @@ trait InteractsWithFakeAudio
     protected array $recordedAudioGenerations = [];
 
     /**
-     * The current index of the faked audio responses.
-     */
-    protected int $fakeAudioResponseIndex = 0;
-
-    /**
-     * Indicates if stray audio generations should be prevented.
-     */
-    protected bool $preventStrayAudioGenerations = false;
-
-    /**
      * Fake audio generation.
      */
-    public function fakeAudio(Closure|array $responses = []): self
+    public function fakeAudio(Closure|array $responses = []): FakeAudioGateway
     {
-        $this->audioFaked = true;
-        $this->fakeAudioResponses = $responses;
-
-        return $this;
+        return $this->fakeAudioGateway = new FakeAudioGateway($responses);
     }
 
     /**
@@ -56,44 +36,6 @@ trait InteractsWithFakeAudio
         $this->recordedAudioGenerations[] = $prompt;
 
         return $this;
-    }
-
-    /**
-     * Get the next fake audio response.
-     */
-    public function nextFakeAudioResponse(AudioPrompt $prompt): AudioResponse
-    {
-        $response = is_array($this->fakeAudioResponses)
-            ? ($this->fakeAudioResponses[$this->fakeAudioResponseIndex] ?? null)
-            : call_user_func($this->fakeAudioResponses, $prompt);
-
-        $this->fakeAudioResponseIndex++;
-
-        return $this->marshalAudioResponse($response, $prompt);
-    }
-
-    /**
-     * Marshal the given response into an AudioResponse instance.
-     */
-    protected function marshalAudioResponse(mixed $response, AudioPrompt $prompt): AudioResponse
-    {
-        if ($response instanceof Closure) {
-            $response = $response($prompt);
-        }
-
-        if (is_null($response)) {
-            if ($this->preventStrayAudioGenerations) {
-                throw new RuntimeException('Attempted audio generation without a fake response.');
-            }
-
-            $response = base64_encode('fake-audio-content');
-        }
-
-        if (is_string($response)) {
-            return new AudioResponse($response, new Meta);
-        }
-
-        return $response;
     }
 
     /**
@@ -140,20 +82,18 @@ trait InteractsWithFakeAudio
     }
 
     /**
-     * Indicate that an exception should be thrown if any audio generation is not faked.
+     * Determine if audio generation is faked.
      */
-    public function preventStrayAudioGenerations(bool $prevent = true): self
+    public function audioIsFaked(): bool
     {
-        $this->preventStrayAudioGenerations = $prevent;
-
-        return $this;
+        return $this->fakeAudioGateway !== null;
     }
 
     /**
-     * Determine if audio generation is faked.
+     * Get the fake audio gateway.
      */
-    public function isAudioFaked(): bool
+    public function fakeAudioGateway(): ?FakeAudioGateway
     {
-        return $this->audioFaked;
+        return $this->fakeAudioGateway;
     }
 }

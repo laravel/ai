@@ -3,6 +3,7 @@
 namespace Laravel\Ai;
 
 use Closure;
+use Laravel\Ai\Gateway\FakeAudioGateway;
 use Laravel\Ai\PendingResponses\PendingAudioGeneration;
 
 class Audio
@@ -18,7 +19,7 @@ class Audio
     /**
      * Fake audio generation.
      */
-    public static function fake(Closure|array $responses = []): AiManager
+    public static function fake(Closure|array $responses = []): FakeAudioGateway
     {
         return Ai::fakeAudio($responses);
     }
@@ -60,6 +61,6 @@ class Audio
      */
     public static function isFaked(): bool
     {
-        return Ai::isAudioFaked();
+        return Ai::audioIsFaked();
     }
 }

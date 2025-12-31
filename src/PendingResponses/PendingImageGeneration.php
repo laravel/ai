@@ -8,7 +8,6 @@ use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Jobs\GenerateImage;
 use Laravel\Ai\Messages\Attachments\LocalImage;
 use Laravel\Ai\Messages\Attachments\StoredImage;
-use Laravel\Ai\Prompts\ImagePrompt;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\QueuedImageResponse;
@@ -97,20 +96,12 @@ class PendingImageGeneration
      */
     public function generate(array|string|null $provider = null, ?string $model = null): ImageResponse
     {
-        if (Ai::areImagesFaked()) {
-            $prompt = new ImagePrompt($this->prompt, $this->attachments, $this->size, $this->quality);
-
-            Ai::recordImageGeneration($prompt);
-
-            return Ai::nextFakeImageResponse($prompt);
-        }
-
         $providers = Provider::formatProviderAndModelList(
             $provider ?? config('ai.default_for_images'), $model
         );
 
         foreach ($providers as $provider => $model) {
-            $provider = Ai::imageProvider($provider);
+            $provider = Ai::imageProviderWithFake($provider);
 
             $model ??= $provider->defaultImageModel();
 

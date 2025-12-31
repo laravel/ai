@@ -3,13 +3,16 @@
 namespace Laravel\Ai\Prompts;
 
 use Illuminate\Support\Str;
+use Laravel\Ai\Contracts\Providers\AudioProvider;
 
 class AudioPrompt
 {
     public function __construct(
         public readonly string $text,
-        public readonly string $voice = 'default-female',
-        public readonly ?string $instructions = null,
+        public readonly string $voice,
+        public readonly ?string $instructions,
+        public readonly AudioProvider $provider,
+        public readonly string $model,
     ) {}
 
     /**

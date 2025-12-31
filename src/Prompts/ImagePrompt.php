@@ -4,6 +4,7 @@ namespace Laravel\Ai\Prompts;
 
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use Laravel\Ai\Contracts\Providers\ImageProvider;
 
 class ImagePrompt
 {
@@ -11,9 +12,11 @@ class ImagePrompt
 
     public function __construct(
         public readonly string $prompt,
-        Collection|array $attachments = [],
-        public readonly ?string $size = null,
-        public readonly ?string $quality = null,
+        Collection|array $attachments,
+        public readonly ?string $size,
+        public readonly ?string $quality,
+        public readonly ImageProvider $provider,
+        public readonly string $model,
     ) {
         $this->attachments = Collection::make($attachments);
     }

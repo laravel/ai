@@ -6,7 +6,7 @@ use Closure;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Agent;
-use Laravel\Ai\Gateway\FakeGateway;
+use Laravel\Ai\Gateway\FakeTextGateway;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\QueuedAgentPrompt;
 use PHPUnit\Framework\Assert as PHPUnit;
@@ -31,10 +31,10 @@ trait InteractsWithFakeAgents
     /**
      * Fake the responses returned by the given agent.
      */
-    public function fakeAgent(string $agent, Closure|array $responses = []): FakeGateway
+    public function fakeAgent(string $agent, Closure|array $responses = []): FakeTextGateway
     {
         return tap(
-            new FakeGateway($responses),
+            new FakeTextGateway($responses),
             fn ($gateway) => $this->fakeAgentGateways[$agent] = $gateway
         );
     }
@@ -53,7 +53,7 @@ trait InteractsWithFakeAgents
     /**
      * Get a fake gateway instance for the given agent.
      */
-    public function fakeGatewayFor(Agent $agent): FakeGateway
+    public function fakeGatewayFor(Agent $agent): FakeTextGateway
     {
         return $this->hasFakeGatewayFor($agent)
             ? $this->fakeAgentGateways[get_class($agent)]

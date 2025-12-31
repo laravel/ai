@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Providers\Concerns;
 
 use Illuminate\Support\Str;
+use Laravel\Ai\Ai;
 use Laravel\Ai\Events\GeneratingImage;
 use Laravel\Ai\Events\ImageGenerated;
 use Laravel\Ai\Prompts\ImagePrompt;
@@ -28,7 +29,11 @@ trait GeneratesImages
 
         $model ??= $this->defaultImageModel();
 
-        $prompt = new ImagePrompt($prompt, $attachments, $size, $quality);
+        $prompt = new ImagePrompt($prompt, $attachments, $size, $quality, $this, $model);
+
+        if (Ai::imagesAreFaked()) {
+            Ai::recordImageGeneration($prompt);
+        }
 
         $this->events->dispatch(new GeneratingImage(
             $invocationId, $this, $model, $prompt,
