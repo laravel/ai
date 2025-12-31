@@ -29,6 +29,12 @@ The official Laravel AI SDK.
 - [Transcription (STT)](#transcription)
 - [Embeddings](#embeddings)
 - [Failover](#failover)
+- [Testing](#testing)
+    - [Agents](#testing-agents)
+    - [Images](#testing-images)
+    - [Audio](#testing-audio)
+    - [Transcriptions](#testing-transcriptions)
+    - [Embeddings](#testing-embeddings)
 - [Events](#events)
 
 ## Installation
@@ -652,6 +658,301 @@ $response = (new SalesCoach)->prompt(
 
 $image = Image::of('A donut sitting on the kitchen counter')
     ->generate(provider: ['gemini', 'xai']);
+```
+
+## Testing
+
+<a name="testing-agents"></a>
+### Agents
+
+To fake an agent's responses during tests, call the `fake` method on the agent class. You may optionally provide an array of responses or a closure:
+
+```php
+use App\Ai\Agents\SalesCoach;
+use Laravel\Ai\Prompts\AgentPrompt;
+
+// Automatically generate a fixed response for every prompt...
+SalesCoach::fake();
+
+// Provide a list of prompt responses...
+SalesCoach::fake([
+    'First response',
+    'Second response',
+]);
+
+// Dynamically handle prompt responses based on the incoming prompt...
+SalesCoach::fake(function (AgentPrompt $prompt) {
+    return 'Response for: '.$prompt->prompt;
+});
+```
+
+After prompting the agent, you may make assertions about the prompts that were received:
+
+```php
+use Laravel\Ai\Prompts\AgentPrompt;
+
+SalesCoach::assertPrompted('Analyze this...');
+
+SalesCoach::assertPrompted(function (AgentPrompt $prompt) {
+    return $prompt->contains('Analyze');
+});
+
+SalesCoach::assertNotPrompted('Missing prompt');
+
+SalesCoach::assertNeverPrompted();
+```
+
+For queued agent invocations, use the queued assertion methods:
+
+```php
+use Laravel\Ai\QueuedAgentPrompt;
+
+SalesCoach::assertQueued('Analyze this...');
+
+SalesCoach::assertQueued(function (QueuedAgentPrompt $prompt) {
+    return $prompt->contains('Analyze');
+});
+
+SalesCoach::assertNotQueued('Missing prompt');
+
+SalesCoach::assertNeverQueued();
+```
+
+To ensure all agent invocations have a corresponding fake response, you may use `preventStrayPrompts`. If an agent is invoked without a defined fake response, an exception will be thrown:
+
+```php
+SalesCoach::fake()->preventStrayPrompts();
+```
+
+<a name="testing-images"></a>
+### Images
+
+Image generations may be faked by invoking the `fake` method on the `Image` class. Once image has been faked, various assertions may be performed against the recorded image generation prompts:
+
+```php
+use Laravel\Ai\Image;
+use Laravel\Ai\Prompts\ImagePrompt;
+use Laravel\Ai\Prompts\QueuedImagePrompt;
+
+// Automatically generate a fixed response for every prompt...
+Image::fake();
+
+// Provide a list of prompt responses...
+Image::fake([
+    base64_encode($firstImage),
+    base64_encode($secondImage),
+]);
+
+// Dynamically handle prompt responses based on the incoming prompt...
+Image::fake(function (ImagePrompt $prompt) {
+    return base64_encode('...');
+});
+```
+
+After generating images, you may make assertions about the prompts that were received:
+
+```php
+Image::assertGenerated(function (ImagePrompt $prompt) {
+    return $prompt->contains('sunset') && $prompt->isLandscape();
+});
+
+Image::assertNotGenerated('Missing prompt');
+
+Image::assertNothingGenerated();
+```
+
+For queued image generations, use the queued assertion methods:
+
+```php
+Image::assertQueued(
+    fn (QueuedImagePrompt $prompt) => $prompt->contains('sunset')
+);
+
+Image::assertNotQueued('Missing prompt');
+
+Image::assertNothingQueued();
+```
+
+To ensure all image generations have a corresponding fake response, you may use `preventStrayImages`. If an image is generated without a defined fake response, an exception will be thrown:
+
+```php
+Image::fake()->preventStrayImages();
+```
+
+<a name="testing-audio"></a>
+### Audio
+
+Audio generations may be faked by invoking the `fake` method on the `Audio` class. Once audio has been faked, various assertions may be performed against the recorded audio generation prompts:
+
+```php
+use Laravel\Ai\Audio;
+use Laravel\Ai\Prompts\AudioPrompt;
+use Laravel\Ai\Prompts\QueuedAudioPrompt;
+
+// Automatically generate a fixed response for every prompt...
+Audio::fake();
+
+// Provide a list of prompt responses...
+Audio::fake([
+    base64_encode($firstAudio),
+    base64_encode($secondAudio),
+]);
+
+// Dynamically handle prompt responses based on the incoming prompt...
+Audio::fake(function (AudioPrompt $prompt) {
+    return base64_encode('...');
+});
+```
+
+After generating audio, you may make assertions about the prompts that were received:
+
+```php
+Audio::assertGenerated(function (AudioPrompt $prompt) {
+    return $prompt->contains('Hello') && $prompt->isFemale();
+});
+
+Audio::assertNotGenerated('Missing prompt');
+
+Audio::assertNothingGenerated();
+```
+
+For queued audio generations, use the queued assertion methods:
+
+```php
+Audio::assertQueued(
+    fn (QueuedAudioPrompt $prompt) => $prompt->contains('Hello')
+);
+
+Audio::assertNotQueued('Missing prompt');
+
+Audio::assertNothingQueued();
+```
+
+To ensure all audio generations have a corresponding fake response, you may use `preventStrayAudio`. If audio is generated without a defined fake response, an exception will be thrown:
+
+```php
+Audio::fake()->preventStrayAudio();
+```
+
+<a name="testing-transcriptions"></a>
+### Transcriptions
+
+Transcription generations may be faked by invoking the `fake` method on the `Transcription` class. Once transcription has been faked, various assertions may be performed against the recorded transcription generation prompts:
+
+```php
+use Laravel\Ai\Transcription;
+use Laravel\Ai\Prompts\TranscriptionPrompt;
+use Laravel\Ai\Prompts\QueuedTranscriptionPrompt;
+
+// Automatically generate a fixed response for every prompt...
+Transcription::fake();
+
+// Provide a list of prompt responses...
+Transcription::fake([
+    'First transcription text.',
+    'Second transcription text.',
+]);
+
+// Dynamically handle prompt responses based on the incoming prompt...
+Transcription::fake(function (TranscriptionPrompt $prompt) {
+    return 'Transcribed text...';
+});
+```
+
+After generating transcriptions, you may make assertions about the prompts that were received:
+
+```php
+Transcription::assertGenerated(function (TranscriptionPrompt $prompt) {
+    return $prompt->language === 'en' && $prompt->isDiarized();
+});
+
+Transcription::assertNotGenerated(
+    fn (TranscriptionPrompt $prompt) => $prompt->language === 'fr'
+);
+
+Transcription::assertNothingGenerated();
+```
+
+For queued transcription generations, use the queued assertion methods:
+
+```php
+Transcription::assertQueued(
+    fn (QueuedTranscriptionPrompt $prompt) => $prompt->isDiarized()
+);
+
+Transcription::assertNotQueued(
+    fn (QueuedTranscriptionPrompt $prompt) => $prompt->language === 'fr'
+);
+
+Transcription::assertNothingQueued();
+```
+
+To ensure all transcription generations have a corresponding fake response, you may use `preventStrayTranscriptions`. If a transcription is generated without a defined fake response, an exception will be thrown:
+
+```php
+Transcription::fake()->preventStrayTranscriptions();
+```
+
+<a name="testing-embeddings"></a>
+### Embeddings
+
+Embeddings generations may be faked by invoking the `fake` method on the `Embeddings` class. Once embeddings has been faked, various assertions may be performed against the recorded embeddings generation prompts:
+
+```php
+use Laravel\Ai\Embeddings;
+use Laravel\Ai\Prompts\EmbeddingsPrompt;
+use Laravel\Ai\Prompts\QueuedEmbeddingsPrompt;
+
+// Automatically generate fake embeddings of the proper dimensions for every prompt...
+Embeddings::fake();
+
+// Provide a list of prompt responses...
+Embeddings::fake([
+    [$firstEmbeddingVector],
+    [$secondEmbeddingVector],
+]);
+
+// Dynamically handle prompt responses based on the incoming prompt...
+Embeddings::fake(function (EmbeddingsPrompt $prompt) {
+    return array_map(
+        fn () => Embeddings::fakeEmbedding($prompt->dimensions),
+        $prompt->inputs
+    );
+});
+```
+
+After generating embeddings, you may make assertions about the prompts that were received:
+
+```php
+Embeddings::assertGenerated(function (EmbeddingsPrompt $prompt) {
+    return $prompt->contains('Laravel') && $prompt->dimensions === 1536;
+});
+
+Embeddings::assertNotGenerated(
+    fn (EmbeddingsPrompt $prompt) => $prompt->contains('Other')
+);
+
+Embeddings::assertNothingGenerated();
+```
+
+For queued embeddings generations, use the queued assertion methods:
+
+```php
+Embeddings::assertQueued(
+    fn (QueuedEmbeddingsPrompt $prompt) => $prompt->contains('Laravel')
+);
+
+Embeddings::assertNotQueued(
+    fn (QueuedEmbeddingsPrompt $prompt) => $prompt->contains('Other')
+);
+
+Embeddings::assertNothingQueued();
+```
+
+To ensure all embeddings generations have a corresponding fake response, you may use `preventStrayEmbeddings`. If embeddings are generated without a defined fake response, an exception will be thrown:
+
+```php
+Embeddings::fake()->preventStrayEmbeddings();
 ```
 
 ## Events

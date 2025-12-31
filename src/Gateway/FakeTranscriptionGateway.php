@@ -92,7 +92,7 @@ class FakeTranscriptionGateway implements TranscriptionGateway
     /**
      * Indicate that an exception should be thrown if any transcription generation is not faked.
      */
-    public function preventStrayTranscriptionGenerations(bool $prevent = true): self
+    public function preventStrayTranscriptions(bool $prevent = true): self
     {
         $this->preventStrayGenerations = $prevent;
 

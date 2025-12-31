@@ -80,7 +80,7 @@ class FakeAudioGateway implements AudioGateway
     /**
      * Indicate that an exception should be thrown if any audio generation is not faked.
      */
-    public function preventStrayAudioGenerations(bool $prevent = true): self
+    public function preventStrayAudio(bool $prevent = true): self
     {
         $this->preventStrayGenerations = $prevent;
 

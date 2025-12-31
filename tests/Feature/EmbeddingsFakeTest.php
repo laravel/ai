@@ -112,7 +112,7 @@ class EmbeddingsFakeTest extends TestCase
     {
         $this->expectException(RuntimeException::class);
 
-        Embeddings::fake()->preventStrayEmbeddingGenerations();
+        Embeddings::fake()->preventStrayEmbeddings();
 
         Embeddings::for(['Hello world'])->generate();
     }

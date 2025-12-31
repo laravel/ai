@@ -82,7 +82,7 @@ class TranscriptionFakeTest extends TestCase
     {
         $this->expectException(RuntimeException::class);
 
-        Transcription::fake()->preventStrayTranscriptionGenerations();
+        Transcription::fake()->preventStrayTranscriptions();
 
         Transcription::of(base64_encode('audio'))->generate();
     }

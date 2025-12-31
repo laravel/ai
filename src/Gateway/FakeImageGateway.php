@@ -92,7 +92,7 @@ class FakeImageGateway implements ImageGateway
     /**
      * Indicate that an exception should be thrown if any image generation is not faked.
      */
-    public function preventStrayImageGenerations(bool $prevent = true): self
+    public function preventStrayImages(bool $prevent = true): self
     {
         $this->preventStrayGenerations = $prevent;
 

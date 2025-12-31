@@ -74,7 +74,7 @@ class AudioFakeTest extends TestCase
     {
         $this->expectException(RuntimeException::class);
 
-        Audio::fake()->preventStrayAudioGenerations();
+        Audio::fake()->preventStrayAudio();
 
         Audio::of('First text')->generate();
     }

@@ -81,7 +81,7 @@ class ImageFakeTest extends TestCase
     {
         $this->expectException(RuntimeException::class);
 
-        Image::fake()->preventStrayImageGenerations();
+        Image::fake()->preventStrayImages();
 
         Image::of('First prompt')->generate();
     }

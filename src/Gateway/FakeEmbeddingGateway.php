@@ -105,7 +105,7 @@ class FakeEmbeddingGateway implements EmbeddingGateway
     /**
      * Indicate that an exception should be thrown if any embeddings generation is not faked.
      */
-    public function preventStrayEmbeddingGenerations(bool $prevent = true): self
+    public function preventStrayEmbeddings(bool $prevent = true): self
     {
         $this->preventStrayGenerations = $prevent;
 
