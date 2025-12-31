@@ -16,7 +16,7 @@ class EmbeddingsFakeTest extends TestCase
         $response = Embeddings::for(['Hello world'])->generate();
 
         $this->assertCount(1, $response);
-        $this->assertCount(1536, $response->first()); // Default OpenAI dimensions
+        $this->assertCount(1536, $response->first());
     }
 
     public function test_can_fake_embeddings_with_custom_dimensions(): void
