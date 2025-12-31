@@ -7,7 +7,6 @@ use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Collection;
 use Illuminate\Support\MultipleInstanceManager;
 use InvalidArgumentException;
-use Laravel\Ai\AgentPrompt;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
