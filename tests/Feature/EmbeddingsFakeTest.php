@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Prompts\EmbeddingsPrompt;
+use Laravel\Ai\Prompts\QueuedEmbeddingsPrompt;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -114,5 +115,41 @@ class EmbeddingsFakeTest extends TestCase
         Embeddings::fake()->preventStrayEmbeddingGenerations();
 
         Embeddings::for(['Hello world'])->generate();
+    }
+
+    public function test_queued_embeddings_can_be_faked(): void
+    {
+        Embeddings::fake();
+
+        Embeddings::for(['Hello world'])->queue();
+
+        Embeddings::assertQueued(fn (QueuedEmbeddingsPrompt $prompt) => $prompt->contains('Hello'));
+        Embeddings::assertNotQueued(fn (QueuedEmbeddingsPrompt $prompt) => $prompt->contains('Goodbye'));
+
+        Embeddings::assertQueued(function (QueuedEmbeddingsPrompt $prompt) {
+            return in_array('Hello world', $prompt->inputs);
+        });
+
+        Embeddings::assertNotQueued(function (QueuedEmbeddingsPrompt $prompt) {
+            return in_array('Goodbye', $prompt->inputs);
+        });
+    }
+
+    public function test_can_assert_no_embeddings_were_queued(): void
+    {
+        Embeddings::fake();
+
+        Embeddings::assertNothingQueued();
+    }
+
+    public function test_queued_embeddings_dimensions_are_recorded(): void
+    {
+        Embeddings::fake();
+
+        Embeddings::for(['Hello world'])->dimensions(256)->queue();
+
+        Embeddings::assertQueued(function (QueuedEmbeddingsPrompt $prompt) {
+            return $prompt->dimensions === 256 && $prompt->count() === 1;
+        });
     }
 }

@@ -4,15 +4,14 @@ namespace Laravel\Ai\Prompts;
 
 use Countable;
 use Illuminate\Support\Str;
-use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 
-class EmbeddingsPrompt implements Countable
+class QueuedEmbeddingsPrompt implements Countable
 {
     public function __construct(
         public readonly array $inputs,
-        public readonly int $dimensions,
-        public readonly EmbeddingProvider $provider,
-        public readonly string $model,
+        public readonly ?int $dimensions,
+        public readonly array|string|null $provider,
+        public readonly ?string $model,
     ) {}
 
     /**

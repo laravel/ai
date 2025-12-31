@@ -5,7 +5,9 @@ namespace Laravel\Ai\PendingResponses;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
+use Laravel\Ai\FakePendingDispatch;
 use Laravel\Ai\Jobs\GenerateEmbeddings;
+use Laravel\Ai\Prompts\QueuedEmbeddingsPrompt;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\QueuedEmbeddingsResponse;
@@ -57,10 +59,23 @@ class PendingEmbeddingsGeneration
     }
 
     /**
-     * Queue the generation of the audio.
+     * Queue the generation of the embeddings.
      */
     public function queue(array|string|null $provider = null, ?string $model = null): QueuedEmbeddingsResponse
     {
+        if (Ai::embeddingsAreFaked()) {
+            Ai::recordEmbeddingsGeneration(
+                new QueuedEmbeddingsPrompt(
+                    $this->inputs,
+                    $this->dimensions,
+                    $provider,
+                    $model
+                )
+            );
+
+            return new QueuedEmbeddingsResponse(new FakePendingDispatch);
+        }
+
         return new QueuedEmbeddingsResponse(
             GenerateEmbeddings::dispatch($this, $provider, $model),
         );

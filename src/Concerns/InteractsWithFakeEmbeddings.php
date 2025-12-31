@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Gateway\FakeEmbeddingGateway;
 use Laravel\Ai\Prompts\EmbeddingsPrompt;
+use Laravel\Ai\Prompts\QueuedEmbeddingsPrompt;
 use PHPUnit\Framework\Assert as PHPUnit;
 
 trait InteractsWithFakeEmbeddings
@@ -21,6 +22,11 @@ trait InteractsWithFakeEmbeddings
     protected array $recordedEmbeddingsGenerations = [];
 
     /**
+     * All of the recorded embeddings generations that were queued.
+     */
+    protected array $recordedQueuedEmbeddingsGenerations = [];
+
+    /**
      * Fake embeddings generation.
      */
     public function fakeEmbeddings(Closure|array $responses = []): FakeEmbeddingGateway
@@ -31,9 +37,13 @@ trait InteractsWithFakeEmbeddings
     /**
      * Record an embeddings generation.
      */
-    public function recordEmbeddingsGeneration(EmbeddingsPrompt $prompt): self
+    public function recordEmbeddingsGeneration(EmbeddingsPrompt|QueuedEmbeddingsPrompt $prompt): self
     {
-        $this->recordedEmbeddingsGenerations[] = $prompt;
+        if ($prompt instanceof QueuedEmbeddingsPrompt) {
+            $this->recordedQueuedEmbeddingsGenerations[] = $prompt;
+        } else {
+            $this->recordedEmbeddingsGenerations[] = $prompt;
+        }
 
         return $this;
     }
@@ -76,6 +86,49 @@ trait InteractsWithFakeEmbeddings
         PHPUnit::assertEmpty(
             $this->recordedEmbeddingsGenerations,
             'Unexpected embeddings generations were recorded.'
+        );
+
+        return $this;
+    }
+
+    /**
+     * Assert that a queued embeddings generation was recorded matching a given truth test.
+     */
+    public function assertEmbeddingsQueued(Closure $callback): self
+    {
+        PHPUnit::assertTrue(
+            (new Collection($this->recordedQueuedEmbeddingsGenerations))->filter(function (QueuedEmbeddingsPrompt $prompt) use ($callback) {
+                return $callback($prompt);
+            })->count() > 0,
+            'An expected queued embeddings generation was not recorded.'
+        );
+
+        return $this;
+    }
+
+    /**
+     * Assert that a queued embeddings generation was not recorded matching a given truth test.
+     */
+    public function assertEmbeddingsNotQueued(Closure $callback): self
+    {
+        PHPUnit::assertTrue(
+            (new Collection($this->recordedQueuedEmbeddingsGenerations))->filter(function (QueuedEmbeddingsPrompt $prompt) use ($callback) {
+                return $callback($prompt);
+            })->count() === 0,
+            'An unexpected queued embeddings generation was recorded.'
+        );
+
+        return $this;
+    }
+
+    /**
+     * Assert that no queued embeddings generations were recorded.
+     */
+    public function assertNoEmbeddingsQueued(): self
+    {
+        PHPUnit::assertEmpty(
+            $this->recordedQueuedEmbeddingsGenerations,
+            'Unexpected queued embeddings generations were recorded.'
         );
 
         return $this;
