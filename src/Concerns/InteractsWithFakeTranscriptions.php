@@ -5,6 +5,7 @@ namespace Laravel\Ai\Concerns;
 use Closure;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Gateway\FakeTranscriptionGateway;
+use Laravel\Ai\Prompts\QueuedTranscriptionPrompt;
 use Laravel\Ai\Prompts\TranscriptionPrompt;
 use PHPUnit\Framework\Assert as PHPUnit;
 
@@ -21,6 +22,11 @@ trait InteractsWithFakeTranscriptions
     protected array $recordedTranscriptionGenerations = [];
 
     /**
+     * All of the recorded transcription generations that were queued.
+     */
+    protected array $recordedQueuedTranscriptionGenerations = [];
+
+    /**
      * Fake transcription generation.
      */
     public function fakeTranscriptions(Closure|array $responses = []): FakeTranscriptionGateway
@@ -31,9 +37,13 @@ trait InteractsWithFakeTranscriptions
     /**
      * Record a transcription generation.
      */
-    public function recordTranscriptionGeneration(TranscriptionPrompt $prompt): self
+    public function recordTranscriptionGeneration(TranscriptionPrompt|QueuedTranscriptionPrompt $prompt): self
     {
-        $this->recordedTranscriptionGenerations[] = $prompt;
+        if ($prompt instanceof QueuedTranscriptionPrompt) {
+            $this->recordedQueuedTranscriptionGenerations[] = $prompt;
+        } else {
+            $this->recordedTranscriptionGenerations[] = $prompt;
+        }
 
         return $this;
     }
@@ -76,6 +86,49 @@ trait InteractsWithFakeTranscriptions
         PHPUnit::assertEmpty(
             $this->recordedTranscriptionGenerations,
             'Unexpected transcription generations were recorded.'
+        );
+
+        return $this;
+    }
+
+    /**
+     * Assert that a queued transcription generation was recorded matching a given truth test.
+     */
+    public function assertTranscriptionQueued(Closure $callback): self
+    {
+        PHPUnit::assertTrue(
+            (new Collection($this->recordedQueuedTranscriptionGenerations))->filter(function (QueuedTranscriptionPrompt $prompt) use ($callback) {
+                return $callback($prompt);
+            })->count() > 0,
+            'An expected queued transcription generation was not recorded.'
+        );
+
+        return $this;
+    }
+
+    /**
+     * Assert that a queued transcription generation was not recorded matching a given truth test.
+     */
+    public function assertTranscriptionNotQueued(Closure $callback): self
+    {
+        PHPUnit::assertTrue(
+            (new Collection($this->recordedQueuedTranscriptionGenerations))->filter(function (QueuedTranscriptionPrompt $prompt) use ($callback) {
+                return $callback($prompt);
+            })->count() === 0,
+            'An unexpected queued transcription generation was recorded.'
+        );
+
+        return $this;
+    }
+
+    /**
+     * Assert that no queued transcription generations were recorded.
+     */
+    public function assertNoTranscriptionsQueued(): self
+    {
+        PHPUnit::assertEmpty(
+            $this->recordedQueuedTranscriptionGenerations,
+            'Unexpected queued transcription generations were recorded.'
         );
 
         return $this;

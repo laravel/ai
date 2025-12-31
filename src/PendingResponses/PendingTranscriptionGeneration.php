@@ -6,10 +6,12 @@ use Illuminate\Http\UploadedFile;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
+use Laravel\Ai\FakePendingDispatch;
 use Laravel\Ai\Jobs\GenerateTranscription;
 use Laravel\Ai\Messages\Attachments\LocalAudio;
 use Laravel\Ai\Messages\Attachments\StoredAudio;
 use Laravel\Ai\Messages\Attachments\TranscribableAudio;
+use Laravel\Ai\Prompts\QueuedTranscriptionPrompt;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\QueuedTranscriptionResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
@@ -79,6 +81,20 @@ class PendingTranscriptionGeneration
         if (! $this->audio instanceof StoredAudio &&
             ! $this->audio instanceof LocalAudio) {
             throw new LogicException('Only local audio or audio stored on a filesystem disk may be attachments for queued transcription generations.');
+        }
+
+        if (Ai::transcriptionsAreFaked()) {
+            Ai::recordTranscriptionGeneration(
+                new QueuedTranscriptionPrompt(
+                    $this->audio,
+                    $this->language,
+                    $this->diarize,
+                    $provider,
+                    $model
+                )
+            );
+
+            return new QueuedTranscriptionResponse(new FakePendingDispatch);
         }
 
         return new QueuedTranscriptionResponse(

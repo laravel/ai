@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use Exception;
 use Illuminate\Support\Collection;
+use Laravel\Ai\Prompts\QueuedTranscriptionPrompt;
 use Laravel\Ai\Prompts\TranscriptionPrompt;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
@@ -117,5 +118,41 @@ class TranscriptionFakeTest extends TestCase
         $this->assertCount(1, $response->segments);
         $this->assertEquals('Hello world', $response->segments[0]->text);
         $this->assertEquals('Speaker 1', $response->segments[0]->speaker);
+    }
+
+    public function test_queued_transcriptions_can_be_faked(): void
+    {
+        Transcription::fake();
+
+        Transcription::fromPath('/path/to/audio.mp3')->queue();
+
+        Transcription::assertQueued(fn (QueuedTranscriptionPrompt $prompt) => $prompt->audio->path === '/path/to/audio.mp3');
+        Transcription::assertNotQueued(fn (QueuedTranscriptionPrompt $prompt) => $prompt->audio->path === '/path/to/other.mp3');
+
+        Transcription::assertQueued(function (QueuedTranscriptionPrompt $prompt) {
+            return $prompt->audio->path === '/path/to/audio.mp3';
+        });
+
+        Transcription::assertNotQueued(function (QueuedTranscriptionPrompt $prompt) {
+            return $prompt->audio->path === '/path/to/other.mp3';
+        });
+    }
+
+    public function test_can_assert_no_transcriptions_were_queued(): void
+    {
+        Transcription::fake();
+
+        Transcription::assertNothingQueued();
+    }
+
+    public function test_queued_transcription_language_and_diarize_are_recorded(): void
+    {
+        Transcription::fake();
+
+        Transcription::fromPath('/path/to/audio.mp3')->language('es')->diarize()->queue();
+
+        Transcription::assertQueued(function (QueuedTranscriptionPrompt $prompt) {
+            return $prompt->language === 'es' && $prompt->isDiarized();
+        });
     }
 }
