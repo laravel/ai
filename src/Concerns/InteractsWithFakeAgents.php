@@ -111,27 +111,6 @@ trait InteractsWithFakeAgents
     }
 
     /**
-     * Assert that a prompt was received a given number of times matching a given truth test.
-     */
-    public function assertAgentWasPromptedTimes(string $agent, Closure|string $callback, int $times = 1): self
-    {
-        $callback = is_string($callback)
-            ? fn (AgentPrompt $prompt) => $prompt->prompt === $callback
-            : $callback;
-
-        $count = (new Collection($this->recordedPrompts[$agent] ?? []))
-            ->filter(fn ($prompt) => $callback($prompt))
-            ->count();
-
-        PHPUnit::assertSame(
-            $times, $count,
-            "An expected prompt was received {$count} times instead of {$times} times."
-        );
-
-        return $this;
-    }
-
-    /**
      * Assert that a prompt was not received matching a given truth test.
      */
     public function assertAgentWasntPrompted(

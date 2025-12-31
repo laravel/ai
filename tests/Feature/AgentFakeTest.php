@@ -35,7 +35,6 @@ class AgentFakeTest extends TestCase
 
         // Assertion tests...
         AssistantAgent::assertPrompted('First prompt');
-        AssistantAgent::assertPromptedTimes('First prompt', 1);
         AssistantAgent::assertWasntPrompted('Missing prompt');
 
         AssistantAgent::assertPrompted(function (AgentPrompt $prompt) {
