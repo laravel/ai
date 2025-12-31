@@ -249,6 +249,46 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
+     * Assert that a prompt was received a given number of times matching a given truth test.
+     */
+    public function assertAgentWasPromptedTimes(string $agent, Closure|string $callback, int $times = 1): self
+    {
+        $callback = is_string($callback)
+            ? fn (AgentPrompt $prompt) => $prompt->prompt === $callback
+            : $callback;
+
+        $count = (new Collection($this->recorded[$agent]))
+            ->filter(fn ($prompt) => $callback($prompt))
+            ->count();
+
+        PHPUnit::assertSame(
+            $times, $count,
+            "An expected prompt was received {$count} times instead of {$times} times."
+        );
+
+        return $this;
+    }
+
+    /**
+     * Assert that a prompt was not received matching a given truth test.
+     */
+    public function assertAgentWasntPrompted(string $agent, Closure|string $callback): self
+    {
+        $callback = is_string($callback)
+            ? fn ($prompt) => $prompt->prompt === $callback
+            : $callback;
+
+        PHPUnit::assertTrue(
+            (new Collection($this->recorded[$agent]))->filter(function ($prompt) use ($callback) {
+                return $callback($prompt);
+            })->count() === 0,
+            'An unexpected prompt was received.'
+        );
+
+        return $this;
+    }
+
+    /**
      * Get the default instance name.
      *
      * @return string

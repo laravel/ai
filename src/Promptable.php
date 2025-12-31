@@ -178,6 +178,22 @@ trait Promptable
     }
 
     /**
+     * Assert that a prompt was received a given number of times matching a given truth test.
+     */
+    public static function assertPromptedTimes(Closure|string $callback, int $times = 1): void
+    {
+        Ai::assertAgentWasPromptedTimes(static::class, $callback, $times);
+    }
+
+    /**
+     * Assert that a prompt was not received matching a given truth test.
+     */
+    public static function assertWasntPrompted(Closure|string $callback): void
+    {
+        Ai::assertAgentWasntPrompted(static::class, $callback);
+    }
+
+    /**
      * Determine if the agent is currently faked.
      */
     public static function isFaked(): bool
