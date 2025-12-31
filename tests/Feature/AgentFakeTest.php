@@ -137,9 +137,14 @@ class AgentFakeTest extends TestCase
         (new AssistantAgent)->queue('First prompt');
 
         AssistantAgent::assertQueued('First prompt');
+        AssistantAgent::assertNotQueued('Second prompt');
 
         AssistantAgent::assertQueued(function (QueuedAgentPrompt $prompt) {
             return $prompt->prompt === 'First prompt';
+        });
+
+        AssistantAgent::assertNotQueued(function (QueuedAgentPrompt $prompt) {
+            return $prompt->prompt === 'Second prompt';
         });
     }
 

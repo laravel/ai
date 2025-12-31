@@ -106,7 +106,7 @@ trait InteractsWithFakeAgents
             $agent,
             $callback,
             $this->recordedQueuedPrompts[$agent],
-            'An expected prompt was not received.'
+            'An expected queued prompt was not received.'
         );
     }
 
@@ -134,20 +134,37 @@ trait InteractsWithFakeAgents
     /**
      * Assert that a prompt was not received matching a given truth test.
      */
-    public function assertAgentWasntPrompted(string $agent, Closure|string $callback): self
+    public function assertAgentWasntPrompted(
+        string $agent,
+        Closure|string $callback,
+        ?array $prompts = null,
+        ?string $message = null): self
     {
         $callback = is_string($callback)
             ? fn ($prompt) => $prompt->prompt === $callback
             : $callback;
 
         PHPUnit::assertTrue(
-            (new Collection($this->recordedPrompts[$agent] ?? []))->filter(function ($prompt) use ($callback) {
+            (new Collection($prompts ?? $this->recordedPrompts[$agent] ?? []))->filter(function ($prompt) use ($callback) {
                 return $callback($prompt);
             })->count() === 0,
-            'An unexpected prompt was received.'
+            $message ?? 'An unexpected prompt was received.'
         );
 
         return $this;
+    }
+
+    /**
+     * Assert that a queued prompt was not received matching a given truth test.
+     */
+    public function assertAgentWasntQueued(string $agent, Closure|string $callback): self
+    {
+        return $this->assertAgentWasntPrompted(
+            $agent,
+            $callback,
+            $this->recordedQueuedPrompts[$agent],
+            'An unexpected queued prompt was received.'
+        );
     }
 
     /**
