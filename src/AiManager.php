@@ -22,7 +22,7 @@ use LogicException;
 
 class AiManager extends MultipleInstanceManager
 {
-    use Concerns\OffersAgentAssertions;
+    use Concerns\InteractsWithFakeAgents;
 
     /**
      * The key name of the "driver" equivalent configuration option.

@@ -10,7 +10,7 @@ use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Gateway\FakeGateway;
 use PHPUnit\Framework\Assert as PHPUnit;
 
-trait OffersAgentAssertions
+trait InteractsWithFakeAgents
 {
     /**
      * All of the registered fake agent gateways.
