@@ -4,6 +4,7 @@ namespace Laravel\Ai;
 
 use Closure;
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Support\Collection;
 use Illuminate\Support\MultipleInstanceManager;
 use InvalidArgumentException;
 use Laravel\Ai\AgentPrompt;
@@ -23,6 +24,7 @@ use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\XaiProvider;
 use LogicException;
+use PHPUnit\Framework\Assert as PHPUnit;
 
 class AiManager extends MultipleInstanceManager
 {
@@ -32,9 +34,9 @@ class AiManager extends MultipleInstanceManager
     protected array $fakeAgentGateways = [];
 
     /**
-     * All of the recorded fake agent prompts.
+     * All of the recorded agent prompts.
      */
-    protected array $fakeAgentPrompts = [];
+    protected array $recorded = [];
 
     /**
      * The key name of the "driver" equivalent configuration option.
@@ -198,16 +200,6 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
-     * Record the given prompt for the faked agent.
-     */
-    public function recordPrompt(AgentPrompt $prompt): self
-    {
-        $this->fakeAgentPrompts[get_class($prompt->agent)][] = $prompt;
-
-        return $this;
-    }
-
-    /**
      * Determine if the given agent has been faked.
      */
     public function hasFakeGatewayFor(Agent|string $agent): bool
@@ -226,6 +218,35 @@ class AiManager extends MultipleInstanceManager
         return $this->hasFakeGatewayFor($agent)
             ? $this->fakeAgentGateways[get_class($agent)]
             : throw new InvalidArgumentException('Agent ['.get_class($agent).'] has not been faked.');
+    }
+
+    /**
+     * Record the given prompt for the faked agent.
+     */
+    public function recordPrompt(AgentPrompt $prompt): self
+    {
+        $this->recorded[get_class($prompt->agent)][] = $prompt;
+
+        return $this;
+    }
+
+    /**
+     * Assert that a prompt was received matching a given truth test.
+     */
+    public function assertPrompted(string $agent, Closure|string $callback): self
+    {
+        $callback = is_string($callback)
+            ? fn ($prompt) => $prompt->prompt === $callback
+            : $callback;
+
+        PHPUnit::assertTrue(
+            (new Collection($this->recorded[$agent] ?? []))->filter(function ($prompt) use ($callback) {
+                return $callback($prompt);
+            })->count() > 0,
+            'An expected prompt was not received.'
+        );
+
+        return $this;
     }
 
     /**

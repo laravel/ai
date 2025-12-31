@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Exception;
+use Laravel\Ai\AgentPrompt;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StructuredTextResponse;
@@ -30,6 +31,12 @@ class AgentFakeTest extends TestCase
 
         $response = (new AssistantAgent)->prompt('Third prompt');
         $this->assertEquals('Third response', $response->text);
+
+        AssistantAgent::assertPrompted('First prompt');
+
+        AssistantAgent::assertPrompted(function (AgentPrompt $prompt) {
+            return $prompt->prompt === 'First prompt';
+        });
     }
 
     public function test_agents_can_be_faked_with_no_predefined_responses(): void

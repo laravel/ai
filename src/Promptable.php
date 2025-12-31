@@ -170,6 +170,14 @@ trait Promptable
     }
 
     /**
+     * Assert that a prompt was received matching a given truth test.
+     */
+    public static function assertPrompted(Closure|string $callback): void
+    {
+        Ai::assertPrompted(static::class, $callback);
+    }
+
+    /**
      * Determine if the agent is currently faked.
      */
     public static function isFaked(): bool
