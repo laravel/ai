@@ -3,6 +3,7 @@
 namespace Laravel\Ai;
 
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 
 class ImagePrompt
 {
@@ -15,6 +16,14 @@ class ImagePrompt
         public readonly ?string $quality = null,
     ) {
         $this->attachments = Collection::make($attachments);
+    }
+
+    /**
+     * Determine if the prompt contains the given string.
+     */
+    public function contains(string $string): bool
+    {
+        return Str::contains($this->prompt, $string);
     }
 
     /**

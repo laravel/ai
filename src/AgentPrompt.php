@@ -3,6 +3,7 @@
 namespace Laravel\Ai;
 
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 
@@ -23,6 +24,14 @@ class AgentPrompt extends Prompt
 
         $this->agent = $agent;
         $this->attachments = Collection::make($attachments);
+    }
+
+    /**
+     * Determine if the prompt contains the given string.
+     */
+    public function contains(string $string): bool
+    {
+        return Str::contains($this->prompt, $string);
     }
 
     /**
