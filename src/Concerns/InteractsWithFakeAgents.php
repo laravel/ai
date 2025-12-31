@@ -63,9 +63,9 @@ trait InteractsWithFakeAgents
     /**
      * Record the given prompt for the faked agent.
      */
-    public function recordPrompt(AgentPrompt|QueuedAgentPrompt $prompt, bool $queued = false): self
+    public function recordPrompt(AgentPrompt|QueuedAgentPrompt $prompt): self
     {
-        if ($queued) {
+        if ($prompt instanceof QueuedAgentPrompt) {
             $this->recordedQueuedPrompts[get_class($prompt->agent)][] = $prompt;
         } else {
             $this->recordedPrompts[get_class($prompt->agent)][] = $prompt;

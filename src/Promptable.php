@@ -62,7 +62,6 @@ trait Promptable
         if (static::isFaked()) {
             Ai::recordPrompt(
                 new QueuedAgentPrompt($this, $prompt, $attachments, $provider, $model),
-                queued: true,
             );
 
             return new QueuedAgentResponse(new FakePendingDispatch);
@@ -100,7 +99,6 @@ trait Promptable
         if (static::isFaked()) {
             Ai::recordPrompt(
                 new QueuedAgentPrompt($this, $prompt, $attachments, $provider, $model),
-                queued: true,
             );
 
             return new QueuedAgentResponse(new FakePendingDispatch);

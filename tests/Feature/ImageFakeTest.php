@@ -6,6 +6,7 @@ use Exception;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Image;
 use Laravel\Ai\Prompts\ImagePrompt;
+use Laravel\Ai\Prompts\QueuedImagePrompt;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
@@ -106,6 +107,44 @@ class ImageFakeTest extends TestCase
             return $prompt->prompt === 'A sunset'
                 && $prompt->size === '1:1'
                 && $prompt->quality === 'high';
+        });
+    }
+
+    public function test_queued_images_can_be_faked(): void
+    {
+        Image::fake();
+
+        Image::of('First prompt')->queue();
+
+        Image::assertQueued(fn (QueuedImagePrompt $prompt) => $prompt->prompt === 'First prompt');
+        Image::assertNotQueued(fn (QueuedImagePrompt $prompt) => $prompt->contains('Second prompt'));
+
+        Image::assertQueued(function (QueuedImagePrompt $prompt) {
+            return $prompt->prompt === 'First prompt';
+        });
+
+        Image::assertNotQueued(function (QueuedImagePrompt $prompt) {
+            return $prompt->prompt === 'Second prompt';
+        });
+    }
+
+    public function test_can_assert_no_images_were_queued(): void
+    {
+        Image::fake();
+
+        Image::assertNothingQueued();
+    }
+
+    public function test_queued_image_size_and_quality_are_recorded(): void
+    {
+        Image::fake();
+
+        Image::of('A sunset')->landscape()->quality('low')->queue();
+
+        Image::assertQueued(function (QueuedImagePrompt $prompt) {
+            return $prompt->prompt === 'A sunset'
+                && $prompt->size === '3:2'
+                && $prompt->quality === 'low';
         });
     }
 }

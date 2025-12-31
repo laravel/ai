@@ -49,6 +49,30 @@ class Image
     }
 
     /**
+     * Assert that a queued image generation was recorded matching a given truth test.
+     */
+    public static function assertQueued(Closure $callback): void
+    {
+        Ai::assertImageQueued($callback);
+    }
+
+    /**
+     * Assert that a queued image generation was not recorded matching a given truth test.
+     */
+    public static function assertNotQueued(Closure $callback): void
+    {
+        Ai::assertImageNotQueued($callback);
+    }
+
+    /**
+     * Assert that no queued image generations were recorded.
+     */
+    public static function assertNothingQueued(): void
+    {
+        Ai::assertNoImagesQueued();
+    }
+
+    /**
      * Determine if image generation is faked.
      */
     public static function isFaked(): bool
