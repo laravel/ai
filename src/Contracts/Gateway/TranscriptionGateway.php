@@ -3,8 +3,8 @@
 namespace Laravel\Ai\Contracts\Gateway;
 
 use Illuminate\Http\UploadedFile;
+use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Messages\Attachments\TranscribableAudio;
-use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\TranscriptionResponse;
 
 interface TranscriptionGateway
@@ -13,7 +13,7 @@ interface TranscriptionGateway
      * Generate text from the given audio.
      */
     public function generateTranscription(
-        Provider $provider,
+        TranscriptionProvider $provider,
         string $model,
         TranscribableAudio|UploadedFile $audio,
         ?string $language = null,

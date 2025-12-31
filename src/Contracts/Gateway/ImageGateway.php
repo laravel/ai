@@ -2,8 +2,8 @@
 
 namespace Laravel\Ai\Contracts\Gateway;
 
+use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Messages\Attachments\Image as ImageAttachment;
-use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\ImageResponse;
 
 interface ImageGateway
@@ -16,7 +16,7 @@ interface ImageGateway
      * @param  'low'|'medium'|'high'  $quality
      */
     public function generateImage(
-        Provider $provider,
+        ImageProvider $provider,
         string $model,
         string $prompt,
         array $attachments = [],

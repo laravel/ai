@@ -25,6 +25,11 @@ interface TranscriptionProvider
     public function transcriptionGateway(): TranscriptionGateway;
 
     /**
+     * Set the provider's transcription gateway.
+     */
+    public function useTranscriptionGateway(TranscriptionGateway $gateway): self;
+
+    /**
      * Get the name of the default transcription (STT) model.
      */
     public function defaultTranscriptionModel(): string;

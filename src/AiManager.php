@@ -23,6 +23,10 @@ use LogicException;
 class AiManager extends MultipleInstanceManager
 {
     use Concerns\InteractsWithFakeAgents;
+    use Concerns\InteractsWithFakeAudio;
+    use Concerns\InteractsWithFakeEmbeddings;
+    use Concerns\InteractsWithFakeImages;
+    use Concerns\InteractsWithFakeTranscriptions;
 
     /**
      * The key name of the "driver" equivalent configuration option.
@@ -44,6 +48,18 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
+     * Get an audio provider instance, using a fake gateway if audio is faked.
+     */
+    public function audioProviderWithFake(?string $name = null): AudioProvider
+    {
+        $provider = $this->audioProvider($name);
+
+        return $this->audioIsFaked()
+            ? (clone $provider)->useAudioGateway($this->fakeAudioGateway())
+            : $provider;
+    }
+
+    /**
      * Get a provider instance by name.
      */
     public function embeddingProvider(?string $name = null): EmbeddingProvider
@@ -56,6 +72,18 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
+     * Get an embedding provider instance, using a fake gateway if embeddings are faked.
+     */
+    public function embeddingProviderWithFake(?string $name = null): EmbeddingProvider
+    {
+        $provider = $this->embeddingProvider($name);
+
+        return $this->embeddingsAreFaked()
+            ? (clone $provider)->useEmbeddingGateway($this->fakeEmbeddingGateway())
+            : $provider;
+    }
+
+    /**
      * Get a provider instance by name.
      */
     public function imageProvider(?string $name = null): ImageProvider
@@ -65,6 +93,18 @@ class AiManager extends MultipleInstanceManager
                 throw new LogicException('Provider ['.get_class($instance).'] does not support image generation.');
             }
         });
+    }
+
+    /**
+     * Get an image provider instance, using a fake gateway if images are faked.
+     */
+    public function imageProviderWithFake(?string $name = null): ImageProvider
+    {
+        $provider = $this->imageProvider($name);
+
+        return $this->imagesAreFaked()
+            ? (clone $provider)->useImageGateway($this->fakeImageGateway())
+            : $provider;
     }
 
     /**
@@ -101,6 +141,18 @@ class AiManager extends MultipleInstanceManager
                 throw new LogicException('Provider ['.get_class($instance).'] does not support transcription generation.');
             }
         });
+    }
+
+    /**
+     * Get a transcription provider instance, using a fake gateway if transcriptions are faked.
+     */
+    public function transcriptionProviderWithFake(?string $name = null): TranscriptionProvider
+    {
+        $provider = $this->transcriptionProvider($name);
+
+        return $this->transcriptionsAreFaked()
+            ? (clone $provider)->useTranscriptionGateway($this->fakeTranscriptionGateway())
+            : $provider;
     }
 
     /**

@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 use Closure;
-use Laravel\Ai\AgentPrompt;
+use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\TestCase;

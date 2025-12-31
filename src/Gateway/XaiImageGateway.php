@@ -6,9 +6,9 @@ use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
+use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Messages\Attachments\Image as ImageAttachment;
-use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
@@ -24,7 +24,7 @@ class XaiImageGateway implements ImageGateway
      * @param  'low'|'medium'|'high'  $quality
      */
     public function generateImage(
-        Provider $provider,
+        ImageProvider $provider,
         string $model,
         string $prompt,
         array $attachments = [],

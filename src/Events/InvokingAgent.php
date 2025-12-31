@@ -2,7 +2,7 @@
 
 namespace Laravel\Ai\Events;
 
-use Laravel\Ai\AgentPrompt;
+use Laravel\Ai\Prompts\AgentPrompt;
 
 class InvokingAgent
 {

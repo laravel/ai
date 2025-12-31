@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Events;
 
+use Laravel\Ai\Prompts\EmbeddingsPrompt;
 use Laravel\Ai\Providers\Provider;
 
 class GeneratingEmbeddings
@@ -10,7 +11,6 @@ class GeneratingEmbeddings
         public string $invocationId,
         public Provider $provider,
         public string $model,
-        public array $inputs,
-        public int $dimensions
+        public EmbeddingsPrompt $prompt,
     ) {}
 }

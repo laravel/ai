@@ -23,6 +23,11 @@ interface AudioProvider
     public function audioGateway(): AudioGateway;
 
     /**
+     * Set the provider's audio gateway.
+     */
+    public function useAudioGateway(AudioGateway $gateway): self;
+
+    /**
      * Get the name of the default audio (TTS) model.
      */
     public function defaultAudioModel(): string;

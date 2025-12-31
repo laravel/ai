@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Events;
 
+use Laravel\Ai\Prompts\ImagePrompt;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\ImageResponse;
 
@@ -11,8 +12,7 @@ class ImageGenerated
         public string $invocationId,
         public Provider $provider,
         public string $model,
-        public string $prompt,
-        public array $attachments,
-        public ImageResponse $response
+        public ImagePrompt $prompt,
+        public ImageResponse $response,
     ) {}
 }

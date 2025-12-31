@@ -101,7 +101,7 @@ class PendingImageGeneration
         );
 
         foreach ($providers as $provider => $model) {
-            $provider = Ai::imageProvider($provider);
+            $provider = Ai::imageProviderWithFake($provider);
 
             $model ??= $provider->defaultImageModel();
 

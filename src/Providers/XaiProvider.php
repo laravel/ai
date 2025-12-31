@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Providers;
 
-use Laravel\Ai\Contracts\Gateway\Gateway;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -12,6 +11,7 @@ class XaiProvider extends Provider implements ImageProvider, TextProvider
 {
     use Concerns\GeneratesImages;
     use Concerns\GeneratesText;
+    use Concerns\HasImageGateway;
     use Concerns\HasTextGateway;
     use Concerns\StreamsText;
 
@@ -28,7 +28,7 @@ class XaiProvider extends Provider implements ImageProvider, TextProvider
      */
     public function imageGateway(): ImageGateway
     {
-        return new XaiImageGateway;
+        return $this->imageGateway ?? new XaiImageGateway;
     }
 
     /**

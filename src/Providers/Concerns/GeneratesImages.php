@@ -3,8 +3,10 @@
 namespace Laravel\Ai\Providers\Concerns;
 
 use Illuminate\Support\Str;
+use Laravel\Ai\Ai;
 use Laravel\Ai\Events\GeneratingImage;
 use Laravel\Ai\Events\ImageGenerated;
+use Laravel\Ai\Prompts\ImagePrompt;
 use Laravel\Ai\Responses\ImageResponse;
 
 trait GeneratesImages
@@ -27,15 +29,21 @@ trait GeneratesImages
 
         $model ??= $this->defaultImageModel();
 
+        $prompt = new ImagePrompt($prompt, $attachments, $size, $quality, $this, $model);
+
+        if (Ai::imagesAreFaked()) {
+            Ai::recordImageGeneration($prompt);
+        }
+
         $this->events->dispatch(new GeneratingImage(
-            $invocationId, $this, $model, $prompt, $attachments,
+            $invocationId, $this, $model, $prompt,
         ));
 
         return tap($this->imageGateway()->generateImage(
-            $this, $model, $prompt, $attachments, $size, $quality,
-        ), function (ImageResponse $response) use ($invocationId, $prompt, $attachments, $model) {
+            $this, $model, $prompt->prompt, $prompt->attachments->all(), $prompt->size, $prompt->quality,
+        ), function (ImageResponse $response) use ($invocationId, $prompt, $model) {
             $this->events->dispatch(new ImageGenerated(
-                $invocationId, $this, $model, $prompt, $attachments, $response
+                $invocationId, $this, $model, $prompt, $response,
             ));
         });
     }

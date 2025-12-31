@@ -13,17 +13,19 @@ class ElevenLabsProvider extends Provider implements AudioProvider, Transcriptio
 {
     use Concerns\GeneratesAudio;
     use Concerns\GeneratesTranscriptions;
+    use Concerns\HasAudioGateway;
+    use Concerns\HasTranscriptionGateway;
 
     public function __construct(
         protected array $config,
         protected Dispatcher $events) {}
 
     /**
-     * Get the provider's image gateway.
+     * Get the provider's audio gateway.
      */
     public function audioGateway(): AudioGateway
     {
-        return new ElevenLabsGateway;
+        return $this->audioGateway ?? new ElevenLabsGateway;
     }
 
     /**
@@ -31,7 +33,7 @@ class ElevenLabsProvider extends Provider implements AudioProvider, Transcriptio
      */
     public function transcriptionGateway(): TranscriptionGateway
     {
-        return new ElevenLabsGateway;
+        return $this->transcriptionGateway ?? new ElevenLabsGateway;
     }
 
     /**
