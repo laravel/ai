@@ -194,6 +194,14 @@ trait Promptable
     }
 
     /**
+     * Assert that no prompts were received.
+     */
+    public static function assertNeverPrompted(): void
+    {
+        Ai::assertAgentNeverPrompted(static::class);
+    }
+
+    /**
      * Determine if the agent is currently faked.
      */
     public static function isFaked(): bool

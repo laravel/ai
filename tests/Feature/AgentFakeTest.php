@@ -32,6 +32,7 @@ class AgentFakeTest extends TestCase
         $response = (new AssistantAgent)->prompt('Third prompt');
         $this->assertEquals('Third response', $response->text);
 
+        // Assertion tests...
         AssistantAgent::assertPrompted('First prompt');
         AssistantAgent::assertPromptedTimes('First prompt', 1);
         AssistantAgent::assertWasntPrompted('Missing prompt');
@@ -39,6 +40,13 @@ class AgentFakeTest extends TestCase
         AssistantAgent::assertPrompted(function (AgentPrompt $prompt) {
             return $prompt->prompt === 'First prompt';
         });
+    }
+
+    public function test_can_assert_agent_was_never_prompted()
+    {
+        AssistantAgent::fake();
+
+        AssistantAgent::assertNeverPrompted();
     }
 
     public function test_agents_can_be_faked_with_no_predefined_responses(): void

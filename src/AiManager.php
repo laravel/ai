@@ -257,7 +257,7 @@ class AiManager extends MultipleInstanceManager
             ? fn (AgentPrompt $prompt) => $prompt->prompt === $callback
             : $callback;
 
-        $count = (new Collection($this->recorded[$agent]))
+        $count = (new Collection($this->recorded[$agent] ?? []))
             ->filter(fn ($prompt) => $callback($prompt))
             ->count();
 
@@ -279,9 +279,22 @@ class AiManager extends MultipleInstanceManager
             : $callback;
 
         PHPUnit::assertTrue(
-            (new Collection($this->recorded[$agent]))->filter(function ($prompt) use ($callback) {
+            (new Collection($this->recorded[$agent] ?? []))->filter(function ($prompt) use ($callback) {
                 return $callback($prompt);
             })->count() === 0,
+            'An unexpected prompt was received.'
+        );
+
+        return $this;
+    }
+
+    /**
+     * Assert that no prompts were received.
+     */
+    public function assertAgentNeverPrompted(string $agent): self
+    {
+        PHPUnit::assertEmpty(
+            $this->recorded[$agent] ?? [],
             'An unexpected prompt was received.'
         );
 
