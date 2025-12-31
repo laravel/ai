@@ -199,15 +199,7 @@ trait Promptable
      */
     public static function assertNotPrompted(Closure|string $callback): void
     {
-        Ai::assertAgentWasntPrompted(static::class, $callback);
-    }
-
-    /**
-     * Assert that a prompt was not received matching a given truth test.
-     */
-    public static function assertWasntPrompted(Closure|string $callback): void
-    {
-        Ai::assertAgentWasntPrompted(static::class, $callback);
+        Ai::assertAgentNotPrompted(static::class, $callback);
     }
 
     /**
@@ -229,17 +221,9 @@ trait Promptable
     /**
      * Assert that a queued prompt was not received matching a given truth test.
      */
-    public static function assertWasntQueued(Closure|string $callback): void
-    {
-        Ai::assertAgentWasntQueued(static::class, $callback);
-    }
-
-    /**
-     * Assert that a queued prompt was not received matching a given truth test.
-     */
     public static function assertNotQueued(Closure|string $callback): void
     {
-        Ai::assertAgentWasntQueued(static::class, $callback);
+        Ai::assertAgentNotQueued(static::class, $callback);
     }
 
     /**

@@ -113,7 +113,7 @@ trait InteractsWithFakeAgents
     /**
      * Assert that a prompt was not received matching a given truth test.
      */
-    public function assertAgentWasntPrompted(
+    public function assertAgentNotPrompted(
         string $agent,
         Closure|string $callback,
         ?array $prompts = null,
@@ -136,9 +136,9 @@ trait InteractsWithFakeAgents
     /**
      * Assert that a queued prompt was not received matching a given truth test.
      */
-    public function assertAgentWasntQueued(string $agent, Closure|string $callback): self
+    public function assertAgentNotQueued(string $agent, Closure|string $callback): self
     {
-        return $this->assertAgentWasntPrompted(
+        return $this->assertAgentNotPrompted(
             $agent,
             $callback,
             $this->recordedQueuedPrompts[$agent],

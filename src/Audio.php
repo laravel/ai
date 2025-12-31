@@ -41,14 +41,6 @@ class Audio
     }
 
     /**
-     * Assert that audio was not generated matching a given truth test.
-     */
-    public static function assertWasntGenerated(Closure $callback): void
-    {
-        Ai::assertAudioNotGenerated($callback);
-    }
-
-    /**
      * Assert that no audio was generated.
      */
     public static function assertNothingGenerated(): void
