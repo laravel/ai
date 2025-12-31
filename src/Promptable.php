@@ -96,6 +96,15 @@ trait Promptable
      */
     public function broadcastOnQueue(string $prompt, Channel|array $channels, array $attachments = [], ?string $provider = null, ?string $model = null): QueuedAgentResponse
     {
+        if (static::isFaked()) {
+            Ai::recordPrompt(
+                new QueuedAgentPrompt($this, $prompt, $attachments, $provider, $model),
+                queued: true,
+            );
+
+            return new QueuedAgentResponse(new FakePendingDispatch);
+        }
+
         return new QueuedAgentResponse(
             BroadcastAgent::dispatch($this, $prompt, $channels, $attachments, $provider, $model)
         );
