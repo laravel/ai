@@ -58,6 +58,15 @@ trait Promptable
      */
     public function queue(string $prompt, array $attachments = [], array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
     {
+        if (static::isFaked()) {
+            Ai::recordPrompt(
+                new QueuedAgentPrompt($this, $prompt, $attachments, $provider, $model),
+                queued: true,
+            );
+
+            return new QueuedAgentResponse(new FakePendingDispatch);
+        }
+
         return new QueuedAgentResponse(
             InvokeAgent::dispatch($this, $prompt, $attachments, $provider, $model)
         );
@@ -175,6 +184,14 @@ trait Promptable
     public static function assertPrompted(Closure|string $callback): void
     {
         Ai::assertAgentWasPrompted(static::class, $callback);
+    }
+
+    /**
+     * Assert that a queued prompt was received matching a given truth test.
+     */
+    public static function assertQueued(Closure|string $callback): void
+    {
+        Ai::assertAgentWasQueued(static::class, $callback);
     }
 
     /**

@@ -14,7 +14,7 @@ class AgentPrompt extends Prompt
 
     public function __construct(
         Agent $agent,
-        $prompt,
+        string $prompt,
         Collection|array $attachments,
         TextProvider $provider,
         string $model

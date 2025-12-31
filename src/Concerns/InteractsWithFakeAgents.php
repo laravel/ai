@@ -8,6 +8,7 @@ use InvalidArgumentException;
 use Laravel\Ai\AgentPrompt;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Gateway\FakeGateway;
+use Laravel\Ai\QueuedAgentPrompt;
 use PHPUnit\Framework\Assert as PHPUnit;
 
 trait InteractsWithFakeAgents
@@ -21,6 +22,11 @@ trait InteractsWithFakeAgents
      * All of the recorded agent prompts.
      */
     protected array $recordedPrompts = [];
+
+    /**
+     * All of the recorded agent prompts that were queued.
+     */
+    protected array $recordedQueuedPrompts = [];
 
     /**
      * Fake the responses returned by the given agent.
@@ -57,9 +63,13 @@ trait InteractsWithFakeAgents
     /**
      * Record the given prompt for the faked agent.
      */
-    public function recordPrompt(AgentPrompt $prompt): self
+    public function recordPrompt(AgentPrompt|QueuedAgentPrompt $prompt, bool $queued = false): self
     {
-        $this->recordedPrompts[get_class($prompt->agent)][] = $prompt;
+        if ($queued) {
+            $this->recordedQueuedPrompts[get_class($prompt->agent)][] = $prompt;
+        } else {
+            $this->recordedPrompts[get_class($prompt->agent)][] = $prompt;
+        }
 
         return $this;
     }
@@ -67,20 +77,37 @@ trait InteractsWithFakeAgents
     /**
      * Assert that a prompt was received matching a given truth test.
      */
-    public function assertAgentWasPrompted(string $agent, Closure|string $callback): self
+    public function assertAgentWasPrompted(
+        string $agent,
+        Closure|string $callback,
+        ?array $prompts = null,
+        ?string $message = null): self
     {
         $callback = is_string($callback)
             ? fn ($prompt) => $prompt->prompt === $callback
             : $callback;
 
         PHPUnit::assertTrue(
-            (new Collection($this->recordedPrompts[$agent] ?? []))->filter(function ($prompt) use ($callback) {
+            (new Collection($prompts ?? $this->recordedPrompts[$agent] ?? []))->filter(function ($prompt) use ($callback) {
                 return $callback($prompt);
             })->count() > 0,
-            'An expected prompt was not received.'
+            $message ?? 'An expected prompt was not received.'
         );
 
         return $this;
+    }
+
+    /**
+     * Assert that a prompt was received matching a given truth test.
+     */
+    public function assertAgentWasQueued(string $agent, Closure|string $callback): self
+    {
+        return $this->assertAgentWasPrompted(
+            $agent,
+            $callback,
+            $this->recordedQueuedPrompts[$agent],
+            'An expected prompt was not received.'
+        );
     }
 
     /**
