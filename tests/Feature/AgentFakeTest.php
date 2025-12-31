@@ -130,7 +130,7 @@ class AgentFakeTest extends TestCase
         $this->assertCount(6, $response->events);
     }
 
-    public function test_assert_queued_agents_can_be_faked()
+    public function test_queued_agents_can_be_faked()
     {
         AssistantAgent::fake();
 
@@ -146,6 +146,13 @@ class AgentFakeTest extends TestCase
         AssistantAgent::assertNotQueued(function (QueuedAgentPrompt $prompt) {
             return $prompt->prompt === 'Second prompt';
         });
+    }
+
+    public function test_can_assert_agent_was_never_queued()
+    {
+        AssistantAgent::fake();
+
+        AssistantAgent::assertNeverQueued();
     }
 
     public function test_fake_closures_can_throw_exceptions()

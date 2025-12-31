@@ -179,4 +179,17 @@ trait InteractsWithFakeAgents
 
         return $this;
     }
+
+    /**
+     * Assert that no queued prompts were received.
+     */
+    public function assertAgentNeverQueued(string $agent): self
+    {
+        PHPUnit::assertEmpty(
+            $this->recordedQueuedPrompts[$agent] ?? [],
+            'An unexpected queued prompt was received.'
+        );
+
+        return $this;
+    }
 }

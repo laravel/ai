@@ -244,6 +244,14 @@ trait Promptable
     }
 
     /**
+     * Assert that no queued prompts were received.
+     */
+    public static function assertNeverQueued(): void
+    {
+        Ai::assertAgentNeverQueued(static::class);
+    }
+
+    /**
      * Determine if the agent is currently faked.
      */
     public static function isFaked(): bool
