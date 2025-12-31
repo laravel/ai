@@ -233,7 +233,7 @@ class AiManager extends MultipleInstanceManager
     /**
      * Assert that a prompt was received matching a given truth test.
      */
-    public function assertPrompted(string $agent, Closure|string $callback): self
+    public function assertAgentWasPrompted(string $agent, Closure|string $callback): self
     {
         $callback = is_string($callback)
             ? fn ($prompt) => $prompt->prompt === $callback

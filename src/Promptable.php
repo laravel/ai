@@ -174,7 +174,7 @@ trait Promptable
      */
     public static function assertPrompted(Closure|string $callback): void
     {
-        Ai::assertPrompted(static::class, $callback);
+        Ai::assertAgentWasPrompted(static::class, $callback);
     }
 
     /**
