@@ -11,6 +11,7 @@ class GeminiProvider extends Provider implements EmbeddingProvider, ImageProvide
     use Concerns\GeneratesEmbeddings;
     use Concerns\GeneratesImages;
     use Concerns\GeneratesText;
+    use Concerns\HasEmbeddingGateway;
     use Concerns\HasImageGateway;
     use Concerns\HasTextGateway;
     use Concerns\StreamsText;

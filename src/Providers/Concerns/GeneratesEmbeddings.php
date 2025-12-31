@@ -4,8 +4,10 @@ namespace Laravel\Ai\Providers\Concerns;
 
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use Laravel\Ai\Ai;
 use Laravel\Ai\Events\EmbeddingsGenerated;
 use Laravel\Ai\Events\GeneratingEmbeddings;
+use Laravel\Ai\Prompts\EmbeddingsPrompt;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 
 trait GeneratesEmbeddings
@@ -26,17 +28,23 @@ trait GeneratesEmbeddings
         $model ??= $this->defaultEmbeddingsModel();
         $dimensions ??= $this->defaultEmbeddingsDimensions();
 
+        $prompt = new EmbeddingsPrompt($inputs, $dimensions, $this, $model);
+
+        if (Ai::embeddingsAreFaked()) {
+            Ai::recordEmbeddingsGeneration($prompt);
+        }
+
         $this->events->dispatch(new GeneratingEmbeddings(
-            $invocationId, $this, $model, $inputs, $dimensions
+            $invocationId, $this, $model, $prompt,
         ));
 
-        return tap($this->gateway->generateEmbeddings(
+        return tap($this->embeddingGateway()->generateEmbeddings(
             $this,
             $model,
             $inputs,
             $dimensions
         ), fn (EmbeddingsResponse $response) => $this->events->dispatch(new EmbeddingsGenerated(
-            $invocationId, $this, $model, $inputs, $dimensions, $response
+            $invocationId, $this, $model, $prompt, $response,
         )));
     }
 }

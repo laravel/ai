@@ -24,6 +24,7 @@ class AiManager extends MultipleInstanceManager
 {
     use Concerns\InteractsWithFakeAgents;
     use Concerns\InteractsWithFakeAudio;
+    use Concerns\InteractsWithFakeEmbeddings;
     use Concerns\InteractsWithFakeImages;
     use Concerns\InteractsWithFakeTranscriptions;
 
@@ -68,6 +69,18 @@ class AiManager extends MultipleInstanceManager
                 throw new LogicException('Provider ['.get_class($instance).'] does not support embedding generation.');
             }
         });
+    }
+
+    /**
+     * Get an embedding provider instance, using a fake gateway if embeddings are faked.
+     */
+    public function embeddingProviderWithFake(?string $name = null): EmbeddingProvider
+    {
+        $provider = $this->embeddingProvider($name);
+
+        return $this->embeddingsAreFaked()
+            ? (clone $provider)->useEmbeddingGateway($this->fakeEmbeddingGateway())
+            : $provider;
     }
 
     /**
