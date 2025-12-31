@@ -13,6 +13,7 @@ use Laravel\Ai\Messages\Attachments\TranscribableAudio;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\QueuedTranscriptionResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
+use Laravel\Ai\TranscriptionPrompt;
 use LogicException;
 
 class PendingTranscriptionGeneration
@@ -51,9 +52,11 @@ class PendingTranscriptionGeneration
     public function generate(array|string|null $provider = null, ?string $model = null): TranscriptionResponse
     {
         if (Ai::areTranscriptionsFaked()) {
-            Ai::recordTranscriptionGeneration($this->audio, $this->language, $this->diarize);
+            $prompt = new TranscriptionPrompt($this->audio, $this->language, $this->diarize);
 
-            return Ai::nextFakeTranscriptionResponse($this->audio, $this->language, $this->diarize);
+            Ai::recordTranscriptionGeneration($prompt);
+
+            return Ai::nextFakeTranscriptionResponse($prompt);
         }
 
         $providers = Provider::formatProviderAndModelList(

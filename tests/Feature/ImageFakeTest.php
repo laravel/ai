@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use Exception;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Image;
+use Laravel\Ai\ImagePrompt;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
@@ -18,7 +19,7 @@ class ImageFakeTest extends TestCase
     {
         Image::fake([
             base64_encode('first-image'),
-            fn (string $prompt) => base64_encode('second-image-'.$prompt),
+            fn (ImagePrompt $prompt) => base64_encode('second-image-'.$prompt->prompt),
             new ImageResponse(
                 new Collection([new GeneratedImage(base64_encode('third-image'))]),
                 new Usage,
@@ -36,11 +37,11 @@ class ImageFakeTest extends TestCase
         $this->assertEquals(base64_encode('third-image'), $response->firstImage()->image);
 
         // Assertion tests...
-        Image::assertGenerated(fn (string $prompt) => $prompt === 'First prompt');
-        Image::assertNotGenerated(fn (string $prompt) => $prompt === 'Missing prompt');
+        Image::assertGenerated(fn (ImagePrompt $prompt) => $prompt->prompt === 'First prompt');
+        Image::assertNotGenerated(fn (ImagePrompt $prompt) => $prompt->prompt === 'Missing prompt');
 
-        Image::assertGenerated(function (string $prompt, array $attachments, ?string $size, ?string $quality) {
-            return $prompt === 'First prompt';
+        Image::assertGenerated(function (ImagePrompt $prompt) {
+            return $prompt->prompt === 'First prompt';
         });
     }
 
@@ -64,8 +65,8 @@ class ImageFakeTest extends TestCase
 
     public function test_images_can_be_faked_with_a_single_closure_that_is_invoked_for_every_generation(): void
     {
-        Image::fake(function (string $prompt) {
-            return base64_encode('image-for-'.$prompt);
+        Image::fake(function (ImagePrompt $prompt) {
+            return base64_encode('image-for-'.$prompt->prompt);
         });
 
         $response = Image::of('First prompt')->generate();
@@ -101,8 +102,10 @@ class ImageFakeTest extends TestCase
 
         Image::of('A sunset')->square()->quality('high')->generate();
 
-        Image::assertGenerated(function (string $prompt, array $attachments, ?string $size, ?string $quality) {
-            return $prompt === 'A sunset' && $size === '1:1' && $quality === 'high';
+        Image::assertGenerated(function (ImagePrompt $prompt) {
+            return $prompt->prompt === 'A sunset'
+                && $prompt->size === '1:1'
+                && $prompt->quality === 'high';
         });
     }
 }

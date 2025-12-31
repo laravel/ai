@@ -8,6 +8,7 @@ use Laravel\Ai\Events\GeneratingTranscription;
 use Laravel\Ai\Events\TranscriptionGenerated;
 use Laravel\Ai\Messages\Attachments\TranscribableAudio;
 use Laravel\Ai\Responses\TranscriptionResponse;
+use Laravel\Ai\TranscriptionPrompt;
 
 trait GeneratesTranscriptions
 {
@@ -24,15 +25,17 @@ trait GeneratesTranscriptions
 
         $model ??= $this->defaultTranscriptionModel();
 
+        $prompt = new TranscriptionPrompt($audio, $language, $diarize);
+
         $this->events->dispatch(new GeneratingTranscription(
-            $invocationId, $this, $model, $audio, $language, $diarize,
+            $invocationId, $this, $model, $prompt,
         ));
 
         return tap($this->transcriptionGateway()->generateTranscription(
-            $this, $model, $audio, $language, $diarize
-        ), function (TranscriptionResponse $response) use ($invocationId, $model, $audio, $language, $diarize) {
+            $this, $model, $prompt->audio, $prompt->language, $prompt->diarize
+        ), function (TranscriptionResponse $response) use ($invocationId, $model, $prompt) {
             $this->events->dispatch(new TranscriptionGenerated(
-                $invocationId, $this, $model, $audio, $language, $diarize, $response
+                $invocationId, $this, $model, $prompt, $response
             ));
         });
     }

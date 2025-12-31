@@ -3,13 +3,12 @@
 namespace Laravel\Ai\Concerns;
 
 use Closure;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
-use Laravel\Ai\Messages\Attachments\TranscribableAudio;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\TranscriptionResponse;
+use Laravel\Ai\TranscriptionPrompt;
 use PHPUnit\Framework\Assert as PHPUnit;
 use RuntimeException;
 
@@ -54,13 +53,9 @@ trait InteractsWithFakeTranscriptions
     /**
      * Record a transcription generation.
      */
-    public function recordTranscriptionGeneration(TranscribableAudio|UploadedFile $audio, ?string $language, bool $diarize): self
+    public function recordTranscriptionGeneration(TranscriptionPrompt $prompt): self
     {
-        $this->recordedTranscriptionGenerations[] = [
-            'audio' => $audio,
-            'language' => $language,
-            'diarize' => $diarize,
-        ];
+        $this->recordedTranscriptionGenerations[] = $prompt;
 
         return $this;
     }
@@ -68,33 +63,24 @@ trait InteractsWithFakeTranscriptions
     /**
      * Get the next fake transcription response.
      */
-    public function nextFakeTranscriptionResponse(
-        TranscribableAudio|UploadedFile $audio,
-        ?string $language,
-        bool $diarize): TranscriptionResponse
+    public function nextFakeTranscriptionResponse(TranscriptionPrompt $prompt): TranscriptionResponse
     {
         $response = is_array($this->fakeTranscriptionResponses)
             ? ($this->fakeTranscriptionResponses[$this->fakeTranscriptionResponseIndex] ?? null)
-            : call_user_func($this->fakeTranscriptionResponses, $audio, $language, $diarize);
+            : call_user_func($this->fakeTranscriptionResponses, $prompt);
 
         $this->fakeTranscriptionResponseIndex++;
 
-        return $this->marshalTranscriptionResponse(
-            $response, $audio, $language, $diarize
-        );
+        return $this->marshalTranscriptionResponse($response, $prompt);
     }
 
     /**
      * Marshal the given response into a TranscriptionResponse instance.
      */
-    protected function marshalTranscriptionResponse(
-        mixed $response,
-        TranscribableAudio|UploadedFile $audio,
-        ?string $language,
-        bool $diarize): TranscriptionResponse
+    protected function marshalTranscriptionResponse(mixed $response, TranscriptionPrompt $prompt): TranscriptionResponse
     {
         if ($response instanceof Closure) {
-            $response = $response($audio, $language, $diarize);
+            $response = $response($prompt);
         }
 
         if (is_null($response)) {
@@ -125,8 +111,8 @@ trait InteractsWithFakeTranscriptions
     public function assertTranscriptionGenerated(Closure $callback): self
     {
         PHPUnit::assertTrue(
-            (new Collection($this->recordedTranscriptionGenerations))->filter(function ($generation) use ($callback) {
-                return $callback($generation['audio'], $generation['language'], $generation['diarize']);
+            (new Collection($this->recordedTranscriptionGenerations))->filter(function (TranscriptionPrompt $prompt) use ($callback) {
+                return $callback($prompt);
             })->count() > 0,
             'An expected transcription generation was not recorded.'
         );
@@ -140,8 +126,8 @@ trait InteractsWithFakeTranscriptions
     public function assertTranscriptionNotGenerated(Closure $callback): self
     {
         PHPUnit::assertTrue(
-            (new Collection($this->recordedTranscriptionGenerations))->filter(function ($generation) use ($callback) {
-                return $callback($generation['audio'], $generation['language'], $generation['diarize']);
+            (new Collection($this->recordedTranscriptionGenerations))->filter(function (TranscriptionPrompt $prompt) use ($callback) {
+                return $callback($prompt);
             })->count() === 0,
             'An unexpected transcription generation was recorded.'
         );

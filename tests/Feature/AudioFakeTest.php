@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use Exception;
 use Laravel\Ai\Audio;
+use Laravel\Ai\AudioPrompt;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use RuntimeException;
@@ -15,7 +16,7 @@ class AudioFakeTest extends TestCase
     {
         Audio::fake([
             base64_encode('first-audio'),
-            fn (string $text) => base64_encode('second-audio-'.$text),
+            fn (AudioPrompt $prompt) => base64_encode('second-audio-'.$prompt->text),
             new AudioResponse(base64_encode('third-audio'), new Meta),
         ]);
 
@@ -29,11 +30,11 @@ class AudioFakeTest extends TestCase
         $this->assertEquals(base64_encode('third-audio'), $response->audio);
 
         // Assertion tests...
-        Audio::assertGenerated(fn (string $text) => $text === 'First text');
-        Audio::assertNotGenerated(fn (string $text) => $text === 'Missing text');
+        Audio::assertGenerated(fn (AudioPrompt $prompt) => $prompt->text === 'First text');
+        Audio::assertNotGenerated(fn (AudioPrompt $prompt) => $prompt->text === 'Missing text');
 
-        Audio::assertGenerated(function (string $text, string $voice, ?string $instructions) {
-            return $text === 'First text';
+        Audio::assertGenerated(function (AudioPrompt $prompt) {
+            return $prompt->text === 'First text';
         });
     }
 
@@ -57,8 +58,8 @@ class AudioFakeTest extends TestCase
 
     public function test_audio_can_be_faked_with_a_single_closure_that_is_invoked_for_every_generation(): void
     {
-        Audio::fake(function (string $text) {
-            return base64_encode('audio-for-'.$text);
+        Audio::fake(function (AudioPrompt $prompt) {
+            return base64_encode('audio-for-'.$prompt->text);
         });
 
         $response = Audio::of('First text')->generate();
@@ -94,8 +95,10 @@ class AudioFakeTest extends TestCase
 
         Audio::of('Hello world')->voice('alloy')->instructions('Speak slowly')->generate();
 
-        Audio::assertGenerated(function (string $text, string $voice, ?string $instructions) {
-            return $text === 'Hello world' && $voice === 'alloy' && $instructions === 'Speak slowly';
+        Audio::assertGenerated(function (AudioPrompt $prompt) {
+            return $prompt->text === 'Hello world'
+                && $prompt->voice === 'alloy'
+                && $prompt->instructions === 'Speak slowly';
         });
     }
 }

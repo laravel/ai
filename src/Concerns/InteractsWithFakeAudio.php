@@ -4,6 +4,7 @@ namespace Laravel\Ai\Concerns;
 
 use Closure;
 use Illuminate\Support\Collection;
+use Laravel\Ai\AudioPrompt;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use PHPUnit\Framework\Assert as PHPUnit;
@@ -50,13 +51,9 @@ trait InteractsWithFakeAudio
     /**
      * Record an audio generation.
      */
-    public function recordAudioGeneration(string $text, string $voice, ?string $instructions): self
+    public function recordAudioGeneration(AudioPrompt $prompt): self
     {
-        $this->recordedAudioGenerations[] = [
-            'text' => $text,
-            'voice' => $voice,
-            'instructions' => $instructions,
-        ];
+        $this->recordedAudioGenerations[] = $prompt;
 
         return $this;
     }
@@ -64,24 +61,24 @@ trait InteractsWithFakeAudio
     /**
      * Get the next fake audio response.
      */
-    public function nextFakeAudioResponse(string $text, string $voice, ?string $instructions): AudioResponse
+    public function nextFakeAudioResponse(AudioPrompt $prompt): AudioResponse
     {
         $response = is_array($this->fakeAudioResponses)
             ? ($this->fakeAudioResponses[$this->fakeAudioResponseIndex] ?? null)
-            : call_user_func($this->fakeAudioResponses, $text, $voice, $instructions);
+            : call_user_func($this->fakeAudioResponses, $prompt);
 
         $this->fakeAudioResponseIndex++;
 
-        return $this->marshalAudioResponse($response, $text, $voice, $instructions);
+        return $this->marshalAudioResponse($response, $prompt);
     }
 
     /**
      * Marshal the given response into an AudioResponse instance.
      */
-    protected function marshalAudioResponse(mixed $response, string $text, string $voice, ?string $instructions): AudioResponse
+    protected function marshalAudioResponse(mixed $response, AudioPrompt $prompt): AudioResponse
     {
         if ($response instanceof Closure) {
-            $response = $response($text, $voice, $instructions);
+            $response = $response($prompt);
         }
 
         if (is_null($response)) {
@@ -105,8 +102,8 @@ trait InteractsWithFakeAudio
     public function assertAudioGenerated(Closure $callback): self
     {
         PHPUnit::assertTrue(
-            (new Collection($this->recordedAudioGenerations))->filter(function (array $generation) use ($callback) {
-                return $callback($generation['text'], $generation['voice'], $generation['instructions']);
+            (new Collection($this->recordedAudioGenerations))->filter(function (AudioPrompt $prompt) use ($callback) {
+                return $callback($prompt);
             })->count() > 0,
             'An expected audio generation was not recorded.'
         );
@@ -120,8 +117,8 @@ trait InteractsWithFakeAudio
     public function assertAudioNotGenerated(Closure $callback): self
     {
         PHPUnit::assertTrue(
-            (new Collection($this->recordedAudioGenerations))->filter(function (array $generation) use ($callback) {
-                return $callback($generation['text'], $generation['voice'], $generation['instructions']);
+            (new Collection($this->recordedAudioGenerations))->filter(function (AudioPrompt $prompt) use ($callback) {
+                return $callback($prompt);
             })->count() === 0,
             'An unexpected audio generation was recorded.'
         );

@@ -2,10 +2,9 @@
 
 namespace Laravel\Ai\Events;
 
-use Illuminate\Http\UploadedFile;
-use Laravel\Ai\Messages\Attachments\TranscribableAudio;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\TranscriptionResponse;
+use Laravel\Ai\TranscriptionPrompt;
 
 class TranscriptionGenerated
 {
@@ -13,9 +12,7 @@ class TranscriptionGenerated
         public string $invocationId,
         public Provider $provider,
         public string $model,
-        public TranscribableAudio|UploadedFile $audio,
-        public ?string $language,
-        public bool $diarize,
+        public TranscriptionPrompt $prompt,
         public TranscriptionResponse $response,
     ) {}
 }

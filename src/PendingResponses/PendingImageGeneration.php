@@ -5,6 +5,7 @@ namespace Laravel\Ai\PendingResponses;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
+use Laravel\Ai\ImagePrompt;
 use Laravel\Ai\Jobs\GenerateImage;
 use Laravel\Ai\Messages\Attachments\LocalImage;
 use Laravel\Ai\Messages\Attachments\StoredImage;
@@ -97,9 +98,11 @@ class PendingImageGeneration
     public function generate(array|string|null $provider = null, ?string $model = null): ImageResponse
     {
         if (Ai::areImagesFaked()) {
-            Ai::recordImageGeneration($this->prompt, $this->attachments, $this->size, $this->quality);
+            $prompt = new ImagePrompt($this->prompt, $this->attachments, $this->size, $this->quality);
 
-            return Ai::nextFakeImageResponse($this->prompt, $this->attachments, $this->size, $this->quality);
+            Ai::recordImageGeneration($prompt);
+
+            return Ai::nextFakeImageResponse($prompt);
         }
 
         $providers = Provider::formatProviderAndModelList(

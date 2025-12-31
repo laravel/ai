@@ -3,6 +3,7 @@
 namespace Laravel\Ai\PendingResponses;
 
 use Laravel\Ai\Ai;
+use Laravel\Ai\AudioPrompt;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Jobs\GenerateAudio;
@@ -66,9 +67,11 @@ class PendingAudioGeneration
     public function generate(array|string|null $provider = null, ?string $model = null): AudioResponse
     {
         if (Ai::isAudioFaked()) {
-            Ai::recordAudioGeneration($this->text, $this->voice, $this->instructions);
+            $prompt = new AudioPrompt($this->text, $this->voice, $this->instructions);
 
-            return Ai::nextFakeAudioResponse($this->text, $this->voice, $this->instructions);
+            Ai::recordAudioGeneration($prompt);
+
+            return Ai::nextFakeAudioResponse($prompt);
         }
 
         $providers = Provider::formatProviderAndModelList(

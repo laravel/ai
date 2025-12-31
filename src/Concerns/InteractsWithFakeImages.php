@@ -4,6 +4,7 @@ namespace Laravel\Ai\Concerns;
 
 use Closure;
 use Illuminate\Support\Collection;
+use Laravel\Ai\ImagePrompt;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
@@ -52,14 +53,9 @@ trait InteractsWithFakeImages
     /**
      * Record an image generation.
      */
-    public function recordImageGeneration(string $prompt, array $attachments, ?string $size, ?string $quality): self
+    public function recordImageGeneration(ImagePrompt $prompt): self
     {
-        $this->recordedImageGenerations[] = [
-            'prompt' => $prompt,
-            'attachments' => $attachments,
-            'size' => $size,
-            'quality' => $quality,
-        ];
+        $this->recordedImageGenerations[] = $prompt;
 
         return $this;
     }
@@ -67,24 +63,24 @@ trait InteractsWithFakeImages
     /**
      * Get the next fake image response.
      */
-    public function nextFakeImageResponse(string $prompt, array $attachments, ?string $size, ?string $quality): ImageResponse
+    public function nextFakeImageResponse(ImagePrompt $prompt): ImageResponse
     {
         $response = is_array($this->fakeImageResponses)
             ? ($this->fakeImageResponses[$this->fakeImageResponseIndex] ?? null)
-            : call_user_func($this->fakeImageResponses, $prompt, $attachments, $size, $quality);
+            : call_user_func($this->fakeImageResponses, $prompt);
 
         $this->fakeImageResponseIndex++;
 
-        return $this->marshalImageResponse($response, $prompt, $attachments, $size, $quality);
+        return $this->marshalImageResponse($response, $prompt);
     }
 
     /**
      * Marshal the given response into an ImageResponse instance.
      */
-    protected function marshalImageResponse(mixed $response, string $prompt, array $attachments, ?string $size, ?string $quality): ImageResponse
+    protected function marshalImageResponse(mixed $response, ImagePrompt $prompt): ImageResponse
     {
         if ($response instanceof Closure) {
-            $response = $response($prompt, $attachments, $size, $quality);
+            $response = $response($prompt);
         }
 
         if (is_null($response)) {
@@ -112,8 +108,8 @@ trait InteractsWithFakeImages
     public function assertImageGenerated(Closure $callback): self
     {
         PHPUnit::assertTrue(
-            (new Collection($this->recordedImageGenerations))->filter(function (array $generation) use ($callback) {
-                return $callback($generation['prompt'], $generation['attachments'], $generation['size'], $generation['quality']);
+            (new Collection($this->recordedImageGenerations))->filter(function (ImagePrompt $prompt) use ($callback) {
+                return $callback($prompt);
             })->count() > 0,
             'An expected image generation was not recorded.'
         );
@@ -127,8 +123,8 @@ trait InteractsWithFakeImages
     public function assertImageNotGenerated(Closure $callback): self
     {
         PHPUnit::assertTrue(
-            (new Collection($this->recordedImageGenerations))->filter(function (array $generation) use ($callback) {
-                return $callback($generation['prompt'], $generation['attachments'], $generation['size'], $generation['quality']);
+            (new Collection($this->recordedImageGenerations))->filter(function (ImagePrompt $prompt) use ($callback) {
+                return $callback($prompt);
             })->count() === 0,
             'An unexpected image generation was recorded.'
         );

@@ -9,6 +9,7 @@ use Laravel\Ai\Responses\Data\TranscriptionSegment;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\TranscriptionResponse;
 use Laravel\Ai\Transcription;
+use Laravel\Ai\TranscriptionPrompt;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -18,7 +19,7 @@ class TranscriptionFakeTest extends TestCase
     {
         Transcription::fake([
             'First transcription',
-            fn () => 'Second transcription',
+            fn (TranscriptionPrompt $prompt) => 'Second transcription',
             new TranscriptionResponse(
                 'Third transcription',
                 new Collection([new TranscriptionSegment('Third transcription', 'Speaker 1', 0.0, 1.0)]),
@@ -37,8 +38,8 @@ class TranscriptionFakeTest extends TestCase
         $this->assertEquals('Third transcription', $response->text);
 
         // Assertion tests...
-        Transcription::assertGenerated(fn ($audio) => true);
-        Transcription::assertNotGenerated(fn ($audio, $language) => $language === 'fr');
+        Transcription::assertGenerated(fn (TranscriptionPrompt $prompt) => true);
+        Transcription::assertNotGenerated(fn (TranscriptionPrompt $prompt) => $prompt->language === 'fr');
     }
 
     public function test_can_assert_no_transcriptions_were_generated(): void
@@ -63,7 +64,7 @@ class TranscriptionFakeTest extends TestCase
     {
         $counter = 0;
 
-        Transcription::fake(function () use (&$counter) {
+        Transcription::fake(function (TranscriptionPrompt $prompt) use (&$counter) {
             $counter++;
 
             return "Transcription {$counter}";
@@ -102,8 +103,8 @@ class TranscriptionFakeTest extends TestCase
 
         Transcription::of(base64_encode('audio'))->language('en')->diarize()->generate();
 
-        Transcription::assertGenerated(function ($audio, ?string $language, bool $diarize) {
-            return $language === 'en' && $diarize === true;
+        Transcription::assertGenerated(function (TranscriptionPrompt $prompt) {
+            return $prompt->language === 'en' && $prompt->isDiarized();
         });
     }
 
