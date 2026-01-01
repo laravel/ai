@@ -8,7 +8,7 @@ use Tests\TestCase;
 
 use function Laravel\Ai\generate_fake_data_for_json_schema_type;
 
-class FakeStructuredDataTest extends TestCase
+class FakeJsonSchemaDataTest extends TestCase
 {
     public function test_structured_data_can_be_faked(): void
     {
