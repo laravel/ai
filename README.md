@@ -25,6 +25,7 @@ The official Laravel AI SDK.
     - [Queueing](#queueing)
     - [Middleware](#middleware)
     - [Anonymous Agents](#anonymous-agents)
+    - [Agent Configuration](#agent-configuration)
 - [Images](#images)
 - [Audio (TTS)](#audio)
 - [Transcription (STT)](#transcription)
@@ -532,6 +533,36 @@ $response = agent(
         'number' => $schema->integer()->required(),
     ],
 )->prompt('Generate a random number less than 100')
+```
+
+### Agent Configuration
+
+You may configure text generation options for an agent using PHP attributes. The following attributes are available:
+
+- `MaxSteps`: The maximum number of steps the agent may take when using tools.
+- `MaxTokens`: The maximum number of tokens the model may generate.
+- `Temperature`: The sampling temperature to use for generation (0.0 to 1.0).
+
+```php
+<?php
+
+namespace App\Ai\Agents;
+
+use Laravel\Ai\Attributes\MaxSteps;
+use Laravel\Ai\Attributes\MaxTokens;
+use Laravel\Ai\Attributes\Temperature;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Promptable;
+
+#[MaxSteps(10)]
+#[MaxTokens(4096)]
+#[Temperature(0.7)]
+class SalesCoach implements Agent
+{
+    use Promptable;
+
+    // ...
+}
 ```
 
 ## Images
