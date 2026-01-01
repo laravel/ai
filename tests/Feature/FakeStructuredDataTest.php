@@ -14,7 +14,7 @@ class FakeStructuredDataTest extends TestCase
     {
         $schema = new JsonSchemaTypeFactory;
 
-        $object = (new ObjectType([
+        $response = generate_fake_data_for_json_schema_type((new ObjectType([
             'name' => $schema->string()->required(),
             'age' => $schema->integer()->required()->min(1)->max(120),
             'address' => $schema->object([
@@ -26,15 +26,13 @@ class FakeStructuredDataTest extends TestCase
                 $schema->string()->required(),
             ),
             'active' => $schema->boolean(),
-        ]))->withoutAdditionalProperties();
+        ]))->withoutAdditionalProperties());
 
-        $fake = generate_fake_data_for_json_schema_type($object);
-
-        $this->assertTrue(is_string($fake['name']));
-        $this->assertTrue(is_numeric($fake['age']));
-        $this->assertTrue(is_array($fake['address']));
-        $this->assertTrue(in_array($fake['role'], ['admin', 'editor']));
-        $this->assertTrue(array_is_list($fake['skills']));
-        $this->assertTrue(is_bool($fake['active']));
+        $this->assertTrue(is_string($response['name']));
+        $this->assertTrue(is_numeric($response['age']));
+        $this->assertTrue(is_array($response['address']));
+        $this->assertTrue(in_array($response['role'], ['admin', 'editor']));
+        $this->assertTrue(array_is_list($response['skills']));
+        $this->assertTrue(is_bool($response['active']));
     }
 }
