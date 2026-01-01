@@ -51,7 +51,7 @@ class AiServiceProvider extends ServiceProvider
     protected function registerCommands(): void
     {
         $this->commands([
-            // ChatCommand::class,
+            ChatCommand::class,
             MakeAgentCommand::class,
             MakeToolCommand::class,
         ]);
