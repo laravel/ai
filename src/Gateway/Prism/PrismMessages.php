@@ -1,13 +1,13 @@
 <?php
 
 namespace Laravel\Ai\Gateway\Prism;
-
 use Illuminate\Http\UploadedFile;
+
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use Laravel\Ai\Messages\AssistantMessage;
-use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Base64Image;
+use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Files\LocalDocument;
 use Laravel\Ai\Files\LocalImage;
@@ -65,13 +65,13 @@ class PrismMessages
             }
 
             $prismAttachment = match (true) {
-                $attachment instanceof Base64Image => PrismImage::fromBase64($attachment->base64, $attachment->mime),
                 $attachment instanceof ProviderImage => PrismImage::fromFileId($attachment->id),
+                $attachment instanceof Base64Image => PrismImage::fromBase64($attachment->base64, $attachment->mime),
                 $attachment instanceof LocalImage => PrismImage::fromLocalPath($attachment->path, $attachment->mime),
                 $attachment instanceof RemoteImage => PrismImage::fromUrl($attachment->url),
                 $attachment instanceof StoredImage => PrismImage::fromStoragePath($attachment->path, $attachment->disk),
-                $attachment instanceof Base64Document => PrismDocument::fromBase64($attachment->base64, $attachment->mime),
                 $attachment instanceof ProviderDocument => PrismDocument::fromFileId($attachment->id),
+                $attachment instanceof Base64Document => PrismDocument::fromBase64($attachment->base64, $attachment->mime),
                 $attachment instanceof LocalDocument => PrismDocument::fromPath($attachment->path),
                 $attachment instanceof RemoteDocument => PrismDocument::fromUrl($attachment->url),
                 $attachment instanceof StoredDocument => PrismDocument::fromStoragePath($attachment->path, $attachment->disk),
