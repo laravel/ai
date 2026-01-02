@@ -25,7 +25,7 @@ class PrismStreamEvent
     /**
      * Convert a Prism stream event to a Laravel AI SDK stream event.
      */
-    public static function toLaravelStreamEvent(string $invocationId, StreamEvent $event, string $provider, string $model): LaravelStreamEvent
+    public static function toLaravelStreamEvent(string $invocationId, StreamEvent $event, string $provider, string $model): ?LaravelStreamEvent
     {
         if (isset($event->id)) {
             $id = strtolower($event->id);
