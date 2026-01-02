@@ -23,7 +23,7 @@
         "prism-php/prism": "^0.99.0"
     },
     "require-dev": {
-        "laravel/pint": "1.20",
+        "laravel/pint": "^1.26",
         "mockery/mockery": "^1.6.12",
         "orchestra/testbench": "^10.6"
     },

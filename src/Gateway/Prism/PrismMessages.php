@@ -1,13 +1,12 @@
 <?php
 
 namespace Laravel\Ai\Gateway\Prism;
-use Illuminate\Http\UploadedFile;
 
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
-use Laravel\Ai\Messages\AssistantMessage;
-use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Files\Base64Document;
+use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Files\LocalDocument;
 use Laravel\Ai\Files\LocalImage;
@@ -17,6 +16,7 @@ use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\StoredDocument;
 use Laravel\Ai\Files\StoredImage;
+use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\MessageRole;
 use Laravel\Ai\Messages\ToolResultMessage;
