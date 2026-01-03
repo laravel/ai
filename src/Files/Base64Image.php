@@ -17,6 +17,14 @@ class Base64Image extends Image implements StorableFile
     }
 
     /**
+     * Get the storable display name of the file.
+     */
+    public function storableName(): ?string
+    {
+        return null;
+    }
+
+    /**
      * Get the MIME type for storage.
      */
     public function storableMimeType(): ?string

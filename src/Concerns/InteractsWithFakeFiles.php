@@ -3,7 +3,6 @@
 namespace Laravel\Ai\Concerns;
 
 use Closure;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Gateway\FakeFileGateway;
@@ -37,11 +36,12 @@ trait InteractsWithFakeFiles
     /**
      * Record a file upload.
      */
-    public function recordFileUpload(StorableFile|UploadedFile|string $file, ?string $mime): self
+    public function recordFileUpload(StorableFile $file, ?string $mime, ?string $name): self
     {
         $this->recordedFileUploads[] = [
             'file' => $file,
             'mime' => $mime,
+            'name' => $name,
         ];
 
         return $this;
@@ -64,7 +64,7 @@ trait InteractsWithFakeFiles
     {
         PHPUnit::assertTrue(
             (new Collection($this->recordedFileUploads))->filter(function (array $upload) use ($callback) {
-                return $callback($upload['file'], $upload['mime']);
+                return $callback($upload['file'], $upload['mime'], $upload['name']);
             })->count() > 0,
             'An expected file upload was not recorded.'
         );
@@ -79,7 +79,7 @@ trait InteractsWithFakeFiles
     {
         PHPUnit::assertTrue(
             (new Collection($this->recordedFileUploads))->filter(function (array $upload) use ($callback) {
-                return $callback($upload['file'], $upload['mime']);
+                return $callback($upload['file'], $upload['mime'], $upload['name']);
             })->count() === 0,
             'An unexpected file upload was recorded.'
         );

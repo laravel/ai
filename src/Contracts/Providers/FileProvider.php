@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Contracts\Providers;
 
-use Illuminate\Http\UploadedFile;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Responses\FileResponse;
@@ -18,7 +17,7 @@ interface FileProvider
     /**
      * Store the given file.
      */
-    public function putFile(StorableFile|UploadedFile|string $file, ?string $mime = null): StoredFileResponse;
+    public function putFile(StorableFile $file, ?string $mime = null, ?string $name = null): StoredFileResponse;
 
     /**
      * Delete a file by its ID.

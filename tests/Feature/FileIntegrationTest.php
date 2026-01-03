@@ -20,7 +20,7 @@ class FileIntegrationTest extends TestCase
     {
         Event::fake();
 
-        $response = Files::put('Hello, World!', 'text/plain', $this->provider);
+        $response = Files::put('Hello, World!', 'text/plain', name: 'hello.txt', provider: $this->provider);
 
         $this->assertNotEmpty($response->id);
 
@@ -34,7 +34,7 @@ class FileIntegrationTest extends TestCase
 
     public function test_can_store_files_from_local_paths(): void
     {
-        $response = Files::putFromPath(__DIR__.'/files/document.txt', provider: $this->provider);
+        $response = Files::putFromPath(__DIR__.'/files/document.txt', name: 'document.txt', provider: $this->provider);
 
         $this->assertNotEmpty($response->id);
 
@@ -61,7 +61,7 @@ class FileIntegrationTest extends TestCase
 
     public function test_can_get_files(): void
     {
-        $stored = Files::put('Hello, World!', 'text/plain', $this->provider);
+        $stored = Files::put('Hello, World!', 'text/plain', provider: $this->provider);
 
         $response = Files::get($stored->id, $this->provider);
 
@@ -73,7 +73,7 @@ class FileIntegrationTest extends TestCase
 
     public function test_can_delete_files(): void
     {
-        $stored = Files::put('Hello, World!', 'text/plain', $this->provider);
+        $stored = Files::put('Hello, World!', 'text/plain', provider: $this->provider);
 
         Files::delete($stored->id, $this->provider);
 

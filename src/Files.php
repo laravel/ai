@@ -5,6 +5,7 @@ namespace Laravel\Ai;
 use Closure;
 use Illuminate\Http\UploadedFile;
 use Laravel\Ai\Contracts\Files\StorableFile;
+use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Document;
 use Laravel\Ai\Gateway\FakeFileGateway;
 use Laravel\Ai\Responses\FileResponse;
@@ -23,25 +24,35 @@ class Files
     /**
      * Store the given file.
      */
-    public static function put(StorableFile|UploadedFile|string $file, ?string $mime = null, ?string $provider = null): StoredFileResponse
+    public static function put(StorableFile|UploadedFile|string $file, ?string $mime = null, ?string $name = null, ?string $provider = null): StoredFileResponse
     {
-        return Ai::fakeableFileProvider($provider)->putFile($file, $mime);
+        if (is_string($file)) {
+            $file = new Base64Document(base64_encode($file), $mime);
+        }
+
+        if ($file instanceof UploadedFile) {
+            $file = new Base64Document(
+                base64_encode($file->getContent()), $file->getClientMimeType(), $file->getClientOriginalName()
+            );
+        }
+
+        return Ai::fakeableFileProvider($provider)->putFile($file, $mime, $name);
     }
 
     /**
      * Store the file at the given local path.
      */
-    public static function putFromPath(string $path, ?string $mime = null, ?string $provider = null): StoredFileResponse
+    public static function putFromPath(string $path, ?string $mime = null, ?string $name = null, ?string $provider = null): StoredFileResponse
     {
-        return static::put(Document::fromPath($path), $mime, $provider);
+        return static::put(Document::fromPath($path), $mime, $name, provider: $provider);
     }
 
     /**
      * Store the file at the given path on the given disk.
      */
-    public static function putFromStorage(string $path, ?string $disk = null, ?string $provider = null): StoredFileResponse
+    public static function putFromStorage(string $path, ?string $disk = null, ?string $name = null, ?string $provider = null): StoredFileResponse
     {
-        return static::put(Document::fromStorage($path, $disk), provider: $provider);
+        return static::put(Document::fromStorage($path, $disk), name: $name, provider: $provider);
     }
 
     /**

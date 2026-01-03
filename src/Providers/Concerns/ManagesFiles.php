@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Providers\Concerns;
 
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Files\StorableFile;
@@ -25,23 +24,23 @@ trait ManagesFiles
     /**
      * Store the given file.
      */
-    public function putFile(StorableFile|UploadedFile|string $file, ?string $mime = null): StoredFileResponse
+    public function putFile(StorableFile $file, ?string $mime = null, ?string $name = null): StoredFileResponse
     {
         $invocationId = (string) Str::uuid7();
 
         if (Ai::filesAreFaked()) {
-            Ai::recordFileUpload($file, $mime);
+            Ai::recordFileUpload($file, $mime, $name);
         }
 
         $this->events->dispatch(new StoringFile(
-            $invocationId, $this, $file, $mime,
+            $invocationId, $this, $file, $mime, $name
         ));
 
         return tap(
-            $this->fileGateway()->putFile($this, $file, $mime),
-            function (StoredFileResponse $response) use ($invocationId, $file, $mime) {
+            $this->fileGateway()->putFile($this, $file, $mime, $name),
+            function (StoredFileResponse $response) use ($invocationId, $file, $mime, $name) {
                 $this->events->dispatch(new FileStored(
-                    $invocationId, $this, $file, $mime, $response,
+                    $invocationId, $this, $file, $mime, $name, $response,
                 ));
             }
         );

@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Gateway\Concerns;
 
-use Illuminate\Http\UploadedFile;
 use Laravel\Ai\Contracts\Files\StorableFile;
 
 trait PreparesStorableFiles
@@ -12,23 +11,13 @@ trait PreparesStorableFiles
      *
      * @return array{string, string, string}
      */
-    protected function prepareStorableFile(StorableFile|UploadedFile|string $file, ?string $mime): array
+    protected function prepareStorableFile(StorableFile $file, ?string $mime, ?string $name): array
     {
         return match (true) {
             $file instanceof StorableFile => [
                 $file->storableContent(),
                 $mime ?? $file->storableMimeType() ?? 'application/octet-stream',
-                'file',
-            ],
-            $file instanceof UploadedFile => [
-                $file->getContent(),
-                $mime ?? $file->getClientMimeType() ?? 'application/octet-stream',
-                $file->getClientOriginalName(),
-            ],
-            default => [
-                $file,
-                $mime ?? 'application/octet-stream',
-                'file',
+                $name ?? $file->storableName() ?? 'file',
             ],
         };
     }

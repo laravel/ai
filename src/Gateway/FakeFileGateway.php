@@ -3,7 +3,6 @@
 namespace Laravel\Ai\Gateway;
 
 use Closure;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
@@ -73,8 +72,9 @@ class FakeFileGateway implements FileGateway
      */
     public function putFile(
         FileProvider $provider,
-        StorableFile|UploadedFile|string $file,
+        StorableFile $file,
         ?string $mime = null,
+        ?string $name = null,
     ): StoredFileResponse {
         return new StoredFileResponse('file_'.Str::random(24));
     }

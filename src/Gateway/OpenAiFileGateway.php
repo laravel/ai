@@ -3,7 +3,6 @@
 namespace Laravel\Ai\Gateway;
 
 use Illuminate\Http\Client\RequestException;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
@@ -47,10 +46,11 @@ class OpenAiFileGateway implements FileGateway
      */
     public function putFile(
         FileProvider $provider,
-        StorableFile|UploadedFile|string $file,
+        StorableFile $file,
         ?string $mime = null,
+        ?string $name = null,
     ): StoredFileResponse {
-        [$content, $mime, $name] = $this->prepareStorableFile($file, $mime);
+        [$content, $mime, $name] = $this->prepareStorableFile($file, $mime, $name);
 
         try {
             $response = Http::withToken($provider->providerCredentials()['key'])

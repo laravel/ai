@@ -8,5 +8,7 @@ interface StorableFile extends Stringable
 {
     public function storableContent(): string;
 
+    public function storableName(): ?string;
+
     public function storableMimeType(): ?string;
 }

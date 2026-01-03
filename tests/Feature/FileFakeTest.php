@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files;
 use Laravel\Ai\Responses\FileResponse;
 use RuntimeException;
@@ -65,10 +66,11 @@ class FileFakeTest extends TestCase
         Files::put('Hello, World!', 'text/plain');
         Files::putFromPath(__DIR__.'/files/document.txt');
 
-        Files::assertUploaded(fn ($file, $mime) => $file === 'Hello, World!');
-        Files::assertUploaded(fn ($file, $mime) => trim((string) $file) === 'I am a local document.');
-        Files::assertUploaded(fn ($file, $mime) => $mime === 'text/plain');
-        Files::assertNotUploaded(fn ($file, $mime) => $mime === 'application/json');
+        Files::assertUploaded(fn (StorableFile $file, $mime) => (string) $file === 'Hello, World!');
+        Files::assertUploaded(fn (StorableFile $file, $mime) => trim((string) $file) === 'I am a local document.');
+        Files::assertUploaded(fn (StorableFile $file, $mime) => $file->storableName() === 'document.txt');
+        Files::assertUploaded(fn (StorableFile $file, $mime) => $mime === 'text/plain');
+        Files::assertNotUploaded(fn (StorableFile $file, $mime) => $mime === 'application/json');
     }
 
     public function test_can_assert_no_files_were_uploaded(): void

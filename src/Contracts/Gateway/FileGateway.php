@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Contracts\Gateway;
 
-use Illuminate\Http\UploadedFile;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Responses\FileResponse;
@@ -23,8 +22,9 @@ interface FileGateway
      */
     public function putFile(
         FileProvider $provider,
-        StorableFile|UploadedFile|string $file,
+        StorableFile $file,
         ?string $mime = null,
+        ?string $name = null,
     ): StoredFileResponse;
 
     /**

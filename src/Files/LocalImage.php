@@ -18,6 +18,14 @@ class LocalImage extends Image implements StorableFile
     }
 
     /**
+     * Get the storable display name of the file.
+     */
+    public function storableName(): ?string
+    {
+        return basename($this->path);
+    }
+
+    /**
      * Get the MIME type for storage.
      */
     public function storableMimeType(): ?string
