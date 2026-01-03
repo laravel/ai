@@ -27,6 +27,7 @@ class AiManager extends MultipleInstanceManager
     use Concerns\InteractsWithFakeAgents;
     use Concerns\InteractsWithFakeAudio;
     use Concerns\InteractsWithFakeEmbeddings;
+    use Concerns\InteractsWithFakeFiles;
     use Concerns\InteractsWithFakeImages;
     use Concerns\InteractsWithFakeTranscriptions;
 
@@ -174,7 +175,11 @@ class AiManager extends MultipleInstanceManager
      */
     public function fakeableFileProvider(?string $name = null): FileProvider
     {
-        return $this->fileProvider($name);
+        $provider = $this->fileProvider($name);
+
+        return $this->filesAreFaked()
+            ? (clone $provider)->useFileGateway($this->fakeFileGateway())
+            : $provider;
     }
 
     /**

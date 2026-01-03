@@ -2,8 +2,10 @@
 
 namespace Laravel\Ai;
 
+use Closure;
 use Illuminate\Http\UploadedFile;
 use Laravel\Ai\Contracts\Files\StorableFile;
+use Laravel\Ai\Gateway\FakeFileGateway;
 use Laravel\Ai\Responses\FileResponse;
 use Laravel\Ai\Responses\StoredFileResponse;
 
@@ -31,5 +33,69 @@ class Files
     public static function delete(string $fileId, ?string $provider = null): void
     {
         Ai::fakeableFileProvider($provider)->deleteFile($fileId);
+    }
+
+    /**
+     * Fake file operations.
+     */
+    public static function fake(Closure|array $responses = []): FakeFileGateway
+    {
+        return Ai::fakeFiles($responses);
+    }
+
+    /**
+     * Assert that a file was uploaded matching a given truth test.
+     */
+    public static function assertUploaded(Closure $callback): void
+    {
+        Ai::assertFileUploaded($callback);
+    }
+
+    /**
+     * Assert that a file was not uploaded matching a given truth test.
+     */
+    public static function assertNotUploaded(Closure $callback): void
+    {
+        Ai::assertFileNotUploaded($callback);
+    }
+
+    /**
+     * Assert that no files were uploaded.
+     */
+    public static function assertNothingUploaded(): void
+    {
+        Ai::assertNoFilesUploaded();
+    }
+
+    /**
+     * Assert that a file was deleted matching a given truth test.
+     */
+    public static function assertDeleted(Closure|string $callback): void
+    {
+        Ai::assertFileDeleted($callback);
+    }
+
+    /**
+     * Assert that a file was not deleted matching a given truth test.
+     */
+    public static function assertNotDeleted(Closure|string $callback): void
+    {
+        Ai::assertFileNotDeleted($callback);
+    }
+
+    /**
+     * Assert that no files were deleted.
+     */
+    public static function assertNothingDeleted(): void
+    {
+        Ai::assertNoFilesDeleted();
+    }
+
+    /**
+     * Determine if file operations are faked.
+     */
+    public static function isFaked(): bool
+    {
+        return Ai::filesAreFaked();
     }
 }
