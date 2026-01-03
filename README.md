@@ -760,7 +760,7 @@ use Laravel\Ai\Files\Document;
 $stored = Document::fromString('Hello, World!', 'text/plain')->put();
 
 // Store an uploaded file...
-$stored = Files::put($request->file('document'));
+$stored = Document::fromUpload($request->file('document'))->put();
 ```
 
 Once a file has been stored, you may reference the file when generating text via agents instead of re-uploading the file:
@@ -811,7 +811,7 @@ use App\Ai\Agents\DocumentAnalyzer;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Document;
 
-$stored = Files::put('/path/to/report.pdf', 'application/pdf');
+$stored = Document::fromPath('/path/to/report.pdf')->put();
 
 $response = (new DocumentAnalyzer)->prompt(
     'Summarize this document.',
@@ -827,7 +827,7 @@ Similarly, stored images may be referenced using the `Image` class:
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Image;
 
-$stored = Files::put('/path/to/photo.jpg', 'image/jpeg');
+$stored = Image::fromPath('/path/to/photo.jpg')->put();
 
 $response = (new ImageAnalyzer)->prompt(
     'What is in this image?',
@@ -1158,6 +1158,7 @@ File operations may be faked by invoking the `fake` method on the `Files` class.
 
 ```php
 use Laravel\Ai\Files;
+use Laravel\Ai\Responses\FileResponse;
 
 // Automatically return fake content for every file retrieval...
 Files::fake();
@@ -1176,12 +1177,15 @@ After performing file operations, you may make assertions about the uploads and 
 
 ```php
 use Laravel\Ai\Contracts\Files\StorableFile;
+use Laravel\Ai\Files\Document;
 
-Files::assertUploaded(fn (StorableFile $file, ?string $mime, ?string $name) =>
-    (string) $file === 'Hello, World!'
+Document::fromString('Hello, Laravel!', mime: 'text/plain')->put();
+
+Files::assertUploaded(fn (StorableFile $file) =>
+    (string) $file === 'Hello, Laravel!'
 );
 
-Files::assertNotUploaded(fn (StorableFile $file, ?string $mime, ?string $name) =>
+Files::assertNotUploaded(fn (StorableFile $file) =>
     (string) $file === 'Hello, World!'
 );
 
@@ -1193,7 +1197,7 @@ For asserting against file deletions, you may pass a file ID or closure:
 ```php
 Files::assertDeleted('file-id');
 
-Files::assertDeleted(fn ($id) => $id === 'file-id');
+Files::assertDeleted(fn (string $id) => $id === 'file-id');
 
 Files::assertNotDeleted('file-id');
 
