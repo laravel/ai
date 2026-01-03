@@ -6,6 +6,8 @@ use Illuminate\Filesystem\Filesystem;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
+use Laravel\Ai\PendingResponses\PendingTranscriptionGeneration;
+use Laravel\Ai\Transcription;
 
 class LocalAudio extends Audio implements StorableFile, TranscribableAudio
 {
@@ -19,6 +21,14 @@ class LocalAudio extends Audio implements StorableFile, TranscribableAudio
     public function content(): string
     {
         return file_get_contents($this->path);
+    }
+
+    /**
+     * Generate a transcription of the given audio.
+     */
+    public function transcription(): PendingTranscriptionGeneration
+    {
+        return Transcription::of($this);
     }
 
     /**

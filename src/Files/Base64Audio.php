@@ -5,6 +5,8 @@ namespace Laravel\Ai\Files;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
+use Laravel\Ai\PendingResponses\PendingTranscriptionGeneration;
+use Laravel\Ai\Transcription;
 
 class Base64Audio extends Audio implements StorableFile, TranscribableAudio
 {
@@ -34,6 +36,14 @@ class Base64Audio extends Audio implements StorableFile, TranscribableAudio
     public function storableMimeType(): ?string
     {
         return $this->mime;
+    }
+
+    /**
+     * Generate a transcription of the given audio.
+     */
+    public function transcription(): PendingTranscriptionGeneration
+    {
+        return Transcription::of($this);
     }
 
     /**

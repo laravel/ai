@@ -50,6 +50,14 @@ class Transcription
     }
 
     /**
+     * Generate a transcription of the given uploaded file.
+     */
+    public static function fromUpload(UploadedFile $file): PendingTranscriptionGeneration
+    {
+        return static::of($file);
+    }
+
+    /**
      * Fake transcription generation.
      */
     public static function fake(Closure|array $responses = []): FakeTranscriptionGateway

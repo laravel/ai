@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\Storage;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
+use Laravel\Ai\PendingResponses\PendingTranscriptionGeneration;
+use Laravel\Ai\Transcription;
 use RuntimeException;
 
 class StoredAudio extends Audio implements StorableFile, TranscribableAudio
@@ -37,6 +39,14 @@ class StoredAudio extends Audio implements StorableFile, TranscribableAudio
     public function storableMimeType(): ?string
     {
         return Storage::disk($this->disk)->mimeType($this->path);
+    }
+
+    /**
+     * Generate a transcription of the given audio.
+     */
+    public function transcription(): PendingTranscriptionGeneration
+    {
+        return Transcription::of($this);
     }
 
     /**
