@@ -1196,6 +1196,8 @@ The Laravel AI SDK dispatches a variety of events, including:
 - `AgentStreamed`
 - `AudioGenerated`
 - `EmbeddingsGenerated`
+- `FileDeleted`
+- `FileStored`
 - `GeneratingAudio`
 - `GeneratingEmbeddings`
 - `GeneratingImage`
@@ -1203,6 +1205,7 @@ The Laravel AI SDK dispatches a variety of events, including:
 - `ImageGenerated`
 - `InvokingTool`
 - `PromptingAgent`
+- `StoringFile`
 - `StreamingAgent`
 - `ToolInvoked`
 - `TranscriptionGenerated`

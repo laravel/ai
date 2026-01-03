@@ -3,7 +3,11 @@
 namespace Tests\Feature;
 
 use Illuminate\Http\Client\RequestException;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
+use Laravel\Ai\Events\FileDeleted;
+use Laravel\Ai\Events\FileStored;
+use Laravel\Ai\Events\StoringFile;
 use Laravel\Ai\Files;
 use RuntimeException;
 use Tests\TestCase;
@@ -14,11 +18,18 @@ class FileIntegrationTest extends TestCase
 
     public function test_can_store_files(): void
     {
+        Event::fake();
+
         $response = Files::put('Hello, World!', 'text/plain', $this->provider);
 
         $this->assertNotEmpty($response->id);
 
+        Event::assertDispatched(StoringFile::class);
+        Event::assertDispatched(FileStored::class);
+
         Files::delete($response->id, $this->provider);
+
+        Event::assertDispatched(FileDeleted::class);
     }
 
     public function test_can_store_files_from_local_paths(): void
