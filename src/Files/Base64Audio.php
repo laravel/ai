@@ -2,7 +2,7 @@
 
 namespace Laravel\Ai\Files;
 
-class Base64Audio extends Audio implements TranscribableAudio
+class Base64Audio extends Audio implements StorableFile, TranscribableAudio
 {
     public function __construct(public string $base64, public ?string $mime = null) {}
 
@@ -18,6 +18,22 @@ class Base64Audio extends Audio implements TranscribableAudio
      * Get the MIME type for transcription.
      */
     public function mimeTypeForTranscription(): ?string
+    {
+        return $this->mime;
+    }
+
+    /**
+     * Get the raw representation of the file.
+     */
+    public function storableContent(): string
+    {
+        return base64_decode($this->base64);
+    }
+
+    /**
+     * Get the MIME type for storage.
+     */
+    public function storableMimeType(): ?string
     {
         return $this->mime;
     }
