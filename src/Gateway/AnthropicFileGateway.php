@@ -26,9 +26,7 @@ class AnthropicFileGateway implements FileGateway
                 'x-api-key' => $provider->providerCredentials()['key'],
                 'anthropic-version' => '2023-06-01',
                 'anthropic-beta' => 'files-api-2025-04-14',
-            ])
-                ->get("https://api.anthropic.com/v1/files/{$fileId}")
-                ->throw();
+            ])->get("https://api.anthropic.com/v1/files/{$fileId}")->throw();
         } catch (RequestException $e) {
             if ($e->response->status() === 429) {
                 throw RateLimitedException::forProvider(
@@ -42,7 +40,7 @@ class AnthropicFileGateway implements FileGateway
         return new FileResponse(
             id: $response->json('id'),
             content: null,
-            mimeType: $response->json('mime_type'),
+            mime: $response->json('mime_type'),
         );
     }
 

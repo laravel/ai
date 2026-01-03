@@ -38,7 +38,7 @@ class OpenAiFileGateway implements FileGateway
         return new FileResponse(
             id: $response->json('id'),
             content: null,
-            mimeType: $this->guessMimeType($response->json('filename')),
+            mime: null,
         );
     }
 
@@ -90,35 +90,5 @@ class OpenAiFileGateway implements FileGateway
 
             throw $e;
         }
-    }
-
-    /**
-     * Guess the MIME type from a filename.
-     */
-    protected function guessMimeType(string $filename): string
-    {
-        $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-
-        return match ($extension) {
-            'pdf' => 'application/pdf',
-            'txt' => 'text/plain',
-            'json' => 'application/json',
-            'jsonl' => 'application/jsonl',
-            'csv' => 'text/csv',
-            'md' => 'text/markdown',
-            'html', 'htm' => 'text/html',
-            'js' => 'application/javascript',
-            'py' => 'text/x-python',
-            'jpg', 'jpeg' => 'image/jpeg',
-            'png' => 'image/png',
-            'gif' => 'image/gif',
-            'webp' => 'image/webp',
-            'mp3' => 'audio/mpeg',
-            'wav' => 'audio/wav',
-            'mp4' => 'video/mp4',
-            'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            default => 'application/octet-stream',
-        };
     }
 }

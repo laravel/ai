@@ -26,6 +26,7 @@ class FileIntegrationTest extends TestCase
         $response = Files::get($stored->id, $this->provider);
 
         $this->assertEquals($stored->id, $response->id);
+        $this->assertEquals('text/plain', $response->mime);
 
         Files::delete($stored->id, $this->provider);
     }
