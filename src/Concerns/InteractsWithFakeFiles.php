@@ -36,12 +36,10 @@ trait InteractsWithFakeFiles
     /**
      * Record a file upload.
      */
-    public function recordFileUpload(StorableFile $file, ?string $mime, ?string $name): self
+    public function recordFileUpload(StorableFile $file): self
     {
         $this->recordedFileUploads[] = [
             'file' => $file,
-            'mime' => $mime,
-            'name' => $name,
         ];
 
         return $this;
@@ -64,7 +62,7 @@ trait InteractsWithFakeFiles
     {
         PHPUnit::assertTrue(
             (new Collection($this->recordedFileUploads))->filter(function (array $upload) use ($callback) {
-                return $callback($upload['file'], $upload['mime'], $upload['name']);
+                return $callback($upload['file']);
             })->count() > 0,
             'An expected file upload was not recorded.'
         );
@@ -79,7 +77,7 @@ trait InteractsWithFakeFiles
     {
         PHPUnit::assertTrue(
             (new Collection($this->recordedFileUploads))->filter(function (array $upload) use ($callback) {
-                return $callback($upload['file'], $upload['mime'], $upload['name']);
+                return $callback($upload['file']);
             })->count() === 0,
             'An unexpected file upload was recorded.'
         );

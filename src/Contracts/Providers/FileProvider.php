@@ -17,7 +17,7 @@ interface FileProvider
     /**
      * Store the given file.
      */
-    public function putFile(StorableFile $file, ?string $mime = null, ?string $name = null): StoredFileResponse;
+    public function putFile(StorableFile $file): StoredFileResponse;
 
     /**
      * Delete a file by its ID.

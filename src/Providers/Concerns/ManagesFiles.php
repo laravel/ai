@@ -24,23 +24,23 @@ trait ManagesFiles
     /**
      * Store the given file.
      */
-    public function putFile(StorableFile $file, ?string $mime = null, ?string $name = null): StoredFileResponse
+    public function putFile(StorableFile $file): StoredFileResponse
     {
         $invocationId = (string) Str::uuid7();
 
         if (Ai::filesAreFaked()) {
-            Ai::recordFileUpload($file, $mime, $name);
+            Ai::recordFileUpload($file);
         }
 
         $this->events->dispatch(new StoringFile(
-            $invocationId, $this, $file, $mime, $name
+            $invocationId, $this, $file
         ));
 
         return tap(
-            $this->fileGateway()->putFile($this, $file, $mime, $name),
-            function (StoredFileResponse $response) use ($invocationId, $file, $mime, $name) {
+            $this->fileGateway()->putFile($this, $file),
+            function (StoredFileResponse $response) use ($invocationId, $file) {
                 $this->events->dispatch(new FileStored(
-                    $invocationId, $this, $file, $mime, $name, $response,
+                    $invocationId, $this, $file, $response,
                 ));
             }
         );

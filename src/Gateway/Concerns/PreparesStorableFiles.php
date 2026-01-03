@@ -11,14 +11,12 @@ trait PreparesStorableFiles
      *
      * @return array{string, string, string}
      */
-    protected function prepareStorableFile(StorableFile $file, ?string $mime, ?string $name): array
+    protected function prepareStorableFile(StorableFile $file): array
     {
-        return match (true) {
-            $file instanceof StorableFile => [
-                $file->storableContent(),
-                $mime ?? $file->storableMimeType() ?? 'application/octet-stream',
-                $name ?? $file->storableName() ?? 'file',
-            ],
-        };
+        return [
+            $file->storableContent(),
+            $file->storableMimeType() ?? 'application/octet-stream',
+            $file->storableName() ?? 'file',
+        ];
     }
 }

@@ -23,8 +23,6 @@ interface FileGateway
     public function putFile(
         FileProvider $provider,
         StorableFile $file,
-        ?string $mime = null,
-        ?string $name = null,
     ): StoredFileResponse;
 
     /**

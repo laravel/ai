@@ -12,8 +12,6 @@ class FileStored
         public string $invocationId,
         public Provider $provider,
         public StorableFile $file,
-        public ?string $mime,
-        public ?string $name,
         public StoredFileResponse $response,
     ) {}
 }

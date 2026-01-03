@@ -73,8 +73,6 @@ class FakeFileGateway implements FileGateway
     public function putFile(
         FileProvider $provider,
         StorableFile $file,
-        ?string $mime = null,
-        ?string $name = null,
     ): StoredFileResponse {
         return new StoredFileResponse('file_'.Str::random(24));
     }

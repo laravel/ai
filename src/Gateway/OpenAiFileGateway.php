@@ -45,10 +45,8 @@ class OpenAiFileGateway implements FileGateway
     public function putFile(
         FileProvider $provider,
         StorableFile $file,
-        ?string $mime = null,
-        ?string $name = null,
     ): StoredFileResponse {
-        [$content, $mime, $name] = $this->prepareStorableFile($file, $mime, $name);
+        [$content, $mime, $name] = $this->prepareStorableFile($file);
 
         try {
             $response = Http::withToken($provider->providerCredentials()['key'])

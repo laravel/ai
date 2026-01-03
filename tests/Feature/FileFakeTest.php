@@ -76,16 +76,16 @@ class FileFakeTest extends TestCase
         Document::fromPath(__DIR__.'/files/document.txt')->put();
         Document::fromUpload(new UploadedFile(__DIR__.'/files/report.txt', 'report.txt'))->put();
 
-        Files::assertUploaded(fn (StorableFile $file, $mime) => (string) $file === 'Hello, World!');
+        Files::assertUploaded(fn (StorableFile $file) => (string) $file === 'Hello, World!');
 
-        Files::assertUploaded(fn (StorableFile $file, $mime) => trim((string) $file) === 'I am a local document.');
-        Files::assertUploaded(fn (StorableFile $file, $mime) => $file->storableName() === 'document.txt');
+        Files::assertUploaded(fn (StorableFile $file) => trim((string) $file) === 'I am a local document.');
+        Files::assertUploaded(fn (StorableFile $file) => $file->storableName() === 'document.txt');
 
-        Files::assertUploaded(fn (StorableFile $file, $mime) => trim((string) $file) === 'I am an expense report.');
-        Files::assertUploaded(fn (StorableFile $file, $mime) => $file->storableName() === 'report.txt');
+        Files::assertUploaded(fn (StorableFile $file) => trim((string) $file) === 'I am an expense report.');
+        Files::assertUploaded(fn (StorableFile $file) => $file->storableName() === 'report.txt');
 
-        Files::assertUploaded(fn (StorableFile $file, $mime) => $mime === 'text/plain');
-        Files::assertNotUploaded(fn (StorableFile $file, $mime) => $mime === 'application/json');
+        Files::assertUploaded(fn (StorableFile $file) => $file->storableMimeType() === 'text/plain');
+        Files::assertNotUploaded(fn (StorableFile $file) => $file->storableMimeType() === 'application/json');
     }
 
     public function test_can_assert_no_files_were_uploaded(): void
