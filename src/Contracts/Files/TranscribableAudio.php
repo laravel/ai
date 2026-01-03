@@ -3,8 +3,9 @@
 namespace Laravel\Ai\Contracts\Files;
 
 use Laravel\Ai\PendingResponses\PendingTranscriptionGeneration;
+use Stringable;
 
-interface TranscribableAudio
+interface TranscribableAudio extends Stringable
 {
     /**
      * Generate a transcription of the given audio.

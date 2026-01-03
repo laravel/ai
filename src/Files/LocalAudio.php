@@ -24,30 +24,6 @@ class LocalAudio extends Audio implements StorableFile, TranscribableAudio
     }
 
     /**
-     * Generate a transcription of the given audio.
-     */
-    public function transcription(): PendingTranscriptionGeneration
-    {
-        return Transcription::of($this);
-    }
-
-    /**
-     * Get the raw representation of the audio for transcription.
-     */
-    public function transcribableContent(): string
-    {
-        return file_get_contents($this->path);
-    }
-
-    /**
-     * Get the MIME type for transcription.
-     */
-    public function transcribableMimeType(): ?string
-    {
-        return $this->mime ?? (new Filesystem)->mimeType($this->path);
-    }
-
-    /**
      * Get the raw representation of the file.
      */
     public function storableContent(): string
@@ -67,6 +43,30 @@ class LocalAudio extends Audio implements StorableFile, TranscribableAudio
      * Get the MIME type for storage.
      */
     public function storableMimeType(): ?string
+    {
+        return $this->mime ?? (new Filesystem)->mimeType($this->path);
+    }
+
+    /**
+     * Generate a transcription of the given audio.
+     */
+    public function transcription(): PendingTranscriptionGeneration
+    {
+        return Transcription::of($this);
+    }
+
+    /**
+     * Get the raw representation of the audio for transcription.
+     */
+    public function transcribableContent(): string
+    {
+        return file_get_contents($this->path);
+    }
+
+    /**
+     * Get the MIME type for transcription.
+     */
+    public function transcribableMimeType(): ?string
     {
         return $this->mime ?? (new Filesystem)->mimeType($this->path);
     }
