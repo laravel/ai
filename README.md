@@ -762,6 +762,20 @@ $stored = Files::put('Hello, World!', 'text/plain');
 $stored = Files::put($request->file('document'));
 ```
 
+Once a file has been stored, you may reference the file when generating text via agents instead of re-uploading the file:
+
+```php
+use App\Ai\Agents\SalesCoach;
+use Laravel\Ai\Files;
+
+$response = (new SalesCoach)->prompt(
+    'Analyze the attached sales transcript...'
+    attachments: [
+        Files\Document::fromId('file-id') // Attach a stored document...
+    ]
+);
+```
+
 To retrieve a previously stored file, use the `get` method:
 
 ```php
