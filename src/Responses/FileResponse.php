@@ -5,9 +5,9 @@ namespace Laravel\Ai\Responses;
 class FileResponse
 {
     public function __construct(
-        public string $id,
-        public ?string $mime = null,
-        public ?string $content = null,
+        public readonly string $id,
+        public readonly ?string $mime = null,
+        public readonly ?string $content = null,
     ) {}
 
     /**

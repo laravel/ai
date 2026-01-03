@@ -785,7 +785,7 @@ use Laravel\Ai\Files\Document;
 $file = Document::fromId('file-id')->get();
 
 $file->id;
-$file->mime;
+$file->mimeType();
 ```
 
 To delete a file from the provider, use the `delete` method:
