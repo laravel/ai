@@ -10,7 +10,6 @@ use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\FakePendingDispatch;
 use Laravel\Ai\Files\LocalAudio;
 use Laravel\Ai\Files\StoredAudio;
-use Laravel\Ai\Files\TranscribableAudio;
 use Laravel\Ai\Jobs\GenerateTranscription;
 use Laravel\Ai\Prompts\QueuedTranscriptionPrompt;
 use Laravel\Ai\Providers\Provider;
