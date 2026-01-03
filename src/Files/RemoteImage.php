@@ -2,7 +2,13 @@
 
 namespace Laravel\Ai\Files;
 
-class RemoteImage extends Image
+use Laravel\Ai\Contracts\Files\StorableFile;
+use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
+use Laravel\Ai\Files\Concerns\HasRemoteContent;
+
+class RemoteImage extends Image implements StorableFile
 {
-    public function __construct(public string $url) {}
+    use CanBeUploadedToProvider, HasRemoteContent;
+
+    public function __construct(public string $url, public ?string $mime = null) {}
 }

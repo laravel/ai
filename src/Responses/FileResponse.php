@@ -9,4 +9,20 @@ class FileResponse
         public ?string $mime = null,
         public ?string $content = null,
     ) {}
+
+    /**
+     * Get the MIME type for the file.
+     */
+    public function mimeType(): ?string
+    {
+        return $this->mime;
+    }
+
+    /**
+     * Get the file's content.
+     */
+    public function content(): ?string
+    {
+        return $this->content;
+    }
 }

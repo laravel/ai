@@ -79,7 +79,7 @@ class ImageResponse implements Countable, Htmlable
     }
 
     /**
-     * Get the Base64 representation of the image.
+     * Get the raw string content of the image.
      */
     public function __toString(): string
     {

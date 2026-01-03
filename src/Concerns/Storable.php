@@ -63,7 +63,7 @@ trait Storable
         $disk = Arr::pull($options, 'disk');
 
         $result = Container::getInstance()->make(FilesystemFactory::class)->disk($disk)->put(
-            $path = trim($path.'/'.((string) $name), '/'), $this->raw(), $options
+            $path = trim($path.'/'.((string) $name), '/'), $this->content(), $options
         );
 
         return $result ? $path : false;

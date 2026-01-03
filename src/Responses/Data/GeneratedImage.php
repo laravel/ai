@@ -31,9 +31,9 @@ class GeneratedImage
     }
 
     /**
-     * Get the raw representation of the image.
+     * Get the raw string content of the image.
      */
-    public function raw(): string
+    public function content(): string
     {
         return base64_decode($this->image);
     }
@@ -43,6 +43,6 @@ class GeneratedImage
      */
     public function __toString(): string
     {
-        return $this->raw();
+        return $this->content();
     }
 }

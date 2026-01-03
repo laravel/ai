@@ -21,6 +21,14 @@ abstract class Audio extends File
     }
 
     /**
+     * Create a new remote audio using the audio at the given URL.
+     */
+    public static function fromUrl(string $url, ?string $mime = null): RemoteAudio
+    {
+        return new RemoteAudio($url, $mime);
+    }
+
+    /**
      * Create a new stored audio using the audio at the given path on the given disk.
      */
     public static function fromStorage(string $path, ?string $disk = null): StoredAudio

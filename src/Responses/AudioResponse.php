@@ -32,8 +32,24 @@ class AudioResponse
     /**
      * Get the raw representation of the audio.
      */
-    public function raw(): string
+    public function content(): string
     {
         return base64_decode($this->audio);
+    }
+
+    /**
+     * Get the MIME type for the audio.
+     */
+    public function mimeType(): ?string
+    {
+        return $this->mime;
+    }
+
+    /**
+     * Get the raw string content of the audio.
+     */
+    public function __toString(): string
+    {
+        return $this->content();
     }
 }

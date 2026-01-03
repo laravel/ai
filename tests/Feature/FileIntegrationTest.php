@@ -58,6 +58,23 @@ class FileIntegrationTest extends TestCase
         Document::fromId($response->id)->delete(provider: $this->provider);
     }
 
+    public function test_can_store_files_from_remote_paths(): void
+    {
+        $stored = Document::fromUrl(
+            'https://raw.githubusercontent.com/laravel/laravel/refs/heads/12.x/README.md'
+        )->put(
+            provider: $this->provider,
+        );
+
+        $this->assertNotEmpty($stored->id);
+
+        $response = Document::fromId($stored->id)->get(provider: $this->provider);
+
+        $this->assertEquals('text/plain', $response->mime);
+
+        Document::fromId($response->id)->delete(provider: $this->provider);
+    }
+
     public function test_exception_is_thrown_if_stored_file_does_not_exist(): void
     {
         $this->expectException(RuntimeException::class);
