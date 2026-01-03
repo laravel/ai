@@ -9,7 +9,7 @@ abstract class File
     /**
      * Set the file's name.
      */
-    public function as(string $name): static
+    public function as(?string $name): static
     {
         $this->name = $name;
 

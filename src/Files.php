@@ -31,13 +31,14 @@ class Files
         ?string $provider = null): StoredFileResponse
     {
         if (is_string($file)) {
-            $file = new Base64Document(base64_encode($file), $mime);
+            $file = (new Base64Document(base64_encode($file), $mime))->as($name);
         }
 
         if ($file instanceof UploadedFile) {
-            $file = new Base64Document(
-                base64_encode($file->getContent()), $file->getClientMimeType(), $file->getClientOriginalName()
-            );
+            $file = (new Base64Document(
+                base64_encode($file->getContent()),
+                mime: $mime ?? $file->getClientMimeType()
+            )->as($name ?? $file->getClientOriginalName()));
         }
 
         return Ai::fakeableFileProvider($provider)->putFile($file, $mime, $name);
