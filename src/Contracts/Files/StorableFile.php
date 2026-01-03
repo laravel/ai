@@ -1,6 +1,6 @@
 <?php
 
-namespace Laravel\Ai\Files;
+namespace Laravel\Ai\Contracts\Files;
 
 interface StorableFile
 {

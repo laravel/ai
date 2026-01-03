@@ -2,6 +2,8 @@
 
 namespace Laravel\Ai\Files;
 
+use Laravel\Ai\Contracts\Files\StorableFile;
+
 class Base64Image extends Image implements StorableFile
 {
     public function __construct(public string $base64, public ?string $mime = null) {}

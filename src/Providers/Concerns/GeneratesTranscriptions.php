@@ -5,9 +5,9 @@ namespace Laravel\Ai\Providers\Concerns;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Events\GeneratingTranscription;
 use Laravel\Ai\Events\TranscriptionGenerated;
-use Laravel\Ai\Files\TranscribableAudio;
 use Laravel\Ai\Prompts\TranscriptionPrompt;
 use Laravel\Ai\Responses\TranscriptionResponse;
 

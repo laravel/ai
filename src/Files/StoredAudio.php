@@ -3,6 +3,8 @@
 namespace Laravel\Ai\Files;
 
 use Illuminate\Support\Facades\Storage;
+use Laravel\Ai\Contracts\Files\StorableFile;
+use Laravel\Ai\Contracts\Files\TranscribableAudio;
 
 class StoredAudio extends Audio implements StorableFile, TranscribableAudio
 {

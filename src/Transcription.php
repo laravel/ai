@@ -4,11 +4,11 @@ namespace Laravel\Ai;
 
 use Closure;
 use Illuminate\Http\UploadedFile;
-use Laravel\Ai\Gateway\FakeTranscriptionGateway;
+use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Files\Base64Audio;
 use Laravel\Ai\Files\LocalAudio;
 use Laravel\Ai\Files\StoredAudio;
-use Laravel\Ai\Files\TranscribableAudio;
+use Laravel\Ai\Gateway\FakeTranscriptionGateway;
 use Laravel\Ai\PendingResponses\PendingTranscriptionGeneration;
 
 class Transcription

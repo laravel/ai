@@ -2,6 +2,8 @@
 
 namespace Laravel\Ai\Files;
 
+use Laravel\Ai\Contracts\Files\StorableFile;
+
 class LocalImage extends Image implements StorableFile
 {
     public function __construct(public string $path, public ?string $mime = null) {}

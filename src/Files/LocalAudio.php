@@ -2,6 +2,9 @@
 
 namespace Laravel\Ai\Files;
 
+use Laravel\Ai\Contracts\Files\StorableFile;
+use Laravel\Ai\Contracts\Files\TranscribableAudio;
+
 class LocalAudio extends Audio implements StorableFile, TranscribableAudio
 {
     public function __construct(public string $path, public ?string $mime = null) {}

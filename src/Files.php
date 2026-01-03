@@ -3,8 +3,7 @@
 namespace Laravel\Ai;
 
 use Illuminate\Http\UploadedFile;
-use Laravel\Ai\Ai;
-use Laravel\Ai\Files\StorableFile;
+use Laravel\Ai\Contracts\Files\StorableFile;
 
 class Files
 {

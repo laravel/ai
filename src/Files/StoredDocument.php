@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Files;
 
 use Illuminate\Support\Facades\Storage;
+use Laravel\Ai\Contracts\Files\StorableFile;
 
 class StoredDocument extends Document implements StorableFile
 {

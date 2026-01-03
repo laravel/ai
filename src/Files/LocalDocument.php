@@ -2,6 +2,8 @@
 
 namespace Laravel\Ai\Files;
 
+use Laravel\Ai\Contracts\Files\StorableFile;
+
 class LocalDocument extends Document implements StorableFile
 {
     public function __construct(public string $path) {}

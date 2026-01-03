@@ -2,6 +2,9 @@
 
 namespace Laravel\Ai\Files;
 
+use Laravel\Ai\Contracts\Files\StorableFile;
+use Laravel\Ai\Contracts\Files\TranscribableAudio;
+
 class Base64Audio extends Audio implements StorableFile, TranscribableAudio
 {
     public function __construct(public string $base64, public ?string $mime = null) {}
