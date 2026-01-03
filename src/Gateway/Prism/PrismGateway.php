@@ -21,6 +21,7 @@ use Laravel\Ai\Files\File;
 use Laravel\Ai\Files\Image as ImageFile;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\StoredImage;
+use Laravel\Ai\Files\TranscribableAudio;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\ObjectSchema;
