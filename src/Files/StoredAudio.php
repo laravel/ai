@@ -50,11 +50,11 @@ class StoredAudio extends Audio implements StorableFile, TranscribableAudio
     }
 
     /**
-     * Get the Base64 representation of the audio for transcription.
+     * Get the raw representation of the audio for transcription.
      */
     public function transcribableContent(): string
     {
-        return base64_encode($this->storableContent());
+        return $this->storableContent();
     }
 
     /**

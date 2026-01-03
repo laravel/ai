@@ -22,6 +22,13 @@ class Transcription
             $audio = new Base64Audio($audio);
         }
 
+        if ($audio instanceof UploadedFile) {
+            $audio = new Base64Audio(
+                base64_encode($audio->getContent()),
+                mime: $audio->getClientMimeType()
+            );
+        }
+
         return new PendingTranscriptionGeneration($audio);
     }
 

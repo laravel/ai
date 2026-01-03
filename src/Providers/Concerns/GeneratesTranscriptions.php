@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Providers\Concerns;
 
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
@@ -17,7 +16,7 @@ trait GeneratesTranscriptions
      * Generate audio from the given text.
      */
     public function transcribe(
-        TranscribableAudio|UploadedFile $audio,
+        TranscribableAudio $audio,
         ?string $language = null,
         bool $diarize = false,
         ?string $model = null,

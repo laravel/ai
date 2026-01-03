@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Contracts\Providers;
 
-use Illuminate\Http\UploadedFile;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
 use Laravel\Ai\Responses\TranscriptionResponse;
@@ -13,7 +12,7 @@ interface TranscriptionProvider
      * Generate audio from the given text.
      */
     public function transcribe(
-        TranscribableAudio|UploadedFile $audio,
+        TranscribableAudio $audio,
         ?string $language = null,
         bool $diarize = false,
         ?string $model = null,

@@ -3,7 +3,6 @@
 namespace Laravel\Ai\Gateway;
 
 use Closure;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
@@ -31,7 +30,7 @@ class FakeTranscriptionGateway implements TranscriptionGateway
     public function generateTranscription(
         TranscriptionProvider $provider,
         string $model,
-        TranscribableAudio|UploadedFile $audio,
+        TranscribableAudio $audio,
         ?string $language = null,
         bool $diarize = false,
     ): TranscriptionResponse {

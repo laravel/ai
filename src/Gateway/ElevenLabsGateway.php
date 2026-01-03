@@ -3,7 +3,6 @@
 namespace Laravel\Ai\Gateway;
 
 use Illuminate\Http\Client\RequestException;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\AudioGateway;
@@ -67,18 +66,16 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
     public function generateTranscription(
         TranscriptionProvider $provider,
         string $model,
-        TranscribableAudio|UploadedFile $audio,
+        TranscribableAudio $audio,
         ?string $language = null,
         bool $diarize = false,
     ): TranscriptionResponse {
         $audioContent = match (true) {
-            $audio instanceof TranscribableAudio => base64_decode($audio->transcribableContent()),
-            $audio instanceof UploadedFile => $audio->get(),
+            $audio instanceof TranscribableAudio => $audio->transcribableContent(),
         };
 
         $mimeType = match (true) {
             $audio instanceof TranscribableAudio => $audio->transcribableMimeType(),
-            $audio instanceof UploadedFile => $audio->getClientMimeType(),
         };
 
         try {

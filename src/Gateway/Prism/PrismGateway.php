@@ -333,7 +333,7 @@ class PrismGateway implements Gateway
     public function generateTranscription(
         TranscriptionProvider $provider,
         string $model,
-        TranscribableAudio|UploadedFile $audio,
+        TranscribableAudio $audio,
         ?string $language = null,
         bool $diarize = false,
     ): TranscriptionResponse {
@@ -346,9 +346,8 @@ class PrismGateway implements Gateway
                 ->using(static::toPrismProvider($provider), $model)
                 ->withInput(match (true) {
                     $audio instanceof TranscribableAudio => Audio::fromBase64(
-                        $audio->transcribableContent(), $audio->transcribableMimeType()
+                        base64_encode($audio->transcribableContent()), $audio->transcribableMimeType()
                     ),
-                    $audio instanceof UploadedFile => Audio::fromBase64(base64_encode($audio->get()), $audio->getClientMimeType()),
                 });
 
             if ($provider->driver() === 'openai') {

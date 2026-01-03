@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\PendingResponses;
 
-use Illuminate\Http\UploadedFile;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Events\ProviderFailedOver;
@@ -24,7 +23,7 @@ class PendingTranscriptionGeneration
     protected bool $diarize = false;
 
     public function __construct(
-        protected TranscribableAudio|UploadedFile $audio,
+        protected TranscribableAudio $audio,
     ) {}
 
     /**
