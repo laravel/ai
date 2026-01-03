@@ -6,7 +6,7 @@ class FileResponse
 {
     public function __construct(
         public string $id,
-        public ?string $mime,
-        public ?string $content,
+        public ?string $mime = null,
+        public ?string $content = null,
     ) {}
 }
