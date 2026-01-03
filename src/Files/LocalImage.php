@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Files;
 
+use Illuminate\Filesystem\Filesystem;
 use Laravel\Ai\Contracts\Files\StorableFile;
 
 class LocalImage extends Image implements StorableFile
@@ -21,7 +22,7 @@ class LocalImage extends Image implements StorableFile
      */
     public function storableMimeType(): ?string
     {
-        return $this->mime;
+        return $this->mime ?? (new Filesystem)->mimeType($this->path);
     }
 
     /**
@@ -34,5 +35,10 @@ class LocalImage extends Image implements StorableFile
         $this->mime = $mime;
 
         return $this;
+    }
+
+    public function __toString(): string
+    {
+        return $this->storableContent();
     }
 }

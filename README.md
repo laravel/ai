@@ -30,6 +30,7 @@ The official Laravel AI SDK.
 - [Audio (TTS)](#audio)
 - [Transcription (STT)](#transcription)
 - [Embeddings](#embeddings)
+- [Files](#files)
 - [Failover](#failover)
 - [Testing](#testing)
     - [Agents](#testing-agents)
@@ -37,6 +38,7 @@ The official Laravel AI SDK.
     - [Audio](#testing-audio)
     - [Transcriptions](#testing-transcriptions)
     - [Embeddings](#testing-embeddings)
+    - [Files](#testing-files)
 - [Events](#events)
 
 ## Installation
@@ -85,6 +87,8 @@ The default models used for text, images, audio, transcription, and embeddings m
 **STT:** OpenAI, ElevenLabs
 
 **Embeddings:** OpenAI, Gemini
+
+**Files:** OpenAI, Anthropic, Gemini
 
 ## Agents
 
@@ -730,6 +734,90 @@ use Illuminate\Support\Str;
 $embeddings = Str::of('Napa Valley has great wine.')->toEmbeddings();
 ```
 
+## Files
+
+The `Laravel\Ai\Files` class may be used to store files with your AI provider for later use in conversations. This is useful for large documents or files you want to reference multiple times without re-uploading:
+
+```php
+use Laravel\Ai\Files;
+
+// Store a file from a local path...
+$response = Files::putFromPath('/home/laravel/document.pdf');
+
+// Store a file that is stored on a filesystem disk...
+$response = Files::putFromStorage('document.pdf', disk: 'local');
+
+return $response->id;
+```
+
+You may also store raw content or uploaded files:
+
+```php
+use Laravel\Ai\Files;
+
+// Store raw content...
+$stored = Files::put('Hello, World!', 'text/plain');
+
+// Store an uploaded file...
+$stored = Files::put($request->file('document'));
+```
+
+To retrieve a previously stored file, use the `get` method:
+
+```php
+$file = Files::get('file-id');
+
+$file->id;
+$file->mime;
+```
+
+To delete a file from the provider, use the `delete` method:
+
+```php
+Files::delete('file-id');
+```
+
+By default, the `Files` class uses the default AI provider configured in your application's `config/ai.php` configuration file. You may specify a different provider using the `provider` argument:
+
+```php
+$response = Files::put($content, 'text/plain', provider: 'anthropic');
+```
+
+### Using Stored Files in Conversations
+
+Once a file has been stored with a provider, you may reference it in agent conversations using the `fromId` method on the `Document` or `Image` classes:
+
+```php
+use App\Ai\Agents\DocumentAnalyzer;
+use Laravel\Ai\Files;
+use Laravel\Ai\Files\Document;
+
+$stored = Files::put('/path/to/report.pdf', 'application/pdf');
+
+$response = (new DocumentAnalyzer)->prompt(
+    'Summarize this document.',
+    attachments: [
+        Document::fromId($stored->id),
+    ],
+);
+```
+
+Similarly, stored images may be referenced using the `Image` class:
+
+```php
+use Laravel\Ai\Files;
+use Laravel\Ai\Files\Image;
+
+$stored = Files::put('/path/to/photo.jpg', 'image/jpeg');
+
+$response = (new ImageAnalyzer)->prompt(
+    'What is in this image?',
+    attachments: [
+        Image::fromId($stored->id),
+    ],
+);
+```
+
 ## Failover
 
 When prompting or generating other media, you may provide an array of providers / models to automatically failover to a backup provider / model if a service interruption or rate limit is encountered on the primary provider:
@@ -1042,6 +1130,62 @@ To ensure all embeddings generations have a corresponding fake response, you may
 
 ```php
 Embeddings::fake()->preventStrayEmbeddings();
+```
+
+<a name="testing-files"></a>
+### Files
+
+File operations may be faked by invoking the `fake` method on the `Files` class. Once files have been faked, various assertions may be performed against the recorded file operations:
+
+```php
+use Laravel\Ai\Files;
+
+// Automatically return fake content for every file retrieval...
+Files::fake();
+
+// Provide a list of responses for file retrievals...
+Files::fake([
+    'First file content',
+    'Second file content',
+]);
+
+// Dynamically handle file retrievals based on the file ID...
+Files::fake(fn ($fileId) => "Content for {$fileId}");
+```
+
+After performing file operations, you may make assertions about the uploads and deletions that occurred:
+
+```php
+use Illuminate\Http\UploadedFile;
+use Laravel\Ai\Contracts\Files\StorableFile;
+
+Files::assertUploaded(fn (StorableFile|UploadedFile|string $file, ?string $mime) =>
+    (string) $file === 'Hello, World!'
+);
+
+Files::assertNotUploaded(fn (StorableFile|UploadedFile|string $file, ?string $mime) =>
+    (string) $file === 'Hello, World!'
+);
+
+Files::assertNothingUploaded();
+```
+
+For asserting against file deletions, you may pass a file ID or closure:
+
+```php
+Files::assertDeleted('file-id');
+
+Files::assertDeleted(fn ($id) => $id === 'file-id');
+
+Files::assertNotDeleted('file-id');
+
+Files::assertNothingDeleted();
+```
+
+To ensure all file operations have a corresponding fake response, you may use `preventStrayOperations`. If a file is retrieved without a defined fake response, an exception will be thrown:
+
+```php
+Files::fake()->preventStrayOperations();
 ```
 
 ## Events

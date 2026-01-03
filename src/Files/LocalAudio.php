@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Files;
 
+use Illuminate\Filesystem\Filesystem;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 
@@ -30,7 +31,7 @@ class LocalAudio extends Audio implements StorableFile, TranscribableAudio
      */
     public function mimeTypeForTranscription(): ?string
     {
-        return $this->mime;
+        return $this->mime ?? (new Filesystem)->mimeType($this->path);
     }
 
     /**
@@ -46,7 +47,7 @@ class LocalAudio extends Audio implements StorableFile, TranscribableAudio
      */
     public function storableMimeType(): ?string
     {
-        return $this->mime;
+        return $this->mime ?? (new Filesystem)->mimeType($this->path);
     }
 
     /**
@@ -57,5 +58,10 @@ class LocalAudio extends Audio implements StorableFile, TranscribableAudio
         $this->mime = $mime;
 
         return $this;
+    }
+
+    public function __toString(): string
+    {
+        return $this->storableContent();
     }
 }

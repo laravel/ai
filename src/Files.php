@@ -5,6 +5,7 @@ namespace Laravel\Ai;
 use Closure;
 use Illuminate\Http\UploadedFile;
 use Laravel\Ai\Contracts\Files\StorableFile;
+use Laravel\Ai\Files\Document;
 use Laravel\Ai\Gateway\FakeFileGateway;
 use Laravel\Ai\Responses\FileResponse;
 use Laravel\Ai\Responses\StoredFileResponse;
@@ -25,6 +26,22 @@ class Files
     public static function put(StorableFile|UploadedFile|string $file, ?string $mime = null, ?string $provider = null): StoredFileResponse
     {
         return Ai::fakeableFileProvider($provider)->putFile($file, $mime);
+    }
+
+    /**
+     * Store the file at the given local path.
+     */
+    public static function putFromPath(string $path, ?string $mime = null, ?string $provider = null): StoredFileResponse
+    {
+        return static::put(Document::fromPath($path), $mime, $provider);
+    }
+
+    /**
+     * Store the file at the given path on the given disk.
+     */
+    public static function putFromStorage(string $path, ?string $disk = null, ?string $provider = null): StoredFileResponse
+    {
+        return static::put(Document::fromStorage($path, $disk), provider: $provider);
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Files;
 
+use Illuminate\Filesystem\Filesystem;
 use Laravel\Ai\Contracts\Files\StorableFile;
 
 class LocalDocument extends Document implements StorableFile
@@ -21,6 +22,11 @@ class LocalDocument extends Document implements StorableFile
      */
     public function storableMimeType(): ?string
     {
-        return $this->mime;
+        return $this->mime ?? (new Filesystem)->mimeType($this->path);
+    }
+
+    public function __toString(): string
+    {
+        return $this->storableContent();
     }
 }

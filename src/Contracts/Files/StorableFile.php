@@ -2,7 +2,9 @@
 
 namespace Laravel\Ai\Contracts\Files;
 
-interface StorableFile
+use Stringable;
+
+interface StorableFile extends Stringable
 {
     public function storableContent(): string;
 

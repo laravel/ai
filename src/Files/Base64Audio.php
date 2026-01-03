@@ -50,4 +50,9 @@ class Base64Audio extends Audio implements StorableFile, TranscribableAudio
 
         return $this;
     }
+
+    public function __toString(): string
+    {
+        return $this->storableContent();
+    }
 }

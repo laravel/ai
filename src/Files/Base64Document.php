@@ -33,4 +33,9 @@ class Base64Document extends Document implements StorableFile
 
         return $this;
     }
+
+    public function __toString(): string
+    {
+        return $this->storableContent();
+    }
 }

@@ -16,6 +16,7 @@
         "illuminate/console": "^12.0",
         "illuminate/container": "^12.0",
         "illuminate/contracts": "^12.0",
+        "illuminate/filesystem": "^12.0",
         "illuminate/json-schema": "^12.0",
         "illuminate/support": "^12.0",
         "laravel/prompts": "^0.3.6",
