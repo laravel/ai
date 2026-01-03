@@ -2,13 +2,16 @@
 
 namespace Laravel\Ai\Providers;
 
+use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
+use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Gateway\OpenAiFileGateway;
 
-class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvider, ImageProvider, TextProvider, TranscriptionProvider
+class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvider, FileProvider, ImageProvider, TextProvider, TranscriptionProvider
 {
     use Concerns\GeneratesAudio;
     use Concerns\GeneratesEmbeddings;
@@ -17,9 +20,11 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     use Concerns\GeneratesTranscriptions;
     use Concerns\HasAudioGateway;
     use Concerns\HasEmbeddingGateway;
+    use Concerns\HasFileGateway;
     use Concerns\HasImageGateway;
     use Concerns\HasTextGateway;
     use Concerns\HasTranscriptionGateway;
+    use Concerns\ManagesFiles;
     use Concerns\StreamsText;
 
     /**
@@ -86,5 +91,13 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     public function defaultEmbeddingsDimensions(): int
     {
         return 1536;
+    }
+
+    /**
+     * Get the provider's file gateway.
+     */
+    public function fileGateway(): FileGateway
+    {
+        return $this->fileGateway ??= new OpenAiFileGateway;
     }
 }

@@ -7,6 +7,7 @@ use Illuminate\Support\MultipleInstanceManager;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
+use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
@@ -154,6 +155,26 @@ class AiManager extends MultipleInstanceManager
         return $this->transcriptionsAreFaked()
             ? (clone $provider)->useTranscriptionGateway($this->fakeTranscriptionGateway())
             : $provider;
+    }
+
+    /**
+     * Get a file provider instance by name.
+     */
+    public function fileProvider(?string $name = null): FileProvider
+    {
+        return tap($this->instance($name), function ($instance) {
+            if (! $instance instanceof FileProvider) {
+                throw new LogicException('Provider ['.get_class($instance).'] does not support file management.');
+            }
+        });
+    }
+
+    /**
+     * Get a file provider instance, using a fake gateway if files are faked.
+     */
+    public function fakeableFileProvider(?string $name = null): FileProvider
+    {
+        return $this->fileProvider($name);
     }
 
     /**

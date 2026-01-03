@@ -2,18 +2,23 @@
 
 namespace Laravel\Ai\Providers;
 
+use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
+use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Gateway\GeminiFileGateway;
 
-class GeminiProvider extends Provider implements EmbeddingProvider, ImageProvider, TextProvider
+class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider, ImageProvider, TextProvider
 {
     use Concerns\GeneratesEmbeddings;
     use Concerns\GeneratesImages;
     use Concerns\GeneratesText;
     use Concerns\HasEmbeddingGateway;
+    use Concerns\HasFileGateway;
     use Concerns\HasImageGateway;
     use Concerns\HasTextGateway;
+    use Concerns\ManagesFiles;
     use Concerns\StreamsText;
 
     /**
@@ -67,5 +72,13 @@ class GeminiProvider extends Provider implements EmbeddingProvider, ImageProvide
     public function defaultEmbeddingsDimensions(): int
     {
         return 3072;
+    }
+
+    /**
+     * Get the provider's file gateway.
+     */
+    public function fileGateway(): FileGateway
+    {
+        return $this->fileGateway ??= new GeminiFileGateway;
     }
 }

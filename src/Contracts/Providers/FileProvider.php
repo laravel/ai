@@ -4,6 +4,9 @@ namespace Laravel\Ai\Contracts\Providers;
 
 use Illuminate\Http\UploadedFile;
 use Laravel\Ai\Contracts\Files\StorableFile;
+use Laravel\Ai\Contracts\Gateway\FileGateway;
+use Laravel\Ai\Responses\FileResponse;
+use Laravel\Ai\Responses\StoredFileResponse;
 
 interface FileProvider
 {

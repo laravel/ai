@@ -4,6 +4,8 @@ namespace Laravel\Ai;
 
 use Illuminate\Http\UploadedFile;
 use Laravel\Ai\Contracts\Files\StorableFile;
+use Laravel\Ai\Responses\FileResponse;
+use Laravel\Ai\Responses\StoredFileResponse;
 
 class Files
 {
@@ -12,9 +14,7 @@ class Files
      */
     public static function get(string $fileId, ?string $provider = null): FileResponse
     {
-        $provider = Ai::fakeableFileProvider($provider);
-
-        // Get file...
+        return Ai::fakeableFileProvider($provider)->getFile($fileId);
     }
 
     /**
@@ -22,9 +22,7 @@ class Files
      */
     public static function put(StorableFile|UploadedFile|string $file, ?string $mime = null, ?string $provider = null): StoredFileResponse
     {
-        $provider = Ai::fakeableFileProvider($provider);
-
-        // Store file...
+        return Ai::fakeableFileProvider($provider)->putFile($file, $mime);
     }
 
     /**
@@ -32,8 +30,6 @@ class Files
      */
     public static function delete(string $fileId, ?string $provider = null): void
     {
-        $provider = Ai::fakeableFileProvider($provider);
-
-        // Store file...
+        Ai::fakeableFileProvider($provider)->deleteFile($fileId);
     }
 }

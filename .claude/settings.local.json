@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(./vendor/bin/phpunit:*)"
+      "Bash(./vendor/bin/phpunit:*)",
+      "WebSearch",
+      "WebFetch(domain:platform.openai.com)",
+      "Bash(php -l:*)"
     ]
   }
 }
