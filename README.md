@@ -697,9 +697,9 @@ The `Laravel\Ai\Transcription` class may be used to generate a transcript of the
 ```php
 use Laravel\Ai\Transcription;
 
-$transcript = Transcription::of($request->file('audio'))->generate();
-$transcript = Transcription::fromStorage('audio.mp3')->generate();
 $transcript = Transcription::fromPath('/home/laravel/audio.mp3')->generate();
+$transcript = Transcription::fromStorage('audio.mp3')->generate();
+$transcript = Transcription::fromUpload($request->file('audio'))->generate();
 
 return (string) $transcript;
 ```
