@@ -23,34 +23,48 @@ trait CreatesPrismTextRequests
         );
 
         if (! empty($schema)) {
-            $request = $request->withSchema(new ObjectSchema($schema));
+            $request = $this->withStructuredOutputOptions($request, $provider, $schema);
         }
 
-        if (! is_null($schema) &&
-            ! empty($schema) &&
-            $provider instanceof OpenAiProvider) {
-            $request = $request->withProviderOptions([
-                'schema' => [
-                    'strict' => true,
-                ],
-            ]);
-        }
-
-        if ($provider instanceof AnthropicProvider) {
-            $request = $request->withProviderOptions(array_filter([
-                'use_tool_calling' => $schema ? true : null,
-            ]))->withMaxTokens($options?->maxTokens ?? 64_000);
-        } elseif (! is_null($options?->maxTokens)) {
-            $request = $request->withMaxTokens($options->maxTokens);
-        }
+        $request = $this->withProviderOptions($request, $provider, $schema, $options);
 
         if (! is_null($options?->temperature)) {
             $request = $request->usingTemperature($options->temperature);
         }
 
-        return $request->withClientOptions([
-            'timeout' => 60,
-        ]);
+        return $request->withClientOptions(['timeout' => 60]);
+    }
+
+    /**
+     * Add structured output options to the request.
+     */
+    protected function withStructuredOutputOptions($request, Provider $provider, array $schema)
+    {
+        $request = $request->withSchema(new ObjectSchema($schema));
+
+        if ($provider instanceof OpenAiProvider) {
+            $request = $request->withProviderOptions(['schema' => ['strict' => true]]);
+        }
+
+        return $request;
+    }
+
+    /**
+     * Add provider-specific options to the request.
+     */
+    protected function withProviderOptions($request, Provider $provider, ?array $schema, ?TextGenerationOptions $options)
+    {
+        if ($provider instanceof AnthropicProvider) {
+            return $request
+                ->withProviderOptions(array_filter(['use_tool_calling' => $schema ? true : null]))
+                ->withMaxTokens($options?->maxTokens ?? 64_000);
+        }
+
+        if (! is_null($options?->maxTokens)) {
+            $request = $request->withMaxTokens($options->maxTokens);
+        }
+
+        return $request;
     }
 
     /**
