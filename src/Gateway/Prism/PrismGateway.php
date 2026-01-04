@@ -15,6 +15,7 @@ use Laravel\Ai\Contracts\Prompt;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
+use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Files\File;
@@ -46,6 +47,7 @@ use Prism\Prism\Facades\Prism;
 use Prism\Prism\ValueObjects\Media\Audio;
 use Prism\Prism\ValueObjects\Media\Image as PrismImage;
 use Prism\Prism\ValueObjects\ProviderTool as PrismProviderTool;
+use RuntimeException;
 
 class PrismGateway implements Gateway
 {
@@ -199,10 +201,19 @@ class PrismGateway implements Gateway
     {
         return $request
             ->withProviderTools(collect($tools)->map(function ($tool) use ($provider) {
+                // Web search...
                 if ($tool instanceof WebSearch) {
+                    $options = $provider instanceof SupportsWebSearch
+                        ? $provider->webSearchToolOptions($tool)
+                        : throw new RuntimeException('Provider ['.$provider->name().'] does not support web search.');
+
                     return match ($provider->driver()) {
-                        'openai' => new PrismProviderTool('web_search'),
-                        'anthropic' => new PrismProviderTool('web_search_20250305', 'web_search'),
+                        'openai' => new PrismProviderTool(
+                            'web_search', options: $options
+                        ),
+                        'anthropic' => new PrismProviderTool(
+                            'web_search_20250305', 'web_search', options: $options,
+                        ),
                     };
                 }
             })->filter()->values()->all());

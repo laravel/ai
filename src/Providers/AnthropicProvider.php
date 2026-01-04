@@ -4,16 +4,39 @@ namespace Laravel\Ai\Providers;
 
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Providers\FileProvider;
+use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Gateway\AnthropicFileGateway;
+use Laravel\Ai\Providers\Tools\WebSearch;
 
-class AnthropicProvider extends Provider implements FileProvider, TextProvider
+class AnthropicProvider extends Provider implements FileProvider, SupportsWebSearch, TextProvider
 {
     use Concerns\GeneratesText;
     use Concerns\HasFileGateway;
     use Concerns\HasTextGateway;
     use Concerns\ManagesFiles;
     use Concerns\StreamsText;
+
+    /**
+     * Get the web search tool options for the provider.
+     */
+    public function webSearchToolOptions(WebSearch $search): array
+    {
+        return array_filter([
+            'max_uses' => $search->maxSearches,
+            'allowed_domains' => ! empty($search->allowedDomains)
+                ? $search->allowedDomains
+                : null,
+            'user_location' => $search->hasLocation()
+                ? array_filter([
+                    'type' => 'approximate',
+                    'city' => $search->city,
+                    'region' => $search->region,
+                    'country' => $search->country,
+                ])
+                : null,
+        ]);
+    }
 
     /**
      * Get the name of the default text model.
