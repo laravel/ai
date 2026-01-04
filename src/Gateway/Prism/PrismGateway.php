@@ -82,7 +82,7 @@ class PrismGateway implements Gateway
 
         if (count($tools) > 0) {
             $this->addTools($request, $tools, $options);
-            $this->addProviderTools($request, $tools, $options);
+            $this->addProviderTools($provider, $request, $tools, $options);
         }
 
         try {
@@ -195,12 +195,15 @@ class PrismGateway implements Gateway
     /**
      * Add the given provider tools to the Prism request.
      */
-    protected function addProviderTools($request, array $tools, ?TextGenerationOptions $options = null)
+    protected function addProviderTools(Provider $provider, $request, array $tools, ?TextGenerationOptions $options = null)
     {
         return $request
-            ->withProviderTools(collect($tools)->map(function ($tool) {
+            ->withProviderTools(collect($tools)->map(function ($tool) use ($provider) {
                 if ($tool instanceof WebSearch) {
-                    return new PrismProviderTool('web_search');
+                    return match ($provider->driver()) {
+                        'openai' => new PrismProviderTool('web_search'),
+                        'anthropic' => new PrismProviderTool('web_search_20250305', 'web_search'),
+                    };
                 }
             })->filter()->values()->all());
     }
@@ -241,7 +244,9 @@ class PrismGateway implements Gateway
             $request = $request->usingTemperature($options->temperature);
         }
 
-        return $request;
+        return $request->withClientOptions([
+            'timeout' => 60,
+        ]);
     }
 
     /**
