@@ -9,6 +9,7 @@ use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
+use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Gateway\Prism\PrismGateway;
@@ -29,6 +30,7 @@ class AiManager extends MultipleInstanceManager
     use Concerns\InteractsWithFakeEmbeddings;
     use Concerns\InteractsWithFakeFiles;
     use Concerns\InteractsWithFakeImages;
+    use Concerns\InteractsWithFakeStores;
     use Concerns\InteractsWithFakeTranscriptions;
 
     /**
@@ -179,6 +181,30 @@ class AiManager extends MultipleInstanceManager
 
         return $this->filesAreFaked()
             ? (clone $provider)->useFileGateway($this->fakeFileGateway())
+            : $provider;
+    }
+
+    /**
+     * Get a store provider instance by name.
+     */
+    public function storeProvider(?string $name = null): StoreProvider
+    {
+        return tap($this->instance($name), function ($instance) {
+            if (! $instance instanceof StoreProvider) {
+                throw new LogicException('Provider ['.get_class($instance).'] does not support store management.');
+            }
+        });
+    }
+
+    /**
+     * Get a store provider instance, using a fake gateway if stores are faked.
+     */
+    public function fakeableStoreProvider(?string $name = null): StoreProvider
+    {
+        $provider = $this->storeProvider($name);
+
+        return $this->storesAreFaked()
+            ? (clone $provider)->useStoreGateway($this->fakeStoreGateway())
             : $provider;
     }
 
