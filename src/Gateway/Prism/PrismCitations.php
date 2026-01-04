@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\Prism;
 
 use Illuminate\Support\Collection;
+use Laravel\Ai\Responses\Data\Citation;
 use Laravel\Ai\Responses\Data\UrlCitation;
 use Prism\Prism\Enums\Citations\CitationSourceType;
 use Prism\Prism\ValueObjects\Citation as PrismCitation;
@@ -26,6 +27,9 @@ class PrismCitations
                 $citation->source,
                 $citation->sourceTitle,
             ))
+            ->unique(function (Citation $citation) {
+                return $citation->title;
+            })
             ->values();
     }
 }

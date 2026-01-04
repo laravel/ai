@@ -208,11 +208,14 @@ class PrismGateway implements Gateway
                         : throw new RuntimeException('Provider ['.$provider->name().'] does not support web search.');
 
                     return match ($provider->driver()) {
-                        'openai' => new PrismProviderTool(
-                            'web_search', options: $options
-                        ),
                         'anthropic' => new PrismProviderTool(
                             'web_search_20250305', 'web_search', options: $options,
+                        ),
+                        'gemini' => new PrismProviderTool(
+                            'google_search',
+                        ),
+                        'openai' => new PrismProviderTool(
+                            'web_search', options: $options
                         ),
                     };
                 }
