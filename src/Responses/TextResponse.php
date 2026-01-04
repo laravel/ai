@@ -60,6 +60,16 @@ class TextResponse
     }
 
     /**
+     * Provide the steps taken to generate the response.
+     */
+    public function withSteps(Collection $steps): self
+    {
+        $this->steps = $steps;
+
+        return $this;
+    }
+
+    /**
      * Get the string representation of the object.
      */
     public function __toString(): string
