@@ -11,6 +11,7 @@ use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Responses\CreatedStoreResponse;
+use Laravel\Ai\Responses\Data\StoreFileCounts;
 use Laravel\Ai\Responses\StoreResponse;
 
 class OpenAiStoreGateway implements StoreGateway
@@ -37,6 +38,11 @@ class OpenAiStoreGateway implements StoreGateway
         return new StoreResponse(
             id: $response->json('id'),
             name: $response->json('name'),
+            fileCounts: new StoreFileCounts(
+                completed: $response->json('file_counts.completed'),
+                pending: $response->json('file_counts.in_progress'),
+                failed: $response->json('file_counts.failed'),
+            ),
             ready: $response->json('status') === 'completed',
         );
     }

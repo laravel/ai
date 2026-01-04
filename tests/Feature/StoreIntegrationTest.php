@@ -30,6 +30,7 @@ class StoreIntegrationTest extends TestCase
 
         $this->assertEquals($created->id, $retrieved->id);
         $this->assertEquals('Test Store', $retrieved->name);
+        $this->assertEquals(0, $retrieved->fileCounts->completed);
         $this->assertTrue(is_bool($retrieved->ready));
 
         $deleted = Stores::delete($created->id, provider: $this->provider);
