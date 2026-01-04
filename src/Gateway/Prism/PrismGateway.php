@@ -6,16 +6,13 @@ use Closure;
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Http\UploadedFile;
-use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\Gateway;
-use Laravel\Ai\Contracts\Prompt;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
-use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Files\File;
@@ -24,12 +21,7 @@ use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\StoredImage;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\Message;
-use Laravel\Ai\ObjectSchema;
-use Laravel\Ai\Providers\AnthropicProvider;
-use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Providers\Provider;
-use Laravel\Ai\Providers\Tools\ProviderTool;
-use Laravel\Ai\Providers\Tools\WebSearch;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
@@ -39,18 +31,17 @@ use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
-use Laravel\Ai\Tools\Request as ToolRequest;
 use Prism\Prism\Enums\Provider as PrismProvider;
-use Prism\Prism\Enums\ToolChoice;
 use Prism\Prism\Exceptions\PrismException as PrismVendorException;
 use Prism\Prism\Facades\Prism;
 use Prism\Prism\ValueObjects\Media\Audio;
 use Prism\Prism\ValueObjects\Media\Image as PrismImage;
-use Prism\Prism\ValueObjects\ProviderTool as PrismProviderTool;
-use RuntimeException;
 
 class PrismGateway implements Gateway
 {
+    use Concerns\AddsToolsToPrismRequests;
+    use Concerns\CreatesPrismTextRequests;
+
     protected $invokingToolCallback;
 
     protected $toolInvokedCallback;
@@ -158,110 +149,6 @@ class PrismGateway implements Gateway
         } catch (PrismVendorException $e) {
             throw PrismException::toAiException($e, $provider, $model);
         }
-    }
-
-    /**
-     * Add the given tools to the Prism request.
-     */
-    protected function addTools($request, array $tools, ?TextGenerationOptions $options = null)
-    {
-        return $request
-            ->withTools(collect($tools)->map(function ($tool) {
-                if ($tool instanceof ProviderTool) {
-                    return;
-                }
-
-                return (new PrismTool)
-                    ->as(class_basename($tool))
-                    ->for((string) $tool->description())
-                    ->when(
-                        ! empty($tool->schema(new JsonSchemaTypeFactory)),
-                        fn ($prismTool) => $prismTool->withParameter(
-                            new ObjectSchema($tool->schema(new JsonSchemaTypeFactory))
-                        )
-                    )
-                    ->using(function ($arguments) use ($tool) {
-                        $arguments = $arguments['schema_definition'] ?? [];
-
-                        call_user_func($this->invokingToolCallback, $tool, $arguments);
-
-                        return (string) tap($tool->handle(new ToolRequest($arguments)), function ($result) use ($tool, $arguments) {
-                            call_user_func($this->toolInvokedCallback, $tool, $arguments, $result);
-                        });
-                    })
-                    ->withoutErrorHandling();
-            })->filter()->values()->all())
-            ->withToolChoice(ToolChoice::Auto)
-            ->withMaxSteps($options?->maxSteps ?? round(count($tools) * 1.5));
-    }
-
-    /**
-     * Add the given provider tools to the Prism request.
-     */
-    protected function addProviderTools(Provider $provider, $request, array $tools, ?TextGenerationOptions $options = null)
-    {
-        return $request
-            ->withProviderTools(collect($tools)->map(function ($tool) use ($provider) {
-                // Web search...
-                if ($tool instanceof WebSearch) {
-                    $options = $provider instanceof SupportsWebSearch
-                        ? $provider->webSearchToolOptions($tool)
-                        : throw new RuntimeException('Provider ['.$provider->name().'] does not support web search.');
-
-                    return match ($provider->driver()) {
-                        'anthropic' => new PrismProviderTool(
-                            'web_search_20250305', 'web_search', options: $options,
-                        ),
-                        'gemini' => new PrismProviderTool(
-                            'google_search',
-                        ),
-                        'openai' => new PrismProviderTool(
-                            'web_search', options: $options
-                        ),
-                    };
-                }
-            })->filter()->values()->all());
-    }
-
-    /**
-     * Create a Prism text request for the given provider, model, and prompt.
-     */
-    protected function createPrismTextRequest(Provider $provider, string $model, ?array $schema, ?TextGenerationOptions $options = null)
-    {
-        $request = tap(
-            ! empty($schema) ? Prism::structured() : Prism::text(),
-            fn ($prism) => $this->configure($prism, $provider, $model)
-        );
-
-        if (! empty($schema)) {
-            $request = $request->withSchema(new ObjectSchema($schema));
-        }
-
-        if (! is_null($schema) &&
-            ! empty($schema) &&
-            $provider instanceof OpenAiProvider) {
-            $request = $request->withProviderOptions([
-                'schema' => [
-                    'strict' => true,
-                ],
-            ]);
-        }
-
-        if ($provider instanceof AnthropicProvider) {
-            $request = $request->withProviderOptions(array_filter([
-                'use_tool_calling' => $schema ? true : null,
-            ]))->withMaxTokens($options?->maxTokens ?? 64_000);
-        } elseif (! is_null($options?->maxTokens)) {
-            $request = $request->withMaxTokens($options->maxTokens);
-        }
-
-        if (! is_null($options?->temperature)) {
-            $request = $request->usingTemperature($options->temperature);
-        }
-
-        return $request->withClientOptions([
-            'timeout' => 60,
-        ]);
     }
 
     /**
@@ -444,18 +331,6 @@ class PrismGateway implements Gateway
             collect($response->embeddings)->map->embedding->all(),
             $response->usage->tokens,
             new Meta($provider->name(), $model),
-        );
-    }
-
-    /**
-     * Configure the given pending Prism request for the provider.
-     */
-    protected function configure($prism, Provider $provider, string $model): mixed
-    {
-        return $prism->using(
-            static::toPrismProvider($provider),
-            $model,
-            ['api_key' => $provider->providerCredentials()['key']],
         );
     }
 
