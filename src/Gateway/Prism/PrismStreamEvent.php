@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Gateway\Prism;
 
-use Laravel\Ai\Gateway\Prism\PrismCitations;
 use Laravel\Ai\Streaming\Events\Citation;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ProviderToolEvent as LaravelProviderToolEvent;
