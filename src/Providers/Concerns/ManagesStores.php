@@ -10,14 +10,14 @@ use Laravel\Ai\Events\CreatingStore;
 use Laravel\Ai\Events\StoreCreated;
 use Laravel\Ai\Events\StoreDeleted;
 use Laravel\Ai\Responses\CreatedStoreResponse;
-use Laravel\Ai\Responses\StoreResponse;
+use Laravel\Ai\Store;
 
 trait ManagesStores
 {
     /**
      * Get a vector store by its ID.
      */
-    public function getStore(string $storeId): StoreResponse
+    public function getStore(string $storeId): Store
     {
         return $this->storeGateway()->getStore($this, $storeId);
     }

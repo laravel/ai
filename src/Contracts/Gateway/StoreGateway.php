@@ -6,7 +6,7 @@ use DateInterval;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Responses\CreatedStoreResponse;
-use Laravel\Ai\Responses\StoreResponse;
+use Laravel\Ai\Store;
 
 interface StoreGateway
 {
@@ -16,7 +16,7 @@ interface StoreGateway
     public function getStore(
         StoreProvider $provider,
         string $storeId,
-    ): StoreResponse;
+    ): Store;
 
     /**
      * Create a new vector store.

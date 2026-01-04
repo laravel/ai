@@ -9,7 +9,8 @@ use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Responses\CreatedStoreResponse;
-use Laravel\Ai\Responses\StoreResponse;
+use Laravel\Ai\Responses\Data\StoreFileCounts;
+use Laravel\Ai\Store;
 use RuntimeException;
 
 class FakeStoreGateway implements StoreGateway
@@ -25,29 +26,29 @@ class FakeStoreGateway implements StoreGateway
     /**
      * Get a vector store by its ID.
      */
-    public function getStore(StoreProvider $provider, string $storeId): StoreResponse
+    public function getStore(StoreProvider $provider, string $storeId): Store
     {
-        return $this->nextGetResponse($storeId);
+        return $this->nextGetResponse($provider, $storeId);
     }
 
     /**
      * Get the next response for a get request.
      */
-    protected function nextGetResponse(string $storeId): StoreResponse
+    protected function nextGetResponse(StoreProvider $provider, string $storeId): Store
     {
         $response = is_array($this->responses)
             ? ($this->responses[$this->currentResponseIndex] ?? null)
             : call_user_func($this->responses, $storeId);
 
         return tap($this->marshalGetResponse(
-            $response, $storeId
+            $provider, $response, $storeId
         ), fn () => $this->currentResponseIndex++);
     }
 
     /**
-     * Marshal the given response into a StoreResponse instance.
+     * Marshal the given response into a Store instance.
      */
-    protected function marshalGetResponse(mixed $response, string $storeId): StoreResponse
+    protected function marshalGetResponse(StoreProvider $provider, mixed $response, string $storeId): Store
     {
         if ($response instanceof Closure) {
             $response = $response($storeId);
@@ -58,11 +59,23 @@ class FakeStoreGateway implements StoreGateway
                 throw new RuntimeException('Attempted store retrieval without a fake response.');
             }
 
-            return new StoreResponse($storeId, name: 'fake-store');
+            return new Store(
+                provider: $provider,
+                id: $storeId,
+                name: 'fake-store',
+                fileCounts: new StoreFileCounts(0, 0, 0),
+                ready: true,
+            );
         }
 
         if (is_string($response)) {
-            return new StoreResponse($storeId, name: $response);
+            return new Store(
+                provider: $provider,
+                id: $storeId,
+                name: $response,
+                fileCounts: new StoreFileCounts(0, 0, 0),
+                ready: true,
+            );
         }
 
         return $response;

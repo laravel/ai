@@ -12,14 +12,14 @@ use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Responses\CreatedStoreResponse;
 use Laravel\Ai\Responses\Data\StoreFileCounts;
-use Laravel\Ai\Responses\StoreResponse;
+use Laravel\Ai\Store;
 
 class OpenAiStoreGateway implements StoreGateway
 {
     /**
      * Get a vector store by its ID.
      */
-    public function getStore(StoreProvider $provider, string $storeId): StoreResponse
+    public function getStore(StoreProvider $provider, string $storeId): Store
     {
         try {
             $response = Http::withToken($provider->providerCredentials()['key'])
@@ -35,7 +35,8 @@ class OpenAiStoreGateway implements StoreGateway
             throw $e;
         }
 
-        return new StoreResponse(
+        return new Store(
+            provider: $provider,
             id: $response->json('id'),
             name: $response->json('name'),
             fileCounts: new StoreFileCounts(

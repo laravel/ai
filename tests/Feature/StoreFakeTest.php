@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use DateInterval;
 use Illuminate\Support\Collection;
-use Laravel\Ai\Responses\StoreResponse;
+use Laravel\Ai\Store;
 use Laravel\Ai\Stores;
 use RuntimeException;
 use Tests\TestCase;
@@ -18,7 +18,7 @@ class StoreFakeTest extends TestCase
         Stores::fake([
             'first-store',
             fn ($storeId) => "store-{$storeId}",
-            new StoreResponse('vs_123', name: 'Custom Store'),
+            'Custom Store',
         ]);
 
         $response = Stores::get('vs_1');
@@ -30,7 +30,7 @@ class StoreFakeTest extends TestCase
         $this->assertEquals('store-vs_2', $response->name);
 
         $response = Stores::get('vs_3');
-        $this->assertEquals('vs_123', $response->id);
+        $this->assertEquals('vs_3', $response->id);
         $this->assertEquals('Custom Store', $response->name);
     }
 

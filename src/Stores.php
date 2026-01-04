@@ -7,14 +7,13 @@ use DateInterval;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Gateway\FakeStoreGateway;
 use Laravel\Ai\Responses\CreatedStoreResponse;
-use Laravel\Ai\Responses\StoreResponse;
 
 class Stores
 {
     /**
      * Get a vector store by its ID.
      */
-    public static function get(string $storeId, ?string $provider = null): StoreResponse
+    public static function get(string $storeId, ?string $provider = null): Store
     {
         return Ai::fakeableStoreProvider($provider)->getStore($storeId);
     }
