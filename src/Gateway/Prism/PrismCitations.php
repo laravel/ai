@@ -13,23 +13,31 @@ class PrismCitations
 {
     /**
      * Extract URL citations from Prism response additional content.
-     *
-     * @param  array<string, mixed>  $additionalContent
      */
-    public static function toLaravelCitations(array $additionalContent): Collection
+    public static function toLaravelCitations(Collection $citations): Collection
     {
-        $citations = $additionalContent['citations'] ?? [];
-
-        return collect($citations)
+        return $citations
             ->flatMap(fn (MessagePartWithCitations $part) => $part->citations)
-            ->filter(fn (PrismCitation $citation) => $citation->sourceType === CitationSourceType::Url)
-            ->map(fn (PrismCitation $citation) => new UrlCitation(
-                $citation->source,
-                $citation->sourceTitle,
-            ))
+            ->map(static::toLaravelCitation(...))
+            ->filter()
             ->unique(function (Citation $citation) {
                 return $citation->title;
             })
             ->values();
+    }
+
+    /**
+     * Convert the given Prism citation into a Laravel citation.
+     */
+    public static function toLaravelCitation(PrismCitation $citation): ?Citation
+    {
+        if ($citation->sourceType !== CitationSourceType::Url) {
+            return null;
+        }
+
+        return new UrlCitation(
+            $citation->source,
+            $citation->sourceTitle,
+        );
     }
 }

@@ -2,6 +2,8 @@
 
 namespace Laravel\Ai\Gateway\Prism;
 
+use Laravel\Ai\Gateway\Prism\PrismCitations;
+use Laravel\Ai\Streaming\Events\Citation;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ProviderToolEvent as LaravelProviderToolEvent;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
@@ -44,6 +46,7 @@ class PrismStreamEvent
             PrismStreamEventType::ToolCall => static::toToolCallEvent($event),
             PrismStreamEventType::ToolResult => static::toToolResultEvent($event),
             PrismStreamEventType::ProviderToolEvent => static::toProviderToolEvent($event),
+            PrismStreamEventType::Citation => new Citation($id ?? $event->id, $event->messageId, PrismCitations::toLaravelCitation($event->citation), $event->timestamp),
             PrismStreamEventType::StreamEnd => static::toStreamEndEvent($event),
             PrismStreamEventType::Error => new Error($event->id, $event->type, $event->message, $event->recoverable, $event->timestamp, $event->metadata),
             default => null

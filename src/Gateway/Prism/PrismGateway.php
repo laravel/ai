@@ -86,7 +86,9 @@ class PrismGateway implements Gateway
             throw PrismException::toAiException($e, $provider, $model);
         }
 
-        $citations = PrismCitations::toLaravelCitations($response->additionalContent);
+        $citations = PrismCitations::toLaravelCitations(
+            new Collection($response->additionalContent['citations'] ?? [])
+        );
 
         return $structured
             ? (new StructuredTextResponse(
