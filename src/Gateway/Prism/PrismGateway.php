@@ -140,6 +140,7 @@ class PrismGateway implements Gateway
 
         if (count($tools) > 0) {
             $this->addTools($request, $tools, $options);
+            $this->addProviderTools($provider, $request, $tools, $options);
         }
 
         try {
