@@ -2,12 +2,15 @@
 
 namespace Tests\Feature;
 
+use DateInterval;
 use Illuminate\Support\Facades\Event;
 use Laravel\Ai\Events\CreatingStore;
 use Laravel\Ai\Events\StoreCreated;
 use Laravel\Ai\Events\StoreDeleted;
 use Laravel\Ai\Stores;
 use Tests\TestCase;
+
+use function Illuminate\Support\days;
 
 class StoreIntegrationTest extends TestCase
 {
@@ -34,5 +37,19 @@ class StoreIntegrationTest extends TestCase
         $this->assertTrue($deleted);
 
         Event::assertDispatched(StoreDeleted::class);
+    }
+
+    public function test_can_create_store_with_expiration(): void
+    {
+        $created = Stores::create(
+            name: 'Expiring Store',
+            description: 'A store that expires after 7 days of inactivity',
+            expiresWhenIdleFor: days(7),
+            provider: $this->provider,
+        );
+
+        $this->assertNotEmpty($created->id);
+
+        Stores::delete($created->id, provider: $this->provider);
     }
 }

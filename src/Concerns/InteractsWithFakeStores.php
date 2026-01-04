@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Concerns;
 
 use Closure;
+use DateInterval;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Gateway\FakeStoreGateway;
 use PHPUnit\Framework\Assert as PHPUnit;
@@ -35,10 +36,17 @@ trait InteractsWithFakeStores
     /**
      * Record a store creation.
      */
-    public function recordStoreCreation(string $name): self
-    {
+    public function recordStoreCreation(
+        string $name,
+        ?string $description = null,
+        ?Collection $fileIds = null,
+        ?DateInterval $expiresWhenIdleFor = null,
+    ): self {
         $this->recordedStoreCreations[] = [
             'name' => $name,
+            'description' => $description,
+            'fileIds' => $fileIds,
+            'expiresWhenIdleFor' => $expiresWhenIdleFor,
         ];
 
         return $this;
@@ -61,12 +69,17 @@ trait InteractsWithFakeStores
     {
         if (is_string($callback)) {
             $name = $callback;
-            $callback = fn ($creation) => $creation['name'] === $name;
+            $callback = fn ($n) => $n === $name;
         }
 
         PHPUnit::assertTrue(
             (new Collection($this->recordedStoreCreations))->filter(function (array $creation) use ($callback) {
-                return $callback($creation);
+                return $callback(
+                    $creation['name'],
+                    $creation['description'],
+                    $creation['fileIds'],
+                    $creation['expiresWhenIdleFor'],
+                );
             })->count() > 0,
             'An expected store creation was not recorded.'
         );
@@ -81,12 +94,17 @@ trait InteractsWithFakeStores
     {
         if (is_string($callback)) {
             $name = $callback;
-            $callback = fn ($creation) => $creation['name'] === $name;
+            $callback = fn ($n) => $n === $name;
         }
 
         PHPUnit::assertTrue(
             (new Collection($this->recordedStoreCreations))->filter(function (array $creation) use ($callback) {
-                return $callback($creation);
+                return $callback(
+                    $creation['name'],
+                    $creation['description'],
+                    $creation['fileIds'],
+                    $creation['expiresWhenIdleFor'],
+                );
             })->count() === 0,
             'An unexpected store creation was recorded.'
         );

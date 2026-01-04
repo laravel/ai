@@ -2,6 +2,8 @@
 
 namespace Laravel\Ai\Contracts\Gateway;
 
+use DateInterval;
+use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Responses\CreatedStoreResponse;
 use Laravel\Ai\Responses\StoreResponse;
@@ -22,6 +24,9 @@ interface StoreGateway
     public function createStore(
         StoreProvider $provider,
         string $name,
+        ?string $description = null,
+        ?Collection $fileIds = null,
+        ?DateInterval $expiresWhenIdleFor = null,
     ): CreatedStoreResponse;
 
     /**

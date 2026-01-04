@@ -2,7 +2,11 @@
 
 namespace Laravel\Ai\Gateway;
 
+use DateInterval;
+use DateTime;
 use Illuminate\Http\Client\RequestException;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
@@ -34,19 +38,33 @@ class OpenAiStoreGateway implements StoreGateway
         return new StoreResponse(
             id: $response->json('id'),
             name: $response->json('name'),
+            ready: $response->json('status') === 'completed',
         );
     }
 
     /**
      * Create a new vector store.
      */
-    public function createStore(StoreProvider $provider, string $name): CreatedStoreResponse
-    {
+    public function createStore(
+        StoreProvider $provider,
+        string $name,
+        ?string $description = null,
+        ?Collection $fileIds = null,
+        ?DateInterval $expiresWhenIdleFor = null,
+    ): CreatedStoreResponse {
         try {
+            $fileIds ??= new Collection;
+
             $response = Http::withToken($provider->providerCredentials()['key'])
-                ->post('https://api.openai.com/v1/vector_stores', [
+                ->post('https://api.openai.com/v1/vector_stores', array_filter([
                     'name' => $name,
-                ])
+                    'description' => $description,
+                    'file_ids' => $fileIds?->values()->all(),
+                    'expires_after' => $expiresWhenIdleFor ? [
+                        'anchor' => 'last_active_at',
+                        'days' => $this->intervalToDays($expiresWhenIdleFor),
+                    ] : null,
+                ]))
                 ->throw();
         } catch (RequestException $e) {
             if ($e->response->status() === 429) {
@@ -59,6 +77,14 @@ class OpenAiStoreGateway implements StoreGateway
         }
 
         return new CreatedStoreResponse($response->json('id'));
+    }
+
+    /**
+     * Convert a DateInterval to days.
+     */
+    protected function intervalToDays(DateInterval $interval): int
+    {
+        return max(1, (int) Carbon::now()->diff(Carbon::now()->add($interval))->days);
     }
 
     /**

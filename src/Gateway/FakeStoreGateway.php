@@ -3,6 +3,8 @@
 namespace Laravel\Ai\Gateway;
 
 use Closure;
+use DateInterval;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
@@ -69,8 +71,13 @@ class FakeStoreGateway implements StoreGateway
     /**
      * Create a new vector store.
      */
-    public function createStore(StoreProvider $provider, string $name): CreatedStoreResponse
-    {
+    public function createStore(
+        StoreProvider $provider,
+        string $name,
+        ?string $description = null,
+        ?Collection $fileIds = null,
+        ?DateInterval $expiresWhenIdleFor = null,
+    ): CreatedStoreResponse {
         return new CreatedStoreResponse('vs_'.Str::random(24));
     }
 

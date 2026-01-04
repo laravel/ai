@@ -3,6 +3,8 @@
 namespace Laravel\Ai;
 
 use Closure;
+use DateInterval;
+use Illuminate\Support\Collection;
 use Laravel\Ai\Gateway\FakeStoreGateway;
 use Laravel\Ai\Responses\CreatedStoreResponse;
 use Laravel\Ai\Responses\StoreResponse;
@@ -20,9 +22,16 @@ class Stores
     /**
      * Create a new vector store.
      */
-    public static function create(string $name, ?string $provider = null): CreatedStoreResponse
+    public static function create(
+        string $name,
+        ?string $description = null,
+        Collection|array $fileIds = [],
+        ?DateInterval $expiresWhenIdleFor = null,
+        ?string $provider = null): CreatedStoreResponse
     {
-        return Ai::fakeableStoreProvider($provider)->createStore($name);
+        return Ai::fakeableStoreProvider($provider)->createStore(
+            $name, $description, Collection::make($fileIds), $expiresWhenIdleFor
+        );
     }
 
     /**

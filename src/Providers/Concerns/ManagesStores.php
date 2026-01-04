@@ -2,6 +2,8 @@
 
 namespace Laravel\Ai\Providers\Concerns;
 
+use DateInterval;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Events\CreatingStore;
@@ -23,23 +25,29 @@ trait ManagesStores
     /**
      * Create a new vector store.
      */
-    public function createStore(string $name): CreatedStoreResponse
-    {
+    public function createStore(
+        string $name,
+        ?string $description = null,
+        ?Collection $fileIds = null,
+        ?DateInterval $expiresWhenIdleFor = null,
+    ): CreatedStoreResponse {
         $invocationId = (string) Str::uuid7();
 
+        $fileIds ??= new Collection;
+
         if (Ai::storesAreFaked()) {
-            Ai::recordStoreCreation($name);
+            Ai::recordStoreCreation($name, $description, $fileIds, $expiresWhenIdleFor);
         }
 
         $this->events->dispatch(new CreatingStore(
-            $invocationId, $this, $name
+            $invocationId, $this, $name, $description, $fileIds, $expiresWhenIdleFor
         ));
 
         return tap(
-            $this->storeGateway()->createStore($this, $name),
-            function (CreatedStoreResponse $response) use ($invocationId, $name) {
+            $this->storeGateway()->createStore($this, $name, $description, $fileIds, $expiresWhenIdleFor),
+            function (CreatedStoreResponse $response) use ($invocationId, $name, $description, $fileIds, $expiresWhenIdleFor) {
                 $this->events->dispatch(new StoreCreated(
-                    $invocationId, $this, $name, $response,
+                    $invocationId, $this, $name, $description, $fileIds, $expiresWhenIdleFor, $response,
                 ));
             }
         );
