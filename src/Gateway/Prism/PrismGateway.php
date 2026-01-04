@@ -82,10 +82,6 @@ class PrismGateway implements Gateway
             $this->addTools($request, $tools, $options);
         }
 
-        $request->withProviderTools([
-            new ProviderTool('web_search'),
-        ]);
-
         try {
             $response = $request
                 ->withMessages($this->toPrismMessages($messages))
