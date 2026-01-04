@@ -2,8 +2,6 @@
 
 namespace Laravel\Ai\Streaming\Events;
 
-use Laravel\Ai\Streaming\Events\StreamEvent;
-
 class ProviderToolEvent extends StreamEvent
 {
     /**

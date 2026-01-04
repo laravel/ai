@@ -15,7 +15,6 @@ use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall;
 use Laravel\Ai\Streaming\Events\ToolResult;
-use Prism\Prism\Enums\ProviderToolEvent;
 use Prism\Prism\Enums\StreamEventType as PrismStreamEventType;
 use Prism\Prism\Streaming\Events\ProviderToolEvent as ProviderToolStreamEvent;
 use Prism\Prism\Streaming\Events\StreamEndEvent;

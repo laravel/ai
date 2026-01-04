@@ -52,8 +52,10 @@ trait GeneratesText
         $response = $agent instanceof HasStructuredOutput
             ? (new StructuredAgentResponse($invocationId, $response->structured, $response->text, $response->usage, $response->meta))
                 ->withToolCallsAndResults($response->toolCalls, $response->toolResults)
+                ->withSteps($response->steps)
             : (new AgentResponse($invocationId, $response->text, $response->usage, $response->meta))
-                ->withMessages($response->messages);
+                ->withMessages($response->messages)
+                ->withSteps($response->steps);
 
         $this->events->dispatch(
             new AgentPrompted($invocationId, $agentPrompt, $response)

@@ -98,14 +98,14 @@ class PrismGateway implements Gateway
             ))->withToolCallsAndResults(
                 toolCalls: collect($response->toolCalls)->map(PrismTool::toLaravelToolCall(...)),
                 toolResults: collect($response->toolResults)->map(PrismTool::toLaravelToolResult(...)),
-            )->withSteps(PrismSteps::toLaravelSteps($response->steps))
+            )->withSteps(PrismSteps::toLaravelSteps($response->steps, $provider))
             : (new TextResponse(
                 $response->text,
                 PrismUsage::toLaravelUsage($response->usage),
                 new Meta($provider->name(), $response->meta->model),
             ))->withMessages(
                 PrismMessages::toLaravelMessages($response->messages)
-            )->withSteps(PrismSteps::toLaravelSteps($response->steps));
+            )->withSteps(PrismSteps::toLaravelSteps($response->steps, $provider));
     }
 
     /**

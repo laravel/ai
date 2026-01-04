@@ -16,11 +16,14 @@ class TextResponse
 
     public Collection $toolResults;
 
+    public Collection $steps;
+
     public function __construct(public string $text, public Usage $usage, public Meta $meta)
     {
         $this->messages = new Collection;
         $this->toolCalls = new Collection;
         $this->toolResults = new Collection;
+        $this->steps = new Collection;
     }
 
     /**

@@ -49,6 +49,7 @@ class AgentIntegrationTest extends TestCase
         $this->assertTrue($response->messages->count() > 0);
         $this->assertEquals($response->meta->provider, 'groq');
         $this->assertEquals($response->meta->model, 'openai/gpt-oss-20b');
+        $this->assertTrue($response->steps->count() > 0);
 
         Event::assertDispatched(PromptingAgent::class);
         Event::assertDispatched(AgentPrompted::class);
@@ -185,6 +186,7 @@ class AgentIntegrationTest extends TestCase
         );
 
         $this->assertEquals('ag', strtolower($response['symbol']));
+        $this->assertTrue($response->steps->count() > 0);
     }
 
     public function test_ad_hoc_agents_can_have_structured_output(): void
