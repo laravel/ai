@@ -5,6 +5,8 @@ namespace Laravel\Ai\Gateway\Prism\Concerns;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
+use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Gateway\Prism\PrismTool;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
@@ -26,35 +28,43 @@ trait AddsToolsToPrismRequests
     {
         return $request
             ->withTools(collect($tools)->map(function ($tool) {
-                if ($tool instanceof ProviderTool) {
-                    return;
-                }
-
-                return (new PrismTool)
-                    ->as(class_basename($tool))
-                    ->for((string) $tool->description())
-                    ->when(
-                        ! empty($tool->schema(new JsonSchemaTypeFactory)),
-                        fn ($prismTool) => $prismTool->withParameter(
-                            new ObjectSchema($tool->schema(new JsonSchemaTypeFactory))
-                        )
-                    )
-                    ->using(function ($arguments) use ($tool) {
-                        $arguments = $arguments['schema_definition'] ?? [];
-
-                        call_user_func($this->invokingToolCallback, $tool, $arguments);
-
-                        return (string) tap(
-                            $tool->handle(new ToolRequest($arguments)),
-                            function ($result) use ($tool, $arguments) {
-                                call_user_func($this->toolInvokedCallback, $tool, $arguments, $result);
-                            }
-                        );
-                    })
-                    ->withoutErrorHandling();
+                return $tool instanceof ProviderTool ? null : $this->createPrismTool($tool);
             })->filter()->values()->all())
             ->withToolChoice(ToolChoice::Auto)
             ->withMaxSteps($options?->maxSteps ?? round(count($tools) * 1.5));
+    }
+
+    /**
+     * Create a Prism tool from the given tool.
+     */
+    protected function createPrismTool(Tool $tool): PrismTool
+    {
+        return (new PrismTool)
+            ->as(class_basename($tool))
+            ->for((string) $tool->description())
+            ->when(
+                ! empty($tool->schema(new JsonSchemaTypeFactory)),
+                fn ($prismTool) => $prismTool->withParameter(
+                    new ObjectSchema($tool->schema(new JsonSchemaTypeFactory))
+                )
+            )
+            ->using(fn ($arguments) => $this->invokeTool($tool, $arguments))
+            ->withoutErrorHandling();
+    }
+
+    /**
+     * Invoke the given tool with the given arguments.
+     */
+    protected function invokeTool(Tool $tool, array $arguments): string
+    {
+        $arguments = $arguments['schema_definition'] ?? [];
+
+        call_user_func($this->invokingToolCallback, $tool, $arguments);
+
+        return (string) tap(
+            $tool->handle(new ToolRequest($arguments)),
+            fn ($result) => call_user_func($this->toolInvokedCallback, $tool, $arguments, $result)
+        );
     }
 
     /**
