@@ -6,12 +6,14 @@ use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
+use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Gateway\GeminiFileGateway;
+use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 
-class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider, ImageProvider, SupportsWebSearch, TextProvider
+class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider, ImageProvider, SupportsWebFetch, SupportsWebSearch, TextProvider
 {
     use Concerns\GeneratesEmbeddings;
     use Concerns\GeneratesImages;
@@ -22,6 +24,14 @@ class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider
     use Concerns\HasTextGateway;
     use Concerns\ManagesFiles;
     use Concerns\StreamsText;
+
+    /**
+     * Get the web fetch tool options for the provider.
+     */
+    public function webFetchToolOptions(WebFetch $fetch): array
+    {
+        return [];
+    }
 
     /**
      * Get the web search tool options for the provider.

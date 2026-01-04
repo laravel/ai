@@ -93,6 +93,7 @@ trait AddsToolsToPrismRequests
 
         return match ($provider->driver()) {
             'anthropic' => new PrismProviderTool('web_fetch_20250910', 'web_fetch', options: $options),
+            'gemini' => new PrismProviderTool('url_context'),
         };
     }
 
