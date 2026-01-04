@@ -27,6 +27,8 @@ use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\AnthropicProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Providers\Tools\ProviderTool;
+use Laravel\Ai\Providers\Tools\WebSearch;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
@@ -43,7 +45,7 @@ use Prism\Prism\Exceptions\PrismException as PrismVendorException;
 use Prism\Prism\Facades\Prism;
 use Prism\Prism\ValueObjects\Media\Audio;
 use Prism\Prism\ValueObjects\Media\Image as PrismImage;
-use Prism\Prism\ValueObjects\ProviderTool;
+use Prism\Prism\ValueObjects\ProviderTool as PrismProviderTool;
 
 class PrismGateway implements Gateway
 {
@@ -80,6 +82,7 @@ class PrismGateway implements Gateway
 
         if (count($tools) > 0) {
             $this->addTools($request, $tools, $options);
+            $this->addProviderTools($request, $tools, $options);
         }
 
         try {
@@ -161,6 +164,10 @@ class PrismGateway implements Gateway
     {
         return $request
             ->withTools(collect($tools)->map(function ($tool) {
+                if ($tool instanceof ProviderTool) {
+                    return;
+                }
+
                 return (new PrismTool)
                     ->as(class_basename($tool))
                     ->for((string) $tool->description())
@@ -180,9 +187,22 @@ class PrismGateway implements Gateway
                         });
                     })
                     ->withoutErrorHandling();
-            })->all())
+            })->filter()->values()->all())
             ->withToolChoice(ToolChoice::Auto)
             ->withMaxSteps($options?->maxSteps ?? round(count($tools) * 1.5));
+    }
+
+    /**
+     * Add the given provider tools to the Prism request.
+     */
+    protected function addProviderTools($request, array $tools, ?TextGenerationOptions $options = null)
+    {
+        return $request
+            ->withProviderTools(collect($tools)->map(function ($tool) {
+                if ($tool instanceof WebSearch) {
+                    return new PrismProviderTool('web_search');
+                }
+            })->filter()->values()->all());
     }
 
     /**
