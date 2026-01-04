@@ -5,7 +5,9 @@ namespace Laravel\Ai\Providers\Tools;
 class WebSearch extends ProviderTool
 {
     public ?string $city = null;
+
     public ?string $region = null;
+
     public ?string $country = null;
 
     public function __construct(
