@@ -70,7 +70,7 @@ trait AddsToolsToPrismRequests
     /**
      * Add the given provider tools to the Prism request.
      */
-    protected function addProviderTools(Provider $provider, $request, array $tools, ?TextGenerationOptions $options = null)
+    protected function addProviderTools(Provider $provider, $request, array $tools)
     {
         return $request
             ->withProviderTools(collect($tools)->map(function ($tool) use ($provider) {
