@@ -6,6 +6,7 @@ use DateInterval;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Contracts\Files\HasProviderId;
 use Laravel\Ai\Events\CreatingStore;
 use Laravel\Ai\Events\StoreCreated;
 use Laravel\Ai\Events\StoreDeleted;
@@ -49,6 +50,26 @@ trait ManagesStores
                     $invocationId, $this, $name, $description, $fileIds, $expiresWhenIdleFor, $store,
                 ));
             }
+        );
+    }
+
+    /**
+     * Add a file to a vector store.
+     */
+    public function addFileToStore(string $storeId, HasProviderId $file): string
+    {
+        return $this->storeGateway()->addFile($this, $storeId, $file->id());
+    }
+
+    /**
+     * Remove a file from a vector store.
+     */
+    public function removeFileFromStore(string $storeId, HasProviderId|string $fileId): bool
+    {
+        return $this->storeGateway()->removeFile(
+            $this,
+            $storeId,
+            $fileId instanceof HasProviderId ? $fileId->id() : $fileId
         );
     }
 

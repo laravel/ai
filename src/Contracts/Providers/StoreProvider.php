@@ -4,6 +4,7 @@ namespace Laravel\Ai\Contracts\Providers;
 
 use DateInterval;
 use Illuminate\Support\Collection;
+use Laravel\Ai\Contracts\Files\HasProviderId;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Store;
 
@@ -23,6 +24,16 @@ interface StoreProvider
         ?Collection $fileIds = null,
         ?DateInterval $expiresWhenIdleFor = null,
     ): Store;
+
+    /**
+     * Add a file to a vector store.
+     */
+    public function addFileToStore(string $storeId, HasProviderId $file): string;
+
+    /**
+     * Remove a file from a vector store.
+     */
+    public function removeFileFromStore(string $storeId, HasProviderId|string $fileId): bool;
 
     /**
      * Delete a vector store by its ID.

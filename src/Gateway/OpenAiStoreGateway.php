@@ -85,11 +85,49 @@ class OpenAiStoreGateway implements StoreGateway
     }
 
     /**
-     * Convert a DateInterval to days.
+     * Add a file to a vector store.
      */
-    protected function intervalToDays(DateInterval $interval): int
+    public function addFile(StoreProvider $provider, string $storeId, string $fileId): string
     {
-        return max(1, (int) Carbon::now()->diff(Carbon::now()->add($interval))->days);
+        try {
+            $response = Http::withToken($provider->providerCredentials()['key'])
+                ->post("https://api.openai.com/v1/vector_stores/{$storeId}/files", [
+                    'file_id' => $fileId,
+                ])
+                ->throw();
+        } catch (RequestException $e) {
+            if ($e->response->status() === 429) {
+                throw RateLimitedException::forProvider(
+                    $provider->name(), $e->getCode(), $e
+                );
+            }
+
+            throw $e;
+        }
+
+        return $response->json('id');
+    }
+
+    /**
+     * Remove a file from a vector store.
+     */
+    public function removeFile(StoreProvider $provider, string $storeId, string $fileId): bool
+    {
+        try {
+            $response = Http::withToken($provider->providerCredentials()['key'])
+                ->delete("https://api.openai.com/v1/vector_stores/{$storeId}/files/{$fileId}")
+                ->throw();
+        } catch (RequestException $e) {
+            if ($e->response->status() === 429) {
+                throw RateLimitedException::forProvider(
+                    $provider->name(), $e->getCode(), $e
+                );
+            }
+
+            throw $e;
+        }
+
+        return $response->json('deleted', false);
     }
 
     /**
@@ -112,5 +150,13 @@ class OpenAiStoreGateway implements StoreGateway
         }
 
         return $response->json('deleted', false);
+    }
+
+    /**
+     * Convert a DateInterval to days.
+     */
+    protected function intervalToDays(DateInterval $interval): int
+    {
+        return max(1, (int) Carbon::now()->diff(Carbon::now()->add($interval))->days);
     }
 }

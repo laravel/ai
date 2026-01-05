@@ -4,10 +4,13 @@ namespace Tests\Feature;
 
 use DateInterval;
 use Illuminate\Support\Collection;
+use Laravel\Ai\Contracts\Files\StorableFile;
+use Laravel\Ai\Files;
+use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\ProviderDocument;
 use Laravel\Ai\Stores;
 use RuntimeException;
 use Tests\TestCase;
-
 use function Illuminate\Support\days;
 
 class StoreFakeTest extends TestCase
@@ -110,6 +113,7 @@ class StoreFakeTest extends TestCase
 
         Stores::assertDeleted('vs_123');
         Stores::assertDeleted(fn (string $id) => $id === 'vs_123');
+
         Stores::assertNotDeleted('vs_456');
         Stores::assertNotDeleted(fn (string $id) => $id === 'vs_456');
     }
@@ -119,5 +123,49 @@ class StoreFakeTest extends TestCase
         Stores::fake();
 
         Stores::assertNothingDeleted();
+    }
+
+    public function test_can_add_file_to_store_with_provider_id(): void
+    {
+        Stores::fake();
+
+        $store = Stores::create('My Store');
+
+        $result = $store->add(new ProviderDocument('file_123'));
+
+        $this->assertEquals('file_123', $result);
+    }
+
+    public function test_can_remove_file_from_store_with_provider_id(): void
+    {
+        Stores::fake();
+
+        $result = Stores::create('My Store')->remove(new ProviderDocument('file_123'));
+
+        $this->assertTrue($result);
+    }
+
+    public function test_can_remove_file_from_store_with_string_id(): void
+    {
+        Stores::fake();
+
+        $result = Stores::create('My Store')->remove('file_123');
+
+        $this->assertTrue($result);
+    }
+
+    public function test_can_add_storable_file_to_store(): void
+    {
+        Stores::fake();
+        Files::fake();
+
+        $response = Stores::create('My Store')
+            ->add(Document::fromString('Hello, world!', 'text/plain'));
+
+        $this->assertNotEmpty($response);
+
+        Files::assertUploaded(
+            fn (StorableFile $file) => $file->content() === 'Hello, world!'
+        );
     }
 }

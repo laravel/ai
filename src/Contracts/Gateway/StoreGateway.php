@@ -29,6 +29,24 @@ interface StoreGateway
     ): Store;
 
     /**
+     * Add a file to a vector store.
+     */
+    public function addFile(
+        StoreProvider $provider,
+        string $storeId,
+        string $fileId,
+    ): string;
+
+    /**
+     * Remove a file from a vector store.
+     */
+    public function removeFile(
+        StoreProvider $provider,
+        string $storeId,
+        string $fileId,
+    ): bool;
+
+    /**
      * Delete a vector store by its ID.
      */
     public function deleteStore(
