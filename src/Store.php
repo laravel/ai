@@ -3,6 +3,7 @@
 namespace Laravel\Ai;
 
 use Closure;
+use Illuminate\Http\UploadedFile;
 use Laravel\Ai\Contracts\Files\HasProviderId;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Providers\FileProvider;
@@ -24,10 +25,23 @@ class Store
     /**
      * Add a file to the store.
      */
-    public function add(StorableFile|HasProviderId|string $file): AddedDocumentResponse
+    public function add(StorableFile|UploadedFile|HasProviderId|string $file): AddedDocumentResponse
     {
+        if ($file instanceof UploadedFile) {
+            $file = (new Base64Document(
+                base64_encode($file->getContent()),
+                mime: $mime ?? $file->getClientMimeType()
+            )->as($name ?? $file->getClientOriginalName()));
+        }
+
+        $originalFile = $file;
+
         if ($file instanceof StorableFile) {
             $file = $this->storeFile($file);
+        }
+
+        if (Ai::storesAreFaked()) {
+            Ai::recordFileAddition($this->id, $file instanceof HasProviderId ? $file->id() : $file, $originalFile);
         }
 
         return new AddedDocumentResponse($this->provider->addFileToStore($this->id, match (true) {
@@ -132,6 +146,20 @@ class Store
 
         $expectedFileId = str_starts_with($fileId, 'fake_file_') ? $fileId : Files::fakeId($fileId);
 
-        return fn ($s, $f) => $s === $this->id && $f === $expectedFileId;
+        return fn ($s, $f) => $s === $this->id && $this->fileIdMatches($f, $expectedFileId);
+    }
+
+    /**
+     * Determine if the given file matches the expected file ID.
+     */
+    protected function fileIdMatches(
+        StorableFile|HasProviderId|string $file,
+        string $expectedFileId,
+    ): bool {
+        return match (true) {
+            $file instanceof HasProviderId => $file->id() === $expectedFileId,
+            is_string($file) => $file === $expectedFileId,
+            default => false,
+        };
     }
 }

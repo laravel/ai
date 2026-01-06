@@ -64,10 +64,6 @@ trait ManagesStores
     {
         $invocationId = (string) Str::uuid7();
 
-        if (Ai::storesAreFaked()) {
-            Ai::recordFileAddition($storeId, $file->id());
-        }
-
         $this->events->dispatch(new AddingFileToStore(
             $invocationId, $this, $storeId, $file->id()
         ));

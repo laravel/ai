@@ -4,7 +4,10 @@ namespace Laravel\Ai\Concerns;
 
 use Closure;
 use DateInterval;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
+use Laravel\Ai\Contracts\Files\HasProviderId;
+use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files;
 use Laravel\Ai\Gateway\FakeStoreGateway;
 use Laravel\Ai\Stores;
@@ -77,11 +80,15 @@ trait InteractsWithFakeStores
     /**
      * Record a file addition to a store.
      */
-    public function recordFileAddition(string $storeId, string $fileId): self
-    {
+    public function recordFileAddition(
+        string $storeId,
+        string $fileId,
+        StorableFile|UploadedFile|HasProviderId|string $file,
+    ): self {
         $this->recordedFileAdditions[] = [
             'storeId' => $storeId,
             'fileId' => $fileId,
+            'file' => $file,
         ];
 
         return $this;
@@ -225,7 +232,7 @@ trait InteractsWithFakeStores
 
         PHPUnit::assertTrue(
             (new Collection($this->recordedFileAdditions))->filter(function (array $addition) use ($callback) {
-                return $callback($addition['storeId'], $addition['fileId']);
+                return $callback($addition['storeId'], $addition['file']);
             })->count() > 0,
             'An expected file addition was not recorded.'
         );
@@ -242,7 +249,7 @@ trait InteractsWithFakeStores
 
         PHPUnit::assertTrue(
             (new Collection($this->recordedFileAdditions))->filter(function (array $addition) use ($callback) {
-                return $callback($addition['storeId'], $addition['fileId']);
+                return $callback($addition['storeId'], $addition['file']);
             })->count() === 0,
             'An unexpected file addition was recorded.'
         );
@@ -296,7 +303,19 @@ trait InteractsWithFakeStores
         $expectedStoreId = str_starts_with($storeId, 'fake_store_') ? $storeId : Stores::fakeId($storeId);
         $expectedFileId = str_starts_with($fileId, 'fake_file_') ? $fileId : Files::fakeId($fileId);
 
-        return fn ($s, $f) => $s === $expectedStoreId && $f === $expectedFileId;
+        return fn ($s, $f) => $s === $expectedStoreId && $this->fileIdMatches($f, $expectedFileId);
+    }
+
+    /**
+     * Determine if the given file matches the expected file ID.
+     */
+    protected function fileIdMatches(StorableFile|UploadedFile|HasProviderId|string $file, string $expectedFileId): bool
+    {
+        return match (true) {
+            $file instanceof HasProviderId => $file->id() === $expectedFileId,
+            is_string($file) => $file === $expectedFileId,
+            default => false,
+        };
     }
 
     /**

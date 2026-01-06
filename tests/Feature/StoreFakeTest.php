@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use DateInterval;
 use Illuminate\Support\Collection;
-use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Document;
@@ -180,14 +179,27 @@ class StoreFakeTest extends TestCase
 
         $store->add($file);
 
-        // Using closure...
-        $store->assertAdded(fn ($fileId) => $fileId === $file->id());
+        // Using closure receives the original file...
+        $store->assertAdded(fn ($f) => $f instanceof ProviderDocument && $f->id() === $file->id());
 
         // Using exact IDs...
         $store->assertAdded($file->id());
 
         // Using friendly names (automatically converted to fake IDs)...
         $store->assertAdded('test.txt');
+    }
+
+    public function test_can_assert_file_added_to_store_with_storable_file(): void
+    {
+        Stores::fake();
+
+        $store = Stores::create('My Store');
+
+        $store->add(Document::fromString('Hello, world!', 'text/plain')->as('hello.txt'));
+
+        // Using closure receives the original StorableFile...
+        $store->assertAdded(fn (StorableFile $file) => $file->name() === 'hello.txt');
+        $store->assertAdded(fn (StorableFile $file) => $file->content() === 'Hello, world!');
     }
 
     public function test_can_assert_file_not_added_to_store(): void
@@ -199,7 +211,7 @@ class StoreFakeTest extends TestCase
 
         $store->add($file);
 
-        $store->assertNotAdded(fn ($fileId) => $fileId === 'file_456');
+        $store->assertNotAdded(fn ($f) => $f instanceof ProviderDocument && $f->id() === 'file_456');
     }
 
     public function test_can_assert_file_removed_from_store(): void

@@ -911,12 +911,13 @@ $document = $store->add(Document::fromId('file_id'));
 // Or, store and add a file in one step...
 $document = $store->add(Document::fromPath('/path/to/document.pdf'));
 $document = $store->add(Document::fromStorage('manual.pdf'));
+$document = $store->add($request->file('document'));
 
 $document->id;
 $document->fileId;
 ```
 
-> **Note:** Typically, when adding previously stored files to vector stores, the document ID returned when adding a file to a vector store will match the file's previously assigned ID; however, some vector storage providers may return a new, different "document ID". Therefore, it's recommended that you always store both IDs in your database for future reference.
+> **Note:** Typically, when adding previously stored files to vector stores, the returned document ID will match the file's previously assigned ID; however, some vector storage providers may return a new, different "document ID". Therefore, it's recommended that you always store both IDs in your database for future reference.
 
 To remove a file from a store, use the `remove` method:
 
@@ -1261,10 +1262,12 @@ Once file operations have been faked, you may make assertions about the uploads 
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Document;
 
+// Store files...
 Document::fromString('Hello, Laravel!', mime: 'text/plain')
     ->as('hello.txt')
     ->put();
 
+// Make assertions...
 Files::assertStored(fn (StorableFile $file) =>
     (string) $file === 'Hello, Laravel!' &&
         $file->mimeType() === 'text/plain';
@@ -1277,15 +1280,11 @@ Files::assertNotStored(fn (StorableFile $file) =>
 Files::assertNothingStored();
 ```
 
-For asserting against file deletions, you may pass a file ID or closure:
+For asserting against file deletions, you may pass a file ID:
 
 ```php
 Files::assertDeleted('file-id');
-
-Files::assertDeleted(fn (string $id) => $id === 'file-id');
-
 Files::assertNotDeleted('file-id');
-
 Files::assertNothingDeleted();
 ```
 
@@ -1305,10 +1304,10 @@ Once store operations have been faked, you may make assertions about the stores 
 ```php
 use Laravel\Ai\Stores;
 
-Stores::fake();
+// Create store...
+$store = Stores::create('My Knowledge Base');
 
-Stores::create('My Knowledge Base');
-
+// Make assertions...
 Stores::assertCreated('My Knowledge Base');
 
 Stores::assertCreated(fn (string $name, ?string $description) =>
@@ -1320,15 +1319,11 @@ Stores::assertNotCreated('Other Store');
 Stores::assertNothingCreated();
 ```
 
-For asserting against store deletions, you may provide the store ID or a closure:
+For asserting against store deletions, you may provide the store ID:
 
 ```php
 Stores::assertDeleted('store_id');
-
-Stores::assertDeleted(fn (string $id) => $id === 'store_id');
-
 Stores::assertNotDeleted('other_store_id');
-
 Stores::assertNothingDeleted();
 ```
 
@@ -1339,17 +1334,28 @@ Stores::fake();
 
 $store = Stores::get('store_id');
 
+// Add / remove files...
 $store->add('added_id');
 $store->remove('removed_id');
 
+// Make assertions...
 $store->assertAdded('added_id');
-$store->assertAdded(fn (string $fileId) => $fileId === 'added_id');
-
 $store->assertRemoved('removed_id');
-$store->assertRemoved(fn (string $fileId) => $fileId === 'removed_id');
 
 $store->assertNotAdded('other_file_id');
 $store->assertNotRemoved('other_file_id');
+```
+
+If a file is stored in the provider's [file storage](#files) and added to a vector store in the same request, you may not know the file's provider ID. In this case, you can pass a closure to the `assertAdded` method to assert against the content of the added file:
+
+```php
+use Laravel\Ai\Contracts\Files\StorableFile;
+use Laravel\Ai\Files\Document;
+
+$store->add(Document::fromString('Hello, World!', 'text/plain')->as('hello.txt'));
+
+$store->assertAdded(fn (StorableFile $file) => $file->name() === 'hello.txt');
+$store->assertAdded(fn (StorableFile $file) => $file->content() === 'Hello, World!');
 ```
 
 ## Events
