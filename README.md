@@ -31,6 +31,8 @@ The official Laravel AI SDK.
 - [Transcription (STT)](#transcription)
 - [Embeddings](#embeddings)
 - [Files](#files)
+- [Vector Stores](#vector-stores)
+    - [Adding Files to Stores](#adding-files-to-stores)
 - [Failover](#failover)
 - [Testing](#testing)
     - [Agents](#testing-agents)
@@ -39,6 +41,7 @@ The official Laravel AI SDK.
     - [Transcriptions](#testing-transcriptions)
     - [Embeddings](#testing-embeddings)
     - [Files](#testing-files)
+    - [Vector Stores](#testing-vector-stores)
 - [Events](#events)
 
 ## Installation
@@ -844,6 +847,89 @@ $response = (new ImageAnalyzer)->prompt(
 );
 ```
 
+## Vector Stores
+
+Vector stores allow you to create searchable collections of files that can be used for retrieval-augmented generation (RAG). The `Laravel\Ai\Stores` class provides methods for creating, retrieving, and deleting vector stores:
+
+```php
+use Laravel\Ai\Stores;
+
+// Create a new vector store...
+$store = Stores::create('My Knowledge Base');
+
+// Create a store with additional options...
+$store = Stores::create(
+    name: 'My Knowledge Base',
+    description: 'Documentation and reference materials.',
+    expiresWhenIdleFor: days(30),
+);
+
+return $store->id;
+```
+
+To retrieve an existing vector store by its ID, use the `get` method:
+
+```php
+use Laravel\Ai\Stores;
+
+$store = Stores::get('store_id');
+
+$store->id;
+$store->name;
+$store->fileCounts;
+$store->ready;
+```
+
+To delete a vector store, use the `delete` method on the `Stores` class or the store instance:
+
+```php
+use Laravel\Ai\Stores;
+
+// Delete by ID...
+Stores::delete('store_id');
+
+// Or delete via a store instance...
+$store = Stores::get('store_id');
+
+$store->delete();
+```
+
+### Adding Files to Stores
+
+Once you have a vector store, you may add [files](#files) to it using the `add` method. Files added to a store are automatically indexed for semantic searching using the file search agent tool:
+
+```php
+use Laravel\Ai\Files\Document;
+use Laravel\Ai\Stores;
+
+$store = Stores::get('store_id');
+
+// Add a file that has already been stored with the provider...
+$document = $store->add('file_id');
+$document = $store->add(Document::fromId('file_id'));
+
+// Or, store and add a file in one step...
+$document = $store->add(Document::fromPath('/path/to/document.pdf'));
+$document = $store->add(Document::fromStorage('manual.pdf'));
+
+$document->id;
+$document->fileId;
+```
+
+> **Note:** Typically, when adding previously stored files to vector stores, the document ID returned when adding a file to a vector store will match the file's previously assigned ID; however, some vector storage providers may return a new, different "document ID". Therefore, it's recommended that you always store both IDs in your database for future reference.
+
+To remove a file from a store, use the `remove` method:
+
+```php
+$store->remove('file_id');
+```
+
+Removing a file from a vector store does not remove it from the provider's [file storage](#files). To remove a file from the vector store and delete it permanently from file storage, use the `deleteFile` argument:
+
+```php
+$store->remove('file_abc123', deleteFile: true);
+```
+
 ## Failover
 
 When prompting or generating other media, you may provide an array of providers / models to automatically failover to a backup provider / model if a service interruption or rate limit is encountered on the primary provider:
@@ -1161,43 +1247,34 @@ Embeddings::fake()->preventStrayEmbeddings();
 <a name="testing-files"></a>
 ### Files
 
-File operations may be faked by invoking the `fake` method on the `Files` class. Once files have been faked, various assertions may be performed against the recorded file operations:
+File operations may be faked by invoking the `fake` method on the `Files` class:
 
 ```php
 use Laravel\Ai\Files;
-use Laravel\Ai\Responses\FileResponse;
 
-// Automatically return fake content for every file retrieval...
 Files::fake();
-
-// Provide a list of responses for file retrievals...
-Files::fake([
-    new FileResponse('file-id-1'),
-    new FileResponse('file-id-2'),
-]);
-
-// Dynamically handle file retrievals based on the file ID...
-Files::fake(fn ($fileId) => "Content for {$fileId}");
 ```
 
-After performing file operations, you may make assertions about the uploads and deletions that occurred:
+Once file operations have been faked, you may make assertions about the uploads and deletions that occurred:
 
 ```php
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Document;
 
-Document::fromString('Hello, Laravel!', mime: 'text/plain')->put();
+Document::fromString('Hello, Laravel!', mime: 'text/plain')
+    ->as('hello.txt')
+    ->put();
 
-Files::assertUploaded(fn (StorableFile $file) =>
+Files::assertStored(fn (StorableFile $file) =>
     (string) $file === 'Hello, Laravel!' &&
         $file->mimeType() === 'text/plain';
 );
 
-Files::assertNotUploaded(fn (StorableFile $file) =>
+Files::assertNotStored(fn (StorableFile $file) =>
     (string) $file === 'Hello, World!'
 );
 
-Files::assertNothingUploaded();
+Files::assertNothingStored();
 ```
 
 For asserting against file deletions, you may pass a file ID or closure:
@@ -1212,21 +1289,82 @@ Files::assertNotDeleted('file-id');
 Files::assertNothingDeleted();
 ```
 
-To ensure all file operations have a corresponding fake response, you may use `preventStrayOperations`. If a file is retrieved without a defined fake response, an exception will be thrown:
+<a name="testing-vector-stores"></a>
+### Vector Stores
+
+Vector store operations may be faked by invoking the `fake` method on the `Stores` class. Faking stores will also fake [file operations](#files) automatically:
 
 ```php
-Files::fake()->preventStrayOperations();
+use Laravel\Ai\Stores;
+
+Stores::fake();
+```
+
+Once store operations have been faked, you may make assertions about the stores that were created or deleted:
+
+```php
+use Laravel\Ai\Stores;
+
+Stores::fake();
+
+Stores::create('My Knowledge Base');
+
+Stores::assertCreated('My Knowledge Base');
+
+Stores::assertCreated(fn (string $name, ?string $description) =>
+    $name === 'My Knowledge Base'
+);
+
+Stores::assertNotCreated('Other Store');
+
+Stores::assertNothingCreated();
+```
+
+For asserting against store deletions, you may provide the store ID or a closure:
+
+```php
+Stores::assertDeleted('store_id');
+
+Stores::assertDeleted(fn (string $id) => $id === 'store_id');
+
+Stores::assertNotDeleted('other_store_id');
+
+Stores::assertNothingDeleted();
+```
+
+To assert files were added or removed from a store, use the assertion methods on a given `Store` instance:
+
+```php
+Stores::fake();
+
+$store = Stores::get('store_id');
+
+$store->add('added_id');
+$store->remove('removed_id');
+
+$store->assertAdded('added_id');
+$store->assertAdded(fn (string $fileId) => $fileId === 'added_id');
+
+$store->assertRemoved('removed_id');
+$store->assertRemoved(fn (string $fileId) => $fileId === 'removed_id');
+
+$store->assertNotAdded('other_file_id');
+$store->assertNotRemoved('other_file_id');
 ```
 
 ## Events
 
 The Laravel AI SDK dispatches a variety of events, including:
 
+- `AddingFileToStore`
 - `AgentPrompted`
 - `AgentStreamed`
 - `AudioGenerated`
+- `CreatingStore`
 - `EmbeddingsGenerated`
+- `FileAddedToStore`
 - `FileDeleted`
+- `FileRemovedFromStore`
 - `FileStored`
 - `GeneratingAudio`
 - `GeneratingEmbeddings`
@@ -1235,6 +1373,8 @@ The Laravel AI SDK dispatches a variety of events, including:
 - `ImageGenerated`
 - `InvokingTool`
 - `PromptingAgent`
+- `RemovingFileFromStore`
+- `StoreCreated`
 - `StoringFile`
 - `StreamingAgent`
 - `ToolInvoked`

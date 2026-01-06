@@ -3,10 +3,10 @@
 namespace Laravel\Ai\Gateway;
 
 use Closure;
-use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Providers\FileProvider;
+use Laravel\Ai\Files;
 use Laravel\Ai\Responses\FileResponse;
 use Laravel\Ai\Responses\StoredFileResponse;
 use RuntimeException;
@@ -74,7 +74,7 @@ class FakeFileGateway implements FileGateway
         FileProvider $provider,
         StorableFile $file,
     ): StoredFileResponse {
-        return new StoredFileResponse('file_'.Str::random(24));
+        return new StoredFileResponse(Files::fakeId($file->name() ?? $file->content()));
     }
 
     /**

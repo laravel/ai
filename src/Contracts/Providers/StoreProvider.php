@@ -1,0 +1,52 @@
+<?php
+
+namespace Laravel\Ai\Contracts\Providers;
+
+use DateInterval;
+use Illuminate\Support\Collection;
+use Laravel\Ai\Contracts\Files\HasProviderId;
+use Laravel\Ai\Contracts\Gateway\StoreGateway;
+use Laravel\Ai\Store;
+
+interface StoreProvider
+{
+    /**
+     * Get a vector store by its ID.
+     */
+    public function getStore(string $storeId): Store;
+
+    /**
+     * Create a new vector store.
+     */
+    public function createStore(
+        string $name,
+        ?string $description = null,
+        ?Collection $fileIds = null,
+        ?DateInterval $expiresWhenIdleFor = null,
+    ): Store;
+
+    /**
+     * Add a file to a vector store.
+     */
+    public function addFileToStore(string $storeId, HasProviderId $file): string;
+
+    /**
+     * Remove a file from a vector store.
+     */
+    public function removeFileFromStore(string $storeId, HasProviderId|string $fileId): bool;
+
+    /**
+     * Delete a vector store by its ID.
+     */
+    public function deleteStore(string $storeId): bool;
+
+    /**
+     * Get the provider's store gateway.
+     */
+    public function storeGateway(): StoreGateway;
+
+    /**
+     * Set the provider's store gateway.
+     */
+    public function useStoreGateway(StoreGateway $gateway): self;
+}

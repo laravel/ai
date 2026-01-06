@@ -77,25 +77,33 @@ class Files
     }
 
     /**
-     * Assert that a file was uploaded matching a given truth test.
+     * Get the fake file ID for a given store name.
      */
-    public static function assertUploaded(Closure $callback): void
+    public static function fakeId(string $for): string
+    {
+        return 'fake_file_'.md5($for);
+    }
+
+    /**
+     * Assert that a file was stored matching a given truth test.
+     */
+    public static function assertStored(Closure $callback): void
     {
         Ai::assertFileUploaded($callback);
     }
 
     /**
-     * Assert that a file was not uploaded matching a given truth test.
+     * Assert that a file was not stored matching a given truth test.
      */
-    public static function assertNotUploaded(Closure $callback): void
+    public static function assertNotStored(Closure $callback): void
     {
         Ai::assertFileNotUploaded($callback);
     }
 
     /**
-     * Assert that no files were uploaded.
+     * Assert that no files were stored.
      */
-    public static function assertNothingUploaded(): void
+    public static function assertNothingStored(): void
     {
         Ai::assertNoFilesUploaded();
     }
