@@ -74,7 +74,7 @@ class FakeFileGateway implements FileGateway
         FileProvider $provider,
         StorableFile $file,
     ): StoredFileResponse {
-        return new StoredFileResponse(Files::fakeId($file->name()));
+        return new StoredFileResponse(Files::fakeId($file->name() ?? $file->content()));
     }
 
     /**

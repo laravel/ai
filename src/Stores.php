@@ -57,7 +57,7 @@ class Stores
      */
     public static function fakeId(string $for): string
     {
-        return 'vs_'.md5($for);
+        return 'fake_store_'.md5($for);
     }
 
     /**

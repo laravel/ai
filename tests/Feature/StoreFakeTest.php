@@ -174,13 +174,18 @@ class StoreFakeTest extends TestCase
         Stores::fake();
 
         $store = Stores::create('My Store');
-        $file = new ProviderDocument('file_123');
+        $file = new ProviderDocument(Files::fakeId('test.txt'));
 
         $store->add($file);
 
-        Stores::assertFileAdded(fn ($storeId, $fileId) => $fileId === 'file_123');
+        // Using closure...
         Stores::assertFileAdded(fn ($storeId, $fileId) => $storeId === $store->id);
-        Stores::assertFileAdded($store->id, 'file_123');
+
+        // Using exact IDs...
+        Stores::assertFileAdded($store->id, $file->id());
+
+        // Using friendly names (automatically converted to fake IDs)...
+        Stores::assertFileAdded('My Store', 'test.txt');
     }
 
     public function test_can_assert_file_not_added_to_store(): void
@@ -209,12 +214,18 @@ class StoreFakeTest extends TestCase
         Stores::fake();
 
         $store = Stores::create('My Store');
+        $fileId = Files::fakeId('test.txt');
 
-        $store->remove('file_123');
+        $store->remove($fileId);
 
-        Stores::assertFileRemoved(fn ($storeId, $fileId) => $fileId === 'file_123');
+        // Using closure...
         Stores::assertFileRemoved(fn ($storeId, $fileId) => $storeId === $store->id);
-        Stores::assertFileRemoved($store->id, 'file_123');
+
+        // Using exact IDs...
+        Stores::assertFileRemoved($store->id, $fileId);
+
+        // Using friendly names (automatically converted to fake IDs)...
+        Stores::assertFileRemoved('My Store', 'test.txt');
     }
 
     public function test_can_assert_file_not_removed_from_store(): void

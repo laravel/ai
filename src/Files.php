@@ -81,7 +81,7 @@ class Files
      */
     public static function fakeId(string $for): string
     {
-        return 'file_'.md5($for);
+        return 'fake_file_'.md5($for);
     }
 
     /**

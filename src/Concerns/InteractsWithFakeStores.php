@@ -5,7 +5,9 @@ namespace Laravel\Ai\Concerns;
 use Closure;
 use DateInterval;
 use Illuminate\Support\Collection;
+use Laravel\Ai\Files;
 use Laravel\Ai\Gateway\FakeStoreGateway;
+use Laravel\Ai\Stores;
 use PHPUnit\Framework\Assert as PHPUnit;
 
 trait InteractsWithFakeStores
@@ -219,9 +221,7 @@ trait InteractsWithFakeStores
      */
     public function assertFileAddedToStore(Closure|string $storeId, ?string $fileId = null): self
     {
-        $callback = $storeId instanceof Closure
-            ? $storeId
-            : fn ($s, $f) => $s === $storeId && $f === $fileId;
+        $callback = $this->fileMatchingCallback($storeId, $fileId);
 
         PHPUnit::assertTrue(
             (new Collection($this->recordedFileAdditions))->filter(function (array $addition) use ($callback) {
@@ -238,9 +238,7 @@ trait InteractsWithFakeStores
      */
     public function assertFileNotAddedToStore(Closure|string $storeId, ?string $fileId = null): self
     {
-        $callback = $storeId instanceof Closure
-            ? $storeId
-            : fn ($s, $f) => $s === $storeId && $f === $fileId;
+        $callback = $this->fileMatchingCallback($storeId, $fileId);
 
         PHPUnit::assertTrue(
             (new Collection($this->recordedFileAdditions))->filter(function (array $addition) use ($callback) {
@@ -270,9 +268,7 @@ trait InteractsWithFakeStores
      */
     public function assertFileRemovedFromStore(Closure|string $storeId, ?string $fileId = null): self
     {
-        $callback = $storeId instanceof Closure
-            ? $storeId
-            : fn ($s, $f) => $s === $storeId && $f === $fileId;
+        $callback = $this->fileMatchingCallback($storeId, $fileId);
 
         PHPUnit::assertTrue(
             (new Collection($this->recordedFileRemovals))->filter(function (array $removal) use ($callback) {
@@ -289,9 +285,7 @@ trait InteractsWithFakeStores
      */
     public function assertFileNotRemovedFromStore(Closure|string $storeId, ?string $fileId = null): self
     {
-        $callback = $storeId instanceof Closure
-            ? $storeId
-            : fn ($s, $f) => $s === $storeId && $f === $fileId;
+        $callback = $this->fileMatchingCallback($storeId, $fileId);
 
         PHPUnit::assertTrue(
             (new Collection($this->recordedFileRemovals))->filter(function (array $removal) use ($callback) {
@@ -301,6 +295,21 @@ trait InteractsWithFakeStores
         );
 
         return $this;
+    }
+
+    /**
+     * Get a callback for matching store and file IDs.
+     */
+    protected function fileMatchingCallback(Closure|string $storeId, ?string $fileId): Closure
+    {
+        if ($storeId instanceof Closure) {
+            return $storeId;
+        }
+
+        $expectedStoreId = str_starts_with($storeId, 'fake_store_') ? $storeId : Stores::fakeId($storeId);
+        $expectedFileId = str_starts_with($fileId, 'fake_file_') ? $fileId : Files::fakeId($fileId);
+
+        return fn ($s, $f) => $s === $expectedStoreId && $f === $expectedFileId;
     }
 
     /**
