@@ -102,7 +102,7 @@ class FakeStoreGateway implements StoreGateway
     /**
      * Add a file to a vector store.
      */
-    public function addFile(StoreProvider $provider, string $storeId, string $fileId): string
+    public function addFile(StoreProvider $provider, string $storeId, string $fileId, array $metadata = []): string
     {
         return $fileId;
     }

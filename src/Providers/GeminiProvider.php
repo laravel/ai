@@ -37,9 +37,26 @@ class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider
      */
     public function fileSearchToolOptions(FileSearch $search): array
     {
-        return [
+        return array_filter([
             'fileSearchStoreNames' => $search->ids(),
-        ];
+            'metadataFilter' => ! empty($search->where)
+                ? $this->formatMetadataFilter($search->where)
+                : null,
+        ]);
+    }
+
+    /**
+     * Format the file search metadata filter for Gemini's filter expression syntax.
+     */
+    protected function formatMetadataFilter(array $filters): string
+    {
+        return collect($filters)->map(function ($value, $key) {
+            return match (true) {
+                is_numeric($value) => "{$key}={$value}",
+                is_array($value) => collect($value)->map(fn ($v) => "{$key}=\"{$v}\"")->implode(' OR '),
+                default => "{$key}=\"{$value}\"",
+            };
+        })->implode(' AND ');
     }
 
     /**

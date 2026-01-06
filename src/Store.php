@@ -25,8 +25,10 @@ class Store
     /**
      * Add a file to the store.
      */
-    public function add(StorableFile|UploadedFile|HasProviderId|string $file): AddedDocumentResponse
-    {
+    public function add(
+        StorableFile|UploadedFile|HasProviderId|string $file,
+        array $metadata = [],
+    ): AddedDocumentResponse {
         if ($file instanceof UploadedFile) {
             $file = (new Base64Document(
                 base64_encode($file->getContent()),
@@ -47,7 +49,7 @@ class Store
         return new AddedDocumentResponse($this->provider->addFileToStore($this->id, match (true) {
             is_string($file) => new ProviderDocument($file),
             default => $file,
-        }), match (true) {
+        }, $metadata), match (true) {
             $file instanceof HasProviderId => $file->id(),
             is_string($file) => $file,
             default => null,

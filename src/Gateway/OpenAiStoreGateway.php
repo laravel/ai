@@ -87,13 +87,14 @@ class OpenAiStoreGateway implements StoreGateway
     /**
      * Add a file to a vector store.
      */
-    public function addFile(StoreProvider $provider, string $storeId, string $fileId): string
+    public function addFile(StoreProvider $provider, string $storeId, string $fileId, array $metadata = []): string
     {
         try {
             $response = Http::withToken($provider->providerCredentials()['key'])
-                ->post("https://api.openai.com/v1/vector_stores/{$storeId}/files", [
+                ->post("https://api.openai.com/v1/vector_stores/{$storeId}/files", array_filter([
                     'file_id' => $fileId,
-                ])
+                    'attributes' => ! empty($metadata) ? $metadata : null,
+                ]))
                 ->throw();
         } catch (RequestException $e) {
             if ($e->response->status() === 429) {

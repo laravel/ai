@@ -60,7 +60,7 @@ trait ManagesStores
     /**
      * Add a file to a vector store.
      */
-    public function addFileToStore(string $storeId, HasProviderId $file): string
+    public function addFileToStore(string $storeId, HasProviderId $file, array $metadata = []): string
     {
         $invocationId = (string) Str::uuid7();
 
@@ -69,7 +69,7 @@ trait ManagesStores
         ));
 
         return tap(
-            $this->storeGateway()->addFile($this, $storeId, $file->id()),
+            $this->storeGateway()->addFile($this, $storeId, $file->id(), $metadata),
             function (string $documentId) use ($invocationId, $storeId, $file) {
                 $this->events->dispatch(new FileAddedToStore(
                     $invocationId, $this, $storeId, $file->id(), $documentId,

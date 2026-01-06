@@ -35,6 +35,7 @@ interface StoreGateway
         StoreProvider $provider,
         string $storeId,
         string $fileId,
+        array $metadata = [],
     ): string;
 
     /**
