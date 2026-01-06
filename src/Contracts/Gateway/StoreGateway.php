@@ -43,7 +43,7 @@ interface StoreGateway
     public function removeFile(
         StoreProvider $provider,
         string $storeId,
-        string $fileId,
+        string $documentId,
     ): bool;
 
     /**

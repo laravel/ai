@@ -905,15 +905,15 @@ use Laravel\Ai\Stores;
 $store = Stores::get('store_id');
 
 // Add a file that has already been stored with the provider...
-$searchable = $store->add('file_id');
-$searchable = $store->add(Document::fromId('file_id'));
+$document = $store->add('file_id');
+$document = $store->add(Document::fromId('file_id'));
 
 // Or, store and add a file in one step...
-$searchable = $store->add(Document::fromPath('/path/to/document.pdf'));
-$searchable = $store->add(Document::fromStorage('manual.pdf'));
+$document = $store->add(Document::fromPath('/path/to/document.pdf'));
+$document = $store->add(Document::fromStorage('manual.pdf'));
 
-$searchable->id;
-$searchable->fileId;
+$document->id;
+$document->fileId;
 ```
 
 > **Note:** Typically, when adding previously stored files to vector stores, the document ID returned when adding a file to a vector store will match the file's previously assigned ID; however, some vector storage providers may return a new, different "document ID". Therefore, it's recommended that you always store both IDs in your database for future reference.
@@ -1356,12 +1356,15 @@ $store->assertNotRemoved('other_file_id');
 
 The Laravel AI SDK dispatches a variety of events, including:
 
+- `AddingFileToStore`
 - `AgentPrompted`
 - `AgentStreamed`
 - `AudioGenerated`
 - `CreatingStore`
 - `EmbeddingsGenerated`
+- `FileAddedToStore`
 - `FileDeleted`
+- `FileRemovedFromStore`
 - `FileStored`
 - `GeneratingAudio`
 - `GeneratingEmbeddings`
@@ -1370,6 +1373,7 @@ The Laravel AI SDK dispatches a variety of events, including:
 - `ImageGenerated`
 - `InvokingTool`
 - `PromptingAgent`
+- `RemovingFileFromStore`
 - `StoreCreated`
 - `StoringFile`
 - `StreamingAgent`

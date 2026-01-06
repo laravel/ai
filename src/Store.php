@@ -49,15 +49,15 @@ class Store
     }
 
     /**
-     * Remove a file from the store.
+     * Remove a document from the store.
      */
-    public function remove(HasProviderId|string $file, $deleteFile = false): bool
+    public function remove(HasProviderId|string $documentId, bool $deleteFile = false): bool
     {
-        $removed = $this->provider->removeFileFromStore($this->id, $file);
+        $removed = $this->provider->removeFileFromStore($this->id, $documentId);
 
         if ($deleteFile && $removed) {
             Files::delete(
-                $file instanceof HasProviderId ? $file->id() : $file,
+                $documentId instanceof HasProviderId ? $documentId->id() : $documentId,
                 $this->provider->name()
             );
         }
@@ -102,21 +102,21 @@ class Store
     }
 
     /**
-     * Assert that a file was removed from the store.
+     * Assert that a document was removed from the store.
      */
-    public function assertRemoved(Closure|string $fileId): self
+    public function assertRemoved(Closure|string $documentId): self
     {
-        Ai::assertFileRemovedFromStore($this->fileAssertionCallback($fileId));
+        Ai::assertFileRemovedFromStore($this->fileAssertionCallback($documentId));
 
         return $this;
     }
 
     /**
-     * Assert that a file was not removed from the store.
+     * Assert that a document was not removed from the store.
      */
-    public function assertNotRemoved(Closure|string $fileId): self
+    public function assertNotRemoved(Closure|string $documentId): self
     {
-        Ai::assertFileNotRemovedFromStore($this->fileAssertionCallback($fileId));
+        Ai::assertFileNotRemovedFromStore($this->fileAssertionCallback($documentId));
 
         return $this;
     }

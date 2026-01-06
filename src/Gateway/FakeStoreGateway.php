@@ -110,7 +110,7 @@ class FakeStoreGateway implements StoreGateway
     /**
      * Remove a file from a vector store.
      */
-    public function removeFile(StoreProvider $provider, string $storeId, string $fileId): bool
+    public function removeFile(StoreProvider $provider, string $storeId, string $documentId): bool
     {
         return true;
     }

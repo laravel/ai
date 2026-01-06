@@ -117,10 +117,10 @@ class GeminiStoreGateway implements StoreGateway
     /**
      * Remove a file from a vector store.
      */
-    public function removeFile(StoreProvider $provider, string $storeId, string $fileId): bool
+    public function removeFile(StoreProvider $provider, string $storeId, string $documentId): bool
     {
         $storeId = $this->normalizeStoreId($storeId);
-        $documentId = $this->normalizeDocumentId($storeId, $fileId);
+        $documentId = $this->normalizeDocumentId($storeId, $documentId);
 
         try {
             Http::withHeaders([

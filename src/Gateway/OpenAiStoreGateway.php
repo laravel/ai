@@ -111,11 +111,11 @@ class OpenAiStoreGateway implements StoreGateway
     /**
      * Remove a file from a vector store.
      */
-    public function removeFile(StoreProvider $provider, string $storeId, string $fileId): bool
+    public function removeFile(StoreProvider $provider, string $storeId, string $documentId): bool
     {
         try {
             $response = Http::withToken($provider->providerCredentials()['key'])
-                ->delete("https://api.openai.com/v1/vector_stores/{$storeId}/files/{$fileId}")
+                ->delete("https://api.openai.com/v1/vector_stores/{$storeId}/files/{$documentId}")
                 ->throw();
         } catch (RequestException $e) {
             if ($e->response->status() === 429) {

@@ -7,7 +7,11 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Files\HasProviderId;
+use Laravel\Ai\Events\AddingFileToStore;
 use Laravel\Ai\Events\CreatingStore;
+use Laravel\Ai\Events\FileAddedToStore;
+use Laravel\Ai\Events\FileRemovedFromStore;
+use Laravel\Ai\Events\RemovingFileFromStore;
 use Laravel\Ai\Events\StoreCreated;
 use Laravel\Ai\Events\StoreDeleted;
 use Laravel\Ai\Store;
@@ -58,25 +62,51 @@ trait ManagesStores
      */
     public function addFileToStore(string $storeId, HasProviderId $file): string
     {
+        $invocationId = (string) Str::uuid7();
+
         if (Ai::storesAreFaked()) {
             Ai::recordFileAddition($storeId, $file->id());
         }
 
-        return $this->storeGateway()->addFile($this, $storeId, $file->id());
+        $this->events->dispatch(new AddingFileToStore(
+            $invocationId, $this, $storeId, $file->id()
+        ));
+
+        return tap(
+            $this->storeGateway()->addFile($this, $storeId, $file->id()),
+            function (string $documentId) use ($invocationId, $storeId, $file) {
+                $this->events->dispatch(new FileAddedToStore(
+                    $invocationId, $this, $storeId, $file->id(), $documentId,
+                ));
+            }
+        );
     }
 
     /**
      * Remove a file from a vector store.
      */
-    public function removeFileFromStore(string $storeId, HasProviderId|string $fileId): bool
+    public function removeFileFromStore(string $storeId, HasProviderId|string $documentId): bool
     {
-        $fileId = $fileId instanceof HasProviderId ? $fileId->id() : $fileId;
+        $invocationId = (string) Str::uuid7();
+
+        $documentId = $documentId instanceof HasProviderId ? $documentId->id() : $documentId;
 
         if (Ai::storesAreFaked()) {
-            Ai::recordFileRemoval($storeId, $fileId);
+            Ai::recordFileRemoval($storeId, $documentId);
         }
 
-        return $this->storeGateway()->removeFile($this, $storeId, $fileId);
+        $this->events->dispatch(new RemovingFileFromStore(
+            $invocationId, $this, $storeId, $documentId
+        ));
+
+        return tap(
+            $this->storeGateway()->removeFile($this, $storeId, $documentId),
+            function () use ($invocationId, $storeId, $documentId) {
+                $this->events->dispatch(new FileRemovedFromStore(
+                    $invocationId, $this, $storeId, $documentId,
+                ));
+            }
+        );
     }
 
     /**
