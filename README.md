@@ -1029,7 +1029,7 @@ $store->delete();
 
 ### Adding Files to Stores
 
-Once you have a vector store, you may add [files](#files) to it using the `add` method. Files added to a store are automatically indexed for semantic searching using the file search agent tool:
+Once you have a vector store, you may add [files](#files) to it using the `add` method. Files added to a store are automatically indexed for semantic searching using the [file search provider tool](#file-search):
 
 ```php
 use Laravel\Ai\Files\Document;
