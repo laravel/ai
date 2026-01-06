@@ -53,6 +53,14 @@ class Stores
     }
 
     /**
+     * Get the fake store ID for a given store name.
+     */
+    public static function fakeId(string $for): string
+    {
+        return 'vs_'.md5($for);
+    }
+
+    /**
      * Assert that a vector store was created by name.
      */
     public static function assertCreated(Closure|string $callback): void

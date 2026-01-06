@@ -5,11 +5,11 @@ namespace Laravel\Ai\Gateway;
 use Closure;
 use DateInterval;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Responses\Data\StoreFileCounts;
 use Laravel\Ai\Store;
+use Laravel\Ai\Stores;
 use RuntimeException;
 
 class FakeStoreGateway implements StoreGateway
@@ -92,7 +92,7 @@ class FakeStoreGateway implements StoreGateway
     ): Store {
         return new Store(
             provider: $provider,
-            id: 'vs_'.Str::random(24),
+            id: Stores::fakeId($name),
             name: $name,
             fileCounts: new StoreFileCounts(0, 0, 0),
             ready: true,

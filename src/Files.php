@@ -77,6 +77,14 @@ class Files
     }
 
     /**
+     * Get the fake file ID for a given store name.
+     */
+    public static function fakeId(string $for): string
+    {
+        return 'file_'.md5($for);
+    }
+
+    /**
      * Assert that a file was stored matching a given truth test.
      */
     public static function assertStored(Closure $callback): void

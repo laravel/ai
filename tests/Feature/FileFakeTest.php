@@ -72,7 +72,9 @@ class FileFakeTest extends TestCase
     {
         Files::fake();
 
-        Document::fromString('Hello, World!', 'text/plain')->as('document.txt')->put();
+        $id = Document::fromString('Hello, World!', 'text/plain')->as('document.txt')->put()->id;
+        $this->assertEquals($id, Files::fakeId('document.txt'));
+
         Document::fromPath(__DIR__.'/files/document.txt')->put();
         Document::fromUpload(new UploadedFile(__DIR__.'/files/report.txt', 'report.txt'))->put();
 
