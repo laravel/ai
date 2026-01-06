@@ -133,9 +133,10 @@ class StoreFakeTest extends TestCase
 
         $store = Stores::create('My Store');
 
-        $result = $store->add(new ProviderDocument('file_123'));
+        $searchable = $store->add(new ProviderDocument('file_123'));
 
-        $this->assertEquals('file_123', $result);
+        $this->assertEquals('file_123', $searchable->id);
+        $this->assertEquals('file_123', $searchable->fileId());
     }
 
     public function test_can_remove_file_from_store_with_provider_id(): void

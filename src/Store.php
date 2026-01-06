@@ -8,6 +8,7 @@ use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Files\ProviderDocument;
+use Laravel\Ai\Responses\AddedDocumentResponse;
 use Laravel\Ai\Responses\Data\StoreFileCounts;
 
 class Store
@@ -23,12 +24,19 @@ class Store
     /**
      * Add a file to the store.
      */
-    public function add(StorableFile|HasProviderId|string $file): string
+    public function add(StorableFile|HasProviderId|string $file): AddedDocumentResponse
     {
-        return $this->provider->addFileToStore($this->id, match (true) {
+        if ($file instanceof StorableFile) {
+            $file = $this->storeFile($file);
+        }
+
+        return new AddedDocumentResponse($this->provider->addFileToStore($this->id, match (true) {
             is_string($file) => new ProviderDocument($file),
-            $file instanceof StorableFile => $this->storeFile($file),
             default => $file,
+        }), match (true) {
+            $file instanceof HasProviderId => $file->id(),
+            is_string($file) => $file,
+            default => null,
         });
     }
 
