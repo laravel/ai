@@ -158,7 +158,6 @@ class StoreFakeTest extends TestCase
     public function test_can_add_storable_file_to_store(): void
     {
         Stores::fake();
-        Files::fake();
 
         $response = Stores::create('My Store')
             ->add(Document::fromString('Hello, world!', 'text/plain'));

@@ -43,8 +43,12 @@ class Stores
     /**
      * Fake store operations.
      */
-    public static function fake(Closure|array $responses = []): FakeStoreGateway
+    public static function fake(Closure|array $responses = [], bool $files = true): FakeStoreGateway
     {
+        if ($files) {
+            Files::fake();
+        }
+
         return Ai::fakeStores($responses);
     }
 
