@@ -17,7 +17,7 @@ use function Laravel\Ai\agent;
 
 class StoreIntegrationTest extends TestCase
 {
-    protected $provider = 'gemini';
+    protected $provider = 'openai';
 
     public function test_can_create_get_and_delete_store(): void
     {

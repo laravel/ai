@@ -38,7 +38,7 @@ class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider
     public function fileSearchToolOptions(FileSearch $search): array
     {
         return [
-            'fileSearchStoreNames' => $search->storeIds,
+            'fileSearchStoreNames' => $search->ids(),
         ];
     }
 

@@ -334,7 +334,88 @@ public function tools(): iterable
 
 ### Provider Tools
 
-Foo
+Provider tools are special tools implemented natively by AI providers, offering capabilities like web searching, URL fetching, and file searching. Unlike regular tools, provider tools are executed by the provider itself rather than your application.
+
+Provider tools can be returned by your agent's `tools` method.
+
+#### Web Search
+
+The `WebSearch` provider tool allows agents to search the web for real-time information. This is useful for answering questions about current events, recent data, or topics that may have changed since the model's training cutoff.
+
+**Supported Providers:** Anthropic, OpenAI, Gemini
+
+```php
+use Laravel\Ai\Providers\Tools\WebSearch;
+
+public function tools(): iterable
+{
+    return [
+        new WebSearch,
+    ];
+}
+```
+
+You may configure the web search tool to limit the number of searches or restrict results to specific domains:
+
+```php
+(new WebSearch)->max(5)->allow(['laravel.com', 'php.net']),
+```
+
+To refine search results based on user location, use the `location` method:
+
+```php
+(new WebSearch)->location(
+    city: 'New York',
+    region: 'NY',
+    country: 'US'
+);
+```
+
+#### Web Fetch
+
+The `WebFetch` provider tool allows agents to fetch and read the contents of web pages. This is useful when you need the agent to analyze specific URLs or retrieve detailed information from known web pages.
+
+**Supported providers:** Anthropic, Gemini
+
+```php
+use Laravel\Ai\Providers\Tools\WebFetch;
+
+public function tools(): iterable
+{
+    return [
+        new WebFetch,
+    ];
+}
+```
+
+You may configure the web fetch tool to limit the number of fetches or restrict to specific domains:
+
+```php
+(new WebFetch)->max(3)->allow(['docs.laravel.com']),
+```
+
+#### File Search
+
+The `FileSearch` provider tool allows agents to search through [files](#files) stored in [vector stores](#vector-stores). This enables retrieval-augmented generation (RAG) by allowing the agent to search your uploaded documents for relevant information.
+
+**Supported providers:** OpenAI, Gemini
+
+```php
+use Laravel\Ai\Providers\Tools\FileSearch;
+
+public function tools(): iterable
+{
+    return [
+        new FileSearch(stores: ['store_id']),
+    ];
+}
+```
+
+You may provide multiple vector store IDs to search across multiple stores:
+
+```php
+new FileSearch(stores: ['store_1', 'store_2']);
+```
 
 ### Structured Output
 
