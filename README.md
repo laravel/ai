@@ -653,6 +653,9 @@ use Laravel\Ai\Image;
 $image = Image::of('Update this photo of me to be in the style of a impressionist painting.')
     ->attachments([
         Files\Image::fromStorage('photo.jpg'),
+        // Files\Image::fromPath('/home/laravel/photo.jpg'),
+        // Files\Image::fromUrl('https://example.com/photo.jpg'),
+        // $request->file('photo'),
     ])
     ->landscape()
     ->generate();
