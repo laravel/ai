@@ -417,6 +417,15 @@ You may provide multiple vector store IDs to search across multiple stores:
 new FileSearch(stores: ['store_1', 'store_2']);
 ```
 
+If your files have [metadata](#adding-files-to-stores), you may filter the search results using the `where` method:
+
+```php
+(new FileSearch(stores: ['store_id']))->where([
+    'author' => 'Taylor Otwell',
+    'year' => 2026,
+]);
+```
+
 ### Structured Output
 
 If you would like your agent to return structured output, implement the `HasStructuredOutput` interface, which requires that your agent define a `schema` method:
@@ -1051,6 +1060,16 @@ $document->fileId;
 ```
 
 > **Note:** Typically, when adding previously stored files to vector stores, the returned document ID will match the file's previously assigned ID; however, some vector storage providers may return a new, different "document ID". Therefore, it's recommended that you always store both IDs in your database for future reference.
+
+You may attach metadata to files when adding them to a store. This metadata can later be used to filter search results when using the [file search provider tool](#file-search):
+
+```php
+$store->add(Document::fromPath('/path/to/document.pdf'), metadata: [
+    'author' => 'Taylor Otwell',
+    'department' => 'Engineering',
+    'year' => 2026,
+]);
+```
 
 To remove a file from a store, use the `remove` method:
 

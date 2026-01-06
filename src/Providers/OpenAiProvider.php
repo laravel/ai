@@ -41,9 +41,19 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function fileSearchToolOptions(FileSearch $search): array
     {
-        return [
+        return array_filter([
             'vector_store_ids' => $search->ids(),
-        ];
+            'filters' => ! empty($search->where) ? [
+                'type' => 'and',
+                'filters' => collect($search->where)->map(function ($value, $key) {
+                    return [
+                        'type' => 'eq',
+                        'key' => $key,
+                        'value' => $value,
+                    ];
+                })->values()->all(),
+            ] : null,
+        ]);
     }
 
     /**

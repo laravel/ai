@@ -90,7 +90,7 @@ class GeminiStoreGateway implements StoreGateway
     /**
      * Add a file to a vector store.
      */
-    public function addFile(StoreProvider $provider, string $storeId, string $fileId): string
+    public function addFile(StoreProvider $provider, string $storeId, string $fileId, array $metadata = []): string
     {
         $storeId = $this->normalizeStoreId($storeId);
         $fileId = $this->normalizeFileId($fileId);
@@ -98,9 +98,10 @@ class GeminiStoreGateway implements StoreGateway
         try {
             $response = Http::withHeaders([
                 'x-goog-api-key' => $provider->providerCredentials()['key'],
-            ])->post("https://generativelanguage.googleapis.com/v1beta/{$storeId}:importFile", [
+            ])->post("https://generativelanguage.googleapis.com/v1beta/{$storeId}:importFile", array_filter([
                 'fileName' => $fileId,
-            ])->throw();
+                'customMetadata' => ! empty($metadata) ? $this->formatMetadata($metadata) : null,
+            ]))->throw();
         } catch (RequestException $e) {
             if ($e->response->status() === 429) {
                 throw RateLimitedException::forProvider(
@@ -112,6 +113,20 @@ class GeminiStoreGateway implements StoreGateway
         }
 
         return basename($response->json('name'));
+    }
+
+    /**
+     * Format metadata for Gemini's custom_metadata format.
+     */
+    protected function formatMetadata(array $metadata): array
+    {
+        return collect($metadata)->map(function ($value, $key) {
+            return match (true) {
+                is_numeric($value) => ['key' => $key, 'numericValue' => $value],
+                is_array($value) => ['key' => $key, 'stringListValue' => ['values' => $value]],
+                default => ['key' => $key, 'stringValue' => (string) $value],
+            };
+        })->values()->all();
     }
 
     /**

@@ -97,7 +97,7 @@ class StoreIntegrationTest extends TestCase
             : 'fileSearchStores/laravel-ai-sdk-test-store-ur5230zq9t31';
 
         // $store = Stores::get($storeId, provider: $this->provider);
-        // $document = $store->add(Document::fromPath(__DIR__.'/../../tmp/laravel.pdf'));
+        // $document = $store->add(Document::fromPath(__DIR__.'/../../tmp/laravel.pdf'), metadata: ['company' => 'laravel']);
 
         $response = agent(
             instructions: 'You will use the file search tool available to you to answer questions about the documents you have access to.',
@@ -108,5 +108,34 @@ class StoreIntegrationTest extends TestCase
 
         $this->assertTrue(str_contains((string) $response, 'Yes'));
         $this->assertTrue(str_contains((string) $response, 'Valkey'));
+    }
+
+    public function test_can_actually_prompt_an_agent_with_filtered_search_data()
+    {
+        // OpenAI: vs_695d788d9afc8191aa87e0ef81bacbda, file-7r66Gzib7ooyhJcxKDyq2q
+        // Gemini: fileSearchStores/laravel-ai-sdk-test-store-ur5230zq9t31, kxv9av2adm6m-wys58b8hnirl
+        $storeId = $this->provider === 'openai'
+            ? 'vs_695d788d9afc8191aa87e0ef81bacbda'
+            : 'fileSearchStores/laravel-ai-sdk-test-store-ur5230zq9t31';
+
+        // Tailwind...
+        $response = agent(
+            instructions: 'You will use the file search tool available to you to answer questions about the documents you have access to.',
+            tools: [
+                new FileSearch([$storeId], where: ['company' => 'tailwind']),
+            ],
+        )->prompt('Do you see any mention of Valkey in the documents you have access to?', provider: $this->provider);
+
+        $this->assertTrue(str_contains((string) $response, 'No'));
+
+        // Laravel...
+        $response = agent(
+            instructions: 'You will use the file search tool available to you to answer questions about the documents you have access to.',
+            tools: [
+                new FileSearch([$storeId], where: ['company' => 'laravel']),
+            ],
+        )->prompt('Do you see any mention of Valkey in the documents you have access to?', provider: $this->provider);
+
+        $this->assertTrue(str_contains((string) $response, 'Yes'));
     }
 }
