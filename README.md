@@ -14,6 +14,7 @@ The official Laravel AI SDK.
 - [Installation](#installation)
     - [Configuration](#configuration)
     - [Provider Support](#provider-support)
+- [TLDR](#tldr)
 - [Agents](#agents)
     - [Prompting](#prompting)
     - [Conversation Context](#conversation-context)
@@ -92,6 +93,41 @@ The default models used for text, images, audio, transcription, and embeddings m
 **Embeddings:** OpenAI, Gemini
 
 **Files:** OpenAI, Anthropic, Gemini
+
+## TLDR
+
+```php
+use Illuminate\Support\Str;
+use Laravel\Ai\Audio;
+use Laravel\Ai\Files\Document;
+use Laravel\Ai\Image;
+use Laravel\Ai\Stores;
+use Laravel\Ai\Transcription;
+
+// Agents...
+$response = (new SalesCoach)->prompt('Analyze this sales transcript...');
+$response = (new SalesCoach)->stream('Analyze this sales transcript...');
+
+// Images...
+$image = Image::of('A donut sitting on the kitchen counter.')->generate();
+
+// Audio (TTS)...
+$audio = Audio::of('I love coding with Laravel.')->generate();
+
+// Transcriptions (STT)...
+$transcript = Transcription::fromStorage('audio.mp3')->generate();
+
+// Embeddings...
+$embeddings = Str::of('Napa Valley has great wine.')->toEmbeddings();
+
+// Files...
+$file = Document::fromPath('/path/to/document.pdf')->put();
+
+// Vector Stores...
+$store = Stores::create('My Knowledge Base');
+
+$document = $store->add(Document::fromPath('/path/to/document.pdf'));
+```
 
 ## Agents
 
