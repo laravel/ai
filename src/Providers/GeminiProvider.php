@@ -3,17 +3,20 @@
 namespace Laravel\Ai\Providers;
 
 use Laravel\Ai\Contracts\Gateway\FileGateway;
+use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
+use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Gateway\GeminiFileGateway;
+use Laravel\Ai\Gateway\GeminiStoreGateway;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 
-class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider, ImageProvider, SupportsWebFetch, SupportsWebSearch, TextProvider
+class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider, ImageProvider, StoreProvider, SupportsWebFetch, SupportsWebSearch, TextProvider
 {
     use Concerns\GeneratesEmbeddings;
     use Concerns\GeneratesImages;
@@ -21,8 +24,10 @@ class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider
     use Concerns\HasEmbeddingGateway;
     use Concerns\HasFileGateway;
     use Concerns\HasImageGateway;
+    use Concerns\HasStoreGateway;
     use Concerns\HasTextGateway;
     use Concerns\ManagesFiles;
+    use Concerns\ManagesStores;
     use Concerns\StreamsText;
 
     /**
@@ -100,5 +105,13 @@ class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider
     public function fileGateway(): FileGateway
     {
         return $this->fileGateway ??= new GeminiFileGateway;
+    }
+
+    /**
+     * Get the provider's store gateway.
+     */
+    public function storeGateway(): StoreGateway
+    {
+        return $this->storeGateway ??= new GeminiStoreGateway;
     }
 }
