@@ -39,23 +39,29 @@ class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider
     {
         return array_filter([
             'fileSearchStoreNames' => $search->ids(),
-            'metadataFilter' => ! empty($search->where)
-                ? $this->formatMetadataFilter($search->where)
+            'metadataFilter' => ! empty($search->filters)
+                ? $this->formatMetadataFilter($search->filters)
                 : null,
         ]);
     }
 
     /**
      * Format the file search metadata filter for Gemini's filter expression syntax.
+     *
+     * @param  array<int, array{type: string, key: string, value: mixed}>  $filters
      */
     protected function formatMetadataFilter(array $filters): string
     {
-        return collect($filters)->map(function ($value, $key) {
-            return match (true) {
-                is_numeric($value) => "{$key}={$value}",
-                is_array($value) => collect($value)->map(fn ($v) => "{$key}=\"{$v}\"")->implode(' OR '),
-                default => "{$key}=\"{$value}\"",
-            };
+        return collect($filters)->map(fn ($filter) => match ($filter['type']) {
+            'eq' => is_numeric($filter['value'])
+                ? "{$filter['key']}={$filter['value']}"
+                : "{$filter['key']}=\"{$filter['value']}\"",
+            'ne' => is_numeric($filter['value'])
+                ? "{$filter['key']}!={$filter['value']}"
+                : "{$filter['key']}!=\"{$filter['value']}\"",
+            'in' => '('.collect($filter['value'])->map(fn ($v) =>
+                is_numeric($v) ? "{$filter['key']}={$v}" : "{$filter['key']}=\"{$v}\""
+            )->implode(' OR ').')',
         })->implode(' AND ');
     }
 

@@ -126,13 +126,16 @@ class StoreIntegrationTest extends TestCase
             ],
         )->prompt('Do you see any mention of Valkey in the documents you have access to?', provider: $this->provider);
 
-        $this->assertTrue(str_contains((string) $response, 'No'));
+        $this->assertTrue(str_contains(strtolower((string) $response), 'no'));
 
         // Laravel...
         $response = agent(
             instructions: 'You will use the file search tool available to you to answer questions about the documents you have access to.',
             tools: [
-                new FileSearch([$storeId], where: ['company' => 'laravel']),
+                new FileSearch(
+                    [$storeId],
+                    where: fn ($query) => $query->where('company', 'laravel')
+                ),
             ],
         )->prompt('Do you see any mention of Valkey in the documents you have access to?', provider: $this->provider);
 
