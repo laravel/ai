@@ -49,6 +49,6 @@ class ElevenLabsProvider extends Provider implements AudioProvider, Transcriptio
      */
     public function defaultTranscriptionModel(): string
     {
-        return 'scribe_v1';
+        return 'scribe_v2';
     }
 }

@@ -74,21 +74,25 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
         )->post('https://api.elevenlabs.io/v1/speech-to-text', [
             'model_id' => $model,
             'language' => $language,
-            'diarize' => $diarize,
+            'diarize' => $diarize ? 'true' : 'false',
         ])->throw());
 
         $response = $response->json();
 
+        $segments = $diarize
+            ? ($response['words'] ?? [])
+            : [];
+
         return new TranscriptionResponse(
             $response['text'],
-            collect($response['words'] ?? [])->map(function ($segment) {
+            collect($segments)->map(function ($segment) {
                 if ($segment['type'] !== 'word') {
                     return;
                 }
 
                 return new TranscriptionSegment(
                     $segment['text'],
-                    $segment['speaker_id'],
+                    $segment['speaker_id'] ?? '',
                     $segment['start'],
                     $segment['end'],
                 );
