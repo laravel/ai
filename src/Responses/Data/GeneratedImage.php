@@ -2,10 +2,12 @@
 
 namespace Laravel\Ai\Responses\Data;
 
+use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Support\Str;
+use JsonSerializable;
 use Laravel\Ai\Concerns\Storable;
 
-class GeneratedImage
+class GeneratedImage implements Arrayable, JsonSerializable
 {
     use Storable;
 
@@ -36,6 +38,25 @@ class GeneratedImage
     public function content(): string
     {
         return base64_decode($this->image);
+    }
+
+    /**
+     * Get the instance as an array.
+     */
+    public function toArray()
+    {
+        return [
+            'image' => $this->image,
+            'mime' => $this->mime,
+        ];
+    }
+
+    /**
+     * Get the JSON serializable representation of the instance.
+     */
+    public function jsonSerialize(): mixed
+    {
+        return $this->toArray();
     }
 
     /**
