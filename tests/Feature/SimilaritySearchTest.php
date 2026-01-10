@@ -21,7 +21,7 @@ class SimilaritySearchTest extends TestCase
             ],
         ];
 
-        $search = new SimilaritySearch(function (string $query) use ($data) {
+        $search = new SimilaritySearch(using: function (string $query) use ($data) {
             return $data;
         });
 

@@ -9,6 +9,8 @@ use Laravel\Ai\Contracts\Tool;
 
 class SimilaritySearch implements Tool
 {
+    protected ?string $description;
+
     public function __construct(
         public Closure $using,
     ) {}
@@ -18,7 +20,7 @@ class SimilaritySearch implements Tool
      */
     public function description(): string
     {
-        return 'Search for documents similar to a given query.';
+        return $this->description ?? 'Search for documents similar to a given query.';
     }
 
     /**
@@ -53,5 +55,15 @@ class SimilaritySearch implements Tool
                 ->description('The search query.')
                 ->required(),
         ];
+    }
+
+    /**
+     * Set the tool's description.
+     */
+    public function withDescription(string $description): self
+    {
+        $this->description = $description;
+
+        return $this;
     }
 }
