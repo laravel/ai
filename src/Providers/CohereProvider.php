@@ -3,12 +3,16 @@
 namespace Laravel\Ai\Providers;
 
 use Illuminate\Contracts\Events\Dispatcher;
+use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\RerankingGateway;
+use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\RerankingProvider;
-use Laravel\Ai\Gateway\CohereRerankingGateway;
+use Laravel\Ai\Gateway\CohereGateway;
 
-class CohereProvider extends Provider implements RerankingProvider
+class CohereProvider extends Provider implements EmbeddingProvider, RerankingProvider
 {
+    use Concerns\GeneratesEmbeddings;
+    use Concerns\HasEmbeddingGateway;
     use Concerns\HasRerankingGateway;
     use Concerns\Reranks;
 
@@ -16,6 +20,30 @@ class CohereProvider extends Provider implements RerankingProvider
         protected array $config,
         protected Dispatcher $events,
     ) {}
+
+    /**
+     * Get the name of the default embeddings model.
+     */
+    public function defaultEmbeddingsModel(): string
+    {
+        return 'embed-v4.0';
+    }
+
+    /**
+     * Get the default dimensions of the default embeddings model.
+     */
+    public function defaultEmbeddingsDimensions(): int
+    {
+        return 1536;
+    }
+
+    /**
+     * Get the provider's embedding gateway.
+     */
+    public function embeddingGateway(): EmbeddingGateway
+    {
+        return $this->embeddingGateway ??= new CohereGateway;
+    }
 
     /**
      * Get the name of the default reranking model.
@@ -30,6 +58,6 @@ class CohereProvider extends Provider implements RerankingProvider
      */
     public function rerankingGateway(): RerankingGateway
     {
-        return $this->rerankingGateway ??= new CohereRerankingGateway;
+        return $this->rerankingGateway ??= new CohereGateway;
     }
 }

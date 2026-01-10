@@ -4,14 +4,44 @@ namespace Laravel\Ai\Gateway;
 
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\RerankingGateway;
+use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\RerankingProvider;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\RankedDocument;
+use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\RerankingResponse;
 
-class CohereRerankingGateway implements RerankingGateway
+class CohereGateway implements EmbeddingGateway, RerankingGateway
 {
+    /**
+     * Generate embedding vectors representing the given inputs.
+     *
+     * @param  string[]  $inputs
+     */
+    public function generateEmbeddings(
+        EmbeddingProvider $provider,
+        string $model,
+        array $inputs,
+        int $dimensions
+    ): EmbeddingsResponse {
+        $response = $this->client($provider)->post('/embed', [
+            'model' => $model,
+            'texts' => $inputs,
+            'input_type' => 'search_document',
+            'embedding_types' => ['float'],
+        ]);
+
+        $data = $response->json();
+
+        return new EmbeddingsResponse(
+            $data['embeddings']['float'],
+            $data['meta']['billed_units']['input_tokens'] ?? 0,
+            new Meta($provider->name(), $model),
+        );
+    }
+
     /**
      * Rerank the given documents based on their relevance to the query.
      *
@@ -48,7 +78,7 @@ class CohereRerankingGateway implements RerankingGateway
     /**
      * Get an HTTP client for the Cohere API.
      */
-    protected function client(RerankingProvider $provider): PendingRequest
+    protected function client(EmbeddingProvider|RerankingProvider $provider): PendingRequest
     {
         return Http::baseUrl('https://api.cohere.com/v2')
             ->withHeaders([
