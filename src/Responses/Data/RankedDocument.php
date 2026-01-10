@@ -2,7 +2,9 @@
 
 namespace Laravel\Ai\Responses\Data;
 
-class RankedDocument
+use Stringable;
+
+class RankedDocument implements Stringable
 {
     /**
      * Create a new ranked document instance.
@@ -12,4 +14,12 @@ class RankedDocument
         public readonly string $document,
         public readonly float $score,
     ) {}
+
+    /**
+     * Get the document content.
+     */
+    public function __toString(): string
+    {
+        return $this->document;
+    }
 }
