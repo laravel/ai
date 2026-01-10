@@ -22,6 +22,13 @@ return [
     'default_for_embeddings' => 'openai',
     'default_for_reranking' => 'cohere',
 
+    'caching' => [
+        'embeddings' => [
+            'cache' => true,
+            'store' => env('CACHE_STORE', 'database'),
+        ],
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | AI Providers

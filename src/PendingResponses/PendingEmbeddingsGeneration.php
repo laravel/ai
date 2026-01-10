@@ -48,7 +48,7 @@ class PendingEmbeddingsGeneration
 
             $dimensions = $this->dimensions ?: $provider->defaultEmbeddingsDimensions();
 
-            if (true && $cached = $this->generateFromCache($provider, $model, $dimensions)) {
+            if ($cached = $this->generateFromCache($provider, $model, $dimensions)) {
                 return $cached;
             }
 
@@ -71,6 +71,10 @@ class PendingEmbeddingsGeneration
      */
     protected function generateFromCache(Provider $provider, string $model, int $dimensions): ?EmbeddingsResponse
     {
+        if (! $this->shouldCache()) {
+            return null;
+        }
+
         $key = 'laravel-embeddings:'.hash('sha256', $provider->driver().'-'.$model.'-'.$dimensions.'-'.implode('-', $this->inputs));
 
         $response = Cache::get($key);
@@ -92,6 +96,10 @@ class PendingEmbeddingsGeneration
      */
     protected function cacheEmbeddings(Provider $provider, string $model, int $dimensions, EmbeddingsResponse $response): void
     {
+        if (! $this->shouldCache()) {
+            return;
+        }
+
         $key = 'laravel-embeddings:'.hash('sha256', $provider->driver().'-'.$model.'-'.$dimensions.'-'.implode('-', $this->inputs));
 
         Cache::put($key, json_encode($response), now()->addDays(30));
@@ -118,5 +126,13 @@ class PendingEmbeddingsGeneration
         return new QueuedEmbeddingsResponse(
             GenerateEmbeddings::dispatch($this, $provider, $model),
         );
+    }
+
+    /**
+     * Determine if embeddings should be cached.
+     */
+    protected function shouldCache(): bool
+    {
+        return config('ai.caching.embeddings.cache', false);
     }
 }
