@@ -39,6 +39,11 @@ return [
             'key' => env('ANTHROPIC_API_KEY'),
         ],
 
+        'cohere' => [
+            'driver' => 'cohere',
+            'key' => env('COHERE_API_KEY'),
+        ],
+
         'eleven' => [
             'driver' => 'eleven',
             'key' => env('ELEVENLABS_API_KEY'),
@@ -67,11 +72,6 @@ return [
         'xai' => [
             'driver' => 'xai',
             'key' => env('XAI_API_KEY'),
-        ],
-
-        'cohere' => [
-            'driver' => 'cohere',
-            'key' => env('COHERE_API_KEY'),
         ],
     ],
 

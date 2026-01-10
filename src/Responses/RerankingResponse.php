@@ -3,13 +3,15 @@
 namespace Laravel\Ai\Responses;
 
 use Countable;
+use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Support\Collection;
 use IteratorAggregate;
+use JsonSerializable;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\RankedDocument;
 use Traversable;
 
-class RerankingResponse implements Countable, IteratorAggregate
+class RerankingResponse implements Arrayable, Countable, IteratorAggregate, JsonSerializable
 {
     /**
      * Create a new reranking response instance.
@@ -45,6 +47,25 @@ class RerankingResponse implements Countable, IteratorAggregate
     public function count(): int
     {
         return count($this->results);
+    }
+
+    /**
+     * Get the instance as an array.
+     */
+    public function toArray()
+    {
+        return [
+            'results' => $this->results,
+            'meta' => $this->meta,
+        ];
+    }
+
+    /**
+     * Get the JSON serializable representation of the instance.
+     */
+    public function jsonSerialize(): mixed
+    {
+        return $this->toArray();
     }
 
     /**
