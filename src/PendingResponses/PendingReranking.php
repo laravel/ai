@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\PendingResponses;
 
-use Illuminate\Support\Collection;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;

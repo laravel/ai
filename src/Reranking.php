@@ -22,7 +22,7 @@ class Reranking
         }
 
         if (! array_is_list($documents)) {
-            throw new InvalidArgumentException("Documents to rerank must be a list, not an associative array.");
+            throw new InvalidArgumentException('Documents to rerank must be a list, not an associative array.');
         }
 
         return new PendingReranking($documents);

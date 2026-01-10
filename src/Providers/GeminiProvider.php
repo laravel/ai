@@ -59,8 +59,7 @@ class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider
             'ne' => is_numeric($filter['value'])
                 ? "{$filter['key']}!={$filter['value']}"
                 : "{$filter['key']}!=\"{$filter['value']}\"",
-            'in' => '('.collect($filter['value'])->map(fn ($v) =>
-                is_numeric($v) ? "{$filter['key']}={$v}" : "{$filter['key']}=\"{$v}\""
+            'in' => '('.collect($filter['value'])->map(fn ($v) => is_numeric($v) ? "{$filter['key']}={$v}" : "{$filter['key']}=\"{$v}\""
             )->implode(' OR ').')',
         })->implode(' AND ');
     }

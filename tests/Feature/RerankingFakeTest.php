@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use Laravel\Ai\Prompts\RerankingPrompt;
 use Laravel\Ai\Reranking;
 use Laravel\Ai\Responses\Data\RankedDocument;
-use Laravel\Ai\Responses\RerankingResponse;
 use RuntimeException;
 use Tests\TestCase;
 
