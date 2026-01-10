@@ -900,6 +900,43 @@ use Illuminate\Support\Str;
 $embeddings = Str::of('Napa Valley has great wine.')->toEmbeddings();
 ```
 
+Alternatively, you may use the `Embeddings` class to generate embeddings for multiple inputs at once:
+
+```php
+use Laravel\Ai\Embeddings;
+
+$response = Embeddings::for([
+    'Napa Valley has great wine.',
+    'Laravel is a PHP framework.',
+])->generate();
+
+$response->embeddings; // [[0.123, 0.456, ...], [0.789, 0.012, ...]]
+```
+
+You may specify the dimensions and provider for the embeddings:
+
+```php
+$response = Embeddings::for(['Napa Valley has great wine.'])
+    ->dimensions(1536)
+    ->generate('openai', 'text-embedding-3-small');
+```
+
+### Caching Embeddings
+
+Embedding generation can be cached to avoid redundant API calls for identical inputs. To enable caching, set the `ai.caching.embeddings.cache` configuration option to `true`:
+
+```php
+'caching' => [
+    'embeddings' => [
+        'cache' => true,
+        'store' => env('CACHE_STORE', 'database'),
+        // ...
+    ],
+],
+```
+
+When caching is enabled, embeddings are cached for 30 days. The cache key is based on the provider, model, dimensions, and input content, ensuring that identical requests return cached results while different configurations generate fresh embeddings.
+
 ## Reranking
 
 Reranking allows you to reorder a list of documents based on their relevance to a given query. This is useful for improving search results by using semantic understanding:
