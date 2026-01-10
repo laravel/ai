@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\PendingResponses;
 
+use Illuminate\Support\Traits\Conditionable;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Events\ProviderFailedOver;
@@ -18,6 +19,8 @@ use LogicException;
 
 class PendingTranscriptionGeneration
 {
+    use Conditionable;
+
     protected ?string $language = null;
 
     protected bool $diarize = false;

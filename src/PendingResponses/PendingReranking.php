@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\PendingResponses;
 
+use Illuminate\Support\Traits\Conditionable;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
@@ -10,6 +11,8 @@ use Laravel\Ai\Responses\RerankingResponse;
 
 class PendingReranking
 {
+    use Conditionable;
+
     protected ?int $limit = null;
 
     /**

@@ -36,7 +36,7 @@ class AiServiceProvider extends ServiceProvider
             $this->registerPublishing();
         }
 
-        // Embeddings macro..
+        // Embeddings macro...
         Stringable::macro('toEmbeddings', function (
             ?string $provider = null,
             ?int $dimensions = null,
@@ -51,7 +51,7 @@ class AiServiceProvider extends ServiceProvider
             return $request->generate(provider: $provider, model: $model)->embeddings[0];
         });
 
-        // Reranking macro..
+        // Reranking macro...
         Collection::macro('rerank', function (
             Closure|array|string $by,
             string $query,

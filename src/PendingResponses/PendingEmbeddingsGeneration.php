@@ -3,6 +3,7 @@
 namespace Laravel\Ai\PendingResponses;
 
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Traits\Conditionable;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
@@ -16,6 +17,8 @@ use Laravel\Ai\Responses\QueuedEmbeddingsResponse;
 
 class PendingEmbeddingsGeneration
 {
+    use Conditionable;
+
     protected ?int $dimensions = null;
 
     public function __construct(

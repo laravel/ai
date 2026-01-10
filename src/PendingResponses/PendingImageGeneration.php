@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\PendingResponses;
 
+use Illuminate\Support\Traits\Conditionable;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
@@ -17,6 +18,8 @@ use LogicException;
 
 class PendingImageGeneration
 {
+    use Conditionable;
+
     public array $attachments = [];
 
     public ?string $size = null;
