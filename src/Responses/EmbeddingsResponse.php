@@ -3,11 +3,13 @@
 namespace Laravel\Ai\Responses;
 
 use Countable;
+use Illuminate\Contracts\Support\Arrayable;
 use IteratorAggregate;
+use JsonSerializable;
 use Laravel\Ai\Responses\Data\Meta;
 use Traversable;
 
-class EmbeddingsResponse implements Countable, IteratorAggregate
+class EmbeddingsResponse implements Arrayable, Countable, IteratorAggregate, JsonSerializable
 {
     /**
      * Create a new embeddings response instance.
@@ -22,6 +24,26 @@ class EmbeddingsResponse implements Countable, IteratorAggregate
     public function first(): array
     {
         return $this->embeddings[0];
+    }
+
+    /**
+     * Get the instance as an array.
+     */
+    public function toArray()
+    {
+        return [
+            'embeddings' => $this->embeddings,
+            'tokens' => $this->tokens,
+            'meta' => $this->meta,
+        ];
+    }
+
+    /**
+     * Get the JSON serializable representation of the instance.
+     */
+    public function jsonSerialize(): mixed
+    {
+        return $this->toArray();
     }
 
     /**

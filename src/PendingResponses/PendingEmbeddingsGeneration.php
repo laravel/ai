@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\PendingResponses;
 
+use Illuminate\Support\Facades\Cache;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
@@ -9,6 +10,7 @@ use Laravel\Ai\FakePendingDispatch;
 use Laravel\Ai\Jobs\GenerateEmbeddings;
 use Laravel\Ai\Prompts\QueuedEmbeddingsPrompt;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\QueuedEmbeddingsResponse;
 
@@ -46,8 +48,14 @@ class PendingEmbeddingsGeneration
 
             $dimensions = $this->dimensions ?: $provider->defaultEmbeddingsDimensions();
 
+            if (true && $cached = $this->generateFromCache($provider, $model, $dimensions)) {
+                return $cached;
+            }
+
             try {
-                return $provider->embeddings($this->inputs, $dimensions, $model);
+                return tap($provider->embeddings($this->inputs, $dimensions, $model), fn () =>
+                    $this->cacheEmbeddings($provider, $model, $dimensions, $response)
+                );
             } catch (FailoverableException $e) {
                 event(new ProviderFailedOver($provider, $model, $e));
 
@@ -56,6 +64,37 @@ class PendingEmbeddingsGeneration
         }
 
         throw $e;
+    }
+
+    /**
+     * Generate the embeddings from a cached response if possible.
+     */
+    protected function generateFromCache(Provider $provider, string $model, int $dimensions): ?EmbeddingsResponse
+    {
+        $key = 'laravel-embeddings:'.hash('sha256', $provider->driver().'-'.$model.'-'.$dimensions.'-'.implode('-', $this->inputs));
+
+        $response = Cache::get($key);
+
+        if (! is_null($response)) {
+            $response = json_decode($response, true);
+
+            return new EmbeddingsResponse($response['embeddings'], 0, new Meta(
+                provider: $response['meta']['provider'],
+                model: $response['meta']['model'],
+            ));
+        }
+
+        return null;
+    }
+
+    /**
+     * Cache the given embeddings response.
+     */
+    protected function cacheEmbeddings(Provider $provider, string $model, int $dimensions, EmbeddingsResponse $response): void
+    {
+        $key = 'laravel-embeddings:'.hash('sha256', $provider->driver().'-'.$model.'-'.$dimensions.'-'.implode('-', $this->inputs));
+
+        Cache::put($key, json_encode($response), now()->addDays(30));
     }
 
     /**

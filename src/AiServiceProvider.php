@@ -42,9 +42,13 @@ class AiServiceProvider extends ServiceProvider
             ?int $dimensions = null,
             ?string $model = null
         ) {
-            return Ai::embeddingProvider($provider ?? config('ai.default_for_embeddings'))
-                ->embeddings([$this->value], $dimensions, $model)
-                ->embeddings[0];
+            $request = Embeddings::for([$this->value]);
+
+            if ($dimensions) {
+                $request->dimensions($dimensions);
+            }
+
+            return $request->generate(provider: $provider, model: $model)->embeddings[0];
         });
 
         // Reranking macro..
