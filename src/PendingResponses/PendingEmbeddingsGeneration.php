@@ -75,9 +75,7 @@ class PendingEmbeddingsGeneration
             return null;
         }
 
-        $key = 'laravel-embeddings:'.hash('sha256', $provider->driver().'-'.$model.'-'.$dimensions.'-'.implode('-', $this->inputs));
-
-        $response = Cache::get($key);
+        $response = Cache::get($this->cacheKey($provider, $model, $dimensions));
 
         if (! is_null($response)) {
             $response = json_decode($response, true);
@@ -100,9 +98,18 @@ class PendingEmbeddingsGeneration
             return;
         }
 
-        $key = 'laravel-embeddings:'.hash('sha256', $provider->driver().'-'.$model.'-'.$dimensions.'-'.implode('-', $this->inputs));
+        Cache::put(
+            $this->cacheKey($provider, $model, $dimensions),
+            json_encode($response), now()->addDays(30)
+        );
+    }
 
-        Cache::put($key, json_encode($response), now()->addDays(30));
+    /**
+     * Get the cache key for the given embeddings request.
+     */
+    protected function cacheKey(Provider $provider, string $model, int $dimensions): string
+    {
+        return 'laravel-embeddings:'.hash('sha256', $provider->driver().'-'.$model.'-'.$dimensions.'-'.implode('-', $this->inputs));
     }
 
     /**
