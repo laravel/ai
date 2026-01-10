@@ -53,8 +53,9 @@ class PendingEmbeddingsGeneration
             }
 
             try {
-                return tap($provider->embeddings($this->inputs, $dimensions, $model), fn ($response) =>
-                    $this->cacheEmbeddings($provider, $model, $dimensions, $response)
+                return tap(
+                    $provider->embeddings($this->inputs, $dimensions, $model),
+                    fn ($response) => $this->cacheEmbeddings($provider, $model, $dimensions, $response)
                 );
             } catch (FailoverableException $e) {
                 event(new ProviderFailedOver($provider, $model, $e));
