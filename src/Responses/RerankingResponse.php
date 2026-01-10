@@ -1,0 +1,59 @@
+<?php
+
+namespace Laravel\Ai\Responses;
+
+use Countable;
+use Illuminate\Support\Collection;
+use IteratorAggregate;
+use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\RankedDocument;
+use Traversable;
+
+class RerankingResponse implements Countable, IteratorAggregate
+{
+    /**
+     * Create a new reranking response instance.
+     *
+     * @param  array<int, RankedDocument>  $results
+     */
+    public function __construct(
+        public readonly array $results,
+        public readonly Meta $meta,
+    ) {}
+
+    /**
+     * Get the top-ranked result.
+     */
+    public function first(): ?RankedDocument
+    {
+        return $this->results[0] ?? null;
+    }
+
+    /**
+     * Get the documents in their reranked order.
+     *
+     * @return array<int, string>
+     */
+    public function documents(): array
+    {
+        return (new Collection($this->results))->map->document->all();
+    }
+
+    /**
+     * Get the number of results in the response.
+     */
+    public function count(): int
+    {
+        return count($this->results);
+    }
+
+    /**
+     * Get an iterator for the results.
+     */
+    public function getIterator(): Traversable
+    {
+        foreach ($this->results as $result) {
+            yield $result;
+        }
+    }
+}

@@ -20,6 +20,7 @@ return [
     'default_for_audio' => 'openai',
     'default_for_transcription' => 'openai',
     'default_for_embeddings' => 'openai',
+    'default_for_reranking' => 'cohere',
 
     /*
     |--------------------------------------------------------------------------
@@ -66,6 +67,11 @@ return [
         'xai' => [
             'driver' => 'xai',
             'key' => env('XAI_API_KEY'),
+        ],
+
+        'cohere' => [
+            'driver' => 'cohere',
+            'key' => env('COHERE_API_KEY'),
         ],
     ],
 
