@@ -2,7 +2,10 @@
 
 namespace Laravel\Ai\Responses\Data;
 
-class Usage
+use Illuminate\Contracts\Support\Arrayable;
+use JsonSerializable;
+
+class Usage implements Arrayable, JsonSerializable
 {
     public function __construct(
         public int $promptTokens = 0,
@@ -11,20 +14,6 @@ class Usage
         public int $cacheReadInputTokens = 0,
         public int $reasoningTokens = 0,
     ) {}
-
-    /**
-     * Convert the usage to its array representation.
-     */
-    public function toArray(): array
-    {
-        return [
-            'prompt_tokens' => $this->promptTokens,
-            'completion_tokens' => $this->completionTokens,
-            'cache_write_input_tokens' => $this->cacheWriteInputTokens,
-            'cache_read_input_tokens' => $this->cacheReadInputTokens,
-            'reasoning_tokens' => $this->reasoningTokens,
-        ];
-    }
 
     /**
      * Add the given usage to the current usage and return a new usage instance.
@@ -38,5 +27,27 @@ class Usage
             $this->cacheReadInputTokens + $usage->cacheReadInputTokens,
             $this->reasoningTokens + $usage->reasoningTokens,
         );
+    }
+
+    /**
+     * Get the instance as an array.
+     */
+    public function toArray()
+    {
+        return [
+            'prompt_tokens' => $this->promptTokens,
+            'completion_tokens' => $this->completionTokens,
+            'cache_write_input_tokens' => $this->cacheWriteInputTokens,
+            'cache_read_input_tokens' => $this->cacheReadInputTokens,
+            'reasoning_tokens' => $this->reasoningTokens,
+        ];
+    }
+
+    /**
+     * Get the JSON serializable representation of the instance.
+     */
+    public function jsonSerialize(): mixed
+    {
+        return $this->toArray();
     }
 }

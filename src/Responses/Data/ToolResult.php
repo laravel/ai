@@ -2,7 +2,10 @@
 
 namespace Laravel\Ai\Responses\Data;
 
-class ToolResult
+use Illuminate\Contracts\Support\Arrayable;
+use JsonSerializable;
+
+class ToolResult implements Arrayable, JsonSerializable
 {
     public function __construct(
         public string $id,
@@ -11,4 +14,26 @@ class ToolResult
         public $result,
         public ?string $resultId = null,
     ) {}
+
+    /**
+     * Get the instance as an array.
+     */
+    public function toArray()
+    {
+        return [
+            'id' => $this->id,
+            'name' => $this->name,
+            'arguments' => $this->arguments,
+            'result' => $this->result,
+            'result_id' => $this->resultId,
+        ];
+    }
+
+    /**
+     * Get the JSON serializable representation of the instance.
+     */
+    public function jsonSerialize(): mixed
+    {
+        return $this->toArray();
+    }
 }

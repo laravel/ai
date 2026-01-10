@@ -2,6 +2,8 @@
 
 namespace Laravel\Ai\PendingResponses;
 
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Traits\Conditionable;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
@@ -9,11 +11,14 @@ use Laravel\Ai\FakePendingDispatch;
 use Laravel\Ai\Jobs\GenerateEmbeddings;
 use Laravel\Ai\Prompts\QueuedEmbeddingsPrompt;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\QueuedEmbeddingsResponse;
 
 class PendingEmbeddingsGeneration
 {
+    use Conditionable;
+
     protected ?int $dimensions = null;
 
     public function __construct(
@@ -46,8 +51,15 @@ class PendingEmbeddingsGeneration
 
             $dimensions = $this->dimensions ?: $provider->defaultEmbeddingsDimensions();
 
+            if ($cached = $this->generateFromCache($provider, $model, $dimensions)) {
+                return $cached;
+            }
+
             try {
-                return $provider->embeddings($this->inputs, $dimensions, $model);
+                return tap(
+                    $provider->embeddings($this->inputs, $dimensions, $model),
+                    fn ($response) => $this->cacheEmbeddings($provider, $model, $dimensions, $response)
+                );
             } catch (FailoverableException $e) {
                 event(new ProviderFailedOver($provider, $model, $e));
 
@@ -56,6 +68,52 @@ class PendingEmbeddingsGeneration
         }
 
         throw $e;
+    }
+
+    /**
+     * Generate the embeddings from a cached response if possible.
+     */
+    protected function generateFromCache(Provider $provider, string $model, int $dimensions): ?EmbeddingsResponse
+    {
+        if (! $this->shouldCache()) {
+            return null;
+        }
+
+        $response = Cache::get($this->cacheKey($provider, $model, $dimensions));
+
+        if (! is_null($response)) {
+            $response = json_decode($response, true);
+
+            return new EmbeddingsResponse($response['embeddings'], 0, new Meta(
+                provider: $response['meta']['provider'],
+                model: $response['meta']['model'],
+            ));
+        }
+
+        return null;
+    }
+
+    /**
+     * Cache the given embeddings response.
+     */
+    protected function cacheEmbeddings(Provider $provider, string $model, int $dimensions, EmbeddingsResponse $response): void
+    {
+        if (! $this->shouldCache()) {
+            return;
+        }
+
+        Cache::put(
+            $this->cacheKey($provider, $model, $dimensions),
+            json_encode($response), now()->addDays(30)
+        );
+    }
+
+    /**
+     * Get the cache key for the given embeddings request.
+     */
+    protected function cacheKey(Provider $provider, string $model, int $dimensions): string
+    {
+        return 'laravel-embeddings:'.hash('sha256', $provider->driver().'-'.$model.'-'.$dimensions.'-'.implode('-', $this->inputs));
     }
 
     /**
@@ -79,5 +137,13 @@ class PendingEmbeddingsGeneration
         return new QueuedEmbeddingsResponse(
             GenerateEmbeddings::dispatch($this, $provider, $model),
         );
+    }
+
+    /**
+     * Determine if embeddings should be cached.
+     */
+    protected function shouldCache(): bool
+    {
+        return config('ai.caching.embeddings.cache', false);
     }
 }

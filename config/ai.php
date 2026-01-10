@@ -20,6 +20,25 @@ return [
     'default_for_audio' => 'openai',
     'default_for_transcription' => 'openai',
     'default_for_embeddings' => 'openai',
+    'default_for_reranking' => 'cohere',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Caching
+    |--------------------------------------------------------------------------
+    |
+    | Below you may configure caching strategies for AI related operations
+    | such as embedding generation. You are free to adjust these values
+    | based on your application's available caching stores and needs.
+    |
+    */
+
+    'caching' => [
+        'embeddings' => [
+            'cache' => false,
+            'store' => env('CACHE_STORE', 'database'),
+        ],
+    ],
 
     /*
     |--------------------------------------------------------------------------
@@ -36,6 +55,11 @@ return [
         'anthropic' => [
             'driver' => 'anthropic',
             'key' => env('ANTHROPIC_API_KEY'),
+        ],
+
+        'cohere' => [
+            'driver' => 'cohere',
+            'key' => env('COHERE_API_KEY'),
         ],
 
         'eleven' => [

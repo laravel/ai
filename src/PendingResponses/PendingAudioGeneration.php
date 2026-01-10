@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\PendingResponses;
 
+use Illuminate\Support\Traits\Conditionable;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
@@ -14,6 +15,8 @@ use Laravel\Ai\Responses\QueuedAudioResponse;
 
 class PendingAudioGeneration
 {
+    use Conditionable;
+
     protected string $voice = 'default-female';
 
     protected ?string $instructions = null;

@@ -2,7 +2,10 @@
 
 namespace Laravel\Ai\Responses\Data;
 
-class ToolCall
+use Illuminate\Contracts\Support\Arrayable;
+use JsonSerializable;
+
+class ToolCall implements Arrayable, JsonSerializable
 {
     public function __construct(
         public string $id,
@@ -12,4 +15,27 @@ class ToolCall
         public ?string $reasoningId = null,
         public ?array $reasoningSummary = null,
     ) {}
+
+    /**
+     * Get the instance as an array.
+     */
+    public function toArray()
+    {
+        return [
+            'id' => $this->id,
+            'name' => $this->name,
+            'arguments' => $this->arguments,
+            'result_id' => $this->resultId,
+            'reasoning_id' => $this->reasoningId,
+            'reasoning_summary' => $this->reasoningSummary,
+        ];
+    }
+
+    /**
+     * Get the JSON serializable representation of the instance.
+     */
+    public function jsonSerialize(): mixed
+    {
+        return $this->toArray();
+    }
 }

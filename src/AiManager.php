@@ -9,11 +9,13 @@ use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
+use Laravel\Ai\Contracts\Providers\RerankingProvider;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Gateway\Prism\PrismGateway;
 use Laravel\Ai\Providers\AnthropicProvider;
+use Laravel\Ai\Providers\CohereProvider;
 use Laravel\Ai\Providers\ElevenLabsProvider;
 use Laravel\Ai\Providers\GeminiProvider;
 use Laravel\Ai\Providers\GroqProvider;
@@ -30,6 +32,7 @@ class AiManager extends MultipleInstanceManager
     use Concerns\InteractsWithFakeEmbeddings;
     use Concerns\InteractsWithFakeFiles;
     use Concerns\InteractsWithFakeImages;
+    use Concerns\InteractsWithFakeReranking;
     use Concerns\InteractsWithFakeStores;
     use Concerns\InteractsWithFakeTranscriptions;
 
@@ -85,6 +88,30 @@ class AiManager extends MultipleInstanceManager
 
         return $this->embeddingsAreFaked()
             ? (clone $provider)->useEmbeddingGateway($this->fakeEmbeddingGateway())
+            : $provider;
+    }
+
+    /**
+     * Get a reranking provider instance by name.
+     */
+    public function rerankingProvider(?string $name = null): RerankingProvider
+    {
+        return tap($this->instance($name), function ($instance) {
+            if (! $instance instanceof RerankingProvider) {
+                throw new LogicException('Provider ['.get_class($instance).'] does not support reranking.');
+            }
+        });
+    }
+
+    /**
+     * Get a reranking provider instance, using a fake gateway if reranking is faked.
+     */
+    public function fakeableRerankingProvider(?string $name = null): RerankingProvider
+    {
+        $provider = $this->rerankingProvider($name);
+
+        return $this->rerankingIsFaked()
+            ? (clone $provider)->useRerankingGateway($this->fakeRerankingGateway())
             : $provider;
     }
 
@@ -215,6 +242,17 @@ class AiManager extends MultipleInstanceManager
     {
         return new AnthropicProvider(
             new PrismGateway($this->app['events']),
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create a Cohere powered instance.
+     */
+    public function createCohereDriver(array $config): CohereProvider
+    {
+        return new CohereProvider(
             $config,
             $this->app->make(Dispatcher::class)
         );

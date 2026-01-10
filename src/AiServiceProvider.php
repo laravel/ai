@@ -2,6 +2,8 @@
 
 namespace Laravel\Ai;
 
+use Closure;
+use Illuminate\Support\Collection;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Stringable;
 use Laravel\Ai\Console\Commands\ChatCommand;
@@ -34,14 +36,44 @@ class AiServiceProvider extends ServiceProvider
             $this->registerPublishing();
         }
 
+        // Embeddings macro...
         Stringable::macro('toEmbeddings', function (
             ?string $provider = null,
             ?int $dimensions = null,
             ?string $model = null
         ) {
-            return Ai::embeddingProvider($provider ?? config('ai.default_for_embeddings'))
-                ->embeddings([$this->value], $dimensions, $model)
-                ->embeddings[0];
+            $request = Embeddings::for([$this->value]);
+
+            if ($dimensions) {
+                $request->dimensions($dimensions);
+            }
+
+            return $request->generate(provider: $provider, model: $model)->embeddings[0];
+        });
+
+        // Reranking macro...
+        Collection::macro('rerank', function (
+            Closure|array|string $by,
+            string $query,
+            ?int $limit = null,
+            array|string|null $provider = null,
+            ?string $model = null
+        ) {
+            $resolver = match (true) {
+                $by instanceof Closure => $by,
+                is_array($by) => fn ($item) => json_encode(
+                    (new Collection($by))->mapWithKeys(fn ($field) => [$field => data_get($item, $field)])->all()
+                ),
+                default => fn ($item) => data_get($item, $by),
+            };
+
+            $response = Reranking::of($this->map($resolver)->values()->all())
+                ->limit($limit)
+                ->rerank($query, $provider, $model);
+
+            return (new Collection($response->results))->map(
+                fn ($result) => $this->values()[$result->index]
+            );
         });
     }
 
