@@ -76,7 +76,7 @@ class SimilaritySearch implements Tool
         if ($this->rerank) {
             $results = $results->rerank(
                 $this->rerankBy,
-                query: $request->string('query'),
+                $request->string('query'),
                 limit: $this->rerankLimit
             );
         }
