@@ -64,10 +64,10 @@ class SimilaritySearch implements Tool
         };
 
         if ($results->isEmpty()) {
-            return 'No results found.';
+            return 'No relevant results found.';
         }
 
-        return "Results found. They are listed below sorted by relevance:\n\n".
+        return "Relevant results found. They are listed below sorted by relevance:\n\n".
             $results->toJson(JSON_PRETTY_PRINT);
     }
 
