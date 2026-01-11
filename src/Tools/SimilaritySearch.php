@@ -4,6 +4,7 @@ namespace Laravel\Ai\Tools;
 
 use Closure;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Tool;
 
@@ -44,7 +45,7 @@ class SimilaritySearch implements Tool
 
             return $pendingQuery
                 ->get()
-                ->map(fn ($model) => collect($model->toArray())->except($column)->all());
+                ->map(fn ($model) => Arr::except($model->toArray(), [$column]));
         });
     }
 

@@ -45,7 +45,7 @@ class SimilaritySearchTest extends TestCase
             'query' => 'search term',
         ]));
 
-        $this->assertStringContainsString('Results found.', $results);
+        $this->assertStringContainsString('Relevant results found.', $results);
         $this->assertStringContainsString('First document', $results);
         $this->assertStringContainsString('Second document', $results);
     }
@@ -63,7 +63,7 @@ class SimilaritySearchTest extends TestCase
             'query' => 'search term',
         ]));
 
-        $this->assertStringContainsString('Results found.', $results);
+        $this->assertStringContainsString('Relevant results found.', $results);
     }
 
     public function test_using_model_excludes_embedding_column_from_results(): void
