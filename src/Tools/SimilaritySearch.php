@@ -18,7 +18,12 @@ class SimilaritySearch implements Tool
     /**
      * Create a new similarity search tool instance.
      */
-    public static function usingModel(string $model, string $column, float $minSimilarity = 0.6, int $limit = 15, ?Closure $query = null): self
+    public static function usingModel(
+        string $model,
+        string $column,
+        float $minSimilarity = 0.6,
+        int $limit = 15,
+        ?Closure $query = null): self
     {
         return new static(function (string $queryString) use ($model, $column, $minSimilarity, $limit, $query) {
             $pendingQuery = $model::query()->whereVectorSimilarTo($column, $queryString, $minSimilarity);
