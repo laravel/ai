@@ -28,6 +28,8 @@ return new class extends AiMigration
             $table->text('content');
             $table->text('tool_calls');
             $table->text('tool_results');
+            $table->text('usage');
+            $table->text('meta');
             $table->timestamps();
 
             $table->index(['conversation_id', 'user_id', 'updated_at']);

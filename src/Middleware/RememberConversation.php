@@ -42,8 +42,10 @@ class RememberConversation
                 'user_id' => $agent->conversationParticipant()->id,
                 'role' => 'user',
                 'content' => $prompt->prompt,
-                'tool_calls' => '',
-                'tool_results' => '',
+                'tool_calls' => '[]',
+                'tool_results' => '[]',
+                'usage' => '[]',
+                'meta' => '[]',
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
@@ -57,6 +59,8 @@ class RememberConversation
                 'content' => $response->text,
                 'tool_calls' => json_encode($response->toolCalls),
                 'tool_results' => json_encode($response->toolResults),
+                'usage' => json_encode($response->usage),
+                'meta' => json_encode($response->meta),
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
