@@ -63,9 +63,10 @@ class PrismGateway implements Gateway
         array $tools = [],
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
+        int $timeout = 60,
     ): TextResponse {
         [$request, $structured] = [
-            $this->createPrismTextRequest($provider, $model, $schema, $options),
+            $this->createPrismTextRequest($provider, $model, $schema, $options, $timeout),
             ! empty($schema),
         ];
 
@@ -121,9 +122,10 @@ class PrismGateway implements Gateway
         array $tools = [],
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
+        int $timeout = 60,
     ): Generator {
         [$request, $structured] = [
-            $this->createPrismTextRequest($provider, $model, $schema, $options),
+            $this->createPrismTextRequest($provider, $model, $schema, $options, $timeout),
             ! empty($schema),
         ];
 

@@ -15,7 +15,7 @@ trait CreatesPrismTextRequests
     /**
      * Create a Prism text request for the given provider, model, and prompt.
      */
-    protected function createPrismTextRequest(Provider $provider, string $model, ?array $schema, ?TextGenerationOptions $options = null)
+    protected function createPrismTextRequest(Provider $provider, string $model, ?array $schema, ?TextGenerationOptions $options = null, int $timeout = 60)
     {
         $request = tap(
             ! empty($schema) ? Prism::structured() : Prism::text(),
@@ -32,7 +32,7 @@ trait CreatesPrismTextRequests
             $request = $request->usingTemperature($options->temperature);
         }
 
-        return $request->withClientOptions(['timeout' => 60]);
+        return $request->withClientOptions(['timeout' => $timeout]);
     }
 
     /**
