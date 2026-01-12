@@ -2,7 +2,9 @@
 
 namespace Laravel\Ai\Files;
 
+use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Support\Facades\Storage;
+use JsonSerializable;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
@@ -10,7 +12,7 @@ use Laravel\Ai\PendingResponses\PendingTranscriptionGeneration;
 use Laravel\Ai\Transcription;
 use RuntimeException;
 
-class StoredAudio extends Audio implements StorableFile, TranscribableAudio
+class StoredAudio extends Audio implements Arrayable, JsonSerializable, StorableFile, TranscribableAudio
 {
     use CanBeUploadedToProvider;
 
@@ -47,6 +49,27 @@ class StoredAudio extends Audio implements StorableFile, TranscribableAudio
     public function transcription(): PendingTranscriptionGeneration
     {
         return Transcription::of($this);
+    }
+
+    /**
+     * Get the instance as an array.
+     */
+    public function toArray(): array
+    {
+        return [
+            'type' => 'stored-audio',
+            'name' => $this->name,
+            'path' => $this->path,
+            'disk' => $this->disk ?? config('filesystems.default'),
+        ];
+    }
+
+    /**
+     * Get the JSON serializable representation of the instance.
+     */
+    public function jsonSerialize(): mixed
+    {
+        return $this->toArray();
     }
 
     public function __toString(): string

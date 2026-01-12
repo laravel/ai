@@ -26,6 +26,7 @@ return new class extends AiMigration
             $table->foreignId('user_id');
             $table->string('role', 25);
             $table->text('content');
+            $table->text('attachments');
             $table->text('tool_calls');
             $table->text('tool_results');
             $table->text('usage');
