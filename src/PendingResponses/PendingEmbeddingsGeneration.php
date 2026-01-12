@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\PendingResponses;
 
+use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Traits\Conditionable;
 use Laravel\Ai\Ai;
@@ -79,8 +80,7 @@ class PendingEmbeddingsGeneration
             return null;
         }
 
-        $response = Cache::store(config('ai.caching.embeddings.store'))
-            ->get($this->cacheKey($provider, $model, $dimensions));
+        $response = $this->cache()->get($this->cacheKey($provider, $model, $dimensions));
 
         if (! is_null($response)) {
             $response = json_decode($response, true);
@@ -103,7 +103,7 @@ class PendingEmbeddingsGeneration
             return;
         }
 
-        Cache::store(config('ai.caching.embeddings.store'))->put(
+        $this->cache()->put(
             $this->cacheKey($provider, $model, $dimensions),
             json_encode($response),
             now()->addSeconds(config('ai.caching.embeddings.seconds', 60 * 60 * 24 * 30))
@@ -147,5 +147,13 @@ class PendingEmbeddingsGeneration
     protected function shouldCache(): bool
     {
         return config('ai.caching.embeddings.cache', false);
+    }
+
+    /**
+     * Get the cache store for embeddings.
+     */
+    protected function cache(): CacheRepository
+    {
+        return Cache::store(config('ai.caching.embeddings.store'));
     }
 }
