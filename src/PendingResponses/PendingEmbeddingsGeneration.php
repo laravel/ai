@@ -104,7 +104,8 @@ class PendingEmbeddingsGeneration
 
         Cache::put(
             $this->cacheKey($provider, $model, $dimensions),
-            json_encode($response), now()->addSeconds(config('ai.caching.embeddings.seconds', 60 * 60 * 24 * 30))
+            json_encode($response),
+            now()->addSeconds(config('ai.caching.embeddings.seconds', 60 * 60 * 24 * 30))
         );
     }
 
