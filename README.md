@@ -600,12 +600,12 @@ The `then` method may be used to provide a closure that will be invoked when the
 
 ```php
 use App\Ai\Agents\SalesCoach;
-use Laravel\Ai\Responses\StreamableAgentResponse;
+use Laravel\Ai\Responses\StreamedAgentResponse;
 
 Route::get('/coach', function () {
     return (new SalesCoach)
         ->stream('Analyze this sales transcript...')
-        ->then(function (StreamableAgentResponse $response) {
+        ->then(function (StreamedAgentResponse $response) {
             // $response->text, $response->events, $response->usage...
         });
 });
@@ -734,6 +734,17 @@ class LogPrompts
 
         return $next($prompt);
     }
+}
+```
+
+You may use the `then` method on the response to execute code after the agent has finished processing. This works for both synchronous and streaming responses:
+
+```php
+public function handle(AgentPrompt $prompt, Closure $next)
+{
+    return $next($prompt)->then(function (AgentResponse $response) {
+        Log::info('Agent responded', ['text' => $response->text]);
+    });
 }
 ```
 
