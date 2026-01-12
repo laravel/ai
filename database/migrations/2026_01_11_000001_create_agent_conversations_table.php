@@ -41,7 +41,7 @@ return new class extends AiMigration
      */
     public function down(): void
     {
-        Schema::dropIfExists('agent_converations');
-        Schema::dropIfExists('agent_converation_messages');
+        Schema::dropIfExists('agent_conversations');
+        Schema::dropIfExists('agent_conversation_messages');
     }
 };

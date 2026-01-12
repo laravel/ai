@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Concerns\RecordsConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasMiddleware;
@@ -18,6 +19,7 @@ use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\UserMessage;
+use Laravel\Ai\Middleware\RecordConversation;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StructuredAgentResponse;
@@ -87,6 +89,11 @@ trait GeneratesText
 
             return $next($prompt);
         }] : [];
+
+        if (in_array(RecordsConversations::class, class_uses_recursive($agent))
+            && $agent->recordsConversations()) {
+            $middleware[] = new RecordConversation;
+        }
 
         return $agent instanceof HasMiddleware
             ? [...$middleware, ...$agent->middleware()]

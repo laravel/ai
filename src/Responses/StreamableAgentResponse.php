@@ -21,6 +21,8 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
 
     public Collection $events;
 
+    public ?string $conversationUuid = null;
+
     protected array $thenCallbacks = [];
 
     protected bool $usesVercelProtocol = false;
@@ -57,6 +59,16 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
         }
 
         $this->thenCallbacks[] = $callback;
+
+        return $this;
+    }
+
+    /**
+     * Set the conversation UUID for this response.
+     */
+    public function withinConversation(?string $conversationUuid): self
+    {
+        $this->conversationUuid = $conversationUuid;
 
         return $this;
     }
