@@ -11,6 +11,8 @@ class AgentResponse extends TextResponse
 
     public ?string $conversationUuid = null;
 
+    public ?object $conversationUser = null;
+
     public function __construct(string $invocationId, string $text, Usage $usage, Meta $meta)
     {
         $this->invocationId = $invocationId;
@@ -19,11 +21,12 @@ class AgentResponse extends TextResponse
     }
 
     /**
-     * Set the conversation UUID for this response.
+     * Set the conversation UUID and participant for this response.
      */
-    public function withinConversation(?string $conversationUuid): self
+    public function withinConversation(string $conversationUuid, object $conversationUser): self
     {
         $this->conversationUuid = $conversationUuid;
+        $this->conversationUser = $conversationUser;
 
         return $this;
     }
