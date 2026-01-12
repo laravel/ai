@@ -41,14 +41,6 @@ trait RemembersConversations
             return [];
         }
 
-        $conversation = DB::table('agent_conversations')
-            ->where('id', $this->conversationId)
-            ->first();
-
-        if (! $conversation) {
-            return [];
-        }
-
         return DB::table('agent_conversation_messages')
             ->where('conversation_id', $conversation->id)
             ->orderBy('id', 'asc')
