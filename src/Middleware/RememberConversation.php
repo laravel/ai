@@ -11,9 +11,7 @@ class RememberConversation
     /**
      * Create a new middleware instance.
      */
-    public function __construct(protected ConversationStore $store)
-    {
-    }
+    public function __construct(protected ConversationStore $store) {}
 
     /**
      * Handle the incoming prompt.
