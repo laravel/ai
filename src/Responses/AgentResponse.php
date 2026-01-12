@@ -15,4 +15,14 @@ class AgentResponse extends TextResponse
 
         parent::__construct($text, $usage, $meta);
     }
+
+    /**
+     * Execute a callback with this response.
+     */
+    public function then(callable $callback): self
+    {
+        $callback($this);
+
+        return $this;
+    }
 }

@@ -80,7 +80,7 @@ trait CreatesPrismTextRequests
             array_filter([
                 ...($provider->driver() === 'anthropic')
                     ? ['anthropic_beta' => 'web-fetch-2025-09-10']
-                    : null,
+                    : [],
                 'api_key' => $provider->providerCredentials()['key']
             ]),
         );

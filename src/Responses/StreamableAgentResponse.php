@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Contracts\Support\Responsable;
 use Illuminate\Support\Collection;
 use IteratorAggregate;
+use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\TextDelta;
@@ -25,8 +26,13 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
 
     protected bool $usesVercelProtocol = false;
 
-    public function __construct(public string $invocationId, protected Closure $generator)
-    {
+    protected ?StreamedAgentResponse $streamedResponse = null;
+
+    public function __construct(
+        public string $invocationId,
+        protected Closure $generator,
+        protected ?Meta $meta = null,
+    ) {
         $this->events = new Collection;
     }
 
@@ -50,8 +56,8 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     public function then(callable $callback): self
     {
         // If the response has already been iterated / streamed, invoke now...
-        if (count($this->events) > 0) {
-            $callback($this);
+        if ($this->streamedResponse) {
+            $callback($this->streamedResponse);
 
             return $this;
         }
@@ -119,8 +125,14 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
         $this->text = TextDelta::combine($events);
         $this->usage = StreamEnd::combineUsage($events);
 
+        $this->streamedResponse = new StreamedAgentResponse(
+            $this->invocationId,
+            $this->events,
+            $this->meta,
+        );
+
         foreach ($this->thenCallbacks as $callback) {
-            call_user_func($callback, $this);
+            call_user_func($callback, $this->streamedResponse);
         }
     }
 }
