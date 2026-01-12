@@ -11,7 +11,7 @@ return new class extends AiMigration
      */
     public function up(): void
     {
-        Schema::create('agent_converations', function (Blueprint $table) {
+        Schema::create('agent_conversations', function (Blueprint $table) {
             $table->id();
             $table->string('uuid')->unique();
             $table->foreignId('user_id');
@@ -21,7 +21,7 @@ return new class extends AiMigration
             $table->index(['user_id', 'updated_at']);
         });
 
-        Schema::create('agent_converation_messages', function (Blueprint $table) {
+        Schema::create('agent_conversation_messages', function (Blueprint $table) {
             $table->id();
             $table->foreignId('conversation_id');
             $table->foreignId('user_id');
