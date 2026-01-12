@@ -21,7 +21,7 @@ interface ConversationStore
     /**
      * Store a new assistant message for the given conversation and return its ID.
      */
-    public function storeAssistantMessage(string $conversationId, int $userId, AgentResponse $response): string;
+    public function storeAssistantMessage(string $conversationId, int $userId, AgentPrompt $prompt, AgentResponse $response): string;
 
     /**
      * Get the latest messages for the given conversation.

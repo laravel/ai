@@ -41,6 +41,7 @@ class DatabaseConversationStore implements ConversationStore
             'id' => $messageId,
             'conversation_id' => $conversationId,
             'user_id' => $userId,
+            'agent' => get_class($prompt->agent),
             'role' => 'user',
             'content' => $prompt->prompt,
             'attachments' => $prompt->attachments->toJson(),
@@ -58,7 +59,7 @@ class DatabaseConversationStore implements ConversationStore
     /**
      * Store a new assistant message for the given conversation and return its ID.
      */
-    public function storeAssistantMessage(string $conversationId, int $userId, AgentResponse $response): string
+    public function storeAssistantMessage(string $conversationId, int $userId, AgentPrompt $prompt, AgentResponse $response): string
     {
         $messageId = (string) Str::uuid7();
 
@@ -66,6 +67,7 @@ class DatabaseConversationStore implements ConversationStore
             'id' => $messageId,
             'conversation_id' => $conversationId,
             'user_id' => $userId,
+            'agent' => get_class($prompt->agent),
             'role' => 'assistant',
             'content' => $response->text,
             'attachments' => '[]',

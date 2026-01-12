@@ -24,6 +24,7 @@ return new class extends AiMigration
             $table->string('id', 36)->primary();
             $table->string('conversation_id', 36)->index();
             $table->foreignId('user_id');
+            $table->string('agent');
             $table->string('role', 25);
             $table->text('content');
             $table->text('attachments');

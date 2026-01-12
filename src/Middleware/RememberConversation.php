@@ -45,6 +45,7 @@ class RememberConversation
             $this->store->storeAssistantMessage(
                 $agent->currentConversation(),
                 $agent->conversationParticipant()->id,
+                $prompt,
                 $response
             );
 
