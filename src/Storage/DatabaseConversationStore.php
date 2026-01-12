@@ -2,9 +2,11 @@
 
 namespace Laravel\Ai\Storage;
 
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 
@@ -76,5 +78,22 @@ class DatabaseConversationStore implements ConversationStore
         ]);
 
         return $messageId;
+    }
+
+    /**
+     * Get the latest messages for the given conversation.
+     *
+     * @return \Illuminate\Support\Collection<int, \Laravel\Ai\Messages\Message>
+     */
+    public function getLatestConversationMessages(string $conversationId, int $limit): Collection
+    {
+        return DB::table('agent_conversation_messages')
+            ->where('conversation_id', $conversationId)
+            ->orderByDesc('id')
+            ->limit($limit)
+            ->get()
+            ->reverse()
+            ->values()
+            ->map(fn ($m) => new Message($m->role, $m->content));
     }
 }

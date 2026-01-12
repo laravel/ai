@@ -2,8 +2,7 @@
 
 namespace Laravel\Ai\Concerns;
 
-use Illuminate\Support\Facades\DB;
-use Laravel\Ai\Messages\Message;
+use Laravel\Ai\Contracts\ConversationStore;
 
 trait RemembersConversations
 {
@@ -41,12 +40,16 @@ trait RemembersConversations
             return [];
         }
 
-        return DB::table('agent_conversation_messages')
-            ->where('conversation_id', $conversation->id)
-            ->orderBy('id', 'asc')
-            ->get()
-            ->map(fn ($m) => new Message($m->role, $m->content))
-            ->all();
+        return resolve(ConversationStore::class)
+            ->getLatestConversationMessages($this->conversationId, $this->maxConversationMessages());
+    }
+
+    /**
+     * Get the maximum number of conversation messages to include in context.
+     */
+    protected function maxConversationMessages(): int
+    {
+        return 100;
     }
 
     /**
