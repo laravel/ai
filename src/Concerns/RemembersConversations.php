@@ -42,7 +42,7 @@ trait RemembersConversations
         }
 
         $conversation = DB::table('agent_conversations')
-            ->where('uuid', $this->conversationUuid)
+            ->where('id', $this->conversationUuid)
             ->first();
 
         if (! $conversation) {

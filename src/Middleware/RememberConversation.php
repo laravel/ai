@@ -23,7 +23,7 @@ class RememberConversation
 
                 DB::table('agent_conversations')->insert([
                     'id' => $conversationId,
-                    'user_id' => $user->id,
+                    'user_id' => $agent->conversationParticipant()->id,
                     'title' => Str::limit($prompt->prompt, 100),
                     'created_at' => now(),
                     'updated_at' => now(),
@@ -37,6 +37,7 @@ class RememberConversation
 
             // Record user message...
             DB::table('agent_conversation_messages')->insert([
+                'id' => (string) Str::uuid7(),
                 'conversation_id' => $agent->currentConversation(),
                 'user_id' => $agent->conversationParticipant()->id,
                 'role' => 'user',
@@ -49,8 +50,9 @@ class RememberConversation
 
             // Record assistant message...
             DB::table('agent_conversation_messages')->insert([
+                'id' => (string) Str::uuid7(),
                 'conversation_id' => $agent->currentConversation(),
-                'user_id' => $agent->conversationParticipant(),
+                'user_id' => $agent->conversationParticipant()->id,
                 'role' => 'assistant',
                 'content' => $response->text,
                 'tool_calls' => json_encode($response->toolCalls),
