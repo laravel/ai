@@ -22,7 +22,7 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
 
     public Collection $events;
 
-    public ?string $conversationUuid = null;
+    public ?string $conversationId = null;
 
     protected array $thenCallbacks = [];
 
@@ -72,9 +72,9 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     /**
      * Set the conversation UUID for this response.
      */
-    public function withinConversation(?string $conversationUuid): self
+    public function withinConversation(?string $conversationId): self
     {
-        $this->conversationUuid = $conversationUuid;
+        $this->conversationId = $conversationId;
 
         return $this;
     }

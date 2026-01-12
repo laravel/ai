@@ -9,7 +9,7 @@ class AgentResponse extends TextResponse
 {
     public string $invocationId;
 
-    public ?string $conversationUuid = null;
+    public ?string $conversationId = null;
 
     public ?object $conversationUser = null;
 
@@ -23,9 +23,9 @@ class AgentResponse extends TextResponse
     /**
      * Set the conversation UUID and participant for this response.
      */
-    public function withinConversation(string $conversationUuid, object $conversationUser): self
+    public function withinConversation(string $conversationId, object $conversationUser): self
     {
-        $this->conversationUuid = $conversationUuid;
+        $this->conversationId = $conversationId;
         $this->conversationUser = $conversationUser;
 
         return $this;

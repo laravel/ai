@@ -3,12 +3,18 @@
 namespace Laravel\Ai\Middleware;
 
 use Closure;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
+use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Prompts\AgentPrompt;
 
 class RememberConversation
 {
+    /**
+     * Create a new middleware instance.
+     */
+    public function __construct(protected ConversationStore $store)
+    {
+    }
+
     /**
      * Handle the incoming prompt.
      */
@@ -19,15 +25,10 @@ class RememberConversation
 
             // Create conversation if necessary...
             if (! $agent->currentConversation()) {
-                $conversationId = (string) Str::uuid7();
-
-                DB::table('agent_conversations')->insert([
-                    'id' => $conversationId,
-                    'user_id' => $agent->conversationParticipant()->id,
-                    'title' => Str::limit($prompt->prompt, 100),
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
+                $conversationId = $this->store->storeConversation(
+                    $agent->conversationParticipant()->id,
+                    $prompt->prompt
+                );
 
                 $agent->continue(
                     $conversationId,
@@ -36,36 +37,18 @@ class RememberConversation
             }
 
             // Record user message...
-            DB::table('agent_conversation_messages')->insert([
-                'id' => (string) Str::uuid7(),
-                'conversation_id' => $agent->currentConversation(),
-                'user_id' => $agent->conversationParticipant()->id,
-                'role' => 'user',
-                'content' => $prompt->prompt,
-                'attachments' => $prompt->attachments->toJson(),
-                'tool_calls' => '[]',
-                'tool_results' => '[]',
-                'usage' => '[]',
-                'meta' => '[]',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
+            $this->store->storeUserMessage(
+                $agent->currentConversation(),
+                $agent->conversationParticipant()->id,
+                $prompt
+            );
 
             // Record assistant message...
-            DB::table('agent_conversation_messages')->insert([
-                'id' => (string) Str::uuid7(),
-                'conversation_id' => $agent->currentConversation(),
-                'user_id' => $agent->conversationParticipant()->id,
-                'role' => 'assistant',
-                'content' => $response->text,
-                'attachments' => '[]',
-                'tool_calls' => json_encode($response->toolCalls),
-                'tool_results' => json_encode($response->toolResults),
-                'usage' => json_encode($response->usage),
-                'meta' => json_encode($response->meta),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
+            $this->store->storeAssistantMessage(
+                $agent->currentConversation(),
+                $agent->conversationParticipant()->id,
+                $response
+            );
 
             $response->withinConversation(
                 $agent->currentConversation(),

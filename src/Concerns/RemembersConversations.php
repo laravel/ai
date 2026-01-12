@@ -7,7 +7,7 @@ use Laravel\Ai\Messages\Message;
 
 trait RemembersConversations
 {
-    protected ?string $conversationUuid = null;
+    protected ?string $conversationId = null;
 
     protected ?object $conversationUser = null;
 
@@ -24,9 +24,9 @@ trait RemembersConversations
     /**
      * Continue an existing conversation as the given user.
      */
-    public function continue(string $conversationUuid, object $as): static
+    public function continue(string $conversationId, object $as): static
     {
-        $this->conversationUuid = $conversationUuid;
+        $this->conversationId = $conversationId;
         $this->conversationUser = $as;
 
         return $this;
@@ -37,12 +37,12 @@ trait RemembersConversations
      */
     public function messages(): iterable
     {
-        if (! $this->conversationUuid) {
+        if (! $this->conversationId) {
             return [];
         }
 
         $conversation = DB::table('agent_conversations')
-            ->where('id', $this->conversationUuid)
+            ->where('id', $this->conversationId)
             ->first();
 
         if (! $conversation) {
@@ -62,7 +62,7 @@ trait RemembersConversations
      */
     public function currentConversation(): ?string
     {
-        return $this->conversationUuid;
+        return $this->conversationId;
     }
 
     /**

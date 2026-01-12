@@ -8,6 +8,7 @@ use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Contracts\HasStructuredOutput;
@@ -23,7 +24,7 @@ use Laravel\Ai\Middleware\RememberConversation;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StructuredAgentResponse;
-
+use Laravel\Ai\Storage\DatabaseConversationStore;
 use function Laravel\Ai\pipeline;
 
 trait GeneratesText
@@ -92,7 +93,7 @@ trait GeneratesText
 
         if (in_array(RemembersConversations::class, class_uses_recursive($agent))
             && $agent->hasConversationParticipant()) {
-            $middleware[] = new RememberConversation;
+            $middleware[] = resolve(RememberConversation::class);
         }
 
         return $agent instanceof HasMiddleware

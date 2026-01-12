@@ -9,6 +9,8 @@ use Illuminate\Support\Stringable;
 use Laravel\Ai\Console\Commands\ChatCommand;
 use Laravel\Ai\Console\Commands\MakeAgentCommand;
 use Laravel\Ai\Console\Commands\MakeToolCommand;
+use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Storage\DatabaseConversationStore;
 
 class AiServiceProvider extends ServiceProvider
 {
@@ -20,6 +22,7 @@ class AiServiceProvider extends ServiceProvider
     public function register()
     {
         $this->app->scoped(AiManager::class, fn ($app): AiManager => new AiManager($app));
+        $this->app->singleton(ConversationStore::class, DatabaseConversationStore::class);
 
         $this->mergeConfigFrom(__DIR__.'/../config/ai.php', 'ai');
     }
