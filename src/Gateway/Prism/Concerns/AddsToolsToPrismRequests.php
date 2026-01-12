@@ -31,7 +31,7 @@ trait AddsToolsToPrismRequests
         return $request
             ->withTools(
                 collect($tools)->map(function ($tool) {
-                    return $tool instanceof ProviderTool ? null : $this->createPrismTool($tool);
+                    return ! $tool instanceof ProviderTool ? $this->createPrismTool($tool) : null;
                 })->filter()->values()->all()
             )
             ->withToolChoice(ToolChoice::Auto)
