@@ -41,7 +41,10 @@ trait RemembersConversations
         }
 
         return resolve(ConversationStore::class)
-            ->getLatestConversationMessages($this->conversationId, $this->maxConversationMessages());
+            ->getLatestConversationMessages(
+                $this->conversationId,
+                $this->maxConversationMessages()
+            );
     }
 
     /**
