@@ -12,7 +12,6 @@ use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\StreamingAgent;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Responses\AgentResponse;
-use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Tests\Feature\Agents\AssistantAgent;
@@ -20,6 +19,7 @@ use Tests\Feature\Agents\ConversationalAgent;
 use Tests\Feature\Agents\StructuredAgent;
 use Tests\Feature\Agents\ToolUsingAgent;
 use Tests\TestCase;
+
 use function Laravel\Ai\agent;
 
 class AgentIntegrationTest extends TestCase
