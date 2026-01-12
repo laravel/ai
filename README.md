@@ -18,7 +18,7 @@ The official Laravel AI SDK.
 - [Agents](#agents)
     - [Prompting](#prompting)
     - [Conversation Context](#conversation-context)
-    - [Remembering Conversations](#remembering-conversations)
+        - [Remembering Conversations](#remembering-conversations)
     - [Tools](#tools)
         - [Similarity Search](#similarity-search)
     - [Provider Tools](#provider-tools)
