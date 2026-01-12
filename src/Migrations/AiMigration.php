@@ -1,6 +1,6 @@
 <?php
 
-namespace Laravel\Pennant\Migrations;
+namespace Laravel\Ai\Migrations;
 
 use Illuminate\Database\Migrations\Migration;
 
