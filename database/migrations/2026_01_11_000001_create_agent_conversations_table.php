@@ -25,7 +25,10 @@ return new class extends AiMigration
             $table->id();
             $table->foreignId('conversation_id');
             $table->foreignId('user_id');
+            $table->string('role', 25);
             $table->text('content');
+            $table->text('tool_calls');
+            $table->text('tool_results');
             $table->timestamps();
 
             $table->index(['conversation_id', 'user_id', 'updated_at']);
