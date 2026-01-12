@@ -79,7 +79,8 @@ class PendingEmbeddingsGeneration
             return null;
         }
 
-        $response = Cache::get($this->cacheKey($provider, $model, $dimensions));
+        $response = Cache::store(config('ai.caching.embeddings.store'))
+            ->get($this->cacheKey($provider, $model, $dimensions));
 
         if (! is_null($response)) {
             $response = json_decode($response, true);
@@ -102,7 +103,7 @@ class PendingEmbeddingsGeneration
             return;
         }
 
-        Cache::put(
+        Cache::store(config('ai.caching.embeddings.store'))->put(
             $this->cacheKey($provider, $model, $dimensions),
             json_encode($response),
             now()->addSeconds(config('ai.caching.embeddings.seconds', 60 * 60 * 24 * 30))
