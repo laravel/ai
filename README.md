@@ -18,6 +18,7 @@ The official Laravel AI SDK.
 - [Agents](#agents)
     - [Prompting](#prompting)
     - [Conversation Context](#conversation-context)
+    - [Remembering Conversations](#remembering-conversations)
     - [Tools](#tools)
         - [Similarity Search](#similarity-search)
     - [Provider Tools](#provider-tools)
@@ -275,6 +276,56 @@ public function messages(): iterable
         })->all();
 }
 ```
+
+#### Remembering Conversations
+
+If you would like Laravel to automatically store and retrieve conversation history for your agent, you may use the `RemembersConversations` trait. This trait provides a simple way to persist conversation messages to the database without manually implementing the `Conversational` interface:
+
+```php
+<?php
+
+namespace App\Ai\Agents;
+
+use Laravel\Ai\Concerns\RemembersConversations;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\Conversational;
+use Laravel\Ai\Promptable;
+
+class SalesCoach implements Agent, Conversational
+{
+    use Promptable, RemembersConversations;
+
+    /**
+     * Get the instructions that the agent should follow.
+     */
+    public function instructions(): string
+    {
+        return 'You are a sales coach...';
+    }
+}
+```
+
+To start a new conversation for a user, call the `forUser` method before prompting:
+
+```php
+$response = (new SalesCoach)->forUser($user)->prompt('Hello!');
+
+$conversationId = $response->conversationId;
+```
+
+The conversation ID is returned on the response and can be stored for future reference, or you can retrieve all of a user's conversations from the `agent_conversations` table directly.
+
+To continue an existing conversation, use the `continue` method:
+
+```php
+$response = (new SalesCoach)
+    ->continue($conversationId, as: $user)
+    ->prompt('Tell me more about that.');
+```
+
+When using the `RemembersConversations` trait, previous messages are automatically loaded and included in the conversation context when prompting. New messages (both user and assistant) are automatically stored after each interaction.
+
+> **Note:** Before using the `RemembersConversations` trait, you should publish and run the package migrations to create the necessary database tables.
 
 ### Tools
 
