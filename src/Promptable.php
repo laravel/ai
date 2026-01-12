@@ -5,7 +5,6 @@ namespace Laravel\Ai;
 use Closure;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Queue\SerializesModels;
-use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Gateway\FakeTextGateway;
@@ -28,9 +27,9 @@ trait Promptable
     public function prompt(string $prompt, array $attachments = [], array|string|null $provider = null, ?string $model = null): AgentResponse
     {
         return $this->withModelFailover(
-            $this->withinMiddlewarePipeline(function (AgentPrompt $prompt) {
-                return $prompt->provider()->prompt($prompt);
-            }, $prompt, $attachments),
+            fn (Provider $provider, string $model) => $provider->prompt(
+                new AgentPrompt($this, $prompt, $attachments, $provider, $model)
+            ),
             $provider,
             $model,
         );
@@ -42,9 +41,9 @@ trait Promptable
     public function stream(string $prompt, array $attachments = [], ?string $provider = null, ?string $model = null): StreamableAgentResponse
     {
         return $this->withModelFailover(
-            $this->withinMiddlewarePipeline(function (AgentPrompt $prompt) {
-                return $prompt->provider()->stream($prompt);
-            }, $prompt, $attachments),
+            fn (Provider $provider, string $model) => $provider->stream(
+                new AgentPrompt($this, $prompt, $attachments, $provider, $model)
+            ),
             $provider,
             $model,
         );
@@ -127,33 +126,6 @@ trait Promptable
         }
 
         throw $e;
-    }
-
-    /**
-     * Wrap the given Closure in an agent middleware pipeline.
-     */
-    private function withinMiddlewarePipeline(Closure $callback, string $prompt, array $attachments): Closure
-    {
-        $baseMiddleware = static::isFaked() ? [function (AgentPrompt $prompt, Closure $next) {
-            Ai::recordPrompt($prompt);
-
-            return $next($prompt);
-        }] : [];
-
-        return fn (Provider $provider, string $model) => pipeline()
-            ->send(new AgentPrompt(
-                $this,
-                $prompt,
-                $attachments,
-                $provider,
-                $model
-            ))
-            ->through(
-                $this instanceof HasMiddleware
-                    ? [...$baseMiddleware, ...$this->middleware()]
-                    : $baseMiddleware
-            )
-            ->then($callback);
     }
 
     /**

@@ -2,10 +2,13 @@
 
 namespace Laravel\Ai\Providers\Concerns;
 
+use Closure;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Str;
+use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
+use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Tool;
@@ -19,6 +22,8 @@ use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StructuredAgentResponse;
 
+use function Laravel\Ai\pipeline;
+
 trait GeneratesText
 {
     /**
@@ -28,39 +33,64 @@ trait GeneratesText
     {
         $invocationId = (string) Str::uuid7();
 
-        $this->events->dispatch(new PromptingAgent($invocationId, $prompt));
+        $processedPrompt = null;
 
-        $agent = $prompt->agent;
+        $response = pipeline()
+            ->send($prompt)
+            ->through($this->gatherMiddlewareFor($prompt->agent))
+            ->then(function (AgentPrompt $prompt) use ($invocationId, &$processedPrompt) {
+                $processedPrompt = $prompt;
 
-        $messages = $agent instanceof Conversational ? $agent->messages() : [];
+                $this->events->dispatch(new PromptingAgent($invocationId, $prompt));
 
-        $messages[] = new UserMessage($prompt->prompt, $prompt->attachments->all());
+                $agent = $prompt->agent;
 
-        $this->listenForToolInvocations($invocationId, $agent);
+                $messages = $agent instanceof Conversational ? $agent->messages() : [];
 
-        $response = $this->textGateway()->generateText(
-            $this,
-            $prompt->model,
-            (string) $agent->instructions(),
-            $messages,
-            $agent instanceof HasTools ? $agent->tools() : [],
-            $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null,
-            TextGenerationOptions::forAgent($agent),
-        );
+                $messages[] = new UserMessage($prompt->prompt, $prompt->attachments->all());
 
-        $response = $agent instanceof HasStructuredOutput
-            ? (new StructuredAgentResponse($invocationId, $response->structured, $response->text, $response->usage, $response->meta))
-                ->withToolCallsAndResults($response->toolCalls, $response->toolResults)
-                ->withSteps($response->steps)
-            : (new AgentResponse($invocationId, $response->text, $response->usage, $response->meta))
-                ->withMessages($response->messages)
-                ->withSteps($response->steps);
+                $this->listenForToolInvocations($invocationId, $agent);
+
+                $response = $this->textGateway()->generateText(
+                    $this,
+                    $prompt->model,
+                    (string) $agent->instructions(),
+                    $messages,
+                    $agent instanceof HasTools ? $agent->tools() : [],
+                    $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null,
+                    TextGenerationOptions::forAgent($agent),
+                );
+
+                return $agent instanceof HasStructuredOutput
+                    ? (new StructuredAgentResponse($invocationId, $response->structured, $response->text, $response->usage, $response->meta))
+                        ->withToolCallsAndResults($response->toolCalls, $response->toolResults)
+                        ->withSteps($response->steps)
+                    : (new AgentResponse($invocationId, $response->text, $response->usage, $response->meta))
+                        ->withMessages($response->messages)
+                        ->withSteps($response->steps);
+            });
 
         $this->events->dispatch(
-            new AgentPrompted($invocationId, $prompt, $response)
+            new AgentPrompted($invocationId, $processedPrompt, $response)
         );
 
         return $response;
+    }
+
+    /**
+     * Gather the middleware for the given agent.
+     */
+    protected function gatherMiddlewareFor(Agent $agent): array
+    {
+        $middleware = Ai::hasFakeGatewayFor(get_class($agent)) ? [function (AgentPrompt $prompt, Closure $next) {
+            Ai::recordPrompt($prompt);
+
+            return $next($prompt);
+        }] : [];
+
+        return $agent instanceof HasMiddleware
+            ? [...$middleware, ...$agent->middleware()]
+            : $middleware;
     }
 
     /**

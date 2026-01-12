@@ -17,6 +17,8 @@ use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 
+use function Laravel\Ai\pipeline;
+
 trait StreamsText
 {
     /**
@@ -27,32 +29,43 @@ trait StreamsText
         $invocationId = (string) Str::uuid7();
 
         return new StreamableAgentResponse($invocationId, function () use ($invocationId, $prompt) {
-            $agent = $prompt->agent;
+            $processedPrompt = null;
 
-            if ($agent instanceof HasStructuredOutput) {
-                throw new InvalidArgumentException('Streaming structured output is not currently supported.');
-            }
+            $generator = pipeline()
+                ->send($prompt)
+                ->through($this->gatherMiddlewareFor($prompt->agent))
+                ->then(function (AgentPrompt $prompt) use ($invocationId, &$processedPrompt) {
+                    $processedPrompt = $prompt;
 
-            $this->events->dispatch(new StreamingAgent($invocationId, $prompt));
+                    $agent = $prompt->agent;
 
-            $messages = $agent instanceof Conversational ? $agent->messages() : [];
+                    if ($agent instanceof HasStructuredOutput) {
+                        throw new InvalidArgumentException('Streaming structured output is not currently supported.');
+                    }
 
-            $messages[] = new UserMessage($prompt->prompt, $prompt->attachments->all());
+                    $this->events->dispatch(new StreamingAgent($invocationId, $prompt));
+
+                    $messages = $agent instanceof Conversational ? $agent->messages() : [];
+
+                    $messages[] = new UserMessage($prompt->prompt, $prompt->attachments->all());
+
+                    $this->listenForToolInvocations($invocationId, $agent);
+
+                    yield from $this->textGateway()->streamText(
+                        $invocationId,
+                        $this,
+                        $prompt->model,
+                        (string) $agent->instructions(),
+                        $messages,
+                        $agent instanceof HasTools ? $agent->tools() : [],
+                        $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null,
+                        TextGenerationOptions::forAgent($agent),
+                    );
+                });
 
             $events = [];
 
-            $this->listenForToolInvocations($invocationId, $agent);
-
-            foreach ($this->textGateway()->streamText(
-                $invocationId,
-                $this,
-                $prompt->model,
-                (string) $agent->instructions(),
-                $messages,
-                $agent instanceof HasTools ? $agent->tools() : [],
-                $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null,
-                TextGenerationOptions::forAgent($agent),
-            ) as $event) {
+            foreach ($generator as $event) {
                 $events[] = $event;
 
                 yield $event;
@@ -61,11 +74,11 @@ trait StreamsText
             $response = new StreamedAgentResponse(
                 $invocationId,
                 collect($events),
-                new Meta($this->name(), $prompt->model),
+                new Meta($this->name(), $processedPrompt->model),
             );
 
             $this->events->dispatch(
-                new AgentStreamed($invocationId, $prompt, $response)
+                new AgentStreamed($invocationId, $processedPrompt, $response)
             );
         });
     }

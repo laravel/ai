@@ -4,7 +4,8 @@
       "Bash(./vendor/bin/phpunit:*)",
       "WebSearch",
       "WebFetch(domain:platform.openai.com)",
-      "Bash(php -l:*)"
+      "Bash(php -l:*)",
+      "Bash(grep:*)"
     ]
   }
 }
