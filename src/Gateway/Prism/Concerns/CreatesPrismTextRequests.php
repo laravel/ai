@@ -57,7 +57,7 @@ trait CreatesPrismTextRequests
         if ($provider instanceof AnthropicProvider) {
             return $request
                 ->withProviderOptions(array_filter([
-                    'use_tool_calling' => $schema ? true : null
+                    'use_tool_calling' => $schema ? true : null,
                 ]))
                 ->withMaxTokens($options?->maxTokens ?? 64_000);
         }
@@ -80,8 +80,8 @@ trait CreatesPrismTextRequests
             array_filter([
                 ...($provider->driver() === 'anthropic')
                     ? ['anthropic_beta' => 'web-fetch-2025-09-10']
-                    : null,
-                'api_key' => $provider->providerCredentials()['key']
+                    : [],
+                'api_key' => $provider->providerCredentials()['key'],
             ]),
         );
     }

@@ -27,4 +27,14 @@ class AgentResponse extends TextResponse
 
         return $this;
     }
+
+    /**
+     * Execute a callback with this response.
+     */
+    public function then(callable $callback): self
+    {
+        $callback($this);
+
+        return $this;
+    }
 }

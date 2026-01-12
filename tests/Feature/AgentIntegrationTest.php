@@ -12,7 +12,7 @@ use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\StreamingAgent;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Responses\AgentResponse;
-use Laravel\Ai\Responses\StreamableAgentResponse;
+use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\Feature\Agents\ConversationalAgent;
@@ -76,7 +76,7 @@ class AgentIntegrationTest extends TestCase
             'What is the name of the PHP framework created by Taylor Otwell?',
             provider: $this->provider,
             model: $this->model,
-        )->then(function (StreamableAgentResponse $response) {
+        )->then(function (StreamedAgentResponse $response) {
             $_SERVER['__testing.response'] = $response;
         })->then(function () {
             $_SERVER['__testing.invoked'] = true;

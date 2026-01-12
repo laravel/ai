@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use Closure;
 use Laravel\Ai\Prompts\AgentPrompt;
-use Laravel\Ai\Responses\StreamableAgentResponse;
+use Laravel\Ai\Responses\StreamedAgentResponse;
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\TestCase;
 
@@ -38,7 +38,7 @@ class AgentMiddlewareTest extends TestCase
 
         $response
             ->each(fn () => true)
-            ->then(function (StreamableAgentResponse $response) {
+            ->then(function (StreamedAgentResponse $response) {
                 $_SERVER['__testing.text'] = $response->text;
             });
 
