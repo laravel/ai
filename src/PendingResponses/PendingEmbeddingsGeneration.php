@@ -142,18 +142,18 @@ class PendingEmbeddingsGeneration
     }
 
     /**
-     * Determine if embeddings should be cached.
-     */
-    protected function shouldCache(): bool
-    {
-        return config('ai.caching.embeddings.cache', false);
-    }
-
-    /**
      * Get the cache store for embeddings.
      */
     protected function cache(): CacheRepository
     {
         return Cache::store(config('ai.caching.embeddings.store'));
+    }
+
+    /**
+     * Determine if embeddings should be cached.
+     */
+    protected function shouldCache(): bool
+    {
+        return config('ai.caching.embeddings.cache', false);
     }
 }
