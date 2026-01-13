@@ -1065,6 +1065,32 @@ Embedding generation can be cached to avoid redundant API calls for identical in
 
 When caching is enabled, embeddings are cached for 30 days. The cache key is based on the provider, model, dimensions, and input content, ensuring that identical requests return cached results while different configurations generate fresh embeddings.
 
+You may also enable caching for a specific request using the `cache` method, even when global caching is disabled:
+
+```php
+$response = Embeddings::for(['Napa Valley has great wine.'])
+    ->cache()
+    ->generate();
+```
+
+You may specify a custom cache duration in seconds:
+
+```php
+$response = Embeddings::for(['Napa Valley has great wine.'])
+    ->cache(seconds: 3600) // Cache for 1 hour
+    ->generate();
+```
+
+The `toEmbeddings` Stringable method also accepts a `cache` argument:
+
+```php
+// Cache with default duration...
+$embeddings = Str::of('Napa Valley has great wine.')->toEmbeddings(cache: true);
+
+// Cache for a specific duration...
+$embeddings = Str::of('Napa Valley has great wine.')->toEmbeddings(cache: 3600);
+```
+
 ## Reranking
 
 Reranking allows you to reorder a list of documents based on their relevance to a given query. This is useful for improving search results by using semantic understanding:
