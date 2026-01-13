@@ -916,7 +916,8 @@ use Laravel\Ai\Responses\ImageResponse;
 
 Image::of('A donut sitting on the kitchen counter')
     ->portrait()
-    ->queue(function (ImageResponse $image) {
+    ->queue()
+    ->then(function (ImageResponse $image) {
         $path = $image->store();
 
         // ...
@@ -974,7 +975,8 @@ use Laravel\Ai\Audio;
 use Laravel\Ai\Responses\AudioResponse;
 
 Audio::of('I love coding with Laravel.')
-    ->queue(function (AudioResponse $audio) {
+    ->queue()
+    ->then(function (AudioResponse $audio) {
         $path = $image->store();
 
         // ...
@@ -1010,7 +1012,8 @@ use Laravel\Ai\Transcription;
 use Laravel\Ai\Responses\TranscriptionResponse;
 
 Transcription::fromStorage('audio.mp3')
-    ->queue(function (TranscriptionResponse $transcript) {
+    ->queue()
+    ->then(function (TranscriptionResponse $transcript) {
         // ...
     });
 ```
