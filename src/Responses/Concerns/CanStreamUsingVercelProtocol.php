@@ -71,6 +71,7 @@ trait CanStreamUsingVercelProtocol
             yield "data: [DONE]\n\n";
         }, headers: [
             'Cache-Control' => 'no-cache, no-transform',
+            'Content-Type' => 'text/event-stream',
             'x-vercel-ai-ui-message-stream' => 'v1',
         ]);
     }
