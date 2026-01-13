@@ -105,9 +105,11 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
 
         return response()->stream(function () {
             foreach ($this as $event) {
-                yield (string) $event;
+                yield 'data: '.((string) $event)."\n\n";
             }
-        });
+
+            yield "data: [DONE]\n\n";
+        }, headers: ['Content-Type' => 'text/event-stream']);
     }
 
     /**
