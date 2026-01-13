@@ -22,6 +22,8 @@ class PendingEmbeddingsGeneration
 
     protected ?int $dimensions = null;
 
+    protected ?int $cacheSeconds = null;
+
     public function __construct(
         protected array $inputs,
     ) {}
@@ -32,6 +34,16 @@ class PendingEmbeddingsGeneration
     public function dimensions(int $dimensions): self
     {
         $this->dimensions = $dimensions;
+
+        return $this;
+    }
+
+    /**
+     * Enable caching for this embedding request.
+     */
+    public function cache(?int $seconds = null): self
+    {
+        $this->cacheSeconds = $seconds ?? config('ai.caching.embeddings.seconds', 60 * 60 * 24 * 30);
 
         return $this;
     }
@@ -80,7 +92,7 @@ class PendingEmbeddingsGeneration
             return null;
         }
 
-        $response = $this->cache()->get($this->cacheKey($provider, $model, $dimensions));
+        $response = $this->cacheStore()->get($this->cacheKey($provider, $model, $dimensions));
 
         if (! is_null($response)) {
             $response = json_decode($response, true);
@@ -103,10 +115,10 @@ class PendingEmbeddingsGeneration
             return;
         }
 
-        $this->cache()->put(
+        $this->cacheStore()->put(
             $this->cacheKey($provider, $model, $dimensions),
             json_encode($response),
-            now()->addSeconds(config('ai.caching.embeddings.seconds', 60 * 60 * 24 * 30))
+            now()->addSeconds($this->cacheSeconds ?? config('ai.caching.embeddings.seconds', 60 * 60 * 24 * 30))
         );
     }
 
@@ -144,7 +156,7 @@ class PendingEmbeddingsGeneration
     /**
      * Get the cache store for embeddings.
      */
-    protected function cache(): CacheRepository
+    protected function cacheStore(): CacheRepository
     {
         return Cache::store(config('ai.caching.embeddings.store'));
     }
@@ -154,6 +166,6 @@ class PendingEmbeddingsGeneration
      */
     protected function shouldCache(): bool
     {
-        return config('ai.caching.embeddings.cache', false);
+        return ! is_null($this->cacheSeconds) || config('ai.caching.embeddings.cache', false);
     }
 }

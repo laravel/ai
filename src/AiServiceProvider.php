@@ -43,12 +43,17 @@ class AiServiceProvider extends ServiceProvider
         Stringable::macro('toEmbeddings', function (
             ?string $provider = null,
             ?int $dimensions = null,
-            ?string $model = null
+            ?string $model = null,
+            bool|int|null $cache = null,
         ) {
             $request = Embeddings::for([$this->value]);
 
             if ($dimensions) {
                 $request->dimensions($dimensions);
+            }
+
+            if ($cache !== false && ! is_null($cache)) {
+                $request->cache(is_int($cache) ? $cache : null);
             }
 
             return $request->generate(provider: $provider, model: $model)->embeddings[0];
