@@ -7,7 +7,7 @@ use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\ToolCall;
 use Laravel\Ai\Streaming\Events\ToolResult;
 
-trait CanStreamusingVercelDataProtocol
+trait CanStreamUsingVercelProtocol
 {
     /**
      * Create an HTTP response that represents the object using the Vercel AI SDK protocol

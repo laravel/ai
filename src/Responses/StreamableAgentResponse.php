@@ -14,7 +14,7 @@ use Traversable;
 
 class StreamableAgentResponse implements IteratorAggregate, Responsable
 {
-    use Concerns\CanStreamusingVercelDataProtocol;
+    use Concerns\CanStreamUsingVercelProtocol;
 
     public ?string $text;
 
