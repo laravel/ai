@@ -14,7 +14,7 @@ use Traversable;
 
 class StreamableAgentResponse implements IteratorAggregate, Responsable
 {
-    use Concerns\CanStreamUsingVercelProtocol;
+    use Concerns\CanStreamusingVercelDataProtocol;
 
     public ?string $text;
 
@@ -84,7 +84,7 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
      *
      * See: https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol
      */
-    public function usingVercelProtocol(bool $value = true): self
+    public function usingVercelDataProtocol(bool $value = true): self
     {
         $this->usesVercelProtocol = $value;
 

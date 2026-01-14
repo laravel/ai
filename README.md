@@ -674,7 +674,7 @@ foreach ($stream as $event) {
 
 #### Streaming Using the Vercel AI SDK Protocol
 
-You may stream the events using the [Vercel AI SDK stream protocol](https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol) by invoking the `usingVercelProtocol` method on the streamable response:
+You may stream the events using the [Vercel AI SDK stream protocol](https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol) by invoking the `usingVercelDataProtocol` method on the streamable response:
 
 ```php
 use App\Ai\Agents\SalesCoach;
@@ -682,7 +682,7 @@ use App\Ai\Agents\SalesCoach;
 Route::get('/coach', function () {
     return (new SalesCoach)
         ->stream('Analyze this sales transcript...')
-        ->usingVercelProtocol();
+        ->usingVercelDataProtocol();
 });
 ```
 
