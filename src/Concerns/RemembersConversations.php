@@ -44,7 +44,7 @@ trait RemembersConversations
             ->getLatestConversationMessages(
                 $this->conversationId,
                 $this->maxConversationMessages()
-            );
+            )->all();
     }
 
     /**
