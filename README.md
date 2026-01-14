@@ -833,6 +833,7 @@ You may configure text generation options for an agent using PHP attributes. The
 
 - `MaxSteps`: The maximum number of steps the agent may take when using tools.
 - `MaxTokens`: The maximum number of tokens the model may generate.
+- `Provider`: The AI provider (or providers for failover) to use for the agent.
 - `Temperature`: The sampling temperature to use for generation (0.0 to 1.0).
 
 ```php
@@ -842,12 +843,14 @@ namespace App\Ai\Agents;
 
 use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Attributes\MaxTokens;
+use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Attributes\Temperature;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Promptable;
 
 #[MaxSteps(10)]
 #[MaxTokens(4096)]
+#[Provider('anthropic')]
 #[Temperature(0.7)]
 class SalesCoach implements Agent
 {
