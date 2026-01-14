@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Prompts\AgentPrompt;
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\Feature\Agents\AttributeAgent;
 use Tests\TestCase;
@@ -25,5 +26,16 @@ class AgentAttributeTest extends TestCase
         $this->assertNull($options->maxSteps);
         $this->assertNull($options->maxTokens);
         $this->assertNull($options->temperature);
+    }
+
+    public function test_provider_attribute_is_used_when_prompting(): void
+    {
+        AttributeAgent::fake();
+
+        (new AttributeAgent)->prompt('Hello');
+
+        AttributeAgent::assertPrompted(function (AgentPrompt $prompt) {
+            return $prompt->provider->name() === 'anthropic';
+        });
     }
 }
