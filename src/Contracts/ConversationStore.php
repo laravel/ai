@@ -9,6 +9,11 @@ use Laravel\Ai\Responses\AgentResponse;
 interface ConversationStore
 {
     /**
+     * Get the most recent conversation ID for a given user.
+     */
+    public function latestConversationId(int $userId): string;
+
+    /**
      * Store a new conversation and return its ID.
      */
     public function storeConversation(int $userId, string $title): string;

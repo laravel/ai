@@ -32,6 +32,19 @@ trait RemembersConversations
     }
 
     /**
+     * Continue an existing conversation as the given user.
+     */
+    public function continueLastConversation(object $as): static
+    {
+        $this->conversationUser = $as;
+
+        $this->conversationId = resolve(ConversationStore::class)
+            ->latestConversationId($as);
+
+        return $this;
+    }
+
+    /**
      * Get the list of messages comprising the conversation so far.
      */
     public function messages(): iterable

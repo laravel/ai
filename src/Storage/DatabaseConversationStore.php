@@ -13,6 +13,17 @@ use Laravel\Ai\Responses\AgentResponse;
 class DatabaseConversationStore implements ConversationStore
 {
     /**
+     * Get the most recent conversation ID for a given user.
+     */
+    public function latestConversationId(int $userId): ?string
+    {
+        return DB::table('agent_conversations')
+            ->where('user_id', $userId)
+            ->orderBy('updated_at', 'desc')
+            ->first()?->id;
+    }
+
+    /**
      * Store a new conversation and return its ID.
      */
     public function storeConversation(int $userId, string $title): string
