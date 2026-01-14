@@ -39,7 +39,7 @@ trait RemembersConversations
         $this->conversationUser = $as;
 
         $this->conversationId = resolve(ConversationStore::class)
-            ->latestConversationId($as);
+            ->latestConversationId($as->id);
 
         return $this;
     }

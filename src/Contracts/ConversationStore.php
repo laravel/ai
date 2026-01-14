@@ -11,7 +11,7 @@ interface ConversationStore
     /**
      * Get the most recent conversation ID for a given user.
      */
-    public function latestConversationId(int $userId): string;
+    public function latestConversationId(int $userId): ?string;
 
     /**
      * Store a new conversation and return its ID.
