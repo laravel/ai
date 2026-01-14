@@ -1,5 +1,4 @@
 <?php
-
 namespace Laravel\Ai\Gateway\Prism\Concerns;
 
 use Laravel\Ai\Contracts\Prompt;
@@ -15,20 +14,28 @@ trait CreatesPrismTextRequests
     /**
      * Create a Prism text request for the given provider, model, and prompt.
      */
-    protected function createPrismTextRequest(Provider $provider, string $model, ?array $schema, ?TextGenerationOptions $options = null, int $timeout = 60)
+    protected function createPrismTextRequest(
+        Provider $provider,
+        string $model,
+        ?array $schema,
+        ?TextGenerationOptions $options = null,
+        ?int $timeout = null,
+    )
     {
+        $timeout ??= config('ai.http.timeout', 60);
+
         $request = tap(
-            ! empty($schema) ? Prism::structured() : Prism::text(),
-            fn ($prism) => $this->configure($prism, $provider, $model)
+            !empty($schema) ? Prism::structured() : Prism::text(),
+            fn($prism) => $this->configure($prism, $provider, $model)
         );
 
-        if (! empty($schema)) {
+        if (!empty($schema)) {
             $request = $this->withStructuredOutputOptions($request, $provider, $schema);
         }
 
         $request = $this->withProviderOptions($request, $provider, $schema, $options);
 
-        if (! is_null($options?->temperature)) {
+        if (!is_null($options?->temperature)) {
             $request = $request->usingTemperature($options->temperature);
         }
 
@@ -62,7 +69,7 @@ trait CreatesPrismTextRequests
                 ->withMaxTokens($options?->maxTokens ?? 64_000);
         }
 
-        if (! is_null($options?->maxTokens)) {
+        if (!is_null($options?->maxTokens)) {
             $request = $request->withMaxTokens($options->maxTokens);
         }
 
@@ -78,7 +85,7 @@ trait CreatesPrismTextRequests
             static::toPrismProvider($provider),
             $model,
             array_filter([
-                ...($provider->driver() === 'anthropic')
+                 ...($provider->driver() === 'anthropic')
                     ? ['anthropic_beta' => 'web-fetch-2025-09-10']
                     : [],
                 'api_key' => $provider->providerCredentials()['key'],

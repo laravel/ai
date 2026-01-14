@@ -63,8 +63,10 @@ class PrismGateway implements Gateway
         array $tools = [],
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
-        int $timeout = 60,
+        ?int $timeout = null,
     ): TextResponse {
+        $timeout ??= config('ai.http.timeout', 60);
+
         [$request, $structured] = [
             $this->createPrismTextRequest($provider, $model, $schema, $options, $timeout),
             ! empty($schema),
@@ -122,8 +124,10 @@ class PrismGateway implements Gateway
         array $tools = [],
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
-        int $timeout = 60,
+        ?int $timeout = null,
     ): Generator {
+        $timeout ??= config('ai.http.timeout', 60);
+
         [$request, $structured] = [
             $this->createPrismTextRequest($provider, $model, $schema, $options, $timeout),
             ! empty($schema),
@@ -177,14 +181,17 @@ class PrismGateway implements Gateway
         array $attachments = [],
         ?string $size = null,
         ?string $quality = null,
+        ?int $timeout = null,
     ): ImageResponse {
+        $timeout ??= config('ai.http.timeout', 60);
+
         try {
             $response = Prism::image()
                 ->using(static::toPrismProvider($provider), $model)
                 ->withPrompt($prompt, $this->toPrismImageAttachments($attachments))
                 ->withProviderOptions($provider->defaultImageOptions($size, $quality))
                 ->withClientOptions([
-                    'timeout' => 60,
+                    'timeout' => $timeout,
                 ])
                 ->generate();
         } catch (PrismVendorException $e) {
