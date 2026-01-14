@@ -182,7 +182,7 @@ class PrismGateway implements Gateway
                 ->withPrompt($prompt, $this->toPrismImageAttachments($attachments))
                 ->withProviderOptions($provider->defaultImageOptions($size, $quality))
                 ->withClientOptions([
-                    'timeout' => 60,
+                    'timeout' => 120,
                 ])
                 ->generate();
         } catch (PrismVendorException $e) {
@@ -248,6 +248,7 @@ class PrismGateway implements Gateway
                 ->withVoice($voice)
                 ->withProviderOptions(array_filter([
                     'instructions' => $instructions,
+                    'speed' => 1.0,
                 ]))
                 ->asAudio();
         } catch (PrismVendorException $e) {
