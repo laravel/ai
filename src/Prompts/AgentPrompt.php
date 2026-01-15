@@ -13,17 +13,21 @@ class AgentPrompt extends Prompt
 
     public readonly Collection $attachments;
 
+    public readonly ?int $timeout;
+
     public function __construct(
         Agent $agent,
         string $prompt,
         Collection|array $attachments,
         TextProvider $provider,
-        string $model
+        string $model,
+        ?int $timeout = null
     ) {
         parent::__construct($prompt, $provider, $model);
 
         $this->agent = $agent;
         $this->attachments = Collection::make($attachments);
+        $this->timeout = $timeout;
     }
 
     /**
@@ -49,6 +53,7 @@ class AgentPrompt extends Prompt
             $attachments ?? $this->attachments,
             $this->provider,
             $this->model,
+            $this->timeout,
         );
     }
 

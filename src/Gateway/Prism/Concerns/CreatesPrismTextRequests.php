@@ -15,8 +15,13 @@ trait CreatesPrismTextRequests
     /**
      * Create a Prism text request for the given provider, model, and prompt.
      */
-    protected function createPrismTextRequest(Provider $provider, string $model, ?array $schema, ?TextGenerationOptions $options = null)
-    {
+    protected function createPrismTextRequest(
+        Provider $provider,
+        string $model,
+        ?array $schema,
+        ?TextGenerationOptions $options = null,
+        ?int $timeout = null,
+    ) {
         $request = tap(
             ! empty($schema) ? Prism::structured() : Prism::text(),
             fn ($prism) => $this->configure($prism, $provider, $model)
@@ -32,7 +37,7 @@ trait CreatesPrismTextRequests
             $request = $request->usingTemperature($options->temperature);
         }
 
-        return $request->withClientOptions(['timeout' => 60]);
+        return $request->withClientOptions(['timeout' => $timeout ?? 60]);
     }
 
     /**
@@ -79,8 +84,8 @@ trait CreatesPrismTextRequests
             $model,
             array_filter([
                 ...($provider->driver() === 'anthropic')
-                    ? ['anthropic_beta' => 'web-fetch-2025-09-10']
-                    : [],
+                   ? ['anthropic_beta' => 'web-fetch-2025-09-10']
+                   : [],
                 'api_key' => $provider->providerCredentials()['key'],
             ]),
         );

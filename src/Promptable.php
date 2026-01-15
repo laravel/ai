@@ -26,11 +26,16 @@ trait Promptable
     /**
      * Invoke the agent with a given prompt.
      */
-    public function prompt(string $prompt, array $attachments = [], array|string|null $provider = null, ?string $model = null): AgentResponse
+    public function prompt(
+        string $prompt,
+        array $attachments = [],
+        array|string|null $provider = null,
+        ?string $model = null,
+        ?int $timeout = null): AgentResponse
     {
         return $this->withModelFailover(
             fn (Provider $provider, string $model) => $provider->prompt(
-                new AgentPrompt($this, $prompt, $attachments, $provider, $model)
+                new AgentPrompt($this, $prompt, $attachments, $provider, $model, $timeout ?? 60)
             ),
             $provider,
             $model,
@@ -40,11 +45,16 @@ trait Promptable
     /**
      * Invoke the agent with a given prompt and return a streamable response.
      */
-    public function stream(string $prompt, array $attachments = [], ?string $provider = null, ?string $model = null): StreamableAgentResponse
+    public function stream(
+        string $prompt,
+        array $attachments = [],
+        ?string $provider = null,
+        ?string $model = null,
+        ?int $timeout = null): StreamableAgentResponse
     {
         return $this->withModelFailover(
             fn (Provider $provider, string $model) => $provider->stream(
-                new AgentPrompt($this, $prompt, $attachments, $provider, $model)
+                new AgentPrompt($this, $prompt, $attachments, $provider, $model, $timeout ?? 60)
             ),
             $provider,
             $model,

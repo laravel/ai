@@ -63,6 +63,7 @@ trait StreamsText
                             $agent instanceof HasTools ? $agent->tools() : [],
                             null,
                             TextGenerationOptions::forAgent($agent),
+                            $prompt->timeout,
                         );
                     },
                     $meta,

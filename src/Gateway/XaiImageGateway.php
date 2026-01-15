@@ -30,11 +30,12 @@ class XaiImageGateway implements ImageGateway
         array $attachments = [],
         ?string $size = null,
         ?string $quality = null,
+        ?int $timeout = null,
     ): ImageResponse {
         $response = $this->withRateLimitHandling(
             $provider->name(),
             fn () => Http::withToken($provider->providerCredentials()['key'])
-                ->timeout(60)
+                ->timeout($timeout ?? 120)
                 ->post('https://api.x.ai/v1/images/generations', [
                     'model' => $model,
                     'prompt' => $prompt,

@@ -26,6 +26,8 @@ class PendingImageGeneration
 
     public ?string $quality = null;
 
+    public ?int $timeout = null;
+
     public function __construct(
         public string $prompt,
     ) {}
@@ -97,6 +99,16 @@ class PendingImageGeneration
     }
 
     /**
+     * Specify the timeout for the image generation request.
+     */
+    public function timeout(?int $timeout): self
+    {
+        $this->timeout = $timeout;
+
+        return $this;
+    }
+
+    /**
      * Generate the image.
      */
     public function generate(array|string|null $provider = null, ?string $model = null): ImageResponse
@@ -112,7 +124,7 @@ class PendingImageGeneration
 
             try {
                 return $provider->image(
-                    $this->prompt, $this->attachments, $this->size, $this->quality, $model
+                    $this->prompt, $this->attachments, $this->size, $this->quality, $model, $this->timeout
                 );
             } catch (FailoverableException $e) {
                 event(new ProviderFailedOver($provider, $model, $e));
