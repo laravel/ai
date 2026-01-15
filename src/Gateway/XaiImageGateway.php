@@ -32,12 +32,10 @@ class XaiImageGateway implements ImageGateway
         ?string $quality = null,
         ?int $timeout = null,
     ): ImageResponse {
-        $timeout ??= config('ai.http.timeout', 60);
-
         $response = $this->withRateLimitHandling(
             $provider->name(),
             fn () => Http::withToken($provider->providerCredentials()['key'])
-                ->timeout($timeout)
+                ->timeout($timeout ?? 120)
                 ->post('https://api.x.ai/v1/images/generations', [
                     'model' => $model,
                     'prompt' => $prompt,

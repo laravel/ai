@@ -22,8 +22,6 @@ trait CreatesPrismTextRequests
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ) {
-        $timeout ??= config('ai.http.timeout', 60);
-
         $request = tap(
             ! empty($schema) ? Prism::structured() : Prism::text(),
             fn ($prism) => $this->configure($prism, $provider, $model)
@@ -39,7 +37,7 @@ trait CreatesPrismTextRequests
             $request = $request->usingTemperature($options->temperature);
         }
 
-        return $request->withClientOptions(['timeout' => $timeout]);
+        return $request->withClientOptions(['timeout' => $timeout ?? 60]);
     }
 
     /**

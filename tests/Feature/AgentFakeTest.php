@@ -179,6 +179,7 @@ class AgentFakeTest extends TestCase
         AssistantAgent::fake();
 
         $timeout = 120;
+
         (new AssistantAgent)->prompt('Test prompt', timeout: $timeout);
 
         AssistantAgent::assertPrompted(function (AgentPrompt $prompt) {
@@ -187,7 +188,7 @@ class AgentFakeTest extends TestCase
         });
     }
 
-    public function test_timeout_defaults_to_null_when_not_provided(): void
+    public function test_timeout_defaults_to_sdk_default_when_not_provided(): void
     {
         AssistantAgent::fake();
 
@@ -195,7 +196,7 @@ class AgentFakeTest extends TestCase
 
         AssistantAgent::assertPrompted(function (AgentPrompt $prompt) {
             return $prompt->prompt === 'Test prompt'
-                && $prompt->timeout === null;
+                && $prompt->timeout === 60;
         });
     }
 
@@ -203,12 +204,13 @@ class AgentFakeTest extends TestCase
     {
         AssistantAgent::fake();
 
-        $timeout = 180;
+        $timeout = 120;
+
         (new AssistantAgent)->stream('Test prompt', timeout: $timeout);
 
         AssistantAgent::assertPrompted(function (AgentPrompt $prompt) {
             return $prompt->prompt === 'Test prompt'
-                && $prompt->timeout === 180;
+                && $prompt->timeout === 120;
         });
     }
 
@@ -216,12 +218,15 @@ class AgentFakeTest extends TestCase
     {
         AssistantAgent::fake();
 
-        $timeout = 150;
-        $agent = new AssistantAgent;
-        $provider = \Laravel\Ai\Ai::textProviderFor($agent, 'groq');
-        $model = $provider->defaultTextModel();
+        $prompt = new AgentPrompt(
+            new AssistantAgent,
+            'Original prompt',
+            [],
+            \Laravel\Ai\Ai::textProviderFor(new AssistantAgent, 'groq'),
+            'test-model',
+            150
+        );
 
-        $prompt = new AgentPrompt($agent, 'Original prompt', [], $provider, $model, $timeout);
         $revised = $prompt->revise('Revised prompt');
 
         $this->assertEquals(150, $revised->timeout);

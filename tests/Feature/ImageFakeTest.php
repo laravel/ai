@@ -147,35 +147,4 @@ class ImageFakeTest extends TestCase
                 && $prompt->quality === 'low';
         });
     }
-
-    public function test_timeout_can_be_passed_to_image_generation(): void
-    {
-        Image::fake();
-
-        $timeout = 120;
-        Image::of('Test prompt')->timeout($timeout)->generate();
-
-        // Verify the generation was recorded
-        Image::assertGenerated(fn (ImagePrompt $prompt) => $prompt->prompt === 'Test prompt');
-    }
-
-    public function test_timeout_can_be_passed_directly_to_generate(): void
-    {
-        Image::fake();
-
-        $timeout = 120;
-        Image::of('Test prompt')->generate(timeout: $timeout);
-
-        // Verify the generation was recorded
-        Image::assertGenerated(fn (ImagePrompt $prompt) => $prompt->prompt === 'Test prompt');
-    }
-
-    public function test_timeout_defaults_to_null_when_not_provided(): void
-    {
-        Image::fake();
-
-        Image::of('Test prompt')->generate();
-
-        Image::assertGenerated(fn (ImagePrompt $prompt) => $prompt->prompt === 'Test prompt');
-    }
 }

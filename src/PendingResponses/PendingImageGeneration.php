@@ -111,7 +111,7 @@ class PendingImageGeneration
     /**
      * Generate the image.
      */
-    public function generate(array|string|null $provider = null, ?string $model = null, ?int $timeout = null): ImageResponse
+    public function generate(array|string|null $provider = null, ?string $model = null): ImageResponse
     {
         $providers = Provider::formatProviderAndModelList(
             $provider ?? config('ai.default_for_images'), $model
@@ -124,7 +124,7 @@ class PendingImageGeneration
 
             try {
                 return $provider->image(
-                    $this->prompt, $this->attachments, $this->size, $this->quality, $model, $timeout ?? $this->timeout
+                    $this->prompt, $this->attachments, $this->size, $this->quality, $model, $this->timeout
                 );
             } catch (FailoverableException $e) {
                 event(new ProviderFailedOver($provider, $model, $e));

@@ -93,17 +93,4 @@ return [
         ],
     ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | HTTP Timeout
-    |--------------------------------------------------------------------------
-    |
-    | Here you may configure the timeout for HTTP requests to the AI providers.
-    |
-    */
-
-    'http' => [
-        'timeout' => env('AI_HTTP_TIMEOUT', 60),
-    ],
-
 ];
