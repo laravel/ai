@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Exception;
+use Laravel\Ai\Ai;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\QueuedAgentPrompt;
 use Laravel\Ai\Responses\Data\Meta;
@@ -222,7 +223,7 @@ class AgentFakeTest extends TestCase
             new AssistantAgent,
             'Original prompt',
             [],
-            \Laravel\Ai\Ai::textProviderFor(new AssistantAgent, 'groq'),
+            Ai::textProviderFor(new AssistantAgent, 'groq'),
             'test-model',
             150
         );
