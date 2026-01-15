@@ -23,6 +23,7 @@ interface TextGateway
         array $tools = [],
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
+        ?int $timeout = null,
     ): TextResponse;
 
     /**
@@ -39,6 +40,7 @@ interface TextGateway
         array $tools = [],
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
+        ?int $timeout = null,
     ): Generator;
 
     /**

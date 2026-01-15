@@ -22,5 +22,6 @@ interface ImageGateway
         array $attachments = [],
         ?string $size = null,
         ?string $quality = null,
+        ?int $timeout = null,
     ): ImageResponse;
 }

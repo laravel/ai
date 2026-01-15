@@ -24,6 +24,7 @@ trait GeneratesImages
         ?string $size = null,
         ?string $quality = null,
         ?string $model = null,
+        ?int $timeout = null,
     ): ImageResponse {
         $invocationId = (string) Str::uuid7();
 
@@ -40,7 +41,7 @@ trait GeneratesImages
         ));
 
         return tap($this->imageGateway()->generateImage(
-            $this, $model, $prompt->prompt, $prompt->attachments->all(), $prompt->size, $prompt->quality,
+            $this, $model, $prompt->prompt, $prompt->attachments->all(), $prompt->size, $prompt->quality, $timeout,
         ), function (ImageResponse $response) use ($invocationId, $prompt, $model) {
             $this->events->dispatch(new ImageGenerated(
                 $invocationId, $this, $model, $prompt, $response,

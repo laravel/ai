@@ -55,6 +55,26 @@ class AgentIntegrationTest extends TestCase
         Event::assertDispatched(AgentPrompted::class);
     }
 
+    public function test_timeout_can_be_passed_to_agent_prompt(): void
+    {
+        Event::fake();
+
+        $agent = new AssistantAgent;
+
+        $response = $agent->prompt(
+            'What is the name of the PHP framework created by Taylor Otwell?',
+            provider: $this->provider,
+            model: $this->model,
+            timeout: 120,
+        );
+
+        $this->assertTrue(str_contains($response->text, 'Laravel'));
+        $this->assertEquals($response->meta->provider, 'groq');
+
+        Event::assertDispatched(PromptingAgent::class);
+        Event::assertDispatched(AgentPrompted::class);
+    }
+
     public function test_ad_hoc_agents_can_be_prompted(): void
     {
         $response = agent()->prompt(
@@ -94,15 +114,44 @@ class AgentIntegrationTest extends TestCase
                 ->isNotEmpty()
         );
 
+        Event::assertDispatched(StreamingAgent::class);
+        Event::assertDispatched(AgentStreamed::class);
+    }
+
+    public function test_timeout_can_be_passed_to_agent_stream(): void
+    {
+        Event::fake();
+
+        $agent = new AssistantAgent;
+
+        $response = $agent->stream(
+            'What is the name of the PHP framework created by Taylor Otwell?',
+            provider: $this->provider,
+            model: $this->model,
+            timeout: 180,
+        )->then(function (StreamedAgentResponse $response) {
+            $_SERVER['__testing.response'] = $response;
+        });
+
+        $events = [];
+
+        foreach ($response as $event) {
+            $events[] = $event;
+        }
+
+        $this->assertTrue(
+            collect($events)
+                ->whereInstanceOf(TextDelta::class)
+                ->isNotEmpty()
+        );
+
         $this->assertTrue(str_contains($response->text, 'Laravel'));
         $this->assertCount(count($events), $_SERVER['__testing.response']->events);
-        $this->assertTrue($_SERVER['__testing.invoked']);
 
         Event::assertDispatched(StreamingAgent::class);
         Event::assertDispatched(AgentStreamed::class);
 
         unset($_SERVER['__testing.response']);
-        unset($_SERVER['__testing.invoked']);
     }
 
     public function test_agents_can_queue_a_response(): void

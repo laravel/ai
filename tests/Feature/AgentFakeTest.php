@@ -173,4 +173,58 @@ class AgentFakeTest extends TestCase
 
         $response = (new AssistantAgent)->prompt('Test prompt');
     }
+
+    public function test_timeout_can_be_passed_to_agent_prompt(): void
+    {
+        AssistantAgent::fake();
+
+        $timeout = 120;
+        (new AssistantAgent)->prompt('Test prompt', timeout: $timeout);
+
+        AssistantAgent::assertPrompted(function (AgentPrompt $prompt) {
+            return $prompt->prompt === 'Test prompt'
+                && $prompt->timeout === 120;
+        });
+    }
+
+    public function test_timeout_defaults_to_null_when_not_provided(): void
+    {
+        AssistantAgent::fake();
+
+        (new AssistantAgent)->prompt('Test prompt');
+
+        AssistantAgent::assertPrompted(function (AgentPrompt $prompt) {
+            return $prompt->prompt === 'Test prompt'
+                && $prompt->timeout === null;
+        });
+    }
+
+    public function test_timeout_can_be_passed_to_agent_stream(): void
+    {
+        AssistantAgent::fake();
+
+        $timeout = 180;
+        (new AssistantAgent)->stream('Test prompt', timeout: $timeout);
+
+        AssistantAgent::assertPrompted(function (AgentPrompt $prompt) {
+            return $prompt->prompt === 'Test prompt'
+                && $prompt->timeout === 180;
+        });
+    }
+
+    public function test_timeout_is_preserved_when_revising_agent_prompt(): void
+    {
+        AssistantAgent::fake();
+
+        $timeout = 150;
+        $agent = new AssistantAgent;
+        $provider = \Laravel\Ai\Ai::textProviderFor($agent, 'groq');
+        $model = $provider->defaultTextModel();
+
+        $prompt = new AgentPrompt($agent, 'Original prompt', [], $provider, $model, $timeout);
+        $revised = $prompt->revise('Revised prompt');
+
+        $this->assertEquals(150, $revised->timeout);
+        $this->assertEquals('Revised prompt', $revised->prompt);
+    }
 }

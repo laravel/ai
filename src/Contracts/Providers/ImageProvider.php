@@ -20,6 +20,7 @@ interface ImageProvider
         ?string $size = null,
         ?string $quality = null,
         ?string $model = null,
+        ?int $timeout = null,
     ): ImageResponse;
 
     /**
