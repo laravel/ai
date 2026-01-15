@@ -26,6 +26,8 @@ use function Laravel\Ai\pipeline;
 
 trait GeneratesText
 {
+    protected string $currentToolInvocationId;
+    
     /**
      * Invoke the given agent.
      */
