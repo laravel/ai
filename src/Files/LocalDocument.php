@@ -2,11 +2,13 @@
 
 namespace Laravel\Ai\Files;
 
+use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Filesystem\Filesystem;
+use JsonSerializable;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
 
-class LocalDocument extends Document implements StorableFile
+class LocalDocument extends Document implements Arrayable, JsonSerializable, StorableFile
 {
     use CanBeUploadedToProvider;
 
@@ -44,6 +46,27 @@ class LocalDocument extends Document implements StorableFile
         $this->mime = $mime;
 
         return $this;
+    }
+
+    /**
+     * Get the instance as an array.
+     */
+    public function toArray(): array
+    {
+        return [
+            'type' => 'local-document',
+            'name' => $this->name,
+            'path' => $this->path,
+            'mime' => $this->mime,
+        ];
+    }
+
+    /**
+     * Get the JSON serializable representation of the instance.
+     */
+    public function jsonSerialize(): mixed
+    {
+        return $this->toArray();
     }
 
     public function __toString(): string

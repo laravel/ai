@@ -160,7 +160,7 @@ class RerankingFakeTest extends TestCase
 
         $response = Reranking::of(['First', 'Second'])->rerank('query');
 
-        $this->assertEquals(['Second', 'First'], $response->documents());
+        $this->assertEquals(['Second', 'First'], $response->documents()->all());
     }
 
     public function test_prompt_records_limit(): void

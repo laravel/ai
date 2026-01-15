@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Responses\Concerns;
 
 use Closure;
+use Laravel\Ai\FakePendingDispatch;
 
 trait HasQueuedResponseCallbacks
 {
@@ -11,7 +12,9 @@ trait HasQueuedResponseCallbacks
      */
     public function then(Closure $callback): self
     {
-        $this->dispatchable->getJob()->then($callback);
+        if (! $this->dispatchable instanceof FakePendingDispatch) {
+            $this->dispatchable->getJob()->then($callback);
+        }
 
         return $this;
     }
@@ -21,7 +24,9 @@ trait HasQueuedResponseCallbacks
      */
     public function catch(Closure $callback): self
     {
-        $this->dispatchable->getJob()->catch($callback);
+        if (! $this->dispatchable instanceof FakePendingDispatch) {
+            $this->dispatchable->getJob()->catch($callback);
+        }
 
         return $this;
     }

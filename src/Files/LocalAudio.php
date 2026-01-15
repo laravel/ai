@@ -2,14 +2,16 @@
 
 namespace Laravel\Ai\Files;
 
+use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Filesystem\Filesystem;
+use JsonSerializable;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
 use Laravel\Ai\PendingResponses\PendingTranscriptionGeneration;
 use Laravel\Ai\Transcription;
 
-class LocalAudio extends Audio implements StorableFile, TranscribableAudio
+class LocalAudio extends Audio implements Arrayable, JsonSerializable, StorableFile, TranscribableAudio
 {
     use CanBeUploadedToProvider;
 
@@ -55,6 +57,27 @@ class LocalAudio extends Audio implements StorableFile, TranscribableAudio
         $this->mime = $mime;
 
         return $this;
+    }
+
+    /**
+     * Get the instance as an array.
+     */
+    public function toArray(): array
+    {
+        return [
+            'type' => 'local-audio',
+            'name' => $this->name,
+            'path' => $this->path,
+            'mime' => $this->mime,
+        ];
+    }
+
+    /**
+     * Get the JSON serializable representation of the instance.
+     */
+    public function jsonSerialize(): mixed
+    {
+        return $this->toArray();
     }
 
     public function __toString(): string

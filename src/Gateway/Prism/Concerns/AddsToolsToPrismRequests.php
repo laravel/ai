@@ -29,11 +29,15 @@ trait AddsToolsToPrismRequests
     protected function addTools($request, array $tools, ?TextGenerationOptions $options = null)
     {
         return $request
-            ->withTools(collect($tools)->map(function ($tool) {
-                return $tool instanceof ProviderTool ? null : $this->createPrismTool($tool);
-            })->filter()->values()->all())
+            ->withTools(
+                collect($tools)->map(function ($tool) {
+                    return ! $tool instanceof ProviderTool ? $this->createPrismTool($tool) : null;
+                })->filter()->values()->all()
+            )
             ->withToolChoice(ToolChoice::Auto)
-            ->withMaxSteps($options?->maxSteps ?? round(count($tools) * 1.5));
+            ->withMaxSteps(
+                $options?->maxSteps ?? round(count($tools) * 1.5)
+            );
     }
 
     /**

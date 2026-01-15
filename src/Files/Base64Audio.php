@@ -2,14 +2,16 @@
 
 namespace Laravel\Ai\Files;
 
+use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Http\UploadedFile;
+use JsonSerializable;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
 use Laravel\Ai\PendingResponses\PendingTranscriptionGeneration;
 use Laravel\Ai\Transcription;
 
-class Base64Audio extends Audio implements StorableFile, TranscribableAudio
+class Base64Audio extends Audio implements Arrayable, JsonSerializable, StorableFile, TranscribableAudio
 {
     use CanBeUploadedToProvider;
 
@@ -58,6 +60,27 @@ class Base64Audio extends Audio implements StorableFile, TranscribableAudio
         $this->mime = $mime;
 
         return $this;
+    }
+
+    /**
+     * Get the instance as an array.
+     */
+    public function toArray(): array
+    {
+        return [
+            'type' => 'base64-audio',
+            'name' => $this->name,
+            'base64' => $this->base64,
+            'mime' => $this->mime,
+        ];
+    }
+
+    /**
+     * Get the JSON serializable representation of the instance.
+     */
+    public function jsonSerialize(): mixed
+    {
+        return $this->toArray();
     }
 
     public function __toString(): string

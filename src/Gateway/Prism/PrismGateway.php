@@ -251,6 +251,7 @@ class PrismGateway implements Gateway
                 ->withVoice($voice)
                 ->withProviderOptions(array_filter([
                     'instructions' => $instructions,
+                    'speed' => 1.0,
                 ]))
                 ->asAudio();
         } catch (PrismVendorException $e) {

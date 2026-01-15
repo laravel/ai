@@ -9,6 +9,8 @@ use Illuminate\Support\Stringable;
 use Laravel\Ai\Console\Commands\ChatCommand;
 use Laravel\Ai\Console\Commands\MakeAgentCommand;
 use Laravel\Ai\Console\Commands\MakeToolCommand;
+use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Storage\DatabaseConversationStore;
 
 class AiServiceProvider extends ServiceProvider
 {
@@ -20,6 +22,7 @@ class AiServiceProvider extends ServiceProvider
     public function register()
     {
         $this->app->scoped(AiManager::class, fn ($app): AiManager => new AiManager($app));
+        $this->app->singleton(ConversationStore::class, DatabaseConversationStore::class);
 
         $this->mergeConfigFrom(__DIR__.'/../config/ai.php', 'ai');
     }
@@ -40,12 +43,17 @@ class AiServiceProvider extends ServiceProvider
         Stringable::macro('toEmbeddings', function (
             ?string $provider = null,
             ?int $dimensions = null,
-            ?string $model = null
+            ?string $model = null,
+            bool|int|null $cache = null,
         ) {
             $request = Embeddings::for([$this->value]);
 
             if ($dimensions) {
                 $request->dimensions($dimensions);
+            }
+
+            if ($cache !== false && ! is_null($cache)) {
+                $request->cache(is_int($cache) ? $cache : null);
             }
 
             return $request->generate(provider: $provider, model: $model)->embeddings[0];
@@ -103,5 +111,9 @@ class AiServiceProvider extends ServiceProvider
             __DIR__.'/../stubs/structured-agent.stub' => base_path('stubs/structured-agent.stub'),
             __DIR__.'/../stubs/tool.stub' => base_path('stubs/tool.stub'),
         ], 'ai-stubs');
+
+        $this->publishesMigrations([
+            __DIR__.'/../database/migrations' => database_path('migrations'),
+        ]);
     }
 }

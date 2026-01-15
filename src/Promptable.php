@@ -5,6 +5,7 @@ namespace Laravel\Ai;
 use Closure;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Queue\SerializesModels;
+use Laravel\Ai\Attributes\Provider as ProviderAttribute;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Gateway\FakeTextGateway;
@@ -16,6 +17,7 @@ use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\QueuedAgentResponse;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Streaming\Events\StreamEvent;
+use ReflectionClass;
 
 trait Promptable
 {
@@ -143,9 +145,15 @@ trait Promptable
      */
     protected function getProvidersAndModels(array|string|null $provider, ?string $model): array
     {
-        $provider = is_null($provider) && method_exists($this, 'provider')
-            ? $this->provider()
-            : $provider;
+        if (is_null($provider)) {
+            if (method_exists($this, 'provider')) {
+                $provider = $this->provider();
+            } else {
+                $attributes = (new ReflectionClass($this))->getAttributes(ProviderAttribute::class);
+
+                $provider = ! empty($attributes) ? $attributes[0]->newInstance()->value : null;
+            }
+        }
 
         if (! is_array($provider) && is_null($model) && method_exists($this, 'model')) {
             $model = $this->model();

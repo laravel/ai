@@ -33,12 +33,10 @@ class RerankingResponse implements Arrayable, Countable, IteratorAggregate, Json
 
     /**
      * Get the documents in their reranked order.
-     *
-     * @return array<int, string>
      */
-    public function documents(): array
+    public function documents(): Collection
     {
-        return (new Collection($this->results))->map->document->all();
+        return (new Collection($this->results))->map->document;
     }
 
     /**
@@ -47,6 +45,14 @@ class RerankingResponse implements Arrayable, Countable, IteratorAggregate, Json
     public function count(): int
     {
         return count($this->results);
+    }
+
+    /**
+     * Get the results as a collection.
+     */
+    public function collect(): Collection
+    {
+        return new Collection($this->results);
     }
 
     /**

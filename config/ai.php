@@ -77,6 +77,11 @@ return [
             'key' => env('GROQ_API_KEY'),
         ],
 
+        'jina' => [
+            'driver' => 'jina',
+            'key' => env('JINA_API_KEY'),
+        ],
+
         'openai' => [
             'driver' => 'openai',
             'key' => env('OPENAI_API_KEY'),

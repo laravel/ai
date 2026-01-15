@@ -2,10 +2,12 @@
 
 namespace Laravel\Ai\Files;
 
+use Illuminate\Contracts\Support\Arrayable;
+use JsonSerializable;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
 
-class Base64Image extends Image implements StorableFile
+class Base64Image extends Image implements Arrayable, JsonSerializable, StorableFile
 {
     use CanBeUploadedToProvider;
 
@@ -35,6 +37,27 @@ class Base64Image extends Image implements StorableFile
         $this->mime = $mime;
 
         return $this;
+    }
+
+    /**
+     * Get the instance as an array.
+     */
+    public function toArray(): array
+    {
+        return [
+            'type' => 'base64-image',
+            'name' => $this->name,
+            'base64' => $this->base64,
+            'mime' => $this->mime,
+        ];
+    }
+
+    /**
+     * Get the JSON serializable representation of the instance.
+     */
+    public function jsonSerialize(): mixed
+    {
+        return $this->toArray();
     }
 
     public function __toString(): string

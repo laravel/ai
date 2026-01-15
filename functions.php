@@ -53,7 +53,11 @@ function generate_fake_data_for_json_schema_type(Type $type): mixed
     $attributes = (fn () => get_object_vars($type))->call($type);
 
     if (isset($attributes['enum']) && is_array($attributes['enum']) && count($attributes['enum']) > 0) {
-        return $attributes['enum'][array_rand($attributes['enum'])];
+        $enumValue = $attributes['enum'][array_rand($attributes['enum'])];
+
+        return get_class($type) === ArrayType::class
+            ? [$enumValue]
+            : $enumValue;
     }
 
     if (isset($attributes['default'])) {

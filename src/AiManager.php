@@ -19,6 +19,7 @@ use Laravel\Ai\Providers\CohereProvider;
 use Laravel\Ai\Providers\ElevenLabsProvider;
 use Laravel\Ai\Providers\GeminiProvider;
 use Laravel\Ai\Providers\GroqProvider;
+use Laravel\Ai\Providers\JinaProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Providers\OpenRouterProvider;
 use Laravel\Ai\Providers\Provider;
@@ -288,6 +289,17 @@ class AiManager extends MultipleInstanceManager
     {
         return new GroqProvider(
             new PrismGateway($this->app['events']),
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create a Jina powered instance.
+     */
+    public function createJinaDriver(array $config): JinaProvider
+    {
+        return new JinaProvider(
             $config,
             $this->app->make(Dispatcher::class)
         );

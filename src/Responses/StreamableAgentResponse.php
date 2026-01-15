@@ -22,6 +22,8 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
 
     public Collection $events;
 
+    public ?string $conversationId = null;
+
     protected array $thenCallbacks = [];
 
     protected bool $usesVercelProtocol = false;
@@ -68,11 +70,21 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     }
 
     /**
+     * Set the conversation UUID for this response.
+     */
+    public function withinConversation(?string $conversationId): self
+    {
+        $this->conversationId = $conversationId;
+
+        return $this;
+    }
+
+    /**
      * Stream the response using Vercel's AI SDK stream protocol.
      *
      * See: https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol
      */
-    public function usingVercelProtocol(bool $value = true): self
+    public function usingVercelDataProtocol(bool $value = true): self
     {
         $this->usesVercelProtocol = $value;
 
@@ -93,9 +105,11 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
 
         return response()->stream(function () {
             foreach ($this as $event) {
-                yield (string) $event;
+                yield 'data: '.((string) $event)."\n\n";
             }
-        });
+
+            yield "data: [DONE]\n\n";
+        }, headers: ['Content-Type' => 'text/event-stream']);
     }
 
     /**
