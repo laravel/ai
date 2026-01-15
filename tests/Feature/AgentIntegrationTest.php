@@ -94,8 +94,15 @@ class AgentIntegrationTest extends TestCase
                 ->isNotEmpty()
         );
 
+        $this->assertTrue(str_contains($response->text, 'Laravel'));
+        $this->assertCount(count($events), $_SERVER['__testing.response']->events);
+        $this->assertTrue($_SERVER['__testing.invoked']);
+
         Event::assertDispatched(StreamingAgent::class);
         Event::assertDispatched(AgentStreamed::class);
+
+        unset($_SERVER['__testing.response']);
+        unset($_SERVER['__testing.invoked']);
     }
 
     public function test_agents_can_queue_a_response(): void
