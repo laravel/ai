@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Queue\SerializesModels;
 use Laravel\Ai\Attributes\Provider as ProviderAttribute;
+use Laravel\Ai\Attributes\Timeout as TimeoutAttribute;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Gateway\FakeTextGateway;
@@ -35,7 +36,7 @@ trait Promptable
     {
         return $this->withModelFailover(
             fn (Provider $provider, string $model) => $provider->prompt(
-                new AgentPrompt($this, $prompt, $attachments, $provider, $model, $timeout ?? 60)
+                new AgentPrompt($this, $prompt, $attachments, $provider, $model, $this->getTimeout($timeout))
             ),
             $provider,
             $model,
@@ -54,7 +55,7 @@ trait Promptable
     {
         return $this->withModelFailover(
             fn (Provider $provider, string $model) => $provider->stream(
-                new AgentPrompt($this, $prompt, $attachments, $provider, $model, $timeout ?? 60)
+                new AgentPrompt($this, $prompt, $attachments, $provider, $model, $this->getTimeout($timeout))
             ),
             $provider,
             $model,
@@ -162,6 +163,28 @@ trait Promptable
         return Provider::formatProviderAndModelList(
             $provider ?? config('ai.default'), $model
         );
+    }
+
+    /**
+     * Get the timeout to use for the agent prompt.
+     */
+    protected function getTimeout(?int $timeout): int
+    {
+        if (! is_null($timeout)) {
+            return $timeout;
+        }
+
+        if (method_exists($this, 'timeout')) {
+            return $this->timeout();
+        }
+
+        $attributes = (new ReflectionClass($this))->getAttributes(TimeoutAttribute::class);
+
+        if (! empty($attributes)) {
+            return $attributes[0]->newInstance()->value;
+        }
+
+        return 60;
     }
 
     /**

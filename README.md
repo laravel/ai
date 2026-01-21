@@ -837,6 +837,7 @@ You may configure text generation options for an agent using PHP attributes. The
 - `MaxTokens`: The maximum number of tokens the model may generate.
 - `Provider`: The AI provider (or providers for failover) to use for the agent.
 - `Temperature`: The sampling temperature to use for generation (0.0 to 1.0).
+- `Timeout`: The HTTP timeout in seconds for agent requests (default: 60).
 
 ```php
 <?php
@@ -847,6 +848,7 @@ use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Attributes\MaxTokens;
 use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Attributes\Temperature;
+use Laravel\Ai\Attributes\Timeout;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Promptable;
 
@@ -854,6 +856,7 @@ use Laravel\Ai\Promptable;
 #[MaxTokens(4096)]
 #[Provider('anthropic')]
 #[Temperature(0.7)]
+#[Timeout(120)]
 class SalesCoach implements Agent
 {
     use Promptable;
