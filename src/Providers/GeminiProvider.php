@@ -89,6 +89,22 @@ class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider
     }
 
     /**
+     * Get the name of the cheapest text model.
+     */
+    public function cheapestTextModel(): string
+    {
+        return 'gemini-2.5-flash-lite';
+    }
+
+    /**
+     * Get the name of the smartest text model.
+     */
+    public function smartestTextModel(): string
+    {
+        return 'gemini-3-pro-preview';
+    }
+
+    /**
      * Get the name of the default image model.
      */
     public function defaultImageModel(): string

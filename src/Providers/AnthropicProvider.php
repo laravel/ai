@@ -62,6 +62,22 @@ class AnthropicProvider extends Provider implements FileProvider, SupportsWebFet
     }
 
     /**
+     * Get the name of the cheapest text model.
+     */
+    public function cheapestTextModel(): string
+    {
+        return 'claude-haiku-4-5-20251001';
+    }
+
+    /**
+     * Get the name of the smartest text model.
+     */
+    public function smartestTextModel(): string
+    {
+        return 'claude-opus-4-5-20251101';
+    }
+
+    /**
      * Get the provider's file gateway.
      */
     public function fileGateway(): FileGateway

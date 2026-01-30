@@ -85,6 +85,22 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     }
 
     /**
+     * Get the name of the cheapest text model.
+     */
+    public function cheapestTextModel(): string
+    {
+        return 'gpt-5-nano';
+    }
+
+    /**
+     * Get the name of the smartest text model.
+     */
+    public function smartestTextModel(): string
+    {
+        return 'gpt-5.2-pro';
+    }
+
+    /**
      * Get the name of the default image model.
      */
     public function defaultImageModel(): string

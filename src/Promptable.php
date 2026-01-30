@@ -8,6 +8,8 @@ use Illuminate\Container\Container;
 use Illuminate\Queue\SerializesModels;
 use Laravel\Ai\Attributes\Provider as ProviderAttribute;
 use Laravel\Ai\Attributes\Timeout as TimeoutAttribute;
+use Laravel\Ai\Attributes\UseCheapestModel;
+use Laravel\Ai\Attributes\UseSmartestModel;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Gateway\FakeTextGateway;
@@ -140,7 +142,7 @@ trait Promptable
         foreach ($providers as $provider => $model) {
             $provider = Ai::textProviderFor($this, $provider);
 
-            $model ??= $provider->defaultTextModel();
+            $model ??= $this->getDefaultModelFor($provider);
 
             try {
                 return $callback($provider, $model);
@@ -176,6 +178,24 @@ trait Promptable
         return Provider::formatProviderAndModelList(
             $provider ?? config('ai.default'), $model
         );
+    }
+
+    /**
+     * Get the default model to use for the given provider.
+     */
+    protected function getDefaultModelFor(Provider $provider): string
+    {
+        $reflection = new ReflectionClass($this);
+
+        if (! empty($reflection->getAttributes(UseSmartestModel::class))) {
+            return $provider->smartestTextModel();
+        }
+
+        if (! empty($reflection->getAttributes(UseCheapestModel::class))) {
+            return $provider->cheapestTextModel();
+        }
+
+        return $provider->defaultTextModel();
     }
 
     /**

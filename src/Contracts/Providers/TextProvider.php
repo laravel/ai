@@ -33,4 +33,14 @@ interface TextProvider
      * Get the name of the default text model.
      */
     public function defaultTextModel(): string;
+
+    /**
+     * Get the name of the cheapest text model.
+     */
+    public function cheapestTextModel(): string;
+
+    /**
+     * Get the name of the smartest text model.
+     */
+    public function smartestTextModel(): string;
 }

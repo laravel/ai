@@ -24,6 +24,22 @@ class XaiProvider extends Provider implements ImageProvider, TextProvider
     }
 
     /**
+     * Get the name of the cheapest text model.
+     */
+    public function cheapestTextModel(): string
+    {
+        return 'grok-4-1-fast-reasoning';
+    }
+
+    /**
+     * Get the name of the smartest text model.
+     */
+    public function smartestTextModel(): string
+    {
+        return 'grok-4-1-fast-reasoning';
+    }
+
+    /**
      * Get the provider's image gateway.
      */
     public function imageGateway(): ImageGateway

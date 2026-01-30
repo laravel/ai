@@ -15,6 +15,22 @@ class GroqProvider extends Provider implements TextProvider
      */
     public function defaultTextModel(): string
     {
+        return 'openai/gpt-oss-120b';
+    }
+
+    /**
+     * Get the name of the cheapest text model.
+     */
+    public function cheapestTextModel(): string
+    {
         return 'openai/gpt-oss-20b';
+    }
+
+    /**
+     * Get the name of the smartest text model.
+     */
+    public function smartestTextModel(): string
+    {
+        return 'openai/gpt-oss-120b';
     }
 }
