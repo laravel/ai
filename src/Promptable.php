@@ -4,6 +4,7 @@ namespace Laravel\Ai;
 
 use Closure;
 use Illuminate\Broadcasting\Channel;
+use Illuminate\Container\Container;
 use Illuminate\Queue\SerializesModels;
 use Laravel\Ai\Attributes\Provider as ProviderAttribute;
 use Laravel\Ai\Attributes\Timeout as TimeoutAttribute;
@@ -23,6 +24,18 @@ use ReflectionClass;
 trait Promptable
 {
     use SerializesModels;
+
+    /**
+     * Create a new instance of the agent.
+     */
+    public static function make(...$arguments): static
+    {
+        return match (true) {
+            ! empty($arguments) && ! array_is_list($arguments) => Container::getInstance()->makeWith(static::class, $arguments),
+            ! empty($arguments) => new static(...$arguments),
+            default => Container::getInstance()->make(static::class),
+        };
+    }
 
     /**
      * Invoke the agent with a given prompt.
