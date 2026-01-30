@@ -39,6 +39,14 @@ class AgentPrompt extends Prompt
     }
 
     /**
+     * Prepend to the prompt and return a new prompt instance.
+     */
+    public function prepend(string $prompt): AgentPrompt
+    {
+        return $this->revise($prompt.PHP_EOL.PHP_EOL.$this->prompt);
+    }
+
+    /**
      * Append to the prompt and return a new prompt instance.
      */
     public function append(string $prompt): AgentPrompt
