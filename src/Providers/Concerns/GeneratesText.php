@@ -8,6 +8,7 @@ use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Contracts\HasStructuredOutput;
@@ -95,7 +96,7 @@ trait GeneratesText
 
         if (in_array(RemembersConversations::class, class_uses_recursive($agent))
             && $agent->hasConversationParticipant()) {
-            $middleware[] = resolve(RememberConversation::class);
+            $middleware[] = new RememberConversation(resolve(ConversationStore::class), $this);
         }
 
         return $agent instanceof HasMiddleware

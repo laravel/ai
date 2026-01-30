@@ -3,15 +3,22 @@
 namespace Laravel\Ai\Middleware;
 
 use Closure;
+use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
+use Throwable;
 
 class RememberConversation
 {
     /**
      * Create a new middleware instance.
      */
-    public function __construct(protected ConversationStore $store) {}
+    public function __construct(
+        protected ConversationStore $store,
+        protected TextProvider $provider,
+    ) {}
 
     /**
      * Handle the incoming prompt.
@@ -25,7 +32,7 @@ class RememberConversation
             if (! $agent->currentConversation()) {
                 $conversationId = $this->store->storeConversation(
                     $agent->conversationParticipant()->id,
-                    $prompt->prompt
+                    $this->generateTitle($prompt->prompt)
                 );
 
                 $agent->continue(
@@ -54,5 +61,24 @@ class RememberConversation
                 $agent->conversationParticipant(),
             );
         });
+    }
+
+    /**
+     * Generate a title for the conversation.
+     */
+    protected function generateTitle(string $prompt): string
+    {
+        try {
+            $response = $this->provider->textGateway()->generateText(
+                $this->provider,
+                $this->provider->defaultTextModel(),
+                'Generate a concise 3-5 word title for a conversation that starts with the following message. Respond with only the title, no quotes or punctuation.',
+                [new UserMessage(Str::limit($prompt, 500))],
+            );
+
+            return Str::limit($response->text, 100);
+        } catch (Throwable) {
+            return Str::limit($prompt, 100, preserveWords: true);
+        }
     }
 }

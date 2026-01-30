@@ -33,7 +33,7 @@ class DatabaseConversationStore implements ConversationStore
         DB::table('agent_conversations')->insert([
             'id' => $conversationId,
             'user_id' => $userId,
-            'title' => Str::limit($title, 100, preserveWords: true),
+            'title' => $title,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
