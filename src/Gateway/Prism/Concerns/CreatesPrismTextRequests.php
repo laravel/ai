@@ -83,7 +83,7 @@ trait CreatesPrismTextRequests
             static::toPrismProvider($provider),
             $model,
             array_filter([
-                ...$provider->connectionConfig(),
+                ...$provider->additionalConfiguration(),
                 ...($provider->driver() === 'anthropic')
                    ? ['anthropic_beta' => 'web-fetch-2025-09-10']
                    : [],
