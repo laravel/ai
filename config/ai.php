@@ -23,6 +23,7 @@ return [
     'default_for_embeddings' => 'openai',
     'default_for_reranking' => 'cohere',
     'default_for_moderation' => 'openai',
+    'default_for_fine_tuning' => 'openai',
 
     /*
     |--------------------------------------------------------------------------

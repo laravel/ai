@@ -8,6 +8,7 @@ use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
+use Laravel\Ai\Contracts\Providers\FineTuningProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\ModerationProvider;
 use Laravel\Ai\Contracts\Providers\RerankingProvider;
@@ -35,6 +36,7 @@ class AiManager extends MultipleInstanceManager
     use Concerns\InteractsWithFakeAudio;
     use Concerns\InteractsWithFakeEmbeddings;
     use Concerns\InteractsWithFakeFiles;
+    use Concerns\InteractsWithFakeFineTuning;
     use Concerns\InteractsWithFakeImages;
     use Concerns\InteractsWithFakeModerations;
     use Concerns\InteractsWithFakeReranking;
@@ -214,6 +216,32 @@ class AiManager extends MultipleInstanceManager
 
         return $this->moderationsAreFaked()
             ? (clone $provider)->useModerationGateway($this->fakeModerationGateway())
+            : $provider;
+    }
+
+    /**
+     * Get a fine-tuning provider instance by name.
+     */
+    public function fineTuningProvider(?string $name = null): FineTuningProvider
+    {
+        $name = $name ?? config('ai.default_for_fine_tuning', 'openai');
+
+        return tap($this->instance($name), function ($instance) {
+            if (! $instance instanceof FineTuningProvider) {
+                throw new LogicException('Provider ['.get_class($instance).'] does not support fine-tuning.');
+            }
+        });
+    }
+
+    /**
+     * Get a fine-tuning provider instance, using a fake gateway if fine-tuning is faked.
+     */
+    public function fakeableFineTuningProvider(?string $name = null): FineTuningProvider
+    {
+        $provider = $this->fineTuningProvider($name);
+
+        return $this->fineTuningIsFaked()
+            ? (clone $provider)->useFineTuningGateway($this->fakeFineTuningGateway())
             : $provider;
     }
 
