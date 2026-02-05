@@ -12,6 +12,7 @@ class QueuedTranscriptionPrompt
         public readonly bool $diarize,
         public readonly array|string|null $provider,
         public readonly ?string $model,
+        public readonly ?string $context = null,
     ) {}
 
     /**

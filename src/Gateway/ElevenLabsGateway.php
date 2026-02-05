@@ -58,6 +58,7 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
         TranscribableAudio $audio,
         ?string $language = null,
         bool $diarize = false,
+        ?string $context = null,
     ): TranscriptionResponse {
         $audioContent = match (true) {
             $audio instanceof TranscribableAudio => $audio->content(),
