@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use Exception;
 use Illuminate\Support\Collection;
+use Laravel\Ai\Enums\AiProvider;
 use Laravel\Ai\Prompts\QueuedTranscriptionPrompt;
 use Laravel\Ai\Prompts\TranscriptionPrompt;
 use Laravel\Ai\Responses\Data\Meta;
@@ -143,6 +144,24 @@ class TranscriptionFakeTest extends TestCase
         Transcription::fake();
 
         Transcription::assertNothingQueued();
+    }
+
+    public function test_generate_accepts_ai_provider_enum(): void
+    {
+        Transcription::fake();
+
+        Transcription::of(base64_encode('audio'))->generate(provider: AiProvider::OpenAI);
+
+        Transcription::assertGenerated(fn (TranscriptionPrompt $prompt) => true);
+    }
+
+    public function test_queued_transcription_accepts_ai_provider_enum(): void
+    {
+        Transcription::fake();
+
+        Transcription::fromPath('/path/to/audio.mp3')->queue(provider: AiProvider::ElevenLabs);
+
+        Transcription::assertQueued(fn (QueuedTranscriptionPrompt $prompt) => $prompt->provider === AiProvider::ElevenLabs);
     }
 
     public function test_queued_transcription_language_and_diarize_are_recorded(): void

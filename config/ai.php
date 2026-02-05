@@ -15,12 +15,12 @@ return [
     |
     */
 
-    'default' => AiProvider::OPENAI,
-    'default_for_images' => AiProvider::GEMINI,
-    'default_for_audio' => AiProvider::OPENAI,
-    'default_for_transcription' => AiProvider::OPENAI,
-    'default_for_embeddings' => AiProvider::OPENAI,
-    'default_for_reranking' => AiProvider::COHERE,
+    'default' => 'openai',
+    'default_for_images' => 'gemini',
+    'default_for_audio' => 'openai',
+    'default_for_transcription' => 'openai',
+    'default_for_embeddings' => 'openai',
+    'default_for_reranking' => 'cohere',
 
     /*
     |--------------------------------------------------------------------------
@@ -53,47 +53,47 @@ return [
 
     'providers' => [
         'anthropic' => [
-            'driver' => AiProvider::ANTHROPIC,
+            'driver' => 'anthropic',
             'key' => env('ANTHROPIC_API_KEY'),
         ],
 
         'cohere' => [
-            'driver' => AiProvider::COHERE,
+            'driver' => 'cohere',
             'key' => env('COHERE_API_KEY'),
         ],
 
         'eleven' => [
-            'driver' => AiProvider::ELEVEN_LABS,
+            'driver' => 'eleven',
             'key' => env('ELEVENLABS_API_KEY'),
         ],
 
         'gemini' => [
-            'driver' => AiProvider::GEMINI,
+            'driver' => 'gemini',
             'key' => env('GEMINI_API_KEY'),
         ],
 
         'groq' => [
-            'driver' => AiProvider::GROQ,
+            'driver' => 'groq',
             'key' => env('GROQ_API_KEY'),
         ],
 
         'jina' => [
-            'driver' => AiProvider::JINA,
+            'driver' => 'jina',
             'key' => env('JINA_API_KEY'),
         ],
 
         'openai' => [
-            'driver' => AiProvider::OPENAI,
+            'driver' => 'openai',
             'key' => env('OPENAI_API_KEY'),
         ],
 
         'openrouter' => [
-            'driver' => AiProvider::OPEN_ROUTER,
+            'driver' => 'openrouter',
             'key' => env('OPENROUTER_API_KEY'),
         ],
 
         'xai' => [
-            'driver' => AiProvider::XAI,
+            'driver' => 'xai',
             'key' => env('XAI_API_KEY'),
         ],
     ],

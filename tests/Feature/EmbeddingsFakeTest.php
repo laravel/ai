@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Laravel\Ai\Embeddings;
+use Laravel\Ai\Enums\AiProvider;
 use Laravel\Ai\Prompts\EmbeddingsPrompt;
 use Laravel\Ai\Prompts\QueuedEmbeddingsPrompt;
 use RuntimeException;
@@ -140,6 +141,27 @@ class EmbeddingsFakeTest extends TestCase
         Embeddings::fake();
 
         Embeddings::assertNothingQueued();
+    }
+
+    public function test_generate_accepts_ai_provider_enum(): void
+    {
+        Embeddings::fake();
+
+        Embeddings::for(['Enum test'])->generate(provider: AiProvider::OpenAI);
+
+        Embeddings::assertGenerated(function (EmbeddingsPrompt $prompt) {
+            return in_array('Enum test', $prompt->inputs);
+        });
+    }
+
+    public function test_queued_embeddings_accept_ai_provider_enum(): void
+    {
+        Embeddings::fake();
+
+        Embeddings::for(['Queued enum'])->queue(provider: AiProvider::Gemini);
+
+        Embeddings::assertQueued(fn (QueuedEmbeddingsPrompt $prompt) => $prompt->contains('Queued enum')
+            && $prompt->provider === AiProvider::Gemini);
     }
 
     public function test_queued_embeddings_dimensions_are_recorded(): void

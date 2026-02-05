@@ -162,11 +162,34 @@ class AgentFakeTest extends TestCase
     {
         AssistantAgent::fake();
 
-        (new AssistantAgent)->queue('Enum prompt', provider: AiProvider::OPENAI);
+        (new AssistantAgent)->queue('Enum prompt', provider: AiProvider::OpenAI);
 
         AssistantAgent::assertQueued(function (QueuedAgentPrompt $prompt) {
             return $prompt->prompt === 'Enum prompt'
-                && $prompt->provider === AiProvider::OPENAI;
+                && $prompt->provider === AiProvider::OpenAI;
+        });
+    }
+
+    public function test_prompt_accepts_ai_provider_enum()
+    {
+        AssistantAgent::fake();
+
+        (new AssistantAgent)->prompt('Enum prompt', provider: AiProvider::ANTHROPIC);
+
+        AssistantAgent::assertPrompted(function (AgentPrompt $prompt) {
+            return $prompt->prompt === 'Enum prompt';
+        });
+    }
+
+    public function test_stream_accepts_ai_provider_enum()
+    {
+        AssistantAgent::fake();
+
+        $response = (new AssistantAgent)->stream('Enum stream', provider: AiProvider::Gemini);
+        $response->each(fn () => true);
+
+        AssistantAgent::assertPrompted(function (AgentPrompt $prompt) {
+            return $prompt->prompt === 'Enum stream';
         });
     }
 
