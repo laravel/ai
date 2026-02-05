@@ -351,6 +351,7 @@ class PrismGateway implements Gateway
             'gemini' => PrismProvider::Gemini,
             'groq' => PrismProvider::Groq,
             'mistral' => PrismProvider::Mistral,
+            'ollama' => PrismProvider::Ollama,
             'openai' => PrismProvider::OpenAI,
             'openrouter' => PrismProvider::OpenRouter,
             'voyageai' => PrismProvider::VoyageAI,

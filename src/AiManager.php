@@ -22,6 +22,7 @@ use Laravel\Ai\Providers\GeminiProvider;
 use Laravel\Ai\Providers\GroqProvider;
 use Laravel\Ai\Providers\JinaProvider;
 use Laravel\Ai\Providers\MistralProvider;
+use Laravel\Ai\Providers\OllamaProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Providers\OpenRouterProvider;
 use Laravel\Ai\Providers\Provider;
@@ -326,6 +327,18 @@ class AiManager extends MultipleInstanceManager
     public function createMistralDriver(array $config): MistralProvider
     {
         return new MistralProvider(
+            new PrismGateway($this->app['events']),
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create an Ollama powered instance.
+     */
+    public function createOllamaDriver(array $config): OllamaProvider
+    {
+        return new OllamaProvider(
             new PrismGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)
