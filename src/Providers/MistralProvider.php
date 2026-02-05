@@ -18,7 +18,7 @@ class MistralProvider extends Provider implements TextProvider, TranscriptionPro
      */
     public function defaultTextModel(): string
     {
-        return 'mistral-small-latest';
+        return 'mistral-medium-latest';
     }
 
     /**
