@@ -14,12 +14,13 @@ use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Contracts\Providers\TranslationProvider;
 use Laravel\Ai\Gateway\OpenAiFileGateway;
 use Laravel\Ai\Gateway\OpenAiStoreGateway;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 
-class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvider, FileProvider, ImageProvider, ModerationProvider, StoreProvider, SupportsFileSearch, SupportsWebSearch, TextProvider, TranscriptionProvider
+class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvider, FileProvider, ImageProvider, ModerationProvider, StoreProvider, SupportsFileSearch, SupportsWebSearch, TextProvider, TranscriptionProvider, TranslationProvider
 {
     use Concerns\GeneratesAudio;
     use Concerns\GeneratesEmbeddings;
@@ -27,6 +28,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     use Concerns\GeneratesModerations;
     use Concerns\GeneratesText;
     use Concerns\GeneratesTranscriptions;
+    use Concerns\GeneratesTranslations;
     use Concerns\HasAudioGateway;
     use Concerns\HasEmbeddingGateway;
     use Concerns\HasFileGateway;
@@ -35,6 +37,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     use Concerns\HasStoreGateway;
     use Concerns\HasTextGateway;
     use Concerns\HasTranscriptionGateway;
+    use Concerns\HasTranslationGateway;
     use Concerns\ManagesFiles;
     use Concerns\ManagesStores;
     use Concerns\StreamsText;
@@ -143,6 +146,14 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     public function defaultTranscriptionModel(): string
     {
         return 'gpt-4o-transcribe-diarize';
+    }
+
+    /**
+     * Get the name of the default translation model.
+     */
+    public function defaultTranslationModel(): string
+    {
+        return 'whisper-1';
     }
 
     /**
