@@ -134,3 +134,23 @@ function generate_fake_data_for_json_schema_type(Type $type): mixed
         default => null,
     };
 }
+
+/**
+ * Create a new batch job.
+ */
+function ai_batch(
+    string $inputFileId,
+    string $endpoint,
+    string $completionWindow = '24h',
+    array $options = []
+) {
+    return Laravel\Ai\Batches::create($inputFileId, $endpoint, $completionWindow, $options);
+}
+
+/**
+ * List all batches with optional pagination.
+ */
+function ai_batches(array $options = [])
+{
+    return Laravel\Ai\Batches::list($options);
+}
