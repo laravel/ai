@@ -62,6 +62,11 @@ return [
             'key' => env('COHERE_API_KEY'),
         ],
 
+        'deepseek' => [
+            'driver' => 'deepseek',
+            'key' => env('DEEPSEEK_API_KEY'),
+        ],
+
         'eleven' => [
             'driver' => 'eleven',
             'key' => env('ELEVENLABS_API_KEY'),

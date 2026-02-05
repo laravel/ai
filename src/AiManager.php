@@ -16,6 +16,7 @@ use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Gateway\Prism\PrismGateway;
 use Laravel\Ai\Providers\AnthropicProvider;
 use Laravel\Ai\Providers\CohereProvider;
+use Laravel\Ai\Providers\DeepSeekProvider;
 use Laravel\Ai\Providers\ElevenLabsProvider;
 use Laravel\Ai\Providers\GeminiProvider;
 use Laravel\Ai\Providers\GroqProvider;
@@ -254,6 +255,18 @@ class AiManager extends MultipleInstanceManager
     public function createCohereDriver(array $config): CohereProvider
     {
         return new CohereProvider(
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create a DeepSeek powered instance.
+     */
+    public function createDeepseekDriver(array $config): DeepSeekProvider
+    {
+        return new DeepSeekProvider(
+            new PrismGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)
         );
