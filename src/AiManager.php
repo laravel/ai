@@ -10,6 +10,7 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\FineTuningProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
+use Laravel\Ai\Contracts\Providers\ModerationProvider;
 use Laravel\Ai\Contracts\Providers\RerankingProvider;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -37,6 +38,7 @@ class AiManager extends MultipleInstanceManager
     use Concerns\InteractsWithFakeFiles;
     use Concerns\InteractsWithFakeFineTuning;
     use Concerns\InteractsWithFakeImages;
+    use Concerns\InteractsWithFakeModerations;
     use Concerns\InteractsWithFakeReranking;
     use Concerns\InteractsWithFakeStores;
     use Concerns\InteractsWithFakeTranscriptions;
@@ -194,6 +196,56 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
+     * Get a moderation provider instance by name.
+     */
+    public function moderationProvider(?string $name = null): ModerationProvider
+    {
+        return tap($this->instance($name), function ($instance) {
+            if (! $instance instanceof ModerationProvider) {
+                throw new LogicException('Provider ['.get_class($instance).'] does not support moderation.');
+            }
+        });
+    }
+
+    /**
+     * Get a moderation provider instance, using a fake gateway if moderations are faked.
+     */
+    public function fakeableModerationProvider(?string $name = null): ModerationProvider
+    {
+        $provider = $this->moderationProvider($name);
+
+        return $this->moderationsAreFaked()
+            ? (clone $provider)->useModerationGateway($this->fakeModerationGateway())
+            : $provider;
+    }
+
+    /**
+     * Get a fine-tuning provider instance by name.
+     */
+    public function fineTuningProvider(?string $name = null): FineTuningProvider
+    {
+        $name = $name ?? config('ai.default_for_fine_tuning', 'openai');
+
+        return tap($this->instance($name), function ($instance) {
+            if (! $instance instanceof FineTuningProvider) {
+                throw new LogicException('Provider ['.get_class($instance).'] does not support fine-tuning.');
+            }
+        });
+    }
+
+    /**
+     * Get a fine-tuning provider instance, using a fake gateway if fine-tuning is faked.
+     */
+    public function fakeableFineTuningProvider(?string $name = null): FineTuningProvider
+    {
+        $provider = $this->fineTuningProvider($name);
+
+        return $this->fineTuningIsFaked()
+            ? (clone $provider)->useFineTuningGateway($this->fakeFineTuningGateway())
+            : $provider;
+    }
+
+    /**
      * Get a provider instance by name.
      */
     public function translationProvider(?string $name = null): TranslationProvider
@@ -262,32 +314,6 @@ class AiManager extends MultipleInstanceManager
 
         return $this->storesAreFaked()
             ? (clone $provider)->useStoreGateway($this->fakeStoreGateway())
-            : $provider;
-    }
-
-    /**
-     * Get a fine-tuning provider instance by name.
-     */
-    public function fineTuningProvider(?string $name = null): FineTuningProvider
-    {
-        $name = $name ?? config('ai.default_for_fine_tuning', 'openai');
-
-        return tap($this->instance($name), function ($instance) {
-            if (! $instance instanceof FineTuningProvider) {
-                throw new LogicException('Provider ['.get_class($instance).'] does not support fine-tuning.');
-            }
-        });
-    }
-
-    /**
-     * Get a fine-tuning provider instance, using a fake gateway if fine-tuning is faked.
-     */
-    public function fakeableFineTuningProvider(?string $name = null): FineTuningProvider
-    {
-        $provider = $this->fineTuningProvider($name);
-
-        return $this->fineTuningIsFaked()
-            ? (clone $provider)->useFineTuningGateway($this->fakeFineTuningGateway())
             : $provider;
     }
 

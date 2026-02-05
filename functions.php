@@ -14,6 +14,7 @@ use Illuminate\JsonSchema\Types\Type;
 use Illuminate\Pipeline\Pipeline;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\PendingResponses\PendingModerationGeneration;
 
 /**
  * Get an ad-hoc agent instance.
@@ -27,6 +28,14 @@ function agent(
     return $schema
         ? new StructuredAnonymousAgent($instructions, $messages, $tools, $schema)
         : new AnonymousAgent($instructions, $messages, $tools);
+}
+
+/**
+ * Moderate the given content.
+ */
+function ai_moderate(string|array $input): PendingModerationGeneration
+{
+    return Moderation::of($input);
 }
 
 /**

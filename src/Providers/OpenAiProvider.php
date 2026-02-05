@@ -10,6 +10,7 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\FineTuningProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
+use Laravel\Ai\Contracts\Providers\ModerationProvider;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
@@ -22,11 +23,12 @@ use Laravel\Ai\Gateway\OpenAiStoreGateway;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 
-class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvider, FileProvider, FineTuningProvider, ImageProvider, StoreProvider, SupportsFileSearch, SupportsWebSearch, TextProvider, TranscriptionProvider
+class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvider, FileProvider, FineTuningProvider, ImageProvider, ModerationProvider, StoreProvider, SupportsFileSearch, SupportsWebSearch, TextProvider, TranscriptionProvider, TranslationProvider
 {
     use Concerns\GeneratesAudio;
     use Concerns\GeneratesEmbeddings;
     use Concerns\GeneratesImages;
+    use Concerns\GeneratesModerations;
     use Concerns\GeneratesText;
     use Concerns\GeneratesTranscriptions;
     use Concerns\GeneratesTranslations;
@@ -35,6 +37,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     use Concerns\HasFileGateway;
     use Concerns\HasFineTuningGateway;
     use Concerns\HasImageGateway;
+    use Concerns\HasModerationGateway;
     use Concerns\HasStoreGateway;
     use Concerns\HasTextGateway;
     use Concerns\HasTranscriptionGateway;
@@ -188,6 +191,14 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     public function storeGateway(): StoreGateway
     {
         return $this->storeGateway ??= new OpenAiStoreGateway;
+    }
+
+    /**
+     * Get the name of the default moderation model.
+     */
+    public function defaultModerationModel(): string
+    {
+        return 'omni-moderation-latest';
     }
 
     /**
