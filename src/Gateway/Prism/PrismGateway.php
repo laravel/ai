@@ -350,6 +350,7 @@ class PrismGateway implements Gateway
             'deepseek' => PrismProvider::DeepSeek,
             'gemini' => PrismProvider::Gemini,
             'groq' => PrismProvider::Groq,
+            'mistral' => PrismProvider::Mistral,
             'openai' => PrismProvider::OpenAI,
             'openrouter' => PrismProvider::OpenRouter,
             'xai' => PrismProvider::XAI,
