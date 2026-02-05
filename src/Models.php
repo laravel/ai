@@ -37,12 +37,4 @@ class Models
 
         return Ai::modelProvider($provider)->deleteModel($modelId);
     }
-
-    /**
-     * Specify the provider to use for model operations.
-     */
-    public static function using(string $provider): self
-    {
-        return new static;
-    }
 }
