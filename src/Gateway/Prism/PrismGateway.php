@@ -15,6 +15,7 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Contracts\Providers\TranslationProvider;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Files\Image as ImageFile;
 use Laravel\Ai\Files\LocalImage;
@@ -31,6 +32,7 @@ use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
+use Laravel\Ai\Responses\TranslationResponse;
 use Prism\Prism\Enums\Provider as PrismProvider;
 use Prism\Prism\Exceptions\PrismException as PrismVendorException;
 use Prism\Prism\Facades\Prism;
@@ -310,6 +312,43 @@ class PrismGateway implements Gateway
                     $segment['end'],
                 );
             }),
+            PrismUsage::toLaravelUsage($response->usage),
+            new Meta($provider->name(), $model),
+        );
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function generateTranslation(
+        TranslationProvider $provider,
+        string $model,
+        TranscribableAudio $audio,
+        ?string $prompt = null,
+    ): TranslationResponse {
+        try {
+            $request = Prism::audio()
+                ->using(static::toPrismProvider($provider), $model)
+                ->withInput(match (true) {
+                    $audio instanceof TranscribableAudio => Audio::fromBase64(
+                        base64_encode($audio->content()), $audio->mimeType()
+                    ),
+                });
+
+            if ($provider->driver() === 'openai') {
+                $request->withProviderOptions(array_filter([
+                    'prompt' => $prompt,
+                    'response_format' => 'json',
+                ]));
+            }
+
+            $response = $request->translate();
+        } catch (PrismVendorException $e) {
+            throw PrismException::toAiException($e, $provider, $model);
+        }
+
+        return new TranslationResponse(
+            $response->text,
             PrismUsage::toLaravelUsage($response->usage),
             new Meta($provider->name(), $model),
         );
