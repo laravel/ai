@@ -15,6 +15,7 @@ use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Contracts\Providers\TranslationProvider;
 use Laravel\Ai\Gateway\OpenAiFileGateway;
 use Laravel\Ai\Gateway\OpenAiFineTuningGateway;
 use Laravel\Ai\Gateway\OpenAiStoreGateway;
@@ -28,6 +29,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     use Concerns\GeneratesImages;
     use Concerns\GeneratesText;
     use Concerns\GeneratesTranscriptions;
+    use Concerns\GeneratesTranslations;
     use Concerns\HasAudioGateway;
     use Concerns\HasEmbeddingGateway;
     use Concerns\HasFileGateway;
@@ -36,6 +38,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     use Concerns\HasStoreGateway;
     use Concerns\HasTextGateway;
     use Concerns\HasTranscriptionGateway;
+    use Concerns\HasTranslationGateway;
     use Concerns\ManagesFiles;
     use Concerns\ManagesFineTuning;
     use Concerns\ManagesStores;
@@ -145,6 +148,14 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     public function defaultTranscriptionModel(): string
     {
         return 'gpt-4o-transcribe-diarize';
+    }
+
+    /**
+     * Get the name of the default translation model.
+     */
+    public function defaultTranslationModel(): string
+    {
+        return 'whisper-1';
     }
 
     /**

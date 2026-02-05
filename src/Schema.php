@@ -31,8 +31,8 @@ class Schema implements PrismSchema, Schemable
     public function withName(string $name): self
     {
         return new static(
-            $name,
             $this->schema,
+            $name,
             $this->strict,
         );
     }
