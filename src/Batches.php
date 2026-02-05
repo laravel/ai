@@ -48,6 +48,6 @@ class Batches
      */
     public static function using(?string $provider = null): Contracts\Providers\BatchProvider
     {
-        return Ai::batchProvider($provider);
+        return Ai::batchProvider($provider ?? config('ai.default_for_batches'));
     }
 }
