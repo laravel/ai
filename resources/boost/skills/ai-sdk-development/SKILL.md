@@ -367,7 +367,7 @@ $store->assertAdded('file_id');
 
 - Namespace: `Laravel\Ai\`
 - Package: `composer require laravel/ai`
-- Agent pattern: Implement `Agent` interface + use `Promptable` trait
+- Agent pattern: Implement the `Agent` interface and use the `Promptable` trait
 - Optional interfaces: `HasTools`, `HasMiddleware`, `HasStructuredOutput`, `Conversational`
 - Entry-point classes: `Image`, `Audio`, `Transcription`, `Embeddings`, `Reranking`, `Stores`
 - Artisan commands: `php artisan make:agent`, `php artisan make:tool`
@@ -376,6 +376,8 @@ $store->assertAdded('file_id');
 ## Common Pitfalls
 
 ### Wrong Namespace
+
+The namespace is `Laravel\Ai`, not `Illuminate\Ai` or `Laravel\AI`.
 
 ```php
 // Correct
