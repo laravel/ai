@@ -13,6 +13,7 @@ use Laravel\Ai\Contracts\Providers\RerankingProvider;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Contracts\Providers\TranslationProvider;
 use Laravel\Ai\Gateway\Prism\PrismGateway;
 use Laravel\Ai\Providers\AnthropicProvider;
 use Laravel\Ai\Providers\CohereProvider;
@@ -37,6 +38,7 @@ class AiManager extends MultipleInstanceManager
     use Concerns\InteractsWithFakeReranking;
     use Concerns\InteractsWithFakeStores;
     use Concerns\InteractsWithFakeTranscriptions;
+    use Concerns\InteractsWithFakeTranslations;
 
     /**
      * The key name of the "driver" equivalent configuration option.
@@ -186,6 +188,30 @@ class AiManager extends MultipleInstanceManager
 
         return $this->transcriptionsAreFaked()
             ? (clone $provider)->useTranscriptionGateway($this->fakeTranscriptionGateway())
+            : $provider;
+    }
+
+    /**
+     * Get a provider instance by name.
+     */
+    public function translationProvider(?string $name = null): TranslationProvider
+    {
+        return tap($this->instance($name), function ($instance) {
+            if (! $instance instanceof TranslationProvider) {
+                throw new LogicException('Provider ['.get_class($instance).'] does not support translation generation.');
+            }
+        });
+    }
+
+    /**
+     * Get a translation provider instance, using a fake gateway if translations are faked.
+     */
+    public function fakeableTranslationProvider(?string $name = null): TranslationProvider
+    {
+        $provider = $this->translationProvider($name);
+
+        return $this->translationsAreFaked()
+            ? (clone $provider)->useTranslationGateway($this->fakeTranslationGateway())
             : $provider;
     }
 
