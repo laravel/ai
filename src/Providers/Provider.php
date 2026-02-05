@@ -39,6 +39,14 @@ abstract class Provider
     }
 
     /**
+     * Get the Prism provider configuration.
+     */
+    public function prismConfig(): array
+    {
+        return $this->config['prism'] ?? [];
+    }
+
+    /**
      * Format the given provider / model list.
      */
     public static function formatProviderAndModelList(array|string $providers, ?string $model = null): array
