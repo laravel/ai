@@ -31,7 +31,7 @@ class Store
     ): AddedDocumentResponse {
         if ($file instanceof UploadedFile) {
             $file = Base64Document::fromUpload($file)
-                ->as($this->name ?? $file->getClientOriginalName());
+                ->as($file->getClientOriginalName());
         }
 
         $originalFile = $file;
