@@ -14,6 +14,7 @@ use Illuminate\JsonSchema\Types\Type;
 use Illuminate\Pipeline\Pipeline;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\PendingResponses\PendingModerationGeneration;
 
 /**
  * Get an ad-hoc agent instance.
@@ -27,6 +28,14 @@ function agent(
     return $schema
         ? new StructuredAnonymousAgent($instructions, $messages, $tools, $schema)
         : new AnonymousAgent($instructions, $messages, $tools);
+}
+
+/**
+ * Moderate the given content.
+ */
+function ai_moderate(string|array $input): PendingModerationGeneration
+{
+    return Moderation::of($input);
 }
 
 /**
@@ -149,4 +158,24 @@ function ai_models(array|string|null $provider = null, array $options = []): \La
 function ai_model(string $modelId, array|string|null $provider = null): \Laravel\Ai\Responses\ModelResponse
 {
     return \Laravel\Ai\Models::retrieve($modelId, $provider);
+}
+
+/**
+ * Create a new batch job.
+ */
+function ai_batch(
+    string $inputFileId,
+    string $endpoint,
+    string $completionWindow = '24h',
+    array $options = []
+) {
+    return Laravel\Ai\Batches::create($inputFileId, $endpoint, $completionWindow, $options);
+}
+
+/**
+ * List all batches with optional pagination.
+ */
+function ai_batches(array $options = [])
+{
+    return Laravel\Ai\Batches::list($options);
 }

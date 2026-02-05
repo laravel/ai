@@ -39,6 +39,14 @@ abstract class Provider
     }
 
     /**
+     * Get the provider connection configuration other than the driver, key, and name.
+     */
+    public function additionalConfiguration(): array
+    {
+        return array_diff_key($this->config, array_flip(['driver', 'key', 'name']));
+    }
+
+    /**
      * Format the given provider / model list.
      */
     public static function formatProviderAndModelList(array|string $providers, ?string $model = null): array
