@@ -24,6 +24,7 @@ use Laravel\Ai\Providers\JinaProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Providers\OpenRouterProvider;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Providers\VoyageAiProvider;
 use Laravel\Ai\Providers\XaiProvider;
 use LogicException;
 
@@ -336,6 +337,18 @@ class AiManager extends MultipleInstanceManager
     public function createOpenrouterDriver(array $config): OpenRouterProvider
     {
         return new OpenRouterProvider(
+            new PrismGateway($this->app['events']),
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create an xAI powered instance.
+     */
+    public function createVoyageaiDriver(array $config): VoyageAiProvider
+    {
+        return new VoyageAiProvider(
             new PrismGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)

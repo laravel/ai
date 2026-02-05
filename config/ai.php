@@ -97,6 +97,11 @@ return [
             'key' => env('OPENROUTER_API_KEY'),
         ],
 
+        'voyageai' => [
+            'driver' => 'voyageai',
+            'key' => env('VOYAGEAI_API_KEY'),
+        ],
+
         'xai' => [
             'driver' => 'xai',
             'key' => env('XAI_API_KEY'),
