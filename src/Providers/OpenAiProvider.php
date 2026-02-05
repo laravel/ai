@@ -3,39 +3,50 @@
 namespace Laravel\Ai\Providers;
 
 use Laravel\Ai\Contracts\Gateway\FileGateway;
+use Laravel\Ai\Contracts\Gateway\FineTuningGateway;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\BatchProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
+use Laravel\Ai\Contracts\Providers\FineTuningProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
+use Laravel\Ai\Contracts\Providers\ModerationProvider;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Contracts\Providers\TranslationProvider;
 use Laravel\Ai\Gateway\OpenAiFileGateway;
+use Laravel\Ai\Gateway\OpenAiFineTuningGateway;
 use Laravel\Ai\Gateway\OpenAiStoreGateway;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 
-class OpenAiProvider extends Provider implements AudioProvider, BatchProvider, EmbeddingProvider, FileProvider, ImageProvider, StoreProvider, SupportsFileSearch, SupportsWebSearch, TextProvider, TranscriptionProvider
+class OpenAiProvider extends Provider implements AudioProvider, BatchProvider, EmbeddingProvider, FileProvider, FineTuningProvider, ImageProvider, ModerationProvider, StoreProvider, SupportsFileSearch, SupportsWebSearch, TextProvider, TranscriptionProvider, TranslationProvider
 {
     use Concerns\GeneratesAudio;
     use Concerns\GeneratesEmbeddings;
     use Concerns\GeneratesImages;
+    use Concerns\GeneratesModerations;
     use Concerns\GeneratesText;
     use Concerns\GeneratesTranscriptions;
+    use Concerns\GeneratesTranslations;
     use Concerns\HasAudioGateway;
     use Concerns\HasBatchGateway;
     use Concerns\HasEmbeddingGateway;
     use Concerns\HasFileGateway;
+    use Concerns\HasFineTuningGateway;
     use Concerns\HasImageGateway;
+    use Concerns\HasModerationGateway;
     use Concerns\HasStoreGateway;
     use Concerns\HasTextGateway;
     use Concerns\HasTranscriptionGateway;
+    use Concerns\HasTranslationGateway;
     use Concerns\ManagesBatches;
     use Concerns\ManagesFiles;
+    use Concerns\ManagesFineTuning;
     use Concerns\ManagesStores;
     use Concerns\StreamsText;
 
@@ -146,6 +157,14 @@ class OpenAiProvider extends Provider implements AudioProvider, BatchProvider, E
     }
 
     /**
+     * Get the name of the default translation model.
+     */
+    public function defaultTranslationModel(): string
+    {
+        return 'whisper-1';
+    }
+
+    /**
      * Get the name of the default embeddings model.
      */
     public function defaultEmbeddingsModel(): string
@@ -175,5 +194,21 @@ class OpenAiProvider extends Provider implements AudioProvider, BatchProvider, E
     public function storeGateway(): StoreGateway
     {
         return $this->storeGateway ??= new OpenAiStoreGateway;
+    }
+
+    /**
+     * Get the name of the default moderation model.
+     */
+    public function defaultModerationModel(): string
+    {
+        return 'omni-moderation-latest';
+    }
+
+    /**
+     * Get the default fine-tuning gateway for the provider.
+     */
+    protected function defaultFineTuningGateway(): FineTuningGateway
+    {
+        return new OpenAiFineTuningGateway;
     }
 }
