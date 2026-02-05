@@ -1,19 +1,19 @@
 ---
 name: developing-with-ai-sdk
-description: Creates AI agents, generates text and chat responses, produces images, synthesizes audio, transcribes speech, generates vector embeddings, reranks documents, and manages files and vector stores using the Laravel AI SDK (laravel/ai). Supports structured output, streaming, tools, conversation memory, middleware, queueing, broadcasting, and provider failover. Use when the user is building, editing, updating, debugging, or testing any AI functionality in the application, including AI agents, LLMs, chatbots, text generation, image generation, audio, transcription, embeddings, RAG, similarity search, vector stores, prompting, structured output, or any AI provider (OpenAI, Anthropic, Gemini, Cohere, Groq, xAI, ElevenLabs, Jina, OpenRouter).
+description: Builds AI agents, generates text and chat responses, produces images, synthesizes audio, transcribes speech, generates vector embeddings, reranks documents, and manages files and vector stores using the Laravel AI SDK (laravel/ai). Supports structured output, streaming, tools, conversation memory, middleware, queueing, broadcasting, and provider failover. Use when building, editing, updating, debugging, or testing any AI functionality, including agents, LLMs, chatbots, text generation, image generation, audio, transcription, embeddings, RAG, similarity search, vector stores, prompting, structured output, or any AI provider (OpenAI, Anthropic, Gemini, Cohere, Groq, xAI, ElevenLabs, Jina, OpenRouter).
 ---
 
 # Developing with the Laravel AI SDK
 
 The Laravel AI SDK (`laravel/ai`) is the official AI package for Laravel, providing a unified API for agents, images, audio, transcription, embeddings, reranking, vector stores, and file management across multiple AI providers.
 
-## Searching Documentation (Critically Important)
+## Searching the Documentation
 
-CRITICAL: This package is very new. ALWAYS search the documentation before implementing any feature. Do NOT guess at APIs — the docs are the single source of truth.
+This package is new. Always search the documentation before implementing any feature. Never guess at APIs — the documentation is the single source of truth.
 
-- Use broad, simple queries matching the documentation section headings below
-- Do NOT add package names to queries — package info is shared automatically. Use `test agent fake`, not `laravel ai test agent fake`.
-- Run multiple queries at once — the most relevant results are returned first
+- Use broad, simple queries that match the documentation section headings below.
+- Do not add package names to queries — package information is shared automatically. Use `test agent fake`, not `laravel ai test agent fake`.
+- Run multiple queries at once — the most relevant results are returned first.
 
 ### Documentation Sections
 
@@ -36,7 +36,7 @@ Use these section headings as query terms for accurate results:
 
 Determine the right entry point before writing code:
 
-Text generation / chat? → Agent class with `Promptable` trait
+Text generation or chat? → Agent class with `Promptable` trait
 Chat with conversation history? → Agent + `Conversational` interface (manual) or `RemembersConversations` trait (automatic)
 Structured JSON output? → Agent + `HasStructuredOutput` interface
 Image generation? → `Image::of()->generate()`
@@ -84,7 +84,7 @@ $response = agent(instructions: 'You are a helpful assistant.')->prompt('Hello')
 
 ### Conversation Context
 
-Manual conversation history via `Conversational` interface:
+Manual conversation history via the `Conversational` interface:
 
 ```php
 use Laravel\Ai\Contracts\Agent;
@@ -110,7 +110,7 @@ class SalesCoach implements Agent, Conversational
 }
 ```
 
-Automatic conversation persistence via `RemembersConversations` trait:
+Automatic conversation persistence via the `RemembersConversations` trait:
 
 ```php
 use Laravel\Ai\Concerns\RemembersConversations;
@@ -225,7 +225,7 @@ $response = Reranking::of(['Django is Python.', 'Laravel is PHP.', 'React is JS.
 $response->first()->document; // "Laravel is PHP."
 ```
 
-### Files & Vector Stores
+### Files and Vector Stores
 
 ```php
 use Laravel\Ai\Files\Document;
@@ -259,11 +259,11 @@ class MyAgent implements Agent
 }
 ```
 
-Also available: `#[UseCheapestModel]`, `#[UseSmartestModel]` for automatic model selection.
+The `#[UseCheapestModel]` and `#[UseSmartestModel]` attributes are also available for automatic model selection.
 
 ### Tools
 
-Implement `HasTools` and define tools via `php artisan make:tool`:
+Implement the `HasTools` interface and scaffold tools with `php artisan make:tool`:
 
 ```php
 use Laravel\Ai\Contracts\HasTools;
@@ -316,7 +316,7 @@ $response = (new ChatBot)->continue($conversationId, as: $user)->prompt('More...
 $response = (new MyAgent)->prompt('Hello', provider: ['openai', 'anthropic']);
 ```
 
-## Testing / Faking
+## Testing and Faking
 
 Each capability supports `fake()` with assertions:
 
@@ -390,9 +390,9 @@ use Laravel\AI\Agent;
 
 ### Unsupported Provider Capability
 
-Calling a capability not supported by a provider throws `LogicException`. Check the provider support table below.
+Calling a capability not supported by a provider throws a `LogicException`. Refer to the provider support table below.
 
-### Don't Use Prism Directly - NEVER
+### Never Use Prism Directly
 
 Use agents and entry-point classes (`Image`, `Audio`, etc.) — not `Prism::text()` directly. The AI SDK wraps Prism internally.
 
