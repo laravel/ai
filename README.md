@@ -1,4 +1,4 @@
-# Laravel AI SDK
+<p align="center"><img src="/art/logo.svg" alt="Laravel AI SDK Package Logo"></p>
 
 <p align="center">
 <a href="https://github.com/laravel/ai/actions"><img src="https://github.com/laravel/ai/workflows/tests/badge.svg" alt="Build Status"></a>
