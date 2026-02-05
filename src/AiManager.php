@@ -21,6 +21,7 @@ use Laravel\Ai\Providers\ElevenLabsProvider;
 use Laravel\Ai\Providers\GeminiProvider;
 use Laravel\Ai\Providers\GroqProvider;
 use Laravel\Ai\Providers\JinaProvider;
+use Laravel\Ai\Providers\MistralProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Providers\OpenRouterProvider;
 use Laravel\Ai\Providers\Provider;
@@ -313,6 +314,18 @@ class AiManager extends MultipleInstanceManager
     public function createJinaDriver(array $config): JinaProvider
     {
         return new JinaProvider(
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create a Mistral AI powered instance.
+     */
+    public function createMistralDriver(array $config): MistralProvider
+    {
+        return new MistralProvider(
+            new PrismGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)
         );

@@ -87,6 +87,11 @@ return [
             'key' => env('JINA_API_KEY'),
         ],
 
+        'mistral' => [
+            'driver' => 'mistral',
+            'key' => env('MISTRAL_API_KEY'),
+        ],
+
         'openai' => [
             'driver' => 'openai',
             'key' => env('OPENAI_API_KEY'),
