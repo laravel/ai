@@ -106,17 +106,6 @@ return [
             'driver' => 'ollama',
             'key' => env('OLLAMA_API_KEY', ''),
             'base_url' => env('OLLAMA_BASE_URL', 'http://localhost:11434'),
-            'models' => [
-                'text' => [
-                    'default' => env('OLLAMA_TEXT_DEFAULT_MODEL', 'llama3.1:8b'),
-                    'cheapest' => env('OLLAMA_TEXT_CHEAPEST_MODEL', 'llama3.1:8b'),
-                    'smartest' => env('OLLAMA_TEXT_SMARTEST_MODEL', 'llama3.1:70b'),
-                ],
-                'embeddings' => [
-                    'default' => env('OLLAMA_EMBEDDINGS_DEFAULT_MODEL', 'nomic-embed-text'),
-                    'dimensions' => env('OLLAMA_EMBEDDINGS_DIMENSIONS', 768),
-                ],
-            ],
         ],
     ],
 
