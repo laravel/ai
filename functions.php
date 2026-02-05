@@ -134,3 +134,19 @@ function generate_fake_data_for_json_schema_type(Type $type): mixed
         default => null,
     };
 }
+
+/**
+ * List all available models from a provider.
+ */
+function ai_models(array|string|null $provider = null, array $options = []): \Laravel\Ai\Responses\ModelListResponse
+{
+    return \Laravel\Ai\Models::list($provider, $options);
+}
+
+/**
+ * Retrieve details of a specific model.
+ */
+function ai_model(string $modelId, array|string|null $provider = null): \Laravel\Ai\Responses\ModelResponse
+{
+    return \Laravel\Ai\Models::retrieve($modelId, $provider);
+}
