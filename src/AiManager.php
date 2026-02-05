@@ -6,6 +6,7 @@ use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\MultipleInstanceManager;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
+use Laravel\Ai\Contracts\Providers\BatchProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\FineTuningProvider;
@@ -315,6 +316,18 @@ class AiManager extends MultipleInstanceManager
         return $this->storesAreFaked()
             ? (clone $provider)->useStoreGateway($this->fakeStoreGateway())
             : $provider;
+    }
+
+    /**
+     * Get a batch provider instance by name.
+     */
+    public function batchProvider(?string $name = null): BatchProvider
+    {
+        return tap($this->instance($name), function ($instance) {
+            if (! $instance instanceof BatchProvider) {
+                throw new LogicException('Provider ['.get_class($instance).'] does not support batch operations.');
+            }
+        });
     }
 
     /**

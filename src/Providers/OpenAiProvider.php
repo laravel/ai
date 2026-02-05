@@ -6,6 +6,7 @@ use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Gateway\FineTuningGateway;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
+use Laravel\Ai\Contracts\Providers\BatchProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\FineTuningProvider;
@@ -23,7 +24,7 @@ use Laravel\Ai\Gateway\OpenAiStoreGateway;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 
-class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvider, FileProvider, FineTuningProvider, ImageProvider, ModerationProvider, StoreProvider, SupportsFileSearch, SupportsWebSearch, TextProvider, TranscriptionProvider, TranslationProvider
+class OpenAiProvider extends Provider implements AudioProvider, BatchProvider, EmbeddingProvider, FileProvider, FineTuningProvider, ImageProvider, ModerationProvider, StoreProvider, SupportsFileSearch, SupportsWebSearch, TextProvider, TranscriptionProvider, TranslationProvider
 {
     use Concerns\GeneratesAudio;
     use Concerns\GeneratesEmbeddings;
@@ -33,6 +34,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     use Concerns\GeneratesTranscriptions;
     use Concerns\GeneratesTranslations;
     use Concerns\HasAudioGateway;
+    use Concerns\HasBatchGateway;
     use Concerns\HasEmbeddingGateway;
     use Concerns\HasFileGateway;
     use Concerns\HasFineTuningGateway;
@@ -42,6 +44,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     use Concerns\HasTextGateway;
     use Concerns\HasTranscriptionGateway;
     use Concerns\HasTranslationGateway;
+    use Concerns\ManagesBatches;
     use Concerns\ManagesFiles;
     use Concerns\ManagesFineTuning;
     use Concerns\ManagesStores;
