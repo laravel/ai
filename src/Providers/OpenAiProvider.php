@@ -3,10 +3,12 @@
 namespace Laravel\Ai\Providers;
 
 use Laravel\Ai\Contracts\Gateway\FileGateway;
+use Laravel\Ai\Contracts\Gateway\FineTuningGateway;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
+use Laravel\Ai\Contracts\Providers\FineTuningProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
@@ -15,11 +17,12 @@ use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Contracts\Providers\TranslationProvider;
 use Laravel\Ai\Gateway\OpenAiFileGateway;
+use Laravel\Ai\Gateway\OpenAiFineTuningGateway;
 use Laravel\Ai\Gateway\OpenAiStoreGateway;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 
-class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvider, FileProvider, ImageProvider, StoreProvider, SupportsFileSearch, SupportsWebSearch, TextProvider, TranscriptionProvider, TranslationProvider
+class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvider, FileProvider, FineTuningProvider, ImageProvider, StoreProvider, SupportsFileSearch, SupportsWebSearch, TextProvider, TranscriptionProvider
 {
     use Concerns\GeneratesAudio;
     use Concerns\GeneratesEmbeddings;
@@ -30,12 +33,14 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     use Concerns\HasAudioGateway;
     use Concerns\HasEmbeddingGateway;
     use Concerns\HasFileGateway;
+    use Concerns\HasFineTuningGateway;
     use Concerns\HasImageGateway;
     use Concerns\HasStoreGateway;
     use Concerns\HasTextGateway;
     use Concerns\HasTranscriptionGateway;
     use Concerns\HasTranslationGateway;
     use Concerns\ManagesFiles;
+    use Concerns\ManagesFineTuning;
     use Concerns\ManagesStores;
     use Concerns\StreamsText;
 
@@ -183,5 +188,13 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     public function storeGateway(): StoreGateway
     {
         return $this->storeGateway ??= new OpenAiStoreGateway;
+    }
+
+    /**
+     * Get the default fine-tuning gateway for the provider.
+     */
+    protected function defaultFineTuningGateway(): FineTuningGateway
+    {
+        return new OpenAiFineTuningGateway;
     }
 }
