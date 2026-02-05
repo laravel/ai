@@ -86,9 +86,6 @@ class PrismTool extends Tool
 
     /**
      * Normalize arguments to an array, decoding JSON strings when necessary.
-     *
-     * Some providers (e.g., Anthropic) return schema_definition as a JSON string
-     * instead of an array.
      */
     protected static function normalizeArguments(mixed $arguments): array
     {
