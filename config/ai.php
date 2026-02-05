@@ -25,6 +25,7 @@ return [
     'default_for_moderation' => 'openai',
     'default_for_fine_tuning' => 'openai',
     'default_for_batches' => 'openai',
+    'default_for_models' => 'openai',
 
     /*
     |--------------------------------------------------------------------------

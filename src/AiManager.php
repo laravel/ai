@@ -11,6 +11,7 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\FineTuningProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
+use Laravel\Ai\Contracts\Providers\ModelProvider;
 use Laravel\Ai\Contracts\Providers\ModerationProvider;
 use Laravel\Ai\Contracts\Providers\RerankingProvider;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
@@ -316,6 +317,18 @@ class AiManager extends MultipleInstanceManager
         return $this->storesAreFaked()
             ? (clone $provider)->useStoreGateway($this->fakeStoreGateway())
             : $provider;
+    }
+
+    /**
+     * Get a model provider instance by name.
+     */
+    public function modelProvider(?string $name = null): ModelProvider
+    {
+        return tap($this->instance($name), function ($instance) {
+            if (! $instance instanceof ModelProvider) {
+                throw new LogicException('Provider ['.get_class($instance).'] does not support model management.');
+            }
+        });
     }
 
     /**

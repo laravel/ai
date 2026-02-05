@@ -4,6 +4,7 @@ namespace Laravel\Ai\Providers;
 
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Gateway\FineTuningGateway;
+use Laravel\Ai\Contracts\Gateway\ModelGateway;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\BatchProvider;
@@ -11,6 +12,7 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\FineTuningProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
+use Laravel\Ai\Contracts\Providers\ModelProvider;
 use Laravel\Ai\Contracts\Providers\ModerationProvider;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
@@ -20,11 +22,12 @@ use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Contracts\Providers\TranslationProvider;
 use Laravel\Ai\Gateway\OpenAiFileGateway;
 use Laravel\Ai\Gateway\OpenAiFineTuningGateway;
+use Laravel\Ai\Gateway\OpenAiModelGateway;
 use Laravel\Ai\Gateway\OpenAiStoreGateway;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 
-class OpenAiProvider extends Provider implements AudioProvider, BatchProvider, EmbeddingProvider, FileProvider, FineTuningProvider, ImageProvider, ModerationProvider, StoreProvider, SupportsFileSearch, SupportsWebSearch, TextProvider, TranscriptionProvider, TranslationProvider
+class OpenAiProvider extends Provider implements AudioProvider, BatchProvider, EmbeddingProvider, FileProvider, FineTuningProvider, ImageProvider, ModelProvider, ModerationProvider, StoreProvider, SupportsFileSearch, SupportsWebSearch, TextProvider, TranscriptionProvider, TranslationProvider
 {
     use Concerns\GeneratesAudio;
     use Concerns\GeneratesEmbeddings;
@@ -39,6 +42,7 @@ class OpenAiProvider extends Provider implements AudioProvider, BatchProvider, E
     use Concerns\HasFileGateway;
     use Concerns\HasFineTuningGateway;
     use Concerns\HasImageGateway;
+    use Concerns\HasModelGateway;
     use Concerns\HasModerationGateway;
     use Concerns\HasStoreGateway;
     use Concerns\HasTextGateway;
@@ -47,6 +51,7 @@ class OpenAiProvider extends Provider implements AudioProvider, BatchProvider, E
     use Concerns\ManagesBatches;
     use Concerns\ManagesFiles;
     use Concerns\ManagesFineTuning;
+    use Concerns\ManagesModels;
     use Concerns\ManagesStores;
     use Concerns\StreamsText;
 
@@ -194,6 +199,14 @@ class OpenAiProvider extends Provider implements AudioProvider, BatchProvider, E
     public function storeGateway(): StoreGateway
     {
         return $this->storeGateway ??= new OpenAiStoreGateway;
+    }
+
+    /**
+     * Get the provider's model gateway.
+     */
+    public function modelGateway(): ModelGateway
+    {
+        return $this->modelGateway ??= new OpenAiModelGateway;
     }
 
     /**
