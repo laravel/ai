@@ -74,7 +74,7 @@ class AnthropicProvider extends Provider implements FileProvider, SupportsWebFet
      */
     public function smartestTextModel(): string
     {
-        return 'claude-opus-4-5-20251101';
+        return 'claude-opus-4-6';
     }
 
     /**
