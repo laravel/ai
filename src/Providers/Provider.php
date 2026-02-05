@@ -39,11 +39,11 @@ abstract class Provider
     }
 
     /**
-     * Get the Prism provider configuration.
+     * Get the provider connection configuration.
      */
-    public function prismConfig(): array
+    public function connectionConfig(): array
     {
-        return $this->config['prism'] ?? [];
+        return array_diff_key($this->config, array_flip(['driver', 'key', 'name']));
     }
 
     /**
