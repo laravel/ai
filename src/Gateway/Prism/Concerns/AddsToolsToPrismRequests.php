@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\Prism\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Laravel\Ai\Contracts\NamedTool;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
@@ -45,8 +46,12 @@ trait AddsToolsToPrismRequests
      */
     protected function createPrismTool(Tool $tool): PrismTool
     {
+        $toolName = $tool instanceof NamedTool
+            ? $tool->name()
+            : class_basename($tool);
+
         return (new PrismTool)
-            ->as(class_basename($tool))
+            ->as($toolName)
             ->for((string) $tool->description())
             ->when(
                 ! empty($tool->schema(new JsonSchemaTypeFactory)),
