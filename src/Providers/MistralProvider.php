@@ -15,7 +15,7 @@ class MistralProvider extends Provider implements TextProvider
      */
     public function defaultTextModel(): string
     {
-        return 'mistral-large-latest';
+        return 'mistral-small-latest';
     }
 
     /**
