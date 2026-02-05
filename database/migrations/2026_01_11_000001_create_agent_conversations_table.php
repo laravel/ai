@@ -34,7 +34,7 @@ return new class extends AiMigration
             $table->text('meta');
             $table->timestamps();
 
-            $table->index(['conversation_id', 'user_id', 'updated_at'], 'acm_conv_user_updated_index');
+            $table->index(['conversation_id', 'user_id', 'updated_at'], 'conversation_index');
             $table->index(['user_id']);
         });
     }
