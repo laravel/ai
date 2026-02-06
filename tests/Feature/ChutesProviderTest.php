@@ -3,8 +3,11 @@
 namespace Tests\Feature;
 
 use Laravel\Ai\Ai;
+use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Gateway\ChutesAudioGateway;
 use Laravel\Ai\Gateway\ChutesImageGateway;
 use Laravel\Ai\Providers\ChutesProvider;
 use LogicException;
@@ -31,11 +34,11 @@ class ChutesProviderTest extends TestCase
         $this->assertInstanceOf(ImageProvider::class, $provider);
     }
 
-    public function test_chutes_does_not_support_audio(): void
+    public function test_chutes_is_an_audio_provider(): void
     {
-        $this->expectException(LogicException::class);
+        $provider = Ai::audioProvider('chutes');
 
-        Ai::audioProvider('chutes');
+        $this->assertInstanceOf(AudioProvider::class, $provider);
     }
 
     public function test_chutes_does_not_support_embeddings(): void
@@ -45,11 +48,11 @@ class ChutesProviderTest extends TestCase
         Ai::embeddingProvider('chutes');
     }
 
-    public function test_chutes_does_not_support_transcription(): void
+    public function test_chutes_is_a_transcription_provider(): void
     {
-        $this->expectException(LogicException::class);
+        $provider = Ai::transcriptionProvider('chutes');
 
-        Ai::transcriptionProvider('chutes');
+        $this->assertInstanceOf(TranscriptionProvider::class, $provider);
     }
 
     public function test_default_text_model(): void
@@ -85,6 +88,34 @@ class ChutesProviderTest extends TestCase
         $provider = Ai::imageProvider('chutes');
 
         $this->assertInstanceOf(ChutesImageGateway::class, $provider->imageGateway());
+    }
+
+    public function test_default_audio_model(): void
+    {
+        $provider = Ai::audioProvider('chutes');
+
+        $this->assertEquals('kokoro', $provider->defaultAudioModel());
+    }
+
+    public function test_default_transcription_model(): void
+    {
+        $provider = Ai::transcriptionProvider('chutes');
+
+        $this->assertEquals('whisper-large-v3', $provider->defaultTranscriptionModel());
+    }
+
+    public function test_audio_gateway_is_chutes_gateway(): void
+    {
+        $provider = Ai::audioProvider('chutes');
+
+        $this->assertInstanceOf(ChutesAudioGateway::class, $provider->audioGateway());
+    }
+
+    public function test_transcription_gateway_is_chutes_gateway(): void
+    {
+        $provider = Ai::transcriptionProvider('chutes');
+
+        $this->assertInstanceOf(ChutesAudioGateway::class, $provider->transcriptionGateway());
     }
 
     public function test_default_image_options_square(): void

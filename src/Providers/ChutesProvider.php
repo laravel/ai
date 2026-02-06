@@ -2,17 +2,26 @@
 
 namespace Laravel\Ai\Providers;
 
+use Laravel\Ai\Contracts\Gateway\AudioGateway;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
+use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
+use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Gateway\ChutesAudioGateway;
 use Laravel\Ai\Gateway\ChutesImageGateway;
 
-class ChutesProvider extends Provider implements ImageProvider, TextProvider
+class ChutesProvider extends Provider implements AudioProvider, ImageProvider, TextProvider, TranscriptionProvider
 {
+    use Concerns\GeneratesAudio;
     use Concerns\GeneratesImages;
     use Concerns\GeneratesText;
+    use Concerns\GeneratesTranscriptions;
+    use Concerns\HasAudioGateway;
     use Concerns\HasImageGateway;
     use Concerns\HasTextGateway;
+    use Concerns\HasTranscriptionGateway;
     use Concerns\StreamsText;
 
     /**
@@ -81,5 +90,37 @@ class ChutesProvider extends Provider implements ImageProvider, TextProvider
             },
             'guidance_scale' => 7.5,
         ];
+    }
+
+    /**
+     * Get the audio gateway instance.
+     */
+    public function audioGateway(): AudioGateway
+    {
+        return $this->audioGateway ?? new ChutesAudioGateway;
+    }
+
+    /**
+     * Get the transcription gateway instance.
+     */
+    public function transcriptionGateway(): TranscriptionGateway
+    {
+        return $this->transcriptionGateway ?? new ChutesAudioGateway;
+    }
+
+    /**
+     * Get the name of the default audio model.
+     */
+    public function defaultAudioModel(): string
+    {
+        return $this->config['models']['audio'] ?? 'kokoro';
+    }
+
+    /**
+     * Get the name of the default transcription model.
+     */
+    public function defaultTranscriptionModel(): string
+    {
+        return $this->config['models']['transcription'] ?? 'whisper-large-v3';
     }
 }

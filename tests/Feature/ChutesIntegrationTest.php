@@ -2,9 +2,11 @@
 
 namespace Tests\Feature;
 
+use Laravel\Ai\Audio;
 use Laravel\Ai\Image;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Streaming\Events\TextDelta;
+use Laravel\Ai\Transcription;
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\TestCase;
 
@@ -92,5 +94,29 @@ class ChutesIntegrationTest extends TestCase
         $this->assertNotEmpty($response->firstImage()->image);
         $this->assertEquals('chutes', $response->meta->provider);
         $this->assertEquals('FLUX.1-schnell', $response->meta->model);
+    }
+
+    public function test_audio_generation(): void
+    {
+        $response = Audio::of('Hello, how are you today?')
+            ->generate(provider: 'chutes', model: 'kokoro');
+
+        $this->assertNotEmpty($response->audio);
+        $this->assertEquals('audio/wav', $response->mimeType());
+        $this->assertEquals('chutes', $response->meta->provider);
+        $this->assertEquals('kokoro', $response->meta->model);
+    }
+
+    public function test_transcription(): void
+    {
+        $audio = Audio::of('Hello, how are you today?')
+            ->generate(provider: 'chutes', model: 'kokoro');
+
+        $transcription = Transcription::of($audio->audio)
+            ->generate(provider: 'chutes', model: 'whisper-large-v3');
+
+        $this->assertNotEmpty((string) $transcription);
+        $this->assertEquals('chutes', $transcription->meta->provider);
+        $this->assertEquals('whisper-large-v3', $transcription->meta->model);
     }
 }
