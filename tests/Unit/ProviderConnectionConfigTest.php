@@ -5,20 +5,14 @@ namespace Tests\Unit;
 use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Gateway\Prism\PrismGateway;
 use Laravel\Ai\Providers\AnthropicProvider;
-use Laravel\Ai\Providers\OpenAiProvider;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 class ProviderConnectionConfigTest extends TestCase
 {
-    public function test_provider_returns_additional_config_with_url(): void
+    #[DataProvider('providerConfigDataProvider')]
+    public function test_provider_returns_additional_config(array $config, array $expected): void
     {
-        $config = [
-            'name' => 'anthropic',
-            'driver' => 'anthropic',
-            'key' => 'test-key',
-            'url' => 'https://custom.litellm.com/v1',
-        ];
-
         $provider = new AnthropicProvider(
             $this->createMock(PrismGateway::class),
             $config,
@@ -27,39 +21,52 @@ class ProviderConnectionConfigTest extends TestCase
 
         $additionalConfig = $provider->additionalConfiguration();
 
-        $this->assertEquals('https://custom.litellm.com/v1', $additionalConfig['url']);
-        $this->assertArrayNotHasKey('driver', $additionalConfig);
-        $this->assertArrayNotHasKey('key', $additionalConfig);
-        $this->assertArrayNotHasKey('name', $additionalConfig);
+        $this->assertEquals($expected, $additionalConfig);
     }
 
-    public function test_provider_returns_empty_additional_config_when_not_configured(): void
+    public static function providerConfigDataProvider(): array
     {
-        $config = [
-            'name' => 'anthropic',
-            'driver' => 'anthropic',
-            'key' => 'test-key',
+        return [
+            'with custom URL' => [
+                'config' => [
+                    'name' => 'anthropic',
+                    'driver' => 'anthropic',
+                    'key' => 'test-key',
+                    'url' => 'https://custom.litellm.com/v1',
+                ],
+                'expected' => [
+                    'url' => 'https://custom.litellm.com/v1',
+                ],
+            ],
+            'without custom URL' => [
+                'config' => [
+                    'name' => 'anthropic',
+                    'driver' => 'anthropic',
+                    'key' => 'test-key',
+                ],
+                'expected' => [],
+            ],
+            'with multiple custom params' => [
+                'config' => [
+                    'name' => 'anthropic',
+                    'driver' => 'anthropic',
+                    'key' => 'test-key',
+                    'url' => 'https://custom-litellm.com/v1',
+                    'version' => '2024-01-01',
+                    'custom_param' => 'custom_value',
+                ],
+                'expected' => [
+                    'url' => 'https://custom-litellm.com/v1',
+                    'version' => '2024-01-01',
+                    'custom_param' => 'custom_value',
+                ],
+            ],
         ];
-
-        $provider = new AnthropicProvider(
-            $this->createMock(PrismGateway::class),
-            $config,
-            $this->createMock(Dispatcher::class)
-        );
-
-        $additionalConfig = $provider->additionalConfiguration();
-
-        $this->assertEmpty($additionalConfig);
     }
 
-    public function test_provider_credentials_returns_key(): void
+    #[DataProvider('providerCredentialsDataProvider')]
+    public function test_provider_credentials(array $config, ?string $expectedKey): void
     {
-        $config = [
-            'name' => 'anthropic',
-            'driver' => 'anthropic',
-            'key' => 'test-api-key',
-        ];
-
         $provider = new AnthropicProvider(
             $this->createMock(PrismGateway::class),
             $config,
@@ -68,25 +75,28 @@ class ProviderConnectionConfigTest extends TestCase
 
         $credentials = $provider->providerCredentials();
 
-        $this->assertEquals('test-api-key', $credentials['key']);
+        $this->assertEquals($expectedKey, $credentials['key']);
     }
 
-    public function test_provider_credentials_handles_missing_key(): void
+    public static function providerCredentialsDataProvider(): array
     {
-        $config = [
-            'name' => 'ollama',
-            'driver' => 'ollama',
-            'url' => 'http://localhost:11434/v1',
+        return [
+            'with API key' => [
+                'config' => [
+                    'name' => 'anthropic',
+                    'driver' => 'anthropic',
+                    'key' => 'test-api-key',
+                ],
+                'expectedKey' => 'test-api-key',
+            ],
+            'without API key' => [
+                'config' => [
+                    'name' => 'anthropic',
+                    'driver' => 'anthropic',
+                    'url' => 'https://custom-proxy.com/v1',
+                ],
+                'expectedKey' => null,
+            ],
         ];
-
-        $provider = new AnthropicProvider(
-            $this->createMock(PrismGateway::class),
-            $config,
-            $this->createMock(Dispatcher::class)
-        );
-
-        $credentials = $provider->providerCredentials();
-
-        $this->assertNull($credentials['key']);
     }
 }
