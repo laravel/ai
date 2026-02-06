@@ -41,7 +41,7 @@ class PrismStreamEvent
             PrismStreamEventType::TextComplete => new TextEnd($id ?? $event->id, strtolower($event->messageId), $event->timestamp),
             PrismStreamEventType::ThinkingStart => new ReasoningStart($id ?? $event->id, strtolower($event->reasoningId), $event->timestamp),
             PrismStreamEventType::ThinkingDelta => new ReasoningDelta($id ?? $event->id, strtolower($event->reasoningId), $event->delta, $event->timestamp, $event->summary),
-            PrismStreamEventType::ThinkingComplete => new ReasoningEnd($id ?? $event->id, strtolower($event->reasoningId), $event->delta, $event->timestamp, $event->summary),
+            PrismStreamEventType::ThinkingComplete => new ReasoningEnd($id ?? $event->id, strtolower($event->reasoningId), $event->timestamp, $event->summary),
             PrismStreamEventType::ToolCall => static::toToolCallEvent($event),
             PrismStreamEventType::ToolResult => static::toToolResultEvent($event),
             PrismStreamEventType::ProviderToolEvent => static::toProviderToolEvent($event),
