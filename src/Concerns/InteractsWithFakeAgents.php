@@ -88,9 +88,9 @@ trait InteractsWithFakeAgents
             : $callback;
 
         PHPUnit::assertTrue(
-            (new Collection($prompts ?? $this->recordedPrompts[$agent] ?? []))->filter(function ($prompt) use ($callback) {
+            (new Collection($prompts ?? $this->recordedPrompts[$agent] ?? []))->contains(function ($prompt) use ($callback) {
                 return $callback($prompt);
-            })->count() > 0,
+            }),
             $message ?? 'An expected prompt was not received.'
         );
 
@@ -124,9 +124,9 @@ trait InteractsWithFakeAgents
             : $callback;
 
         PHPUnit::assertTrue(
-            (new Collection($prompts ?? $this->recordedPrompts[$agent] ?? []))->filter(function ($prompt) use ($callback) {
+            (new Collection($prompts ?? $this->recordedPrompts[$agent] ?? []))->doesntContain(function ($prompt) use ($callback) {
                 return $callback($prompt);
-            })->count() === 0,
+            }),
             $message ?? 'An unexpected prompt was received.'
         );
 
