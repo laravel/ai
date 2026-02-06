@@ -87,6 +87,15 @@ return [
             'key' => env('JINA_API_KEY'),
         ],
 
+        'azure' => [
+            'driver' => 'azure',
+            'endpoint' => env('AZURE_OPENAI_ENDPOINT'),
+            'deployment' => env('AZURE_OPENAI_DEPLOYMENT', 'gpt-4o'),
+            'embedding_deployment' => env('AZURE_OPENAI_EMBEDDING_DEPLOYMENT', 'text-embedding-3-small'),
+            'key' => env('AZURE_OPENAI_API_KEY'),
+            'api_version' => env('AZURE_OPENAI_API_VERSION', '2024-10-21'),
+        ],
+
         'openai' => [
             'driver' => 'openai',
             'key' => env('OPENAI_API_KEY'),
