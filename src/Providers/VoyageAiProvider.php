@@ -14,7 +14,7 @@ class VoyageAiProvider extends Provider implements EmbeddingProvider
      */
     public function defaultEmbeddingsModel(): string
     {
-        return 'voyage-3';
+        return 'voyage-4';
     }
 
     /**
