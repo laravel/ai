@@ -352,6 +352,7 @@ class PrismGateway implements Gateway
             'groq' => PrismProvider::Groq,
             'openai' => PrismProvider::OpenAI,
             'openrouter' => PrismProvider::OpenRouter,
+            'voyageai' => PrismProvider::VoyageAI,
             'xai' => PrismProvider::XAI,
             default => throw new InvalidArgumentException('Gateway does not support provider ['.$provider.'].'),
         };
