@@ -55,7 +55,7 @@ class AiManager extends MultipleInstanceManager
     {
         return tap($this->instance($name), function ($instance) {
             if (! $instance instanceof AudioProvider) {
-                throw new LogicException('Provider ['.get_class($instance).'] does not support audio generation.');
+                throw new LogicException('Provider ['. $instance::class .'] does not support audio generation.');
             }
         });
     }
@@ -79,7 +79,7 @@ class AiManager extends MultipleInstanceManager
     {
         return tap($this->instance($name), function ($instance) {
             if (! $instance instanceof EmbeddingProvider) {
-                throw new LogicException('Provider ['.get_class($instance).'] does not support embedding generation.');
+                throw new LogicException('Provider ['. $instance::class .'] does not support embedding generation.');
             }
         });
     }
@@ -103,7 +103,7 @@ class AiManager extends MultipleInstanceManager
     {
         return tap($this->instance($name), function ($instance) {
             if (! $instance instanceof RerankingProvider) {
-                throw new LogicException('Provider ['.get_class($instance).'] does not support reranking.');
+                throw new LogicException('Provider ['. $instance::class .'] does not support reranking.');
             }
         });
     }
@@ -127,7 +127,7 @@ class AiManager extends MultipleInstanceManager
     {
         return tap($this->instance($name), function ($instance) {
             if (! $instance instanceof ImageProvider) {
-                throw new LogicException('Provider ['.get_class($instance).'] does not support image generation.');
+                throw new LogicException('Provider ['. $instance::class .'] does not support image generation.');
             }
         });
     }
@@ -151,7 +151,7 @@ class AiManager extends MultipleInstanceManager
     {
         return tap($this->instance($name), function ($instance) {
             if (! $instance instanceof TextProvider) {
-                throw new LogicException('Provider ['.get_class($instance).'] does not support text generation.');
+                throw new LogicException('Provider ['. $instance::class .'] does not support text generation.');
             }
         });
     }
@@ -175,7 +175,7 @@ class AiManager extends MultipleInstanceManager
     {
         return tap($this->instance($name), function ($instance) {
             if (! $instance instanceof TranscriptionProvider) {
-                throw new LogicException('Provider ['.get_class($instance).'] does not support transcription generation.');
+                throw new LogicException('Provider ['. $instance::class .'] does not support transcription generation.');
             }
         });
     }
@@ -199,7 +199,7 @@ class AiManager extends MultipleInstanceManager
     {
         return tap($this->instance($name), function ($instance) {
             if (! $instance instanceof FileProvider) {
-                throw new LogicException('Provider ['.get_class($instance).'] does not support file management.');
+                throw new LogicException('Provider ['. $instance::class .'] does not support file management.');
             }
         });
     }
@@ -223,7 +223,7 @@ class AiManager extends MultipleInstanceManager
     {
         return tap($this->instance($name), function ($instance) {
             if (! $instance instanceof StoreProvider) {
-                throw new LogicException('Provider ['.get_class($instance).'] does not support store management.');
+                throw new LogicException('Provider ['. $instance::class .'] does not support store management.');
             }
         });
     }
