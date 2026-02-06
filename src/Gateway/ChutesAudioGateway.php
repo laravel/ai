@@ -32,7 +32,7 @@ class ChutesAudioGateway implements AudioGateway, TranscriptionGateway
             $provider->name(),
             fn () => Http::withToken($provider->providerCredentials()['key'])
                 ->timeout(120)
-                ->post('https://chutes-kokoro.chutes.ai/speak', [
+                ->post($provider->additionalConfiguration()['tts_url'] ?? 'https://chutes-kokoro.chutes.ai/speak', [
                     'text' => $text,
                 ])
                 ->throw()
@@ -59,7 +59,7 @@ class ChutesAudioGateway implements AudioGateway, TranscriptionGateway
             $provider->name(),
             fn () => Http::withToken($provider->providerCredentials()['key'])
                 ->timeout(120)
-                ->post('https://chutes-whisper-large-v3.chutes.ai/transcribe', [
+                ->post($provider->additionalConfiguration()['stt_url'] ?? 'https://chutes-whisper-large-v3.chutes.ai/transcribe', [
                     'audio_b64' => base64_encode($audio->content()),
                 ])
                 ->throw()

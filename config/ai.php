@@ -61,6 +61,16 @@ return [
             'driver' => 'chutes',
             'key' => env('CHUTES_API_KEY'),
             'url' => env('CHUTES_BASE_URL', 'https://llm.chutes.ai/v1'),
+            'tts_url' => env('CHUTES_TTS_URL', 'https://chutes-kokoro.chutes.ai/speak'),
+            'stt_url' => env('CHUTES_STT_URL', 'https://chutes-whisper-large-v3.chutes.ai/transcribe'),
+            'models' => [
+                'default' => env('CHUTES_MODEL', 'deepseek-ai/DeepSeek-V3'),
+                'cheapest' => env('CHUTES_CHEAPEST_MODEL', 'unsloth/gemma-3-4b-it'),
+                'smartest' => env('CHUTES_SMARTEST_MODEL', 'moonshotai/Kimi-K2.5'),
+                'image' => env('CHUTES_IMAGE_MODEL', 'FLUX.1-schnell'),
+                'audio' => env('CHUTES_AUDIO_MODEL', 'kokoro'),
+                'transcription' => env('CHUTES_TRANSCRIPTION_MODEL', 'whisper-large-v3'),
+            ],
         ],
 
         'cohere' => [
