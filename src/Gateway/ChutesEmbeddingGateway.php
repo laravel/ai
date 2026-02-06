@@ -23,8 +23,7 @@ class ChutesEmbeddingGateway implements EmbeddingGateway
         array $inputs,
         int $dimensions,
     ): EmbeddingsResponse {
-        $url = $provider->additionalConfiguration()['embedding_url']
-            ?? 'https://chutes-qwen-qwen3-embedding-0-6b.chutes.ai/v1/embeddings';
+        $url = 'https://chutes-qwen-qwen3-embedding-0-6b.chutes.ai/v1/embeddings';
 
         $response = $this->withRateLimitHandling(
             $provider->name(),

@@ -30,11 +30,19 @@ class ChutesProvider extends Provider implements AudioProvider, EmbeddingProvide
     use Concerns\StreamsText;
 
     /**
+     * Get the provider connection configuration other than the driver, key, and name.
+     */
+    public function additionalConfiguration(): array
+    {
+        return ['url' => 'https://llm.chutes.ai/v1'];
+    }
+
+    /**
      * Get the name of the default text model.
      */
     public function defaultTextModel(): string
     {
-        return $this->config['models']['default'] ?? 'deepseek-ai/DeepSeek-V3';
+        return 'deepseek-ai/DeepSeek-V3';
     }
 
     /**
@@ -42,7 +50,7 @@ class ChutesProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function cheapestTextModel(): string
     {
-        return $this->config['models']['cheapest'] ?? 'unsloth/gemma-3-4b-it';
+        return 'unsloth/gemma-3-4b-it';
     }
 
     /**
@@ -50,7 +58,7 @@ class ChutesProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function smartestTextModel(): string
     {
-        return $this->config['models']['smartest'] ?? 'moonshotai/Kimi-K2.5';
+        return 'moonshotai/Kimi-K2.5';
     }
 
     /**
@@ -66,7 +74,7 @@ class ChutesProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function defaultImageModel(): string
     {
-        return $this->config['models']['image'] ?? 'FLUX.1-schnell';
+        return 'FLUX.1-schnell';
     }
 
     /**
@@ -118,7 +126,7 @@ class ChutesProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function defaultAudioModel(): string
     {
-        return $this->config['models']['audio'] ?? 'kokoro';
+        return 'kokoro';
     }
 
     /**
@@ -126,7 +134,7 @@ class ChutesProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function defaultTranscriptionModel(): string
     {
-        return $this->config['models']['transcription'] ?? 'whisper-large-v3';
+        return 'whisper-large-v3';
     }
 
     /**
@@ -142,7 +150,7 @@ class ChutesProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function defaultEmbeddingsModel(): string
     {
-        return $this->config['models']['embedding'] ?? 'Qwen/Qwen3-Embedding-0.6B';
+        return 'Qwen/Qwen3-Embedding-0.6B';
     }
 
     /**
@@ -150,6 +158,6 @@ class ChutesProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function defaultEmbeddingsDimensions(): int
     {
-        return $this->config['models']['embedding_dimensions'] ?? 1024;
+        return 1024;
     }
 }

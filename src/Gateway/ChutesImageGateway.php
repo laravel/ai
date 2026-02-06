@@ -38,7 +38,7 @@ class ChutesImageGateway implements ImageGateway
             $provider->name(),
             fn () => Http::withToken($provider->providerCredentials()['key'])
                 ->timeout($timeout ?? 120)
-                ->post($provider->additionalConfiguration()['image_url'] ?? 'https://image.chutes.ai/generate', [
+                ->post('https://image.chutes.ai/generate', [
                     'model' => $model,
                     'prompt' => $prompt,
                     'width' => $options['width'] ?? 1024,

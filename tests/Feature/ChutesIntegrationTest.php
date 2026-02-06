@@ -22,7 +22,6 @@ class ChutesIntegrationTest extends TestCase
         $app['config']->set('ai.providers.chutes', [
             'driver' => 'chutes',
             'key' => env('CHUTES_API_KEY'),
-            'url' => env('CHUTES_BASE_URL', 'https://llm.chutes.ai/v1'),
         ]);
     }
 

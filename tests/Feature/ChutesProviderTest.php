@@ -182,28 +182,6 @@ class ChutesProviderTest extends TestCase
         $this->assertEquals(7.5, $options['guidance_scale']);
     }
 
-    public function test_model_defaults_can_be_overridden_via_config(): void
-    {
-        config()->set('ai.providers.chutes-custom', [
-            'driver' => 'chutes',
-            'key' => 'test-key',
-            'url' => 'https://llm.chutes.ai/v1',
-            'models' => [
-                'default' => 'Qwen/Qwen3-32B',
-                'cheapest' => 'unsloth/Llama-3.2-3B-Instruct',
-                'smartest' => 'Qwen/Qwen3-235B-A22B',
-                'image' => 'FLUX.1-dev',
-            ],
-        ]);
-
-        $provider = Ai::textProvider('chutes-custom');
-
-        $this->assertEquals('Qwen/Qwen3-32B', $provider->defaultTextModel());
-        $this->assertEquals('unsloth/Llama-3.2-3B-Instruct', $provider->cheapestTextModel());
-        $this->assertEquals('Qwen/Qwen3-235B-A22B', $provider->smartestTextModel());
-        $this->assertEquals('FLUX.1-dev', $provider->defaultImageModel());
-    }
-
     public function test_provider_name(): void
     {
         $provider = Ai::textProvider('chutes');

@@ -28,12 +28,19 @@ class ChutesAudioGateway implements AudioGateway, TranscriptionGateway
         string $voice,
         ?string $instructions = null,
     ): AudioResponse {
+        $voice = match ($voice) {
+            'default-male' => 'am_adam',
+            'default-female' => 'af_heart',
+            default => $voice,
+        };
+
         $response = $this->withRateLimitHandling(
             $provider->name(),
             fn () => Http::withToken($provider->providerCredentials()['key'])
                 ->timeout(120)
-                ->post($provider->additionalConfiguration()['tts_url'] ?? 'https://chutes-kokoro.chutes.ai/speak', [
+                ->post('https://chutes-kokoro.chutes.ai/speak', [
                     'text' => $text,
+                    'voice' => $voice,
                 ])
                 ->throw()
         );
@@ -59,7 +66,7 @@ class ChutesAudioGateway implements AudioGateway, TranscriptionGateway
             $provider->name(),
             fn () => Http::withToken($provider->providerCredentials()['key'])
                 ->timeout(120)
-                ->post($provider->additionalConfiguration()['stt_url'] ?? 'https://chutes-whisper-large-v3.chutes.ai/transcribe', [
+                ->post('https://chutes-whisper-large-v3.chutes.ai/transcribe', [
                     'audio_b64' => base64_encode($audio->content()),
                 ])
                 ->throw()
