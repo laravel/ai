@@ -14,15 +14,14 @@ class AzureProvider extends Provider implements EmbeddingProvider, TextProvider
     use Concerns\StreamsText;
 
     /**
-     * Get the credentials for the underlying AI provider.
+     * Get additional configuration for the underlying AI provider.
      */
-    public function providerCredentials(): array
+    public function additionalConfiguration(): array
     {
-        return [
-            'key' => $this->config['key'],
-            'url' => $this->config['url'],
-            'api_version' => $this->config['api_version'],
-        ];
+        return array_filter([
+            'url' => $this->config['url'] ?? null,
+            'api_version' => $this->config['api_version'] ?? null,
+        ]);
     }
 
     /**

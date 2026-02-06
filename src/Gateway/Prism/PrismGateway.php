@@ -31,6 +31,7 @@ use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
+use Prism\Prism\Enums\Provider as PrismProvider;
 use Prism\Prism\Exceptions\PrismException as PrismVendorException;
 use Prism\Prism\Facades\Prism;
 use Prism\Prism\ValueObjects\Media\Audio;
@@ -342,16 +343,20 @@ class PrismGateway implements Gateway
     /**
      * Map the given Laravel AI provider to a Prism provider.
      */
-    protected static function toPrismProvider(Provider $provider): \Prism\Prism\Enums\Provider|string
+    protected static function toPrismProvider(Provider $provider): PrismProvider|string
     {
         return match ($provider->driver()) {
-            'anthropic' => \Prism\Prism\Enums\Provider::Anthropic,
+            'anthropic' => PrismProvider::Anthropic,
             'azure' => 'azure',
-            'gemini' => \Prism\Prism\Enums\Provider::Gemini,
-            'groq' => \Prism\Prism\Enums\Provider::Groq,
-            'openai' => \Prism\Prism\Enums\Provider::OpenAI,
-            'openrouter' => \Prism\Prism\Enums\Provider::OpenRouter,
-            'xai' => \Prism\Prism\Enums\Provider::XAI,
+            'deepseek' => PrismProvider::DeepSeek,
+            'gemini' => PrismProvider::Gemini,
+            'groq' => PrismProvider::Groq,
+            'mistral' => PrismProvider::Mistral,
+            'ollama' => PrismProvider::Ollama,
+            'openai' => PrismProvider::OpenAI,
+            'openrouter' => PrismProvider::OpenRouter,
+            'voyageai' => PrismProvider::VoyageAI,
+            'xai' => PrismProvider::XAI,
             default => throw new InvalidArgumentException('Gateway does not support provider ['.$provider.'].'),
         };
     }
