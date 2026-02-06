@@ -87,6 +87,12 @@ return [
             'key' => env('JINA_API_KEY'),
         ],
 
+        'ollama' => [
+            'driver' => 'ollama',
+            'key' => env('OLLAMA_API_KEY', ''),
+            'url' => env('OLLAMA_BASE_URL', 'http://localhost:11434'),
+        ],
+
         'openai' => [
             'driver' => 'openai',
             'key' => env('OPENAI_API_KEY'),
@@ -100,12 +106,6 @@ return [
         'xai' => [
             'driver' => 'xai',
             'key' => env('XAI_API_KEY'),
-        ],
-
-        'ollama' => [
-            'driver' => 'ollama',
-            'key' => env('OLLAMA_API_KEY', ''),
-            'url' => env('OLLAMA_BASE_URL', 'http://localhost:11434'),
         ],
     ],
 
