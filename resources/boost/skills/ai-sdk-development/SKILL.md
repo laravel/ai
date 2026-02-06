@@ -316,10 +316,6 @@ $response = (new ChatBot)->continue($conversationId, as: $user)->prompt('More...
 $response = (new MyAgent)->prompt('Hello', provider: ['openai', 'anthropic']);
 ```
 
-## Diagnostics
-
-Use `php artisan ai:diagnose` to check SDK configuration, provider connectivity, and capability support.
-
 ## Testing and Faking
 
 Each capability supports `fake()` with assertions:
@@ -402,16 +398,6 @@ Calling a capability not supported by a provider throws a `LogicException`. Refe
 
 Use agents and entry-point classes (`Image`, `Audio`, etc.) — not `Prism::text()` directly. The AI SDK wraps Prism internally.
 
-## Provider Support
+## Provider Support and Diagnostics
 
-| Provider   | Text | Image | Audio | STT | Embeddings | Reranking | Files | Stores |
-| ---------- | ---- | ----- | ----- | --- | ---------- | --------- | ----- | ------ |
-| OpenAI     | Y    | Y     | Y     | Y   | Y          | -         | Y     | Y      |
-| Anthropic  | Y    | -     | -     | -   | -          | -         | Y     | -      |
-| Gemini     | Y    | Y     | -     | -   | Y          | -         | Y     | Y      |
-| xAI        | Y    | Y     | -     | -   | -          | -         | -     | -      |
-| Groq       | Y    | -     | -     | -   | -          | -         | -     | -      |
-| OpenRouter | Y    | -     | -     | -   | -          | -         | -     | -      |
-| ElevenLabs | -    | -     | Y     | Y   | -          | -         | -     | -      |
-| Cohere     | -    | -     | -     | -   | Y          | Y         | -     | -      |
-| Jina       | -    | -     | -     | -   | Y          | Y         | -     | -      |
+Use `php artisan ai:diagnose` to check SDK configuration, provider support and connectivity, and capability support.
