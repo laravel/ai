@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use Laravel\Ai\Image;
+use Laravel\Ai\Responses\StreamedAgentResponse;
+use Laravel\Ai\Streaming\Events\TextDelta;
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\TestCase;
 
@@ -46,6 +48,36 @@ class ChutesIntegrationTest extends TestCase
 
         $this->assertNotEmpty($response->text);
         $this->assertStringContainsString('Paris', $response->text);
+    }
+
+    public function test_streaming(): void
+    {
+        $agent = new AssistantAgent;
+
+        $response = $agent->stream(
+            'What is 2 + 2? Reply with just the number.',
+            provider: 'chutes',
+            model: $this->model,
+        )->then(function (StreamedAgentResponse $response) {
+            $_SERVER['__testing.chutes_response'] = $response;
+        });
+
+        $events = [];
+
+        foreach ($response as $event) {
+            $events[] = $event;
+        }
+
+        $this->assertTrue(
+            collect($events)
+                ->whereInstanceOf(TextDelta::class)
+                ->isNotEmpty()
+        );
+
+        $this->assertStringContainsString('4', $response->text);
+        $this->assertCount(count($events), $_SERVER['__testing.chutes_response']->events);
+
+        unset($_SERVER['__testing.chutes_response']);
     }
 
     public function test_image_generation(): void

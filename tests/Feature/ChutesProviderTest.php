@@ -70,7 +70,7 @@ class ChutesProviderTest extends TestCase
     {
         $provider = Ai::textProvider('chutes');
 
-        $this->assertEquals('deepseek-ai/DeepSeek-R1', $provider->smartestTextModel());
+        $this->assertEquals('moonshotai/Kimi-K2.5', $provider->smartestTextModel());
     }
 
     public function test_default_image_model(): void

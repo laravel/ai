@@ -36,7 +36,7 @@ class ChutesProvider extends Provider implements ImageProvider, TextProvider
      */
     public function smartestTextModel(): string
     {
-        return $this->config['models']['smartest'] ?? 'deepseek-ai/DeepSeek-R1';
+        return $this->config['models']['smartest'] ?? 'moonshotai/Kimi-K2.5';
     }
 
     /**
