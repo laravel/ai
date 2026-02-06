@@ -2,8 +2,6 @@
 
 namespace Laravel\Ai\Prompts;
 
-use Illuminate\Support\Str;
-
 class QueuedAudioPrompt
 {
     public function __construct(
@@ -19,7 +17,7 @@ class QueuedAudioPrompt
      */
     public function contains(string $string): bool
     {
-        return Str::contains($this->text, $string);
+        return str_contains($this->text, $string);
     }
 
     /**

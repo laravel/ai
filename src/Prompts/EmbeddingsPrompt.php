@@ -3,7 +3,6 @@
 namespace Laravel\Ai\Prompts;
 
 use Countable;
-use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 
 class EmbeddingsPrompt implements Countable
@@ -20,7 +19,7 @@ class EmbeddingsPrompt implements Countable
      */
     public function contains(string $string): bool
     {
-        return array_any($this->inputs, fn ($input) => Str::contains($input, $string));
+        return array_any($this->inputs, fn ($input) => str_contains($input, $string));
     }
 
     /**

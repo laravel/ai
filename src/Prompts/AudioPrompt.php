@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Prompts;
 
-use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 
 class AudioPrompt
@@ -20,7 +19,7 @@ class AudioPrompt
      */
     public function contains(string $string): bool
     {
-        return Str::contains($this->text, $string);
+        return str_contains($this->text, $string);
     }
 
     /**

@@ -3,7 +3,6 @@
 namespace Laravel\Ai\Prompts;
 
 use Countable;
-use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Providers\RerankingProvider;
 
 class RerankingPrompt implements Countable
@@ -26,7 +25,7 @@ class RerankingPrompt implements Countable
      */
     public function contains(string $string): bool
     {
-        return Str::contains($this->query, $string);
+        return str_contains($this->query, $string);
     }
 
     /**
@@ -34,7 +33,7 @@ class RerankingPrompt implements Countable
      */
     public function documentsContain(string $string): bool
     {
-        return array_any($this->documents, fn ($document) => Str::contains($document, $string));
+        return array_any($this->documents, fn ($document) => str_contains($document, $string));
     }
 
     /**

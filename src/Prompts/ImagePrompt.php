@@ -3,7 +3,6 @@
 namespace Laravel\Ai\Prompts;
 
 use Illuminate\Support\Collection;
-use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 
 class ImagePrompt
@@ -26,7 +25,7 @@ class ImagePrompt
      */
     public function contains(string $string): bool
     {
-        return Str::contains($this->prompt, $string);
+        return str_contains($this->prompt, $string);
     }
 
     /**
