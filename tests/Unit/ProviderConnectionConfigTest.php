@@ -156,6 +156,28 @@ class ProviderConnectionConfigTest extends TestCase
                     'custom_param' => 'custom_value',
                 ],
             ],
+            'with null URL' => [
+                'config' => [
+                    'name' => 'cohere',
+                    'driver' => 'cohere',
+                    'key' => 'test-key',
+                    'url' => null,
+                ],
+                'expected' => [
+                    'url' => null,
+                ],
+            ],
+            'with empty string URL' => [
+                'config' => [
+                    'name' => 'cohere',
+                    'driver' => 'cohere',
+                    'key' => 'test-key',
+                    'url' => '',
+                ],
+                'expected' => [
+                    'url' => '',
+                ],
+            ],
         ];
     }
 }

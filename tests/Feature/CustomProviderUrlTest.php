@@ -117,4 +117,56 @@ class CustomProviderUrlTest extends TestCase
         $additionalConfig = $provider->additionalConfiguration();
         $this->assertEmpty($additionalConfig);
     }
+
+    /**
+     * Test that Cohere handles null URL gracefully.
+     *
+     * When URL is null (e.g., COHERE_BASE_URL not set in .env),
+     * CohereGateway should fall back to the default Cohere API URL.
+     */
+    public function test_cohere_null_url_uses_default(): void
+    {
+        config([
+            'ai.providers.cohere' => [
+                'driver' => 'cohere',
+                'key' => 'test-key',
+                'url' => null,
+            ],
+        ]);
+
+        $provider = Ai::embeddingProvider('cohere');
+
+        $this->assertInstanceOf(CohereProvider::class, $provider);
+
+        $additionalConfig = $provider->additionalConfiguration();
+        // Null URL is present in config but will be handled by gateway
+        $this->assertArrayHasKey('url', $additionalConfig);
+        $this->assertNull($additionalConfig['url']);
+    }
+
+    /**
+     * Test that Cohere handles empty string URL gracefully.
+     *
+     * When URL is empty string (e.g., COHERE_BASE_URL= in .env),
+     * CohereGateway should fall back to the default Cohere API URL.
+     */
+    public function test_cohere_empty_string_url_uses_default(): void
+    {
+        config([
+            'ai.providers.cohere' => [
+                'driver' => 'cohere',
+                'key' => 'test-key',
+                'url' => '',
+            ],
+        ]);
+
+        $provider = Ai::embeddingProvider('cohere');
+
+        $this->assertInstanceOf(CohereProvider::class, $provider);
+
+        $additionalConfig = $provider->additionalConfiguration();
+        // Empty string URL is present in config but will be handled by gateway
+        $this->assertArrayHasKey('url', $additionalConfig);
+        $this->assertSame('', $additionalConfig['url']);
+    }
 }
