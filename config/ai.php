@@ -56,7 +56,6 @@ return [
             'driver' => 'anthropic',
             'key' => env('ANTHROPIC_API_KEY'),
             'url' => env('ANTHROPIC_BASE_URL'),
-            'version' => env('ANTHROPIC_API_VERSION'),
         ],
 
         'cohere' => [
@@ -91,8 +90,6 @@ return [
             'driver' => 'openai',
             'key' => env('OPENAI_API_KEY'),
             'url' => env('OPENAI_BASE_URL'),
-            'organization' => env('OPENAI_ORGANIZATION'),
-            'project' => env('OPENAI_PROJECT'),
         ],
 
         'openrouter' => [
