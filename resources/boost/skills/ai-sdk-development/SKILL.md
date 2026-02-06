@@ -279,6 +279,52 @@ class MyAgent implements Agent, HasTools
 }
 ```
 
+### Custom Tool Names
+
+Tools can define custom names using the `HasCustomName` trait, enabling dynamic tool definitions without creating separate PHP classes for each tool instance.
+
+```php
+use Laravel\Ai\Tools\Concerns\HasCustomName;
+
+class DynamicTool implements Tool
+{
+    use HasCustomName;
+
+    public function __construct(
+        public string $operation,
+        public string $description,
+    ) {}
+
+    public function description(): string
+    {
+        return $this->description;
+    }
+
+    public function handle(Request $request): string
+    {
+        // Handle the dynamic operation
+        return "Processed {$this->operation}";
+    }
+
+    public function schema(JsonSchema $schema): array
+    {
+        return [
+            'input' => $schema->string()->required(),
+        ];
+    }
+}
+
+// Use the same tool class with different names
+public function tools(): iterable
+{
+    return [
+        (new DynamicTool('search', 'Search products'))->as('search_products'),
+        (new DynamicTool('categories', 'Search categories'))->as('search_categories'),
+        (new DynamicTool('get', 'Get product details'))->as('get_product'),
+    ];
+}
+```
+
 ### Provider Tools
 
 ```php

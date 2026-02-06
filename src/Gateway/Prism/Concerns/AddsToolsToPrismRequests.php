@@ -45,8 +45,10 @@ trait AddsToolsToPrismRequests
      */
     protected function createPrismTool(Tool $tool): PrismTool
     {
+        $name = $this->resolveToolName($tool);
+
         return (new PrismTool)
-            ->as(class_basename($tool))
+            ->as($name)
             ->for((string) $tool->description())
             ->when(
                 ! empty($tool->schema(new JsonSchemaTypeFactory)),
@@ -56,6 +58,24 @@ trait AddsToolsToPrismRequests
             )
             ->using(fn ($arguments) => $this->invokeTool($tool, $arguments))
             ->withoutErrorHandling();
+    }
+
+    /**
+     * Resolve the name of the given tool.
+     */
+    protected function resolveToolName(Tool $tool): string
+    {
+        // If the tool has a name() method, use it
+        if (method_exists($tool, 'name')) {
+            $name = $tool->name();
+
+            if ($name !== null) {
+                return $name;
+            }
+        }
+
+        // Fall back to class basename
+        return class_basename($tool);
     }
 
     /**
