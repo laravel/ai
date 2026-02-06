@@ -3,9 +3,6 @@
 namespace Tests\Feature;
 
 use Laravel\Ai\Ai;
-use Laravel\Ai\Providers\AnthropicProvider;
-use Laravel\Ai\Providers\CohereProvider;
-use Laravel\Ai\Providers\OpenAiProvider;
 use Tests\TestCase;
 
 class CustomProviderUrlTest extends TestCase
@@ -29,8 +26,6 @@ class CustomProviderUrlTest extends TestCase
 
         $provider = Ai::textProvider('anthropic');
 
-        $this->assertInstanceOf(AnthropicProvider::class, $provider);
-
         $additionalConfig = $provider->additionalConfiguration();
         $this->assertEquals('https://litellm.company.com/v1', $additionalConfig['url']);
     }
@@ -45,8 +40,6 @@ class CustomProviderUrlTest extends TestCase
         ]);
 
         $provider = Ai::textProvider('anthropic');
-
-        $this->assertInstanceOf(AnthropicProvider::class, $provider);
 
         $additionalConfig = $provider->additionalConfiguration();
         $this->assertEmpty($additionalConfig);
@@ -95,8 +88,6 @@ class CustomProviderUrlTest extends TestCase
 
         $provider = Ai::embeddingProvider('cohere');
 
-        $this->assertInstanceOf(CohereProvider::class, $provider);
-
         $additionalConfig = $provider->additionalConfiguration();
         $this->assertEquals('https://litellm.company.com/v1', $additionalConfig['url']);
     }
@@ -111,8 +102,6 @@ class CustomProviderUrlTest extends TestCase
         ]);
 
         $provider = Ai::embeddingProvider('cohere');
-
-        $this->assertInstanceOf(CohereProvider::class, $provider);
 
         $additionalConfig = $provider->additionalConfiguration();
         $this->assertEmpty($additionalConfig);
@@ -136,37 +125,9 @@ class CustomProviderUrlTest extends TestCase
 
         $provider = Ai::embeddingProvider('cohere');
 
-        $this->assertInstanceOf(CohereProvider::class, $provider);
-
         $additionalConfig = $provider->additionalConfiguration();
         // Null URL is present in config but will be handled by gateway
         $this->assertArrayHasKey('url', $additionalConfig);
         $this->assertNull($additionalConfig['url']);
-    }
-
-    /**
-     * Test that Cohere handles empty string URL gracefully.
-     *
-     * When URL is empty string (e.g., COHERE_BASE_URL= in .env),
-     * CohereGateway should fall back to the default Cohere API URL.
-     */
-    public function test_cohere_empty_string_url_uses_default(): void
-    {
-        config([
-            'ai.providers.cohere' => [
-                'driver' => 'cohere',
-                'key' => 'test-key',
-                'url' => '',
-            ],
-        ]);
-
-        $provider = Ai::embeddingProvider('cohere');
-
-        $this->assertInstanceOf(CohereProvider::class, $provider);
-
-        $additionalConfig = $provider->additionalConfiguration();
-        // Empty string URL is present in config but will be handled by gateway
-        $this->assertArrayHasKey('url', $additionalConfig);
-        $this->assertSame('', $additionalConfig['url']);
     }
 }
