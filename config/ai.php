@@ -69,6 +69,11 @@ return [
             'key' => env('COHERE_API_KEY'),
         ],
 
+        'deepseek' => [
+            'driver' => 'deepseek',
+            'key' => env('DEEPSEEK_API_KEY'),
+        ],
+
         'eleven' => [
             'driver' => 'eleven',
             'key' => env('ELEVENLABS_API_KEY'),
@@ -89,6 +94,17 @@ return [
             'key' => env('JINA_API_KEY'),
         ],
 
+        'mistral' => [
+            'driver' => 'mistral',
+            'key' => env('MISTRAL_API_KEY'),
+        ],
+
+        'ollama' => [
+            'driver' => 'ollama',
+            'key' => env('OLLAMA_API_KEY', ''),
+            'url' => env('OLLAMA_BASE_URL', 'http://localhost:11434'),
+        ],
+
         'openai' => [
             'driver' => 'openai',
             'key' => env('OPENAI_API_KEY'),
@@ -97,6 +113,11 @@ return [
         'openrouter' => [
             'driver' => 'openrouter',
             'key' => env('OPENROUTER_API_KEY'),
+        ],
+
+        'voyageai' => [
+            'driver' => 'voyageai',
+            'key' => env('VOYAGEAI_API_KEY'),
         ],
 
         'xai' => [

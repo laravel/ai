@@ -17,13 +17,17 @@ use Laravel\Ai\Gateway\Prism\PrismGateway;
 use Laravel\Ai\Providers\AnthropicProvider;
 use Laravel\Ai\Providers\AzureProvider;
 use Laravel\Ai\Providers\CohereProvider;
+use Laravel\Ai\Providers\DeepSeekProvider;
 use Laravel\Ai\Providers\ElevenLabsProvider;
 use Laravel\Ai\Providers\GeminiProvider;
 use Laravel\Ai\Providers\GroqProvider;
 use Laravel\Ai\Providers\JinaProvider;
+use Laravel\Ai\Providers\MistralProvider;
+use Laravel\Ai\Providers\OllamaProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Providers\OpenRouterProvider;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Providers\VoyageAiProvider;
 use Laravel\Ai\Providers\XaiProvider;
 use LogicException;
 
@@ -273,6 +277,18 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
+     * Create a DeepSeek powered instance.
+     */
+    public function createDeepseekDriver(array $config): DeepSeekProvider
+    {
+        return new DeepSeekProvider(
+            new PrismGateway($this->app['events']),
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
      * Create an Eleven Labs powered instance.
      */
     public function createElevenDriver(array $config): ElevenLabsProvider
@@ -319,6 +335,30 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
+     * Create a Mistral AI powered instance.
+     */
+    public function createMistralDriver(array $config): MistralProvider
+    {
+        return new MistralProvider(
+            new PrismGateway($this->app['events']),
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create an Ollama powered instance.
+     */
+    public function createOllamaDriver(array $config): OllamaProvider
+    {
+        return new OllamaProvider(
+            new PrismGateway($this->app['events']),
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
      * Create an OpenAI powered instance.
      */
     public function createOpenaiDriver(array $config): OpenAiProvider
@@ -336,6 +376,18 @@ class AiManager extends MultipleInstanceManager
     public function createOpenrouterDriver(array $config): OpenRouterProvider
     {
         return new OpenRouterProvider(
+            new PrismGateway($this->app['events']),
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create a VoyageAI powered instance.
+     */
+    public function createVoyageaiDriver(array $config): VoyageAiProvider
+    {
+        return new VoyageAiProvider(
             new PrismGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)

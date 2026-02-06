@@ -45,8 +45,12 @@ trait AddsToolsToPrismRequests
      */
     protected function createPrismTool(Tool $tool): PrismTool
     {
+        $toolName = method_exists($tool, 'name')
+            ? $tool->name()
+            : class_basename($tool);
+
         return (new PrismTool)
-            ->as(class_basename($tool))
+            ->as($toolName)
             ->for((string) $tool->description())
             ->when(
                 ! empty($tool->schema(new JsonSchemaTypeFactory)),

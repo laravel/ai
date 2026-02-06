@@ -43,7 +43,7 @@ class PrismTool extends Tool
             return new ToolCall(
                 $toolCall['id'] ?? '',
                 $toolCall['name'] ?? '',
-                $toolCall['arguments']['schema_definition'] ?? $toolCall['arguments'] ?? [],
+                static::normalizeArguments($toolCall['arguments']['schema_definition'] ?? $toolCall['arguments'] ?? []),
                 $toolCall['resultId'] ?? null,
                 $toolCall['reasoningId'] ?? null,
                 $toolCall['reasoningSummary'] ?? null,
@@ -53,7 +53,7 @@ class PrismTool extends Tool
         return new ToolCall(
             $toolCall->id,
             $toolCall->name,
-            $toolCall->arguments()['schema_definition'] ?? [],
+            static::normalizeArguments($toolCall->arguments()['schema_definition'] ?? []),
             $toolCall->resultId,
             $toolCall->reasoningId,
             $toolCall->reasoningSummary,
@@ -69,7 +69,7 @@ class PrismTool extends Tool
             return new ToolResult(
                 $toolResult['toolCallId'] ?? $toolResult['tool_call_id'] ?? '',
                 $toolResult['toolName'] ?? $toolResult['tool_name'] ?? '',
-                $toolResult['args']['schema_definition'] ?? $toolResult['args'] ?? [],
+                static::normalizeArguments($toolResult['args']['schema_definition'] ?? $toolResult['args'] ?? []),
                 $toolResult['result'] ?? '',
                 $toolResult['toolCallResultId'] ?? $toolResult['tool_call_result_id'] ?? null,
             );
@@ -78,9 +78,23 @@ class PrismTool extends Tool
         return new ToolResult(
             $toolResult->toolCallId,
             $toolResult->toolName,
-            $toolResult->args['schema_definition'] ?? [],
+            static::normalizeArguments($toolResult->args['schema_definition'] ?? []),
             $toolResult->result,
             $toolResult->toolCallResultId,
         );
+    }
+
+    /**
+     * Normalize arguments to an array, decoding JSON strings when necessary.
+     */
+    protected static function normalizeArguments(mixed $arguments): array
+    {
+        if (is_string($arguments)) {
+            $decoded = json_decode($arguments, true);
+
+            return is_array($decoded) ? $decoded : [];
+        }
+
+        return is_array($arguments) ? $arguments : [];
     }
 }
