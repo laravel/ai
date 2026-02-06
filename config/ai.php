@@ -61,6 +61,7 @@ return [
             'driver' => 'chutes',
             'key' => env('CHUTES_API_KEY'),
             'url' => env('CHUTES_BASE_URL', 'https://llm.chutes.ai/v1'),
+            'image_url' => env('CHUTES_IMAGE_URL', 'https://image.chutes.ai/generate'),
             'tts_url' => env('CHUTES_TTS_URL', 'https://chutes-kokoro.chutes.ai/speak'),
             'stt_url' => env('CHUTES_STT_URL', 'https://chutes-whisper-large-v3.chutes.ai/transcribe'),
             'models' => [
