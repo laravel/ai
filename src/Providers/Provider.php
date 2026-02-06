@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Providers;
 
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Gateway\Gateway;
 
 abstract class Provider
@@ -55,7 +56,7 @@ abstract class Provider
             return [$providers => $model];
         }
 
-        return collect($providers)->mapWithKeys(function ($value, $key) {
+        return (new Collection($providers))->mapWithKeys(function ($value, $key) {
             return is_numeric($key)
                 ? [$value => null] // Provider name and default model...
                 : [$key => $value]; // Provider name and model name...

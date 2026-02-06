@@ -20,7 +20,7 @@ class TextDelta extends StreamEvent
      */
     public static function combine(Collection|array $events): string
     {
-        $events = is_array($events) ? collect($events) : $events;
+        $events = is_array($events) ? new Collection($events) : $events;
 
         return $events->whereInstanceOf(TextDelta::class)->map->delta->join('');
     }

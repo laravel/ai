@@ -119,7 +119,7 @@ class FakeQueryBuilder
 
     public function get(): Collection
     {
-        return collect([
+        return new Collection([
             new FakeModel(['id' => 1, 'content' => 'First document', 'embedding' => [0.1, 0.2, 0.3]]),
             new FakeModel(['id' => 2, 'content' => 'Second document', 'embedding' => [0.4, 0.5, 0.6]]),
         ]);

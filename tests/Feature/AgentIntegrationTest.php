@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
 use Laravel\Ai\Events\AgentPrompted;
@@ -89,7 +90,7 @@ class AgentIntegrationTest extends TestCase
         }
 
         $this->assertTrue(
-            collect($events)
+            (new Collection($events))
                 ->whereInstanceOf(TextDelta::class)
                 ->isNotEmpty()
         );
