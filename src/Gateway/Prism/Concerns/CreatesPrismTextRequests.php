@@ -79,15 +79,26 @@ trait CreatesPrismTextRequests
      */
     protected function configure($prism, Provider $provider, string $model): mixed
     {
+        $credentials = $provider->providerCredentials();
+        $connectionConfig = $provider->connectionConfig();
+
+        // Merge connection config with provider-specific defaults
+        $config = array_filter([
+            ...($provider->driver() === 'anthropic')
+               ? ['anthropic_beta' => $connectionConfig['anthropic_beta'] ?? 'web-fetch-2025-09-10']
+               : [],
+            'api_key' => $credentials['key'] ?? null,
+            'url' => $connectionConfig['url'] ?? null,
+            'organization' => $connectionConfig['organization'] ?? null,
+            'project' => $connectionConfig['project'] ?? null,
+            'version' => $connectionConfig['version'] ?? null,
+            'site' => $connectionConfig['site'] ?? null,
+        ]);
+
         return $prism->using(
             static::toPrismProvider($provider),
             $model,
-            array_filter([
-                ...($provider->driver() === 'anthropic')
-                   ? ['anthropic_beta' => 'web-fetch-2025-09-10']
-                   : [],
-                'api_key' => $provider->providerCredentials()['key'],
-            ]),
+            $config,
         );
     }
 }

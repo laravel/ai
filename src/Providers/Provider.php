@@ -34,8 +34,23 @@ abstract class Provider
     public function providerCredentials(): array
     {
         return [
-            'key' => $this->config['key'],
+            'key' => $this->config['key'] ?? null,
         ];
+    }
+
+    /**
+     * Get the connection configuration for the underlying AI provider.
+     */
+    public function connectionConfig(): array
+    {
+        return array_filter([
+            'url' => $this->config['url'] ?? null,
+            'organization' => $this->config['organization'] ?? null,
+            'project' => $this->config['project'] ?? null,
+            'version' => $this->config['version'] ?? null,
+            'anthropic_beta' => $this->config['anthropic_beta'] ?? null,
+            'site' => $this->config['site'] ?? null,
+        ]);
     }
 
     /**
