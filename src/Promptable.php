@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Container\Container;
 use Illuminate\Queue\SerializesModels;
+use Laravel\Ai\Attributes\Model as ModelAttribute;
 use Laravel\Ai\Attributes\Provider as ProviderAttribute;
 use Laravel\Ai\Attributes\Timeout as TimeoutAttribute;
 use Laravel\Ai\Attributes\UseCheapestModel;
@@ -171,8 +172,14 @@ trait Promptable
             }
         }
 
-        if (! is_array($provider) && is_null($model) && method_exists($this, 'model')) {
-            $model = $this->model();
+        if (! is_array($provider) && is_null($model)) {
+            if (method_exists($this, 'model')) {
+                $model = $this->model();
+            } else {
+                $attributes = (new ReflectionClass($this))->getAttributes(ModelAttribute::class);
+
+                $model = ! empty($attributes) ? $attributes[0]->newInstance()->value : null;
+            }
         }
 
         return Provider::formatProviderAndModelList(
