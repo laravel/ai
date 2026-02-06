@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
-use Laravel\Ai\Contracts\NamedTool;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Gateway\Prism\Concerns\AddsToolsToPrismRequests;
 use Laravel\Ai\Gateway\Prism\PrismTool;
@@ -43,7 +42,7 @@ class TestToolResolver
     }
 }
 
-class NamedToolExample implements Tool, NamedTool
+class NamedToolExample implements Tool
 {
     public function name(): string
     {
