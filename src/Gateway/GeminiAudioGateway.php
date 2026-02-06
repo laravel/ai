@@ -16,6 +16,8 @@ class GeminiAudioGateway implements AudioGateway
 
     /**
      * Generate audio from the given text using Gemini TTS.
+     *
+     * @throws \RuntimeException
      */
     public function generateAudio(
         AudioProvider $provider,
