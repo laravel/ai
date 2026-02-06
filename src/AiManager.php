@@ -344,7 +344,7 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
-     * Create an xAI powered instance.
+     * Create a VoyageAI powered instance.
      */
     public function createVoyageaiDriver(array $config): VoyageAiProvider
     {
