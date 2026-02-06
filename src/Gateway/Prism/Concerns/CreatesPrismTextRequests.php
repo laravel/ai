@@ -6,6 +6,7 @@ use Laravel\Ai\Contracts\Prompt;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\AnthropicProvider;
+use Laravel\Ai\Providers\AzureProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Providers\Provider;
 use Prism\Prism\Facades\Prism;
@@ -47,7 +48,7 @@ trait CreatesPrismTextRequests
     {
         $request = $request->withSchema(new ObjectSchema($schema));
 
-        if ($provider instanceof OpenAiProvider) {
+        if ($provider instanceof OpenAiProvider || $provider instanceof AzureProvider) {
             $request = $request->withProviderOptions(['schema' => ['strict' => true]]);
         }
 
@@ -79,15 +80,22 @@ trait CreatesPrismTextRequests
      */
     protected function configure($prism, Provider $provider, string $model): mixed
     {
+        $credentials = $provider->providerCredentials();
+
+        $providerConfig = array_filter([
+            ...($provider->driver() === 'anthropic')
+               ? ['anthropic_beta' => 'web-fetch-2025-09-10']
+               : [],
+            ...($provider instanceof AzureProvider)
+               ? array_filter(['url' => $credentials['url'], 'api_version' => $credentials['api_version']])
+               : [],
+            'api_key' => $credentials['key'],
+        ]);
+
         return $prism->using(
             static::toPrismProvider($provider),
             $model,
-            array_filter([
-                ...($provider->driver() === 'anthropic')
-                   ? ['anthropic_beta' => 'web-fetch-2025-09-10']
-                   : [],
-                'api_key' => $provider->providerCredentials()['key'],
-            ]),
+            $providerConfig,
         );
     }
 }

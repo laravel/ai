@@ -10,7 +10,9 @@ use Laravel\Ai\Console\Commands\ChatCommand;
 use Laravel\Ai\Console\Commands\MakeAgentCommand;
 use Laravel\Ai\Console\Commands\MakeToolCommand;
 use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Gateway\Prism\Providers\AzureOpenAI;
 use Laravel\Ai\Storage\DatabaseConversationStore;
+use Prism\Prism\PrismManager;
 
 class AiServiceProvider extends ServiceProvider
 {
@@ -25,6 +27,16 @@ class AiServiceProvider extends ServiceProvider
         $this->app->singleton(ConversationStore::class, DatabaseConversationStore::class);
 
         $this->mergeConfigFrom(__DIR__.'/../config/ai.php', 'ai');
+
+        $this->app->resolving(PrismManager::class, function (PrismManager $manager) {
+            $manager->extend('azure', function ($app, array $config) {
+                return new AzureOpenAI(
+                    apiKey: $config['api_key'] ?? '',
+                    url: $config['url'] ?? '',
+                    apiVersion: $config['api_version'] ?? null,
+                );
+            });
+        });
     }
 
     /**

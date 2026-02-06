@@ -15,6 +15,7 @@ use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Gateway\Prism\PrismGateway;
 use Laravel\Ai\Providers\AnthropicProvider;
+use Laravel\Ai\Providers\AzureProvider;
 use Laravel\Ai\Providers\CohereProvider;
 use Laravel\Ai\Providers\ElevenLabsProvider;
 use Laravel\Ai\Providers\GeminiProvider;
@@ -234,6 +235,18 @@ class AiManager extends MultipleInstanceManager
         return $this->storesAreFaked()
             ? (clone $provider)->useStoreGateway($this->fakeStoreGateway())
             : $provider;
+    }
+
+    /**
+     * Create an Azure OpenAI powered instance.
+     */
+    public function createAzureDriver(array $config): AzureProvider
+    {
+        return new AzureProvider(
+            new PrismGateway($this->app['events']),
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
     }
 
     /**

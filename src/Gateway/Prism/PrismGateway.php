@@ -31,7 +31,6 @@ use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
-use Prism\Prism\Enums\Provider as PrismProvider;
 use Prism\Prism\Exceptions\PrismException as PrismVendorException;
 use Prism\Prism\Facades\Prism;
 use Prism\Prism\ValueObjects\Media\Audio;
@@ -185,7 +184,7 @@ class PrismGateway implements Gateway
                 ->withPrompt($prompt, $this->toPrismImageAttachments($attachments))
                 ->withProviderOptions($provider->defaultImageOptions($size, $quality))
                 ->withClientOptions([
-                    'timeout' => $timeout ?? 120
+                    'timeout' => $timeout ?? 120,
                 ])
                 ->generate();
         } catch (PrismVendorException $e) {
@@ -343,15 +342,16 @@ class PrismGateway implements Gateway
     /**
      * Map the given Laravel AI provider to a Prism provider.
      */
-    protected static function toPrismProvider(Provider $provider): PrismProvider
+    protected static function toPrismProvider(Provider $provider): \Prism\Prism\Enums\Provider|string
     {
         return match ($provider->driver()) {
-            'anthropic' => PrismProvider::Anthropic,
-            'gemini' => PrismProvider::Gemini,
-            'groq' => PrismProvider::Groq,
-            'openai' => PrismProvider::OpenAI,
-            'openrouter' => PrismProvider::OpenRouter,
-            'xai' => PrismProvider::XAI,
+            'anthropic' => \Prism\Prism\Enums\Provider::Anthropic,
+            'azure' => 'azure',
+            'gemini' => \Prism\Prism\Enums\Provider::Gemini,
+            'groq' => \Prism\Prism\Enums\Provider::Groq,
+            'openai' => \Prism\Prism\Enums\Provider::OpenAI,
+            'openrouter' => \Prism\Prism\Enums\Provider::OpenRouter,
+            'xai' => \Prism\Prism\Enums\Provider::XAI,
             default => throw new InvalidArgumentException('Gateway does not support provider ['.$provider.'].'),
         };
     }
