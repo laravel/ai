@@ -103,7 +103,7 @@ class PrismStreamEvent
         return new StreamEnd(
             strtolower($event->id),
             $event->finishReason->value,
-            PrismUsage::toLaravelUsage($event->usage),
+            $event->usage ? PrismUsage::toLaravelUsage($event->usage) : new \Laravel\Ai\Responses\Data\Usage,
             $event->timestamp,
         );
     }
