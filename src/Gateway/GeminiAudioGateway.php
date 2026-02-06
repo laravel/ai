@@ -32,7 +32,7 @@ class GeminiAudioGateway implements AudioGateway
         $response = $this->withRateLimitHandling($provider->name(), fn () => Http::withHeaders([
             'Content-Type' => 'application/json',
             'x-goog-api-key' => $apiKey,
-        ])->post("https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent", [
+        ])->timeout(120)->post("https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent", [
             'contents' => [
                 ['parts' => [['text' => $text]]],
             ],
