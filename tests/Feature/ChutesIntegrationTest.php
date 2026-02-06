@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Laravel\Ai\Audio;
+use Laravel\Ai\Embeddings;
 use Laravel\Ai\Image;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Streaming\Events\TextDelta;
@@ -118,5 +119,16 @@ class ChutesIntegrationTest extends TestCase
         $this->assertNotEmpty((string) $transcription);
         $this->assertEquals('chutes', $transcription->meta->provider);
         $this->assertEquals('whisper-large-v3', $transcription->meta->model);
+    }
+
+    public function test_embeddings(): void
+    {
+        $response = Embeddings::for(['Hello world', 'How are you?'])
+            ->dimensions(1024)
+            ->generate(provider: 'chutes', model: 'Qwen/Qwen3-Embedding-0.6B');
+
+        $this->assertCount(2, $response);
+        $this->assertCount(1024, $response->first());
+        $this->assertEquals('chutes', $response->meta->provider);
     }
 }

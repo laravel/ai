@@ -3,22 +3,27 @@
 namespace Laravel\Ai\Providers;
 
 use Laravel\Ai\Contracts\Gateway\AudioGateway;
+use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
+use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Gateway\ChutesAudioGateway;
+use Laravel\Ai\Gateway\ChutesEmbeddingGateway;
 use Laravel\Ai\Gateway\ChutesImageGateway;
 
-class ChutesProvider extends Provider implements AudioProvider, ImageProvider, TextProvider, TranscriptionProvider
+class ChutesProvider extends Provider implements AudioProvider, EmbeddingProvider, ImageProvider, TextProvider, TranscriptionProvider
 {
     use Concerns\GeneratesAudio;
+    use Concerns\GeneratesEmbeddings;
     use Concerns\GeneratesImages;
     use Concerns\GeneratesText;
     use Concerns\GeneratesTranscriptions;
     use Concerns\HasAudioGateway;
+    use Concerns\HasEmbeddingGateway;
     use Concerns\HasImageGateway;
     use Concerns\HasTextGateway;
     use Concerns\HasTranscriptionGateway;
@@ -122,5 +127,29 @@ class ChutesProvider extends Provider implements AudioProvider, ImageProvider, T
     public function defaultTranscriptionModel(): string
     {
         return $this->config['models']['transcription'] ?? 'whisper-large-v3';
+    }
+
+    /**
+     * Get the embedding gateway instance.
+     */
+    public function embeddingGateway(): EmbeddingGateway
+    {
+        return $this->embeddingGateway ?? new ChutesEmbeddingGateway;
+    }
+
+    /**
+     * Get the name of the default embeddings model.
+     */
+    public function defaultEmbeddingsModel(): string
+    {
+        return $this->config['models']['embedding'] ?? 'Qwen/Qwen3-Embedding-0.6B';
+    }
+
+    /**
+     * Get the default dimensions of the default embeddings model.
+     */
+    public function defaultEmbeddingsDimensions(): int
+    {
+        return $this->config['models']['embedding_dimensions'] ?? 1024;
     }
 }

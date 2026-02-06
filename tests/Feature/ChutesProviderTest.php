@@ -4,13 +4,14 @@ namespace Tests\Feature;
 
 use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
+use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Gateway\ChutesAudioGateway;
+use Laravel\Ai\Gateway\ChutesEmbeddingGateway;
 use Laravel\Ai\Gateway\ChutesImageGateway;
 use Laravel\Ai\Providers\ChutesProvider;
-use LogicException;
 use Tests\TestCase;
 
 class ChutesProviderTest extends TestCase
@@ -41,11 +42,11 @@ class ChutesProviderTest extends TestCase
         $this->assertInstanceOf(AudioProvider::class, $provider);
     }
 
-    public function test_chutes_does_not_support_embeddings(): void
+    public function test_chutes_is_an_embedding_provider(): void
     {
-        $this->expectException(LogicException::class);
+        $provider = Ai::embeddingProvider('chutes');
 
-        Ai::embeddingProvider('chutes');
+        $this->assertInstanceOf(EmbeddingProvider::class, $provider);
     }
 
     public function test_chutes_is_a_transcription_provider(): void
@@ -116,6 +117,27 @@ class ChutesProviderTest extends TestCase
         $provider = Ai::transcriptionProvider('chutes');
 
         $this->assertInstanceOf(ChutesAudioGateway::class, $provider->transcriptionGateway());
+    }
+
+    public function test_default_embedding_model(): void
+    {
+        $provider = Ai::embeddingProvider('chutes');
+
+        $this->assertEquals('Qwen/Qwen3-Embedding-0.6B', $provider->defaultEmbeddingsModel());
+    }
+
+    public function test_default_embedding_dimensions(): void
+    {
+        $provider = Ai::embeddingProvider('chutes');
+
+        $this->assertEquals(1024, $provider->defaultEmbeddingsDimensions());
+    }
+
+    public function test_embedding_gateway_is_chutes_gateway(): void
+    {
+        $provider = Ai::embeddingProvider('chutes');
+
+        $this->assertInstanceOf(ChutesEmbeddingGateway::class, $provider->embeddingGateway());
     }
 
     public function test_default_image_options_square(): void
