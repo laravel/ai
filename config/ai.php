@@ -57,6 +57,12 @@ return [
             'key' => env('ANTHROPIC_API_KEY'),
         ],
 
+        'chutes' => [
+            'driver' => 'chutes',
+            'key' => env('CHUTES_API_KEY'),
+            'url' => env('CHUTES_BASE_URL', 'https://llm.chutes.ai/v1'),
+        ],
+
         'cohere' => [
             'driver' => 'cohere',
             'key' => env('COHERE_API_KEY'),
