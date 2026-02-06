@@ -2,8 +2,10 @@
 
 namespace Laravel\Ai\Providers;
 
+use Laravel\Ai\Contracts\Gateway\AudioGateway;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
+use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
@@ -12,17 +14,20 @@ use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Gateway\GeminiAudioGateway;
 use Laravel\Ai\Gateway\GeminiFileGateway;
 use Laravel\Ai\Gateway\GeminiStoreGateway;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 
-class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider, ImageProvider, StoreProvider, SupportsFileSearch, SupportsWebFetch, SupportsWebSearch, TextProvider
+class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvider, FileProvider, ImageProvider, StoreProvider, SupportsFileSearch, SupportsWebFetch, SupportsWebSearch, TextProvider
 {
+    use Concerns\GeneratesAudio;
     use Concerns\GeneratesEmbeddings;
     use Concerns\GeneratesImages;
     use Concerns\GeneratesText;
+    use Concerns\HasAudioGateway;
     use Concerns\HasEmbeddingGateway;
     use Concerns\HasFileGateway;
     use Concerns\HasImageGateway;
@@ -163,5 +168,21 @@ class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider
     public function storeGateway(): StoreGateway
     {
         return $this->storeGateway ??= new GeminiStoreGateway;
+    }
+
+    /**
+     * Get the provider's audio gateway.
+     */
+    public function audioGateway(): AudioGateway
+    {
+        return $this->audioGateway ??= new GeminiAudioGateway;
+    }
+
+    /**
+     * Get the name of the default audio (TTS) model.
+     */
+    public function defaultAudioModel(): string
+    {
+        return 'gemini-2.5-flash-preview-tts';
     }
 }
