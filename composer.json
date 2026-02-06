@@ -1,12 +1,12 @@
 {
     "name": "laravel/ai",
     "description": "The official AI SDK for Laravel.",
+    "license": "MIT",
     "keywords": [
         "laravel",
         "ai"
     ],
     "homepage": "https://github.com/laravel/ai",
-    "license": "MIT",
     "support": {
         "issues": "https://github.com/laravel/ai/issues",
         "source": "https://github.com/laravel/ai"
@@ -28,18 +28,23 @@
         "mockery/mockery": "^1.6.12",
         "orchestra/testbench": "^10.6"
     },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
     "autoload": {
-        "files": [
-            "functions.php"
-        ],
         "psr-4": {
             "Laravel\\Ai\\": "src/"
-        }
+        },
+        "files": [
+            "functions.php"
+        ]
     },
     "autoload-dev": {
         "psr-4": {
             "Tests\\": "tests/"
         }
+    },
+    "config": {
+        "sort-packages": true
     },
     "extra": {
         "branch-alias": {
@@ -50,10 +55,5 @@
                 "Laravel\\Ai\\AiServiceProvider"
             ]
         }
-    },
-    "config": {
-        "sort-packages": true
-    },
-    "minimum-stability": "dev",
-    "prefer-stable": true
+    }
 }
