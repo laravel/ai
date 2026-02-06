@@ -4,6 +4,8 @@
 <a href="https://packagist.org/packages/laravel/ai"><img src="https://img.shields.io/packagist/dt/laravel/ai" alt="Total Downloads"></a>
 <a href="https://packagist.org/packages/laravel/ai"><img src="https://img.shields.io/packagist/v/laravel/ai" alt="Latest Stable Version"></a>
 <a href="https://packagist.org/packages/laravel/ai"><img src="https://img.shields.io/packagist/l/laravel/ai" alt="License"></a>
+<a href="https://packagist.org/packages/laravel/ai"><img src="https://img.shields.io/packagist/dependency-v/laravel/ai/php" alt="Required PHP version"></a>
+
 </p>
 
 ## Introduction
