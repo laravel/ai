@@ -60,7 +60,7 @@ class PrismMessages
         return $attachments->map(function ($attachment) {
             if (! $attachment instanceof File && ! $attachment instanceof UploadedFile) {
                 throw new InvalidArgumentException(
-                    'Unsupported attachment type ['. $attachment::class .']'
+                    'Unsupported attachment type ['.$attachment::class.']'
                 );
             }
 

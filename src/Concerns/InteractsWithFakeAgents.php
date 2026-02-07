@@ -57,7 +57,7 @@ trait InteractsWithFakeAgents
     {
         return $this->hasFakeGatewayFor($agent)
             ? $this->fakeAgentGateways[$agent::class]
-            : throw new InvalidArgumentException('Agent ['. $agent::class .'] has not been faked.');
+            : throw new InvalidArgumentException('Agent ['.$agent::class.'] has not been faked.');
     }
 
     /**

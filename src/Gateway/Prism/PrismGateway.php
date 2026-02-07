@@ -185,7 +185,7 @@ class PrismGateway implements Gateway
                 ->withPrompt($prompt, $this->toPrismImageAttachments($attachments))
                 ->withProviderOptions($provider->defaultImageOptions($size, $quality))
                 ->withClientOptions([
-                    'timeout' => $timeout ?? 120
+                    'timeout' => $timeout ?? 120,
                 ])
                 ->generate();
         } catch (PrismVendorException $e) {
@@ -209,7 +209,7 @@ class PrismGateway implements Gateway
         return (new Collection($attachments))->map(function ($attachment) {
             if (! $attachment instanceof File && ! $attachment instanceof UploadedFile) {
                 throw new InvalidArgumentException(
-                    'Unsupported attachment type ['. $attachment::class .']'
+                    'Unsupported attachment type ['.$attachment::class.']'
                 );
             }
 
@@ -217,7 +217,7 @@ class PrismGateway implements Gateway
                 $attachment instanceof LocalImage => PrismImage::fromLocalPath($attachment->path, $attachment->mime),
                 $attachment instanceof StoredImage => PrismImage::fromStoragePath($attachment->path, $attachment->disk),
                 $attachment instanceof UploadedFile && static::isImage($attachment) => PrismImage::fromBase64(base64_encode($attachment->get()), $attachment->getClientMimeType()),
-                default => throw new InvalidArgumentException('Unsupported attachment type ['. $attachment::class .']'),
+                default => throw new InvalidArgumentException('Unsupported attachment type ['.$attachment::class.']'),
             };
 
             if ($attachment instanceof File && $attachment->name) {
