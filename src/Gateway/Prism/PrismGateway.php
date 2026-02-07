@@ -292,6 +292,7 @@ class PrismGateway implements Gateway
                 $request->withProviderOptions(array_filter([
                     'language' => $language,
                     'response_format' => $diarize ? 'diarized_json' : null,
+                    'chunking_strategy' => $diarize ? 'auto' : null,
                 ]));
             }
 
