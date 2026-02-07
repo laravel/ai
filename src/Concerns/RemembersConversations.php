@@ -38,8 +38,14 @@ trait RemembersConversations
     {
         $this->conversationUser = $as;
 
-        $this->conversationId = resolve(ConversationStore::class)
-            ->latestConversationId($as->id);
+        $store = resolve(ConversationStore::class);
+
+        // Propagate tenant context to store if agent has HasTenantContext trait & this.tenantId is set in the agent by calling forTenant() method as part of the agent's chain of methods to create the prompt
+        if (method_exists($this, 'hasTenantContext') && $this->hasTenantContext()) {
+            $store->forTenant($this->currentTenant());
+        }
+
+        $this->conversationId = $store->latestConversationId($as->id);
 
         return $this;
     }
@@ -53,11 +59,17 @@ trait RemembersConversations
             return [];
         }
 
-        return resolve(ConversationStore::class)
-            ->getLatestConversationMessages(
-                $this->conversationId,
-                $this->maxConversationMessages()
-            )->all();
+        $store = resolve(ConversationStore::class);
+
+        // Propagate tenant context to store if agent has HasTenantContext trait
+        if (method_exists($this, 'hasTenantContext') && $this->hasTenantContext()) {
+            $store->forTenant($this->currentTenant());
+        }
+
+        return $store->getLatestConversationMessages(
+            $this->conversationId,
+            $this->maxConversationMessages()
+        )->all();
     }
 
     /**

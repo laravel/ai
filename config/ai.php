@@ -42,6 +42,52 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Multi-Tenancy Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Configure optional multi-tenancy support for agent conversations. When
+    | enabled, conversations and messages will be scoped by tenant, ensuring
+    | proper data isolation in multi-tenant applications. This feature is
+    | disabled by default to maintain backward compatibility.
+    |
+    */
+
+    'multi_tenancy' => [
+        /*
+         | Enable or disable multi-tenancy support for agent conversations.
+         | When disabled, the package works as a single-tenant application.
+         */
+        'enabled' => env('AI_MULTI_TENANCY_ENABLED', false),
+
+        /*
+         | The column name to use for tenant identification in the database.
+         | Common values: 'tenant_id', 'organization_id', 'workspace_id'
+         */
+        'column' => env('AI_TENANT_COLUMN', 'tenant_id'),
+
+        /*
+         | The foreign table that the tenant column references.
+         | Set to null if you don't want a foreign key constraint.
+         | Example: 'tenants', 'organizations', 'workspaces'
+         */
+        'foreign_table' => env('AI_TENANT_FOREIGN_TABLE', null),
+
+        /*
+         | Whether to add a foreign key constraint for the tenant column.
+         | Only applies if 'foreign_table' is set.
+         */
+        'foreign_key_constraint' => env('AI_TENANT_FOREIGN_KEY_CONSTRAINT', true),
+
+        /*
+         | The action to take when a tenant is deleted.
+         | Options: 'cascade', 'restrict', 'set null', 'no action'
+         | Only applies if foreign key constraint is enabled.
+         */
+        'on_delete' => env('AI_TENANT_ON_DELETE', 'set null'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | AI Providers
     |--------------------------------------------------------------------------
     |

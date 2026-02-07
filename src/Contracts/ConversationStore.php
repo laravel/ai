@@ -34,4 +34,19 @@ interface ConversationStore
      * @return \Illuminate\Support\Collection<int, \Laravel\Ai\Messages\Message>
      */
     public function getLatestConversationMessages(string $conversationId, int $limit): Collection;
+
+    /**
+     * Set the tenant context for multi-tenant applications.
+     */
+    public function forTenant(int|string $tenantId): static;
+
+    /**
+     * Get the current tenant identifier.
+     */
+    public function currentTenant(): int|string|null;
+
+    /**
+     * Determine if a tenant context is set.
+     */
+    public function hasTenantContext(): bool;
 }

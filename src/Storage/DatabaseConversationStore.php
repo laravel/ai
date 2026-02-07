@@ -5,6 +5,7 @@ namespace Laravel\Ai\Storage;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Laravel\Ai\Concerns\TenantAware;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Prompts\AgentPrompt;
@@ -12,15 +13,21 @@ use Laravel\Ai\Responses\AgentResponse;
 
 class DatabaseConversationStore implements ConversationStore
 {
+    use TenantAware;
     /**
      * Get the most recent conversation ID for a given user.
      */
     public function latestConversationId(int $userId): ?string
     {
-        return DB::table('agent_conversations')
-            ->where('user_id', $userId)
-            ->orderBy('updated_at', 'desc')
-            ->first()?->id;
+        $query = DB::table('agent_conversations')
+            ->where('user_id', $userId);
+
+        // Only scope by tenant if forTenant() was called ==> this.tenantId is set && isMultiTenancyEnabled() is true from config
+        if ($this->isMultiTenancyEnabled() && $this->hasTenantContext()) {
+            $query->where($this->tenantColumn(), $this->currentTenant());
+        }
+
+        return $query->orderBy('updated_at', 'desc')->first()?->id;
     }
 
     /**
@@ -30,13 +37,20 @@ class DatabaseConversationStore implements ConversationStore
     {
         $conversationId = (string) Str::uuid7();
 
-        DB::table('agent_conversations')->insert([
+        $data = [
             'id' => $conversationId,
             'user_id' => $userId,
             'title' => $title,
             'created_at' => now(),
             'updated_at' => now(),
-        ]);
+        ];
+
+        // Add tenant_id if forTenant() was called
+        if ($this->isMultiTenancyEnabled() && $this->hasTenantContext()) {
+            $data[$this->tenantColumn()] = $this->currentTenant();
+        }
+
+        DB::table('agent_conversations')->insert($data);
 
         return $conversationId;
     }
@@ -48,7 +62,7 @@ class DatabaseConversationStore implements ConversationStore
     {
         $messageId = (string) Str::uuid7();
 
-        DB::table('agent_conversation_messages')->insert([
+        $data = [
             'id' => $messageId,
             'conversation_id' => $conversationId,
             'user_id' => $userId,
@@ -62,7 +76,14 @@ class DatabaseConversationStore implements ConversationStore
             'meta' => '[]',
             'created_at' => now(),
             'updated_at' => now(),
-        ]);
+        ];
+
+        // Add tenant_id if forTenant() was called
+        if ($this->isMultiTenancyEnabled() && $this->hasTenantContext()) {
+            $data[$this->tenantColumn()] = $this->currentTenant();
+        }
+
+        DB::table('agent_conversation_messages')->insert($data);
 
         return $messageId;
     }
@@ -74,7 +95,7 @@ class DatabaseConversationStore implements ConversationStore
     {
         $messageId = (string) Str::uuid7();
 
-        DB::table('agent_conversation_messages')->insert([
+        $data = [
             'id' => $messageId,
             'conversation_id' => $conversationId,
             'user_id' => $userId,
@@ -88,7 +109,14 @@ class DatabaseConversationStore implements ConversationStore
             'meta' => json_encode($response->meta),
             'created_at' => now(),
             'updated_at' => now(),
-        ]);
+        ];
+
+        // Add tenant_id if forTenant() was called
+        if ($this->isMultiTenancyEnabled() && $this->hasTenantContext()) {
+            $data[$this->tenantColumn()] = $this->currentTenant();
+        }
+
+        DB::table('agent_conversation_messages')->insert($data);
 
         return $messageId;
     }
@@ -100,9 +128,15 @@ class DatabaseConversationStore implements ConversationStore
      */
     public function getLatestConversationMessages(string $conversationId, int $limit): Collection
     {
-        return DB::table('agent_conversation_messages')
-            ->where('conversation_id', $conversationId)
-            ->orderByDesc('id')
+        $query = DB::table('agent_conversation_messages')
+            ->where('conversation_id', $conversationId);
+
+        // Only scope by tenant if forTenant() was called
+        if ($this->isMultiTenancyEnabled() && $this->hasTenantContext()) {
+            $query->where($this->tenantColumn(), $this->currentTenant());
+        }
+
+        return $query->orderByDesc('id')
             ->limit($limit)
             ->get()
             ->reverse()

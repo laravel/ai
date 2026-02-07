@@ -28,6 +28,11 @@ class RememberConversation
         return $next($prompt)->then(function ($response) use ($prompt) {
             $agent = $prompt->agent;
 
+            // Set tenant context on store if agent uses HasTenantContext trait and tenant context is set in the agent by calling forTenant() method as part of the agent's chain of methods to create the prompt
+            if (method_exists($agent, 'hasTenantContext') && $agent->hasTenantContext()) {
+                $this->store->forTenant($agent->currentTenant());
+            }
+
             // Create conversation if necessary...
             if (! $agent->currentConversation()) {
                 $conversationId = $this->store->storeConversation(
