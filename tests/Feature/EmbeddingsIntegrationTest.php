@@ -19,7 +19,7 @@ class EmbeddingsIntegrationTest extends TestCase
 
         $this->assertInstanceOf(EmbeddingsResponse::class, $response);
         $this->assertTrue(count($response->embeddings[0]) === 1536);
-        $this->assertEquals($response->meta->provider, 'openai');
+        $this->assertEquals('openai', $response->meta->provider);
 
         Event::assertDispatched(GeneratingEmbeddings::class);
         Event::assertDispatched(EmbeddingsGenerated::class);
