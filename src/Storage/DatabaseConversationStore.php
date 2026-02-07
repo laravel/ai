@@ -15,7 +15,7 @@ class DatabaseConversationStore implements ConversationStore
     /**
      * Get the most recent conversation ID for a given user.
      */
-    public function latestConversationId(int|string $userId): ?string
+    public function latestConversationId(string|int $userId): ?string
     {
         return DB::table('agent_conversations')
             ->where('user_id', $userId)
@@ -26,7 +26,7 @@ class DatabaseConversationStore implements ConversationStore
     /**
      * Store a new conversation and return its ID.
      */
-    public function storeConversation(int|string $userId, string $title): string
+    public function storeConversation(string|int $userId, string $title): string
     {
         $conversationId = (string) Str::uuid7();
 
@@ -44,7 +44,7 @@ class DatabaseConversationStore implements ConversationStore
     /**
      * Store a new user message for the given conversation and return its ID.
      */
-    public function storeUserMessage(string $conversationId, int|string $userId, AgentPrompt $prompt): string
+    public function storeUserMessage(string $conversationId, string|int $userId, AgentPrompt $prompt): string
     {
         $messageId = (string) Str::uuid7();
 
@@ -70,7 +70,7 @@ class DatabaseConversationStore implements ConversationStore
     /**
      * Store a new assistant message for the given conversation and return its ID.
      */
-    public function storeAssistantMessage(string $conversationId, int|string $userId, AgentPrompt $prompt, AgentResponse $response): string
+    public function storeAssistantMessage(string $conversationId, string|int $userId, AgentPrompt $prompt, AgentResponse $response): string
     {
         $messageId = (string) Str::uuid7();
 
