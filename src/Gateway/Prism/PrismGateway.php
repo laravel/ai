@@ -98,8 +98,8 @@ class PrismGateway implements Gateway
                 PrismUsage::toLaravelUsage($response->usage),
                 new Meta($provider->name(), $response->meta->model, $citations),
             ))->withToolCallsAndResults(
-                toolCalls: collect($response->toolCalls)->map(PrismTool::toLaravelToolCall(...)),
-                toolResults: collect($response->toolResults)->map(PrismTool::toLaravelToolResult(...)),
+                toolCalls: (new Collection($response->toolCalls))->map(PrismTool::toLaravelToolCall(...)),
+                toolResults: (new Collection($response->toolResults))->map(PrismTool::toLaravelToolResult(...)),
             )->withSteps(PrismSteps::toLaravelSteps($response->steps, $provider))
             : (new TextResponse(
                 $response->text,
@@ -160,7 +160,7 @@ class PrismGateway implements Gateway
      */
     protected function toPrismMessages(array $messages): array
     {
-        return PrismMessages::fromLaravelMessages(collect($messages))->all();
+        return PrismMessages::fromLaravelMessages(new Collection($messages))->all();
     }
 
     /**
@@ -193,7 +193,7 @@ class PrismGateway implements Gateway
         }
 
         return new ImageResponse(
-            collect($response->images)->map(function ($image) {
+            (new Collection($response->images))->map(function ($image) {
                 return new GeneratedImage($image->base64, $image->mimeType);
             }),
             PrismUsage::toLaravelUsage($response->usage),
@@ -206,7 +206,7 @@ class PrismGateway implements Gateway
      */
     protected function toPrismImageAttachments(array $attachments): array
     {
-        return collect($attachments)->map(function ($attachment) {
+        return (new Collection($attachments))->map(function ($attachment) {
             if (! $attachment instanceof File && ! $attachment instanceof UploadedFile) {
                 throw new InvalidArgumentException(
                     'Unsupported attachment type ['.get_class($attachment).']'
@@ -335,7 +335,7 @@ class PrismGateway implements Gateway
         $response = $request->asEmbeddings();
 
         return new EmbeddingsResponse(
-            collect($response->embeddings)->map->embedding->all(),
+            (new Collection($response->embeddings))->map->embedding->all(),
             $response->usage->tokens,
             new Meta($provider->name(), $model),
         );

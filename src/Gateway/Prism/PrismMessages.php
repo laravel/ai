@@ -128,14 +128,14 @@ class PrismMessages
             if ($message instanceof PrismAssistantMessage) {
                 return new AssistantMessage(
                     $message->content ?? '',
-                    toolCalls: collect($message->toolCalls ?? [])
+                    toolCalls: (new Collection($message->toolCalls ?? []))
                         ->map(PrismTool::toLaravelToolCall(...))
                 );
             }
 
             if ($message instanceof PrismToolResultMessage) {
                 return new ToolResultMessage(
-                    collect($message->toolResults)
+                    (new Collection($message->toolResults))
                         ->map(PrismTool::toLaravelToolResult(...))
                 );
             }
