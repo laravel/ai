@@ -14,6 +14,7 @@ use Laravel\Ai\Responses\AgentResponse;
 class DatabaseConversationStore implements ConversationStore
 {
     use TenantAware;
+
     /**
      * Get the most recent conversation ID for a given user.
      */

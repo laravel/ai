@@ -8,8 +8,8 @@ use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
-use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\Conversational;
+use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\HasTools;
@@ -30,7 +30,7 @@ use function Laravel\Ai\pipeline;
 trait GeneratesText
 {
     protected string $currentToolInvocationId;
-    
+
     /**
      * Invoke the given agent.
      */

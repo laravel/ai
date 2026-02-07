@@ -185,7 +185,7 @@ class PrismGateway implements Gateway
                 ->withPrompt($prompt, $this->toPrismImageAttachments($attachments))
                 ->withProviderOptions($provider->defaultImageOptions($size, $quality))
                 ->withClientOptions([
-                    'timeout' => $timeout ?? 120
+                    'timeout' => $timeout ?? 120,
                 ])
                 ->generate();
         } catch (PrismVendorException $e) {

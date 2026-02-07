@@ -61,7 +61,7 @@ class MultiTenancyTest extends TestCase
         $tenantColumn = config('ai.multi_tenancy.column', 'tenant_id');
         $record1 = DB::table('agent_conversations')->where('id', $conv1)->first();
         $record2 = DB::table('agent_conversations')->where('id', $conv2)->first();
-        
+
         $this->assertEquals(1, $record1->{$tenantColumn});
         $this->assertEquals(2, $record2->{$tenantColumn});
     }
@@ -136,9 +136,10 @@ class MultiTenancyTest extends TestCase
     {
         AssistantAgent::fake(['Test response']);
 
-        $agent = new class extends AssistantAgent {
-            use \Laravel\Ai\Concerns\RemembersConversations;
+        $agent = new class extends AssistantAgent
+        {
             use \Laravel\Ai\Concerns\HasTenantContext;
+            use \Laravel\Ai\Concerns\RemembersConversations;
 
             public function instructions(): string
             {
@@ -158,9 +159,10 @@ class MultiTenancyTest extends TestCase
     {
         AssistantAgent::fake(['Test response']);
 
-        $agent = new class extends AssistantAgent {
-            use \Laravel\Ai\Concerns\RemembersConversations;
+        $agent = new class extends AssistantAgent
+        {
             use \Laravel\Ai\Concerns\HasTenantContext;
+            use \Laravel\Ai\Concerns\RemembersConversations;
 
             public function instructions(): string
             {
@@ -185,9 +187,10 @@ class MultiTenancyTest extends TestCase
     {
         AssistantAgent::fake(['Test response']);
 
-        $agent = new class extends AssistantAgent {
-            use \Laravel\Ai\Concerns\RemembersConversations;
+        $agent = new class extends AssistantAgent
+        {
             use \Laravel\Ai\Concerns\HasTenantContext;
+            use \Laravel\Ai\Concerns\RemembersConversations;
 
             public function instructions(): string
             {
