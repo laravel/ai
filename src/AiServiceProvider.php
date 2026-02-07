@@ -10,6 +10,7 @@ use Laravel\Ai\Console\Commands\ChatCommand;
 use Laravel\Ai\Console\Commands\MakeAgentCommand;
 use Laravel\Ai\Console\Commands\MakeToolCommand;
 use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Contracts\UniqueIdentifierGenerator;
 use Laravel\Ai\Storage\DatabaseConversationStore;
 
 class AiServiceProvider extends ServiceProvider
@@ -23,6 +24,10 @@ class AiServiceProvider extends ServiceProvider
     {
         $this->app->scoped(AiManager::class, fn ($app): AiManager => new AiManager($app));
         $this->app->singleton(ConversationStore::class, DatabaseConversationStore::class);
+        $this->app->singleton(
+            UniqueIdentifierGenerator::class,
+            fn ($app) => new ($app['config']['ai.database.id_generator'] ?? \Laravel\Ai\Support\Generators\UuidV7Generator::class)()
+        );
 
         $this->mergeConfigFrom(__DIR__.'/../config/ai.php', 'ai');
     }

@@ -2,11 +2,11 @@
 
 namespace Laravel\Ai\Providers\Concerns;
 
-use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Contracts\UniqueIdentifierGenerator;
 use Laravel\Ai\Events\AgentStreamed;
 use Laravel\Ai\Events\StreamingAgent;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -25,7 +25,7 @@ trait StreamsText
      */
     public function stream(AgentPrompt $prompt): StreamableAgentResponse
     {
-        $invocationId = (string) Str::uuid7();
+        $invocationId = resolve(UniqueIdentifierGenerator::class)->generate();
 
         $processedPrompt = null;
 

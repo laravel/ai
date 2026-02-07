@@ -4,7 +4,6 @@ namespace Laravel\Ai\Providers\Concerns;
 
 use Closure;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
-use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
@@ -14,6 +13,7 @@ use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Contracts\UniqueIdentifierGenerator;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
@@ -36,7 +36,7 @@ trait GeneratesText
      */
     public function prompt(AgentPrompt $prompt): AgentResponse
     {
-        $invocationId = (string) Str::uuid7();
+        $invocationId = resolve(UniqueIdentifierGenerator::class)->generate();
 
         $processedPrompt = null;
 
@@ -111,7 +111,7 @@ trait GeneratesText
     {
         $this->textGateway()->onToolInvocation(
             invoking: function (Tool $tool, array $arguments) use ($invocationId, $agent) {
-                $this->currentToolInvocationId = (string) Str::uuid7();
+                $this->currentToolInvocationId = resolve(UniqueIdentifierGenerator::class)->generate();
 
                 $this->events->dispatch(new InvokingTool(
                     $invocationId, $this->currentToolInvocationId, $agent, $tool, $arguments

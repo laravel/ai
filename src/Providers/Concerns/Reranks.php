@@ -2,8 +2,8 @@
 
 namespace Laravel\Ai\Providers\Concerns;
 
-use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Contracts\UniqueIdentifierGenerator;
 use Laravel\Ai\Events\Reranked;
 use Laravel\Ai\Events\Reranking;
 use Laravel\Ai\Prompts\RerankingPrompt;
@@ -18,7 +18,7 @@ trait Reranks
      */
     public function rerank(array $documents, string $query, ?int $limit = null, ?string $model = null): RerankingResponse
     {
-        $invocationId = (string) Str::uuid7();
+        $invocationId = resolve(UniqueIdentifierGenerator::class)->generate();
 
         $model ??= $this->defaultRerankingModel();
 

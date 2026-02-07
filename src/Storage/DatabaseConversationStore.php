@@ -4,8 +4,8 @@ namespace Laravel\Ai\Storage;
 
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Contracts\UniqueIdentifierGenerator;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
@@ -28,7 +28,7 @@ class DatabaseConversationStore implements ConversationStore
      */
     public function storeConversation(string|int $userId, string $title): string
     {
-        $conversationId = (string) Str::uuid7();
+        $conversationId = resolve(UniqueIdentifierGenerator::class)->generate();
 
         DB::table('agent_conversations')->insert([
             'id' => $conversationId,
@@ -46,7 +46,7 @@ class DatabaseConversationStore implements ConversationStore
      */
     public function storeUserMessage(string $conversationId, string|int $userId, AgentPrompt $prompt): string
     {
-        $messageId = (string) Str::uuid7();
+        $messageId = resolve(UniqueIdentifierGenerator::class)->generate();
 
         DB::table('agent_conversation_messages')->insert([
             'id' => $messageId,
@@ -72,7 +72,7 @@ class DatabaseConversationStore implements ConversationStore
      */
     public function storeAssistantMessage(string $conversationId, string|int $userId, AgentPrompt $prompt, AgentResponse $response): string
     {
-        $messageId = (string) Str::uuid7();
+        $messageId = resolve(UniqueIdentifierGenerator::class)->generate();
 
         DB::table('agent_conversation_messages')->insert([
             'id' => $messageId,

@@ -42,6 +42,35 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Database
+    |--------------------------------------------------------------------------
+    |
+    | Below you may configure how the AI SDK stores data in the database.
+    | The "id_generator" option controls the strategy used to generate
+    | unique identifiers for conversations, messages, and invocations.
+    |
+    | Supported generators:
+    |   - UuidV7Generator (default) — Time-ordered, sortable. Best for most apps.
+    |   - UuidV4Generator — Random. Widely compatible but not sortable.
+    |   - UlidGenerator — Time-ordered, compact (26 chars). Good alternative.
+    |   - RandomHexGenerator — 32-char hex string. Simple and fast.
+    |
+    | The "id_column_type" option controls the database column type used
+    | for identifier columns. Both store fixed 36-character strings:
+    |   - "string" (VARCHAR) — Variable-length. Slightly more storage overhead
+    |     but universally supported and flexible.
+    |   - "char" (CHAR) — Fixed-length. Marginally faster lookups on some
+    |     databases (MySQL/MariaDB) due to predictable row sizes.
+    |
+    */
+
+    'database' => [
+        'id_generator' => Laravel\Ai\Support\Generators\UuidV7Generator::class,
+        'id_column_type' => 'string',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | AI Providers
     |--------------------------------------------------------------------------
     |

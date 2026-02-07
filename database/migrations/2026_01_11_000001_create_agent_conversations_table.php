@@ -11,8 +11,10 @@ return new class extends AiMigration
      */
     public function up(): void
     {
-        Schema::create('agent_conversations', function (Blueprint $table) {
-            $table->string('id', 36)->primary();
+        $columnType = config('ai.database.id_column_type', 'string');
+
+        Schema::create('agent_conversations', function (Blueprint $table) use ($columnType) {
+            $table->{$columnType}('id', 36)->primary();
             $table->foreignId('user_id');
             $table->string('title');
             $table->timestamps();
@@ -20,9 +22,9 @@ return new class extends AiMigration
             $table->index(['user_id', 'updated_at']);
         });
 
-        Schema::create('agent_conversation_messages', function (Blueprint $table) {
-            $table->string('id', 36)->primary();
-            $table->string('conversation_id', 36)->index();
+        Schema::create('agent_conversation_messages', function (Blueprint $table) use ($columnType) {
+            $table->{$columnType}('id', 36)->primary();
+            $table->{$columnType}('conversation_id', 36)->index();
             $table->foreignId('user_id');
             $table->string('agent');
             $table->string('role', 25);

@@ -2,9 +2,9 @@
 
 namespace Laravel\Ai\Providers\Concerns;
 
-use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Contracts\UniqueIdentifierGenerator;
 use Laravel\Ai\Events\EmbeddingsGenerated;
 use Laravel\Ai\Events\GeneratingEmbeddings;
 use Laravel\Ai\Prompts\EmbeddingsPrompt;
@@ -23,7 +23,7 @@ trait GeneratesEmbeddings
             throw new InvalidArgumentException('Dimensions must be provided when model is specified.');
         }
 
-        $invocationId = (string) Str::uuid7();
+        $invocationId = resolve(UniqueIdentifierGenerator::class)->generate();
 
         $model ??= $this->defaultEmbeddingsModel();
         $dimensions ??= $this->defaultEmbeddingsDimensions();

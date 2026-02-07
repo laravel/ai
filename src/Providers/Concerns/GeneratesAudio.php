@@ -2,8 +2,8 @@
 
 namespace Laravel\Ai\Providers\Concerns;
 
-use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Contracts\UniqueIdentifierGenerator;
 use Laravel\Ai\Events\AudioGenerated;
 use Laravel\Ai\Events\GeneratingAudio;
 use Laravel\Ai\Prompts\AudioPrompt;
@@ -20,7 +20,7 @@ trait GeneratesAudio
         ?string $instructions = null,
         ?string $model = null,
     ): AudioResponse {
-        $invocationId = (string) Str::uuid7();
+        $invocationId = resolve(UniqueIdentifierGenerator::class)->generate();
 
         $model ??= $this->defaultAudioModel();
 

@@ -2,9 +2,9 @@
 
 namespace Laravel\Ai\Providers\Concerns;
 
-use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Files\StorableFile;
+use Laravel\Ai\Contracts\UniqueIdentifierGenerator;
 use Laravel\Ai\Events\FileDeleted;
 use Laravel\Ai\Events\FileStored;
 use Laravel\Ai\Events\StoringFile;
@@ -26,7 +26,7 @@ trait ManagesFiles
      */
     public function putFile(StorableFile $file): StoredFileResponse
     {
-        $invocationId = (string) Str::uuid7();
+        $invocationId = resolve(UniqueIdentifierGenerator::class)->generate();
 
         if (Ai::filesAreFaked()) {
             Ai::recordFileUpload($file);
@@ -51,7 +51,7 @@ trait ManagesFiles
      */
     public function deleteFile(string $fileId): void
     {
-        $invocationId = (string) Str::uuid7();
+        $invocationId = resolve(UniqueIdentifierGenerator::class)->generate();
 
         if (Ai::filesAreFaked()) {
             Ai::recordFileDeletion($fileId);

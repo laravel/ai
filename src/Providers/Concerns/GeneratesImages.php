@@ -2,8 +2,8 @@
 
 namespace Laravel\Ai\Providers\Concerns;
 
-use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Contracts\UniqueIdentifierGenerator;
 use Laravel\Ai\Events\GeneratingImage;
 use Laravel\Ai\Events\ImageGenerated;
 use Laravel\Ai\Prompts\ImagePrompt;
@@ -26,7 +26,7 @@ trait GeneratesImages
         ?string $model = null,
         ?int $timeout = null,
     ): ImageResponse {
-        $invocationId = (string) Str::uuid7();
+        $invocationId = resolve(UniqueIdentifierGenerator::class)->generate();
 
         $model ??= $this->defaultImageModel();
 

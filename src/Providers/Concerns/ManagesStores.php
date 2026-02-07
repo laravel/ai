@@ -4,9 +4,9 @@ namespace Laravel\Ai\Providers\Concerns;
 
 use DateInterval;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Files\HasProviderId;
+use Laravel\Ai\Contracts\UniqueIdentifierGenerator;
 use Laravel\Ai\Events\AddingFileToStore;
 use Laravel\Ai\Events\CreatingStore;
 use Laravel\Ai\Events\FileAddedToStore;
@@ -35,7 +35,7 @@ trait ManagesStores
         ?Collection $fileIds = null,
         ?DateInterval $expiresWhenIdleFor = null,
     ): Store {
-        $invocationId = (string) Str::uuid7();
+        $invocationId = resolve(UniqueIdentifierGenerator::class)->generate();
 
         $fileIds ??= new Collection;
 
@@ -62,7 +62,7 @@ trait ManagesStores
      */
     public function addFileToStore(string $storeId, HasProviderId $file, array $metadata = []): string
     {
-        $invocationId = (string) Str::uuid7();
+        $invocationId = resolve(UniqueIdentifierGenerator::class)->generate();
 
         $this->events->dispatch(new AddingFileToStore(
             $invocationId, $this, $storeId, $file->id()
@@ -83,7 +83,7 @@ trait ManagesStores
      */
     public function removeFileFromStore(string $storeId, HasProviderId|string $documentId): bool
     {
-        $invocationId = (string) Str::uuid7();
+        $invocationId = resolve(UniqueIdentifierGenerator::class)->generate();
 
         $documentId = $documentId instanceof HasProviderId ? $documentId->id() : $documentId;
 
@@ -110,7 +110,7 @@ trait ManagesStores
      */
     public function deleteStore(string $storeId): bool
     {
-        $invocationId = (string) Str::uuid7();
+        $invocationId = resolve(UniqueIdentifierGenerator::class)->generate();
 
         if (Ai::storesAreFaked()) {
             Ai::recordStoreDeletion($storeId);
