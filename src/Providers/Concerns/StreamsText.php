@@ -7,6 +7,7 @@ use InvalidArgumentException;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Contracts\SupportSkills;
 use Laravel\Ai\Events\AgentStreamed;
 use Laravel\Ai\Events\StreamingAgent;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -54,13 +55,20 @@ trait StreamsText
 
                         $this->listenForToolInvocations($invocationId, $agent);
 
+                        $instructions = (string) $agent->instructions();
+                        $tools = $agent instanceof HasTools ? $agent->tools() : [];
+
+                        if ($agent instanceof SupportSkills) {
+                            [$instructions, $tools] = $this->applySkills($agent, $instructions, $tools);
+                        }
+
                         yield from $this->textGateway()->streamText(
                             $invocationId,
                             $this,
                             $prompt->model,
-                            (string) $agent->instructions(),
+                            $instructions,
                             $messages,
-                            $agent instanceof HasTools ? $agent->tools() : [],
+                            $tools,
                             null,
                             TextGenerationOptions::forAgent($agent),
                             $prompt->timeout,

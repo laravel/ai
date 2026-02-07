@@ -13,6 +13,7 @@ use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Contracts\SupportSkills;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\InvokingTool;
@@ -22,6 +23,9 @@ use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Middleware\RememberConversation;
 use Laravel\Ai\Prompts\AgentPrompt;
+use Laravel\Ai\Skills\ActivateSkillTool;
+use Laravel\Ai\Skills\ReadSkillResourceTool;
+use Laravel\Ai\Skills\SkillRegistry;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StructuredAgentResponse;
 
@@ -56,12 +60,19 @@ trait GeneratesText
 
                 $this->listenForToolInvocations($invocationId, $agent);
 
+                $instructions = (string) $agent->instructions();
+                $tools = $agent instanceof HasTools ? $agent->tools() : [];
+
+                if ($agent instanceof SupportSkills) {
+                    [$instructions, $tools] = $this->applySkills($agent, $instructions, $tools);
+                }
+
                 $response = $this->textGateway()->generateText(
                     $this,
                     $prompt->model,
-                    (string) $agent->instructions(),
+                    $instructions,
                     $messages,
-                    $agent instanceof HasTools ? $agent->tools() : [],
+                    $tools,
                     $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null,
                     TextGenerationOptions::forAgent($agent),
                     $prompt->timeout,
@@ -123,5 +134,35 @@ trait GeneratesText
                 ));
             },
         );
+    }
+
+    /**
+     * Apply skills to the agent's instructions and tools.
+     *
+     * @return array{string, iterable}
+     */
+    protected function applySkills(SupportSkills&Agent $agent, string $instructions, iterable $tools): array
+    {
+        $skills = $agent->skills();
+
+        if (empty($skills)) {
+            return [$instructions, $tools];
+        }
+
+        $registry = new SkillRegistry;
+
+        foreach ($skills as $skill) {
+            $registry->register($skill);
+        }
+
+        $instructions .= "\n\n".$registry->toPrompt();
+
+        $tools = [
+            ...($tools instanceof \Traversable ? iterator_to_array($tools) : (array) $tools),
+            new ActivateSkillTool($registry),
+            new ReadSkillResourceTool($registry),
+        ];
+
+        return [$instructions, $tools];
     }
 }
