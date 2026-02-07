@@ -24,6 +24,7 @@ class GeneratorsTest extends TestCase
         $result = $generator->generate();
 
         $this->assertEquals(36, strlen($result));
+        $this->assertEquals(36, $generator->length());
     }
 
     public function test_uuid_v7_has_correct_format(): void
@@ -57,6 +58,7 @@ class GeneratorsTest extends TestCase
         $result = $generator->generate();
 
         $this->assertEquals(36, strlen($result));
+        $this->assertEquals(36, $generator->length());
     }
 
     public function test_uuid_v4_has_correct_format(): void
@@ -90,6 +92,7 @@ class GeneratorsTest extends TestCase
         $result = $generator->generate();
 
         $this->assertEquals(26, strlen($result));
+        $this->assertEquals(26, $generator->length());
     }
 
     public function test_ulid_has_correct_format(): void
@@ -123,6 +126,7 @@ class GeneratorsTest extends TestCase
         $result = $generator->generate();
 
         $this->assertEquals(32, strlen($result));
+        $this->assertEquals(32, $generator->length());
     }
 
     public function test_random_hex_has_correct_format(): void

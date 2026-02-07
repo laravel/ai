@@ -101,4 +101,21 @@ class UniqueIdentifierStrategyTest extends TestCase
 
         $this->assertSame($generator1, $generator2);
     }
+
+    public function test_generator_length_matches_generated_output(): void
+    {
+        $generators = [
+            UuidV7Generator::class,
+            UuidV4Generator::class,
+            UlidGenerator::class,
+            RandomHexGenerator::class,
+        ];
+
+        foreach ($generators as $generatorClass) {
+            $generator = new $generatorClass;
+            $id = $generator->generate();
+
+            $this->assertEquals($generator->length(), strlen($id), "{$generatorClass}::length() does not match actual output length.");
+        }
+    }
 }

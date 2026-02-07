@@ -13,4 +13,9 @@ class RandomHexGenerator implements UniqueIdentifierGenerator
     {
         return bin2hex(random_bytes(16));
     }
+
+    public function length(): int
+    {
+        return 32;
+    }
 }

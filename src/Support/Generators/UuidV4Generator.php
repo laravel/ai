@@ -14,4 +14,9 @@ class UuidV4Generator implements UniqueIdentifierGenerator
     {
         return (string) Str::uuid();
     }
+
+    public function length(): int
+    {
+        return 36;
+    }
 }

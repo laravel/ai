@@ -14,4 +14,9 @@ class UuidV7Generator implements UniqueIdentifierGenerator
     {
         return (string) Str::uuid7();
     }
+
+    public function length(): int
+    {
+        return 36;
+    }
 }

@@ -49,16 +49,18 @@ return [
     | The "id_generator" option controls the strategy used to generate
     | unique identifiers for conversations, messages, and invocations.
     |
+    | Each generator defines its own length, which is used automatically
+    | by migrations to size the database columns appropriately.
+    |
     | Supported generators:
-    |   - UuidV7Generator (default) — Time-ordered, sortable. Best for most apps.
-    |   - UuidV4Generator — Random. Widely compatible but not sortable.
-    |   - UlidGenerator — Time-ordered, compact (26 chars). Good alternative.
-    |   - RandomHexGenerator — 32-char hex string. Simple and fast.
+    |   - UuidV7Generator (default) — Time-ordered, sortable. 36 chars.
+    |   - UuidV4Generator — Random. Widely compatible but not sortable. 36 chars.
+    |   - UlidGenerator — Time-ordered, compact. 26 chars.
+    |   - RandomHexGenerator — Simple and fast. 32 chars.
     |
     | The "id_column_type" option controls the database column type used
-    | for identifier columns. Both store fixed 36-character strings:
-    |   - "string" (VARCHAR) — Variable-length. Slightly more storage overhead
-    |     but universally supported and flexible.
+    | for identifier columns:
+    |   - "string" (VARCHAR) — Variable-length. Universally supported.
     |   - "char" (CHAR) — Fixed-length. Marginally faster lookups on some
     |     databases (MySQL/MariaDB) due to predictable row sizes.
     |

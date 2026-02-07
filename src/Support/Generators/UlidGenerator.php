@@ -14,4 +14,9 @@ class UlidGenerator implements UniqueIdentifierGenerator
     {
         return strtolower((string) Str::ulid());
     }
+
+    public function length(): int
+    {
+        return 26;
+    }
 }

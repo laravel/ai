@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Laravel\Ai\Contracts\UniqueIdentifierGenerator;
 use Laravel\Ai\Migrations\AiMigration;
 
 return new class extends AiMigration
@@ -12,9 +13,10 @@ return new class extends AiMigration
     public function up(): void
     {
         $columnType = config('ai.database.id_column_type', 'string');
+        $idLength = resolve(UniqueIdentifierGenerator::class)->length();
 
-        Schema::create('agent_conversations', function (Blueprint $table) use ($columnType) {
-            $table->{$columnType}('id', 36)->primary();
+        Schema::create('agent_conversations', function (Blueprint $table) use ($columnType, $idLength) {
+            $table->{$columnType}('id', $idLength)->primary();
             $table->foreignId('user_id');
             $table->string('title');
             $table->timestamps();
@@ -22,9 +24,9 @@ return new class extends AiMigration
             $table->index(['user_id', 'updated_at']);
         });
 
-        Schema::create('agent_conversation_messages', function (Blueprint $table) use ($columnType) {
-            $table->{$columnType}('id', 36)->primary();
-            $table->{$columnType}('conversation_id', 36)->index();
+        Schema::create('agent_conversation_messages', function (Blueprint $table) use ($columnType, $idLength) {
+            $table->{$columnType}('id', $idLength)->primary();
+            $table->{$columnType}('conversation_id', $idLength)->index();
             $table->foreignId('user_id');
             $table->string('agent');
             $table->string('role', 25);
