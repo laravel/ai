@@ -259,7 +259,7 @@ class AgentIntegrationTest extends TestCase
         } catch (\Exception $e) {
             $caught = true;
 
-            $this->assertTrue(get_class($e) === 'Exception');
+            $this->assertTrue($e::class === 'Exception');
             $this->assertEquals('Forced to throw exception.', $e->getMessage());
         }
 
