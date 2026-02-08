@@ -77,7 +77,7 @@ trait GeneratesText
             });
 
         $this->events->dispatch(
-            new AgentPrompted($invocationId, $processedPrompt, $response)
+            new AgentPrompted($invocationId, $processedPrompt ?? $prompt, $response)
         );
 
         return $response;
