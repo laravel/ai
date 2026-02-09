@@ -181,7 +181,10 @@ class PrismGateway implements Gateway
     ): ImageResponse {
         try {
             $response = Prism::image()
-                ->using(static::toPrismProvider($provider), $model, $provider->additionalConfiguration())
+                ->using(static::toPrismProvider($provider), $model, array_filter([
+                    ...$provider->additionalConfiguration(),
+                    'api_key' => $provider->providerCredentials()['key'],
+                ]))
                 ->withPrompt($prompt, $this->toPrismImageAttachments($attachments))
                 ->withProviderOptions($provider->defaultImageOptions($size, $quality))
                 ->withClientOptions([
@@ -246,7 +249,10 @@ class PrismGateway implements Gateway
 
         try {
             $response = Prism::audio()
-                ->using(static::toPrismProvider($provider), $model, $provider->additionalConfiguration())
+                ->using(static::toPrismProvider($provider), $model, array_filter([
+                    ...$provider->additionalConfiguration(),
+                    'api_key' => $provider->providerCredentials()['key'],
+                ]))
                 ->withInput($text)
                 ->withVoice($voice)
                 ->withProviderOptions(array_filter([
@@ -281,7 +287,10 @@ class PrismGateway implements Gateway
             }
 
             $request = Prism::audio()
-                ->using(static::toPrismProvider($provider), $model, $provider->additionalConfiguration())
+                ->using(static::toPrismProvider($provider), $model, array_filter([
+                    ...$provider->additionalConfiguration(),
+                    'api_key' => $provider->providerCredentials()['key'],
+                ]))
                 ->withInput(match (true) {
                     $audio instanceof TranscribableAudio => Audio::fromBase64(
                         base64_encode($audio->content()), $audio->mimeType()
