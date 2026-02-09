@@ -339,6 +339,12 @@ class PrismGateway implements Gateway
             fn ($prism) => $this->configure($prism, $provider, $model)
         );
 
+        $request->withProviderOptions(match ($provider->driver()) {
+            'gemini' => ['outputDimensionality' => $dimensions],
+            'openai' => ['dimensions' => $dimensions],
+            default => [],
+        });
+
         (new Collection($inputs))->each($request->fromInput(...));
 
         $response = $request->asEmbeddings();
