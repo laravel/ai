@@ -49,15 +49,28 @@ class AiManager extends MultipleInstanceManager
     protected $driverKey = 'driver';
 
     /**
-     * Get a provider instance by name.
+     * Resolve a provider instance and verify it implements the given interface.
+     *
+     * @template T
+     *
+     * @param  class-string<T>  $interface
+     * @return T
+     */
+    protected function resolveProvider(string $interface, string $capability, ?string $name = null): mixed
+    {
+        return tap($this->instance($name), function ($instance) use ($interface, $capability) {
+            if (! $instance instanceof $interface) {
+                throw new LogicException('Provider ['.$instance::class.'] does not support '.$capability.'.');
+            }
+        });
+    }
+
+    /**
+     * Get an audio provider instance by name.
      */
     public function audioProvider(?string $name = null): AudioProvider
     {
-        return tap($this->instance($name), function ($instance) {
-            if (! $instance instanceof AudioProvider) {
-                throw new LogicException('Provider ['.$instance::class.'] does not support audio generation.');
-            }
-        });
+        return $this->resolveProvider(AudioProvider::class, 'audio generation', $name);
     }
 
     /**
@@ -73,15 +86,11 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
-     * Get a provider instance by name.
+     * Get an embedding provider instance by name.
      */
     public function embeddingProvider(?string $name = null): EmbeddingProvider
     {
-        return tap($this->instance($name), function ($instance) {
-            if (! $instance instanceof EmbeddingProvider) {
-                throw new LogicException('Provider ['.$instance::class.'] does not support embedding generation.');
-            }
-        });
+        return $this->resolveProvider(EmbeddingProvider::class, 'embedding generation', $name);
     }
 
     /**
@@ -101,11 +110,7 @@ class AiManager extends MultipleInstanceManager
      */
     public function rerankingProvider(?string $name = null): RerankingProvider
     {
-        return tap($this->instance($name), function ($instance) {
-            if (! $instance instanceof RerankingProvider) {
-                throw new LogicException('Provider ['.$instance::class.'] does not support reranking.');
-            }
-        });
+        return $this->resolveProvider(RerankingProvider::class, 'reranking', $name);
     }
 
     /**
@@ -121,15 +126,11 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
-     * Get a provider instance by name.
+     * Get an image provider instance by name.
      */
     public function imageProvider(?string $name = null): ImageProvider
     {
-        return tap($this->instance($name), function ($instance) {
-            if (! $instance instanceof ImageProvider) {
-                throw new LogicException('Provider ['.$instance::class.'] does not support image generation.');
-            }
-        });
+        return $this->resolveProvider(ImageProvider::class, 'image generation', $name);
     }
 
     /**
@@ -145,15 +146,11 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
-     * Get a provider instance by name.
+     * Get a text provider instance by name.
      */
     public function textProvider(?string $name = null): TextProvider
     {
-        return tap($this->instance($name), function ($instance) {
-            if (! $instance instanceof TextProvider) {
-                throw new LogicException('Provider ['.$instance::class.'] does not support text generation.');
-            }
-        });
+        return $this->resolveProvider(TextProvider::class, 'text generation', $name);
     }
 
     /**
@@ -169,15 +166,11 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
-     * Get a provider instance by name.
+     * Get a transcription provider instance by name.
      */
     public function transcriptionProvider(?string $name = null): TranscriptionProvider
     {
-        return tap($this->instance($name), function ($instance) {
-            if (! $instance instanceof TranscriptionProvider) {
-                throw new LogicException('Provider ['.$instance::class.'] does not support transcription generation.');
-            }
-        });
+        return $this->resolveProvider(TranscriptionProvider::class, 'transcription generation', $name);
     }
 
     /**
@@ -197,11 +190,7 @@ class AiManager extends MultipleInstanceManager
      */
     public function fileProvider(?string $name = null): FileProvider
     {
-        return tap($this->instance($name), function ($instance) {
-            if (! $instance instanceof FileProvider) {
-                throw new LogicException('Provider ['.$instance::class.'] does not support file management.');
-            }
-        });
+        return $this->resolveProvider(FileProvider::class, 'file management', $name);
     }
 
     /**
@@ -221,11 +210,7 @@ class AiManager extends MultipleInstanceManager
      */
     public function storeProvider(?string $name = null): StoreProvider
     {
-        return tap($this->instance($name), function ($instance) {
-            if (! $instance instanceof StoreProvider) {
-                throw new LogicException('Provider ['.$instance::class.'] does not support store management.');
-            }
-        });
+        return $this->resolveProvider(StoreProvider::class, 'store management', $name);
     }
 
     /**
