@@ -68,7 +68,7 @@ trait AddsToolsToPrismRequests
      */
     protected function invokeTool(Tool $tool, array $arguments): string
     {
-        $arguments = $arguments['schema_definition'] ?? [];
+        $arguments = $arguments['schema_definition'] ?? $arguments;
 
         call_user_func($this->invokingToolCallback, $tool, $arguments);
 
