@@ -11,8 +11,8 @@ class VoyageAiProvider extends Provider implements EmbeddingProvider, RerankingP
 {
     use Concerns\GeneratesEmbeddings;
     use Concerns\HasEmbeddingGateway;
-    use Concerns\Reranks;
     use Concerns\HasRerankingGateway;
+    use Concerns\Reranks;
 
     /**
      * Get the name of the default embeddings model.
