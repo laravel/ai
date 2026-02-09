@@ -35,12 +35,14 @@ class StreamableAgentResponseStreamingTest extends TestCase
             $streamedResponse = $response->toResponse(request());
 
             $testResponse = TestResponse::fromBaseResponse($streamedResponse);
+
             $content = $testResponse->streamedContent();
 
             $this->assertStringContainsString(
                 'data: {"id":"event-1","invocation_id":"invocation-1","type":"text_delta","message_id":"message-1","delta":"Hello","timestamp":123}',
                 $content
             );
+
             $this->assertStringContainsString('data: [DONE]', $content);
         } finally {
             unset($_SERVER['LARAVEL_OCTANE']);
@@ -70,7 +72,6 @@ class StreamableAgentResponseStreamingTest extends TestCase
             ))->usingVercelDataProtocol();
 
             $streamedResponse = $response->toResponse(request());
-
             $testResponse = TestResponse::fromBaseResponse($streamedResponse);
             $content = $testResponse->streamedContent();
 
@@ -78,10 +79,12 @@ class StreamableAgentResponseStreamingTest extends TestCase
                 'data: {"type":"start","messageId":"stream-1"}',
                 $content
             );
+
             $this->assertStringContainsString(
                 'data: {"type":"text-delta","id":"message-1","delta":"Hello"}',
                 $content
             );
+
             $this->assertStringContainsString('data: {"type":"finish"}', $content);
             $this->assertStringContainsString('data: [DONE]', $content);
         } finally {
