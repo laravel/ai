@@ -23,19 +23,19 @@ class VoyageAiProvider extends Provider implements EmbeddingProvider, RerankingP
     }
 
     /**
-     * Get the name of the default reranking model.
-     */
-    public function defaultRerankingModel(): string
-    {
-        return 'rerank-2.5-lite';
-    }
-
-    /**
      * Get the default dimensions of the default embeddings model.
      */
     public function defaultEmbeddingsDimensions(): int
     {
         return 1024;
+    }
+
+    /**
+     * Get the name of the default reranking model.
+     */
+    public function defaultRerankingModel(): string
+    {
+        return 'rerank-2.5-lite';
     }
 
     /**
