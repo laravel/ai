@@ -31,7 +31,7 @@ class RememberConversation
             // Create conversation if necessary...
             if (! $agent->currentConversation()) {
                 $conversationId = $this->store->storeConversation(
-                    $agent->conversationParticipant()->id,
+                    $agent->conversationParticipant()?->id,
                     $this->generateTitle($prompt->prompt)
                 );
 
@@ -44,14 +44,14 @@ class RememberConversation
             // Record user message...
             $this->store->storeUserMessage(
                 $agent->currentConversation(),
-                $agent->conversationParticipant()->id,
+                $agent->conversationParticipant()?->id,
                 $prompt
             );
 
             // Record assistant message...
             $this->store->storeAssistantMessage(
                 $agent->currentConversation(),
-                $agent->conversationParticipant()->id,
+                $agent->conversationParticipant()?->id,
                 $prompt,
                 $response
             );
