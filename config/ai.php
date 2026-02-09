@@ -42,6 +42,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Conversation Storage
+    |--------------------------------------------------------------------------
+    |
+    | Configure how conversation messages are stored. When encryption is
+    | enabled, content, tool_calls, and tool_results are encrypted at rest
+    | using Laravel's Crypt (APP_KEY). Disable for local/dev if needed.
+    |
+    */
+
+    'conversations' => [
+        'encrypt_sensitive_fields' => env('AI_ENCRYPT_CONVERSATIONS', true),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | AI Providers
     |--------------------------------------------------------------------------
     |

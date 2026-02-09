@@ -2,7 +2,9 @@
 
 namespace Laravel\Ai\Storage;
 
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\ConversationStore;
@@ -12,6 +14,45 @@ use Laravel\Ai\Responses\AgentResponse;
 
 class DatabaseConversationStore implements ConversationStore
 {
+    /**
+     * Memoize the encryption enabled status to avoid repeated config calls.
+     */
+    protected ?bool $encryptionEnabled = null;
+
+    /**
+     * Determine if encryption is enabled for conversation fields.
+     */
+    protected function isEncryptionEnabled(): bool
+    {
+        return $this->encryptionEnabled ??= config('ai.conversations.encrypt_sensitive_fields', true);
+    }
+
+    /**
+     * Encrypt a value when conversation encryption is enabled.
+     */
+    private function encryptField(string $value): string
+    {
+        return $this->isEncryptionEnabled() ? Crypt::encryptString($value) : $value;
+    }
+
+    /**
+     * Decrypt a value when conversation encryption is enabled.
+     * Returns the raw value if decryption fails (e.g. legacy plaintext).
+     */
+    private function decryptField(?string $value): string
+    {
+        if (empty($value) || ! $this->isEncryptionEnabled()) {
+            return $value ?? '';
+        }
+
+        try {
+            return Crypt::decryptString($value);
+        } catch (DecryptException $e) {
+            // Return raw value for legacy plaintext data
+            return $value;
+        }
+    }
+
     /**
      * Get the most recent conversation ID for a given user.
      */
@@ -54,7 +95,7 @@ class DatabaseConversationStore implements ConversationStore
             'user_id' => $userId,
             'agent' => $prompt->agent::class,
             'role' => 'user',
-            'content' => $prompt->prompt,
+            'content' => $this->encryptField($prompt->prompt ?? ''),
             'attachments' => $prompt->attachments->toJson(),
             'tool_calls' => '[]',
             'tool_results' => '[]',
@@ -80,10 +121,10 @@ class DatabaseConversationStore implements ConversationStore
             'user_id' => $userId,
             'agent' => $prompt->agent::class,
             'role' => 'assistant',
-            'content' => $response->text,
+            'content' => $this->encryptField((string) ($response->text ?? '')),
             'attachments' => '[]',
-            'tool_calls' => json_encode($response->toolCalls),
-            'tool_results' => json_encode($response->toolResults),
+            'tool_calls' => $this->encryptField(json_encode($response->toolCalls ?? [])),
+            'tool_results' => $this->encryptField(json_encode($response->toolResults ?? [])),
             'usage' => json_encode($response->usage),
             'meta' => json_encode($response->meta),
             'created_at' => now(),
@@ -107,6 +148,6 @@ class DatabaseConversationStore implements ConversationStore
             ->get()
             ->reverse()
             ->values()
-            ->map(fn ($m) => new Message($m->role, $m->content));
+            ->map(fn ($m) => new Message($m->role, $this->decryptField($m->content)));
     }
 }
