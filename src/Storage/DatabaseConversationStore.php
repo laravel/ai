@@ -102,7 +102,7 @@ class DatabaseConversationStore implements ConversationStore
     {
         return DB::table('agent_conversation_messages')
             ->where('conversation_id', $conversationId)
-            ->orderByDesc('id')
+            ->latest()
             ->limit($limit)
             ->get()
             ->reverse()
