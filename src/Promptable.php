@@ -224,7 +224,35 @@ trait Promptable
             return $attributes[0]->newInstance()->value;
         }
 
+        $providerName = $this->getDefaultProvider();
+
+        if ($providerName) {
+            $providerTimeout = config("ai.providers.{$providerName}.timeout");
+
+            if (! is_null($providerTimeout)) {
+                return (int) $providerTimeout;
+            }
+        }
+
         return 60;
+    }
+
+    /**
+     * Get the default provider name for this agent.
+     */
+    protected function getDefaultProvider(): ?string
+    {
+        if (method_exists($this, 'provider')) {
+            return $this->provider();
+        }
+
+        $attributes = (new ReflectionClass($this))->getAttributes(ProviderAttribute::class);
+
+        if (! empty($attributes)) {
+            return $attributes[0]->newInstance()->value;
+        }
+
+        return config('ai.default');
     }
 
     /**

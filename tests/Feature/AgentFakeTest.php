@@ -233,4 +233,31 @@ class AgentFakeTest extends TestCase
         $this->assertEquals(150, $revised->timeout);
         $this->assertEquals('Revised prompt', $revised->prompt);
     }
+
+    public function test_timeout_from_provider_config_is_used(): void
+    {
+        config(['ai.providers.openai.timeout' => 233]);
+
+        AssistantAgent::fake();
+
+        (new AssistantAgent)->prompt('Test prompt');
+
+        AssistantAgent::assertPrompted(function (AgentPrompt $prompt) {
+            return $prompt->prompt === 'Test prompt'
+                && $prompt->timeout === 233;
+        });
+    }
+
+    public function test_provider_config_timeout_works_with_stream(): void
+    {
+        config(['ai.providers.openai.timeout' => 133]);
+        
+        AssistantAgent::fake();
+        
+        (new AssistantAgent)->stream('Test prompt');
+        
+        AssistantAgent::assertPrompted(function (AgentPrompt $prompt) {
+            return $prompt->timeout === 133;
+        });
+    }
 }
