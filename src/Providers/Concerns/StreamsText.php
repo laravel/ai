@@ -64,6 +64,7 @@ trait StreamsText
                             null,
                             TextGenerationOptions::forAgent($agent),
                             $prompt->timeout,
+                            $agent,
                         );
                     },
                     $meta,

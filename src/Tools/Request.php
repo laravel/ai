@@ -7,12 +7,24 @@ use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Support\Traits\Conditionable;
 use Illuminate\Support\Traits\InteractsWithData;
 use Illuminate\Support\Traits\Macroable;
+use Laravel\Ai\Contracts\Agent;
 
 class Request implements Arrayable, ArrayAccess
 {
     use Conditionable, InteractsWithData, Macroable;
 
-    public function __construct(protected array $arguments = []) {}
+    public function __construct(
+        protected array $arguments = [],
+        protected ?Agent $agent = null
+    ) {}
+
+    /**
+     * Get the agent that is invoking the tool.
+     */
+    public function agent(): ?Agent
+    {
+        return $this->agent;
+    }
 
     /**
      * @param  array<array-key, string>|array-key|null  $keys

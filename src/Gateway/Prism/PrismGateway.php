@@ -8,6 +8,7 @@ use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
+use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\Gateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
@@ -64,6 +65,7 @@ class PrismGateway implements Gateway
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
+        ?Agent $agent = null,
     ): TextResponse {
         [$request, $structured] = [
             $this->createPrismTextRequest($provider, $model, $schema, $options, $timeout),
@@ -75,7 +77,7 @@ class PrismGateway implements Gateway
         }
 
         if (count($tools) > 0) {
-            $this->addTools($request, $tools, $options);
+            $this->addTools($request, $tools, $options, $agent);
             $this->addProviderTools($provider, $request, $tools, $options);
         }
 
@@ -123,6 +125,7 @@ class PrismGateway implements Gateway
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
+        ?Agent $agent = null,
     ): Generator {
         [$request, $structured] = [
             $this->createPrismTextRequest($provider, $model, $schema, $options, $timeout),
@@ -134,7 +137,7 @@ class PrismGateway implements Gateway
         }
 
         if (count($tools) > 0) {
-            $this->addTools($request, $tools, $options);
+            $this->addTools($request, $tools, $options, $agent);
             $this->addProviderTools($provider, $request, $tools, $options);
         }
 

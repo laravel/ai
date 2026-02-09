@@ -65,6 +65,7 @@ trait GeneratesText
                     $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null,
                     TextGenerationOptions::forAgent($agent),
                     $prompt->timeout,
+                    $agent,
                 );
 
                 return $agent instanceof HasStructuredOutput

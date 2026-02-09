@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\Prism\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Collection;
+use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
@@ -27,12 +28,12 @@ trait AddsToolsToPrismRequests
     /**
      * Add the given tools to the Prism request.
      */
-    protected function addTools($request, array $tools, ?TextGenerationOptions $options = null)
+    protected function addTools($request, array $tools, ?TextGenerationOptions $options = null, ?Agent $agent = null)
     {
         return $request
             ->withTools(
-                (new Collection($tools))->map(function ($tool) {
-                    return ! $tool instanceof ProviderTool ? $this->createPrismTool($tool) : null;
+                (new Collection($tools))->map(function ($tool) use ($agent) {
+                    return ! $tool instanceof ProviderTool ? $this->createPrismTool($tool, $agent) : null;
                 })->filter()->values()->all()
             )
             ->withToolChoice(ToolChoice::Auto)
@@ -44,7 +45,7 @@ trait AddsToolsToPrismRequests
     /**
      * Create a Prism tool from the given tool.
      */
-    protected function createPrismTool(Tool $tool): PrismTool
+    protected function createPrismTool(Tool $tool, ?Agent $agent = null): PrismTool
     {
         $toolName = method_exists($tool, 'name')
             ? $tool->name()
@@ -59,21 +60,21 @@ trait AddsToolsToPrismRequests
                     new ObjectSchema($tool->schema(new JsonSchemaTypeFactory))
                 )
             )
-            ->using(fn ($arguments) => $this->invokeTool($tool, $arguments))
+            ->using(fn ($arguments) => $this->invokeTool($tool, $arguments, $agent))
             ->withoutErrorHandling();
     }
 
     /**
      * Invoke the given tool with the given arguments.
      */
-    protected function invokeTool(Tool $tool, array $arguments): string
+    protected function invokeTool(Tool $tool, array $arguments, ?Agent $agent = null): string
     {
         $arguments = $arguments['schema_definition'] ?? [];
 
         call_user_func($this->invokingToolCallback, $tool, $arguments);
 
         return (string) tap(
-            $tool->handle(new ToolRequest($arguments)),
+            $tool->handle(new ToolRequest($arguments, $agent)),
             fn ($result) => call_user_func($this->toolInvokedCallback, $tool, $arguments, $result)
         );
     }
