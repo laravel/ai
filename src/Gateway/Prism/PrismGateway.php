@@ -330,9 +330,11 @@ class PrismGateway implements Gateway
             fn ($prism) => $this->configure($prism, $provider, $model)
         );
 
-        $request->withProviderOptions(
-            $this->dimensionsProviderOptions($provider, $dimensions)
-        );
+        $request->withProviderOptions(match ($provider->driver()) {
+            'gemini' => ['outputDimensionality' => $dimensions],
+            'openai' => ['dimensions' => $dimensions],
+            default => [],
+        });
 
         (new Collection($inputs))->each($request->fromInput(...));
 
@@ -343,18 +345,6 @@ class PrismGateway implements Gateway
             $response->usage->tokens,
             new Meta($provider->name(), $model),
         );
-    }
-
-    /**
-     * Map the dimensions parameter to provider-specific options.
-     */
-    protected function dimensionsProviderOptions(EmbeddingProvider $provider, int $dimensions): array
-    {
-        return match ($provider->driver()) {
-            'gemini' => ['outputDimensionality' => $dimensions],
-            'openai' => ['dimensions' => $dimensions],
-            default => [],
-        };
     }
 
     /**
