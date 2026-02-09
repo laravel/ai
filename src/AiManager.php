@@ -17,13 +17,17 @@ use Laravel\Ai\Enums\AiProvider;
 use Laravel\Ai\Gateway\Prism\PrismGateway;
 use Laravel\Ai\Providers\AnthropicProvider;
 use Laravel\Ai\Providers\CohereProvider;
+use Laravel\Ai\Providers\DeepSeekProvider;
 use Laravel\Ai\Providers\ElevenLabsProvider;
 use Laravel\Ai\Providers\GeminiProvider;
 use Laravel\Ai\Providers\GroqProvider;
 use Laravel\Ai\Providers\JinaProvider;
+use Laravel\Ai\Providers\MistralProvider;
+use Laravel\Ai\Providers\OllamaProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Providers\OpenRouterProvider;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Providers\VoyageAiProvider;
 use Laravel\Ai\Providers\XaiProvider;
 use LogicException;
 
@@ -52,7 +56,7 @@ class AiManager extends MultipleInstanceManager
     {
         return tap($this->instance($name), function ($instance) {
             if (! $instance instanceof AudioProvider) {
-                throw new LogicException('Provider ['.get_class($instance).'] does not support audio generation.');
+                throw new LogicException('Provider ['.$instance::class.'] does not support audio generation.');
             }
         });
     }
@@ -76,7 +80,7 @@ class AiManager extends MultipleInstanceManager
     {
         return tap($this->instance($name), function ($instance) {
             if (! $instance instanceof EmbeddingProvider) {
-                throw new LogicException('Provider ['.get_class($instance).'] does not support embedding generation.');
+                throw new LogicException('Provider ['.$instance::class.'] does not support embedding generation.');
             }
         });
     }
@@ -100,7 +104,7 @@ class AiManager extends MultipleInstanceManager
     {
         return tap($this->instance($name), function ($instance) {
             if (! $instance instanceof RerankingProvider) {
-                throw new LogicException('Provider ['.get_class($instance).'] does not support reranking.');
+                throw new LogicException('Provider ['.$instance::class.'] does not support reranking.');
             }
         });
     }
@@ -124,7 +128,7 @@ class AiManager extends MultipleInstanceManager
     {
         return tap($this->instance($name), function ($instance) {
             if (! $instance instanceof ImageProvider) {
-                throw new LogicException('Provider ['.get_class($instance).'] does not support image generation.');
+                throw new LogicException('Provider ['.$instance::class.'] does not support image generation.');
             }
         });
     }
@@ -148,7 +152,7 @@ class AiManager extends MultipleInstanceManager
     {
         return tap($this->instance($name), function ($instance) {
             if (! $instance instanceof TextProvider) {
-                throw new LogicException('Provider ['.get_class($instance).'] does not support text generation.');
+                throw new LogicException('Provider ['.$instance::class.'] does not support text generation.');
             }
         });
     }
@@ -172,7 +176,7 @@ class AiManager extends MultipleInstanceManager
     {
         return tap($this->instance($name), function ($instance) {
             if (! $instance instanceof TranscriptionProvider) {
-                throw new LogicException('Provider ['.get_class($instance).'] does not support transcription generation.');
+                throw new LogicException('Provider ['.$instance::class.'] does not support transcription generation.');
             }
         });
     }
@@ -196,7 +200,7 @@ class AiManager extends MultipleInstanceManager
     {
         return tap($this->instance($name), function ($instance) {
             if (! $instance instanceof FileProvider) {
-                throw new LogicException('Provider ['.get_class($instance).'] does not support file management.');
+                throw new LogicException('Provider ['.$instance::class.'] does not support file management.');
             }
         });
     }
@@ -220,7 +224,7 @@ class AiManager extends MultipleInstanceManager
     {
         return tap($this->instance($name), function ($instance) {
             if (! $instance instanceof StoreProvider) {
-                throw new LogicException('Provider ['.get_class($instance).'] does not support store management.');
+                throw new LogicException('Provider ['.$instance::class.'] does not support store management.');
             }
         });
     }
@@ -255,6 +259,18 @@ class AiManager extends MultipleInstanceManager
     public function createCohereDriver(array $config): CohereProvider
     {
         return new CohereProvider(
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create a DeepSeek powered instance.
+     */
+    public function createDeepseekDriver(array $config): DeepSeekProvider
+    {
+        return new DeepSeekProvider(
+            new PrismGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)
         );
@@ -307,6 +323,30 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
+     * Create a Mistral AI powered instance.
+     */
+    public function createMistralDriver(array $config): MistralProvider
+    {
+        return new MistralProvider(
+            new PrismGateway($this->app['events']),
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create an Ollama powered instance.
+     */
+    public function createOllamaDriver(array $config): OllamaProvider
+    {
+        return new OllamaProvider(
+            new PrismGateway($this->app['events']),
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
      * Create an OpenAI powered instance.
      */
     public function createOpenaiDriver(array $config): OpenAiProvider
@@ -324,6 +364,18 @@ class AiManager extends MultipleInstanceManager
     public function createOpenrouterDriver(array $config): OpenRouterProvider
     {
         return new OpenRouterProvider(
+            new PrismGateway($this->app['events']),
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create a VoyageAI powered instance.
+     */
+    public function createVoyageaiDriver(array $config): VoyageAiProvider
+    {
+        return new VoyageAiProvider(
             new PrismGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)

@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Providers;
 
+use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
@@ -52,14 +53,14 @@ class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider
      */
     protected function formatMetadataFilter(array $filters): string
     {
-        return collect($filters)->map(fn ($filter) => match ($filter['type']) {
+        return (new Collection($filters))->map(fn ($filter) => match ($filter['type']) {
             'eq' => is_numeric($filter['value'])
                 ? "{$filter['key']}={$filter['value']}"
                 : "{$filter['key']}=\"{$filter['value']}\"",
             'ne' => is_numeric($filter['value'])
                 ? "{$filter['key']}!={$filter['value']}"
                 : "{$filter['key']}!=\"{$filter['value']}\"",
-            'in' => '('.collect($filter['value'])->map(fn ($v) => is_numeric($v) ? "{$filter['key']}={$v}" : "{$filter['key']}=\"{$v}\""
+            'in' => '('.(new Collection($filter['value']))->map(fn ($v) => is_numeric($v) ? "{$filter['key']}={$v}" : "{$filter['key']}=\"{$v}\""
             )->implode(' OR ').')',
         })->implode(' AND ');
     }

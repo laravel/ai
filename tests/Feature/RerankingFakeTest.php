@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Laravel\Ai\Enums\AiProvider;
+use Illuminate\Support\Collection;
 use Laravel\Ai\Prompts\RerankingPrompt;
 use Laravel\Ai\Reranking;
 use Laravel\Ai\Responses\Data\RankedDocument;
@@ -59,7 +60,7 @@ class RerankingFakeTest extends TestCase
     public function test_can_fake_reranking_with_closure(): void
     {
         Reranking::fake(function (RerankingPrompt $prompt) {
-            return collect($prompt->documents)->map(fn ($doc, $index) => new RankedDocument(
+            return (new Collection($prompt->documents))->map(fn ($doc, $index) => new RankedDocument(
                 index: $index,
                 document: $doc,
                 score: 1.0 - ($index * 0.1),

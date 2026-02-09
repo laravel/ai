@@ -58,7 +58,7 @@ class PendingImageGeneration
     }
 
     /**
-     * Indicate that the generated iamge should have a square aspect ratio.
+     * Indicate that the generated image should have a square aspect ratio.
      */
     public function square(): self
     {
@@ -68,7 +68,7 @@ class PendingImageGeneration
     }
 
     /**
-     * Indicate that the generated iamge should have a portrait aspect ratio.
+     * Indicate that the generated image should have a portrait aspect ratio.
      */
     public function portrait(): self
     {
@@ -78,7 +78,7 @@ class PendingImageGeneration
     }
 
     /**
-     * Indicate that the generated iamge should have a landscape aspect ratio.
+     * Indicate that the generated image should have a landscape aspect ratio.
      */
     public function landscape(): self
     {

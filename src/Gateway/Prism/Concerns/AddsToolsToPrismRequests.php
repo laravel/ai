@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\Prism\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
@@ -30,7 +31,7 @@ trait AddsToolsToPrismRequests
     {
         return $request
             ->withTools(
-                collect($tools)->map(function ($tool) {
+                (new Collection($tools))->map(function ($tool) {
                     return ! $tool instanceof ProviderTool ? $this->createPrismTool($tool) : null;
                 })->filter()->values()->all()
             )
@@ -45,8 +46,12 @@ trait AddsToolsToPrismRequests
      */
     protected function createPrismTool(Tool $tool): PrismTool
     {
+        $toolName = method_exists($tool, 'name')
+            ? $tool->name()
+            : class_basename($tool);
+
         return (new PrismTool)
-            ->as(class_basename($tool))
+            ->as($toolName)
             ->for((string) $tool->description())
             ->when(
                 ! empty($tool->schema(new JsonSchemaTypeFactory)),
@@ -79,7 +84,7 @@ trait AddsToolsToPrismRequests
     protected function addProviderTools(Provider $provider, $request, array $tools)
     {
         return $request
-            ->withProviderTools(collect($tools)->map(function ($tool) use ($provider) {
+            ->withProviderTools((new Collection($tools))->map(function ($tool) use ($provider) {
                 return match (true) {
                     $tool instanceof FileSearch => $this->addFileSearchTool($provider, $tool),
                     $tool instanceof WebFetch => $this->addWebFetchTool($provider, $tool),

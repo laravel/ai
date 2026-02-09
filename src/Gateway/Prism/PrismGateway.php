@@ -98,8 +98,8 @@ class PrismGateway implements Gateway
                 PrismUsage::toLaravelUsage($response->usage),
                 new Meta($provider->name(), $response->meta->model, $citations),
             ))->withToolCallsAndResults(
-                toolCalls: collect($response->toolCalls)->map(PrismTool::toLaravelToolCall(...)),
-                toolResults: collect($response->toolResults)->map(PrismTool::toLaravelToolResult(...)),
+                toolCalls: (new Collection($response->toolCalls))->map(PrismTool::toLaravelToolCall(...)),
+                toolResults: (new Collection($response->toolResults))->map(PrismTool::toLaravelToolResult(...)),
             )->withSteps(PrismSteps::toLaravelSteps($response->steps, $provider))
             : (new TextResponse(
                 $response->text,
@@ -160,7 +160,7 @@ class PrismGateway implements Gateway
      */
     protected function toPrismMessages(array $messages): array
     {
-        return PrismMessages::fromLaravelMessages(collect($messages))->all();
+        return PrismMessages::fromLaravelMessages(new Collection($messages))->all();
     }
 
     /**
@@ -181,7 +181,7 @@ class PrismGateway implements Gateway
     ): ImageResponse {
         try {
             $response = Prism::image()
-                ->using(static::toPrismProvider($provider), $model)
+                ->using(static::toPrismProvider($provider), $model, $provider->additionalConfiguration())
                 ->withPrompt($prompt, $this->toPrismImageAttachments($attachments))
                 ->withProviderOptions($provider->defaultImageOptions($size, $quality))
                 ->withClientOptions([
@@ -193,7 +193,7 @@ class PrismGateway implements Gateway
         }
 
         return new ImageResponse(
-            collect($response->images)->map(function ($image) {
+            (new Collection($response->images))->map(function ($image) {
                 return new GeneratedImage($image->base64, $image->mimeType);
             }),
             PrismUsage::toLaravelUsage($response->usage),
@@ -206,10 +206,10 @@ class PrismGateway implements Gateway
      */
     protected function toPrismImageAttachments(array $attachments): array
     {
-        return collect($attachments)->map(function ($attachment) {
+        return (new Collection($attachments))->map(function ($attachment) {
             if (! $attachment instanceof File && ! $attachment instanceof UploadedFile) {
                 throw new InvalidArgumentException(
-                    'Unsupported attachment type ['.get_class($attachment).']'
+                    'Unsupported attachment type ['.$attachment::class.']'
                 );
             }
 
@@ -217,7 +217,7 @@ class PrismGateway implements Gateway
                 $attachment instanceof LocalImage => PrismImage::fromLocalPath($attachment->path, $attachment->mime),
                 $attachment instanceof StoredImage => PrismImage::fromStoragePath($attachment->path, $attachment->disk),
                 $attachment instanceof UploadedFile && static::isImage($attachment) => PrismImage::fromBase64(base64_encode($attachment->get()), $attachment->getClientMimeType()),
-                default => throw new InvalidArgumentException('Unsupported attachment type ['.get_class($attachment).']'),
+                default => throw new InvalidArgumentException('Unsupported attachment type ['.$attachment::class.']'),
             };
 
             if ($attachment instanceof File && $attachment->name) {
@@ -246,7 +246,7 @@ class PrismGateway implements Gateway
 
         try {
             $response = Prism::audio()
-                ->using(static::toPrismProvider($provider), $model)
+                ->using(static::toPrismProvider($provider), $model, $provider->additionalConfiguration())
                 ->withInput($text)
                 ->withVoice($voice)
                 ->withProviderOptions(array_filter([
@@ -281,7 +281,7 @@ class PrismGateway implements Gateway
             }
 
             $request = Prism::audio()
-                ->using(static::toPrismProvider($provider), $model)
+                ->using(static::toPrismProvider($provider), $model, $provider->additionalConfiguration())
                 ->withInput(match (true) {
                     $audio instanceof TranscribableAudio => Audio::fromBase64(
                         base64_encode($audio->content()), $audio->mimeType()
@@ -292,6 +292,7 @@ class PrismGateway implements Gateway
                 $request->withProviderOptions(array_filter([
                     'language' => $language,
                     'response_format' => $diarize ? 'diarized_json' : null,
+                    'chunking_strategy' => $diarize ? 'auto' : null,
                 ]));
             }
 
@@ -334,7 +335,7 @@ class PrismGateway implements Gateway
         $response = $request->asEmbeddings();
 
         return new EmbeddingsResponse(
-            collect($response->embeddings)->map->embedding->all(),
+            (new Collection($response->embeddings))->map->embedding->all(),
             $response->usage->tokens,
             new Meta($provider->name(), $model),
         );
@@ -347,10 +348,14 @@ class PrismGateway implements Gateway
     {
         return match ($provider->driver()) {
             'anthropic' => PrismProvider::Anthropic,
+            'deepseek' => PrismProvider::DeepSeek,
             'gemini' => PrismProvider::Gemini,
             'groq' => PrismProvider::Groq,
+            'mistral' => PrismProvider::Mistral,
+            'ollama' => PrismProvider::Ollama,
             'openai' => PrismProvider::OpenAI,
             'openrouter' => PrismProvider::OpenRouter,
+            'voyageai' => PrismProvider::VoyageAI,
             'xai' => PrismProvider::XAI,
             default => throw new InvalidArgumentException('Gateway does not support provider ['.$provider.'].'),
         };

@@ -41,6 +41,6 @@ class InvokeAgent implements ShouldQueue
      */
     public function displayName()
     {
-        return get_class($this->agent);
+        return $this->agent::class;
     }
 }

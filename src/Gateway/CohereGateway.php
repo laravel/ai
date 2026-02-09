@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway;
 
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\RerankingGateway;
@@ -63,7 +64,7 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway
 
         $data = $response->json();
 
-        $results = collect($data['results'])->map(fn (array $result) => new RankedDocument(
+        $results = (new Collection($data['results']))->map(fn (array $result) => new RankedDocument(
             index: $result['index'],
             document: $documents[$result['index']],
             score: $result['relevance_score'],

@@ -88,7 +88,7 @@ trait GeneratesText
      */
     protected function gatherMiddlewareFor(Agent $agent): array
     {
-        $middleware = Ai::hasFakeGatewayFor(get_class($agent)) ? [function (AgentPrompt $prompt, Closure $next) {
+        $middleware = Ai::hasFakeGatewayFor($agent::class) ? [function (AgentPrompt $prompt, Closure $next) {
             Ai::recordPrompt($prompt);
 
             return $next($prompt);

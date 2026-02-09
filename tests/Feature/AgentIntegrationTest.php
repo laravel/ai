@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
 use Laravel\Ai\Events\AgentPrompted;
@@ -89,7 +90,7 @@ class AgentIntegrationTest extends TestCase
         }
 
         $this->assertTrue(
-            collect($events)
+            (new Collection($events))
                 ->whereInstanceOf(TextDelta::class)
                 ->isNotEmpty()
         );
@@ -258,7 +259,7 @@ class AgentIntegrationTest extends TestCase
         } catch (\Exception $e) {
             $caught = true;
 
-            $this->assertTrue(get_class($e) === 'Exception');
+            $this->assertTrue($e::class === 'Exception');
             $this->assertEquals('Forced to throw exception.', $e->getMessage());
         }
 

@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Providers;
 
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Gateway\Gateway;
 use Laravel\Ai\Enums\AiProvider;
 
@@ -40,6 +41,14 @@ abstract class Provider
     }
 
     /**
+     * Get the provider connection configuration other than the driver, key, and name.
+     */
+    public function additionalConfiguration(): array
+    {
+        return array_diff_key($this->config, array_flip(['driver', 'key', 'name']));
+    }
+
+    /**
      * Format the given provider / model list.
      */
     public static function formatProviderAndModelList(AiProvider|array|string $providers, ?string $model = null): array
@@ -52,7 +61,7 @@ abstract class Provider
             return [$providers => $model];
         }
 
-        return collect($providers)->mapWithKeys(function ($value, $key) {
+        return (new Collection($providers))->mapWithKeys(function ($value, $key) {
             return is_numeric($key)
                 ? [($value instanceof AiProvider ? $value->value : $value) => null]
                 : [($key instanceof AiProvider ? $key->value : $key) => $value];

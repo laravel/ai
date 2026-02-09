@@ -45,7 +45,7 @@ trait InteractsWithFakeAgents
     public function hasFakeGatewayFor(Agent|string $agent): bool
     {
         return array_key_exists(
-            is_object($agent) ? get_class($agent) : $agent,
+            is_object($agent) ? $agent::class : $agent,
             $this->fakeAgentGateways
         );
     }
@@ -56,8 +56,8 @@ trait InteractsWithFakeAgents
     public function fakeGatewayFor(Agent $agent): FakeTextGateway
     {
         return $this->hasFakeGatewayFor($agent)
-            ? $this->fakeAgentGateways[get_class($agent)]
-            : throw new InvalidArgumentException('Agent ['.get_class($agent).'] has not been faked.');
+            ? $this->fakeAgentGateways[$agent::class]
+            : throw new InvalidArgumentException('Agent ['.$agent::class.'] has not been faked.');
     }
 
     /**
@@ -66,9 +66,9 @@ trait InteractsWithFakeAgents
     public function recordPrompt(AgentPrompt|QueuedAgentPrompt $prompt): self
     {
         if ($prompt instanceof QueuedAgentPrompt) {
-            $this->recordedQueuedPrompts[get_class($prompt->agent)][] = $prompt;
+            $this->recordedQueuedPrompts[$prompt->agent::class][] = $prompt;
         } else {
-            $this->recordedPrompts[get_class($prompt->agent)][] = $prompt;
+            $this->recordedPrompts[$prompt->agent::class][] = $prompt;
         }
 
         return $this;
@@ -88,9 +88,9 @@ trait InteractsWithFakeAgents
             : $callback;
 
         PHPUnit::assertTrue(
-            (new Collection($prompts ?? $this->recordedPrompts[$agent] ?? []))->filter(function ($prompt) use ($callback) {
+            (new Collection($prompts ?? $this->recordedPrompts[$agent] ?? []))->contains(function ($prompt) use ($callback) {
                 return $callback($prompt);
-            })->count() > 0,
+            }),
             $message ?? 'An expected prompt was not received.'
         );
 
@@ -124,9 +124,9 @@ trait InteractsWithFakeAgents
             : $callback;
 
         PHPUnit::assertTrue(
-            (new Collection($prompts ?? $this->recordedPrompts[$agent] ?? []))->filter(function ($prompt) use ($callback) {
+            (new Collection($prompts ?? $this->recordedPrompts[$agent] ?? []))->doesntContain(function ($prompt) use ($callback) {
                 return $callback($prompt);
-            })->count() === 0,
+            }),
             $message ?? 'An unexpected prompt was received.'
         );
 
