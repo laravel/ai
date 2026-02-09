@@ -53,7 +53,7 @@ abstract class Image extends File
     {
         return new Base64Image(
             base64_encode($file->getContent()),
-            $file->getClientMimeType(),
+            $mime ?? $file->getClientMimeType(),
         )->as($file->getClientOriginalName());
     }
 }
