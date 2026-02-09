@@ -30,7 +30,8 @@ class PrismException
         }
 
         if (str_starts_with($e->getMessage(), 'Calling ') &&
-            str_ends_with($e->getMessage(), 'tool failed')) {
+            str_ends_with($e->getMessage(), 'tool failed') &&
+            $e->getPrevious() !== null) {
             throw $e->getPrevious();
         }
 
