@@ -49,8 +49,8 @@ class AgentIntegrationTest extends TestCase
         $this->assertTrue(str_contains($response->text, 'Laravel'));
         $this->assertTrue(Str::isUuid($response->invocationId, 7));
         $this->assertTrue($response->messages->count() > 0);
-        $this->assertEquals($response->meta->provider, 'groq');
-        $this->assertEquals($response->meta->model, 'openai/gpt-oss-20b');
+        $this->assertEquals('groq', $response->meta->provider);
+        $this->assertEquals('openai/gpt-oss-20b', $response->meta->model);
         $this->assertTrue($response->steps->count() > 0);
 
         Event::assertDispatched(PromptingAgent::class);
