@@ -61,7 +61,7 @@ abstract class Document extends File
     {
         return new Base64Document(
             base64_encode($file->getContent()),
-            $file->getClientMimeType(),
+            $mime ?? $file->getClientMimeType(),
         )->as($file->getClientOriginalName());
     }
 }
