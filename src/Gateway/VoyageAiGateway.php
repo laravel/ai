@@ -27,29 +27,25 @@ class VoyageAiGateway implements RerankingGateway
         string $query,
         ?int $limit = null
     ): RerankingResponse {
-        $response = $this->client($provider)->post('/rerank', array_filter([
+        $data = $this->client($provider)->post('/rerank', array_filter([
             'model' => $model,
             'query' => $query,
             'documents' => $documents,
             'top_k' => $limit,
-        ]));
-
-        $data = $response->json();
-
-        $results = collect($data['data'])->map(fn (array $result) => new RankedDocument(
-            index: $result['index'],
-            document: $documents[$result['index']],
-            score: $result['relevance_score'],
-        ))->all();
+        ]))->json();
 
         return new RerankingResponse(
-            $results,
+            collect($data['data'])->map(fn (array $result) => new RankedDocument(
+                index: $result['index'],
+                document: $documents[$result['index']],
+                score: $result['relevance_score'],
+            ))->all(),
             new Meta($provider->name(), $model),
         );
     }
 
     /**
-     * Get an HTTP client for the Cohere API.
+     * Get an HTTP client for the Voyage API.
      */
     protected function client(EmbeddingProvider|RerankingProvider $provider): PendingRequest
     {
