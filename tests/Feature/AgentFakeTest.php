@@ -251,11 +251,11 @@ class AgentFakeTest extends TestCase
     public function test_provider_config_timeout_works_with_stream(): void
     {
         config(['ai.providers.openai.timeout' => 133]);
-        
+
         AssistantAgent::fake();
-        
+
         (new AssistantAgent)->stream('Test prompt');
-        
+
         AssistantAgent::assertPrompted(function (AgentPrompt $prompt) {
             return $prompt->timeout === 133;
         });
