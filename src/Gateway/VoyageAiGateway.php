@@ -4,13 +4,11 @@ namespace Laravel\Ai\Gateway;
 
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
-use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\RerankingGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\RerankingProvider;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\RankedDocument;
-use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\RerankingResponse;
 
 class VoyageAiGateway implements RerankingGateway
