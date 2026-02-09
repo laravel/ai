@@ -8,6 +8,8 @@ use Laravel\Ai\Tools\Request;
 
 class FixedNumberGenerator implements Tool
 {
+    public static $usedAgent;
+
     public function __construct(public bool $throwsException = false) {}
 
     /**
@@ -23,6 +25,8 @@ class FixedNumberGenerator implements Tool
      */
     public function handle(Request $request): string
     {
+        static::$usedAgent = $request->agent();
+
         if ($this->throwsException) {
             throw new \Exception('Forced to throw exception.');
         }

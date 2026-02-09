@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use function Laravel\Ai\agent;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Event;
@@ -19,9 +20,11 @@ use Tests\Feature\Agents\AssistantAgent;
 use Tests\Feature\Agents\ConversationalAgent;
 use Tests\Feature\Agents\StructuredAgent;
 use Tests\Feature\Agents\ToolUsingAgent;
-use Tests\TestCase;
 
-use function Laravel\Ai\agent;
+use Tests\Feature\Agents\ToolUsingNonStructuredOutputAgent;
+use Tests\Feature\Tools\FixedNumberGenerator;
+use Tests\Feature\Tools\RandomNumberGenerator;
+use Tests\TestCase;
 
 class AgentIntegrationTest extends TestCase
 {
@@ -238,6 +241,31 @@ class AgentIntegrationTest extends TestCase
         );
 
         $this->assertTrue($response['number'] === 72019);
+    }
+
+    public function test_agent_tool_has_access_to_agent_that_called_tool(): void
+    {
+        $agent = new ToolUsingAgent(fixed: true);
+
+        // Verify when prompting...
+        $agent->prompt(
+            'Can I have a random number?',
+            provider: $this->toolProvider,
+            model: $this->toolModel,
+        );
+
+        $this->assertSame($agent, FixedNumberGenerator::$usedAgent);
+
+        $agent = new ToolUsingNonStructuredOutputAgent();
+
+        // Verify when streaming...
+        $agent->stream(
+            'Can I have a random number between 1 and 1000?',
+            provider: $this->toolProvider,
+            model: $this->toolModel,
+        )->each(fn () => null);
+
+        $this->assertSame($agent, RandomNumberGenerator::$usedAgent);
     }
 
     public function test_agent_tool_exception_handling_is_not_magical(): void
