@@ -13,6 +13,8 @@ use Laravel\Ai\Contracts\Providers\RerankingProvider;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Gateway\OpenAiCompatibleEmbeddingGateway;
+use Laravel\Ai\Gateway\Prism\OpenAiCompatiblePrismGateway;
 use Laravel\Ai\Gateway\Prism\PrismGateway;
 use Laravel\Ai\Providers\AnthropicProvider;
 use Laravel\Ai\Providers\CohereProvider;
@@ -23,6 +25,7 @@ use Laravel\Ai\Providers\GroqProvider;
 use Laravel\Ai\Providers\JinaProvider;
 use Laravel\Ai\Providers\MistralProvider;
 use Laravel\Ai\Providers\OllamaProvider;
+use Laravel\Ai\Providers\OpenAiCompatibleProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Providers\OpenRouterProvider;
 use Laravel\Ai\Providers\Provider;
@@ -355,6 +358,18 @@ class AiManager extends MultipleInstanceManager
             $config,
             $this->app->make(Dispatcher::class)
         );
+    }
+
+    /**
+     * Create an OpenAI compatible powered instance.
+     */
+    public function createOpenaiCompatibleDriver(array $config): OpenAiCompatibleProvider
+    {
+        return new OpenAiCompatibleProvider(
+            new OpenAiCompatiblePrismGateway($this->app['events']),
+            $config,
+            $this->app->make(Dispatcher::class)
+        )->useEmbeddingGateway(new OpenAiCompatibleEmbeddingGateway);
     }
 
     /**
