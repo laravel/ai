@@ -7,6 +7,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Stringable;
 use Laravel\Ai\Console\Commands\ChatCommand;
+use Laravel\Ai\Console\Commands\ListAgentsCommand;
 use Laravel\Ai\Console\Commands\MakeAgentCommand;
 use Laravel\Ai\Console\Commands\MakeToolCommand;
 use Laravel\Ai\Contracts\ConversationStore;
@@ -92,6 +93,7 @@ class AiServiceProvider extends ServiceProvider
     {
         $this->commands([
             // ChatCommand::class,
+            ListAgentsCommand::class,
             MakeAgentCommand::class,
             MakeToolCommand::class,
         ]);
