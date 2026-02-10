@@ -1,7 +1,5 @@
 <?php
 
-use Laravel\Ai\Enums\AiProvider;
-
 return [
 
     /*

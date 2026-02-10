@@ -113,7 +113,7 @@ class AgentFakeTest extends TestCase
 
         $response = (new StructuredAgent)->prompt('Gold prompt');
 
-        $this->assertTrue(is_string($response['symbol']));
+        $this->assertIsString($response['symbol']);
     }
 
     public function test_agent_streams_can_be_faked(): void

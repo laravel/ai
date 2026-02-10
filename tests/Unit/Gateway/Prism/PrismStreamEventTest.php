@@ -4,8 +4,12 @@ namespace Tests\Unit\Gateway\Prism;
 
 use Laravel\Ai\Gateway\Prism\PrismStreamEvent;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
+use Laravel\Ai\Streaming\Events\StreamEnd;
 use PHPUnit\Framework\TestCase;
+use Prism\Prism\Enums\FinishReason;
+use Prism\Prism\Streaming\Events\StreamEndEvent;
 use Prism\Prism\Streaming\Events\ThinkingCompleteEvent;
+use Prism\Prism\ValueObjects\Usage;
 
 class PrismStreamEventTest extends TestCase
 {
@@ -39,5 +43,37 @@ class PrismStreamEventTest extends TestCase
 
         $this->assertInstanceOf(ReasoningEnd::class, $result);
         $this->assertNull($result->summary);
+    }
+
+    public function test_stream_end_event_handles_null_usage(): void
+    {
+        $event = new StreamEndEvent(
+            id: 'event-3',
+            timestamp: 1234567890,
+            finishReason: FinishReason::Stop,
+            usage: null,
+        );
+
+        $result = PrismStreamEvent::toLaravelStreamEvent('invocation-1', $event, 'openrouter', 'anthropic/claude-sonnet');
+
+        $this->assertInstanceOf(StreamEnd::class, $result);
+        $this->assertEquals(0, $result->usage->promptTokens);
+        $this->assertEquals(0, $result->usage->completionTokens);
+    }
+
+    public function test_stream_end_event_maps_usage(): void
+    {
+        $event = new StreamEndEvent(
+            id: 'event-4',
+            timestamp: 1234567890,
+            finishReason: FinishReason::Stop,
+            usage: new Usage(promptTokens: 100, completionTokens: 50),
+        );
+
+        $result = PrismStreamEvent::toLaravelStreamEvent('invocation-1', $event, 'openrouter', 'anthropic/claude-sonnet');
+
+        $this->assertInstanceOf(StreamEnd::class, $result);
+        $this->assertEquals(100, $result->usage->promptTokens);
+        $this->assertEquals(50, $result->usage->completionTokens);
     }
 }
