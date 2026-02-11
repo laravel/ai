@@ -359,10 +359,11 @@ class PrismGateway implements Gateway
     /**
      * Map the given Laravel AI provider to a Prism provider.
      */
-    protected static function toPrismProvider(Provider $provider): PrismProvider
+    protected static function toPrismProvider(Provider $provider): PrismProvider|string
     {
         return match ($provider->driver()) {
             'anthropic' => PrismProvider::Anthropic,
+            'bedrock' => 'bedrock',
             'deepseek' => PrismProvider::DeepSeek,
             'gemini' => PrismProvider::Gemini,
             'groq' => PrismProvider::Groq,

@@ -23,6 +23,9 @@
         "laravel/serializable-closure": "^2.0",
         "prism-php/prism": "^0.99.0"
     },
+    "suggest": {
+        "prism-php/bedrock": "Required for AWS Bedrock provider support (^1.8)."
+    },
     "require-dev": {
         "laravel/pint": "^1.26",
         "mockery/mockery": "^1.6.12",
