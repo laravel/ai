@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Prompts;
 
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -18,12 +19,13 @@ class AgentPrompt extends Prompt
     public function __construct(
         Agent $agent,
         string $prompt,
+        Collection|array $promptData,
         Collection|array $attachments,
         TextProvider $provider,
         string $model,
         ?int $timeout = null
     ) {
-        parent::__construct($prompt, $provider, $model);
+        parent::__construct($this->compose($prompt, $promptData), $provider, $model);
 
         $this->agent = $agent;
         $this->attachments = Collection::make($attachments);
@@ -87,5 +89,19 @@ class AgentPrompt extends Prompt
     public function provider(): TextProvider
     {
         return $this->provider;
+    }
+
+    protected function compose(string $prompt, Collection|array $promptData): string
+    {
+        if (! Str::startsWith($prompt, 'prompts/')) {
+            return $prompt;
+        }
+
+        return Str::of(
+            Blade::render(
+                file_get_contents(resource_path(Str::of($prompt)->replace('.', '/')->prepend('prompts/')->append('.blade.php'))),
+                $promptData
+            )
+        );
     }
 }

@@ -45,6 +45,7 @@ trait Promptable
      */
     public function prompt(
         string $prompt,
+        array $promptData = [],
         array $attachments = [],
         array|string|null $provider = null,
         ?string $model = null,
@@ -52,7 +53,7 @@ trait Promptable
     {
         return $this->withModelFailover(
             fn (Provider $provider, string $model) => $provider->prompt(
-                new AgentPrompt($this, $prompt, $attachments, $provider, $model, $this->getTimeout($timeout))
+                new AgentPrompt($this, $prompt, $promptData, $attachments, $provider, $model, $this->getTimeout($timeout))
             ),
             $provider,
             $model,
@@ -64,6 +65,7 @@ trait Promptable
      */
     public function stream(
         string $prompt,
+        array $promptData = [],
         array $attachments = [],
         ?string $provider = null,
         ?string $model = null,
@@ -71,7 +73,7 @@ trait Promptable
     {
         return $this->withModelFailover(
             fn (Provider $provider, string $model) => $provider->stream(
-                new AgentPrompt($this, $prompt, $attachments, $provider, $model, $this->getTimeout($timeout))
+                new AgentPrompt($this, $prompt, $promptData, $attachments, $provider, $model, $this->getTimeout($timeout))
             ),
             $provider,
             $model,
@@ -81,11 +83,11 @@ trait Promptable
     /**
      * Invoke the agent in a queued job.
      */
-    public function queue(string $prompt, array $attachments = [], array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
+    public function queue(string $prompt, array $promptData = [], array $attachments = [], array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
     {
         if (static::isFaked()) {
             Ai::recordPrompt(
-                new QueuedAgentPrompt($this, $prompt, $attachments, $provider, $model),
+                new QueuedAgentPrompt($this, $prompt, $promptData, $attachments, $provider, $model),
             );
 
             return new QueuedAgentResponse(new FakePendingDispatch);
