@@ -50,10 +50,12 @@ class PrismTool extends Tool
             );
         }
 
+        $arguments = $toolCall->arguments();
+
         return new ToolCall(
             $toolCall->id,
             $toolCall->name,
-            static::normalizeArguments($toolCall->arguments()['schema_definition'] ?? []),
+            static::normalizeArguments($arguments['schema_definition'] ?? $arguments),
             $toolCall->resultId,
             $toolCall->reasoningId,
             $toolCall->reasoningSummary,
@@ -78,7 +80,7 @@ class PrismTool extends Tool
         return new ToolResult(
             $toolResult->toolCallId,
             $toolResult->toolName,
-            static::normalizeArguments($toolResult->args['schema_definition'] ?? []),
+            static::normalizeArguments($toolResult->args['schema_definition'] ?? $toolResult->args),
             $toolResult->result,
             $toolResult->toolCallResultId,
         );
