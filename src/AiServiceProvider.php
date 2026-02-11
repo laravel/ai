@@ -11,6 +11,7 @@ use Laravel\Ai\Console\Commands\MakeAgentCommand;
 use Laravel\Ai\Console\Commands\MakeToolCommand;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Storage\DatabaseConversationStore;
+use Laravel\Ai\Tracing\TracingManager;
 
 class AiServiceProvider extends ServiceProvider
 {
@@ -23,6 +24,7 @@ class AiServiceProvider extends ServiceProvider
     {
         $this->app->scoped(AiManager::class, fn ($app): AiManager => new AiManager($app));
         $this->app->singleton(ConversationStore::class, DatabaseConversationStore::class);
+        $this->app->singleton(TracingManager::class, fn ($app) => new TracingManager($app));
 
         $this->mergeConfigFrom(__DIR__.'/../config/ai.php', 'ai');
     }

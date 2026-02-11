@@ -40,6 +40,37 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Tracing
+    |--------------------------------------------------------------------------
+    |
+    | Below you may configure tracing for AI agent invocations. When an
+    | agent uses the Traceable trait, trace data will be sent to the
+    | configured driver. The Langfuse driver dispatches queued jobs.
+    |
+    */
+
+    'tracing' => [
+        'default' => env('AI_TRACING_DRIVER', 'log'),
+
+        'drivers' => [
+            'log' => [
+                'driver' => 'log',
+                'channel' => env('AI_TRACING_LOG_CHANNEL'),
+                'level' => 'info',
+            ],
+
+            'langfuse' => [
+                'driver' => 'langfuse',
+                'url' => env('LANGFUSE_URL', 'https://cloud.langfuse.com'),
+                'public_key' => env('LANGFUSE_PUBLIC_KEY'),
+                'secret_key' => env('LANGFUSE_SECRET_KEY'),
+                'queue' => env('AI_TRACING_QUEUE', 'default'),
+            ],
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | AI Providers
     |--------------------------------------------------------------------------
     |

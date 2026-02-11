@@ -4,6 +4,7 @@ namespace Laravel\Ai\Providers\Concerns;
 
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use Laravel\Ai\Concerns\Traceable;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\HasTools;
@@ -26,6 +27,8 @@ trait StreamsText
     public function stream(AgentPrompt $prompt): StreamableAgentResponse
     {
         $invocationId = (string) Str::uuid7();
+
+        $this->registerTracingListeners($invocationId, $prompt->agent);
 
         $processedPrompt = null;
 

@@ -7,6 +7,7 @@ use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Concerns\RemembersConversations;
+use Laravel\Ai\Concerns\Traceable;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\ConversationStore;
@@ -24,6 +25,7 @@ use Laravel\Ai\Middleware\RememberConversation;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StructuredAgentResponse;
+use Laravel\Ai\Tracing\TracingManager;
 
 use function Laravel\Ai\pipeline;
 
@@ -37,6 +39,8 @@ trait GeneratesText
     public function prompt(AgentPrompt $prompt): AgentResponse
     {
         $invocationId = (string) Str::uuid7();
+
+        $this->registerTracingListeners($invocationId, $prompt->agent);
 
         $processedPrompt = null;
 
@@ -102,6 +106,22 @@ trait GeneratesText
         return $agent instanceof HasMiddleware
             ? [...$middleware, ...$agent->middleware()]
             : $middleware;
+    }
+
+    /**
+     * Register tracing listeners for the given agent invocation if the agent uses the Traceable trait.
+     */
+    protected function registerTracingListeners(string $invocationId, Agent $agent): void
+    {
+        if (! in_array(Traceable::class, class_uses_recursive($agent))) {
+            return;
+        }
+
+        $driverName = $agent->tracingDriver();
+
+        resolve(TracingManager::class)->driver($driverName)->registerListeners(
+            $invocationId, $agent, $this->events
+        );
     }
 
     /**
