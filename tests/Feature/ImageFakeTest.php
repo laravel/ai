@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use Exception;
 use Illuminate\Support\Collection;
-use Laravel\Ai\Enums\AiProvider;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Image;
 use Laravel\Ai\Prompts\ImagePrompt;
 use Laravel\Ai\Prompts\QueuedImagePrompt;
@@ -140,7 +140,7 @@ class ImageFakeTest extends TestCase
     {
         Image::fake();
 
-        Image::of('Enum image')->generate(provider: AiProvider::Gemini);
+        Image::of('Enum image')->generate(provider: Lab::Gemini);
 
         Image::assertGenerated(fn (ImagePrompt $prompt) => $prompt->prompt === 'Enum image');
     }
@@ -149,10 +149,10 @@ class ImageFakeTest extends TestCase
     {
         Image::fake();
 
-        Image::of('Queued enum image')->queue(provider: AiProvider::OpenAI);
+        Image::of('Queued enum image')->queue(provider: Lab::OpenAI);
 
         Image::assertQueued(fn (QueuedImagePrompt $prompt) => $prompt->prompt === 'Queued enum image'
-            && $prompt->provider === AiProvider::OpenAI);
+            && $prompt->provider === Lab::OpenAI);
     }
 
     public function test_queued_image_size_and_quality_are_recorded(): void

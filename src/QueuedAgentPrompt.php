@@ -4,7 +4,7 @@ namespace Laravel\Ai;
 
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Agent;
-use Laravel\Ai\Enums\AiProvider;
+use Laravel\Ai\Enums\Lab;
 
 class QueuedAgentPrompt
 {
@@ -12,7 +12,7 @@ class QueuedAgentPrompt
         public Agent $agent,
         public string $prompt,
         public Collection|array $attachments,
-        public AiProvider|array|string|null $provider,
+        public Lab|array|string|null $provider,
         public ?string $model
     ) {}
 }

@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
-use Laravel\Ai\Enums\AiProvider;
 use Illuminate\Support\Collection;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Prompts\RerankingPrompt;
 use Laravel\Ai\Reranking;
 use Laravel\Ai\Responses\Data\RankedDocument;
@@ -169,7 +169,7 @@ class RerankingFakeTest extends TestCase
     {
         Reranking::fake();
 
-        Reranking::of(['Laravel is great', 'PHP is cool'])->rerank('Laravel', provider: AiProvider::Cohere);
+        Reranking::of(['Laravel is great', 'PHP is cool'])->rerank('Laravel', provider: Lab::Cohere);
 
         Reranking::assertReranked(function (RerankingPrompt $prompt) {
             return $prompt->contains('Laravel');

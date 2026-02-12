@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use Exception;
 use Laravel\Ai\Ai;
-use Laravel\Ai\Enums\AiProvider;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\QueuedAgentPrompt;
 use Laravel\Ai\Responses\Data\Meta;
@@ -162,11 +162,11 @@ class AgentFakeTest extends TestCase
     {
         AssistantAgent::fake();
 
-        (new AssistantAgent)->queue('Enum prompt', provider: AiProvider::OpenAI);
+        (new AssistantAgent)->queue('Enum prompt', provider: Lab::OpenAI);
 
         AssistantAgent::assertQueued(function (QueuedAgentPrompt $prompt) {
             return $prompt->prompt === 'Enum prompt'
-                && $prompt->provider === AiProvider::OpenAI;
+                && $prompt->provider === Lab::OpenAI;
         });
     }
 
@@ -174,7 +174,7 @@ class AgentFakeTest extends TestCase
     {
         AssistantAgent::fake();
 
-        (new AssistantAgent)->prompt('Enum prompt', provider: AiProvider::ANTHROPIC);
+        (new AssistantAgent)->prompt('Enum prompt', provider: Lab::Anthropic);
 
         AssistantAgent::assertPrompted(function (AgentPrompt $prompt) {
             return $prompt->prompt === 'Enum prompt';
@@ -185,7 +185,7 @@ class AgentFakeTest extends TestCase
     {
         AssistantAgent::fake();
 
-        $response = (new AssistantAgent)->stream('Enum stream', provider: AiProvider::Gemini);
+        $response = (new AssistantAgent)->stream('Enum stream', provider: Lab::Gemini);
         $response->each(fn () => true);
 
         AssistantAgent::assertPrompted(function (AgentPrompt $prompt) {

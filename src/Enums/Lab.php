@@ -2,7 +2,7 @@
 
 namespace Laravel\Ai\Enums;
 
-enum AiProvider: string
+enum Lab: string
 {
     case Anthropic = 'anthropic';
     case Cohere = 'cohere';

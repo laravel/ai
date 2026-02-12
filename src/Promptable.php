@@ -11,7 +11,7 @@ use Laravel\Ai\Attributes\Provider as ProviderAttribute;
 use Laravel\Ai\Attributes\Timeout as TimeoutAttribute;
 use Laravel\Ai\Attributes\UseCheapestModel;
 use Laravel\Ai\Attributes\UseSmartestModel;
-use Laravel\Ai\Enums\AiProvider;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Gateway\FakeTextGateway;
@@ -47,7 +47,7 @@ trait Promptable
     public function prompt(
         string $prompt,
         array $attachments = [],
-        AiProvider|array|string|null $provider = null,
+        Lab|array|string|null $provider = null,
         ?string $model = null,
         ?int $timeout = null): AgentResponse
     {
@@ -66,7 +66,7 @@ trait Promptable
     public function stream(
         string $prompt,
         array $attachments = [],
-        AiProvider|array|string|null $provider = null,
+        Lab|array|string|null $provider = null,
         ?string $model = null,
         ?int $timeout = null): StreamableAgentResponse
     {
@@ -82,7 +82,7 @@ trait Promptable
     /**
      * Invoke the agent in a queued job.
      */
-    public function queue(string $prompt, array $attachments = [], AiProvider|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
+    public function queue(string $prompt, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
     {
         if (static::isFaked()) {
             Ai::recordPrompt(
@@ -100,7 +100,7 @@ trait Promptable
     /**
      * Invoke the agent with a given prompt and broadcast the streamed events.
      */
-    public function broadcast(string $prompt, Channel|array $channels, array $attachments = [], bool $now = false, AiProvider|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
+    public function broadcast(string $prompt, Channel|array $channels, array $attachments = [], bool $now = false, Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
     {
         return $this->stream($prompt, $attachments, $provider, $model)
             ->each(function (StreamEvent $event) use ($channels, $now) {
@@ -111,7 +111,7 @@ trait Promptable
     /**
      * Invoke the agent with a given prompt and broadcast the streamed events immediately.
      */
-    public function broadcastNow(string $prompt, Channel|array $channels, array $attachments = [], AiProvider|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
+    public function broadcastNow(string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
     {
         return $this->broadcast($prompt, $channels, $attachments, now: true, provider: $provider, model: $model);
     }
@@ -119,7 +119,7 @@ trait Promptable
     /**
      * Invoke the agent with a given prompt and broadcast the streamed events.
      */
-    public function broadcastOnQueue(string $prompt, Channel|array $channels, array $attachments = [], AiProvider|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
+    public function broadcastOnQueue(string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
     {
         if (static::isFaked()) {
             Ai::recordPrompt(
@@ -137,7 +137,7 @@ trait Promptable
     /**
      * Invoke the given Closure with provider / model failover.
      */
-    private function withModelFailover(Closure $callback, AiProvider|array|string|null $provider, ?string $model): mixed
+    private function withModelFailover(Closure $callback, Lab|array|string|null $provider, ?string $model): mixed
     {
         $providers = $this->getProvidersAndModels($provider, $model);
 
@@ -161,7 +161,7 @@ trait Promptable
     /**
      * Get the providers and models array given the given initial provider and model values.
      */
-    protected function getProvidersAndModels(AiProvider|array|string|null $provider, ?string $model): array
+    protected function getProvidersAndModels(Lab|array|string|null $provider, ?string $model): array
     {
         if (is_null($provider)) {
             if (method_exists($this, 'provider')) {

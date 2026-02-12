@@ -4,7 +4,7 @@ namespace Laravel\Ai\PendingResponses;
 
 use Illuminate\Support\Traits\Conditionable;
 use Laravel\Ai\Ai;
-use Laravel\Ai\Enums\AiProvider;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Providers\Provider;
@@ -38,7 +38,7 @@ class PendingReranking
     /**
      * Rerank the documents based on their relevance to the query.
      */
-    public function rerank(string $query, AiProvider|array|string|null $provider = null, ?string $model = null): RerankingResponse
+    public function rerank(string $query, Lab|array|string|null $provider = null, ?string $model = null): RerankingResponse
     {
         $providers = Provider::formatProviderAndModelList(
             $provider ?? config('ai.default_for_reranking'), $model

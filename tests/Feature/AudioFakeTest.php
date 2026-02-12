@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use Exception;
 use Laravel\Ai\Audio;
-use Laravel\Ai\Enums\AiProvider;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Prompts\AudioPrompt;
 use Laravel\Ai\Prompts\QueuedAudioPrompt;
 use Laravel\Ai\Responses\AudioResponse;
@@ -133,7 +133,7 @@ class AudioFakeTest extends TestCase
     {
         Audio::fake();
 
-        Audio::of('Enum audio')->generate(provider: AiProvider::OpenAI);
+        Audio::of('Enum audio')->generate(provider: Lab::OpenAI);
 
         Audio::assertGenerated(fn (AudioPrompt $prompt) => $prompt->text === 'Enum audio');
     }
@@ -142,10 +142,10 @@ class AudioFakeTest extends TestCase
     {
         Audio::fake();
 
-        Audio::of('Queued enum audio')->queue(provider: AiProvider::ElevenLabs);
+        Audio::of('Queued enum audio')->queue(provider: Lab::ElevenLabs);
 
         Audio::assertQueued(fn (QueuedAudioPrompt $prompt) => $prompt->text === 'Queued enum audio'
-            && $prompt->provider === AiProvider::ElevenLabs);
+            && $prompt->provider === Lab::ElevenLabs);
     }
 
     public function test_queued_audio_voice_and_instructions_are_recorded(): void

@@ -5,7 +5,7 @@ namespace Tests\Feature;
 use Illuminate\Support\Facades\Event;
 use Laravel\Ai\Audio;
 use Laravel\Ai\Embeddings;
-use Laravel\Ai\Enums\AiProvider;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\AgentStreamed;
 use Laravel\Ai\Events\EmbeddingsGenerated;
@@ -25,7 +25,7 @@ class AiProviderEnumIntegrationTest extends TestCase
 
         $response = (new AssistantAgent)->prompt(
             'What is the name of the PHP framework created by Taylor Otwell?',
-            provider: AiProvider::Groq,
+            provider: Lab::Groq,
             model: 'openai/gpt-oss-20b',
         );
 
@@ -41,7 +41,7 @@ class AiProviderEnumIntegrationTest extends TestCase
 
         $response = (new AssistantAgent)->stream(
             'What is the name of the PHP framework created by Taylor Otwell?',
-            provider: AiProvider::Groq,
+            provider: Lab::Groq,
             model: 'openai/gpt-oss-20b',
         );
 
@@ -63,7 +63,7 @@ class AiProviderEnumIntegrationTest extends TestCase
     {
         (new AssistantAgent)->queue(
             'What is the name of the PHP framework created by Taylor Otwell?',
-            provider: AiProvider::Groq,
+            provider: Lab::Groq,
             model: 'openai/gpt-oss-20b',
         )->then(function (AgentResponse $response) {
             $_ENV['__testing.enum_queue_response'] = $response;
@@ -80,7 +80,7 @@ class AiProviderEnumIntegrationTest extends TestCase
     {
         $response = (new AssistantAgent)->prompt(
             'What is the name of the PHP framework created by Taylor Otwell?',
-            provider: [AiProvider::Groq],
+            provider: [Lab::Groq],
             model: 'openai/gpt-oss-20b',
         );
 
@@ -93,7 +93,7 @@ class AiProviderEnumIntegrationTest extends TestCase
         Event::fake();
 
         $response = Embeddings::for(['I love to watch Star Trek.'])
-            ->generate(provider: AiProvider::OpenAI);
+            ->generate(provider: Lab::OpenAI);
 
         $this->assertInstanceOf(EmbeddingsResponse::class, $response);
         $this->assertTrue(count($response->embeddings[0]) === 1536);
@@ -106,7 +106,7 @@ class AiProviderEnumIntegrationTest extends TestCase
     public function test_audio_generate_accepts_ai_provider_enum(): void
     {
         $response = Audio::of('Hello there! How are you today?')
-            ->generate(provider: AiProvider::OpenAI);
+            ->generate(provider: Lab::OpenAI);
 
         $this->assertEquals('openai', $response->meta->provider);
     }
@@ -116,7 +116,7 @@ class AiProviderEnumIntegrationTest extends TestCase
         $audio = Audio::of('Hello there! How are you today?')->generate();
 
         $transcription = Transcription::of($audio->audio)
-            ->generate(provider: AiProvider::OpenAI);
+            ->generate(provider: Lab::OpenAI);
 
         $this->assertTrue(str_contains(strtolower((string) $transcription), 'how are you today'));
     }

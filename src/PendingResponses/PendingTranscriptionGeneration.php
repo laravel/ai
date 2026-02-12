@@ -5,7 +5,7 @@ namespace Laravel\Ai\PendingResponses;
 use Illuminate\Support\Traits\Conditionable;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
-use Laravel\Ai\Enums\AiProvider;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\FakePendingDispatch;
@@ -53,7 +53,7 @@ class PendingTranscriptionGeneration
     /**
      * Generate the transcription.
      */
-    public function generate(AiProvider|array|string|null $provider = null, ?string $model = null): TranscriptionResponse
+    public function generate(Lab|array|string|null $provider = null, ?string $model = null): TranscriptionResponse
     {
         $providers = Provider::formatProviderAndModelList(
             $provider ?? config('ai.default_for_transcription'), $model
@@ -79,7 +79,7 @@ class PendingTranscriptionGeneration
     /**
      * Queue the generation of the transcription.
      */
-    public function queue(AiProvider|array|string|null $provider = null, ?string $model = null): QueuedTranscriptionResponse
+    public function queue(Lab|array|string|null $provider = null, ?string $model = null): QueuedTranscriptionResponse
     {
         if (! $this->audio instanceof StoredAudio &&
             ! $this->audio instanceof LocalAudio) {
