@@ -276,7 +276,7 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
-     * Create an Eleven Labs powered instance.
+     * Create an ElevenLabs powered instance.
      */
     public function createElevenDriver(array $config): ElevenLabsProvider
     {
@@ -287,7 +287,7 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
-     * Create an Gemini powered instance.
+     * Create a Gemini powered instance.
      */
     public function createGeminiDriver(array $config): GeminiProvider
     {
@@ -299,7 +299,7 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
-     * Create an Groq powered instance.
+     * Create a Groq powered instance.
      */
     public function createGroqDriver(array $config): GroqProvider
     {
