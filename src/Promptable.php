@@ -159,7 +159,7 @@ trait Promptable
     }
 
     /**
-     * Get the providers and models array given the given initial provider and model values.
+     * Get the providers and models array for the given initial provider and model values.
      */
     protected function getProvidersAndModels(Lab|array|string|null $provider, ?string $model): array
     {
