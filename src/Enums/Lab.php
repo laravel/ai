@@ -16,5 +16,5 @@ enum Lab: string
     case OpenAI = 'openai';
     case OpenRouter = 'openrouter';
     case VoyageAI = 'voyageai';
-    case XAI = 'xai';
+    case xAI = 'xai';
 }
