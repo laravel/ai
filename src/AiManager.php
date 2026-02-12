@@ -15,6 +15,7 @@ use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Gateway\Prism\PrismGateway;
 use Laravel\Ai\Providers\AnthropicProvider;
+use Laravel\Ai\Providers\AzureOpenAiProvider;
 use Laravel\Ai\Providers\CohereProvider;
 use Laravel\Ai\Providers\DeepSeekProvider;
 use Laravel\Ai\Providers\ElevenLabsProvider;
@@ -246,6 +247,18 @@ class AiManager extends MultipleInstanceManager
     public function createAnthropicDriver(array $config): AnthropicProvider
     {
         return new AnthropicProvider(
+            new PrismGateway($this->app['events']),
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create an Azure OpenAI powered instance.
+     */
+    public function createAzureDriver(array $config): AzureOpenAiProvider
+    {
+        return new AzureOpenAiProvider(
             new PrismGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)
