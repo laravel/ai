@@ -67,4 +67,12 @@ abstract class Provider
                 : [($key instanceof Lab ? $key->value : $key) => $value];
         })->all();
     }
+    
+    /**
+     * Convert the provider to its string representation.
+     */
+    public function __toString(): string
+    {
+        return $this->driver();
+    }
 }

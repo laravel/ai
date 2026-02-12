@@ -200,6 +200,27 @@ class AgentFakeTest extends TestCase
         AssistantAgent::assertNeverQueued();
     }
 
+    public function test_assert_queued_does_not_throw_undefined_key_when_agent_was_never_queued()
+    {
+        AssistantAgent::fake();
+
+        // Should fail the assertion gracefully, not throw an undefined array key error.
+        try {
+            AssistantAgent::assertQueued('Some prompt');
+            $this->fail('Expected assertion to fail.');
+        } catch (\PHPUnit\Framework\AssertionFailedError $e) {
+            $this->assertStringContainsString('An expected queued prompt was not received.', $e->getMessage());
+        }
+    }
+
+    public function test_assert_not_queued_does_not_throw_undefined_key_when_agent_was_never_queued()
+    {
+        AssistantAgent::fake();
+
+        // Should pass gracefully since the agent was never queued.
+        AssistantAgent::assertNotQueued('Some prompt');
+    }
+
     public function test_fake_closures_can_throw_exceptions()
     {
         $this->expectException(Exception::class);

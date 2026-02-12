@@ -16,6 +16,7 @@ use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Prism\PrismGateway;
 use Laravel\Ai\Providers\AnthropicProvider;
+use Laravel\Ai\Providers\AzureOpenAiProvider;
 use Laravel\Ai\Providers\CohereProvider;
 use Laravel\Ai\Providers\DeepSeekProvider;
 use Laravel\Ai\Providers\ElevenLabsProvider;
@@ -254,6 +255,18 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
+     * Create an Azure OpenAI powered instance.
+     */
+    public function createAzureDriver(array $config): AzureOpenAiProvider
+    {
+        return new AzureOpenAiProvider(
+            new PrismGateway($this->app['events']),
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
      * Create a Cohere powered instance.
      */
     public function createCohereDriver(array $config): CohereProvider
@@ -277,7 +290,7 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
-     * Create an Eleven Labs powered instance.
+     * Create an ElevenLabs powered instance.
      */
     public function createElevenDriver(array $config): ElevenLabsProvider
     {
@@ -288,7 +301,7 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
-     * Create an Gemini powered instance.
+     * Create a Gemini powered instance.
      */
     public function createGeminiDriver(array $config): GeminiProvider
     {
@@ -300,7 +313,7 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
-     * Create an Groq powered instance.
+     * Create a Groq powered instance.
      */
     public function createGroqDriver(array $config): GroqProvider
     {
