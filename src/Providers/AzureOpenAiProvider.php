@@ -12,11 +12,10 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, TextPro
     use Concerns\HasEmbeddingGateway;
     use Concerns\HasTextGateway;
     use Concerns\StreamsText;
-    
 
     /**
      * Get the credentials for the AI provider.
-     * 
+     *
      * Azure OpenAI uses API key authentication via the `api-key` header.
      */
     public function providerCredentials(): array
@@ -24,28 +23,6 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, TextPro
         return [
             'key' => $this->config['key'],
         ];
-    }
-
-    /**
-     * Get the provider connection configuration other than the driver, key, and name.
-     */
-    public function additionalConfiguration(): array
-    {
-        return array_filter([
-            'url' => $this->buildAzureBaseUrl(),
-            'api_version' => $this->config['api_version'] ?? '2024-10-21',
-        ]);
-    }
-
-    /**
-     * Build the Azure OpenAI base URL.
-     */
-    protected function buildAzureBaseUrl(): string
-    {
-        $endpoint = rtrim($this->config['endpoint'] ?? '', '/');
-        
-        // Use OpenAI-compatible endpoint format
-        return "{$endpoint}/openai/v1";
     }
 
     /**
@@ -86,5 +63,26 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, TextPro
     public function defaultEmbeddingsDimensions(): int
     {
         return 1536;
+    }
+
+    /**
+     * Get the provider connection configuration other than the driver, key, and name.
+     */
+    public function additionalConfiguration(): array
+    {
+        return array_filter([
+            'url' => $this->buildAzureBaseUrl(),
+            'api_version' => $this->config['api_version'] ?? '2024-10-21',
+        ]);
+    }
+
+    /**
+     * Build the Azure OpenAI base URL.
+     */
+    protected function buildAzureBaseUrl(): string
+    {
+        $url = rtrim($this->config['url'] ?? '', '/');
+
+        return "{$url}/openai/v1";
     }
 }
