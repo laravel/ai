@@ -105,7 +105,7 @@ trait InteractsWithFakeAgents
         return $this->assertAgentWasPrompted(
             $agent,
             $callback,
-            $this->recordedQueuedPrompts[$agent],
+            $this->recordedQueuedPrompts[$agent] ?? [],
             'An expected queued prompt was not received.'
         );
     }
@@ -141,7 +141,7 @@ trait InteractsWithFakeAgents
         return $this->assertAgentNotPrompted(
             $agent,
             $callback,
-            $this->recordedQueuedPrompts[$agent],
+            $this->recordedQueuedPrompts[$agent] ?? [],
             'An unexpected queued prompt was received.'
         );
     }
