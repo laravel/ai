@@ -55,19 +55,16 @@ return [
         'anthropic' => [
             'driver' => 'anthropic',
             'key' => env('ANTHROPIC_API_KEY'),
-            'url' => env('ANTHROPIC_BASE_URL'),
         ],
 
         'cohere' => [
             'driver' => 'cohere',
             'key' => env('COHERE_API_KEY'),
-            'url' => env('COHERE_BASE_URL'),
         ],
 
         'deepseek' => [
             'driver' => 'deepseek',
             'key' => env('DEEPSEEK_API_KEY'),
-            'url' => env('DEEPSEEK_BASE_URL'),
         ],
 
         'eleven' => [
@@ -78,13 +75,11 @@ return [
         'gemini' => [
             'driver' => 'gemini',
             'key' => env('GEMINI_API_KEY'),
-            'url' => env('GEMINI_BASE_URL'),
         ],
 
         'groq' => [
             'driver' => 'groq',
             'key' => env('GROQ_API_KEY'),
-            'url' => env('GROQ_BASE_URL'),
         ],
 
         'jina' => [
@@ -95,19 +90,16 @@ return [
         'openai' => [
             'driver' => 'openai',
             'key' => env('OPENAI_API_KEY'),
-            'url' => env('OPENAI_BASE_URL'),
         ],
 
         'openrouter' => [
             'driver' => 'openrouter',
             'key' => env('OPENROUTER_API_KEY'),
-            'url' => env('OPENROUTER_BASE_URL'),
         ],
 
         'xai' => [
             'driver' => 'xai',
             'key' => env('XAI_API_KEY'),
-            'url' => env('XAI_BASE_URL'),
         ],
     ],
 

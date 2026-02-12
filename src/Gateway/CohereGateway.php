@@ -81,9 +81,8 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway
     protected function client(EmbeddingProvider|RerankingProvider $provider): PendingRequest
     {
         $config = $provider->additionalConfiguration();
-        $baseUrl = $config['url'] ?? 'https://api.cohere.com/v2';
 
-        return Http::baseUrl($baseUrl)
+        return Http::baseUrl($config['url'] ?? 'https://api.cohere.com/v2')
             ->withHeaders([
                 'Authorization' => 'Bearer '.$provider->providerCredentials()['key'],
                 'Content-Type' => 'application/json',
