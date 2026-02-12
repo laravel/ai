@@ -5,6 +5,7 @@ namespace Laravel\Ai\Enums;
 enum Lab: string
 {
     case Anthropic = 'anthropic';
+    case Azure = 'azure';
     case Cohere = 'cohere';
     case DeepSeek = 'deepseek';
     case ElevenLabs = 'eleven';
