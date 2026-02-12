@@ -6,7 +6,6 @@ use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasStructuredOutput;
-use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Events\AgentStreamed;
 use Laravel\Ai\Events\StreamingAgent;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -58,9 +57,9 @@ trait StreamsText
                             $invocationId,
                             $this,
                             $prompt->model,
-                            (string) $agent->instructions(),
+                            $prompt->instructions ?? (string) $agent->instructions(),
                             $messages,
-                            $agent instanceof HasTools ? $agent->tools() : [],
+                            $prompt->tools,
                             null,
                             TextGenerationOptions::forAgent($agent),
                             $prompt->timeout,

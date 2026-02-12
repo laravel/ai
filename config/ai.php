@@ -117,4 +117,23 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | AI Skills
+    |--------------------------------------------------------------------------
+    |
+    | Below you may configure your AI skills. Skills are atomic units of
+    | functionality that can be used by AI agents to perform tasks.
+    |
+    | Supported Modes: "none", "lite", "full"
+    |
+    */
+
+    'skills' => [
+        'default_mode' => 'lite',
+        'paths' => [
+            resource_path('skills'),
+        ],
+    ],
+
 ];

@@ -8,8 +8,12 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Stringable;
 use Laravel\Ai\Console\Commands\ChatCommand;
 use Laravel\Ai\Console\Commands\MakeAgentCommand;
+use Laravel\Ai\Console\Commands\MakeSkillCommand;
 use Laravel\Ai\Console\Commands\MakeToolCommand;
+use Laravel\Ai\Console\Commands\SkillsListCommand;
 use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Skills\SkillDiscovery;
+use Laravel\Ai\Skills\SkillRegistry;
 use Laravel\Ai\Storage\DatabaseConversationStore;
 
 class AiServiceProvider extends ServiceProvider
@@ -23,6 +27,16 @@ class AiServiceProvider extends ServiceProvider
     {
         $this->app->scoped(AiManager::class, fn ($app): AiManager => new AiManager($app));
         $this->app->singleton(ConversationStore::class, DatabaseConversationStore::class);
+
+        $this->app->scoped(SkillDiscovery::class, function ($app) {
+            return new SkillDiscovery(
+                config('ai.skills.paths', [resource_path('skills')])
+            );
+        });
+
+        $this->app->scoped(SkillRegistry::class, function ($app) {
+            return new SkillRegistry($app->make(SkillDiscovery::class));
+        });
 
         $this->mergeConfigFrom(__DIR__.'/../config/ai.php', 'ai');
     }
@@ -93,7 +107,9 @@ class AiServiceProvider extends ServiceProvider
         $this->commands([
             // ChatCommand::class,
             MakeAgentCommand::class,
+            MakeSkillCommand::class,
             MakeToolCommand::class,
+            SkillsListCommand::class,
         ]);
     }
 
@@ -110,6 +126,7 @@ class AiServiceProvider extends ServiceProvider
             __DIR__.'/../stubs/agent.stub' => base_path('stubs/agent.stub'),
             __DIR__.'/../stubs/structured-agent.stub' => base_path('stubs/structured-agent.stub'),
             __DIR__.'/../stubs/tool.stub' => base_path('stubs/tool.stub'),
+            __DIR__.'/../stubs/skill.stub' => base_path('stubs/skill.stub'),
         ], 'ai-stubs');
 
         $this->publishesMigrations([

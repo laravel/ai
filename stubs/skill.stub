@@ -1,0 +1,8 @@
+---
+name: {{ name }}
+description: A skill for {{ slug }}.
+---
+
+# {{ name }}
+
+Write the skill instructions here.
