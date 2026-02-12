@@ -32,7 +32,7 @@ class RememberConversation
             if (! $agent->currentConversation()) {
                 $conversationId = $this->store->storeConversation(
                     $agent->conversationParticipant()?->id,
-                    $this->generateTitle($prompt->prompt)
+                    $this->generateTitle($prompt->prompt, $agent)
                 );
 
                 $agent->continue(
@@ -66,13 +66,17 @@ class RememberConversation
     /**
      * Generate a title for the conversation.
      */
-    protected function generateTitle(string $prompt): string
+    protected function generateTitle(string $prompt, $agent): string
     {
+        $titlePrompt = method_exists($agent, 'conversationTitlePrompt')
+            ? $agent->conversationTitlePrompt()
+            : 'Generate a concise 3-5 word title for a conversation that starts with the following message. Respond with only the title, no quotes or punctuation.';
+
         try {
             $response = $this->provider->textGateway()->generateText(
                 $this->provider,
                 $this->provider->cheapestTextModel(),
-                'Generate a concise 3-5 word title for a conversation that starts with the following message. Respond with only the title, no quotes or punctuation.',
+                $titlePrompt,
                 [new UserMessage(Str::limit($prompt, 500))],
             );
 

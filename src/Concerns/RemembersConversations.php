@@ -69,6 +69,14 @@ trait RemembersConversations
     }
 
     /**
+     * Get the prompt used to generate conversation titles.
+     */
+    public function conversationTitlePrompt(): string
+    {
+        return 'Generate a concise 3-5 word title for a conversation that starts with the following message. Respond with only the title, no quotes or punctuation.';
+    }
+
+    /**
      * Get the UUID for the current conversation, if applicable.
      */
     public function currentConversation(): ?string
