@@ -62,4 +62,12 @@ abstract class Provider
                 : [$key => $value]; // Provider name and model name...
         })->all();
     }
+    
+    /**
+     * Convert the provider to its string representation.
+     */
+    public function __toString(): string
+    {
+        return $this->driver();
+    }
 }
