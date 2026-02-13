@@ -115,6 +115,11 @@ return [
             'key' => env('OPENROUTER_API_KEY'),
         ],
 
+        'replicate' => [
+            'driver' => 'replicate',
+            'key' => env('REPLICATE_API_TOKEN'),
+        ],
+
         'voyageai' => [
             'driver' => 'voyageai',
             'key' => env('VOYAGEAI_API_KEY'),

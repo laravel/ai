@@ -28,6 +28,7 @@ use Laravel\Ai\Providers\OllamaProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Providers\OpenRouterProvider;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Providers\ReplicateProvider;
 use Laravel\Ai\Providers\VoyageAiProvider;
 use Laravel\Ai\Providers\XaiProvider;
 use LogicException;
@@ -378,6 +379,17 @@ class AiManager extends MultipleInstanceManager
     {
         return new OpenRouterProvider(
             new PrismGateway($this->app['events']),
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create a Replicate powered instance.
+     */
+    public function createReplicateDriver(array $config): ReplicateProvider
+    {
+        return new ReplicateProvider(
             $config,
             $this->app->make(Dispatcher::class)
         );
