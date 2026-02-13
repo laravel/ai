@@ -3,8 +3,6 @@
 namespace Laravel\Ai\Streaming\Events;
 
 use Illuminate\Broadcasting\Channel;
-use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Broadcast;
 
 abstract class StreamEvent
