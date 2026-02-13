@@ -34,6 +34,7 @@ use Laravel\Ai\Responses\TranscriptionResponse;
 use Prism\Prism\Enums\Provider as PrismProvider;
 use Prism\Prism\Exceptions\PrismException as PrismVendorException;
 use Prism\Prism\Facades\Prism;
+use Prism\Prism\PrismManager;
 use Prism\Prism\ValueObjects\Media\Audio;
 use Prism\Prism\ValueObjects\Media\Image as PrismImage;
 

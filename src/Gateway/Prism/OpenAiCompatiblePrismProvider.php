@@ -25,7 +25,7 @@ class OpenAiCompatiblePrismProvider extends Groq
         }
 
         $manager->extend('openai-compatible', function ($app, array $config) {
-            return new static(
+            return new OpenAiCompatiblePrismProvider(
                 apiKey: $config['api_key'] ?? '',
                 url: $config['url'] ?? 'https://api.groq.com/openai/v1',
             );
