@@ -17,9 +17,7 @@ abstract class StreamEvent
     public function broadcast(Channel|array $channels, bool $now = false): void
     {
         foreach (Arr::wrap($channels) as $channel) {
-            $event = $channel instanceof PrivateChannel
-                ? Broadcast::private((string) $channel)
-                : Broadcast::on((string) $channel);
+            $event = Broadcast::on((string) $channel);
 
             $event->as($this->type())
                 ->with($this->toArray())
