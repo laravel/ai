@@ -94,6 +94,11 @@ return [
             'key' => env('JINA_API_KEY'),
         ],
 
+        'murf' => [
+            'driver' => 'murf',
+            'key' => env('MURF_API_KEY'),
+        ],
+
         'mistral' => [
             'driver' => 'mistral',
             'key' => env('MISTRAL_API_KEY'),
