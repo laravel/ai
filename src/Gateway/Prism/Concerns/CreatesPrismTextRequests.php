@@ -71,8 +71,8 @@ trait CreatesPrismTextRequests
                     'thinking' => $thinking ? array_filter([
                         'enabled' => $thinking['enabled'],
                         'budgetTokens' => $thinking['budgetTokens'],
-                    ]) : null,
-                ]))
+                    ], fn ($value) => $value !== null) : null,
+                ], fn ($value) => $value !== null))
                 ->withMaxTokens($options?->maxTokens ?? 64_000);
         }
 
@@ -80,13 +80,17 @@ trait CreatesPrismTextRequests
             $request = $request->withProviderOptions(array_filter([
                 'thinkingBudget' => $thinking['budgetTokens'],
                 'thinkingLevel' => $thinking['effort'],
-            ]));
+            ], fn ($value) => $value !== null));
         }
 
         if ($thinking && $provider instanceof OpenAiProvider) {
-            $request = $request->withProviderOptions(array_filter([
-                'reasoning' => $thinking['effort'] ? ['effort' => $thinking['effort']] : null,
-            ]));
+            $providerOptions = $request->providerOptions() ?? [];
+
+            if ($thinking['effort']) {
+                $providerOptions['reasoning'] = ['effort' => $thinking['effort']];
+            }
+
+            $request = $request->withProviderOptions($providerOptions);
         }
 
         if ($thinking && $provider instanceof XaiProvider) {
