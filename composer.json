@@ -28,6 +28,9 @@
         "mockery/mockery": "^1.6.12",
         "orchestra/testbench": "^10.6"
     },
+    "suggest": {
+        "prism-php/relay": "Adds MCP tool calling support through Prism Relay (remote HTTP and local STDIO servers)."
+    },
     "minimum-stability": "dev",
     "prefer-stable": true,
     "autoload": {

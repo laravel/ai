@@ -13,13 +13,15 @@ use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\FileSearch;
+use Laravel\Ai\Providers\Tools\McpServer;
 use Laravel\Ai\Providers\Tools\ProviderTool;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Laravel\Ai\Tools\Request as ToolRequest;
+use Prism\Prism\Tool as PrismToolDefinition;
 use Prism\Prism\Enums\ToolChoice;
-use Prism\Prism\Facades\Prism;
 use Prism\Prism\ValueObjects\ProviderTool as PrismProviderTool;
+use Prism\Relay\RelayFactory;
 use RuntimeException;
 
 trait AddsToolsToPrismRequests
@@ -29,16 +31,46 @@ trait AddsToolsToPrismRequests
      */
     protected function addTools($request, array $tools, ?TextGenerationOptions $options = null)
     {
+        $resolvedTools = $this->resolvePrismTools($tools);
+        $defaultMaxSteps = round(max(count($tools), count($resolvedTools)) * 1.5);
+
         return $request
-            ->withTools(
-                (new Collection($tools))->map(function ($tool) {
-                    return ! $tool instanceof ProviderTool ? $this->createPrismTool($tool) : null;
-                })->filter()->values()->all()
-            )
+            ->withTools($resolvedTools)
             ->withToolChoice(ToolChoice::Auto)
             ->withMaxSteps(
-                $options?->maxSteps ?? round(count($tools) * 1.5)
+                $options?->maxSteps ?? $defaultMaxSteps
             );
+    }
+
+    /**
+     * Resolve the given tools into Prism tool definitions.
+     *
+     * @return array<int, PrismToolDefinition>
+     */
+    protected function resolvePrismTools(array $tools): array
+    {
+        return (new Collection($tools))->map(function ($tool) {
+            return match (true) {
+                $tool instanceof McpServer => $this->resolveRelayTools($tool),
+                $tool instanceof ProviderTool => null,
+                $tool instanceof PrismToolDefinition => [$tool],
+                default => [$this->createPrismTool($tool)],
+            };
+        })->filter()->flatten(1)->values()->all();
+    }
+
+    /**
+     * Resolve Prism tools from a configured MCP server.
+     *
+     * @return array<int, PrismToolDefinition>
+     */
+    protected function resolveRelayTools(McpServer $server): array
+    {
+        if (! class_exists(RelayFactory::class)) {
+            throw new RuntimeException('MCP tools require the optional "prism-php/relay" package. Install it via: composer require prism-php/relay');
+        }
+
+        return (new RelayFactory)->tools($server->name, $server->config);
     }
 
     /**
