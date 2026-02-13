@@ -412,7 +412,7 @@ class AiManager extends MultipleInstanceManager
      *
      * @return string
      */
-    public function getDefaultInstance()
+    public function getDefaultInstance(): string
     {
         $default = $this->app['config']['ai.default'];
 
@@ -425,7 +425,7 @@ class AiManager extends MultipleInstanceManager
      * @param  string  $name
      * @return void
      */
-    public function setDefaultInstance($name)
+    public function setDefaultInstance($name): void
     {
         $this->app['config']['ai.default'] = $name;
     }
@@ -436,7 +436,7 @@ class AiManager extends MultipleInstanceManager
      * @param  string  $name
      * @return array
      */
-    public function getInstanceConfig($name)
+    public function getInstanceConfig($name): array
     {
         $config = $this->app['config']->get(
             'ai.providers.'.$name, ['driver' => $name],

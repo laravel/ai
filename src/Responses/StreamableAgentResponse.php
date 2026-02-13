@@ -4,6 +4,7 @@ namespace Laravel\Ai\Responses;
 
 use Closure;
 use Illuminate\Contracts\Support\Responsable;
+use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Support\Collection;
 use IteratorAggregate;
 use Laravel\Ai\Responses\Data\Meta;
@@ -97,7 +98,7 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
      * @param  \Illuminate\Http\Request  $request
      * @return \Symfony\Component\HttpFoundation\Response
      */
-    public function toResponse($request)
+    public function toResponse($request): Response
     {
         if ($this->usesVercelProtocol) {
             return $this->toVercelProtocolResponse();

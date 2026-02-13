@@ -41,7 +41,7 @@ class BroadcastAgent implements ShouldQueue
      *
      * @return string
      */
-    public function displayName()
+    public function displayName(): string
     {
         return $this->agent::class;
     }
