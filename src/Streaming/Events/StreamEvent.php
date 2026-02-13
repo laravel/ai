@@ -16,13 +16,10 @@ abstract class StreamEvent
      */
     public function broadcast(Channel|array $channels, bool $now = false): void
     {
-        foreach (Arr::wrap($channels) as $channel) {
-            $event = Broadcast::on((string) $channel);
-
-            $event->as($this->type())
-                ->with($this->toArray())
-                ->{$now ? 'sendNow' : 'send'}();
-        }
+        Broadcast::on($channels)
+            ->as($this->type())
+            ->with($this->toArray())
+            ->{$now ? 'sendNow' : 'send'}();
     }
 
     /**
