@@ -5,19 +5,24 @@ namespace Laravel\Ai\Gateway;
 use Closure;
 use Generator;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
+use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
 
-class ReplicateGateway implements TextGateway
+class ReplicateGateway implements ImageGateway, TextGateway
 {
     protected $invokingToolCallback;
 
@@ -207,7 +212,7 @@ class ReplicateGateway implements TextGateway
      * Create a prediction on Replicate.
      */
     protected function createPrediction(
-        TextProvider $provider,
+        TextProvider|ImageProvider $provider,
         string $model,
         array $input,
         bool $sync = true,
@@ -283,7 +288,7 @@ class ReplicateGateway implements TextGateway
     /**
      * Get an HTTP client for the Replicate API.
      */
-    protected function client(TextProvider $provider): PendingRequest
+    protected function client(TextProvider|ImageProvider $provider): PendingRequest
     {
         $config = $provider->additionalConfiguration();
 
@@ -293,6 +298,106 @@ class ReplicateGateway implements TextGateway
                 'Content-Type' => 'application/json',
             ])
             ->throw();
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function generateImage(
+        ImageProvider $provider,
+        string $model,
+        string $prompt,
+        array $attachments = [],
+        ?string $size = null,
+        ?string $quality = null,
+        ?int $timeout = null,
+    ): ImageResponse {
+        if (! empty($attachments)) {
+            throw new InvalidArgumentException('Replicate provider does not support image attachments yet.');
+        }
+
+        $input = array_merge(
+            ['prompt' => $prompt],
+            $provider->defaultImageOptions($size, $quality)
+        );
+
+        $prediction = $this->createPrediction(
+            $provider,
+            $model,
+            $input,
+            sync: true,
+            timeout: $timeout ?? 120
+        );
+
+        if ($prediction['status'] === 'failed') {
+            throw new \RuntimeException(
+                'Replicate prediction failed: '.($prediction['error'] ?? 'Unknown error')
+            );
+        }
+
+        $images = $this->normalizeImageOutput($prediction['output']);
+
+        $usage = new Usage(
+            promptTokens: 0,
+            completionTokens: 0,
+        );
+
+        return new ImageResponse(
+            (new Collection($images))->map(function ($imageUrl) {
+                return new GeneratedImage(
+                    $this->fetchImageAsBase64($imageUrl),
+                    $this->detectMimeType($imageUrl)
+                );
+            }),
+            $usage,
+            new Meta($provider->name(), $model),
+        );
+    }
+
+    /**
+     * Normalize Replicate image output to an array of URLs.
+     */
+    protected function normalizeImageOutput(mixed $output): array
+    {
+        if (is_string($output)) {
+            return [$output];
+        }
+
+        if (is_array($output)) {
+            return array_filter($output, 'is_string');
+        }
+
+        return [];
+    }
+
+    /**
+     * Fetch image from URL and convert to base64.
+     */
+    protected function fetchImageAsBase64(string $url): string
+    {
+        $response = Http::timeout(30)->get($url);
+
+        return base64_encode($response->body());
+    }
+
+    /**
+     * Detect MIME type from image URL or content.
+     */
+    protected function detectMimeType(string $url): string
+    {
+        if (str_ends_with($url, '.png')) {
+            return 'image/png';
+        }
+
+        if (str_ends_with($url, '.jpg') || str_ends_with($url, '.jpeg')) {
+            return 'image/jpeg';
+        }
+
+        if (str_ends_with($url, '.webp')) {
+            return 'image/webp';
+        }
+
+        return 'image/png';
     }
 
     /**
