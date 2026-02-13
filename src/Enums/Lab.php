@@ -13,6 +13,7 @@ enum Lab: string
     case Groq = 'groq';
     case Jina = 'jina';
     case Mistral = 'mistral';
+    case Murf = 'murf';
     case Ollama = 'ollama';
     case OpenAI = 'openai';
     case OpenRouter = 'openrouter';

@@ -24,6 +24,7 @@ use Laravel\Ai\Providers\GeminiProvider;
 use Laravel\Ai\Providers\GroqProvider;
 use Laravel\Ai\Providers\JinaProvider;
 use Laravel\Ai\Providers\MistralProvider;
+use Laravel\Ai\Providers\MurfProvider;
 use Laravel\Ai\Providers\OllamaProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Providers\OpenRouterProvider;
@@ -57,7 +58,7 @@ class AiManager extends MultipleInstanceManager
     {
         return tap($this->instance($name), function ($instance) {
             if (! $instance instanceof AudioProvider) {
-                throw new LogicException('Provider ['.$instance::class.'] does not support audio generation.');
+                throw new LogicException('Provider [' . $instance::class . '] does not support audio generation.');
             }
         });
     }
@@ -81,7 +82,7 @@ class AiManager extends MultipleInstanceManager
     {
         return tap($this->instance($name), function ($instance) {
             if (! $instance instanceof EmbeddingProvider) {
-                throw new LogicException('Provider ['.$instance::class.'] does not support embedding generation.');
+                throw new LogicException('Provider [' . $instance::class . '] does not support embedding generation.');
             }
         });
     }
@@ -105,7 +106,7 @@ class AiManager extends MultipleInstanceManager
     {
         return tap($this->instance($name), function ($instance) {
             if (! $instance instanceof RerankingProvider) {
-                throw new LogicException('Provider ['.$instance::class.'] does not support reranking.');
+                throw new LogicException('Provider [' . $instance::class . '] does not support reranking.');
             }
         });
     }
@@ -129,7 +130,7 @@ class AiManager extends MultipleInstanceManager
     {
         return tap($this->instance($name), function ($instance) {
             if (! $instance instanceof ImageProvider) {
-                throw new LogicException('Provider ['.$instance::class.'] does not support image generation.');
+                throw new LogicException('Provider [' . $instance::class . '] does not support image generation.');
             }
         });
     }
@@ -153,7 +154,7 @@ class AiManager extends MultipleInstanceManager
     {
         return tap($this->instance($name), function ($instance) {
             if (! $instance instanceof TextProvider) {
-                throw new LogicException('Provider ['.$instance::class.'] does not support text generation.');
+                throw new LogicException('Provider [' . $instance::class . '] does not support text generation.');
             }
         });
     }
@@ -177,7 +178,7 @@ class AiManager extends MultipleInstanceManager
     {
         return tap($this->instance($name), function ($instance) {
             if (! $instance instanceof TranscriptionProvider) {
-                throw new LogicException('Provider ['.$instance::class.'] does not support transcription generation.');
+                throw new LogicException('Provider [' . $instance::class . '] does not support transcription generation.');
             }
         });
     }
@@ -201,7 +202,7 @@ class AiManager extends MultipleInstanceManager
     {
         return tap($this->instance($name), function ($instance) {
             if (! $instance instanceof FileProvider) {
-                throw new LogicException('Provider ['.$instance::class.'] does not support file management.');
+                throw new LogicException('Provider [' . $instance::class . '] does not support file management.');
             }
         });
     }
@@ -225,7 +226,7 @@ class AiManager extends MultipleInstanceManager
     {
         return tap($this->instance($name), function ($instance) {
             if (! $instance instanceof StoreProvider) {
-                throw new LogicException('Provider ['.$instance::class.'] does not support store management.');
+                throw new LogicException('Provider [' . $instance::class . '] does not support store management.');
             }
         });
     }
@@ -336,6 +337,17 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
+     * Create a Murf AI powered instance.
+     */
+    public function createMurfDriver(array $config): MurfProvider
+    {
+        return new MurfProvider(
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
      * Create a Mistral AI powered instance.
      */
     public function createMistralDriver(array $config): MistralProvider
@@ -439,7 +451,8 @@ class AiManager extends MultipleInstanceManager
     public function getInstanceConfig($name)
     {
         $config = $this->app['config']->get(
-            'ai.providers.'.$name, ['driver' => $name],
+            'ai.providers.' . $name,
+            ['driver' => $name],
         );
 
         if ($config['driver'] instanceof Lab) {
