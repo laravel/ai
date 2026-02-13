@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway;
 
 use DateInterval;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
@@ -22,8 +23,8 @@ class OpenAiStoreGateway implements StoreGateway
     {
         $response = $this->withRateLimitHandling(
             $provider->name(),
-            fn () => Http::withToken($provider->providerCredentials()['key'])
-                ->get("https://api.openai.com/v1/vector_stores/{$storeId}")
+            fn () => $this->client($provider)
+                ->get("vector_stores/{$storeId}")
                 ->throw()
         );
 
@@ -54,8 +55,8 @@ class OpenAiStoreGateway implements StoreGateway
 
         $response = $this->withRateLimitHandling(
             $provider->name(),
-            fn () => Http::withToken($provider->providerCredentials()['key'])
-                ->post('https://api.openai.com/v1/vector_stores', array_filter([
+            fn () => $this->client($provider)
+                ->post('vector_stores', array_filter([
                     'name' => $name,
                     'description' => $description,
                     'file_ids' => $fileIds?->values()->all(),
@@ -77,8 +78,8 @@ class OpenAiStoreGateway implements StoreGateway
     {
         $response = $this->withRateLimitHandling(
             $provider->name(),
-            fn () => Http::withToken($provider->providerCredentials()['key'])
-                ->post("https://api.openai.com/v1/vector_stores/{$storeId}/files", array_filter([
+            fn () => $this->client($provider)
+                ->post("vector_stores/{$storeId}/files", array_filter([
                     'file_id' => $fileId,
                     'attributes' => ! empty($metadata) ? $metadata : null,
                 ]))
@@ -95,8 +96,8 @@ class OpenAiStoreGateway implements StoreGateway
     {
         $response = $this->withRateLimitHandling(
             $provider->name(),
-            fn () => Http::withToken($provider->providerCredentials()['key'])
-                ->delete("https://api.openai.com/v1/vector_stores/{$storeId}/files/{$documentId}")
+            fn () => $this->client($provider)
+                ->delete("vector_stores/{$storeId}/files/{$documentId}")
                 ->throw()
         );
 
@@ -108,9 +109,12 @@ class OpenAiStoreGateway implements StoreGateway
      */
     public function deleteStore(StoreProvider $provider, string $storeId): bool
     {
-        $response = $this->withRateLimitHandling($provider->name(), fn () => Http::withToken($provider->providerCredentials()['key'])
-            ->delete("https://api.openai.com/v1/vector_stores/{$storeId}")
-            ->throw());
+        $response = $this->withRateLimitHandling(
+            $provider->name(),
+            fn () => $this->client($provider)
+                ->delete("vector_stores/{$storeId}")
+                ->throw()
+        );
 
         return $response->json('deleted', false);
     }
@@ -121,5 +125,14 @@ class OpenAiStoreGateway implements StoreGateway
     protected function intervalToDays(DateInterval $interval): int
     {
         return max(1, (int) Carbon::now()->diff(Carbon::now()->add($interval))->days);
+    }
+
+    /**
+     * Get a configured HTTP client for the given provider.
+     */
+    protected function client(StoreProvider $provider): PendingRequest
+    {
+        return Http::withToken($provider->providerCredentials()['key'])
+            ->baseUrl('https://api.openai.com/v1');
     }
 }
