@@ -36,11 +36,15 @@ class TextGenerationOptions
             maxSteps: ! empty($maxSteps) ? $maxSteps[0]->newInstance()->value : null,
             maxTokens: ! empty($maxTokens) ? $maxTokens[0]->newInstance()->value : null,
             temperature: ! empty($temperature) ? $temperature[0]->newInstance()->value : null,
-            thinking: ! empty($thinking) ? [
-                'enabled' => $thinking[0]->newInstance()->enabled,
-                'budgetTokens' => $thinking[0]->newInstance()->budgetTokens,
-                'effort' => $thinking[0]->newInstance()->effort,
-            ] : null,
+            thinking: ! empty($thinking) ? (function () use ($thinking) {
+                $instance = $thinking[0]->newInstance();
+
+                return [
+                    'enabled' => $instance->enabled,
+                    'budgetTokens' => $instance->budgetTokens,
+                    'effort' => $instance->effort,
+                ];
+            })() : null,
         );
     }
 }
