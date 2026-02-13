@@ -6,8 +6,11 @@ use Laravel\Ai\Contracts\Prompt;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\AnthropicProvider;
+use Laravel\Ai\Providers\GeminiProvider;
+use Laravel\Ai\Providers\OllamaProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Providers\XaiProvider;
 use Prism\Prism\Facades\Prism;
 
 trait CreatesPrismTextRequests
@@ -59,12 +62,43 @@ trait CreatesPrismTextRequests
      */
     protected function withProviderOptions($request, Provider $provider, ?array $schema, ?TextGenerationOptions $options)
     {
+        $thinking = $options?->thinking;
+
         if ($provider instanceof AnthropicProvider) {
             return $request
                 ->withProviderOptions(array_filter([
                     'use_tool_calling' => $schema ? true : null,
+                    'thinking' => $thinking ? array_filter([
+                        'enabled' => $thinking['enabled'],
+                        'budgetTokens' => $thinking['budgetTokens'],
+                    ]) : null,
                 ]))
                 ->withMaxTokens($options?->maxTokens ?? 64_000);
+        }
+
+        if ($thinking && $provider instanceof GeminiProvider) {
+            $request = $request->withProviderOptions(array_filter([
+                'thinkingBudget' => $thinking['budgetTokens'],
+                'thinkingLevel' => $thinking['effort'],
+            ]));
+        }
+
+        if ($thinking && $provider instanceof OpenAiProvider) {
+            $request = $request->withProviderOptions(array_filter([
+                'reasoning' => $thinking['effort'] ? ['effort' => $thinking['effort']] : null,
+            ]));
+        }
+
+        if ($thinking && $provider instanceof XaiProvider) {
+            $request = $request->withProviderOptions([
+                'thinking' => ['enabled' => $thinking['enabled']],
+            ]);
+        }
+
+        if ($thinking && $provider instanceof OllamaProvider) {
+            $request = $request->withProviderOptions([
+                'thinking' => $thinking['enabled'],
+            ]);
         }
 
         if (! is_null($options?->maxTokens)) {

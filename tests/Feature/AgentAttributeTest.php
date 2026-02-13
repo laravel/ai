@@ -6,6 +6,9 @@ use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\Feature\Agents\AttributeAgent;
+use Tests\Feature\Agents\ThinkingAgent;
+use Tests\Feature\Agents\ThinkingFullAgent;
+use Tests\Feature\Agents\ThinkingWithEffortAgent;
 use Tests\TestCase;
 
 class AgentAttributeTest extends TestCase
@@ -26,6 +29,43 @@ class AgentAttributeTest extends TestCase
         $this->assertNull($options->maxSteps);
         $this->assertNull($options->maxTokens);
         $this->assertNull($options->temperature);
+    }
+
+    public function test_thinking_attribute_with_budget_tokens_is_parsed(): void
+    {
+        $options = TextGenerationOptions::forAgent(new ThinkingAgent);
+
+        $this->assertNotNull($options->thinking);
+        $this->assertTrue($options->thinking['enabled']);
+        $this->assertSame(10000, $options->thinking['budgetTokens']);
+        $this->assertNull($options->thinking['effort']);
+    }
+
+    public function test_thinking_attribute_with_effort_is_parsed(): void
+    {
+        $options = TextGenerationOptions::forAgent(new ThinkingWithEffortAgent);
+
+        $this->assertNotNull($options->thinking);
+        $this->assertTrue($options->thinking['enabled']);
+        $this->assertNull($options->thinking['budgetTokens']);
+        $this->assertSame('high', $options->thinking['effort']);
+    }
+
+    public function test_thinking_attribute_with_all_options_is_parsed(): void
+    {
+        $options = TextGenerationOptions::forAgent(new ThinkingFullAgent);
+
+        $this->assertNotNull($options->thinking);
+        $this->assertTrue($options->thinking['enabled']);
+        $this->assertSame(8000, $options->thinking['budgetTokens']);
+        $this->assertSame('medium', $options->thinking['effort']);
+    }
+
+    public function test_thinking_is_null_when_agent_has_no_thinking_attribute(): void
+    {
+        $options = TextGenerationOptions::forAgent(new AssistantAgent);
+
+        $this->assertNull($options->thinking);
     }
 
     public function test_provider_attribute_is_used_when_prompting(): void
