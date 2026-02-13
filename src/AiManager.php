@@ -13,10 +13,12 @@ use Laravel\Ai\Contracts\Providers\RerankingProvider;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\OpenAiCompatibleEmbeddingGateway;
 use Laravel\Ai\Gateway\Prism\OpenAiCompatiblePrismGateway;
 use Laravel\Ai\Gateway\Prism\PrismGateway;
 use Laravel\Ai\Providers\AnthropicProvider;
+use Laravel\Ai\Providers\AzureOpenAiProvider;
 use Laravel\Ai\Providers\CohereProvider;
 use Laravel\Ai\Providers\DeepSeekProvider;
 use Laravel\Ai\Providers\ElevenLabsProvider;
@@ -28,7 +30,6 @@ use Laravel\Ai\Providers\OllamaProvider;
 use Laravel\Ai\Providers\OpenAiCompatibleProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Providers\OpenRouterProvider;
-use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\VoyageAiProvider;
 use Laravel\Ai\Providers\XaiProvider;
 use LogicException;
@@ -256,6 +257,18 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
+     * Create an Azure OpenAI powered instance.
+     */
+    public function createAzureDriver(array $config): AzureOpenAiProvider
+    {
+        return new AzureOpenAiProvider(
+            new PrismGateway($this->app['events']),
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
      * Create a Cohere powered instance.
      */
     public function createCohereDriver(array $config): CohereProvider
@@ -279,7 +292,7 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
-     * Create an Eleven Labs powered instance.
+     * Create an ElevenLabs powered instance.
      */
     public function createElevenDriver(array $config): ElevenLabsProvider
     {
@@ -290,7 +303,7 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
-     * Create an Gemini powered instance.
+     * Create a Gemini powered instance.
      */
     public function createGeminiDriver(array $config): GeminiProvider
     {
@@ -302,7 +315,7 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
-     * Create an Groq powered instance.
+     * Create a Groq powered instance.
      */
     public function createGroqDriver(array $config): GroqProvider
     {
@@ -415,7 +428,9 @@ class AiManager extends MultipleInstanceManager
      */
     public function getDefaultInstance()
     {
-        return $this->app['config']['ai.default'];
+        $default = $this->app['config']['ai.default'];
+
+        return $default instanceof Lab ? $default->value : $default;
     }
 
     /**
@@ -440,6 +455,10 @@ class AiManager extends MultipleInstanceManager
         $config = $this->app['config']->get(
             'ai.providers.'.$name, ['driver' => $name],
         );
+
+        if ($config['driver'] instanceof Lab) {
+            $config['driver'] = $config['driver']->value;
+        }
 
         $config['name'] = $name;
 
