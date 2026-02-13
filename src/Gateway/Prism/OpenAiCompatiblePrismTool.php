@@ -2,34 +2,39 @@
 
 namespace Laravel\Ai\Gateway\Prism;
 
-use Laravel\Ai\ObjectSchema;
-
-class SanitizedObjectSchema extends ObjectSchema
+class OpenAiCompatiblePrismTool extends PrismTool
 {
-    /**
-     * Get the sanitized array representation of the schema.
-     *
-     * Recursively strips `name` and `additionalProperties` fields
-     * that are unsupported by strict OpenAI-compatible endpoints.
-     *
-     * @return array<string, mixed>
-     */
-    public function toSchema(): array
+    /** @var array<string, mixed> */
+    protected array $sanitizedSchema = [];
+
+    /** @param array<string, mixed> $schema */
+    public function withSanitizedSchema(array $schema): self
     {
-        return static::sanitize(parent::toSchema());
+        $this->sanitizedSchema = static::sanitize($schema);
+
+        return $this;
+    }
+
+    public function hasParameters(): bool
+    {
+        return ! empty($this->sanitizedSchema)
+            && ! empty($this->sanitizedSchema['properties'] ?? []);
+    }
+
+    /** @return array<string, array<string, mixed>> */
+    public function parametersAsArray(): array
+    {
+        return $this->sanitizedSchema['properties'] ?? [];
+    }
+
+    /** @return array<int, string> */
+    public function requiredParameters(): array
+    {
+        return $this->sanitizedSchema['required'] ?? [];
     }
 
     /**
-     * {@inheritdoc}
-     */
-    public function toArray(): array
-    {
-        return $this->toSchema();
-    }
-
-    /**
-     * Recursively sanitize the given schema array by stripping
-     * unsupported fields (`name`, `additionalProperties`).
+     * Recursively strip fields unsupported by strict OpenAI-compatible endpoints.
      *
      * @param  array<string|int, mixed>  $schema
      * @return array<string|int, mixed>

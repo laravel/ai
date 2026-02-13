@@ -16,17 +16,10 @@ class OpenAiCompatiblePrismGateway extends PrismGateway
             ? $tool->name()
             : class_basename($tool);
 
-        $schema = $tool->schema(new JsonSchemaTypeFactory);
-
-        return (new PrismTool)
+        return (new OpenAiCompatiblePrismTool)
             ->as($toolName)
             ->for((string) $tool->description())
-            ->when(
-                ! empty($schema),
-                fn ($prismTool) => $prismTool->withParameter(
-                    new SanitizedObjectSchema($schema)
-                )
-            )
+            ->withSanitizedSchema($tool->schema(new JsonSchemaTypeFactory))
             ->using(fn ($arguments) => $this->invokeTool($tool, $arguments))
             ->withoutErrorHandling();
     }

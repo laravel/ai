@@ -10,6 +10,7 @@ use Laravel\Ai\Console\Commands\ChatCommand;
 use Laravel\Ai\Console\Commands\MakeAgentCommand;
 use Laravel\Ai\Console\Commands\MakeToolCommand;
 use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Gateway\Prism\OpenAiCompatiblePrismProvider;
 use Laravel\Ai\Storage\DatabaseConversationStore;
 
 class AiServiceProvider extends ServiceProvider
@@ -34,6 +35,8 @@ class AiServiceProvider extends ServiceProvider
      */
     public function boot()
     {
+        $this->registerOpenAiCompatiblePrismProvider();
+
         if ($this->app->runningInConsole()) {
             $this->registerCommands();
             $this->registerPublishing();
@@ -82,6 +85,25 @@ class AiServiceProvider extends ServiceProvider
             return (new Collection($response->results))->map(
                 fn ($result) => $this->values()[$result->index]
             );
+        });
+    }
+
+    /**
+     * Register the custom Prism provider for OpenAI-compatible endpoints.
+     */
+    protected function registerOpenAiCompatiblePrismProvider(): void
+    {
+        if (! class_exists(\Prism\Prism\PrismManager::class)) {
+            return;
+        }
+
+        $this->app->resolving(\Prism\Prism\PrismManager::class, function ($manager) {
+            $manager->extend('openai-compatible', function ($app, array $config) {
+                return new OpenAiCompatiblePrismProvider(
+                    apiKey: $config['api_key'] ?? '',
+                    url: $config['url'] ?? 'https://api.groq.com/openai/v1',
+                );
+            });
         });
     }
 

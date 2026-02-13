@@ -359,18 +359,18 @@ class PrismGateway implements Gateway
     /**
      * Map the given Laravel AI provider to a Prism provider.
      */
-    protected static function toPrismProvider(Provider $provider): PrismProvider
+    protected static function toPrismProvider(Provider $provider): string|PrismProvider
     {
         return match ($provider->driver()) {
             'anthropic' => PrismProvider::Anthropic,
-            'azure' => PrismProvider::OpenAI, 
+            'azure' => PrismProvider::OpenAI,
             'deepseek' => PrismProvider::DeepSeek,
             'gemini' => PrismProvider::Gemini,
             'groq' => PrismProvider::Groq,
             'mistral' => PrismProvider::Mistral,
             'ollama' => PrismProvider::Ollama,
             'openai' => PrismProvider::OpenAI,
-            'openai-compatible' => PrismProvider::Groq,
+            'openai-compatible' => 'openai-compatible',
             'openrouter' => PrismProvider::OpenRouter,
             'voyageai' => PrismProvider::VoyageAI,
             'xai' => PrismProvider::XAI,
