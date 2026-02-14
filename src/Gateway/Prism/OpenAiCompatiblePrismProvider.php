@@ -11,27 +11,16 @@ use Psr\Http\Message\RequestInterface;
 class OpenAiCompatiblePrismProvider extends Groq
 {
     /**
-     * Whether the provider has been registered with PrismManager.
-     */
-    protected static bool $registered = false;
-
-    /**
      * Register this provider with the given PrismManager instance.
      */
     public static function register(PrismManager $manager): void
     {
-        if (static::$registered) {
-            return;
-        }
-
         $manager->extend('openai-compatible', function ($app, array $config) {
             return new OpenAiCompatiblePrismProvider(
                 apiKey: $config['api_key'] ?? '',
                 url: $config['url'] ?? 'https://api.groq.com/openai/v1',
             );
         });
-
-        static::$registered = true;
     }
 
     /**

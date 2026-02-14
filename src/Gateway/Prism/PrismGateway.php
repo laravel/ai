@@ -371,7 +371,7 @@ class PrismGateway implements Gateway
             'mistral' => PrismProvider::Mistral,
             'ollama' => PrismProvider::Ollama,
             'openai' => PrismProvider::OpenAI,
-            'openai-compatible' => static::registerOpenAiCompatibleProvider(),
+            'openai-compatible' => 'openai-compatible',
             'openrouter' => PrismProvider::OpenRouter,
             'voyageai' => PrismProvider::VoyageAI,
             'xai' => PrismProvider::XAI,
@@ -388,17 +388,5 @@ class PrismGateway implements Gateway
         $this->toolInvokedCallback = $invoked;
 
         return $this;
-    }
-
-    /**
-     * Register the OpenAI-compatible Prism provider and return its identifier.
-     */
-    protected static function registerOpenAiCompatibleProvider(): string
-    {
-        OpenAiCompatiblePrismProvider::register(
-            app(PrismManager::class)
-        );
-
-        return 'openai-compatible';
     }
 }
