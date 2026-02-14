@@ -20,6 +20,8 @@ interface Tool
 
     /**
      * Get the tool's schema definition.
+     *
+     * @return array<string, mixed>
      */
     public function schema(JsonSchema $schema): array;
 }
