@@ -21,9 +21,9 @@ class StreamEnd extends StreamEvent
      */
     public static function combineUsage(Collection|array $events): Usage
     {
-        $events = is_array($events) ? collect($events) : $events;
+        $events = is_array($events) ? new Collection($events) : $events;
 
-        return collect($events)->whereInstanceOf(StreamEnd::class)
+        return (new Collection($events))->whereInstanceOf(StreamEnd::class)
             ->values()
             ->map
             ->usage

@@ -26,7 +26,7 @@ trait CanStreamUsingVercelProtocol
             public ?array $lastStreamEndEvent = null;
         };
 
-        return response()->stream(function () use ($state) {
+        $stream = function () use ($state): iterable {
             $lastStreamEndEvent = null;
 
             foreach ($this as $event) {
@@ -69,6 +69,28 @@ trait CanStreamUsingVercelProtocol
             }
 
             yield "data: [DONE]\n\n";
+        };
+
+        return response()->stream(function () use ($stream): void {
+            $result = $stream();
+
+            if (! is_iterable($result)) {
+                return;
+            }
+
+            foreach ($result as $message) {
+                if (connection_aborted()) {
+                    return;
+                }
+
+                echo (string) $message;
+
+                if (ob_get_level() > 0) {
+                    ob_flush();
+                }
+
+                flush();
+            }
         }, headers: [
             'Cache-Control' => 'no-cache, no-transform',
             'Content-Type' => 'text/event-stream',

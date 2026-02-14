@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway;
 
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\AudioGateway;
@@ -85,7 +86,7 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
 
         return new TranscriptionResponse(
             $response['text'],
-            collect($segments)->map(function ($segment) {
+            (new Collection($segments))->map(function ($segment) {
                 if ($segment['type'] !== 'word') {
                     return;
                 }

@@ -6,6 +6,7 @@ use Illuminate\Broadcasting\Channel;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 
 class BroadcastAgent implements ShouldQueue
@@ -20,7 +21,7 @@ class BroadcastAgent implements ShouldQueue
         public string $prompt,
         public Channel|array $channels,
         public array $attachments = [],
-        public array|string|null $provider = null,
+        public Lab|array|string|null $provider = null,
         public ?string $model = null) {}
 
     /**
@@ -42,6 +43,6 @@ class BroadcastAgent implements ShouldQueue
      */
     public function displayName()
     {
-        return get_class($this->agent);
+        return $this->agent::class;
     }
 }

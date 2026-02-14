@@ -13,7 +13,7 @@ use Laravel\Ai\Responses\TranscriptionResponse;
 trait GeneratesTranscriptions
 {
     /**
-     * Generate audio from the given text.
+     * Transcribe the given audio to text.
      */
     public function transcribe(
         TranscribableAudio $audio,

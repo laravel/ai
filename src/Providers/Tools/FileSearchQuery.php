@@ -51,7 +51,7 @@ class FileSearchQuery
         $this->filters[] = [
             'type' => 'in',
             'key' => $key,
-            'value' => collect($values)->values()->all(),
+            'value' => (new Collection($values))->values()->all(),
         ];
 
         return $this;
@@ -67,7 +67,7 @@ class FileSearchQuery
         $this->filters[] = [
             'type' => 'nin',
             'key' => $key,
-            'value' => collect($values)->values()->all(),
+            'value' => (new Collection($values))->values()->all(),
         ];
 
         return $this;

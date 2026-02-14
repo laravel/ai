@@ -3,7 +3,9 @@
 namespace Laravel\Ai\Providers;
 
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Gateway\Gateway;
+use Laravel\Ai\Enums\Lab;
 
 abstract class Provider
 {
@@ -49,16 +51,28 @@ abstract class Provider
     /**
      * Format the given provider / model list.
      */
-    public static function formatProviderAndModelList(array|string $providers, ?string $model = null): array
+    public static function formatProviderAndModelList(Lab|array|string $providers, ?string $model = null): array
     {
+        if ($providers instanceof Lab) {
+            return [$providers->value => $model];
+        }
+
         if (is_string($providers)) {
             return [$providers => $model];
         }
 
-        return collect($providers)->mapWithKeys(function ($value, $key) {
+        return (new Collection($providers))->mapWithKeys(function ($value, $key) {
             return is_numeric($key)
-                ? [$value => null] // Provider name and default model...
-                : [$key => $value]; // Provider name and model name...
+                ? [($value instanceof Lab ? $value->value : $value) => null]
+                : [($key instanceof Lab ? $key->value : $key) => $value];
         })->all();
+    }
+    
+    /**
+     * Convert the provider to its string representation.
+     */
+    public function __toString(): string
+    {
+        return $this->driver();
     }
 }

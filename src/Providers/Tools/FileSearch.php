@@ -53,7 +53,7 @@ class FileSearch extends ProviderTool
         }
 
         if (is_array($where)) {
-            return collect($where)->map(fn ($value, $key) => [
+            return (new Collection($where))->map(fn ($value, $key) => [
                 'type' => 'eq',
                 'key' => $key,
                 'value' => $value,

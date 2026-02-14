@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Providers;
 
+use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
@@ -45,7 +46,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
             'vector_store_ids' => $search->ids(),
             'filters' => ! empty($search->filters) ? [
                 'type' => 'and',
-                'filters' => collect($search->filters)->map(fn ($filter) => match ($filter['type']) {
+                'filters' => (new Collection($search->filters))->map(fn ($filter) => match ($filter['type']) {
                     default => [
                         'type' => $filter['type'],
                         'key' => $filter['key'],

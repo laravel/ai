@@ -43,7 +43,7 @@ class GeneratedImage implements Arrayable, JsonSerializable
     /**
      * Get the instance as an array.
      */
-    public function toArray()
+    public function toArray(): array
     {
         return [
             'image' => $this->image,
