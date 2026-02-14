@@ -1,10 +1,9 @@
 <?php
 
-namespace Tests\Fixtures\Agents;
+namespace Tests\Feature\Agents;
 
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasProviderOptions;
-use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 
 class ProviderOptionsAgent implements Agent, HasProviderOptions
@@ -16,58 +15,14 @@ class ProviderOptionsAgent implements Agent, HasProviderOptions
         return 'You are a helpful assistant.';
     }
 
-    public function providerOptions(Lab|string $provider): array
+    public function providerOptions(): array
     {
-        $provider = is_string($provider) ? Lab::tryFrom($provider) : $provider;
-
-        return match ($provider) {
-            Lab::OpenAI => [
-                'reasoning' => [
-                    'effort' => 'high',
-                ],
-                'frequency_penalty' => 0.5,
-                'presence_penalty' => 0.3,
+        return [
+            'reasoning' => [
+                'effort' => 'high',
             ],
-            Lab::Anthropic => [
-                'thinking' => [
-                    'type' => 'enabled',
-                    'budget_tokens' => 10000,
-                ],
-            ],
-            Lab::Azure => [
-                'frequency_penalty' => 0.5,
-                'presence_penalty' => 0.3,
-            ],
-            Lab::xAI => [
-                'frequency_penalty' => 0.5,
-                'presence_penalty' => 0.3,
-            ],
-            Lab::Groq => [
-                'frequency_penalty' => 0.5,
-                'presence_penalty' => 0.3,
-            ],
-            Lab::Mistral => [
-                'frequency_penalty' => 0.5,
-                'presence_penalty' => 0.3,
-            ],
-            Lab::Ollama => [
-                'top_k' => 40,
-                'repeat_penalty' => 1.1,
-            ],
-            Lab::OpenRouter => [
-                'frequency_penalty' => 0.5,
-                'presence_penalty' => 0.3,
-            ],
-            Lab::Gemini => [
-                'thinkingConfig' => [
-                    'thinkingBudget' => 10000,
-                ],
-            ],
-            Lab::DeepSeek => [
-                'frequency_penalty' => 0.5,
-                'presence_penalty' => 0.3,
-            ],
-            default => [],
-        };
+            'frequency_penalty' => 0.5,
+            'presence_penalty' => 0.3,
+        ];
     }
 }
