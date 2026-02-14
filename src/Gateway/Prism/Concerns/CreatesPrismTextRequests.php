@@ -60,11 +60,23 @@ trait CreatesPrismTextRequests
     protected function withProviderOptions($request, Provider $provider, ?array $schema, ?TextGenerationOptions $options)
     {
         if ($provider instanceof AnthropicProvider) {
+            $providerOptions = array_filter([
+                'use_tool_calling' => $schema ? true : null,
+            ]);
+
+            // Merge agent provider options (agent options can override defaults)
+            if (! is_null($options?->providerOptions)) {
+                $providerOptions = array_merge($providerOptions, $options->providerOptions);
+            }
+
             return $request
-                ->withProviderOptions(array_filter([
-                    'use_tool_calling' => $schema ? true : null,
-                ]))
+                ->withProviderOptions($providerOptions)
                 ->withMaxTokens($options?->maxTokens ?? 64_000);
+        }
+
+        // For non-Anthropic providers, apply agent provider options if available
+        if (! is_null($options?->providerOptions)) {
+            $request = $request->withProviderOptions($options->providerOptions);
         }
 
         if (! is_null($options?->maxTokens)) {
