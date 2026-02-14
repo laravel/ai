@@ -1,11 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Ai\Files;
 
 use Illuminate\Http\UploadedFile;
+use Laravel\Ai\Concerns\SplitsText;
 
 abstract class Document extends File
 {
+    use SplitsText;
+
     /**
      * Create a new document from a string.
      */
