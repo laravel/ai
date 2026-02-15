@@ -17,6 +17,7 @@ class AgentAttributeTest extends TestCase
         $this->assertSame(10, $options->maxSteps);
         $this->assertSame(4096, $options->maxTokens);
         $this->assertSame(0.7, $options->temperature);
+        $this->assertSame('minimal', $options->reasoningEffort);
     }
 
     public function test_text_generation_options_are_null_when_agent_has_no_attributes(): void
@@ -26,6 +27,7 @@ class AgentAttributeTest extends TestCase
         $this->assertNull($options->maxSteps);
         $this->assertNull($options->maxTokens);
         $this->assertNull($options->temperature);
+        $this->assertNull($options->reasoningEffort);
     }
 
     public function test_provider_attribute_is_used_when_prompting(): void
