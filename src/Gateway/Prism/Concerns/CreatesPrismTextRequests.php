@@ -71,6 +71,12 @@ trait CreatesPrismTextRequests
             $request = $request->withMaxTokens($options->maxTokens);
         }
 
+        if (! is_null($options?->reasoningEffort) && $provider instanceof OpenAiProvider) {
+            $request = $request->withProviderOptions([
+                'reasoning' => ['effort' => $options->reasoningEffort],
+            ]);
+        }
+
         return $request;
     }
 
