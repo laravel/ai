@@ -15,6 +15,7 @@ use Traversable;
 class StreamableAgentResponse implements IteratorAggregate, Responsable
 {
     use Concerns\CanStreamUsingVercelProtocol;
+    use Concerns\CanStreamUsingDataProtocol;
 
     public ?string $text;
 
@@ -27,6 +28,8 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     protected array $thenCallbacks = [];
 
     protected bool $usesVercelProtocol = false;
+
+    protected bool $usesDataProtocol = false;
 
     protected ?StreamedAgentResponse $streamedResponse = null;
 
@@ -92,6 +95,18 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     }
 
     /**
+     * Stream the response using the Vercel AI SDK Data Protocol.
+     *
+     * See: https://sdk.vercel.ai/docs/ai-sdk-ui/stream-protocol#data-protocol
+     */
+    public function usingDataProtocol(bool $value = true): self
+    {
+        $this->usesDataProtocol = $value;
+
+        return $this;
+    }
+
+    /**
      * Create an HTTP response that represents the object.
      *
      * @param  \Illuminate\Http\Request  $request
@@ -101,6 +116,10 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     {
         if ($this->usesVercelProtocol) {
             return $this->toVercelProtocolResponse();
+        }
+
+        if ($this->usesDataProtocol) {
+            return $this->toDataProtocolResponse();
         }
 
         $stream = function (): iterable {
