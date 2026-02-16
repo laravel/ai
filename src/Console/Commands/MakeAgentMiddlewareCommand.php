@@ -28,7 +28,7 @@ class MakeAgentMiddlewareCommand extends GeneratorCommand
      *
      * @var string
      */
-    protected $type = 'Middleware';
+    protected $type = 'Agent Middleware';
 
     /**
      * Get the default namespace for the class.
