@@ -69,6 +69,11 @@ return [
             'key' => env('COHERE_API_KEY'),
         ],
 
+        'deepgram' => [
+            'driver' => 'deepgram',
+            'key' => env('DEEPGRAM_API_KEY'),
+        ],
+
         'deepseek' => [
             'driver' => 'deepseek',
             'key' => env('DEEPSEEK_API_KEY'),

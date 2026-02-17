@@ -18,6 +18,7 @@ use Laravel\Ai\Gateway\Prism\PrismGateway;
 use Laravel\Ai\Providers\AnthropicProvider;
 use Laravel\Ai\Providers\AzureOpenAiProvider;
 use Laravel\Ai\Providers\CohereProvider;
+use Laravel\Ai\Providers\DeepgramProvider;
 use Laravel\Ai\Providers\DeepSeekProvider;
 use Laravel\Ai\Providers\ElevenLabsProvider;
 use Laravel\Ai\Providers\GeminiProvider;
@@ -272,6 +273,17 @@ class AiManager extends MultipleInstanceManager
     public function createCohereDriver(array $config): CohereProvider
     {
         return new CohereProvider(
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create a Deepgram powered instance.
+     */
+    public function createDeepgramDriver(array $config): DeepgramProvider
+    {
+        return new DeepgramProvider(
             $config,
             $this->app->make(Dispatcher::class)
         );
