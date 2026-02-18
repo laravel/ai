@@ -12,6 +12,7 @@ use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Contracts\HasStructuredOutput;
+use Laravel\Ai\Contracts\HasSubAgents;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\AgentPrompted;
@@ -24,6 +25,7 @@ use Laravel\Ai\Middleware\RememberConversation;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StructuredAgentResponse;
+use Laravel\Ai\Tools\SubAgentTool;
 
 use function Laravel\Ai\pipeline;
 
@@ -56,12 +58,20 @@ trait GeneratesText
 
                 $this->listenForToolInvocations($invocationId, $agent);
 
+                $tools = $this->gatherToolsFor(
+                    $agent,
+                    $prompt->provider instanceof \Laravel\Ai\Providers\Provider
+                        ? $prompt->provider->name()
+                        : null,
+                    $prompt->model,
+                );
+
                 $response = $this->textGateway()->generateText(
                     $this,
                     $prompt->model,
                     (string) $agent->instructions(),
                     $messages,
-                    $agent instanceof HasTools ? $agent->tools() : [],
+                    $tools,
                     $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null,
                     TextGenerationOptions::forAgent($agent),
                     $prompt->timeout,
@@ -102,6 +112,24 @@ trait GeneratesText
         return $agent instanceof HasMiddleware
             ? [...$middleware, ...$agent->middleware()]
             : $middleware;
+    }
+
+    /**
+     * Gather the tools for the given agent.
+     */
+    protected function gatherToolsFor(Agent $agent, ?string $provider = null, ?string $model = null): array
+    {
+        $tools = $agent instanceof HasTools
+            ? collect($agent->tools())
+            : collect();
+
+        if ($agent instanceof HasSubAgents) {
+            $tools = $tools->merge(
+                collect($agent->subAgents())->map(fn ($subAgent) => new SubAgentTool($subAgent, $provider, $model))
+            );
+        }
+
+        return $tools->values()->all();
     }
 
     /**
