@@ -58,7 +58,7 @@ class AnthropicProvider extends Provider implements FileProvider, SupportsWebFet
      */
     public function defaultTextModel(): string
     {
-        return 'claude-sonnet-4-5-20250929';
+        return 'claude-sonnet-4-6';
     }
 
     /**
