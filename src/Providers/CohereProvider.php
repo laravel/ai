@@ -26,7 +26,7 @@ class CohereProvider extends Provider implements EmbeddingProvider, RerankingPro
      */
     public function defaultEmbeddingsModel(): string
     {
-        return 'embed-v4.0';
+        return $this->config['models']['embeddings']['default'] ?? 'embed-v4.0';
     }
 
     /**
@@ -34,7 +34,7 @@ class CohereProvider extends Provider implements EmbeddingProvider, RerankingPro
      */
     public function defaultEmbeddingsDimensions(): int
     {
-        return 1536;
+        return $this->config['models']['embeddings']['dimensions'] ?? 1536;
     }
 
     /**
@@ -50,7 +50,7 @@ class CohereProvider extends Provider implements EmbeddingProvider, RerankingPro
      */
     public function defaultRerankingModel(): string
     {
-        return 'rerank-v3.5';
+        return $this->config['models']['reranking']['default'] ?? 'rerank-v3.5';
     }
 
     /**
