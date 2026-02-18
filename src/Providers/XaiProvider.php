@@ -44,7 +44,7 @@ class XaiProvider extends Provider implements ImageProvider, TextProvider
      */
     public function imageGateway(): ImageGateway
     {
-        return $this->imageGateway ?? new XaiImageGateway;
+        return $this->imageGateway ??= new XaiImageGateway;
     }
 
     /**
