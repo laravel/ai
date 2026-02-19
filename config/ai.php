@@ -124,6 +124,11 @@ return [
             'driver' => 'xai',
             'key' => env('XAI_API_KEY'),
         ],
+
+        'zai' => [
+            'driver' => 'zai',
+            'key' => env('ZAI_API_KEY'),
+        ],
     ],
 
 ];
