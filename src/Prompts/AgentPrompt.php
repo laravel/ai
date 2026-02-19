@@ -74,6 +74,21 @@ class AgentPrompt extends Prompt
     }
 
     /**
+     * Set the model for the prompt, returning a new prompt instance.
+     */
+    public function withModel(string $model): AgentPrompt
+    {
+        return new static(
+            $this->agent,
+            $this->prompt,
+            $this->attachments,
+            $this->provider,
+            $model,
+            $this->timeout,
+        );
+    }
+
+    /**
      * Add new attachment to the prompt, returning a new prompt instance.
      */
     public function withAttachments(Collection|array $attachments): AgentPrompt
