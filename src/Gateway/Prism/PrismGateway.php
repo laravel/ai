@@ -280,6 +280,7 @@ class PrismGateway implements Gateway
         TranscribableAudio $audio,
         ?string $language = null,
         bool $diarize = false,
+        int $timeout = 30
     ): TranscriptionResponse {
         try {
             if ($provider->driver() === 'openai' && ! $diarize) {
@@ -291,6 +292,9 @@ class PrismGateway implements Gateway
                     ...$provider->additionalConfiguration(),
                     'api_key' => $provider->providerCredentials()['key'],
                 ]))
+                ->withClientOptions([
+                    'timeout' => $timeout,
+                ])
                 ->withInput(match (true) {
                     $audio instanceof TranscribableAudio => Audio::fromBase64(
                         base64_encode($audio->content()), $audio->mimeType()
