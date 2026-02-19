@@ -3,14 +3,16 @@
 namespace Laravel\Ai;
 
 use Closure;
+use Illuminate\Contracts\Container\BindingResolutionException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Stringable;
-use Laravel\Ai\Console\Commands\ChatCommand;
 use Laravel\Ai\Console\Commands\MakeAgentCommand;
 use Laravel\Ai\Console\Commands\MakeToolCommand;
 use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Gateway\Prism\OpenAiCompatiblePrismProvider;
 use Laravel\Ai\Storage\DatabaseConversationStore;
+use Prism\Prism\PrismManager;
 
 class AiServiceProvider extends ServiceProvider
 {
@@ -31,9 +33,15 @@ class AiServiceProvider extends ServiceProvider
      * Bootstrap the package's services.
      *
      * @return void
+     * @throws BindingResolutionException
      */
     public function boot()
     {
+        // Register custom Prism providers...
+        OpenAiCompatiblePrismProvider::register(
+            $this->app->make(PrismManager::class)
+        );
+
         if ($this->app->runningInConsole()) {
             $this->registerCommands();
             $this->registerPublishing();
