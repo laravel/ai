@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\Prism\Concerns;
 
 use Laravel\Ai\Contracts\Prompt;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\AnthropicProvider;
@@ -59,12 +60,28 @@ trait CreatesPrismTextRequests
      */
     protected function withProviderOptions($request, Provider $provider, ?array $schema, ?TextGenerationOptions $options)
     {
+        $agentProviderOptions = $options?->providerOptions(
+            Lab::tryFrom($provider->driver()) ?? $provider->driver()
+        );
+
         if ($provider instanceof AnthropicProvider) {
+            $providerOptions = array_filter([
+                'use_tool_calling' => $schema ? true : null,
+            ]);
+
+            // Merge agent provider options (agent options can override defaults)
+            if (! is_null($agentProviderOptions)) {
+                $providerOptions = array_merge($providerOptions, $agentProviderOptions);
+            }
+
             return $request
-                ->withProviderOptions(array_filter([
-                    'use_tool_calling' => $schema ? true : null,
-                ]))
+                ->withProviderOptions($providerOptions)
                 ->withMaxTokens($options?->maxTokens ?? 64_000);
+        }
+
+        // For non-Anthropic providers, apply agent provider options if available
+        if (! is_null($agentProviderOptions)) {
+            $request = $request->withProviderOptions($agentProviderOptions);
         }
 
         if (! is_null($options?->maxTokens)) {
