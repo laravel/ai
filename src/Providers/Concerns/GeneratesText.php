@@ -56,7 +56,7 @@ trait GeneratesText
 
                 $this->listenForToolInvocations($invocationId, $agent);
 
-                $response = $this->textGateway()->generateText(
+                $response = $this->execute(fn () => $this->textGateway()->generateText(
                     $this,
                     $prompt->model,
                     (string) $agent->instructions(),
@@ -65,7 +65,7 @@ trait GeneratesText
                     $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null,
                     TextGenerationOptions::forAgent($agent),
                     $prompt->timeout,
-                );
+                ));
 
                 return $agent instanceof HasStructuredOutput
                     ? (new StructuredAgentResponse($invocationId, $response->structured, $response->text, $response->usage, $response->meta))
