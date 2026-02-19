@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway;
 
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
@@ -21,8 +22,8 @@ class OpenAiFileGateway implements FileGateway
     {
         $response = $this->withRateLimitHandling(
             $provider->name(),
-            fn () => Http::withToken($provider->providerCredentials()['key'])
-                ->get("https://api.openai.com/v1/files/{$fileId}")
+            fn () => $this->client($provider)
+                ->get("files/{$fileId}")
                 ->throw()
         );
 
@@ -42,10 +43,10 @@ class OpenAiFileGateway implements FileGateway
 
         $response = $this->withRateLimitHandling(
             $provider->name(),
-            fn () => Http::withToken($provider->providerCredentials()['key'])
+            fn () => $this->client($provider)
                 ->attach('file', $content, $name, ['Content-Type' => $mime])
-                ->post('https://api.openai.com/v1/files', [
-                    'purpose' => 'user_data',
+                ->post('files', [
+                    'purpose' => $this->filePurpose(),
                 ])
                 ->throw()
         );
@@ -60,9 +61,26 @@ class OpenAiFileGateway implements FileGateway
     {
         $this->withRateLimitHandling(
             $provider->name(),
-            fn () => Http::withToken($provider->providerCredentials()['key'])
-                ->delete("https://api.openai.com/v1/files/{$fileId}")
+            fn () => $this->client($provider)
+                ->delete("files/{$fileId}")
                 ->throw()
         );
+    }
+
+    /**
+     * Get the file upload purpose.
+     */
+    protected function filePurpose(): string
+    {
+        return 'user_data';
+    }
+
+    /**
+     * Get a configured HTTP client for the given provider.
+     */
+    protected function client(FileProvider $provider): PendingRequest
+    {
+        return Http::withToken($provider->providerCredentials()['key'])
+            ->baseUrl('https://api.openai.com/v1');
     }
 }
