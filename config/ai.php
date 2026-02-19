@@ -55,6 +55,11 @@ return [
             'key' => env('ANTHROPIC_API_KEY'),
         ],
 
+        'chutes' => [
+            'driver' => 'chutes',
+            'key' => env('CHUTES_API_KEY'),
+         ],
+      
         'azure' => [
             'driver' => 'azure',
             'key' => env('AZURE_OPENAI_API_KEY'),
