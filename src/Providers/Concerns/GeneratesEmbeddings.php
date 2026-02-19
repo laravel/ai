@@ -38,12 +38,12 @@ trait GeneratesEmbeddings
             $invocationId, $this, $model, $prompt,
         ));
 
-        return tap($this->embeddingGateway()->generateEmbeddings(
+        return tap($this->execute(fn () => $this->embeddingGateway()->generateEmbeddings(
             $this,
             $model,
             $inputs,
             $dimensions
-        ), fn (EmbeddingsResponse $response) => $this->events->dispatch(new EmbeddingsGenerated(
+        )), fn (EmbeddingsResponse $response) => $this->events->dispatch(new EmbeddingsGenerated(
             $invocationId, $this, $model, $prompt, $response,
         )));
     }

@@ -40,6 +40,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Circuit Breaker
+    |--------------------------------------------------------------------------
+    |
+    | Below you may configure the circuit breaker strategy for AI providers.
+    | When a provider fails multiple times, the circuit will trip and
+    | subsequent requests will be blocked for a cooldown period.
+    |
+    */
+
+    'circuit_breaker' => [
+        'enabled' => env('AI_CIRCUIT_BREAKER_ENABLED', false),
+        'threshold' => env('AI_CIRCUIT_BREAKER_THRESHOLD', 5),
+        'cooldown' => env('AI_CIRCUIT_BREAKER_COOLDOWN', 60),
+        'store' => env('CACHE_STORE', 'database'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | AI Providers
     |--------------------------------------------------------------------------
     |

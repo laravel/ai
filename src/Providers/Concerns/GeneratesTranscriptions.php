@@ -35,9 +35,9 @@ trait GeneratesTranscriptions
             $invocationId, $this, $model, $prompt,
         ));
 
-        return tap($this->transcriptionGateway()->generateTranscription(
+        return tap($this->execute(fn () => $this->transcriptionGateway()->generateTranscription(
             $this, $model, $prompt->audio, $prompt->language, $prompt->diarize
-        ), function (TranscriptionResponse $response) use ($invocationId, $model, $prompt) {
+        )), function (TranscriptionResponse $response) use ($invocationId, $model, $prompt) {
             $this->events->dispatch(new TranscriptionGenerated(
                 $invocationId, $this, $model, $prompt, $response
             ));

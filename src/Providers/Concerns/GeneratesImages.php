@@ -40,9 +40,9 @@ trait GeneratesImages
             $invocationId, $this, $model, $prompt,
         ));
 
-        return tap($this->imageGateway()->generateImage(
+        return tap($this->execute(fn () => $this->imageGateway()->generateImage(
             $this, $model, $prompt->prompt, $prompt->attachments->all(), $prompt->size, $prompt->quality, $timeout,
-        ), function (ImageResponse $response) use ($invocationId, $prompt, $model) {
+        )), function (ImageResponse $response) use ($invocationId, $prompt, $model) {
             $this->events->dispatch(new ImageGenerated(
                 $invocationId, $this, $model, $prompt, $response,
             ));

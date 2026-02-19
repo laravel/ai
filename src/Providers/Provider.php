@@ -4,6 +4,7 @@ namespace Laravel\Ai\Providers;
 
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Collection;
+use Laravel\Ai\CircuitBreaker;
 use Laravel\Ai\Contracts\Gateway\Gateway;
 use Laravel\Ai\Enums\Lab;
 
@@ -12,7 +13,33 @@ abstract class Provider
     public function __construct(
         protected Gateway $gateway,
         protected array $config,
-        protected Dispatcher $events) {}
+        protected Dispatcher $events,
+        protected ?CircuitBreaker $circuitBreaker = null)
+    {
+        $this->circuitBreaker ??= new CircuitBreaker;
+    }
+
+    /**
+     * Execute the given callback within the circuit breaker.
+     */
+    public function execute(\Closure $callback): mixed
+    {
+        if (! $this->circuitBreaker->isAvailable($this)) {
+            throw new \Laravel\Ai\Exceptions\CircuitBreakerOpenException($this->name());
+        }
+
+        try {
+            return tap($callback(), function () {
+                $this->circuitBreaker->recordSuccess($this);
+            });
+        } catch (\Throwable $e) {
+            if ($e instanceof \Laravel\Ai\Exceptions\FailoverableException) {
+                $this->circuitBreaker->recordFailure($this);
+            }
+
+            throw $e;
+        }
+    }
 
     /**
      * Get the name of the underlying AI provider.
