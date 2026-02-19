@@ -39,9 +39,9 @@ trait HasRemoteContent
      *
      * @return $this
      */
-    public function withMimeType(string $mime): static
+    public function withMimeType(string $mimeType): static
     {
-        $this->mime = $mime;
+        $this->mime = $mimeType;
 
         return $this;
     }
