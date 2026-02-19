@@ -14,8 +14,8 @@ class PrismException
     /**
      * Create a new AI exception from a Prism exception.
      *
-     * @throws RateLimitedException
      * @throws ProviderOverloadedException
+     * @throws RateLimitedException
      * @throws \Throwable Rethrows the previous exception when the message indicates a tool call failed.
      */
     public static function toAiException(\Prism\Prism\Exceptions\PrismException $e, Provider $provider, string $model): AiException
