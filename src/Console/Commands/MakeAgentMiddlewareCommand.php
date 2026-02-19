@@ -72,7 +72,7 @@ class MakeAgentMiddlewareCommand extends GeneratorCommand
     protected function getOptions()
     {
         return [
-            ['force', 'f', InputOption::VALUE_NONE, 'Create the agent even if the agent already exists'],
+            ['force', 'f', InputOption::VALUE_NONE, 'Create the middleware even if the middleware already exists'],
         ];
     }
 }

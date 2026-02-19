@@ -4,6 +4,7 @@ namespace {{ namespace }};
 
 use Closure;
 use Laravel\Ai\Prompts\AgentPrompt;
+use Laravel\Ai\Responses\AgentResponse;
 
 class {{ class }}
 {
@@ -12,6 +13,8 @@ class {{ class }}
      */
     public function handle(AgentPrompt $prompt, Closure $next)
     {
-        return $next($prompt);
+        return $next($prompt)->then(function (AgentResponse $response) {
+            // ...
+        });
     }
 }
