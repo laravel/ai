@@ -4,6 +4,7 @@ namespace Tests\Feature\Agents;
 
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasProviderOptions;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 
 class ProviderOptionsAgent implements Agent, HasProviderOptions
@@ -15,14 +16,25 @@ class ProviderOptionsAgent implements Agent, HasProviderOptions
         return 'You are a helpful assistant.';
     }
 
-    public function providerOptions(): array
+    public function providerOptions(Lab|string $provider): array
     {
-        return [
-            'reasoning' => [
-                'effort' => 'high',
+        $provider = is_string($provider) ? Lab::tryFrom($provider) : $provider;
+
+        return match ($provider) {
+            Lab::OpenAI => [
+                'reasoning' => [
+                    'effort' => 'high',
+                ],
+                'frequency_penalty' => 0.5,
+                'presence_penalty' => 0.3,
             ],
-            'frequency_penalty' => 0.5,
-            'presence_penalty' => 0.3,
-        ];
+            Lab::Anthropic => [
+                'thinking' => [
+                    'type' => 'enabled',
+                    'budget_tokens' => 10000,
+                ],
+            ],
+            default => [],
+        };
     }
 }
