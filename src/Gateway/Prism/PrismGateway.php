@@ -351,7 +351,11 @@ class PrismGateway implements Gateway
 
         (new Collection($inputs))->each($request->fromInput(...));
 
-        $response = $request->asEmbeddings();
+        try {
+            $response = $request->asEmbeddings();
+        } catch (PrismVendorException $e) {
+            throw PrismException::toAiException($e, $provider, $model);
+        }
 
         return new EmbeddingsResponse(
             (new Collection($response->embeddings))->map->embedding->all(),
