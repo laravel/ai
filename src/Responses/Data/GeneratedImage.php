@@ -11,13 +11,17 @@ class GeneratedImage implements Arrayable, JsonSerializable
 {
     use Storable;
 
+    public ?string $mime = null;
+
     /**
      * @param  string  $image  The Base64 representation of the image.
      */
     public function __construct(
         public string $image,
-        public ?string $mime = null,
-    ) {}
+        ?string $mimeType = null,
+    ) {
+        $this->mime = $mimeType;
+    }
 
     /**
      * Get a default filename for the file.

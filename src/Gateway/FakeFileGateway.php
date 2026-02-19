@@ -57,11 +57,11 @@ class FakeFileGateway implements FileGateway
                 throw new RuntimeException('Attempted file retrieval without a fake response.');
             }
 
-            return new FileResponse($fileId, mime: 'text/plain', content: 'fake-content');
+            return new FileResponse($fileId, mimeType: 'text/plain', content: 'fake-content');
         }
 
         if (is_string($response)) {
-            return new FileResponse($fileId, mime: 'text/plain', content: $response);
+            return new FileResponse($fileId, mimeType: 'text/plain', content: $response);
         }
 
         return $response;
