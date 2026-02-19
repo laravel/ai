@@ -2,6 +2,8 @@
 
 namespace Laravel\Ai\Contracts;
 
+use Laravel\Ai\Enums\Lab;
+
 interface HasProviderOptions
 {
     /**
@@ -9,5 +11,5 @@ interface HasProviderOptions
      *
      * @return array<string, mixed>
      */
-    public function providerOptions(): array;
+    public function providerOptions(Lab|string $provider): array;
 }
