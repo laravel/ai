@@ -30,9 +30,15 @@ class TextGenerationOptions
         $temperature = $reflection->getAttributes(Temperature::class);
 
         return new self(
-            maxSteps: ! empty($maxSteps) ? $maxSteps[0]->newInstance()->value : null,
-            maxTokens: ! empty($maxTokens) ? $maxTokens[0]->newInstance()->value : null,
-            temperature: ! empty($temperature) ? $temperature[0]->newInstance()->value : null,
+            maxSteps: method_exists($agent, 'maxSteps')
+                ? $agent->maxSteps()
+                : (! empty($maxSteps) ? $maxSteps[0]->newInstance()->value : null),
+            maxTokens: method_exists($agent, 'maxTokens')
+                ? $agent->maxTokens()
+                : (! empty($maxTokens) ? $maxTokens[0]->newInstance()->value : null),
+            temperature: method_exists($agent, 'temperature')
+                ? $agent->temperature()
+                : (! empty($temperature) ? $temperature[0]->newInstance()->value : null),
         );
     }
 }
