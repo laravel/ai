@@ -17,8 +17,6 @@ class AiServiceProvider extends ServiceProvider
 {
     /**
      * Register the package's services.
-     *
-     * @return void
      */
     public function register(): void
     {
@@ -30,8 +28,6 @@ class AiServiceProvider extends ServiceProvider
 
     /**
      * Bootstrap the package's services.
-     *
-     * @return void
      */
     public function boot(): void
     {

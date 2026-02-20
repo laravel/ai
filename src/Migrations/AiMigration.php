@@ -8,8 +8,6 @@ abstract class AiMigration extends Migration
 {
     /**
      * Get the migration connection name.
-     *
-     * @return string|null
      */
     public function getConnection(): ?string
     {
