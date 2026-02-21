@@ -280,6 +280,7 @@ class PrismGateway implements Gateway
         TranscribableAudio $audio,
         ?string $language = null,
         bool $diarize = false,
+        ?string $context = null,
         int $timeout = 30
     ): TranscriptionResponse {
         try {
@@ -304,6 +305,7 @@ class PrismGateway implements Gateway
             if ($provider->driver() === 'openai') {
                 $request->withProviderOptions(array_filter([
                     'language' => $language,
+                    'prompt' => $context,
                     'response_format' => $diarize ? 'diarized_json' : null,
                     'chunking_strategy' => $diarize ? 'auto' : null,
                 ]));

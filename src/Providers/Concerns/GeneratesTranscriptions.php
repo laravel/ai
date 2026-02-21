@@ -20,13 +20,14 @@ trait GeneratesTranscriptions
         ?string $language = null,
         bool $diarize = false,
         ?string $model = null,
+        ?string $context = null,
         ?int $timeout = null,
     ): TranscriptionResponse {
         $invocationId = (string) Str::uuid7();
 
         $model ??= $this->defaultTranscriptionModel();
 
-        $prompt = new TranscriptionPrompt($audio, $language, $diarize, $this, $model, $timeout);
+        $prompt = new TranscriptionPrompt($audio, $language, $diarize, $this, $model, $context, $timeout);
 
         if (Ai::transcriptionsAreFaked()) {
             Ai::recordTranscriptionGeneration($prompt);
@@ -37,7 +38,7 @@ trait GeneratesTranscriptions
         ));
 
         return tap($this->transcriptionGateway()->generateTranscription(
-            $this, $model, $prompt->audio, $prompt->language, $prompt->diarize, $prompt->timeout
+            $this, $model, $prompt->audio, $prompt->language, $prompt->diarize, $prompt->context, $prompt->timeout
         ), function (TranscriptionResponse $response) use ($invocationId, $model, $prompt) {
             $this->events->dispatch(new TranscriptionGenerated(
                 $invocationId, $this, $model, $prompt, $response

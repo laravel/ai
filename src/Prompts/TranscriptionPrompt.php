@@ -13,6 +13,7 @@ class TranscriptionPrompt
         public readonly bool $diarize,
         public readonly TranscriptionProvider $provider,
         public readonly string $model,
+        public readonly ?string $context = null,
         public readonly ?int $timeout = null,
     ) {}
 
