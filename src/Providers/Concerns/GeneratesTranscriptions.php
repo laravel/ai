@@ -13,7 +13,7 @@ use Laravel\Ai\Responses\TranscriptionResponse;
 trait GeneratesTranscriptions
 {
     /**
-     * Generate audio from the given text.
+     * Transcribe the given audio to text.
      */
     public function transcribe(
         TranscribableAudio $audio,
@@ -21,12 +21,13 @@ trait GeneratesTranscriptions
         bool $diarize = false,
         ?string $model = null,
         ?string $context = null,
+        ?int $timeout = null,
     ): TranscriptionResponse {
         $invocationId = (string) Str::uuid7();
 
         $model ??= $this->defaultTranscriptionModel();
 
-        $prompt = new TranscriptionPrompt($audio, $language, $diarize, $this, $model, $context);
+        $prompt = new TranscriptionPrompt($audio, $language, $diarize, $this, $model, $context, $timeout);
 
         if (Ai::transcriptionsAreFaked()) {
             Ai::recordTranscriptionGeneration($prompt);
@@ -37,7 +38,7 @@ trait GeneratesTranscriptions
         ));
 
         return tap($this->transcriptionGateway()->generateTranscription(
-            $this, $model, $prompt->audio, $prompt->language, $prompt->diarize, $prompt->context
+            $this, $model, $prompt->audio, $prompt->language, $prompt->diarize, $prompt->context, $prompt->timeout
         ), function (TranscriptionResponse $response) use ($invocationId, $model, $prompt) {
             $this->events->dispatch(new TranscriptionGenerated(
                 $invocationId, $this, $model, $prompt, $response

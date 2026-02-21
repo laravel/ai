@@ -41,7 +41,7 @@ class ElevenLabsProvider extends Provider implements AudioProvider, Transcriptio
      */
     public function defaultAudioModel(): string
     {
-        return 'eleven_multilingual_v2';
+        return $this->config['models']['audio']['default'] ?? 'eleven_multilingual_v2';
     }
 
     /**
@@ -49,6 +49,6 @@ class ElevenLabsProvider extends Provider implements AudioProvider, Transcriptio
      */
     public function defaultTranscriptionModel(): string
     {
-        return 'scribe_v2';
+        return $this->config['models']['transcription']['default'] ?? 'scribe_v2';
     }
 }

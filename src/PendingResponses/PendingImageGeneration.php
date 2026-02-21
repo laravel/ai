@@ -4,6 +4,7 @@ namespace Laravel\Ai\PendingResponses;
 
 use Illuminate\Support\Traits\Conditionable;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\FakePendingDispatch;
@@ -57,7 +58,7 @@ class PendingImageGeneration
     }
 
     /**
-     * Indicate that the generated iamge should have a square aspect ratio.
+     * Indicate that the generated image should have a square aspect ratio.
      */
     public function square(): self
     {
@@ -67,7 +68,7 @@ class PendingImageGeneration
     }
 
     /**
-     * Indicate that the generated iamge should have a portrait aspect ratio.
+     * Indicate that the generated image should have a portrait aspect ratio.
      */
     public function portrait(): self
     {
@@ -77,7 +78,7 @@ class PendingImageGeneration
     }
 
     /**
-     * Indicate that the generated iamge should have a landscape aspect ratio.
+     * Indicate that the generated image should have a landscape aspect ratio.
      */
     public function landscape(): self
     {
@@ -111,7 +112,7 @@ class PendingImageGeneration
     /**
      * Generate the image.
      */
-    public function generate(array|string|null $provider = null, ?string $model = null): ImageResponse
+    public function generate(Lab|array|string|null $provider = null, ?string $model = null): ImageResponse
     {
         $providers = Provider::formatProviderAndModelList(
             $provider ?? config('ai.default_for_images'), $model
@@ -139,7 +140,7 @@ class PendingImageGeneration
     /**
      * Queue the generation of an image.
      */
-    public function queue(array|string|null $provider = null, ?string $model = null): QueuedImageResponse
+    public function queue(Lab|array|string|null $provider = null, ?string $model = null): QueuedImageResponse
     {
         $this->ensureAttachmentsAreQueueable();
 

@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Prompts;
 
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
+use Laravel\Ai\Enums\Lab;
 
 class QueuedTranscriptionPrompt
 {
@@ -10,7 +11,7 @@ class QueuedTranscriptionPrompt
         public readonly TranscribableAudio $audio,
         public readonly ?string $language,
         public readonly bool $diarize,
-        public readonly array|string|null $provider,
+        public readonly Lab|array|string|null $provider,
         public readonly ?string $model,
         public readonly ?string $context = null,
     ) {}

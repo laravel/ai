@@ -44,9 +44,9 @@ trait InteractsWithFakeReranking
     public function assertReranked(Closure $callback): self
     {
         PHPUnit::assertTrue(
-            (new Collection($this->recordedRerankings))->filter(function (RerankingPrompt $prompt) use ($callback) {
+            (new Collection($this->recordedRerankings))->contains(function (RerankingPrompt $prompt) use ($callback) {
                 return $callback($prompt);
-            })->count() > 0,
+            }),
             'An expected reranking was not recorded.'
         );
 
@@ -59,9 +59,9 @@ trait InteractsWithFakeReranking
     public function assertNotReranked(Closure $callback): self
     {
         PHPUnit::assertTrue(
-            (new Collection($this->recordedRerankings))->filter(function (RerankingPrompt $prompt) use ($callback) {
+            (new Collection($this->recordedRerankings))->doesntContain(function (RerankingPrompt $prompt) use ($callback) {
                 return $callback($prompt);
-            })->count() === 0,
+            }),
             'An unexpected reranking was recorded.'
         );
 

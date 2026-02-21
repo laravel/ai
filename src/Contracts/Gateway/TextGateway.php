@@ -13,6 +13,8 @@ interface TextGateway
     /**
      * Generate text representing the next message in a conversation.
      *
+     * @param  \Laravel\Ai\Messages\Message[]  $messages
+     * @param  \Laravel\Ai\Contracts\Tool[]  $tools
      * @param  array<string, \Illuminate\JsonSchema\Types\Type>|null  $schema
      */
     public function generateText(
@@ -29,6 +31,8 @@ interface TextGateway
     /**
      * Stream text representing the next message in a conversation.
      *
+     * @param  \Laravel\Ai\Messages\Message[]  $messages
+     * @param  \Laravel\Ai\Contracts\Tool[]  $tools
      * @param  array<string, \Illuminate\JsonSchema\Types\Type>|null  $schema
      */
     public function streamText(

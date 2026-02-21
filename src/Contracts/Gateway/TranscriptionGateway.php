@@ -18,5 +18,6 @@ interface TranscriptionGateway
         ?string $language = null,
         bool $diarize = false,
         ?string $context = null,
+        int $timeout = 30
     ): TranscriptionResponse;
 }

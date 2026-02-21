@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Providers;
 
+use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
@@ -52,14 +53,14 @@ class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider
      */
     protected function formatMetadataFilter(array $filters): string
     {
-        return collect($filters)->map(fn ($filter) => match ($filter['type']) {
+        return (new Collection($filters))->map(fn ($filter) => match ($filter['type']) {
             'eq' => is_numeric($filter['value'])
                 ? "{$filter['key']}={$filter['value']}"
                 : "{$filter['key']}=\"{$filter['value']}\"",
             'ne' => is_numeric($filter['value'])
                 ? "{$filter['key']}!={$filter['value']}"
                 : "{$filter['key']}!=\"{$filter['value']}\"",
-            'in' => '('.collect($filter['value'])->map(fn ($v) => is_numeric($v) ? "{$filter['key']}={$v}" : "{$filter['key']}=\"{$v}\""
+            'in' => '('.(new Collection($filter['value']))->map(fn ($v) => is_numeric($v) ? "{$filter['key']}={$v}" : "{$filter['key']}=\"{$v}\""
             )->implode(' OR ').')',
         })->implode(' AND ');
     }
@@ -85,7 +86,7 @@ class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider
      */
     public function defaultTextModel(): string
     {
-        return 'gemini-3-flash-preview';
+        return $this->config['models']['text']['default'] ?? 'gemini-3-flash-preview';
     }
 
     /**
@@ -93,7 +94,7 @@ class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider
      */
     public function cheapestTextModel(): string
     {
-        return 'gemini-2.5-flash-lite';
+        return $this->config['models']['text']['cheapest'] ?? 'gemini-2.5-flash-lite';
     }
 
     /**
@@ -101,7 +102,7 @@ class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider
      */
     public function smartestTextModel(): string
     {
-        return 'gemini-3-pro-preview';
+        return $this->config['models']['text']['smartest'] ?? 'gemini-3-pro-preview';
     }
 
     /**
@@ -109,7 +110,7 @@ class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider
      */
     public function defaultImageModel(): string
     {
-        return 'gemini-3-pro-image-preview';
+        return $this->config['models']['image']['default'] ?? 'gemini-3-pro-image-preview';
     }
 
     /**
@@ -138,7 +139,7 @@ class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider
      */
     public function defaultEmbeddingsModel(): string
     {
-        return 'gemini-embedding-001';
+        return $this->config['models']['embeddings']['default'] ?? 'gemini-embedding-001';
     }
 
     /**
@@ -146,7 +147,7 @@ class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider
      */
     public function defaultEmbeddingsDimensions(): int
     {
-        return 3072;
+        return $this->config['models']['embeddings']['dimensions'] ?? 3072;
     }
 
     /**

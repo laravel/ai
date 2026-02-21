@@ -4,11 +4,15 @@ namespace Laravel\Ai\Responses;
 
 class FileResponse
 {
+    public readonly ?string $mime;
+
     public function __construct(
         public readonly string $id,
-        public readonly ?string $mime = null,
+        ?string $mimeType = null,
         public readonly ?string $content = null,
-    ) {}
+    ) {
+        $this->mime = $mimeType;
+    }
 
     /**
      * Get the MIME type for the file.

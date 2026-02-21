@@ -10,14 +10,18 @@ class AudioResponse
 {
     use Storable;
 
+    public ?string $mime = null;
+
     /**
      * @param  string  $audio  The Base64 representation of the audio.
      */
     public function __construct(
         public string $audio,
         public Meta $meta,
-        public ?string $mime = null,
-    ) {}
+        ?string $mimeType = null,
+    ) {
+        $this->mime = $mimeType;
+    }
 
     /**
      * Get a default filename for the file.

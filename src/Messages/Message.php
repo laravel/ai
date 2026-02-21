@@ -25,7 +25,7 @@ class Message
 
         $this->role = $role instanceof MessageRole
             ? $role
-            : MessageRole::tryFrom($role);
+            : (MessageRole::tryFrom($role) ?? throw new InvalidArgumentException('Invalid message role.'));
     }
 
     /**

@@ -34,6 +34,7 @@ class FakeTranscriptionGateway implements TranscriptionGateway
         ?string $language = null,
         bool $diarize = false,
         ?string $context = null,
+        int $timeout = 30
     ): TranscriptionResponse {
         $transcriptionPrompt = new TranscriptionPrompt($audio, $language, $diarize, $provider, $model, $context);
 

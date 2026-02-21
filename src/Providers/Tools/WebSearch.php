@@ -43,6 +43,8 @@ class WebSearch extends ProviderTool
         $this->city = $city;
         $this->region = $region;
         $this->country = $country;
+
+        return $this;
     }
 
     /**
