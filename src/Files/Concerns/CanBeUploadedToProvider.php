@@ -10,11 +10,11 @@ trait CanBeUploadedToProvider
     /**
      * Store the file on a given provider.
      */
-    public function put(?string $mime = null, ?string $name = null, ?string $provider = null): StoredFileResponse
+    public function put(?string $mimeType = null, ?string $name = null, ?string $provider = null): StoredFileResponse
     {
         return Files::put(
             $this,
-            mime: $mime ?? $this->mimeType() ?? null,
+            mimeType: $mimeType ?? $this->mimeType() ?? null,
             name: $name ?? $this->name() ?? null,
             provider: $provider
         );

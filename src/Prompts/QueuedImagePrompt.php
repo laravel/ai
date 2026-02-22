@@ -4,6 +4,7 @@ namespace Laravel\Ai\Prompts;
 
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use Laravel\Ai\Enums\Lab;
 
 class QueuedImagePrompt
 {
@@ -14,7 +15,7 @@ class QueuedImagePrompt
         Collection|array $attachments,
         public readonly ?string $size,
         public readonly ?string $quality,
-        public readonly array|string|null $provider,
+        public readonly Lab|array|string|null $provider,
         public readonly ?string $model,
     ) {
         $this->attachments = Collection::make($attachments);

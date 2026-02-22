@@ -4,6 +4,7 @@ namespace Laravel\Ai\Jobs;
 
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\PendingResponses\PendingAudioGeneration;
 
 class GenerateAudio implements ShouldQueue
@@ -15,7 +16,7 @@ class GenerateAudio implements ShouldQueue
      */
     public function __construct(
         public PendingAudioGeneration $pendingAudio,
-        public array|string|null $provider = null,
+        public Lab|array|string|null $provider = null,
         public ?string $model = null) {}
 
     /**

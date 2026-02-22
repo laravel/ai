@@ -9,6 +9,7 @@ use Illuminate\Support\Stringable;
 use Laravel\Ai\Console\Commands\ChatCommand;
 use Laravel\Ai\Console\Commands\MakeAgentCommand;
 use Laravel\Ai\Console\Commands\MakeSubAgentCommand;
+use Laravel\Ai\Console\Commands\MakeAgentMiddlewareCommand;
 use Laravel\Ai\Console\Commands\MakeToolCommand;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Storage\DatabaseConversationStore;
@@ -20,7 +21,7 @@ class AiServiceProvider extends ServiceProvider
      *
      * @return void
      */
-    public function register()
+    public function register(): void
     {
         $this->app->scoped(AiManager::class, fn ($app): AiManager => new AiManager($app));
         $this->app->singleton(ConversationStore::class, DatabaseConversationStore::class);
@@ -33,7 +34,7 @@ class AiServiceProvider extends ServiceProvider
      *
      * @return void
      */
-    public function boot()
+    public function boot(): void
     {
         if ($this->app->runningInConsole()) {
             $this->registerCommands();
@@ -95,6 +96,7 @@ class AiServiceProvider extends ServiceProvider
             // ChatCommand::class,
             MakeAgentCommand::class,
             MakeSubAgentCommand::class,
+            MakeAgentMiddlewareCommand::class,
             MakeToolCommand::class,
         ]);
     }
@@ -113,6 +115,7 @@ class AiServiceProvider extends ServiceProvider
             __DIR__.'/../stubs/structured-agent.stub' => base_path('stubs/structured-agent.stub'),
             __DIR__.'/../stubs/subagent.stub' => base_path('stubs/subagent.stub'),
             __DIR__.'/../stubs/tool.stub' => base_path('stubs/tool.stub'),
+            __DIR__.'/../stubs/middleware.stub' => base_path('stubs/middleware.stub'),
         ], 'ai-stubs');
 
         $this->publishesMigrations([

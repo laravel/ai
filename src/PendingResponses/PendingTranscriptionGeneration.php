@@ -5,6 +5,7 @@ namespace Laravel\Ai\PendingResponses;
 use Illuminate\Support\Traits\Conditionable;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\FakePendingDispatch;
@@ -24,6 +25,8 @@ class PendingTranscriptionGeneration
     protected ?string $language = null;
 
     protected bool $diarize = false;
+
+    protected int $timeout = 30;
 
     public function __construct(
         protected TranscribableAudio $audio,
@@ -50,9 +53,19 @@ class PendingTranscriptionGeneration
     }
 
     /**
+     * Specify the timeout (in seconds) for the transcription generation.
+     */
+    public function timeout(int $seconds = 30): self
+    {
+        $this->timeout = $seconds;
+
+        return $this;
+    }
+
+    /**
      * Generate the transcription.
      */
-    public function generate(array|string|null $provider = null, ?string $model = null): TranscriptionResponse
+    public function generate(Lab|array|string|null $provider = null, ?string $model = null): TranscriptionResponse
     {
         $providers = Provider::formatProviderAndModelList(
             $provider ?? config('ai.default_for_transcription'), $model
@@ -64,7 +77,7 @@ class PendingTranscriptionGeneration
             $model ??= $provider->defaultTranscriptionModel();
 
             try {
-                return $provider->transcribe($this->audio, $this->language, $this->diarize, $model);
+                return $provider->transcribe($this->audio, $this->language, $this->diarize, $model, $this->timeout);
             } catch (FailoverableException $e) {
                 event(new ProviderFailedOver($provider, $model, $e));
 
@@ -78,7 +91,7 @@ class PendingTranscriptionGeneration
     /**
      * Queue the generation of the transcription.
      */
-    public function queue(array|string|null $provider = null, ?string $model = null): QueuedTranscriptionResponse
+    public function queue(Lab|array|string|null $provider = null, ?string $model = null): QueuedTranscriptionResponse
     {
         if (! $this->audio instanceof StoredAudio &&
             ! $this->audio instanceof LocalAudio) {

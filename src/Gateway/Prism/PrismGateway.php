@@ -280,6 +280,7 @@ class PrismGateway implements Gateway
         TranscribableAudio $audio,
         ?string $language = null,
         bool $diarize = false,
+        int $timeout = 30
     ): TranscriptionResponse {
         try {
             if ($provider->driver() === 'openai' && ! $diarize) {
@@ -291,6 +292,9 @@ class PrismGateway implements Gateway
                     ...$provider->additionalConfiguration(),
                     'api_key' => $provider->providerCredentials()['key'],
                 ]))
+                ->withClientOptions([
+                    'timeout' => $timeout,
+                ])
                 ->withInput(match (true) {
                     $audio instanceof TranscribableAudio => Audio::fromBase64(
                         base64_encode($audio->content()), $audio->mimeType()
@@ -347,7 +351,11 @@ class PrismGateway implements Gateway
 
         (new Collection($inputs))->each($request->fromInput(...));
 
-        $response = $request->asEmbeddings();
+        try {
+            $response = $request->asEmbeddings();
+        } catch (PrismVendorException $e) {
+            throw PrismException::toAiException($e, $provider, $model);
+        }
 
         return new EmbeddingsResponse(
             (new Collection($response->embeddings))->map->embedding->all(),
@@ -363,6 +371,7 @@ class PrismGateway implements Gateway
     {
         return match ($provider->driver()) {
             'anthropic' => PrismProvider::Anthropic,
+            'azure' => PrismProvider::OpenAI, 
             'deepseek' => PrismProvider::DeepSeek,
             'gemini' => PrismProvider::Gemini,
             'groq' => PrismProvider::Groq,

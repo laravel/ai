@@ -17,7 +17,7 @@ class FakePendingDispatch extends PendingDispatch
      * @param  \BackedEnum|string|null  $connection
      * @return $this
      */
-    public function onConnection($connection)
+    public function onConnection($connection): static
     {
         return $this;
     }
@@ -28,7 +28,7 @@ class FakePendingDispatch extends PendingDispatch
      * @param  \BackedEnum|string|null  $queue
      * @return $this
      */
-    public function onQueue($queue)
+    public function onQueue($queue): static
     {
         return $this;
     }
@@ -41,7 +41,7 @@ class FakePendingDispatch extends PendingDispatch
      * @param  \UnitEnum|string  $group
      * @return $this
      */
-    public function onGroup($group)
+    public function onGroup($group): static
     {
         return $this;
     }
@@ -54,7 +54,7 @@ class FakePendingDispatch extends PendingDispatch
      * @param  callable|null  $deduplicator
      * @return $this
      */
-    public function withDeduplicator($deduplicator)
+    public function withDeduplicator($deduplicator): static
     {
         return $this;
     }
@@ -65,7 +65,7 @@ class FakePendingDispatch extends PendingDispatch
      * @param  \BackedEnum|string|null  $connection
      * @return $this
      */
-    public function allOnConnection($connection)
+    public function allOnConnection($connection): static
     {
         return $this;
     }
@@ -76,7 +76,7 @@ class FakePendingDispatch extends PendingDispatch
      * @param  \BackedEnum|string|null  $queue
      * @return $this
      */
-    public function allOnQueue($queue)
+    public function allOnQueue($queue): static
     {
         return $this;
     }
@@ -87,7 +87,7 @@ class FakePendingDispatch extends PendingDispatch
      * @param  \DateTimeInterface|\DateInterval|int|null  $delay
      * @return $this
      */
-    public function delay($delay)
+    public function delay($delay): static
     {
         return $this;
     }
@@ -97,7 +97,7 @@ class FakePendingDispatch extends PendingDispatch
      *
      * @return $this
      */
-    public function withoutDelay()
+    public function withoutDelay(): static
     {
         return $this;
     }
@@ -107,7 +107,7 @@ class FakePendingDispatch extends PendingDispatch
      *
      * @return $this
      */
-    public function afterCommit()
+    public function afterCommit(): static
     {
         return $this;
     }
@@ -117,7 +117,7 @@ class FakePendingDispatch extends PendingDispatch
      *
      * @return $this
      */
-    public function beforeCommit()
+    public function beforeCommit(): static
     {
         return $this;
     }
@@ -128,7 +128,7 @@ class FakePendingDispatch extends PendingDispatch
      * @param  array  $chain
      * @return $this
      */
-    public function chain($chain)
+    public function chain($chain): static
     {
         return $this;
     }
@@ -139,7 +139,7 @@ class FakePendingDispatch extends PendingDispatch
      * @param  bool  $afterResponse
      * @return $this
      */
-    public function afterResponse($afterResponse = true)
+    public function afterResponse($afterResponse = true): static
     {
         return $this;
     }
@@ -171,7 +171,7 @@ class FakePendingDispatch extends PendingDispatch
      * @param  array  $parameters
      * @return $this
      */
-    public function __call($method, $parameters)
+    public function __call($method, $parameters): static
     {
         return $this;
     }
