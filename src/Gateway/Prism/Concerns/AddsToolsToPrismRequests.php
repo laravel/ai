@@ -4,10 +4,13 @@ namespace Laravel\Ai\Gateway\Prism\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Collection;
+use Laravel\Ai\Attributes\Deferred;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
+use Laravel\Ai\Contracts\ShouldDeferTool;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\DeferredToolManager;
 use Laravel\Ai\Gateway\Prism\PrismTool;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
@@ -20,6 +23,7 @@ use Laravel\Ai\Tools\Request as ToolRequest;
 use Prism\Prism\Enums\ToolChoice;
 use Prism\Prism\Facades\Prism;
 use Prism\Prism\ValueObjects\ProviderTool as PrismProviderTool;
+use ReflectionClass;
 use RuntimeException;
 
 trait AddsToolsToPrismRequests
@@ -72,10 +76,38 @@ trait AddsToolsToPrismRequests
 
         call_user_func($this->invokingToolCallback, $tool, $arguments);
 
+        if ($this->shouldDeferTool($tool)) {
+            $result = $this->deferredToolManager()->defer($tool, $arguments);
+
+            call_user_func($this->toolInvokedCallback, $tool, $arguments, $result);
+
+            return json_encode($result) ?: '{"status":"pending"}';
+        }
+
         return (string) tap(
             $tool->handle(new ToolRequest($arguments)),
             fn ($result) => call_user_func($this->toolInvokedCallback, $tool, $arguments, $result)
         );
+    }
+
+    /**
+     * Determine whether the given tool should be deferred.
+     */
+    protected function shouldDeferTool(Tool $tool): bool
+    {
+        if ($tool instanceof ShouldDeferTool) {
+            return true;
+        }
+
+        return ! empty((new ReflectionClass($tool))->getAttributes(Deferred::class));
+    }
+
+    /**
+     * Resolve the deferred tool manager.
+     */
+    protected function deferredToolManager(): DeferredToolManager
+    {
+        return app(DeferredToolManager::class);
     }
 
     /**

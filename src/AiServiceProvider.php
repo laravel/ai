@@ -17,21 +17,18 @@ class AiServiceProvider extends ServiceProvider
 {
     /**
      * Register the package's services.
-     *
-     * @return void
      */
     public function register(): void
     {
         $this->app->scoped(AiManager::class, fn ($app): AiManager => new AiManager($app));
         $this->app->singleton(ConversationStore::class, DatabaseConversationStore::class);
+        $this->app->singleton(DeferredToolManager::class);
 
         $this->mergeConfigFrom(__DIR__.'/../config/ai.php', 'ai');
     }
 
     /**
      * Bootstrap the package's services.
-     *
-     * @return void
      */
     public function boot(): void
     {
