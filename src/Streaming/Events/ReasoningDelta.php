@@ -36,7 +36,7 @@ class ReasoningDelta extends StreamEvent
     public function toVercelProtocolArray(): ?array
     {
         return [
-            'type' => 'reasoning-start',
+            'type' => 'reasoning-delta',
             'id' => $this->reasoningId,
             'delta' => $this->delta,
         ];
