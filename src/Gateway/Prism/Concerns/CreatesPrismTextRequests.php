@@ -6,9 +6,14 @@ use Laravel\Ai\Contracts\Prompt;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\AnthropicProvider;
+use Laravel\Ai\Providers\AzureOpenAiProvider;
+use Laravel\Ai\Providers\DeepSeekProvider;
 use Laravel\Ai\Providers\GeminiProvider;
+use Laravel\Ai\Providers\GroqProvider;
+use Laravel\Ai\Providers\MistralProvider;
 use Laravel\Ai\Providers\OllamaProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
+use Laravel\Ai\Providers\OpenRouterProvider;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\XaiProvider;
 use Prism\Prism\Facades\Prism;
@@ -83,7 +88,7 @@ trait CreatesPrismTextRequests
             ], fn ($value) => $value !== null));
         }
 
-        if ($thinking && $provider instanceof OpenAiProvider) {
+        if ($thinking && ($provider instanceof OpenAiProvider || $provider instanceof AzureOpenAiProvider)) {
             $providerOptions = $request->providerOptions() ?? [];
 
             if ($thinking['effort']) {
@@ -102,6 +107,36 @@ trait CreatesPrismTextRequests
         if ($thinking && $provider instanceof OllamaProvider) {
             $request = $request->withProviderOptions([
                 'thinking' => $thinking['enabled'],
+            ]);
+        }
+        if ($thinking && $provider instanceof DeepSeekProvider) {
+            $request = $request->withProviderOptions([
+                'thinking' => [
+                    'type' => $thinking['enabled'] ? 'enabled' : 'disabled',
+                ],
+            ]);
+        }
+
+        if ($thinking && $provider instanceof GroqProvider) {
+            $providerOptions = $request->providerOptions() ?? [];
+            $providerOptions['reasoning_format'] = 'parsed';
+
+            if ($thinking['effort']) {
+                $providerOptions['reasoning_effort'] = $thinking['effort'];
+            }
+
+            $request = $request->withProviderOptions($providerOptions);
+        }
+
+        if ($thinking && $provider instanceof MistralProvider) {
+            $request = $request->withProviderOptions([
+                'prompt_mode' => 'reasoning',
+            ]);
+        }
+
+        if ($thinking && $provider instanceof OpenRouterProvider) {
+            $request = $request->withProviderOptions([
+                'include_reasoning' => $thinking['enabled'],
             ]);
         }
 
