@@ -11,6 +11,7 @@ use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Files\ProviderDocument;
 use Laravel\Ai\Responses\AddedDocumentResponse;
 use Laravel\Ai\Responses\Data\StoreFileCounts;
+use Laravel\Ai\Files\Base64Document;
 
 class Store
 {
