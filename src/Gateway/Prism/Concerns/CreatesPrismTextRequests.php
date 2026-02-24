@@ -109,6 +109,7 @@ trait CreatesPrismTextRequests
                 'thinking' => $thinking['enabled'],
             ]);
         }
+
         if ($thinking && $provider instanceof DeepSeekProvider) {
             $request = $request->withProviderOptions([
                 'thinking' => [
