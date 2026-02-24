@@ -88,7 +88,7 @@ trait CreatesPrismTextRequests
             ], fn ($value) => $value !== null));
         }
 
-        if ($thinking && ($provider instanceof OpenAiProvider || $provider instanceof AzureOpenAiProvider)) {
+        if ($thinking && ($thinking['enabled'] ?? false) && ($provider instanceof OpenAiProvider || $provider instanceof AzureOpenAiProvider)) {
             $providerOptions = $request->providerOptions() ?? [];
 
             if ($thinking['effort']) {
