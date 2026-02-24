@@ -36,7 +36,15 @@ class ChatCommand extends Command
         );
 
         while (true) {
-            $prompt = textarea('Prompt...');
+            $prompt = trim((string) textarea('Prompt (or type "quit" to exit)...'));
+
+            if (in_array(strtolower($prompt), ['quit', 'exit', 'q'], true)) {
+                return Command::SUCCESS;
+            }
+
+            if ($prompt === '') {
+                continue;
+            }
 
             $response = spin(
                 fn () => $agent->prompt($prompt),
