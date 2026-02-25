@@ -4,13 +4,14 @@ namespace Laravel\Ai\Prompts;
 
 use Countable;
 use Illuminate\Support\Str;
+use Laravel\Ai\Enums\Lab;
 
 class QueuedEmbeddingsPrompt implements Countable
 {
     public function __construct(
         public readonly array $inputs,
         public readonly ?int $dimensions,
-        public readonly array|string|null $provider,
+        public readonly Lab|array|string|null $provider,
         public readonly ?string $model,
     ) {}
 
@@ -19,13 +20,7 @@ class QueuedEmbeddingsPrompt implements Countable
      */
     public function contains(string $string): bool
     {
-        foreach ($this->inputs as $input) {
-            if (Str::contains($input, $string)) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any($this->inputs, fn ($input) => Str::contains($input, $string));
     }
 
     /**

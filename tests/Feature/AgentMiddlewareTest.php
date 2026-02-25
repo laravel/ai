@@ -3,7 +3,10 @@
 namespace Tests\Feature;
 
 use Closure;
+use Illuminate\Support\Facades\Event;
+use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Prompts\AgentPrompt;
+use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\TestCase;
@@ -47,6 +50,40 @@ class AgentMiddlewareTest extends TestCase
 
         unset($_SERVER['__testing.text']);
         unset($_SERVER['__testing.middleware-prompt']);
+    }
+
+    public function test_agent_prompted_event_receives_prompt_when_middleware_short_circuits(): void
+    {
+        Event::fake();
+
+        AssistantAgent::fake([
+            'Fake response',
+        ]);
+
+        (new AssistantAgent)
+            ->withMiddleware([$this->shortCircuitingMiddleware()])
+            ->prompt('Test prompt');
+
+        Event::assertDispatched(AgentPrompted::class, function (AgentPrompted $event) {
+            return $event->prompt instanceof AgentPrompt
+                && $event->prompt->prompt === 'Test prompt';
+        });
+    }
+
+    protected function shortCircuitingMiddleware(): object
+    {
+        return new class
+        {
+            public function handle(AgentPrompt $prompt, Closure $next)
+            {
+                return new AgentResponse(
+                    'test-invocation-id',
+                    'Short-circuited response',
+                    new \Laravel\Ai\Responses\Data\Usage,
+                    new \Laravel\Ai\Responses\Data\Meta,
+                );
+            }
+        };
     }
 
     protected function middleware(): object

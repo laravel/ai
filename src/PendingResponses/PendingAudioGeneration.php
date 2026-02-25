@@ -4,6 +4,7 @@ namespace Laravel\Ai\PendingResponses;
 
 use Illuminate\Support\Traits\Conditionable;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\FakePendingDispatch;
@@ -68,7 +69,7 @@ class PendingAudioGeneration
     /**
      * Generate the audio.
      */
-    public function generate(array|string|null $provider = null, ?string $model = null): AudioResponse
+    public function generate(Lab|array|string|null $provider = null, ?string $model = null): AudioResponse
     {
         $providers = Provider::formatProviderAndModelList(
             $provider ?? config('ai.default_for_audio'), $model
@@ -96,7 +97,7 @@ class PendingAudioGeneration
     /**
      * Queue the generation of the audio.
      */
-    public function queue(array|string|null $provider = null, ?string $model = null): QueuedAudioResponse
+    public function queue(Lab|array|string|null $provider = null, ?string $model = null): QueuedAudioResponse
     {
         if (Ai::audioIsFaked()) {
             Ai::recordAudioGeneration(

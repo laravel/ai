@@ -4,6 +4,7 @@ namespace Laravel\Ai\Responses;
 
 use Closure;
 use Illuminate\Contracts\Support\Responsable;
+use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Support\Collection;
 use IteratorAggregate;
 use Laravel\Ai\Responses\Data\Meta;
@@ -97,18 +98,40 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
      * @param  \Illuminate\Http\Request  $request
      * @return \Symfony\Component\HttpFoundation\Response
      */
-    public function toResponse($request)
+    public function toResponse($request): Response
     {
         if ($this->usesVercelProtocol) {
             return $this->toVercelProtocolResponse();
         }
 
-        return response()->stream(function () {
+        $stream = function (): iterable {
             foreach ($this as $event) {
                 yield 'data: '.((string) $event)."\n\n";
             }
 
             yield "data: [DONE]\n\n";
+        };
+
+        return response()->stream(function () use ($stream): void {
+            $result = $stream();
+
+            if (! is_iterable($result)) {
+                return;
+            }
+
+            foreach ($result as $message) {
+                if (connection_aborted()) {
+                    return;
+                }
+
+                echo (string) $message;
+
+                if (ob_get_level() > 0) {
+                    ob_flush();
+                }
+
+                flush();
+            }
         }, headers: ['Content-Type' => 'text/event-stream']);
     }
 

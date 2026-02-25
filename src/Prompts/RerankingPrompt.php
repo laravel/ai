@@ -34,13 +34,7 @@ class RerankingPrompt implements Countable
      */
     public function documentsContain(string $string): bool
     {
-        foreach ($this->documents as $document) {
-            if (Str::contains($document, $string)) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any($this->documents, fn ($document) => Str::contains($document, $string));
     }
 
     /**

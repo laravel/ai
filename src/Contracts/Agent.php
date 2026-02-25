@@ -31,7 +31,7 @@ interface Agent
     public function stream(
         string $prompt,
         array $attachments = [],
-        ?string $provider = null,
+        array|string|null $provider = null,
         ?string $model = null
     ): StreamableAgentResponse;
 

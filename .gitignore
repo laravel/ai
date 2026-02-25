@@ -1,8 +1,11 @@
 /.phpunit.cache
+/.fleet
+/.idea
+/.vscode
 /composer.lock
 /phpunit.xml
 /tmp
 /vendor
 CLAUDE.md
 GEMINI_TTS.md
-.idea/
+.env

@@ -26,12 +26,12 @@ class Files
      */
     public static function put(
         StorableFile|UploadedFile|string $file,
-        ?string $mime = null,
+        ?string $mimeType = null,
         ?string $name = null,
         ?string $provider = null): StoredFileResponse
     {
         if (is_string($file)) {
-            $file = (new Base64Document(base64_encode($file), $mime))->as($name);
+            $file = (new Base64Document(base64_encode($file), $mimeType))->as($name);
         }
 
         if ($file instanceof UploadedFile) {
@@ -39,15 +39,15 @@ class Files
                 ->as($name ?? $file->getClientOriginalName());
         }
 
-        return Ai::fakeableFileProvider($provider)->putFile($file, $mime, $name);
+        return Ai::fakeableFileProvider($provider)->putFile($file, $mimeType, $name);
     }
 
     /**
      * Store the file at the given local path.
      */
-    public static function putFromPath(string $path, ?string $mime = null, ?string $name = null, ?string $provider = null): StoredFileResponse
+    public static function putFromPath(string $path, ?string $mimeType = null, ?string $name = null, ?string $provider = null): StoredFileResponse
     {
-        return static::put(Document::fromPath($path), $mime, $name, provider: $provider);
+        return static::put(Document::fromPath($path), $mimeType, $name, provider: $provider);
     }
 
     /**

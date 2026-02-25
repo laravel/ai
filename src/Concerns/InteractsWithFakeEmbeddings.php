@@ -54,9 +54,9 @@ trait InteractsWithFakeEmbeddings
     public function assertEmbeddingsGenerated(Closure $callback): self
     {
         PHPUnit::assertTrue(
-            (new Collection($this->recordedEmbeddingsGenerations))->filter(function (EmbeddingsPrompt $prompt) use ($callback) {
+            (new Collection($this->recordedEmbeddingsGenerations))->contains(function (EmbeddingsPrompt $prompt) use ($callback) {
                 return $callback($prompt);
-            })->count() > 0,
+            }),
             'An expected embeddings generation was not recorded.'
         );
 
@@ -69,9 +69,9 @@ trait InteractsWithFakeEmbeddings
     public function assertEmbeddingsNotGenerated(Closure $callback): self
     {
         PHPUnit::assertTrue(
-            (new Collection($this->recordedEmbeddingsGenerations))->filter(function (EmbeddingsPrompt $prompt) use ($callback) {
+            (new Collection($this->recordedEmbeddingsGenerations))->doesntContain(function (EmbeddingsPrompt $prompt) use ($callback) {
                 return $callback($prompt);
-            })->count() === 0,
+            }),
             'An unexpected embeddings generation was recorded.'
         );
 
@@ -97,9 +97,9 @@ trait InteractsWithFakeEmbeddings
     public function assertEmbeddingsQueued(Closure $callback): self
     {
         PHPUnit::assertTrue(
-            (new Collection($this->recordedQueuedEmbeddingsGenerations))->filter(function (QueuedEmbeddingsPrompt $prompt) use ($callback) {
+            (new Collection($this->recordedQueuedEmbeddingsGenerations))->contains(function (QueuedEmbeddingsPrompt $prompt) use ($callback) {
                 return $callback($prompt);
-            })->count() > 0,
+            }),
             'An expected queued embeddings generation was not recorded.'
         );
 
@@ -112,9 +112,9 @@ trait InteractsWithFakeEmbeddings
     public function assertEmbeddingsNotQueued(Closure $callback): self
     {
         PHPUnit::assertTrue(
-            (new Collection($this->recordedQueuedEmbeddingsGenerations))->filter(function (QueuedEmbeddingsPrompt $prompt) use ($callback) {
+            (new Collection($this->recordedQueuedEmbeddingsGenerations))->doesntContain(function (QueuedEmbeddingsPrompt $prompt) use ($callback) {
                 return $callback($prompt);
-            })->count() === 0,
+            }),
             'An unexpected queued embeddings generation was recorded.'
         );
 
