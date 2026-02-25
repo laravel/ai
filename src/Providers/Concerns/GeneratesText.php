@@ -17,13 +17,17 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
+use Laravel\Ai\Events\ToolApprovalRequested;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Middleware\RememberConversation;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Responses\Data\PendingToolCall;
+use Laravel\Ai\Responses\PendingApprovalResponse;
 use Laravel\Ai\Responses\StructuredAgentResponse;
+use Laravel\Ai\Responses\TextResponse;
 
 use function Laravel\Ai\pipeline;
 
@@ -69,11 +73,13 @@ trait GeneratesText
 
                 return $agent instanceof HasStructuredOutput
                     ? (new StructuredAgentResponse($invocationId, $response->structured, $response->text, $response->usage, $response->meta))
-                        ->withToolCallsAndResults($response->toolCalls, $response->toolResults)
-                        ->withSteps($response->steps)
-                    : (new AgentResponse($invocationId, $response->text, $response->usage, $response->meta))
+                    ->withToolCallsAndResults($response->toolCalls, $response->toolResults)
+                    ->withSteps($response->steps)
+                    : ($response->hasPendingApprovals()
+                        ? $this->buildPendingApprovalResponse($invocationId, $response, $agent)
+                        : (new AgentResponse($invocationId, $response->text, $response->usage, $response->meta))
                         ->withMessages($response->messages)
-                        ->withSteps($response->steps);
+                        ->withSteps($response->steps));
             });
 
         $this->events->dispatch(
@@ -94,8 +100,10 @@ trait GeneratesText
             return $next($prompt);
         }] : [];
 
-        if (in_array(RemembersConversations::class, class_uses_recursive($agent))
-            && $agent->hasConversationParticipant()) {
+        if (
+            in_array(RemembersConversations::class, class_uses_recursive($agent))
+            && $agent->hasConversationParticipant()
+        ) {
             $middleware[] = new RememberConversation(resolve(ConversationStore::class), $this);
         }
 
@@ -114,14 +122,60 @@ trait GeneratesText
                 $this->currentToolInvocationId = (string) Str::uuid7();
 
                 $this->events->dispatch(new InvokingTool(
-                    $invocationId, $this->currentToolInvocationId, $agent, $tool, $arguments
+                    $invocationId,
+                    $this->currentToolInvocationId,
+                    $agent,
+                    $tool,
+                    $arguments
                 ));
             },
             invoked: function (Tool $tool, array $arguments, mixed $result) use ($invocationId, $agent) {
                 $this->events->dispatch(new ToolInvoked(
-                    $invocationId, $this->currentToolInvocationId, $agent, $tool, $arguments, $result
+                    $invocationId,
+                    $this->currentToolInvocationId,
+                    $agent,
+                    $tool,
+                    $arguments,
+                    $result
                 ));
             },
         );
+    }
+
+    /**
+     * Build a pending approval response from a text response with pending approvals.
+     */
+    protected function buildPendingApprovalResponse(
+        string $invocationId,
+        TextResponse $response,
+        Agent $agent,
+    ): PendingApprovalResponse {
+        $pendingResponse = new PendingApprovalResponse(
+            $invocationId,
+            $response->text,
+            $response->usage,
+            $response->meta
+        );
+
+        foreach ($response->pendingApprovals() as $pending) {
+            $pendingToolCall = new PendingToolCall(
+                tool: $pending['tool'],
+                arguments: $pending['arguments'],
+                agentClass: $agent::class,
+                invocationId: $invocationId,
+            );
+
+            $pendingResponse->addPendingToolCall($pendingToolCall);
+
+            $this->events->dispatch(new ToolApprovalRequested(
+                $invocationId,
+                $agent,
+                $pending['tool'],
+                $pending['arguments'],
+                $pendingToolCall
+            ));
+        }
+
+        return $pendingResponse;
     }
 }
