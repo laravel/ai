@@ -316,7 +316,7 @@ class PrismGateway implements Gateway
 
         return new TranscriptionResponse(
             $response->text,
-            new Collection($response->additionalContent['segments'] ?? [])->map(function ($segment) {
+            (new Collection($response->additionalContent['segments'] ?? []))->map(function ($segment) {
                 return new TranscriptionSegment(
                     $segment['text'],
                     $segment['speaker'],
