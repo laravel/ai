@@ -17,6 +17,7 @@ use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Prism\PrismGateway;
 use Laravel\Ai\Providers\AnthropicProvider;
 use Laravel\Ai\Providers\AzureOpenAiProvider;
+use Laravel\Ai\Providers\ChutesProvider;
 use Laravel\Ai\Providers\CohereProvider;
 use Laravel\Ai\Providers\DeepSeekProvider;
 use Laravel\Ai\Providers\ElevenLabsProvider;
@@ -286,6 +287,18 @@ class AiManager extends MultipleInstanceManager
         );
     }
 
+    /**
+     * Create a Chutes powered instance.
+     */
+    public function createChutesDriver(array $config): ChutesProvider
+    {
+        return new ChutesProvider(
+            new PrismGateway($this->app['events']),
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+  
     /**
      * Create an Azure OpenAI powered instance.
      */

@@ -372,6 +372,7 @@ class PrismGateway implements Gateway
         return match ($provider->driver()) {
             'anthropic' => PrismProvider::Anthropic,
             'azure' => PrismProvider::OpenAI, 
+            'chutes' => PrismProvider::Groq,
             'deepseek' => PrismProvider::DeepSeek,
             'gemini' => PrismProvider::Gemini,
             'groq' => PrismProvider::Groq,
