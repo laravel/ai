@@ -5,15 +5,19 @@ namespace Laravel\Ai\Gateway;
 use Closure;
 use Generator;
 use Illuminate\JsonSchema\Types\ObjectType;
+use Illuminate\JsonSchema\Types\Type;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Contracts\Schemable;
 use Laravel\Ai\Messages\UserMessage;
+use Laravel\Ai\RawSchema;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
+use Laravel\Ai\Schema;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
@@ -37,7 +41,7 @@ class FakeTextGateway implements TextGateway
     /**
      * Generate text representing the next message in a conversation.
      *
-     * @param  array<string, \Illuminate\JsonSchema\Types\Type>|null  $schema
+     * @param  array<string, \Illuminate\JsonSchema\Types\Type>|Schemable|null  $schema
      */
     public function generateText(
         TextProvider $provider,
@@ -45,7 +49,7 @@ class FakeTextGateway implements TextGateway
         ?string $instructions,
         array $messages = [],
         array $tools = [],
-        ?array $schema = null,
+        array|Schemable|null $schema = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): TextResponse {
@@ -61,7 +65,7 @@ class FakeTextGateway implements TextGateway
     /**
      * Stream text representing the next message in a conversation.
      *
-     * @param  array<string, \Illuminate\JsonSchema\Types\Type>|null  $schema
+     * @param  array<string, \Illuminate\JsonSchema\Types\Type>|Schemable|null  $schema
      */
     public function streamText(
         string $invocationId,
@@ -70,7 +74,7 @@ class FakeTextGateway implements TextGateway
         ?string $instructions,
         array $messages = [],
         array $tools = [],
-        ?array $schema = null,
+        array|Schemable|null $schema = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): Generator {
@@ -110,7 +114,7 @@ class FakeTextGateway implements TextGateway
     /**
      * Get the next response instance.
      */
-    protected function nextResponse(TextProvider $provider, string $model, string $prompt, Collection $attachments, ?array $schema): mixed
+    protected function nextResponse(TextProvider $provider, string $model, string $prompt, Collection $attachments, array|Schemable|null $schema): mixed
     {
         $response = is_array($this->responses)
             ? ($this->responses[$this->currentResponseIndex] ?? null)
@@ -130,7 +134,7 @@ class FakeTextGateway implements TextGateway
         string $model,
         string $prompt,
         Collection $attachments,
-        ?array $schema): mixed
+        array|Schemable|null $schema): mixed
     {
         if (is_null($response)) {
             if ($this->preventStrayPrompts) {
@@ -139,7 +143,7 @@ class FakeTextGateway implements TextGateway
 
             $response = is_null($schema)
                 ? 'Fake response for prompt: '.Str::words($prompt, 10)
-                : generate_fake_data_for_json_schema_type(new ObjectType($schema));
+                : $this->generateFakeDataForSchema($schema);
         }
 
         return match (true) {
@@ -158,6 +162,154 @@ class FakeTextGateway implements TextGateway
                 $schema
             ),
             default => $response,
+        };
+    }
+
+    /**
+     * @param  array<string, \Illuminate\JsonSchema\Types\Type>|Schemable  $schema
+     */
+    protected function generateFakeDataForSchema(array|Schemable $schema): mixed
+    {
+        if (is_array($schema)) {
+            if ($this->isTypeMapSchema($schema)) {
+                return generate_fake_data_for_json_schema_type(new ObjectType($schema));
+            }
+
+            return $this->generateFakeDataForRawSchema($schema);
+        }
+
+        if ($schema instanceof Schema && $schema->schema instanceof ObjectType) {
+            return generate_fake_data_for_json_schema_type($schema->schema);
+        }
+
+        if ($schema instanceof RawSchema) {
+            return $this->generateFakeDataForRawSchema($schema->definition());
+        }
+
+        return $this->generateFakeDataForRawSchema(
+            $this->normalizeRawSchemaPayload($schema->toSchema())
+        );
+    }
+
+    /**
+     * Determine if the array contains Laravel JsonSchema type instances.
+     */
+    protected function isTypeMapSchema(array $schema): bool
+    {
+        return $schema === [] || collect($schema)->every(
+            fn (mixed $value): bool => $value instanceof Type
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $schema
+     */
+    protected function normalizeRawSchemaPayload(array $schema): array
+    {
+        if (isset($schema['name']) && is_string($schema['name'])) {
+            unset($schema['name']);
+        }
+
+        return $schema;
+    }
+
+    /**
+     * @param  array<string, mixed>  $schema
+     */
+    protected function generateFakeDataForRawSchema(array $schema): mixed
+    {
+        $type = $schema['type'] ?? 'object';
+
+        if (is_array($type)) {
+            $type = collect($type)->first(fn ($value) => is_string($value) && $value !== 'null') ?? 'string';
+        }
+
+        if (isset($schema['enum']) && is_array($schema['enum']) && count($schema['enum']) > 0) {
+            return $schema['enum'][array_rand($schema['enum'])];
+        }
+
+        if (array_key_exists('const', $schema)) {
+            return $schema['const'];
+        }
+
+        return match ($type) {
+            'object' => (function () use ($schema) {
+                $properties = is_array($schema['properties'] ?? null)
+                    ? $schema['properties']
+                    : [];
+                $required = collect($schema['required'] ?? [])
+                    ->filter(fn ($value) => is_string($value))
+                    ->values()
+                    ->all();
+                $result = [];
+
+                foreach ($properties as $name => $property) {
+                    if (! is_string($name) || ! is_array($property)) {
+                        continue;
+                    }
+
+                    if (! in_array($name, $required, true) && random_int(0, 1) === 0) {
+                        continue;
+                    }
+
+                    $result[$name] = $this->generateFakeDataForRawSchema($property);
+                }
+
+                return $result;
+            })(),
+            'array' => (function () use ($schema) {
+                $min = (int) ($schema['minItems'] ?? 1);
+                $max = (int) ($schema['maxItems'] ?? max($min, 3));
+
+                if ($max < $min) {
+                    $max = $min;
+                }
+
+                $items = is_array($schema['items'] ?? null)
+                    ? $schema['items']
+                    : ['type' => 'string'];
+                $count = random_int($min, $max);
+
+                return collect(range(1, $count))
+                    ->map(fn ($value) => $this->generateFakeDataForRawSchema($items))
+                    ->all();
+            })(),
+            'integer' => (function () use ($schema) {
+                $min = (int) ($schema['minimum'] ?? 0);
+                $max = (int) ($schema['maximum'] ?? max($min, 100));
+
+                if ($max < $min) {
+                    $max = $min;
+                }
+
+                return random_int($min, $max);
+            })(),
+            'number' => (function () use ($schema) {
+                $min = (float) ($schema['minimum'] ?? 0.0);
+                $max = (float) ($schema['maximum'] ?? max($min, 100.0));
+
+                if ($max < $min) {
+                    $max = $min;
+                }
+
+                return $min + mt_rand() / mt_getrandmax() * ($max - $min);
+            })(),
+            'boolean' => random_int(0, 1) === 0,
+            default => (function () use ($schema) {
+                if (isset($schema['format']) && is_string($schema['format'])) {
+                    return match ($schema['format']) {
+                        'date' => date('Y-m-d'),
+                        'date-time' => date('c'),
+                        'email' => 'user@example.com',
+                        'time' => date('H:i:s'),
+                        'uri', 'url' => 'https://example.com',
+                        'uuid' => (string) Str::uuid(),
+                        default => 'string',
+                    };
+                }
+
+                return 'string';
+            })(),
         };
     }
 

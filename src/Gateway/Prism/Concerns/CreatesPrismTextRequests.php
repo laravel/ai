@@ -2,12 +2,16 @@
 
 namespace Laravel\Ai\Gateway\Prism\Concerns;
 
+use Illuminate\JsonSchema\Types\Type;
 use Laravel\Ai\Contracts\Prompt;
+use Laravel\Ai\Contracts\Schemable;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\AnthropicProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\RawSchema;
+use Prism\Prism\Contracts\Schema as PrismSchema;
 use Prism\Prism\Facades\Prism;
 
 trait CreatesPrismTextRequests
@@ -18,7 +22,7 @@ trait CreatesPrismTextRequests
     protected function createPrismTextRequest(
         Provider $provider,
         string $model,
-        ?array $schema,
+        array|Schemable|null $schema,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ) {
@@ -43,9 +47,9 @@ trait CreatesPrismTextRequests
     /**
      * Add structured output options to the request.
      */
-    protected function withStructuredOutputOptions($request, Provider $provider, array $schema)
+    protected function withStructuredOutputOptions($request, Provider $provider, array|Schemable $schema)
     {
-        $request = $request->withSchema(new ObjectSchema($schema));
+        $request = $request->withSchema($this->normalizeStructuredSchema($schema));
 
         if ($provider instanceof OpenAiProvider) {
             $request = $request->withProviderOptions(['schema' => ['strict' => true]]);
@@ -57,7 +61,7 @@ trait CreatesPrismTextRequests
     /**
      * Add provider-specific options to the request.
      */
-    protected function withProviderOptions($request, Provider $provider, ?array $schema, ?TextGenerationOptions $options)
+    protected function withProviderOptions($request, Provider $provider, array|Schemable|null $schema, ?TextGenerationOptions $options)
     {
         if ($provider instanceof AnthropicProvider) {
             return $request
@@ -72,6 +76,34 @@ trait CreatesPrismTextRequests
         }
 
         return $request;
+    }
+
+    /**
+     * Normalize schema definitions from array or schemable instances.
+     */
+    protected function normalizeStructuredSchema(array|Schemable $schema): PrismSchema
+    {
+        if ($schema instanceof PrismSchema) {
+            return $schema;
+        }
+
+        if ($schema instanceof Schemable) {
+            return RawSchema::fromArray($schema->toSchema(), $schema->name());
+        }
+
+        return $this->isTypeMapSchema($schema)
+            ? new ObjectSchema($schema)
+            : RawSchema::fromArray($schema);
+    }
+
+    /**
+     * Determine if the array contains Laravel JsonSchema type instances.
+     */
+    protected function isTypeMapSchema(array $schema): bool
+    {
+        return $schema === [] || collect($schema)->every(
+            fn (mixed $value): bool => $value instanceof Type
+        );
     }
 
     /**

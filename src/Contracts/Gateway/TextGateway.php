@@ -5,6 +5,7 @@ namespace Laravel\Ai\Contracts\Gateway;
 use Closure;
 use Generator;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Contracts\Schemable;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Responses\TextResponse;
 
@@ -13,7 +14,7 @@ interface TextGateway
     /**
      * Generate text representing the next message in a conversation.
      *
-     * @param  array<string, \Illuminate\JsonSchema\Types\Type>|null  $schema
+     * @param  array<string, \Illuminate\JsonSchema\Types\Type>|Schemable|null  $schema
      */
     public function generateText(
         TextProvider $provider,
@@ -21,7 +22,7 @@ interface TextGateway
         ?string $instructions,
         array $messages = [],
         array $tools = [],
-        ?array $schema = null,
+        array|Schemable|null $schema = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): TextResponse;
@@ -29,7 +30,7 @@ interface TextGateway
     /**
      * Stream text representing the next message in a conversation.
      *
-     * @param  array<string, \Illuminate\JsonSchema\Types\Type>|null  $schema
+     * @param  array<string, \Illuminate\JsonSchema\Types\Type>|Schemable|null  $schema
      */
     public function streamText(
         string $invocationId,
@@ -38,7 +39,7 @@ interface TextGateway
         ?string $instructions,
         array $messages = [],
         array $tools = [],
-        ?array $schema = null,
+        array|Schemable|null $schema = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): Generator;

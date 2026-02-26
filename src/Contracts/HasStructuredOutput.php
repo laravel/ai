@@ -9,5 +9,5 @@ interface HasStructuredOutput
     /**
      * Get the agent's structured output schema definition.
      */
-    public function schema(JsonSchema $schema): array;
+    public function schema(JsonSchema $schema): array|Schemable;
 }
