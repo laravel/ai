@@ -103,34 +103,12 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
             return $this->toVercelProtocolResponse();
         }
 
-        $stream = function (): iterable {
+        return response()->stream(function () {
             foreach ($this as $event) {
                 yield 'data: '.((string) $event)."\n\n";
             }
 
             yield "data: [DONE]\n\n";
-        };
-
-        return response()->stream(function () use ($stream): void {
-            $result = $stream();
-
-            if (! is_iterable($result)) {
-                return;
-            }
-
-            foreach ($result as $message) {
-                if (connection_aborted()) {
-                    return;
-                }
-
-                echo (string) $message;
-
-                if (ob_get_level() > 0) {
-                    ob_flush();
-                }
-
-                flush();
-            }
         }, headers: ['Content-Type' => 'text/event-stream']);
     }
 
