@@ -12,16 +12,21 @@ class Base64Document extends Document implements Arrayable, JsonSerializable, St
 {
     use CanBeUploadedToProvider;
 
-    public function __construct(public string $base64, public ?string $mime = null) {}
+    public ?string $mime = null;
+
+    public function __construct(public string $base64, ?string $mimeType = null)
+    {
+        $this->mime = $mimeType;
+    }
 
     /**
      * Create a new instance from an uploaded file.
      */
-    public static function fromUpload(UploadedFile $file, ?string $mime = null): self
+    public static function fromUpload(UploadedFile $file, ?string $mimeType = null): self
     {
         return new static(
             base64_encode($file->getContent()),
-            mime: $mime ?? $file->getClientMimeType(),
+            mimeType: $mimeType ?? $file->getClientMimeType(),
         );
     }
 
@@ -44,9 +49,9 @@ class Base64Document extends Document implements Arrayable, JsonSerializable, St
     /**
      * Set the document's MIME type.
      */
-    public function withMimeType(string $mime): static
+    public function withMimeType(string $mimeType): static
     {
-        $this->mime = $mime;
+        $this->mime = $mimeType;
 
         return $this;
     }

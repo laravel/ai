@@ -5,6 +5,7 @@ namespace Laravel\Ai\Jobs;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Enums\Lab;
 
 class InvokeAgent implements ShouldQueue
 {
@@ -17,7 +18,7 @@ class InvokeAgent implements ShouldQueue
         public Agent $agent,
         public string $prompt,
         public array $attachments = [],
-        public array|string|null $provider = null,
+        public Lab|array|string|null $provider = null,
         public ?string $model = null) {}
 
     /**
@@ -38,7 +39,7 @@ class InvokeAgent implements ShouldQueue
      *
      * @return string
      */
-    public function displayName()
+    public function displayName(): string
     {
         return $this->agent::class;
     }

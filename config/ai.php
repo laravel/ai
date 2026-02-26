@@ -55,6 +55,15 @@ return [
             'key' => env('ANTHROPIC_API_KEY'),
         ],
 
+        'azure' => [
+            'driver' => 'azure',
+            'key' => env('AZURE_OPENAI_API_KEY'),
+            'url' => env('AZURE_OPENAI_URL'),
+            'api_version' => env('AZURE_OPENAI_API_VERSION', '2024-10-21'),
+            'deployment' => env('AZURE_OPENAI_DEPLOYMENT', 'gpt-4o'),
+            'embedding_deployment' => env('AZURE_OPENAI_EMBEDDING_DEPLOYMENT', 'text-embedding-3-small'),
+        ],
+
         'cohere' => [
             'driver' => 'cohere',
             'key' => env('COHERE_API_KEY'),

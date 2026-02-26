@@ -17,7 +17,7 @@ class FileFakeTest extends TestCase
         Files::fake([
             'first-content',
             fn ($fileId) => "content-for-{$fileId}",
-            new FileResponse('id', mime: 'application/json', content: 'third-content'),
+            new FileResponse('id', mimeType: 'application/json', content: 'third-content'),
         ]);
 
         $response = Files::get('file_1');

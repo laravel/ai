@@ -21,7 +21,7 @@ trait HandlesRateLimiting
         try {
             return $callback();
         } catch (RequestException $e) {
-            if ($e->response->status() === 429) {
+            if ($e->response !== null && $e->response->status() === 429) {
                 throw RateLimitedException::forProvider(
                     $providerName, $e->getCode(), $e
                 );

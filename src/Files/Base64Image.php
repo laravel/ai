@@ -11,7 +11,12 @@ class Base64Image extends Image implements Arrayable, JsonSerializable, Storable
 {
     use CanBeUploadedToProvider;
 
-    public function __construct(public string $base64, public ?string $mime = null) {}
+    public ?string $mime = null;
+
+    public function __construct(public string $base64, ?string $mimeType = null)
+    {
+        $this->mime = $mimeType;
+    }
 
     /**
      * Get the raw representation of the file.
@@ -32,9 +37,9 @@ class Base64Image extends Image implements Arrayable, JsonSerializable, Storable
     /**
      * Set the image's MIME type.
      */
-    public function withMimeType(string $mime): static
+    public function withMimeType(string $mimeType): static
     {
-        $this->mime = $mime;
+        $this->mime = $mimeType;
 
         return $this;
     }

@@ -30,17 +30,17 @@ class Transcription
     /**
      * Generate a transcription of the given audio.
      */
-    public static function fromBase64(string $base64, ?string $mime = null): PendingTranscriptionGeneration
+    public static function fromBase64(string $base64, ?string $mimeType = null): PendingTranscriptionGeneration
     {
-        return static::of(new Base64Audio($base64, $mime));
+        return static::of(new Base64Audio($base64, $mimeType));
     }
 
     /**
      * Generate a transcription of the audio at the given path.
      */
-    public static function fromPath(string $path, ?string $mime = null): PendingTranscriptionGeneration
+    public static function fromPath(string $path, ?string $mimeType = null): PendingTranscriptionGeneration
     {
-        return static::of(new LocalAudio($path, $mime));
+        return static::of(new LocalAudio($path, $mimeType));
     }
 
     /**
