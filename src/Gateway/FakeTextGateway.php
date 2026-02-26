@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway;
 use Closure;
 use Generator;
 use Illuminate\JsonSchema\Types\ObjectType;
+use Illuminate\JsonSchema\Types\Type;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
@@ -37,7 +38,7 @@ class FakeTextGateway implements TextGateway
     /**
      * Generate text representing the next message in a conversation.
      *
-     * @param  array<string, \Illuminate\JsonSchema\Types\Type>|null  $schema
+     * @param  array<string, Type>|null  $schema
      */
     public function generateText(
         TextProvider $provider,
@@ -61,7 +62,7 @@ class FakeTextGateway implements TextGateway
     /**
      * Stream text representing the next message in a conversation.
      *
-     * @param  array<string, \Illuminate\JsonSchema\Types\Type>|null  $schema
+     * @param  array<string, Type>|null  $schema
      */
     public function streamText(
         string $invocationId,

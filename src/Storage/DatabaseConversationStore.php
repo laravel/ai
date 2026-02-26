@@ -96,7 +96,7 @@ class DatabaseConversationStore implements ConversationStore
     /**
      * Get the latest messages for the given conversation.
      *
-     * @return \Illuminate\Support\Collection<int, \Laravel\Ai\Messages\Message>
+     * @return Collection<int, Message>
      */
     public function getLatestConversationMessages(string $conversationId, int $limit): Collection
     {

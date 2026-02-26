@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\Event;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\TestCase;
@@ -79,8 +81,8 @@ class AgentMiddlewareTest extends TestCase
                 return new AgentResponse(
                     'test-invocation-id',
                     'Short-circuited response',
-                    new \Laravel\Ai\Responses\Data\Usage,
-                    new \Laravel\Ai\Responses\Data\Meta,
+                    new Usage,
+                    new Meta,
                 );
             }
         };

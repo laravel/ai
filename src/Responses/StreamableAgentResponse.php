@@ -4,13 +4,14 @@ namespace Laravel\Ai\Responses;
 
 use Closure;
 use Illuminate\Contracts\Support\Responsable;
-use Symfony\Component\HttpFoundation\Response;
+use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use IteratorAggregate;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\TextDelta;
+use Symfony\Component\HttpFoundation\Response;
 use Traversable;
 
 class StreamableAgentResponse implements IteratorAggregate, Responsable
@@ -95,8 +96,7 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     /**
      * Create an HTTP response that represents the object.
      *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Symfony\Component\HttpFoundation\Response
+     * @param  Request  $request
      */
     public function toResponse($request): Response
     {

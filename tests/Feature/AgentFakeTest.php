@@ -11,6 +11,7 @@ use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
+use PHPUnit\Framework\AssertionFailedError;
 use RuntimeException;
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\Feature\Agents\StructuredAgent;
@@ -208,7 +209,7 @@ class AgentFakeTest extends TestCase
         try {
             AssistantAgent::assertQueued('Some prompt');
             $this->fail('Expected assertion to fail.');
-        } catch (\PHPUnit\Framework\AssertionFailedError $e) {
+        } catch (AssertionFailedError $e) {
             $this->assertStringContainsString('An expected queued prompt was not received.', $e->getMessage());
         }
     }

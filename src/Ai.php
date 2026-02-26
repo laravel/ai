@@ -5,7 +5,7 @@ namespace Laravel\Ai;
 use Illuminate\Support\Facades\Facade;
 
 /**
- * @see \Laravel\Ai\AiManager
+ * @see AiManager
  */
 class Ai extends Facade
 {
