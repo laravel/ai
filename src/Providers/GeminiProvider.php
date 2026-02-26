@@ -110,7 +110,7 @@ class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider
      */
     public function defaultImageModel(): string
     {
-        return $this->config['models']['image']['default'] ?? 'gemini-3-pro-image-preview';
+        return $this->config['models']['image']['default'] ?? 'gemini-3.1-flash-image-preview';
     }
 
     /**
