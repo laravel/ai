@@ -38,8 +38,6 @@ class BroadcastAgent implements ShouldQueue
 
     /**
      * Get the display name for the queued job.
-     *
-     * @return string
      */
     public function displayName(): string
     {

@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Contracts;
 
 use Illuminate\Support\Collection;
+use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 
@@ -31,7 +32,7 @@ interface ConversationStore
     /**
      * Get the latest messages for the given conversation.
      *
-     * @return \Illuminate\Support\Collection<int, \Laravel\Ai\Messages\Message>
+     * @return Collection<int, Message>
      */
     public function getLatestConversationMessages(string $conversationId, int $limit): Collection;
 }

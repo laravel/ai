@@ -8,6 +8,7 @@ use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\FakePendingDispatch;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\StoredImage;
 use Laravel\Ai\Jobs\GenerateImage;
@@ -36,7 +37,7 @@ class PendingImageGeneration
     /**
      * Provide the reference images that should be sent with the request.
      *
-     * @param  array<\Laravel\Ai\Files\Image>  $attachments
+     * @param  array<Image>  $attachments
      */
     public function attachments(array $attachments): self
     {

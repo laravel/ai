@@ -441,8 +441,6 @@ class AiManager extends MultipleInstanceManager
 
     /**
      * Get the default instance name.
-     *
-     * @return string
      */
     public function getDefaultInstance(): string
     {
@@ -455,7 +453,6 @@ class AiManager extends MultipleInstanceManager
      * Set the default instance name.
      *
      * @param  string  $name
-     * @return void
      */
     public function setDefaultInstance($name): void
     {
@@ -466,7 +463,6 @@ class AiManager extends MultipleInstanceManager
      * Get the instance specific configuration.
      *
      * @param  string  $name
-     * @return array
      */
     public function getInstanceConfig($name): array
     {

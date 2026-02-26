@@ -18,7 +18,7 @@ class FileSearch extends ProviderTool
     /**
      * Create a new file search tool instance.
      *
-     * @param  array|(\Closure(FileSearchQuery): mixed)|null  $where
+     * @param  array|(Closure(FileSearchQuery): mixed)|null  $where
      */
     public function __construct(
         public array $stores,
@@ -43,7 +43,7 @@ class FileSearch extends ProviderTool
     /**
      * Resolve the filters from the given value.
      *
-     * @param  (\Closure(FileSearchQuery): mixed)|array|null  $where
+     * @param  (Closure(FileSearchQuery): mixed)|array|null  $where
      * @return array<int, array{type: string, key: string, value: mixed}>
      */
     protected function resolveFilters(Closure|array|null $where): array
