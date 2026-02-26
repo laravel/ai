@@ -9,17 +9,17 @@ abstract class Document extends File
     /**
      * Create a new document from a string.
      */
-    public static function fromString(string $content, ?string $mime = null): Base64Document
+    public static function fromString(string $content, ?string $mimeType = null): Base64Document
     {
-        return new Base64Document(base64_encode($content), $mime);
+        return new Base64Document(base64_encode($content), $mimeType);
     }
 
     /**
      * Create a new document from Base64 data.
      */
-    public static function fromBase64(string $base64, ?string $mime = null): Base64Document
+    public static function fromBase64(string $base64, ?string $mimeType = null): Base64Document
     {
-        return new Base64Document($base64, $mime);
+        return new Base64Document($base64, $mimeType);
     }
 
     /**
@@ -57,11 +57,11 @@ abstract class Document extends File
     /**
      * Create a new Base64 document using the given file upload.
      */
-    public static function fromUpload(UploadedFile $file, ?string $mime = null): Base64Document
+    public static function fromUpload(UploadedFile $file, ?string $mimeType = null): Base64Document
     {
-        return new Base64Document(
+        return (new Base64Document(
             base64_encode($file->getContent()),
-            $mime ?? $file->getClientMimeType(),
-        )->as($file->getClientOriginalName());
+            $mimeType ?? $file->getClientMimeType(),
+        ))->as($file->getClientOriginalName());
     }
 }

@@ -27,7 +27,7 @@ class AnthropicFileGateway implements FileGateway
 
         return new FileResponse(
             id: $response->json('id'),
-            mime: $response->json('mime_type'),
+            mimeType: $response->json('mime_type'),
         );
     }
 
