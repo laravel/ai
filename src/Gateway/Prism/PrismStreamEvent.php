@@ -47,7 +47,7 @@ class PrismStreamEvent
             PrismStreamEventType::ProviderToolEvent => static::toProviderToolEvent($event),
             // PrismStreamEventType::Citation => new Citation($id ?? $event->id, $event->messageId, PrismCitations::toLaravelCitation($event->citation), $event->timestamp),
             PrismStreamEventType::StreamEnd => static::toStreamEndEvent($event),
-            PrismStreamEventType::Error => new Error($event->id, $event->type, $event->message, $event->recoverable, $event->timestamp, $event->metadata),
+            PrismStreamEventType::Error => new Error($event->id, $event->errorType, $event->message, $event->recoverable, $event->timestamp, $event->metadata),
             default => null
         }, function ($event) use ($invocationId) {
             $event?->withInvocationId($invocationId);
