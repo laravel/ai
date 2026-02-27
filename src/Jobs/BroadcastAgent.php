@@ -29,11 +29,17 @@ class BroadcastAgent implements ShouldQueue
      */
     public function handle(): void
     {
-        $this->withCallbacks(fn () => $this->agent->stream($this->prompt, $this->attachments, $this->provider, $this->model)
+        $streamedResponse = null;
+
+        $this->agent->stream($this->prompt, $this->attachments, $this->provider, $this->model)
             ->each(function (StreamEvent $event) {
                 $event->broadcastNow($this->channels);
             })
-        );
+            ->then(function ($response) use (&$streamedResponse) {
+                $streamedResponse = $response;
+            });
+
+        $this->withCallbacks(fn () => $streamedResponse);
     }
 
     /**
