@@ -5,15 +5,19 @@ namespace Laravel\Ai\Gateway\Prism;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
+use Laravel\Ai\Files\Base64Audio;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Files\File;
+use Laravel\Ai\Files\LocalAudio;
 use Laravel\Ai\Files\LocalDocument;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\ProviderDocument;
 use Laravel\Ai\Files\ProviderImage;
+use Laravel\Ai\Files\RemoteAudio;
 use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Files\RemoteImage;
+use Laravel\Ai\Files\StoredAudio;
 use Laravel\Ai\Files\StoredDocument;
 use Laravel\Ai\Files\StoredImage;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -75,6 +79,10 @@ class PrismMessages
                 $attachment instanceof LocalDocument => PrismDocument::fromPath($attachment->path),
                 $attachment instanceof RemoteDocument => PrismDocument::fromUrl($attachment->url),
                 $attachment instanceof StoredDocument => PrismDocument::fromStoragePath($attachment->path, $attachment->disk),
+                $attachment instanceof Base64Audio => PrismAudio::fromBase64($attachment->base64, $attachment->mime),
+                $attachment instanceof LocalAudio => PrismAudio::fromLocalPath($attachment->path, $attachment->mime),
+                $attachment instanceof RemoteAudio => PrismAudio::fromUrl($attachment->url, $attachment->mime),
+                $attachment instanceof StoredAudio => PrismAudio::fromStoragePath($attachment->path, $attachment->disk),
                 $attachment instanceof UploadedFile && static::isImage($attachment) => PrismImage::fromBase64(base64_encode($attachment->get()), $attachment->getClientMimeType()),
                 $attachment instanceof UploadedFile && static::isAudio($attachment) => PrismAudio::fromBase64(base64_encode($attachment->get()), $attachment->getClientMimeType()),
                 $attachment instanceof UploadedFile => PrismDocument::fromBase64(base64_encode($attachment->get()), $attachment->getClientMimeType()),
