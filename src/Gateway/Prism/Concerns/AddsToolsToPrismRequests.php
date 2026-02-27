@@ -104,7 +104,7 @@ trait AddsToolsToPrismRequests
             : throw new RuntimeException('Provider ['.$provider->name().'] does not support file search.');
 
         return match ($provider->driver()) {
-            'openai' => new PrismProviderTool('file_search', options: $options),
+            'azure', 'openai' => new PrismProviderTool('file_search', options: $options),
             'gemini' => new PrismProviderTool('fileSearch', options: $options),
         };
     }
@@ -136,7 +136,7 @@ trait AddsToolsToPrismRequests
         return match ($provider->driver()) {
             'anthropic' => new PrismProviderTool('web_search_20250305', 'web_search', options: $options),
             'gemini' => new PrismProviderTool('google_search'),
-            'openai' => new PrismProviderTool('web_search', options: $options),
+            'azure', 'openai' => new PrismProviderTool('web_search', options: $options),
         };
     }
 }
