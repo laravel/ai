@@ -1,0 +1,36 @@
+<?php
+
+namespace {{ namespace }};
+
+use Laravel\Ai\Contracts\SubAgent;
+use Laravel\Ai\Promptable;
+use Stringable;
+
+class {{ class }} implements SubAgent
+{
+    use Promptable;
+
+    /**
+     * Get the subagent name.
+     */
+    public function name(): string
+    {
+        return '{{ class }}';
+    }
+
+    /**
+     * Get the instructions that the subagent should follow.
+     */
+    public function instructions(): Stringable|string
+    {
+        return 'You are a helpful subagent.';
+    }
+
+    /**
+     * Get the description of the subagent's purpose.
+     */
+    public function description(): Stringable|string
+    {
+        return 'A description of the subagent.';
+    }
+}
