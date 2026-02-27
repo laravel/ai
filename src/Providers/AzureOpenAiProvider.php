@@ -83,6 +83,10 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, TextPro
     {
         $url = rtrim($this->config['url'] ?? '', '/');
 
+        if (str_contains($url, '/openai/v1')) {
+            return $url;
+        }
+
         return "{$url}/openai/v1";
     }
 }
