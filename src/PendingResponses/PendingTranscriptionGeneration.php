@@ -26,6 +26,7 @@ class PendingTranscriptionGeneration
 
     protected bool $diarize = false;
 
+    protected ?string $context = null;
     protected int $timeout = 30;
 
     public function __construct(
@@ -53,6 +54,11 @@ class PendingTranscriptionGeneration
     }
 
     /**
+     * Specify context to improve transcription accuracy.
+     */
+    public function context(string $context): self
+    {
+        $this->context = $context;
      * Specify the timeout (in seconds) for the transcription generation.
      */
     public function timeout(int $seconds = 30): self
@@ -77,7 +83,9 @@ class PendingTranscriptionGeneration
             $model ??= $provider->defaultTranscriptionModel();
 
             try {
-                return $provider->transcribe($this->audio, $this->language, $this->diarize, $model, $this->timeout);
+              
+              return $provider->transcribe($this->audio, $this->language, $this->diarize, $model, $this->context, $this->timeout); 
+            
             } catch (FailoverableException $e) {
                 event(new ProviderFailedOver($provider, $model, $e));
 
@@ -105,7 +113,8 @@ class PendingTranscriptionGeneration
                     $this->language,
                     $this->diarize,
                     $provider,
-                    $model
+                    $model,
+                    $this->context,
                 )
             );
 

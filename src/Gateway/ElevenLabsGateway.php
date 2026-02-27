@@ -59,6 +59,7 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
         TranscribableAudio $audio,
         ?string $language = null,
         bool $diarize = false,
+        ?string $context = null,
         int $timeout = 30
     ): TranscriptionResponse {
         $audioContent = match (true) {
