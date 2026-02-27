@@ -10,6 +10,7 @@ use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\Gateway;
+use Laravel\Ai\Exceptions\ToolApprovalRequiredException;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
@@ -48,8 +49,8 @@ class PrismGateway implements Gateway
 
     public function __construct(protected Dispatcher $events)
     {
-        $this->invokingToolCallback = fn () => true;
-        $this->toolInvokedCallback = fn () => true;
+        $this->invokingToolCallback = fn() => true;
+        $this->toolInvokedCallback = fn() => true;
     }
 
     /**
@@ -83,6 +84,13 @@ class PrismGateway implements Gateway
             $response = $request
                 ->withMessages($this->toPrismMessages($messages))
                 ->{$structured ? 'asStructured' : 'asText'}();
+        } catch (ToolApprovalRequiredException $e) {
+            return TextResponse::pendingApproval(
+                $e->tool,
+                $e->arguments,
+                $provider,
+                $model,
+            );
         } catch (PrismVendorException $e) {
             throw PrismException::toAiException($e, $provider, $model);
         }
@@ -145,7 +153,10 @@ class PrismGateway implements Gateway
 
             foreach ($events as $event) {
                 if (! is_null($event = PrismStreamEvent::toLaravelStreamEvent(
-                    $invocationId, $event, $provider->name(), $model
+                    $invocationId,
+                    $event,
+                    $provider->name(),
+                    $model
                 ))) {
                     yield $event;
                 }
@@ -212,7 +223,7 @@ class PrismGateway implements Gateway
         return (new Collection($attachments))->map(function ($attachment) {
             if (! $attachment instanceof File && ! $attachment instanceof UploadedFile) {
                 throw new InvalidArgumentException(
-                    'Unsupported attachment type ['.$attachment::class.']'
+                    'Unsupported attachment type [' . $attachment::class . ']'
                 );
             }
 
@@ -220,7 +231,7 @@ class PrismGateway implements Gateway
                 $attachment instanceof LocalImage => PrismImage::fromLocalPath($attachment->path, $attachment->mime),
                 $attachment instanceof StoredImage => PrismImage::fromStoragePath($attachment->path, $attachment->disk),
                 $attachment instanceof UploadedFile && static::isImage($attachment) => PrismImage::fromBase64(base64_encode($attachment->get()), $attachment->getClientMimeType()),
-                default => throw new InvalidArgumentException('Unsupported attachment type ['.$attachment::class.']'),
+                default => throw new InvalidArgumentException('Unsupported attachment type [' . $attachment::class . ']'),
             };
 
             if ($attachment instanceof File && $attachment->name) {
@@ -297,7 +308,8 @@ class PrismGateway implements Gateway
                 ])
                 ->withInput(match (true) {
                     $audio instanceof TranscribableAudio => Audio::fromBase64(
-                        base64_encode($audio->content()), $audio->mimeType()
+                        base64_encode($audio->content()),
+                        $audio->mimeType()
                     ),
                 });
 
@@ -336,11 +348,11 @@ class PrismGateway implements Gateway
         EmbeddingProvider $provider,
         string $model,
         array $inputs,
-        int $dimensions): EmbeddingsResponse
-    {
+        int $dimensions
+    ): EmbeddingsResponse {
         $request = tap(
             Prism::embeddings(),
-            fn ($prism) => $this->configure($prism, $provider, $model)
+            fn($prism) => $this->configure($prism, $provider, $model)
         );
 
         $request->withProviderOptions(match ($provider->driver()) {
@@ -381,7 +393,7 @@ class PrismGateway implements Gateway
             'openrouter' => PrismProvider::OpenRouter,
             'voyageai' => PrismProvider::VoyageAI,
             'xai' => PrismProvider::XAI,
-            default => throw new InvalidArgumentException('Gateway does not support provider ['.$provider.'].'),
+            default => throw new InvalidArgumentException('Gateway does not support provider [' . $provider . '].'),
         };
     }
 

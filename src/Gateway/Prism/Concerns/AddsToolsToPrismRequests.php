@@ -8,6 +8,7 @@ use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Exceptions\ToolApprovalRequiredException;
 use Laravel\Ai\Gateway\Prism\PrismTool;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
@@ -55,11 +56,11 @@ trait AddsToolsToPrismRequests
             ->for((string) $tool->description())
             ->when(
                 ! empty($tool->schema(new JsonSchemaTypeFactory)),
-                fn ($prismTool) => $prismTool->withParameter(
+                fn($prismTool) => $prismTool->withParameter(
                     new ObjectSchema($tool->schema(new JsonSchemaTypeFactory))
                 )
             )
-            ->using(fn ($arguments) => $this->invokeTool($tool, $arguments))
+            ->using(fn($arguments) => $this->invokeTool($tool, $arguments))
             ->withoutErrorHandling();
     }
 
@@ -70,12 +71,24 @@ trait AddsToolsToPrismRequests
     {
         $arguments = $arguments['schema_definition'] ?? $arguments;
 
+        if ($this->toolRequiresApproval($tool)) {
+            throw new ToolApprovalRequiredException($tool, $arguments);
+        }
+
         call_user_func($this->invokingToolCallback, $tool, $arguments);
 
         return (string) tap(
             $tool->handle(new ToolRequest($arguments)),
-            fn ($result) => call_user_func($this->toolInvokedCallback, $tool, $arguments, $result)
+            fn($result) => call_user_func($this->toolInvokedCallback, $tool, $arguments, $result)
         );
+    }
+
+    /**
+     * Determine if the given tool requires human approval before execution.
+     */
+    protected function toolRequiresApproval(Tool $tool): bool
+    {
+        return method_exists($tool, 'requiresApproval') && $tool->requiresApproval();
     }
 
     /**
@@ -101,7 +114,7 @@ trait AddsToolsToPrismRequests
     {
         $options = $provider instanceof SupportsFileSearch
             ? $provider->fileSearchToolOptions($tool)
-            : throw new RuntimeException('Provider ['.$provider->name().'] does not support file search.');
+            : throw new RuntimeException('Provider [' . $provider->name() . '] does not support file search.');
 
         return match ($provider->driver()) {
             'openai' => new PrismProviderTool('file_search', options: $options),
@@ -116,7 +129,7 @@ trait AddsToolsToPrismRequests
     {
         $options = $provider instanceof SupportsWebFetch
             ? $provider->webFetchToolOptions($tool)
-            : throw new RuntimeException('Provider ['.$provider->name().'] does not support web fetch.');
+            : throw new RuntimeException('Provider [' . $provider->name() . '] does not support web fetch.');
 
         return match ($provider->driver()) {
             'anthropic' => new PrismProviderTool('web_fetch_20250910', 'web_fetch', options: $options),
@@ -131,7 +144,7 @@ trait AddsToolsToPrismRequests
     {
         $options = $provider instanceof SupportsWebSearch
             ? $provider->webSearchToolOptions($tool)
-            : throw new RuntimeException('Provider ['.$provider->name().'] does not support web search.');
+            : throw new RuntimeException('Provider [' . $provider->name() . '] does not support web search.');
 
         return match ($provider->driver()) {
             'anthropic' => new PrismProviderTool('web_search_20250305', 'web_search', options: $options),
