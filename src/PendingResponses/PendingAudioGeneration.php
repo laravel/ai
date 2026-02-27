@@ -75,6 +75,8 @@ class PendingAudioGeneration
             $provider ?? config('ai.default_for_audio'), $model
         );
 
+        $lastException = null;
+
         foreach ($providers as $provider => $model) {
             $provider = Ai::fakeableAudioProvider($provider);
 
@@ -85,13 +87,15 @@ class PendingAudioGeneration
                     $this->text, $this->voice, $this->instructions, $model
                 );
             } catch (FailoverableException $e) {
+                $lastException = $e;
+
                 event(new ProviderFailedOver($provider, $model, $e));
 
                 continue;
             }
         }
 
-        throw $e;
+        throw $lastException;
     }
 
     /**
