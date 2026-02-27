@@ -37,7 +37,7 @@ class ModerationResponse implements Arrayable, Countable, IteratorAggregate, Jso
     /**
      * Get only the flagged categories.
      */
-    public function flagged(): Collection
+    public function flaggedCategories(): Collection
     {
         return (new Collection($this->categories))->filter->flagged->values();
     }

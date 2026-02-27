@@ -84,8 +84,8 @@ class ModerationFakeTest extends TestCase
         $this->assertCount(3, $response->categories);
         $this->assertTrue($response->category('hate')->flagged);
         $this->assertTrue($response->category('violence')->flagged);
-        $this->assertCount(2, $response->flagged());
-        $this->assertEquals('hate', (string) $response->flagged()[0]);
+        $this->assertCount(2, $response->flaggedCategories());
+        $this->assertEquals('hate', (string) $response->flaggedCategories()[0]);
     }
 
     public function test_moderation_can_be_faked_with_closure(): void

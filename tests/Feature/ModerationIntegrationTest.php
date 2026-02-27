@@ -32,7 +32,7 @@ class ModerationIntegrationTest extends TestCase
 
         $this->assertInstanceOf(ModerationResponse::class, $response);
         $this->assertTrue($response->flagged);
-        $this->assertTrue($response->flagged()->isNotEmpty());
+        $this->assertTrue($response->flaggedCategories()->isNotEmpty());
         $this->assertNotNull($response->category('violence'));
     }
 
