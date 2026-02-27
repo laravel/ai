@@ -9,6 +9,7 @@ use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
+use Laravel\Ai\Contracts\Providers\ModerationProvider;
 use Laravel\Ai\Contracts\Providers\RerankingProvider;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -39,6 +40,7 @@ class AiManager extends MultipleInstanceManager
     use Concerns\InteractsWithFakeEmbeddings;
     use Concerns\InteractsWithFakeFiles;
     use Concerns\InteractsWithFakeImages;
+    use Concerns\InteractsWithFakeModeration;
     use Concerns\InteractsWithFakeReranking;
     use Concerns\InteractsWithFakeStores;
     use Concerns\InteractsWithFakeTranscriptions;
@@ -131,6 +133,34 @@ class AiManager extends MultipleInstanceManager
 
         return $this->rerankingIsFaked()
             ? (clone $provider)->useRerankingGateway($this->fakeRerankingGateway())
+            : $provider;
+    }
+
+    /**
+     * Get a moderation provider instance by name.
+     *
+     * @throws LogicException
+     */
+    public function moderationProvider(?string $name = null): ModerationProvider
+    {
+        return tap($this->instance($name), function ($instance) {
+            if (! $instance instanceof ModerationProvider) {
+                throw new LogicException('Provider ['.$instance::class.'] does not support moderation.');
+            }
+        });
+    }
+
+    /**
+     * Get a moderation provider instance, using a fake gateway if moderation is faked.
+     *
+     * @throws LogicException
+     */
+    public function fakeableModerationProvider(?string $name = null): ModerationProvider
+    {
+        $provider = $this->moderationProvider($name);
+
+        return $this->moderationIsFaked()
+            ? (clone $provider)->useModerationGateway($this->fakeModerationGateway())
             : $provider;
     }
 
