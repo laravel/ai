@@ -79,9 +79,11 @@ class PrismGateway implements Gateway
             $this->addProviderTools($provider, $request, $tools, $options);
         }
 
+        $prismMessages = $this->toPrismMessages($messages);
+
         try {
             $response = $request
-                ->withMessages($this->toPrismMessages($messages))
+                ->withMessages($prismMessages)
                 ->{$structured ? 'asStructured' : 'asText'}();
         } catch (PrismVendorException $e) {
             throw PrismException::toAiException($e, $provider, $model);
@@ -106,7 +108,7 @@ class PrismGateway implements Gateway
                 PrismUsage::toLaravelUsage($response->usage),
                 new Meta($provider->name(), $response->meta->model, $citations),
             ))->withMessages(
-                PrismMessages::toLaravelMessages($response->messages)
+                PrismMessages::toLaravelMessages($response->messages)->slice(count($prismMessages))->values()
             )->withSteps(PrismSteps::toLaravelSteps($response->steps, $provider));
     }
 

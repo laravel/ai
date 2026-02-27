@@ -27,6 +27,8 @@ use Prism\Prism\ValueObjects\Media\Image as PrismImage;
 use Prism\Prism\ValueObjects\Messages\AssistantMessage as PrismAssistantMessage;
 use Prism\Prism\ValueObjects\Messages\ToolResultMessage as PrismToolResultMessage;
 use Prism\Prism\ValueObjects\Messages\UserMessage as PrismUserMessage;
+use Prism\Prism\ValueObjects\ToolCall as PrismToolCall;
+use Prism\Prism\ValueObjects\ToolResult as PrismToolResult;
 
 class PrismMessages
 {
@@ -37,6 +39,18 @@ class PrismMessages
     {
         return $messages
             ->map(function ($message) {
+                if ($message instanceof ToolResultMessage) {
+                    return new PrismToolResultMessage(
+                        $message->toolResults->map(fn ($toolResult) => new PrismToolResult(
+                            toolCallId: $toolResult->id,
+                            toolName: $toolResult->name,
+                            args: $toolResult->arguments,
+                            result: $toolResult->result,
+                            toolCallResultId: $toolResult->resultId,
+                        ))->all()
+                    );
+                }
+
                 $message = Message::tryFrom($message);
 
                 if ($message->role === MessageRole::User) {
@@ -47,7 +61,21 @@ class PrismMessages
                 }
 
                 if ($message->role === MessageRole::Assistant) {
-                    return new PrismAssistantMessage($message->content);
+                    $toolCalls = $message instanceof AssistantMessage && $message->toolCalls->isNotEmpty()
+                        ? $message->toolCalls->map(fn ($toolCall) => new PrismToolCall(
+                            id: $toolCall->id,
+                            name: $toolCall->name,
+                            arguments: $toolCall->arguments,
+                            resultId: $toolCall->resultId,
+                            reasoningId: $toolCall->reasoningId,
+                            reasoningSummary: $toolCall->reasoningSummary,
+                        ))->all()
+                        : [];
+
+                    return new PrismAssistantMessage(
+                        $message->content ?? '',
+                        toolCalls: $toolCalls,
+                    );
                 }
             })->filter()->values();
     }
