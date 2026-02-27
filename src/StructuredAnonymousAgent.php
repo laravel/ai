@@ -5,23 +5,28 @@ namespace Laravel\Ai;
 use Closure;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\HasStructuredOutput;
+use Laravel\Ai\Contracts\Schemable;
 use Laravel\SerializableClosure\SerializableClosure;
 
 class StructuredAnonymousAgent extends AnonymousAgent implements HasStructuredOutput
 {
-    public $schema;
+    public array|Schemable|SerializableClosure $schema;
 
     public function __construct(
         public string $instructions,
         public iterable $messages,
         public iterable $tools,
-        Closure $schema,
+        Closure|array|Schemable $schema,
     ) {
-        $this->schema = new SerializableClosure($schema);
+        $this->schema = $schema instanceof Closure
+            ? new SerializableClosure($schema)
+            : $schema;
     }
 
-    public function schema(JsonSchema $schema): array
+    public function schema(JsonSchema $schema): array|Schemable
     {
-        return call_user_func($this->schema, $schema);
+        return $this->schema instanceof SerializableClosure
+            ? call_user_func($this->schema, $schema)
+            : $this->schema;
     }
 }

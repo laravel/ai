@@ -7,14 +7,18 @@ use Laravel\Ai\Ai;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\QueuedAgentPrompt;
+use Laravel\Ai\RawSchema;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
+use Laravel\Ai\StructuredAnonymousAgent;
 use RuntimeException;
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\Feature\Agents\StructuredAgent;
 use Tests\TestCase;
+
+use function Laravel\Ai\agent;
 
 class AgentFakeTest extends TestCase
 {
@@ -112,6 +116,44 @@ class AgentFakeTest extends TestCase
         StructuredAgent::fake();
 
         $response = (new StructuredAgent)->prompt('Gold prompt');
+
+        $this->assertIsString($response['symbol']);
+    }
+
+    public function test_ad_hoc_agents_with_raw_schema_objects_can_be_faked(): void
+    {
+        Ai::fakeAgent(StructuredAnonymousAgent::class, [
+            ['symbol' => 'Ag'],
+        ]);
+
+        $response = agent(
+            schema: RawSchema::fromArray([
+                'type' => 'object',
+                'properties' => [
+                    'symbol' => ['type' => 'string'],
+                ],
+                'required' => ['symbol'],
+                'additionalProperties' => false,
+            ]),
+        )->prompt('What is the chemical symbol for silver?');
+
+        $this->assertSame('Ag', $response['symbol']);
+    }
+
+    public function test_ad_hoc_agents_with_raw_schema_arrays_can_be_faked_without_predefined_responses(): void
+    {
+        Ai::fakeAgent(StructuredAnonymousAgent::class);
+
+        $response = agent(
+            schema: [
+                'type' => 'object',
+                'properties' => [
+                    'symbol' => ['type' => 'string'],
+                ],
+                'required' => ['symbol'],
+                'additionalProperties' => false,
+            ],
+        )->prompt('What is the chemical symbol for silver?');
 
         $this->assertIsString($response['symbol']);
     }
