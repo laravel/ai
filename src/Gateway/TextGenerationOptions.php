@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway;
 use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Attributes\MaxTokens;
 use Laravel\Ai\Attributes\Temperature;
+use Laravel\Ai\Attributes\Thinking;
 use Laravel\Ai\Contracts\Agent;
 use ReflectionClass;
 
@@ -14,6 +15,7 @@ class TextGenerationOptions
         public readonly ?int $maxSteps = null,
         public readonly ?int $maxTokens = null,
         public readonly ?float $temperature = null,
+        public readonly ?array $thinking = null,
     ) {
         //
     }
@@ -28,11 +30,21 @@ class TextGenerationOptions
         $maxSteps = $reflection->getAttributes(MaxSteps::class);
         $maxTokens = $reflection->getAttributes(MaxTokens::class);
         $temperature = $reflection->getAttributes(Temperature::class);
+        $thinking = $reflection->getAttributes(Thinking::class);
 
         return new self(
             maxSteps: ! empty($maxSteps) ? $maxSteps[0]->newInstance()->value : null,
             maxTokens: ! empty($maxTokens) ? $maxTokens[0]->newInstance()->value : null,
             temperature: ! empty($temperature) ? $temperature[0]->newInstance()->value : null,
+            thinking: ! empty($thinking) ? (function () use ($thinking) {
+                $instance = $thinking[0]->newInstance();
+
+                return [
+                    'enabled' => $instance->enabled,
+                    'budgetTokens' => $instance->budgetTokens,
+                    'effort' => $instance->effort,
+                ];
+            })() : null,
         );
     }
 }
