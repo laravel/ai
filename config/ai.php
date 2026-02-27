@@ -124,6 +124,24 @@ return [
             'driver' => 'xai',
             'key' => env('XAI_API_KEY'),
         ],
+
+        // 'claude-cli' => [
+        //     'driver' => 'claude-cli',
+        //     'default_model' => 'sonnet',
+        //     'timeout' => 300,
+        // ],
+
+        // 'codex-cli' => [
+        //     'driver' => 'codex-cli',
+        //     'default_model' => 'gpt-4.1',
+        //     'timeout' => 300,
+        // ],
+
+        // 'gemini-cli' => [
+        //     'driver' => 'gemini-cli',
+        //     'default_model' => 'gemini-2.5-flash',
+        //     'timeout' => 120,
+        // ],
     ],
 
 ];

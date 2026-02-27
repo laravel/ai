@@ -15,8 +15,12 @@ use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Prism\PrismGateway;
+use Laravel\Ai\Gateway\Cli\ClaudeCliGateway;
+use Laravel\Ai\Gateway\Cli\CodexCliGateway;
+use Laravel\Ai\Gateway\Cli\GeminiCliGateway;
 use Laravel\Ai\Providers\AnthropicProvider;
 use Laravel\Ai\Providers\AzureOpenAiProvider;
+use Laravel\Ai\Providers\CliProvider;
 use Laravel\Ai\Providers\CohereProvider;
 use Laravel\Ai\Providers\DeepSeekProvider;
 use Laravel\Ai\Providers\ElevenLabsProvider;
@@ -283,6 +287,42 @@ class AiManager extends MultipleInstanceManager
             new PrismGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create a Claude CLI powered instance.
+     */
+    public function createClaudeCliDriver(array $config): CliProvider
+    {
+        return new CliProvider(
+            new ClaudeCliGateway($config),
+            $config,
+            $this->app->make(Dispatcher::class),
+        );
+    }
+
+    /**
+     * Create a Codex CLI powered instance.
+     */
+    public function createCodexCliDriver(array $config): CliProvider
+    {
+        return new CliProvider(
+            new CodexCliGateway($config),
+            $config,
+            $this->app->make(Dispatcher::class),
+        );
+    }
+
+    /**
+     * Create a Gemini CLI powered instance.
+     */
+    public function createGeminiCliDriver(array $config): CliProvider
+    {
+        return new CliProvider(
+            new GeminiCliGateway($config),
+            $config,
+            $this->app->make(Dispatcher::class),
         );
     }
 
