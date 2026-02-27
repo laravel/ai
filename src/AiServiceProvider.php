@@ -56,6 +56,14 @@ class AiServiceProvider extends ServiceProvider
             return $request->generate(provider: $provider, model: $model)->embeddings[0];
         });
 
+        // Moderation macro...
+        Stringable::macro('moderate', function (
+            ?string $provider = null,
+            ?string $model = null,
+        ) {
+            return Moderation::check($this->value, provider: $provider, model: $model);
+        });
+
         // Reranking macro...
         Collection::macro('rerank', function (
             Closure|array|string $by,
