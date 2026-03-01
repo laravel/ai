@@ -108,7 +108,7 @@ class AiServiceProvider extends ServiceProvider
             __DIR__.'/../stubs/agent.stub' => base_path('stubs/agent.stub'),
             __DIR__.'/../stubs/structured-agent.stub' => base_path('stubs/structured-agent.stub'),
             __DIR__.'/../stubs/tool.stub' => base_path('stubs/tool.stub'),
-            __DIR__.'/../stubs/middleware.stub' => base_path('stubs/middleware.stub'),
+            __DIR__.'/../stubs/agent-middleware.stub' => base_path('stubs/agent-middleware.stub'),
         ], 'ai-stubs');
 
         $this->publishesMigrations([

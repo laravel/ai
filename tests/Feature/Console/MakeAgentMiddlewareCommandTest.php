@@ -24,6 +24,6 @@ class MakeAgentMiddlewareCommandTest extends TestCase
             '--force' => true,
         ])->assertExitCode(0)->run();
 
-        $this->assertFileExists(base_path('stubs/middleware.stub'));
+        $this->assertFileExists(base_path('stubs/agent-middleware.stub'));
     }
 }
