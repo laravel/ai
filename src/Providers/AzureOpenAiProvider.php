@@ -62,7 +62,7 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, TextPro
      */
     public function defaultEmbeddingsDimensions(): int
     {
-        return 1536;
+        return $this->config['models']['embeddings']['dimensions'] ?? 1536;
     }
 
     /**

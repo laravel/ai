@@ -15,7 +15,7 @@ class DeepSeekProvider extends Provider implements TextProvider
      */
     public function defaultTextModel(): string
     {
-        return 'deepseek-chat';
+        return $this->config['models']['text']['default'] ?? 'deepseek-chat';
     }
 
     /**
@@ -23,7 +23,7 @@ class DeepSeekProvider extends Provider implements TextProvider
      */
     public function cheapestTextModel(): string
     {
-        return 'deepseek-chat';
+        return $this->config['models']['text']['cheapest'] ?? 'deepseek-chat';
     }
 
     /**
@@ -31,6 +31,6 @@ class DeepSeekProvider extends Provider implements TextProvider
      */
     public function smartestTextModel(): string
     {
-        return 'deepseek-reasoner';
+        return $this->config['models']['text']['smartest'] ?? 'deepseek-reasoner';
     }
 }

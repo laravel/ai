@@ -12,7 +12,12 @@ class LocalImage extends Image implements Arrayable, JsonSerializable, StorableF
 {
     use CanBeUploadedToProvider;
 
-    public function __construct(public string $path, public ?string $mime = null) {}
+    public ?string $mime = null;
+
+    public function __construct(public string $path, ?string $mimeType = null)
+    {
+        $this->mime = $mimeType;
+    }
 
     /**
      * Get the raw representation of the file.
@@ -43,9 +48,9 @@ class LocalImage extends Image implements Arrayable, JsonSerializable, StorableF
      *
      * @return $this
      */
-    public function withMimeType(string $mime): static
+    public function withMimeType(string $mimeType): static
     {
-        $this->mime = $mime;
+        $this->mime = $mimeType;
 
         return $this;
     }

@@ -15,7 +15,7 @@ class OpenRouterProvider extends Provider implements TextProvider
      */
     public function defaultTextModel(): string
     {
-        return 'anthropic/claude-sonnet-4.5';
+        return $this->config['models']['text']['default'] ?? 'anthropic/claude-sonnet-4.5';
     }
 
     /**
@@ -23,7 +23,7 @@ class OpenRouterProvider extends Provider implements TextProvider
      */
     public function cheapestTextModel(): string
     {
-        return 'anthropic/claude-haiku-4.5';
+        return $this->config['models']['text']['cheapest'] ?? 'anthropic/claude-haiku-4.5';
     }
 
     /**
@@ -31,6 +31,6 @@ class OpenRouterProvider extends Provider implements TextProvider
      */
     public function smartestTextModel(): string
     {
-        return 'anthropic/claude-opus-4.5';
+        return $this->config['models']['text']['smartest'] ?? 'anthropic/claude-opus-4.5';
     }
 }

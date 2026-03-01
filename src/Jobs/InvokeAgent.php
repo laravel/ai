@@ -36,10 +36,8 @@ class InvokeAgent implements ShouldQueue
 
     /**
      * Get the display name for the queued job.
-     *
-     * @return string
      */
-    public function displayName()
+    public function displayName(): string
     {
         return $this->agent::class;
     }

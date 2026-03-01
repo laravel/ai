@@ -29,7 +29,7 @@ class ChatCommand extends Command
     /**
      * Execute the console command.
      */
-    public function handle()
+    public function handle(): int
     {
         $agent = agent(
             instructions: 'You are a helpful assistant.',
@@ -49,5 +49,7 @@ class ChatCommand extends Command
 
             note((string) $response.PHP_EOL);
         }
+
+        return Command::SUCCESS;
     }
 }

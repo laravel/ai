@@ -174,4 +174,15 @@ class TranscriptionFakeTest extends TestCase
             return $prompt->language === 'es' && $prompt->isDiarized();
         });
     }
+
+    public function test_transcription_can_have_timeouts(): void
+    {
+        Transcription::fake();
+
+        Transcription::of(base64_encode('audio'))->timeout(60)->generate();
+
+        Transcription::assertGenerated(function (TranscriptionPrompt $prompt) {
+            return $prompt->timeout === 60;
+        });
+    }
 }

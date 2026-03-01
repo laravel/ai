@@ -26,7 +26,7 @@ class JinaProvider extends Provider implements EmbeddingProvider, RerankingProvi
      */
     public function defaultEmbeddingsModel(): string
     {
-        return 'jina-embeddings-v4';
+        return $this->config['models']['embeddings']['default'] ?? 'jina-embeddings-v4';
     }
 
     /**
@@ -34,7 +34,7 @@ class JinaProvider extends Provider implements EmbeddingProvider, RerankingProvi
      */
     public function defaultEmbeddingsDimensions(): int
     {
-        return 2048;
+        return $this->config['models']['embeddings']['dimensions'] ?? 2048;
     }
 
     /**
@@ -50,7 +50,7 @@ class JinaProvider extends Provider implements EmbeddingProvider, RerankingProvi
      */
     public function defaultRerankingModel(): string
     {
-        return 'jina-reranker-v3';
+        return $this->config['models']['reranking']['default'] ?? 'jina-reranker-v3';
     }
 
     /**

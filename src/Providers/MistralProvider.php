@@ -21,7 +21,7 @@ class MistralProvider extends Provider implements EmbeddingProvider, TextProvide
      */
     public function defaultTextModel(): string
     {
-        return 'mistral-medium-latest';
+        return $this->config['models']['text']['default'] ?? 'mistral-medium-latest';
     }
 
     /**
@@ -29,7 +29,7 @@ class MistralProvider extends Provider implements EmbeddingProvider, TextProvide
      */
     public function cheapestTextModel(): string
     {
-        return 'mistral-small-latest';
+        return $this->config['models']['text']['cheapest'] ?? 'mistral-small-latest';
     }
 
     /**
@@ -37,7 +37,7 @@ class MistralProvider extends Provider implements EmbeddingProvider, TextProvide
      */
     public function smartestTextModel(): string
     {
-        return 'mistral-large-latest';
+        return $this->config['models']['text']['smartest'] ?? 'mistral-large-latest';
     }
 
     /**
@@ -45,7 +45,7 @@ class MistralProvider extends Provider implements EmbeddingProvider, TextProvide
      */
     public function defaultTranscriptionModel(): string
     {
-        return 'voxtral-small-latest';
+        return $this->config['models']['transcription']['default'] ?? 'voxtral-small-latest';
     }
 
     /**
@@ -53,7 +53,7 @@ class MistralProvider extends Provider implements EmbeddingProvider, TextProvide
      */
     public function defaultEmbeddingsModel(): string
     {
-        return 'mistral-embed';
+        return $this->config['models']['embeddings']['default'] ?? 'mistral-embed';
     }
 
     /**
@@ -61,6 +61,6 @@ class MistralProvider extends Provider implements EmbeddingProvider, TextProvide
      */
     public function defaultEmbeddingsDimensions(): int
     {
-        return 1024;
+        return $this->config['models']['embeddings']['dimensions'] ?? 1024;
     }
 }
