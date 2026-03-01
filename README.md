@@ -14,6 +14,12 @@ The Laravel AI SDK provides a unified, expressive API for interacting with AI pr
 
 Documentation for the Laravel AI SDK can be found on the [Laravel website](https://laravel.com/docs/ai-sdk).
 
+## Community Packages
+
+The following community package provides AI provider health checks via an Artisan command:
+
+- [`vaibhavjethva/laravel-ai-health`](https://packagist.org/packages/vaibhavjethva/laravel-ai-health) (`composer require vaibhavjethva/laravel-ai-health`)
+
 ## Contributing
 
 Thank you for considering contributing to Laravel! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
