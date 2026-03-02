@@ -14,6 +14,13 @@ interface ConversationStore
     public function latestConversationId(string|int $userId): ?string;
 
     /**
+     * Get the latest messages for the given conversation.
+     *
+     * @return \Illuminate\Support\Collection<int, \Laravel\Ai\Messages\Conversation>
+     */
+    public function getConversations(string|int $userId, int $limit): Collection;
+
+    /**
      * Store a new conversation and return its ID.
      */
     public function storeConversation(string|int|null $userId, string $title): string;

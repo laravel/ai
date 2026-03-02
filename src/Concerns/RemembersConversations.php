@@ -61,6 +61,24 @@ trait RemembersConversations
     }
 
     /**
+     * Get the list of conversations for the current user.
+     *
+     * @return \Illuminate\Support\Collection<int, \Laravel\Ai\Messages\Conversation>
+     */
+    public function conversations(int $limit = 25): iterable
+    {
+        if (! $this->conversationUser) {
+            return [];
+        }
+
+        return resolve(ConversationStore::class)
+            ->getConversations(
+                $this->conversationUser->id,
+                $limit
+            );
+    }
+
+    /**
      * Get the maximum number of conversation messages to include in context.
      */
     protected function maxConversationMessages(): int
