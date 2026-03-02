@@ -119,7 +119,7 @@ class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider
     public function defaultImageOptions(?string $size = null, $quality = null): array
     {
         return array_filter([
-            'size' => match ($quality) {
+            'image_size' => match ($quality) {
                 'low', '1K' => '1K',
                 'medium', '2K' => '2K',
                 'high', '4K' => '4K',
