@@ -68,7 +68,7 @@ trait RemembersConversations
     public function conversations(int $limit = 25): iterable
     {
         if (! $this->conversationUser) {
-            return [];
+            return collect([]);
         }
 
         return resolve(ConversationStore::class)
