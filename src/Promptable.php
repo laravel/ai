@@ -24,6 +24,7 @@ use Laravel\Ai\Responses\QueuedAgentResponse;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use ReflectionClass;
+use RuntimeException;
 
 trait Promptable
 {
@@ -159,7 +160,7 @@ trait Promptable
             }
         }
 
-        throw $lastException ?? new \RuntimeException('No AI providers were configured.');
+        throw $lastException ?? new RuntimeException('No AI providers were configured.');
     }
 
     /**
