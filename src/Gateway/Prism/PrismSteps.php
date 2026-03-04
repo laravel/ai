@@ -5,7 +5,6 @@ namespace Laravel\Ai\Gateway\Prism;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
-use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Step;
 use Laravel\Ai\Responses\Data\StructuredStep;
 use Prism\Prism\Enums\FinishReason as PrismFinishReason;
@@ -37,7 +36,7 @@ class PrismSteps
             (new Collection($step->toolResults))->map(PrismTool::toLaravelToolResult(...))->all(),
             static::toLaravelFinishReason($step->finishReason),
             PrismUsage::toLaravelUsage($step->usage),
-            new Meta($provider->name(), $step->meta->model),
+            PrismMeta::toLaravelMeta($provider->name(), $step->meta),
         );
     }
 
@@ -53,7 +52,7 @@ class PrismSteps
             (new Collection($step->toolResults))->map(PrismTool::toLaravelToolResult(...))->all(),
             static::toLaravelFinishReason($step->finishReason),
             PrismUsage::toLaravelUsage($step->usage),
-            new Meta($provider->name(), $step->meta->model),
+            PrismMeta::toLaravelMeta($provider->name(), $step->meta),
         );
     }
 

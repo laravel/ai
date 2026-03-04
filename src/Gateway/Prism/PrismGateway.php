@@ -91,12 +91,14 @@ class PrismGateway implements Gateway
             new Collection($response->additionalContent['citations'] ?? [])
         );
 
+        $meta = PrismMeta::toLaravelMeta($provider->name(), $response->meta, $citations);
+
         return $structured
             ? (new StructuredTextResponse(
                 $response->structured,
                 $response->text,
                 PrismUsage::toLaravelUsage($response->usage),
-                new Meta($provider->name(), $response->meta->model, $citations),
+                $meta,
             ))->withToolCallsAndResults(
                 toolCalls: (new Collection($response->toolCalls))->map(PrismTool::toLaravelToolCall(...)),
                 toolResults: (new Collection($response->toolResults))->map(PrismTool::toLaravelToolResult(...)),
@@ -104,7 +106,7 @@ class PrismGateway implements Gateway
             : (new TextResponse(
                 $response->text,
                 PrismUsage::toLaravelUsage($response->usage),
-                new Meta($provider->name(), $response->meta->model, $citations),
+                $meta,
             ))->withMessages(
                 PrismMessages::toLaravelMessages($response->messages)
             )->withSteps(PrismSteps::toLaravelSteps($response->steps, $provider));
@@ -200,7 +202,7 @@ class PrismGateway implements Gateway
                 return new GeneratedImage($image->base64, $image->mimeType);
             }),
             PrismUsage::toLaravelUsage($response->usage),
-            new Meta($provider->name(), $model),
+            PrismMeta::toLaravelMeta($provider->name(), $response->meta),
         );
     }
 
@@ -360,7 +362,7 @@ class PrismGateway implements Gateway
         return new EmbeddingsResponse(
             (new Collection($response->embeddings))->map->embedding->all(),
             $response->usage->tokens,
-            new Meta($provider->name(), $model),
+            PrismMeta::toLaravelMeta($provider->name(), $response->meta),
         );
     }
 
