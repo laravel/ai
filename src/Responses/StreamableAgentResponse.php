@@ -78,7 +78,6 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     public function withinConversation(?string $conversationId, ?object $conversationUser = null): self
     {
         $this->conversationId = $conversationId;
-
         $this->conversationUser = $conversationUser;
 
         return $this;
