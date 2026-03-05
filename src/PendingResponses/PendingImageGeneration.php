@@ -118,6 +118,8 @@ class PendingImageGeneration
             $provider ?? config('ai.default_for_images'), $model
         );
 
+        $lastException = null;
+
         foreach ($providers as $provider => $model) {
             $provider = Ai::fakeableImageProvider($provider);
 
@@ -128,13 +130,15 @@ class PendingImageGeneration
                     $this->prompt, $this->attachments, $this->size, $this->quality, $model, $this->timeout
                 );
             } catch (FailoverableException $e) {
+                $lastException = $e;
+
                 event(new ProviderFailedOver($provider, $model, $e));
 
                 continue;
             }
         }
 
-        throw $e;
+        throw $lastException;
     }
 
     /**

@@ -44,6 +44,8 @@ class PendingReranking
             $provider ?? config('ai.default_for_reranking'), $model
         );
 
+        $lastException = null;
+
         foreach ($providers as $provider => $model) {
             $provider = Ai::fakeableRerankingProvider($provider);
 
@@ -52,12 +54,14 @@ class PendingReranking
             try {
                 return $provider->rerank($this->documents, $query, $this->limit, $model);
             } catch (FailoverableException $e) {
+                $lastException = $e;
+
                 event(new ProviderFailedOver($provider, $model, $e));
 
                 continue;
             }
         }
 
-        throw $e;
+        throw $lastException;
     }
 }

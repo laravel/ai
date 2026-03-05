@@ -71,6 +71,8 @@ class PendingTranscriptionGeneration
             $provider ?? config('ai.default_for_transcription'), $model
         );
 
+        $lastException = null;
+
         foreach ($providers as $provider => $model) {
             $provider = Ai::fakeableTranscriptionProvider($provider);
 
@@ -79,13 +81,15 @@ class PendingTranscriptionGeneration
             try {
                 return $provider->transcribe($this->audio, $this->language, $this->diarize, $model, $this->timeout);
             } catch (FailoverableException $e) {
+                $lastException = $e;
+
                 event(new ProviderFailedOver($provider, $model, $e));
 
                 continue;
             }
         }
 
-        throw $e;
+        throw $lastException;
     }
 
     /**
