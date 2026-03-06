@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use Laravel\Ai\Audio;
-use Laravel\Ai\Gateway\Enums\GeminiVoice;
 use Laravel\Ai\Prompts\AudioPrompt;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\Meta;
@@ -55,16 +54,42 @@ class GeminiAudioTest extends TestCase
         Audio::assertGenerated(fn (AudioPrompt $prompt) => $prompt->voice === 'default-male');
     }
 
+    public function test_gemini_voice_alias_female(): void
+    {
+        Audio::fake();
+
+        $response = Audio::of('Testing female alias')
+            ->voice('female')
+            ->generate('gemini');
+
+        $this->assertNotEmpty($response->audio);
+
+        Audio::assertGenerated(fn (AudioPrompt $prompt) => $prompt->voice === 'female');
+    }
+
+    public function test_gemini_voice_alias_male(): void
+    {
+        Audio::fake();
+
+        $response = Audio::of('Testing male alias')
+            ->voice('male')
+            ->generate('gemini');
+
+        $this->assertNotEmpty($response->audio);
+
+        Audio::assertGenerated(fn (AudioPrompt $prompt) => $prompt->voice === 'male');
+    }
+
     public function test_gemini_multi_speaker_audio_generation(): void
     {
         Audio::fake();
 
         $speakers = json_encode([
-            ['speaker' => 'Alice', 'voice' => 'Kore'],
-            ['speaker' => 'Bob', 'voice' => 'Puck'],
+            ['speaker' => 'host', 'voice' => 'female'],
+            ['speaker' => 'guest', 'voice' => 'male'],
         ]);
 
-        $response = Audio::of('Alice: Hello Bob! Bob: Hi Alice, how are you?')
+        $response = Audio::of('host: Hello everyone! guest: Thanks for having me.')
             ->voice($speakers)
             ->generate('gemini');
 
@@ -72,8 +97,26 @@ class GeminiAudioTest extends TestCase
 
         Audio::assertGenerated(function (AudioPrompt $prompt) use ($speakers) {
             return $prompt->voice === $speakers
-                && $prompt->text === 'Alice: Hello Bob! Bob: Hi Alice, how are you?';
+                && $prompt->text === 'host: Hello everyone! guest: Thanks for having me.';
         });
+    }
+
+    public function test_gemini_multi_speaker_same_gender(): void
+    {
+        Audio::fake();
+
+        $speakers = json_encode([
+            ['speaker' => 'host', 'voice' => 'female_one'],
+            ['speaker' => 'guest', 'voice' => 'female_two'],
+        ]);
+
+        $response = Audio::of('host: Hello! guest: Hi there!')
+            ->voice($speakers)
+            ->generate('gemini');
+
+        $this->assertNotEmpty($response->audio);
+
+        Audio::assertGenerated(fn (AudioPrompt $prompt) => $prompt->voice === $speakers);
     }
 
     public function test_gemini_audio_with_instructions(): void
@@ -100,12 +143,12 @@ class GeminiAudioTest extends TestCase
         $speakers = json_encode([
             [
                 'speaker' => 'Narrator',
-                'voice' => 'Kore',
+                'voice' => 'female',
                 'instructions' => 'Speak calmly and clearly',
             ],
             [
                 'speaker' => 'Character',
-                'voice' => 'Puck',
+                'voice' => 'male',
                 'instructions' => 'Speak with excitement',
             ],
         ]);
@@ -136,9 +179,9 @@ class GeminiAudioTest extends TestCase
     {
         Audio::fake();
 
-        $voices = ['Zephyr', 'Puck', 'Charon', 'Kore', 'Fenrir', 'Aoede'];
+        $voices = ['Zephyr', 'Puck', 'Charon'];
 
-        foreach (array_slice($voices, 0, 3) as $voice) {
+        foreach ($voices as $voice) {
             $response = Audio::of("Testing voice {$voice}")
                 ->voice($voice)
                 ->generate('gemini');
@@ -168,31 +211,24 @@ class GeminiAudioTest extends TestCase
         $method->invoke($gateway, '{invalid json', null);
     }
 
-    public function test_gemini_audio_with_voice_enum(): void
+    public function test_gemini_voice_alias_resolves_correctly(): void
     {
-        Audio::fake();
+        $gateway = new \Laravel\Ai\Gateway\GeminiAudioGateway;
 
-        $response = Audio::of('Testing voice enum')
-            ->voice(GeminiVoice::AOEDE->value)
-            ->generate('gemini');
+        $reflection = new \ReflectionClass($gateway);
+        $method = $reflection->getMethod('resolveVoiceName');
+        $method->setAccessible(true);
 
-        $this->assertNotEmpty($response->audio);
-
-        Audio::assertGenerated(fn (AudioPrompt $prompt) => $prompt->voice === 'Aoede');
-    }
-
-    public function test_gemini_audio_with_random_voice(): void
-    {
-        Audio::fake();
-
-        $randomVoice = GeminiVoice::random();
-
-        $response = Audio::of('Testing random voice')
-            ->voice($randomVoice->value)
-            ->generate('gemini');
-
-        $this->assertNotEmpty($response->audio);
-
-        Audio::assertGenerated(fn (AudioPrompt $prompt) => $prompt->voice === $randomVoice->value);
+        $this->assertSame('Kore', $method->invoke($gateway, 'female'));
+        $this->assertSame('Puck', $method->invoke($gateway, 'male'));
+        $this->assertSame('Kore', $method->invoke($gateway, 'female_one'));
+        $this->assertSame('Aoede', $method->invoke($gateway, 'female_two'));
+        $this->assertSame('Puck', $method->invoke($gateway, 'male_one'));
+        $this->assertSame('Charon', $method->invoke($gateway, 'male_two'));
+        $this->assertSame('Kore', $method->invoke($gateway, 'default-female'));
+        $this->assertSame('Puck', $method->invoke($gateway, 'default-male'));
+        // Direct Gemini voice names pass through unchanged
+        $this->assertSame('Zephyr', $method->invoke($gateway, 'Zephyr'));
+        $this->assertSame('Aoede', $method->invoke($gateway, 'Aoede'));
     }
 }

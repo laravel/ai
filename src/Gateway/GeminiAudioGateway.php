@@ -6,7 +6,6 @@ use Illuminate\Support\Facades\Http;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Gateway\AudioGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
-use Laravel\Ai\Gateway\Enums\GeminiVoice;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\Meta;
 
@@ -15,7 +14,25 @@ class GeminiAudioGateway implements AudioGateway
     use Concerns\HandlesRateLimiting;
 
     /**
+     * Voice aliases mapping descriptive names to Gemini voice names.
+     *
+     * @var array<string, string>
+     */
+    protected const VOICE_ALIASES = [
+        'default-female' => 'Kore',
+        'default-male' => 'Puck',
+        'female' => 'Kore',
+        'male' => 'Puck',
+        'female_one' => 'Kore',
+        'female_two' => 'Aoede',
+        'male_one' => 'Puck',
+        'male_two' => 'Charon',
+    ];
+
+    /**
      * Generate audio from the given text using Gemini TTS.
+     *
+     * @throws \RuntimeException
      */
     public function generateAudio(
         AudioProvider $provider,
@@ -89,17 +106,10 @@ class GeminiAudioGateway implements AudioGateway
      */
     protected function buildSingleSpeakerConfig(string $voice, ?string $instructions): array
     {
-        // Map default voices to Gemini voice names
-        $voiceName = match ($voice) {
-            'default-male' => GeminiVoice::defaultMale()->value,
-            'default-female' => GeminiVoice::defaultFemale()->value,
-            default => $voice,
-        };
-
         $config = [
             'voiceConfig' => [
                 'prebuiltVoiceConfig' => [
-                    'voiceName' => $voiceName,
+                    'voiceName' => $this->resolveVoiceName($voice),
                 ],
             ],
         ];
@@ -135,8 +145,8 @@ class GeminiAudioGateway implements AudioGateway
         $speakerConfigs = [];
 
         foreach ($speakers as $speaker) {
-            $speakerName = $speaker['speaker'] ?? $speaker['name'] ?? 'Speaker' . (count($speakerConfigs) + 1);
-            $voiceName = $speaker['voice'] ?? $speaker['voiceName'] ?? GeminiVoice::defaultFemale()->value;
+            $speakerName = $speaker['speaker'] ?? $speaker['name'] ?? 'Speaker'.(count($speakerConfigs) + 1);
+            $voiceName = $this->resolveVoiceName($speaker['voice'] ?? $speaker['voiceName'] ?? 'female');
 
             $speakerConfig = [
                 'speaker' => $speakerName,
@@ -167,5 +177,13 @@ class GeminiAudioGateway implements AudioGateway
         }
 
         return $config;
+    }
+
+    /**
+     * Resolve a voice alias to a Gemini voice name.
+     */
+    protected function resolveVoiceName(string $voice): string
+    {
+        return self::VOICE_ALIASES[$voice] ?? $voice;
     }
 }
