@@ -26,7 +26,7 @@ class StructuredAgentResponse extends AgentResponse implements Arrayable, ArrayA
     /**
      * Get the instance as an array.
      */
-    public function toArray()
+    public function toArray(): array
     {
         return $this->structured;
     }
@@ -35,9 +35,8 @@ class StructuredAgentResponse extends AgentResponse implements Arrayable, ArrayA
      * Convert the object to its JSON representation.
      *
      * @param  int  $options
-     * @return string
      */
-    public function toJson($options = 0)
+    public function toJson($options = 0): string
     {
         return json_encode($this->structured, $options);
     }

@@ -58,7 +58,7 @@ class RerankingResponse implements Arrayable, Countable, IteratorAggregate, Json
     /**
      * Get the instance as an array.
      */
-    public function toArray()
+    public function toArray(): array
     {
         return [
             'results' => $this->results,

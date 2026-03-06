@@ -16,8 +16,8 @@ class ObjectSchema extends Schema implements HasSchemaType
         bool $strict = true
     ) {
         parent::__construct(
-            name: $name,
             schema: (new ObjectType($schema))->withoutAdditionalProperties(),
+            name: $name,
             strict: $strict
         );
     }

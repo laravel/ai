@@ -4,6 +4,7 @@ namespace Laravel\Ai\PendingResponses;
 
 use Illuminate\Support\Traits\Conditionable;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Providers\Provider;
@@ -37,11 +38,13 @@ class PendingReranking
     /**
      * Rerank the documents based on their relevance to the query.
      */
-    public function rerank(string $query, array|string|null $provider = null, ?string $model = null): RerankingResponse
+    public function rerank(string $query, Lab|array|string|null $provider = null, ?string $model = null): RerankingResponse
     {
         $providers = Provider::formatProviderAndModelList(
             $provider ?? config('ai.default_for_reranking'), $model
         );
+
+        $lastException = null;
 
         foreach ($providers as $provider => $model) {
             $provider = Ai::fakeableRerankingProvider($provider);
@@ -51,12 +54,14 @@ class PendingReranking
             try {
                 return $provider->rerank($this->documents, $query, $this->limit, $model);
             } catch (FailoverableException $e) {
+                $lastException = $e;
+
                 event(new ProviderFailedOver($provider, $model, $e));
 
                 continue;
             }
         }
 
-        throw $e;
+        throw $lastException;
     }
 }

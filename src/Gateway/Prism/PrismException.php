@@ -13,6 +13,10 @@ class PrismException
 {
     /**
      * Create a new AI exception from a Prism exception.
+     *
+     * @throws ProviderOverloadedException
+     * @throws RateLimitedException
+     * @throws \Throwable Rethrows the previous exception when the message indicates a tool call failed.
      */
     public static function toAiException(\Prism\Prism\Exceptions\PrismException $e, Provider $provider, string $model): AiException
     {
@@ -30,7 +34,8 @@ class PrismException
         }
 
         if (str_starts_with($e->getMessage(), 'Calling ') &&
-            str_ends_with($e->getMessage(), 'tool failed')) {
+            str_ends_with($e->getMessage(), 'tool failed') &&
+            $e->getPrevious() !== null) {
             throw $e->getPrevious();
         }
 

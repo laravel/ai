@@ -10,7 +10,7 @@ interface EmbeddingProvider
     /**
      * Get embedding vectors representing the given inputs.
      *
-     * @param  string[]  $input
+     * @param  string[]  $inputs
      */
     public function embeddings(array $inputs, ?int $dimensions = null, ?string $model = null): EmbeddingsResponse;
 

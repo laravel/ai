@@ -39,7 +39,7 @@ trait CanStreamUsingVercelProtocol
                     $state->streamStarted = true;
                 }
 
-                // Store initaited tool calls...
+                // Store initiated tool calls...
                 if ($event instanceof ToolCall) {
                     $state->toolCalls[$event->toolCall->id] = true;
                 }

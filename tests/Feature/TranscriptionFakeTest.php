@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use Exception;
 use Illuminate\Support\Collection;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Prompts\QueuedTranscriptionPrompt;
 use Laravel\Ai\Prompts\TranscriptionPrompt;
 use Laravel\Ai\Responses\Data\Meta;
@@ -145,6 +146,24 @@ class TranscriptionFakeTest extends TestCase
         Transcription::assertNothingQueued();
     }
 
+    public function test_generate_accepts_ai_provider_enum(): void
+    {
+        Transcription::fake();
+
+        Transcription::of(base64_encode('audio'))->generate(provider: Lab::OpenAI);
+
+        Transcription::assertGenerated(fn (TranscriptionPrompt $prompt) => true);
+    }
+
+    public function test_queued_transcription_accepts_ai_provider_enum(): void
+    {
+        Transcription::fake();
+
+        Transcription::fromPath('/path/to/audio.mp3')->queue(provider: Lab::ElevenLabs);
+
+        Transcription::assertQueued(fn (QueuedTranscriptionPrompt $prompt) => $prompt->provider === Lab::ElevenLabs);
+    }
+
     public function test_queued_transcription_language_and_diarize_are_recorded(): void
     {
         Transcription::fake();
@@ -153,6 +172,17 @@ class TranscriptionFakeTest extends TestCase
 
         Transcription::assertQueued(function (QueuedTranscriptionPrompt $prompt) {
             return $prompt->language === 'es' && $prompt->isDiarized();
+        });
+    }
+
+    public function test_transcription_can_have_timeouts(): void
+    {
+        Transcription::fake();
+
+        Transcription::of(base64_encode('audio'))->timeout(60)->generate();
+
+        Transcription::assertGenerated(function (TranscriptionPrompt $prompt) {
+            return $prompt->timeout === 60;
         });
     }
 }

@@ -6,6 +6,7 @@ use Illuminate\Broadcasting\Channel;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 
 class BroadcastAgent implements ShouldQueue
@@ -20,7 +21,7 @@ class BroadcastAgent implements ShouldQueue
         public string $prompt,
         public Channel|array $channels,
         public array $attachments = [],
-        public array|string|null $provider = null,
+        public Lab|array|string|null $provider = null,
         public ?string $model = null) {}
 
     /**
@@ -28,20 +29,24 @@ class BroadcastAgent implements ShouldQueue
      */
     public function handle(): void
     {
-        $this->withCallbacks(fn () => $this->agent->stream($this->prompt, $this->attachments, $this->provider, $this->model)
+        $streamedResponse = null;
+
+        $this->agent->stream($this->prompt, $this->attachments, $this->provider, $this->model)
             ->each(function (StreamEvent $event) {
                 $event->broadcastNow($this->channels);
             })
-        );
+            ->then(function ($response) use (&$streamedResponse) {
+                $streamedResponse = $response;
+            });
+
+        $this->withCallbacks(fn () => $streamedResponse);
     }
 
     /**
      * Get the display name for the queued job.
-     *
-     * @return string
      */
-    public function displayName()
+    public function displayName(): string
     {
-        return get_class($this->agent);
+        return $this->agent::class;
     }
 }

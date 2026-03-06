@@ -6,6 +6,7 @@ use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Traits\Conditionable;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\FakePendingDispatch;
@@ -51,11 +52,13 @@ class PendingEmbeddingsGeneration
     /**
      * Generate the embeddings.
      */
-    public function generate(array|string|null $provider = null, ?string $model = null): EmbeddingsResponse
+    public function generate(Lab|array|string|null $provider = null, ?string $model = null): EmbeddingsResponse
     {
         $providers = Provider::formatProviderAndModelList(
             $provider ?? config('ai.default_for_embeddings'), $model
         );
+
+        $lastException = null;
 
         foreach ($providers as $provider => $model) {
             $provider = Ai::fakeableEmbeddingProvider($provider);
@@ -74,13 +77,15 @@ class PendingEmbeddingsGeneration
                     fn ($response) => $this->cacheEmbeddings($provider, $model, $dimensions, $response)
                 );
             } catch (FailoverableException $e) {
+                $lastException = $e;
+
                 event(new ProviderFailedOver($provider, $model, $e));
 
                 continue;
             }
         }
 
-        throw $e;
+        throw $lastException;
     }
 
     /**
@@ -133,7 +138,7 @@ class PendingEmbeddingsGeneration
     /**
      * Queue the generation of the embeddings.
      */
-    public function queue(array|string|null $provider = null, ?string $model = null): QueuedEmbeddingsResponse
+    public function queue(Lab|array|string|null $provider = null, ?string $model = null): QueuedEmbeddingsResponse
     {
         if (Ai::embeddingsAreFaked()) {
             Ai::recordEmbeddingsGeneration(

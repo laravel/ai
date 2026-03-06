@@ -4,6 +4,7 @@ namespace Laravel\Ai\Files\Concerns;
 
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Stringable;
 
 trait HasRemoteContent
 {
@@ -30,7 +31,7 @@ trait HasRemoteContent
      */
     public function mimeType(): ?string
     {
-        return $this->mime ?? str($this->response()->header('Content-Type'))->before(';')->trim()->toString();
+        return $this->mime ?? (new Stringable($this->response()->header('Content-Type')))->before(';')->trim()->toString();
     }
 
     /**
@@ -38,9 +39,9 @@ trait HasRemoteContent
      *
      * @return $this
      */
-    public function withMimeType(string $mime): static
+    public function withMimeType(string $mimeType): static
     {
-        $this->mime = $mime;
+        $this->mime = $mimeType;
 
         return $this;
     }

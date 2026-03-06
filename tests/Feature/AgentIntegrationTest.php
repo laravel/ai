@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use Exception;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
 use Laravel\Ai\Events\AgentPrompted;
@@ -47,8 +49,8 @@ class AgentIntegrationTest extends TestCase
         $this->assertTrue(str_contains($response->text, 'Laravel'));
         $this->assertTrue(Str::isUuid($response->invocationId, 7));
         $this->assertTrue($response->messages->count() > 0);
-        $this->assertEquals($response->meta->provider, 'groq');
-        $this->assertEquals($response->meta->model, 'openai/gpt-oss-20b');
+        $this->assertEquals('groq', $response->meta->provider);
+        $this->assertEquals('openai/gpt-oss-20b', $response->meta->model);
         $this->assertTrue($response->steps->count() > 0);
 
         Event::assertDispatched(PromptingAgent::class);
@@ -89,7 +91,7 @@ class AgentIntegrationTest extends TestCase
         }
 
         $this->assertTrue(
-            collect($events)
+            (new Collection($events))
                 ->whereInstanceOf(TextDelta::class)
                 ->isNotEmpty()
         );
@@ -218,8 +220,8 @@ class AgentIntegrationTest extends TestCase
         );
 
         $this->assertTrue($response['number'] >= 1 && $response['number'] <= 1000);
-        $this->assertTrue(count($response->toolCalls) === 1);
-        $this->assertTrue(count($response->toolResults) === 1);
+        $this->assertCount(1, $response->toolCalls);
+        $this->assertCount(1, $response->toolResults);
 
         Event::assertDispatched(InvokingTool::class);
 
@@ -236,7 +238,7 @@ class AgentIntegrationTest extends TestCase
             model: $this->toolModel,
         );
 
-        $this->assertTrue($response['number'] === 72019);
+        $this->assertSame(72019, $response['number']);
     }
 
     public function test_agent_tool_exception_handling_is_not_magical(): void
@@ -258,7 +260,7 @@ class AgentIntegrationTest extends TestCase
         } catch (\Exception $e) {
             $caught = true;
 
-            $this->assertTrue(get_class($e) === 'Exception');
+            $this->assertInstanceOf(Exception::class, $e);
             $this->assertEquals('Forced to throw exception.', $e->getMessage());
         }
 

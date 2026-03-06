@@ -4,6 +4,7 @@ namespace Laravel\Ai\PendingResponses;
 
 use Illuminate\Support\Traits\Conditionable;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\FakePendingDispatch;
@@ -111,11 +112,13 @@ class PendingImageGeneration
     /**
      * Generate the image.
      */
-    public function generate(array|string|null $provider = null, ?string $model = null): ImageResponse
+    public function generate(Lab|array|string|null $provider = null, ?string $model = null): ImageResponse
     {
         $providers = Provider::formatProviderAndModelList(
             $provider ?? config('ai.default_for_images'), $model
         );
+
+        $lastException = null;
 
         foreach ($providers as $provider => $model) {
             $provider = Ai::fakeableImageProvider($provider);
@@ -127,19 +130,21 @@ class PendingImageGeneration
                     $this->prompt, $this->attachments, $this->size, $this->quality, $model, $this->timeout
                 );
             } catch (FailoverableException $e) {
+                $lastException = $e;
+
                 event(new ProviderFailedOver($provider, $model, $e));
 
                 continue;
             }
         }
 
-        throw $e;
+        throw $lastException;
     }
 
     /**
      * Queue the generation of an image.
      */
-    public function queue(array|string|null $provider = null, ?string $model = null): QueuedImageResponse
+    public function queue(Lab|array|string|null $provider = null, ?string $model = null): QueuedImageResponse
     {
         $this->ensureAttachmentsAreQueueable();
 

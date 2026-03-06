@@ -4,6 +4,7 @@ namespace Laravel\Ai\Jobs;
 
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\PendingResponses\PendingImageGeneration;
 
 class GenerateImage implements ShouldQueue
@@ -15,7 +16,7 @@ class GenerateImage implements ShouldQueue
      */
     public function __construct(
         public PendingImageGeneration $pendingImage,
-        public array|string|null $provider = null,
+        public Lab|array|string|null $provider = null,
         public ?string $model = null) {}
 
     /**

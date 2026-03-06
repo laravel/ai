@@ -11,6 +11,6 @@ class ImageIntegrationTest extends TestCase
     {
         $response = Image::of('Donut sitting on a kitchen counter.')->generate(provider: ['xai']);
 
-        $this->assertEquals($response->meta->provider, 'xai');
+        $this->assertEquals('xai', $response->meta->provider);
     }
 }

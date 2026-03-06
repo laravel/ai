@@ -90,7 +90,7 @@ class GeminiStoreGateway implements StoreGateway
      */
     protected function formatMetadata(array $metadata): array
     {
-        return collect($metadata)->map(function ($value, $key) {
+        return (new Collection($metadata))->map(function ($value, $key) {
             return match (true) {
                 is_numeric($value) => ['key' => $key, 'numericValue' => $value],
                 is_array($value) => ['key' => $key, 'stringListValue' => ['values' => $value]],

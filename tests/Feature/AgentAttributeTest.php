@@ -35,7 +35,7 @@ class AgentAttributeTest extends TestCase
         (new AttributeAgent)->prompt('Hello');
 
         AttributeAgent::assertPrompted(function (AgentPrompt $prompt) {
-            return $prompt->provider->name() === 'anthropic';
+            return $prompt->provider->name() === \Laravel\Ai\Enums\Lab::Anthropic->value;
         });
     }
 }

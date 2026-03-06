@@ -33,8 +33,8 @@ class PrismSteps
     {
         return new Step(
             $step->text,
-            collect($step->toolCalls)->map(PrismTool::toLaravelToolCall(...))->all(),
-            collect($step->toolResults)->map(PrismTool::toLaravelToolResult(...))->all(),
+            (new Collection($step->toolCalls))->map(PrismTool::toLaravelToolCall(...))->all(),
+            (new Collection($step->toolResults))->map(PrismTool::toLaravelToolResult(...))->all(),
             static::toLaravelFinishReason($step->finishReason),
             PrismUsage::toLaravelUsage($step->usage),
             new Meta($provider->name(), $step->meta->model),
@@ -49,8 +49,8 @@ class PrismSteps
         return new StructuredStep(
             $step->text,
             $step->structured,
-            collect($step->toolCalls)->map(PrismTool::toLaravelToolCall(...))->all(),
-            collect($step->toolResults)->map(PrismTool::toLaravelToolResult(...))->all(),
+            (new Collection($step->toolCalls))->map(PrismTool::toLaravelToolCall(...))->all(),
+            (new Collection($step->toolResults))->map(PrismTool::toLaravelToolResult(...))->all(),
             static::toLaravelFinishReason($step->finishReason),
             PrismUsage::toLaravelUsage($step->usage),
             new Meta($provider->name(), $step->meta->model),

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use Exception;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\QueuedAgentPrompt;
 use Laravel\Ai\Responses\Data\Meta;
@@ -112,7 +113,7 @@ class AgentFakeTest extends TestCase
 
         $response = (new StructuredAgent)->prompt('Gold prompt');
 
-        $this->assertTrue(is_string($response['symbol']));
+        $this->assertIsString($response['symbol']);
     }
 
     public function test_agent_streams_can_be_faked(): void
@@ -157,11 +158,67 @@ class AgentFakeTest extends TestCase
         });
     }
 
+    public function test_queued_agents_accept_ai_provider_enum()
+    {
+        AssistantAgent::fake();
+
+        (new AssistantAgent)->queue('Enum prompt', provider: Lab::OpenAI);
+
+        AssistantAgent::assertQueued(function (QueuedAgentPrompt $prompt) {
+            return $prompt->prompt === 'Enum prompt'
+                && $prompt->provider === Lab::OpenAI;
+        });
+    }
+
+    public function test_prompt_accepts_ai_provider_enum()
+    {
+        AssistantAgent::fake();
+
+        (new AssistantAgent)->prompt('Enum prompt', provider: Lab::Anthropic);
+
+        AssistantAgent::assertPrompted(function (AgentPrompt $prompt) {
+            return $prompt->prompt === 'Enum prompt';
+        });
+    }
+
+    public function test_stream_accepts_ai_provider_enum()
+    {
+        AssistantAgent::fake();
+
+        $response = (new AssistantAgent)->stream('Enum stream', provider: Lab::Gemini);
+        $response->each(fn () => true);
+
+        AssistantAgent::assertPrompted(function (AgentPrompt $prompt) {
+            return $prompt->prompt === 'Enum stream';
+        });
+    }
+
     public function test_can_assert_agent_was_never_queued()
     {
         AssistantAgent::fake();
 
         AssistantAgent::assertNeverQueued();
+    }
+
+    public function test_assert_queued_does_not_throw_undefined_key_when_agent_was_never_queued()
+    {
+        AssistantAgent::fake();
+
+        // Should fail the assertion gracefully, not throw an undefined array key error.
+        try {
+            AssistantAgent::assertQueued('Some prompt');
+            $this->fail('Expected assertion to fail.');
+        } catch (\PHPUnit\Framework\AssertionFailedError $e) {
+            $this->assertStringContainsString('An expected queued prompt was not received.', $e->getMessage());
+        }
+    }
+
+    public function test_assert_not_queued_does_not_throw_undefined_key_when_agent_was_never_queued()
+    {
+        AssistantAgent::fake();
+
+        // Should pass gracefully since the agent was never queued.
+        AssistantAgent::assertNotQueued('Some prompt');
     }
 
     public function test_fake_closures_can_throw_exceptions()

@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway;
 
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\AudioGateway;
@@ -58,6 +59,7 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
         TranscribableAudio $audio,
         ?string $language = null,
         bool $diarize = false,
+        int $timeout = 30
     ): TranscriptionResponse {
         $audioContent = match (true) {
             $audio instanceof TranscribableAudio => $audio->content(),
@@ -69,7 +71,7 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
 
         $response = $this->withRateLimitHandling($provider->name(), fn () => Http::withHeaders([
             'xi-api-key' => $provider->providerCredentials()['key'],
-        ])->attach(
+        ])->timeout($timeout)->attach(
             'file', $audioContent, 'file', ['Content-Type' => $mimeType],
         )->post('https://api.elevenlabs.io/v1/speech-to-text', [
             'model_id' => $model,
@@ -85,7 +87,7 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
 
         return new TranscriptionResponse(
             $response['text'],
-            collect($segments)->map(function ($segment) {
+            (new Collection($segments))->map(function ($segment) {
                 if ($segment['type'] !== 'word') {
                     return;
                 }

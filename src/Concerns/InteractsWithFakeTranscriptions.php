@@ -54,9 +54,9 @@ trait InteractsWithFakeTranscriptions
     public function assertTranscriptionGenerated(Closure $callback): self
     {
         PHPUnit::assertTrue(
-            (new Collection($this->recordedTranscriptionGenerations))->filter(function (TranscriptionPrompt $prompt) use ($callback) {
+            (new Collection($this->recordedTranscriptionGenerations))->contains(function (TranscriptionPrompt $prompt) use ($callback) {
                 return $callback($prompt);
-            })->count() > 0,
+            }),
             'An expected transcription generation was not recorded.'
         );
 
@@ -69,9 +69,9 @@ trait InteractsWithFakeTranscriptions
     public function assertTranscriptionNotGenerated(Closure $callback): self
     {
         PHPUnit::assertTrue(
-            (new Collection($this->recordedTranscriptionGenerations))->filter(function (TranscriptionPrompt $prompt) use ($callback) {
+            (new Collection($this->recordedTranscriptionGenerations))->doesntContain(function (TranscriptionPrompt $prompt) use ($callback) {
                 return $callback($prompt);
-            })->count() === 0,
+            }),
             'An unexpected transcription generation was recorded.'
         );
 
@@ -97,9 +97,9 @@ trait InteractsWithFakeTranscriptions
     public function assertTranscriptionQueued(Closure $callback): self
     {
         PHPUnit::assertTrue(
-            (new Collection($this->recordedQueuedTranscriptionGenerations))->filter(function (QueuedTranscriptionPrompt $prompt) use ($callback) {
+            (new Collection($this->recordedQueuedTranscriptionGenerations))->contains(function (QueuedTranscriptionPrompt $prompt) use ($callback) {
                 return $callback($prompt);
-            })->count() > 0,
+            }),
             'An expected queued transcription generation was not recorded.'
         );
 
@@ -112,9 +112,9 @@ trait InteractsWithFakeTranscriptions
     public function assertTranscriptionNotQueued(Closure $callback): self
     {
         PHPUnit::assertTrue(
-            (new Collection($this->recordedQueuedTranscriptionGenerations))->filter(function (QueuedTranscriptionPrompt $prompt) use ($callback) {
+            (new Collection($this->recordedQueuedTranscriptionGenerations))->doesntContain(function (QueuedTranscriptionPrompt $prompt) use ($callback) {
                 return $callback($prompt);
-            })->count() === 0,
+            }),
             'An unexpected queued transcription generation was recorded.'
         );
 

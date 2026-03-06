@@ -55,7 +55,7 @@ function generate_fake_data_for_json_schema_type(Type $type): mixed
     if (isset($attributes['enum']) && is_array($attributes['enum']) && count($attributes['enum']) > 0) {
         $enumValue = $attributes['enum'][array_rand($attributes['enum'])];
 
-        return get_class($type) === ArrayType::class
+        return $type::class === ArrayType::class
             ? [$enumValue]
             : $enumValue;
     }
@@ -64,7 +64,7 @@ function generate_fake_data_for_json_schema_type(Type $type): mixed
         return $attributes['default'];
     }
 
-    return match (get_class($type)) {
+    return match ($type::class) {
         ObjectType::class => (function () use ($attributes) {
             $result = [];
 

@@ -61,9 +61,9 @@ trait InteractsWithFakeFiles
     public function assertFileUploaded(Closure $callback): self
     {
         PHPUnit::assertTrue(
-            (new Collection($this->recordedFileUploads))->filter(function (array $upload) use ($callback) {
+            (new Collection($this->recordedFileUploads))->contains(function (array $upload) use ($callback) {
                 return $callback($upload['file']);
-            })->count() > 0,
+            }),
             'An expected file upload was not recorded.'
         );
 
@@ -76,9 +76,9 @@ trait InteractsWithFakeFiles
     public function assertFileNotUploaded(Closure $callback): self
     {
         PHPUnit::assertTrue(
-            (new Collection($this->recordedFileUploads))->filter(function (array $upload) use ($callback) {
+            (new Collection($this->recordedFileUploads))->doesntContain(function (array $upload) use ($callback) {
                 return $callback($upload['file']);
-            })->count() === 0,
+            }),
             'An unexpected file upload was recorded.'
         );
 
@@ -109,9 +109,9 @@ trait InteractsWithFakeFiles
         }
 
         PHPUnit::assertTrue(
-            (new Collection($this->recordedFileDeletions))->filter(function (string $id) use ($callback) {
+            (new Collection($this->recordedFileDeletions))->contains(function (string $id) use ($callback) {
                 return $callback($id);
-            })->count() > 0,
+            }),
             'An expected file deletion was not recorded.'
         );
 
@@ -129,9 +129,9 @@ trait InteractsWithFakeFiles
         }
 
         PHPUnit::assertTrue(
-            (new Collection($this->recordedFileDeletions))->filter(function (string $id) use ($callback) {
+            (new Collection($this->recordedFileDeletions))->doesntContain(function (string $id) use ($callback) {
                 return $callback($id);
-            })->count() === 0,
+            }),
             'An unexpected file deletion was recorded.'
         );
 
