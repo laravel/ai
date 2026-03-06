@@ -13,6 +13,10 @@ class GeminiAudioGateway implements AudioGateway
 {
     use Concerns\HandlesRateLimiting;
 
+    public function __construct(
+        protected int $timeout = 120,
+    ) {}
+
     /**
      * Voice aliases mapping descriptive names to Gemini voice names.
      *
@@ -49,7 +53,7 @@ class GeminiAudioGateway implements AudioGateway
         $response = $this->withRateLimitHandling($provider->name(), fn () => Http::withHeaders([
             'Content-Type' => 'application/json',
             'x-goog-api-key' => $apiKey,
-        ])->timeout(120)->post("https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent", [
+        ])->timeout($this->timeout)->post("https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent", [
             'contents' => [
                 ['parts' => [['text' => $text]]],
             ],
