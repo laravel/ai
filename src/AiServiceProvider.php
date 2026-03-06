@@ -11,14 +11,13 @@ use Laravel\Ai\Console\Commands\MakeAgentCommand;
 use Laravel\Ai\Console\Commands\MakeAgentMiddlewareCommand;
 use Laravel\Ai\Console\Commands\MakeToolCommand;
 use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Storage\DatabaseConversationStore;
 
 class AiServiceProvider extends ServiceProvider
 {
     /**
      * Register the package's services.
-     *
-     * @return void
      */
     public function register(): void
     {
@@ -30,8 +29,6 @@ class AiServiceProvider extends ServiceProvider
 
     /**
      * Bootstrap the package's services.
-     *
-     * @return void
      */
     public function boot(): void
     {
@@ -42,7 +39,7 @@ class AiServiceProvider extends ServiceProvider
 
         // Embeddings macro...
         Stringable::macro('toEmbeddings', function (
-            ?string $provider = null,
+            Lab|array|string|null $provider = null,
             ?int $dimensions = null,
             ?string $model = null,
             bool|int|null $cache = null,
@@ -65,7 +62,7 @@ class AiServiceProvider extends ServiceProvider
             Closure|array|string $by,
             string $query,
             ?int $limit = null,
-            array|string|null $provider = null,
+            Lab|array|string|null $provider = null,
             ?string $model = null
         ) {
             $resolver = match (true) {
@@ -112,7 +109,7 @@ class AiServiceProvider extends ServiceProvider
             __DIR__.'/../stubs/agent.stub' => base_path('stubs/agent.stub'),
             __DIR__.'/../stubs/structured-agent.stub' => base_path('stubs/structured-agent.stub'),
             __DIR__.'/../stubs/tool.stub' => base_path('stubs/tool.stub'),
-            __DIR__.'/../stubs/middleware.stub' => base_path('stubs/middleware.stub'),
+            __DIR__.'/../stubs/agent-middleware.stub' => base_path('stubs/agent-middleware.stub'),
         ], 'ai-stubs');
 
         $this->publishesMigrations([

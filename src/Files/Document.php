@@ -59,9 +59,9 @@ abstract class Document extends File
      */
     public static function fromUpload(UploadedFile $file, ?string $mimeType = null): Base64Document
     {
-        return new Base64Document(
+        return (new Base64Document(
             base64_encode($file->getContent()),
             $mimeType ?? $file->getClientMimeType(),
-        )->as($file->getClientOriginalName());
+        ))->as($file->getClientOriginalName());
     }
 }
