@@ -10,9 +10,9 @@ class AnonymousAgent implements Agent, Conversational, HasTools
 {
     use Promptable;
 
-    public function __construct(public string $instructions, public iterable $messages, public iterable $tools) {}
+    public function __construct(public string|array $instructions, public iterable $messages, public iterable $tools) {}
 
-    public function instructions(): string
+    public function instructions(): string|array
     {
         return $this->instructions;
     }

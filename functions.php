@@ -19,7 +19,7 @@ use Laravel\Ai\Contracts\Agent;
  * Get an ad-hoc agent instance.
  */
 function agent(
-    string $instructions = '',
+    string|array $instructions = '',
     iterable $messages = [],
     iterable $tools = [],
     ?Closure $schema = null,

@@ -16,8 +16,11 @@ use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Streaming\Events\TextDelta;
+use Prism\Prism\Facades\Prism;
+use Prism\Prism\Testing\TextResponseFake;
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\Feature\Agents\ConversationalAgent;
+use Tests\Feature\Agents\MultiInstructionAgent;
 use Tests\Feature\Agents\StructuredAgent;
 use Tests\Feature\Agents\ToolUsingAgent;
 use Tests\TestCase;
@@ -265,5 +268,20 @@ class AgentIntegrationTest extends TestCase
         }
 
         $this->assertTrue($caught);
+    }
+
+    public function test_agents_can_have_multiple_system_prompts(): void
+    {
+        $fake = Prism::fake([TextResponseFake::make()->withText('Hello John!')]);
+
+        (new MultiInstructionAgent)->prompt('Hi there');
+
+        $fake->assertRequest(function (array $requests) {
+            $systemPrompts = $requests[0]->systemPrompts();
+
+            $this->assertCount(2, $systemPrompts);
+            $this->assertEquals('You are a helpful assistant.', $systemPrompts[0]->content);
+            $this->assertEquals('The user is John.', $systemPrompts[1]->content);
+        });
     }
 }

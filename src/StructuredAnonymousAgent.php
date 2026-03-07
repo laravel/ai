@@ -12,7 +12,7 @@ class StructuredAnonymousAgent extends AnonymousAgent implements HasStructuredOu
     public $schema;
 
     public function __construct(
-        public string $instructions,
+        public string|array $instructions,
         public iterable $messages,
         public iterable $tools,
         Closure $schema,

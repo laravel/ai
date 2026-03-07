@@ -56,10 +56,12 @@ trait GeneratesText
 
                 $this->listenForToolInvocations($invocationId, $agent);
 
+                $instructions = $agent->instructions();
+
                 $response = $this->textGateway()->generateText(
                     $this,
                     $prompt->model,
-                    (string) $agent->instructions(),
+                    is_array($instructions) ? array_map(strval(...), $instructions) : (string) $instructions,
                     $messages,
                     $agent instanceof HasTools ? $agent->tools() : [],
                     $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null,

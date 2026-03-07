@@ -58,7 +58,7 @@ class PrismGateway implements Gateway
     public function generateText(
         TextProvider $provider,
         string $model,
-        ?string $instructions,
+        string|array|null $instructions,
         array $messages = [],
         array $tools = [],
         ?array $schema = null,
@@ -70,8 +70,10 @@ class PrismGateway implements Gateway
             ! empty($schema),
         ];
 
-        if (! empty($instructions)) {
-            $request->withSystemPrompt($instructions);
+        foreach ((array) ($instructions ?? []) as $instruction) {
+            if (! empty($instruction)) {
+                $request->withSystemPrompt($instruction);
+            }
         }
 
         if (count($tools) > 0) {
@@ -117,7 +119,7 @@ class PrismGateway implements Gateway
         string $invocationId,
         TextProvider $provider,
         string $model,
-        ?string $instructions,
+        string|array|null $instructions,
         array $messages = [],
         array $tools = [],
         ?array $schema = null,
@@ -129,8 +131,10 @@ class PrismGateway implements Gateway
             ! empty($schema),
         ];
 
-        if (! empty($instructions)) {
-            $request->withSystemPrompt($instructions);
+        foreach ((array) ($instructions ?? []) as $instruction) {
+            if (! empty($instruction)) {
+                $request->withSystemPrompt($instruction);
+            }
         }
 
         if (count($tools) > 0) {

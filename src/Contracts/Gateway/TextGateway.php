@@ -20,7 +20,7 @@ interface TextGateway
     public function generateText(
         TextProvider $provider,
         string $model,
-        ?string $instructions,
+        string|array|null $instructions,
         array $messages = [],
         array $tools = [],
         ?array $schema = null,
@@ -39,7 +39,7 @@ interface TextGateway
         string $invocationId,
         TextProvider $provider,
         string $model,
-        ?string $instructions,
+        string|array|null $instructions,
         array $messages = [],
         array $tools = [],
         ?array $schema = null,

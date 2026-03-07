@@ -13,8 +13,10 @@ interface Agent
 {
     /**
      * Get the instructions that the agent should follow.
+     *
+     * @return Stringable|string|array<int, Stringable|string>
      */
-    public function instructions(): Stringable|string;
+    public function instructions(): Stringable|string|array;
 
     /**
      * Invoke the agent with a given prompt.

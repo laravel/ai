@@ -54,11 +54,13 @@ trait StreamsText
 
                         $this->listenForToolInvocations($invocationId, $agent);
 
+                        $instructions = $agent->instructions();
+
                         yield from $this->textGateway()->streamText(
                             $invocationId,
                             $this,
                             $prompt->model,
-                            (string) $agent->instructions(),
+                            is_array($instructions) ? array_map(strval(...), $instructions) : (string) $instructions,
                             $messages,
                             $agent instanceof HasTools ? $agent->tools() : [],
                             null,
