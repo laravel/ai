@@ -1,0 +1,35 @@
+name: Sync with upstream
+
+on:
+  schedule:
+    - cron: '0 9 * * *'  # Runs daily at 9am UTC
+  workflow_dispatch:      # Allows manual trigger from GitHub UI
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          ref: feature/agent-provider-options
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: git remote add upstream https://github.com/laravel/ai.git
+
+      - name: Fetch upstream
+        run: git fetch upstream
+
+      - name: Rebase onto upstream
+        run: git rebase upstream/0.x
+
+      - name: Push
+        run: git push origin feature/agent-provider-options --force-with-lease
