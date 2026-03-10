@@ -22,14 +22,18 @@ jobs:
             laravel: 12
 
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - uses: shivammathur/setup-php@v2
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
           tools: composer:v2
           coverage: none
 
-      - run: composer update --prefer-dist --no-interaction --no-progress --with="illuminate/contracts:^${{ matrix.laravel }}"
+      - name: Install dependencies
+        run: composer update --prefer-dist --no-interaction --no-progress --with="illuminate/contracts=^${{ matrix.laravel }}"
 
-      - run: vendor/bin/phpunit --testsuite Unit
+      - name: Execute tests
+        run: vendor/bin/phpunit --testsuite Unit
