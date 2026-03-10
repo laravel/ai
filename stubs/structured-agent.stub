@@ -12,7 +12,7 @@ use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Promptable;
 use Stringable;
 
-class {{ class }} implements Agent, Conversational, HasTools, HasStructuredOutput
+class {{ class }} implements Agent, Conversational, HasStructuredOutput, HasTools
 {
     use Promptable;
 
