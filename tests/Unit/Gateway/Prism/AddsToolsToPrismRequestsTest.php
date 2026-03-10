@@ -49,13 +49,13 @@ class AddsToolsToPrismRequestsTest extends TestCase
                 $this->toolInvokedCallback = fn () => null;
             }
 
-            public function testInvokeTool(Tool $tool, array $arguments): string
+            public function callTool(Tool $tool, array $arguments): string
             {
                 return $this->invokeTool($tool, $arguments);
             }
         };
 
-        $handler->testInvokeTool($tool, ['schema_definition' => ['query' => 'test']]);
+        $handler->callTool($tool, ['schema_definition' => ['query' => 'test']]);
 
         $this->assertEquals(['query' => 'test'], $tool->receivedArguments);
     }
@@ -98,13 +98,13 @@ class AddsToolsToPrismRequestsTest extends TestCase
                 $this->toolInvokedCallback = fn () => null;
             }
 
-            public function testInvokeTool(Tool $tool, array $arguments): string
+            public function callTool(Tool $tool, array $arguments): string
             {
                 return $this->invokeTool($tool, $arguments);
             }
         };
 
-        $handler->testInvokeTool($tool, ['query' => 'test']);
+        $handler->callTool($tool, ['query' => 'test']);
 
         $this->assertEquals(['query' => 'test'], $tool->receivedArguments);
     }
@@ -147,13 +147,13 @@ class AddsToolsToPrismRequestsTest extends TestCase
                 $this->toolInvokedCallback = fn () => null;
             }
 
-            public function testInvokeTool(Tool $tool, array $arguments): string
+            public function callTool(Tool $tool, array $arguments): string
             {
                 return $this->invokeTool($tool, $arguments);
             }
         };
 
-        $handler->testInvokeTool($tool, []);
+        $handler->callTool($tool, []);
 
         $this->assertEquals([], $tool->receivedArguments);
     }
