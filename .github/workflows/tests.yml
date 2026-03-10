@@ -1,0 +1,35 @@
+name: tests
+
+on:
+  push:
+    branches:
+      - master
+      - '*.x'
+  pull_request:
+
+jobs:
+  tests:
+    name: PHP ${{ matrix.php }} - Laravel ${{ matrix.laravel }}
+    runs-on: ubuntu-22.04
+
+    strategy:
+      fail-fast: true
+      matrix:
+        php: ['8.3', '8.4', '8.5']
+        laravel: [12, 13]
+        exclude:
+          - php: '8.5'
+            laravel: 12
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          tools: composer:v2
+          coverage: none
+
+      - run: composer update --prefer-dist --no-interaction --no-progress --with="illuminate/contracts:^${{ matrix.laravel }}"
+
+      - run: vendor/bin/phpunit --testsuite Unit
