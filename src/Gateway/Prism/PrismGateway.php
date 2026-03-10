@@ -15,9 +15,11 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Files\Image as ImageFile;
 use Laravel\Ai\Files\LocalImage;
+use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\StoredImage;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\Message;
@@ -219,6 +221,8 @@ class PrismGateway implements Gateway
             $prismAttachment = match (true) {
                 $attachment instanceof LocalImage => PrismImage::fromLocalPath($attachment->path, $attachment->mime),
                 $attachment instanceof StoredImage => PrismImage::fromStoragePath($attachment->path, $attachment->disk),
+                $attachment instanceof RemoteImage => PrismImage::fromUrl($attachment->url, $attachment->mime),
+                $attachment instanceof Base64Image => PrismImage::fromBase64($attachment->base64, $attachment->mime),
                 $attachment instanceof UploadedFile && static::isImage($attachment) => PrismImage::fromBase64(base64_encode($attachment->get()), $attachment->getClientMimeType()),
                 default => throw new InvalidArgumentException('Unsupported attachment type ['.$attachment::class.']'),
             };
