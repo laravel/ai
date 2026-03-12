@@ -22,7 +22,7 @@ class ZaiProvider extends Provider implements TextProvider
      */
     public function defaultTextModel(): string
     {
-        return 'glm-4.6';
+        return 'glm-4.7';
     }
 
     /**
