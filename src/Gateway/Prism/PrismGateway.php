@@ -76,7 +76,7 @@ class PrismGateway implements Gateway
 
         if (count($tools) > 0) {
             $this->addTools($request, $tools, $options);
-            $this->addProviderTools($provider, $request, $tools, $options);
+            $this->addProviderTools($provider, $request, $tools);
         }
 
         try {
@@ -135,7 +135,7 @@ class PrismGateway implements Gateway
 
         if (count($tools) > 0) {
             $this->addTools($request, $tools, $options);
-            $this->addProviderTools($provider, $request, $tools, $options);
+            $this->addProviderTools($provider, $request, $tools);
         }
 
         try {
@@ -316,7 +316,7 @@ class PrismGateway implements Gateway
 
         return new TranscriptionResponse(
             $response->text,
-            new Collection($response->additionalContent['segments'] ?? [])->map(function ($segment) {
+            (new Collection($response->additionalContent['segments'] ?? []))->map(function ($segment) {
                 return new TranscriptionSegment(
                     $segment['text'],
                     $segment['speaker'],
@@ -347,6 +347,7 @@ class PrismGateway implements Gateway
             'gemini' => ['outputDimensionality' => $dimensions],
             'openai' => ['dimensions' => $dimensions],
             'ollama' => ['dimensions' => $dimensions],
+            'voyageai' => ['outputDimension' => $dimensions],
             default => [],
         });
 
@@ -372,7 +373,7 @@ class PrismGateway implements Gateway
     {
         return match ($provider->driver()) {
             'anthropic' => PrismProvider::Anthropic,
-            'azure' => PrismProvider::OpenAI, 
+            'azure' => PrismProvider::OpenAI,
             'deepseek' => PrismProvider::DeepSeek,
             'gemini' => PrismProvider::Gemini,
             'groq' => PrismProvider::Groq,

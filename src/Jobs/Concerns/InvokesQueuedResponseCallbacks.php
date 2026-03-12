@@ -47,9 +47,6 @@ trait InvokesQueuedResponseCallbacks
 
     /**
      * Handle a job failure.
-     *
-     * @param  \Throwable  $e
-     * @return void
      */
     public function failed(\Throwable $e): void
     {
