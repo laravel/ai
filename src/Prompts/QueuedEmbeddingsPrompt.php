@@ -13,6 +13,7 @@ class QueuedEmbeddingsPrompt implements Countable
         public readonly ?int $dimensions,
         public readonly Lab|array|string|null $provider,
         public readonly ?string $model,
+        public readonly int $timeout = 30,
     ) {}
 
     /**

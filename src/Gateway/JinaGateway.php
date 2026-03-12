@@ -25,9 +25,10 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
         EmbeddingProvider $provider,
         string $model,
         array $inputs,
-        int $dimensions
+        int $dimensions,
+        int $timeout = 30,
     ): EmbeddingsResponse {
-        $response = $this->client($provider)->post('/embeddings', [
+        $response = $this->client($provider, $timeout)->post('/embeddings', [
             'model' => $model,
             'input' => array_map(fn (string $text) => ['text' => $text], $inputs),
             'dimensions' => $dimensions,
@@ -81,13 +82,14 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
     /**
      * Get an HTTP client for the Jina API.
      */
-    protected function client(EmbeddingProvider|RerankingProvider $provider): PendingRequest
+    protected function client(EmbeddingProvider|RerankingProvider $provider, int $timeout = 30): PendingRequest
     {
         return Http::baseUrl('https://api.jina.ai/v1')
             ->withHeaders([
                 'Authorization' => 'Bearer '.$provider->providerCredentials()['key'],
                 'Content-Type' => 'application/json',
             ])
+            ->timeout($timeout)
             ->throw();
     }
 }

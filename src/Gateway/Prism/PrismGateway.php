@@ -336,17 +336,21 @@ class PrismGateway implements Gateway
         EmbeddingProvider $provider,
         string $model,
         array $inputs,
-        int $dimensions): EmbeddingsResponse
-    {
+        int $dimensions,
+        int $timeout = 30,
+    ): EmbeddingsResponse {
         $request = tap(
             Prism::embeddings(),
             fn ($prism) => $this->configure($prism, $provider, $model)
-        );
+        )->withClientOptions([
+            'timeout' => $timeout,
+        ]);
 
         $request->withProviderOptions(match ($provider->driver()) {
             'gemini' => ['outputDimensionality' => $dimensions],
             'openai' => ['dimensions' => $dimensions],
             'ollama' => ['dimensions' => $dimensions],
+            'openrouter' => ['dimensions' => $dimensions],
             'voyageai' => ['outputDimension' => $dimensions],
             default => [],
         });
