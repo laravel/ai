@@ -1,6 +1,6 @@
 ---
 name: ai-sdk-development
-description: Builds AI agents, generates text and chat responses, produces images, synthesizes audio, transcribes speech, generates vector embeddings, reranks documents, and manages files and vector stores using the Laravel AI SDK (laravel/ai). Supports structured output, streaming, tools, conversation memory, middleware, queueing, broadcasting, and provider failover. Use when building, editing, updating, debugging, or testing any AI functionality, including agents, LLMs, chatbots, text generation, image generation, audio, transcription, embeddings, RAG, similarity search, vector stores, prompting, structured output, or any AI provider (OpenAI, Anthropic, Gemini, Cohere, Groq, xAI, ElevenLabs, Jina, OpenRouter).
+description: Builds AI agents, generates text and chat responses, produces images, synthesizes audio, transcribes speech, generates vector embeddings, reranks documents, and manages files and vector stores using the Laravel AI SDK (laravel/ai). Supports structured output, streaming, tools, conversation memory, middleware, queueing, broadcasting, and provider failover. Use when building, editing, updating, debugging, or testing any AI functionality, including agents, LLMs, chatbots, text generation, image generation, audio, transcription, embeddings, RAG, similarity search, vector stores, prompting, structured output, or any AI provider (OpenAI, Anthropic, Gemini, Cohere, Groq, xAI, ElevenLabs, Jina, OpenRouter, Zai).
 ---
 
 # Developing with the Laravel AI SDK
@@ -401,7 +401,7 @@ Use agents and entry-point classes (`Image`, `Audio`, etc.) — not `Prism::text
 ## Provider Support
 
 | Provider   | Text | Image | Audio | STT | Embeddings | Reranking | Files | Stores |
-| ---------- | ---- | ----- | ----- | --- | ---------- | --------- | ----- | ------ |
+|------------|------|-------|-------|-----|------------|-----------|-------|--------|
 | OpenAI     | Y    | Y     | Y     | Y   | Y          | -         | Y     | Y      |
 | Anthropic  | Y    | -     | -     | -   | -          | -         | Y     | -      |
 | Gemini     | Y    | Y     | -     | -   | Y          | -         | Y     | Y      |
@@ -411,3 +411,4 @@ Use agents and entry-point classes (`Image`, `Audio`, etc.) — not `Prism::text
 | ElevenLabs | -    | -     | Y     | Y   | -          | -         | -     | -      |
 | Cohere     | -    | -     | -     | -   | Y          | Y         | -     | -      |
 | Jina       | -    | -     | -     | -   | Y          | Y         | -     | -      |
+| Zai        | Y    | -     | -     | -   | -          | -         | -     | -      |

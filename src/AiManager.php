@@ -15,8 +15,6 @@ use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Prism\PrismGateway;
-use Laravel\Ai\Gateway\Zai\Streaming\ServerSentEventsStreamParser;
-use Laravel\Ai\Gateway\Zai\ZaiGateway;
 use Laravel\Ai\Providers\AnthropicProvider;
 use Laravel\Ai\Providers\AzureOpenAiProvider;
 use Laravel\Ai\Providers\CohereProvider;
@@ -443,12 +441,12 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
-     * Create an Z.ai powered instance.
+     * Create a Z.ai powered instance.
      */
     public function createZaiDriver(array $config): ZaiProvider
     {
         return new ZaiProvider(
-            new ZaiGateway($this->app['events'], new ServerSentEventsStreamParser()),
+            new PrismGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)
         );
