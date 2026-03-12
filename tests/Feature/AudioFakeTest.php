@@ -3,10 +3,12 @@
 namespace Tests\Feature;
 
 use Exception;
+use Illuminate\Support\Str;
 use Laravel\Ai\Audio;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Prompts\AudioPrompt;
 use Laravel\Ai\Prompts\QueuedAudioPrompt;
+use Laravel\Ai\Providers\ElevenLabsProvider;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use RuntimeException;
@@ -89,6 +91,39 @@ class AudioFakeTest extends TestCase
         });
 
         Audio::of('Hello world')->timeout(45)->generate();
+    }
+
+    public function test_audio_can_be_generated_from_stringable_macro(): void
+    {
+        Audio::fake();
+
+        $response = Str::of('Hello world')->toAudio();
+
+        $this->assertEquals(base64_encode('fake-audio-content'), $response->audio);
+
+        Audio::assertGenerated(fn (AudioPrompt $prompt) => $prompt->text === 'Hello world');
+    }
+
+    public function test_stringable_audio_macro_passes_through_options(): void
+    {
+        Audio::fake();
+
+        Str::of('Hello world')->toAudio(
+            provider: Lab::ElevenLabs,
+            voice: 'alloy',
+            instructions: 'Speak slowly',
+            model: 'custom-model',
+            timeout: 45,
+        );
+
+        Audio::assertGenerated(function (AudioPrompt $prompt) {
+            return $prompt->text === 'Hello world'
+                && $prompt->provider instanceof ElevenLabsProvider
+                && $prompt->voice === 'alloy'
+                && $prompt->instructions === 'Speak slowly'
+                && $prompt->model === 'custom-model'
+                && $prompt->timeout === 45;
+        });
     }
 
     public function test_audio_can_prevent_stray_generations(): void
