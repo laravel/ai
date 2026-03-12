@@ -76,7 +76,7 @@ class PrismGateway implements Gateway
 
         if (count($tools) > 0) {
             $this->addTools($request, $tools, $options);
-            $this->addProviderTools($provider, $request, $tools, $options);
+            $this->addProviderTools($provider, $request, $tools);
         }
 
         try {
@@ -135,7 +135,7 @@ class PrismGateway implements Gateway
 
         if (count($tools) > 0) {
             $this->addTools($request, $tools, $options);
-            $this->addProviderTools($provider, $request, $tools, $options);
+            $this->addProviderTools($provider, $request, $tools);
         }
 
         try {
@@ -336,17 +336,21 @@ class PrismGateway implements Gateway
         EmbeddingProvider $provider,
         string $model,
         array $inputs,
-        int $dimensions): EmbeddingsResponse
-    {
+        int $dimensions,
+        int $timeout = 30,
+    ): EmbeddingsResponse {
         $request = tap(
             Prism::embeddings(),
             fn ($prism) => $this->configure($prism, $provider, $model)
-        );
+        )->withClientOptions([
+            'timeout' => $timeout,
+        ]);
 
         $request->withProviderOptions(match ($provider->driver()) {
             'gemini' => ['outputDimensionality' => $dimensions],
             'openai' => ['dimensions' => $dimensions],
             'openrouter' => ['dimensions' => $dimensions],
+            'voyageai' => ['outputDimension' => $dimensions],
             default => [],
         });
 

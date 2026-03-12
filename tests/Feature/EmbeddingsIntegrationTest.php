@@ -21,8 +21,8 @@ class EmbeddingsIntegrationTest extends TestCase
         $this->assertCount(1536, $response->embeddings[0]);
         $this->assertEquals('openai', $response->meta->provider);
 
-        Event::assertDispatched(GeneratingEmbeddings::class);
-        Event::assertDispatched(EmbeddingsGenerated::class);
+        Event::assertDispatched(GeneratingEmbeddings::class, fn (GeneratingEmbeddings $event) => $event->prompt->timeout === 30);
+        Event::assertDispatched(EmbeddingsGenerated::class, fn (EmbeddingsGenerated $event) => $event->prompt->timeout === 30);
     }
 
     public function test_embeddings_can_be_generated_with_custom_dimensions(): void

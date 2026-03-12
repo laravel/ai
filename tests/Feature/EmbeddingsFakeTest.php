@@ -68,6 +68,29 @@ class EmbeddingsFakeTest extends TestCase
         $this->assertCount(256, $response->first());
     }
 
+    public function test_embeddings_timeout_defaults_to_sdk_fallback(): void
+    {
+        Embeddings::fake();
+
+        Embeddings::for(['Hello world'])->generate();
+
+        Embeddings::assertGenerated(fn (EmbeddingsPrompt $prompt) => $prompt->timeout === 30);
+    }
+
+    public function test_fake_embeddings_closure_receives_timeout(): void
+    {
+        Embeddings::fake(function (EmbeddingsPrompt $prompt) {
+            $this->assertSame(45, $prompt->timeout);
+
+            return array_map(
+                fn () => array_fill(0, $prompt->dimensions, 0.1),
+                $prompt->inputs
+            );
+        });
+
+        Embeddings::for(['Hello world'])->timeout(45)->generate();
+    }
+
     public function test_can_assert_embeddings_generated(): void
     {
         Embeddings::fake();
@@ -172,6 +195,17 @@ class EmbeddingsFakeTest extends TestCase
 
         Embeddings::assertQueued(function (QueuedEmbeddingsPrompt $prompt) {
             return $prompt->dimensions === 256 && $prompt->count() === 1;
+        });
+    }
+
+    public function test_queued_embeddings_timeout_is_recorded(): void
+    {
+        Embeddings::fake();
+
+        Embeddings::for(['Hello world'])->timeout(90)->queue();
+
+        Embeddings::assertQueued(function (QueuedEmbeddingsPrompt $prompt) {
+            return $prompt->timeout === 90 && $prompt->count() === 1;
         });
     }
 }

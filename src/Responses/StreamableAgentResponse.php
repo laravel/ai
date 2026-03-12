@@ -4,6 +4,7 @@ namespace Laravel\Ai\Responses;
 
 use Closure;
 use Illuminate\Contracts\Support\Responsable;
+use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use IteratorAggregate;
 use Laravel\Ai\Responses\Data\Meta;
@@ -24,6 +25,8 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     public Collection $events;
 
     public ?string $conversationId = null;
+
+    public ?object $conversationUser = null;
 
     protected array $thenCallbacks = [];
 
@@ -73,9 +76,10 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     /**
      * Set the conversation UUID for this response.
      */
-    public function withinConversation(?string $conversationId): self
+    public function withinConversation(?string $conversationId, ?object $conversationUser = null): self
     {
         $this->conversationId = $conversationId;
+        $this->conversationUser = $conversationUser;
 
         return $this;
     }
@@ -95,7 +99,7 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     /**
      * Create an HTTP response that represents the object.
      *
-     * @param  \Illuminate\Http\Request  $request
+     * @param  Request  $request
      */
     public function toResponse($request): Response
     {

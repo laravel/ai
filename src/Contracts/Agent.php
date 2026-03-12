@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Contracts;
 
 use Illuminate\Broadcasting\Channel;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\QueuedAgentResponse;
 use Laravel\Ai\Responses\StreamableAgentResponse;
@@ -21,7 +22,7 @@ interface Agent
     public function prompt(
         string $prompt,
         array $attachments = [],
-        ?string $provider = null,
+        Lab|array|string|null $provider = null,
         ?string $model = null
     ): AgentResponse;
 
@@ -31,7 +32,7 @@ interface Agent
     public function stream(
         string $prompt,
         array $attachments = [],
-        array|string|null $provider = null,
+        Lab|array|string|null $provider = null,
         ?string $model = null
     ): StreamableAgentResponse;
 
@@ -41,7 +42,7 @@ interface Agent
     public function queue(
         string $prompt,
         array $attachments = [],
-        array|string|null $provider = null,
+        Lab|array|string|null $provider = null,
         ?string $model = null
     ): QueuedAgentResponse;
 
@@ -53,7 +54,7 @@ interface Agent
         Channel|array $channels,
         array $attachments = [],
         bool $now = false,
-        ?string $provider = null,
+        Lab|array|string|null $provider = null,
         ?string $model = null
     ): StreamableAgentResponse;
 
@@ -64,7 +65,7 @@ interface Agent
         string $prompt,
         Channel|array $channels,
         array $attachments = [],
-        ?string $provider = null,
+        Lab|array|string|null $provider = null,
         ?string $model = null
     ): StreamableAgentResponse;
 
@@ -75,7 +76,7 @@ interface Agent
         string $prompt,
         Channel|array $channels,
         array $attachments = [],
-        ?string $provider = null,
+        Lab|array|string|null $provider = null,
         ?string $model = null
     ): QueuedAgentResponse;
 }
