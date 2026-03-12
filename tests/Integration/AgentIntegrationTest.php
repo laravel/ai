@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Feature;
+namespace Tests\Integration;
 
 use Exception;
 use Illuminate\Contracts\JsonSchema\JsonSchema;

@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Feature;
+namespace Tests\Integration;
 
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\Feature\Agents\SecondaryAssistantAgent;

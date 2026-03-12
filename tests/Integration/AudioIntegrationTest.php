@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Feature;
+namespace Tests\Integration;
 
 use Laravel\Ai\Audio;
 use Laravel\Ai\Files;
