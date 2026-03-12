@@ -71,6 +71,26 @@ class AudioFakeTest extends TestCase
         $this->assertEquals(base64_encode('audio-for-Second text'), $response->audio);
     }
 
+    public function test_audio_timeout_defaults_to_sdk_fallback(): void
+    {
+        Audio::fake();
+
+        Audio::of('Hello world')->generate();
+
+        Audio::assertGenerated(fn (AudioPrompt $prompt) => $prompt->timeout === 30);
+    }
+
+    public function test_fake_audio_closure_receives_timeout(): void
+    {
+        Audio::fake(function (AudioPrompt $prompt) {
+            $this->assertSame(45, $prompt->timeout);
+
+            return base64_encode('audio-for-'.$prompt->text);
+        });
+
+        Audio::of('Hello world')->timeout(45)->generate();
+    }
+
     public function test_audio_can_prevent_stray_generations(): void
     {
         $this->expectException(RuntimeException::class);
@@ -158,6 +178,17 @@ class AudioFakeTest extends TestCase
             return $prompt->text === 'Hello world'
                 && $prompt->voice === 'default-male'
                 && $prompt->instructions === 'Speak quickly';
+        });
+    }
+
+    public function test_queued_audio_timeout_is_recorded(): void
+    {
+        Audio::fake();
+
+        Audio::of('Hello world')->timeout(90)->queue();
+
+        Audio::assertQueued(function (QueuedAudioPrompt $prompt) {
+            return $prompt->timeout === 90 && $prompt->contains('Hello world');
         });
     }
 }
