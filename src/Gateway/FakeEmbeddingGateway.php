@@ -30,9 +30,10 @@ class FakeEmbeddingGateway implements EmbeddingGateway
         EmbeddingProvider $provider,
         string $model,
         array $inputs,
-        int $dimensions
+        int $dimensions,
+        int $timeout = 30,
     ): EmbeddingsResponse {
-        $prompt = new EmbeddingsPrompt($inputs, $dimensions, $provider, $model);
+        $prompt = new EmbeddingsPrompt($inputs, $dimensions, $provider, $model, $timeout);
 
         return $this->nextResponse($provider, $model, $prompt);
     }

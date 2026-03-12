@@ -12,7 +12,7 @@ interface EmbeddingProvider
      *
      * @param  string[]  $inputs
      */
-    public function embeddings(array $inputs, ?int $dimensions = null, ?string $model = null): EmbeddingsResponse;
+    public function embeddings(array $inputs, ?int $dimensions = null, ?string $model = null, int $timeout = 30): EmbeddingsResponse;
 
     /**
      * Get the provider's embedding gateway.
