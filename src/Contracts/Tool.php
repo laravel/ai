@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Contracts;
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\JsonSchema\Types\Type;
 use Laravel\Ai\Tools\Request;
 use Stringable;
 
@@ -20,6 +21,8 @@ interface Tool
 
     /**
      * Get the tool's schema definition.
+     *
+     * @return array<string, Type>
      */
     public function schema(JsonSchema $schema): array;
 }

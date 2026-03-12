@@ -58,6 +58,8 @@ class PendingEmbeddingsGeneration
             $provider ?? config('ai.default_for_embeddings'), $model
         );
 
+        $lastException = null;
+
         foreach ($providers as $provider => $model) {
             $provider = Ai::fakeableEmbeddingProvider($provider);
 
@@ -75,13 +77,15 @@ class PendingEmbeddingsGeneration
                     fn ($response) => $this->cacheEmbeddings($provider, $model, $dimensions, $response)
                 );
             } catch (FailoverableException $e) {
+                $lastException = $e;
+
                 event(new ProviderFailedOver($provider, $model, $e));
 
                 continue;
             }
         }
 
-        throw $e;
+        throw $lastException;
     }
 
     /**

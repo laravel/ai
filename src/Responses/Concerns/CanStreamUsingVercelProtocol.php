@@ -2,18 +2,20 @@
 
 namespace Laravel\Ai\Responses\Concerns;
 
+use Illuminate\Http\Request;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\ToolCall;
 use Laravel\Ai\Streaming\Events\ToolResult;
+use Symfony\Component\HttpFoundation\Response;
 
 trait CanStreamUsingVercelProtocol
 {
     /**
      * Create an HTTP response that represents the object using the Vercel AI SDK protocol
      *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Symfony\Component\HttpFoundation\Response
+     * @param  Request  $request
+     * @return Response
      */
     protected function toVercelProtocolResponse()
     {
@@ -26,7 +28,7 @@ trait CanStreamUsingVercelProtocol
             public ?array $lastStreamEndEvent = null;
         };
 
-        $stream = function () use ($state): iterable {
+        return response()->stream(function () use ($state) {
             $lastStreamEndEvent = null;
 
             foreach ($this as $event) {
@@ -39,7 +41,7 @@ trait CanStreamUsingVercelProtocol
                     $state->streamStarted = true;
                 }
 
-                // Store initaited tool calls...
+                // Store initiated tool calls...
                 if ($event instanceof ToolCall) {
                     $state->toolCalls[$event->toolCall->id] = true;
                 }
@@ -69,28 +71,6 @@ trait CanStreamUsingVercelProtocol
             }
 
             yield "data: [DONE]\n\n";
-        };
-
-        return response()->stream(function () use ($stream): void {
-            $result = $stream();
-
-            if (! is_iterable($result)) {
-                return;
-            }
-
-            foreach ($result as $message) {
-                if (connection_aborted()) {
-                    return;
-                }
-
-                echo (string) $message;
-
-                if (ob_get_level() > 0) {
-                    ob_flush();
-                }
-
-                flush();
-            }
         }, headers: [
             'Cache-Control' => 'no-cache, no-transform',
             'Content-Type' => 'text/event-stream',

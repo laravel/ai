@@ -257,7 +257,7 @@ class AgentIntegrationTest extends TestCase
             );
 
             $text = $response->text;
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             $caught = true;
 
             $this->assertInstanceOf(Exception::class, $e);

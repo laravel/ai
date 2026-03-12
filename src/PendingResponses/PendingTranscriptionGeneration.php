@@ -26,6 +26,8 @@ class PendingTranscriptionGeneration
 
     protected bool $diarize = false;
 
+    protected int $timeout = 30;
+
     public function __construct(
         protected TranscribableAudio $audio,
     ) {}
@@ -51,6 +53,16 @@ class PendingTranscriptionGeneration
     }
 
     /**
+     * Specify the timeout (in seconds) for the transcription generation.
+     */
+    public function timeout(int $seconds = 30): self
+    {
+        $this->timeout = $seconds;
+
+        return $this;
+    }
+
+    /**
      * Generate the transcription.
      */
     public function generate(Lab|array|string|null $provider = null, ?string $model = null): TranscriptionResponse
@@ -59,21 +71,25 @@ class PendingTranscriptionGeneration
             $provider ?? config('ai.default_for_transcription'), $model
         );
 
+        $lastException = null;
+
         foreach ($providers as $provider => $model) {
             $provider = Ai::fakeableTranscriptionProvider($provider);
 
             $model ??= $provider->defaultTranscriptionModel();
 
             try {
-                return $provider->transcribe($this->audio, $this->language, $this->diarize, $model);
+                return $provider->transcribe($this->audio, $this->language, $this->diarize, $model, $this->timeout);
             } catch (FailoverableException $e) {
+                $lastException = $e;
+
                 event(new ProviderFailedOver($provider, $model, $e));
 
                 continue;
             }
         }
 
-        throw $e;
+        throw $lastException;
     }
 
     /**

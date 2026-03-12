@@ -19,7 +19,7 @@ class VoyageAiProvider extends Provider implements EmbeddingProvider, RerankingP
      */
     public function defaultEmbeddingsModel(): string
     {
-        return 'voyage-4';
+        return $this->config['models']['embeddings']['default'] ?? 'voyage-4';
     }
 
     /**
@@ -27,7 +27,7 @@ class VoyageAiProvider extends Provider implements EmbeddingProvider, RerankingP
      */
     public function defaultEmbeddingsDimensions(): int
     {
-        return 1024;
+        return $this->config['models']['embeddings']['dimensions'] ?? 1024;
     }
 
     /**
@@ -35,7 +35,7 @@ class VoyageAiProvider extends Provider implements EmbeddingProvider, RerankingP
      */
     public function defaultRerankingModel(): string
     {
-        return 'rerank-2.5-lite';
+        return $this->config['models']['reranking']['default'] ?? 'rerank-2.5-lite';
     }
 
     /**

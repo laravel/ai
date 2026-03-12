@@ -15,7 +15,7 @@ class GroqProvider extends Provider implements TextProvider
      */
     public function defaultTextModel(): string
     {
-        return 'openai/gpt-oss-120b';
+        return $this->config['models']['text']['default'] ?? 'openai/gpt-oss-120b';
     }
 
     /**
@@ -23,7 +23,7 @@ class GroqProvider extends Provider implements TextProvider
      */
     public function cheapestTextModel(): string
     {
-        return 'openai/gpt-oss-20b';
+        return $this->config['models']['text']['cheapest'] ?? 'openai/gpt-oss-20b';
     }
 
     /**
@@ -31,6 +31,6 @@ class GroqProvider extends Provider implements TextProvider
      */
     public function smartestTextModel(): string
     {
-        return 'openai/gpt-oss-120b';
+        return $this->config['models']['text']['smartest'] ?? 'openai/gpt-oss-120b';
     }
 }

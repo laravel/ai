@@ -58,7 +58,7 @@ class AnthropicProvider extends Provider implements FileProvider, SupportsWebFet
      */
     public function defaultTextModel(): string
     {
-        return 'claude-sonnet-4-6';
+        return $this->config['models']['text']['default'] ?? 'claude-sonnet-4-6';
     }
 
     /**
@@ -66,7 +66,7 @@ class AnthropicProvider extends Provider implements FileProvider, SupportsWebFet
      */
     public function cheapestTextModel(): string
     {
-        return 'claude-haiku-4-5-20251001';
+        return $this->config['models']['text']['cheapest'] ?? 'claude-haiku-4-5-20251001';
     }
 
     /**
@@ -74,7 +74,7 @@ class AnthropicProvider extends Provider implements FileProvider, SupportsWebFet
      */
     public function smartestTextModel(): string
     {
-        return 'claude-opus-4-6';
+        return $this->config['models']['text']['smartest'] ?? 'claude-opus-4-6';
     }
 
     /**
