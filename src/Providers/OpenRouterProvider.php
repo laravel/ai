@@ -5,7 +5,7 @@ namespace Laravel\Ai\Providers;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 
-class OpenRouterProvider extends Provider implements TextProvider, EmbeddingProvider
+class OpenRouterProvider extends Provider implements EmbeddingProvider, TextProvider
 {
     use Concerns\GeneratesText;
     use Concerns\HasTextGateway;
