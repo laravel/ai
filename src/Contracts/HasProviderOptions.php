@@ -7,7 +7,7 @@ use Laravel\Ai\Enums\Lab;
 interface HasProviderOptions
 {
     /**
-     * Get the provider-specific options to be passed to Prism.
+     * Get the provider-specific options to be passed to the provider.
      *
      * @return array<string, mixed>
      */

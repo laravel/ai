@@ -69,7 +69,7 @@ trait CreatesPrismTextRequests
                 'use_tool_calling' => $schema ? true : null,
             ]);
 
-            // Merge agent provider options (agent options can override defaults)
+            // Merge agent provider options (agent options can override defaults)...
             if (! is_null($agentProviderOptions)) {
                 $providerOptions = array_merge($providerOptions, $agentProviderOptions);
             }
@@ -79,7 +79,7 @@ trait CreatesPrismTextRequests
                 ->withMaxTokens($options?->maxTokens ?? 64_000);
         }
 
-        // For non-Anthropic providers, apply agent provider options if available
+        // For non-Anthropic providers, apply agent provider options if available...
         if (! is_null($agentProviderOptions)) {
             $request = $request->withProviderOptions($agentProviderOptions);
         }

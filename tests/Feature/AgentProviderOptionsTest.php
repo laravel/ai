@@ -19,6 +19,7 @@ class AgentProviderOptionsTest extends TestCase
 
         $this->assertNotNull($providerOptions);
         $this->assertIsArray($providerOptions);
+
         $this->assertEquals([
             'reasoning' => [
                 'effort' => 'high',
@@ -35,6 +36,7 @@ class AgentProviderOptionsTest extends TestCase
         $providerOptions = $options->providerOptions(Lab::Anthropic);
 
         $this->assertNotNull($providerOptions);
+
         $this->assertEquals([
             'thinking' => [
                 'type' => 'enabled',
@@ -50,6 +52,7 @@ class AgentProviderOptionsTest extends TestCase
         $providerOptions = $options->providerOptions('openai');
 
         $this->assertNotNull($providerOptions);
+
         $this->assertEquals([
             'reasoning' => [
                 'effort' => 'high',
