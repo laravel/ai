@@ -19,7 +19,7 @@ class OpenRouterProvider extends Provider implements EmbeddingProvider, TextProv
      */
     public function defaultTextModel(): string
     {
-        return $this->config['models']['text']['default'] ?? 'anthropic/claude-sonnet-4.5';
+        return $this->config['models']['text']['default'] ?? 'anthropic/claude-sonnet-4.6';
     }
 
     /**
@@ -35,7 +35,7 @@ class OpenRouterProvider extends Provider implements EmbeddingProvider, TextProv
      */
     public function smartestTextModel(): string
     {
-        return $this->config['models']['text']['smartest'] ?? 'anthropic/claude-opus-4.5';
+        return $this->config['models']['text']['smartest'] ?? 'anthropic/claude-opus-4.6';
     }
 
     /**
