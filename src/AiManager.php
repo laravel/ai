@@ -19,6 +19,7 @@ use Laravel\Ai\Gateway\Gemini\GeminiGateway;
 use Laravel\Ai\Gateway\OpenAi\OpenAiGateway;
 use Laravel\Ai\Providers\AnthropicProvider;
 use Laravel\Ai\Providers\AzureOpenAiProvider;
+use Laravel\Ai\Providers\BedrockProvider;
 use Laravel\Ai\Providers\CohereProvider;
 use Laravel\Ai\Providers\DeepSeekProvider;
 use Laravel\Ai\Providers\ElevenLabsProvider;
@@ -430,6 +431,17 @@ class AiManager extends MultipleInstanceManager
         return new XaiProvider(
             $config,
             $this->app->make(Dispatcher::class),
+        );
+    }
+
+    /**
+     * Create an AWS Bedrock powered instance.
+     */
+    public function createBedrockDriver(array $config): BedrockProvider
+    {
+        return new BedrockProvider(
+            $config,
+            $this->app->make(Dispatcher::class)
         );
     }
 
