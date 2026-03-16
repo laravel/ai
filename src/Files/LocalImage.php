@@ -28,7 +28,7 @@ class LocalImage extends Image implements Arrayable, JsonSerializable, StorableF
         $content = file_get_contents($this->path);
 
         if ($content === false) {
-            throw new RuntimeException("File does not exist at path {$this->path}");
+            throw new RuntimeException("File does not exist at path [{$this->path}]");
         }
 
         return $content;
