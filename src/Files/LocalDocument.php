@@ -28,7 +28,7 @@ class LocalDocument extends Document implements Arrayable, JsonSerializable, Sto
         $content = file_get_contents($this->path);
 
         if ($content === false) {
-            throw new RuntimeException("File does not exist at path {$this->path}");
+            throw new RuntimeException("File does not exist at path [{$this->path}]");
         }
 
         return $content;
