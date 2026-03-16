@@ -1,6 +1,6 @@
 <?php
 
-namespace Laravel\Ai\Gateway;
+namespace Laravel\Ai\Gateway\OpenAi;
 
 use DateInterval;
 use Illuminate\Support\Carbon;
@@ -8,12 +8,13 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
+use Laravel\Ai\Gateway\Concerns\HandlesRateLimiting;
 use Laravel\Ai\Responses\Data\StoreFileCounts;
 use Laravel\Ai\Store;
 
 class OpenAiStoreGateway implements StoreGateway
 {
-    use Concerns\HandlesRateLimiting;
+    use HandlesRateLimiting;
 
     /**
      * Get a vector store by its ID.
@@ -80,7 +81,7 @@ class OpenAiStoreGateway implements StoreGateway
             fn () => Http::withToken($provider->providerCredentials()['key'])
                 ->post("https://api.openai.com/v1/vector_stores/{$storeId}/files", array_filter([
                     'file_id' => $fileId,
-                    'attributes' => ! empty($metadata) ? $metadata : null,
+                    'attributes' => filled($metadata) ? $metadata : null,
                 ]))
                 ->throw()
         );
@@ -108,9 +109,12 @@ class OpenAiStoreGateway implements StoreGateway
      */
     public function deleteStore(StoreProvider $provider, string $storeId): bool
     {
-        $response = $this->withRateLimitHandling($provider->name(), fn () => Http::withToken($provider->providerCredentials()['key'])
-            ->delete("https://api.openai.com/v1/vector_stores/{$storeId}")
-            ->throw());
+        $response = $this->withRateLimitHandling(
+            $provider->name(),
+            fn () => Http::withToken($provider->providerCredentials()['key'])
+                ->delete("https://api.openai.com/v1/vector_stores/{$storeId}")
+                ->throw()
+        );
 
         return $response->json('deleted', false);
     }
