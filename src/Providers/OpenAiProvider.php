@@ -123,7 +123,6 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
                 null => 'auto',
                 default => $size,
             },
-            'moderation' => 'low',
         ];
     }
 
