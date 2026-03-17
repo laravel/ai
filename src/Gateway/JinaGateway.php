@@ -9,6 +9,7 @@ use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\RerankingGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\RerankingProvider;
+use Laravel\Ai\Gateway\Concerns\HandlesRateLimiting;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\RankedDocument;
 use Laravel\Ai\Responses\EmbeddingsResponse;
@@ -16,6 +17,8 @@ use Laravel\Ai\Responses\RerankingResponse;
 
 class JinaGateway implements EmbeddingGateway, RerankingGateway
 {
+    use HandlesRateLimiting;
+
     /**
      * Generate embedding vectors representing the given inputs.
      *
@@ -28,22 +31,24 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
         int $dimensions,
         int $timeout = 30,
     ): EmbeddingsResponse {
-        $response = $this->client($provider, $timeout)->post('/embeddings', [
-            'model' => $model,
-            'input' => array_map(fn (string $text) => ['text' => $text], $inputs),
-            'dimensions' => $dimensions,
-            'task' => 'retrieval.passage',
-        ]);
+        return $this->withRateLimitHandling($provider->name(), function () use ($provider, $model, $inputs, $dimensions, $timeout) {
+            $response = $this->client($provider, $timeout)->post('/embeddings', [
+                'model' => $model,
+                'input' => array_map(fn (string $text) => ['text' => $text], $inputs),
+                'dimensions' => $dimensions,
+                'task' => 'retrieval.passage',
+            ]);
 
-        $data = $response->json();
+            $data = $response->json();
 
-        $embeddings = (new Collection($data['data']))->pluck('embedding')->all();
+            $embeddings = (new Collection($data['data']))->pluck('embedding')->all();
 
-        return new EmbeddingsResponse(
-            $embeddings,
-            $data['usage']['total_tokens'] ?? 0,
-            new Meta($provider->name(), $model),
-        );
+            return new EmbeddingsResponse(
+                $embeddings,
+                $data['usage']['total_tokens'] ?? 0,
+                new Meta($provider->name(), $model),
+            );
+        });
     }
 
     /**
@@ -58,25 +63,27 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
         string $query,
         ?int $limit = null
     ): RerankingResponse {
-        $response = $this->client($provider)->post('/rerank', array_filter([
-            'model' => $model,
-            'query' => $query,
-            'documents' => $documents,
-            'top_n' => $limit,
-        ]));
+        return $this->withRateLimitHandling($provider->name(), function () use ($provider, $model, $documents, $query, $limit) {
+            $response = $this->client($provider)->post('/rerank', array_filter([
+                'model' => $model,
+                'query' => $query,
+                'documents' => $documents,
+                'top_n' => $limit,
+            ]));
 
-        $data = $response->json();
+            $data = $response->json();
 
-        $results = (new Collection($data['results']))->map(fn (array $result) => new RankedDocument(
-            index: $result['index'],
-            document: $documents[$result['index']],
-            score: $result['relevance_score'],
-        ))->all();
+            $results = (new Collection($data['results']))->map(fn (array $result) => new RankedDocument(
+                index: $result['index'],
+                document: $documents[$result['index']],
+                score: $result['relevance_score'],
+            ))->all();
 
-        return new RerankingResponse(
-            $results,
-            new Meta($provider->name(), $model),
-        );
+            return new RerankingResponse(
+                $results,
+                new Meta($provider->name(), $model),
+            );
+        });
     }
 
     /**

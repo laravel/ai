@@ -7,12 +7,15 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Gateway\RerankingGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\RerankingProvider;
+use Laravel\Ai\Gateway\Concerns\HandlesRateLimiting;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\RankedDocument;
 use Laravel\Ai\Responses\RerankingResponse;
 
 class VoyageAiGateway implements RerankingGateway
 {
+    use HandlesRateLimiting;
+
     /**
      * Rerank the given documents based on their relevance to the query.
      *
@@ -25,21 +28,24 @@ class VoyageAiGateway implements RerankingGateway
         string $query,
         ?int $limit = null
     ): RerankingResponse {
-        $data = $this->client($provider)->post('/rerank', array_filter([
-            'model' => $model,
-            'query' => $query,
-            'documents' => $documents,
-            'top_k' => $limit,
-        ]))->json();
 
-        return new RerankingResponse(
-            collect($data['data'])->map(fn (array $result) => new RankedDocument(
-                index: $result['index'],
-                document: $documents[$result['index']],
-                score: $result['relevance_score'],
-            ))->all(),
-            new Meta($provider->name(), $model),
-        );
+        return $this->withRateLimitHandling($provider->name(), function () use ($provider, $model, $documents, $query, $limit) {
+            $data = $this->client($provider)->post('/rerank', array_filter([
+                'model' => $model,
+                'query' => $query,
+                'documents' => $documents,
+                'top_k' => $limit,
+            ]))->json();
+
+            return new RerankingResponse(
+                collect($data['data'])->map(fn (array $result) => new RankedDocument(
+                    index: $result['index'],
+                    document: $documents[$result['index']],
+                    score: $result['relevance_score'],
+                ))->all(),
+                new Meta($provider->name(), $model),
+            );
+        });
     }
 
     /**
