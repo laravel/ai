@@ -33,12 +33,15 @@ trait AddsToolsToPrismRequests
             return ! $tool instanceof ProviderTool ? $this->createPrismTool($tool) : null;
         })->filter()->values()->all();
 
-        return $request
-            ->withTools($prismTools)
-            ->when(! empty($prismTools), fn ($request) => $request->withToolChoice(ToolChoice::Auto))
-            ->withMaxSteps(
-                $options?->maxSteps ?? round(count($tools) * 1.5)
-            );
+        $request->withTools($prismTools);
+
+        if (! empty($prismTools)) {
+            $request->withToolChoice(ToolChoice::Auto);
+        }
+
+        return $request->withMaxSteps(
+            $options?->maxSteps ?? round(count($tools) * 1.5)
+        );
     }
 
     /**
