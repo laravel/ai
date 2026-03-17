@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Container\Container;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Str;
 use Laravel\Ai\Attributes\Model as ModelAttribute;
 use Laravel\Ai\Attributes\Provider as ProviderAttribute;
 use Laravel\Ai\Attributes\Timeout as TimeoutAttribute;
@@ -20,6 +21,7 @@ use Laravel\Ai\Jobs\InvokeAgent;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\QueuedAgentResponse;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Streaming\Events\StreamEvent;
@@ -71,12 +73,57 @@ trait Promptable
         ?string $model = null,
         ?int $timeout = null): StreamableAgentResponse
     {
-        return $this->withModelFailover(
-            fn (Provider $provider, string $model) => $provider->stream(
-                new AgentPrompt($this, $prompt, $attachments, $provider, $model, $this->getTimeout($timeout))
-            ),
-            $provider,
-            $model,
+        $providers = $this->getProvidersAndModels($provider, $model);
+        $resolvedTimeout = $this->getTimeout($timeout);
+
+        $resolvedProviders = [];
+
+        foreach ($providers as $p => $m) {
+            $resolved = Ai::textProviderFor($this, $p);
+            $resolvedProviders[] = [$resolved, $m ?? $this->getDefaultModelFor($resolved)];
+        }
+
+        if (empty($resolvedProviders)) {
+            throw new RuntimeException('No AI providers were configured.');
+        }
+
+        // Single provider: direct path (no failover needed)
+        if (count($resolvedProviders) === 1) {
+            [$singleProvider, $singleModel] = $resolvedProviders[0];
+
+            return $singleProvider->stream(
+                new AgentPrompt($this, $prompt, $attachments, $singleProvider, $singleModel, $resolvedTimeout)
+            );
+        }
+
+        // Multiple providers: failover-aware streaming
+        $agent = $this;
+        [$firstProvider, $firstModel] = $resolvedProviders[0];
+
+        return new StreamableAgentResponse(
+            (string) Str::uuid7(),
+            function () use ($resolvedProviders, $agent, $prompt, $attachments, $resolvedTimeout) {
+                $lastException = null;
+
+                foreach ($resolvedProviders as [$provider, $model]) {
+                    try {
+                        yield from $provider->stream(
+                            new AgentPrompt($agent, $prompt, $attachments, $provider, $model, $resolvedTimeout)
+                        );
+
+                        return;
+                    } catch (FailoverableException $e) {
+                        $lastException = $e;
+
+                        event(new AgentFailedOver($agent, $provider, $model, $e));
+
+                        continue;
+                    }
+                }
+
+                throw $lastException;
+            },
+            new Meta($firstProvider->name(), $firstModel),
         );
     }
 
