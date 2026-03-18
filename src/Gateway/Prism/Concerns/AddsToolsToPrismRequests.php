@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\Prism\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Collection;
+use Laravel\Ai\Contracts\Concurrent;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
@@ -60,7 +61,8 @@ trait AddsToolsToPrismRequests
                 )
             )
             ->using(fn ($arguments) => $this->invokeTool($tool, $arguments))
-            ->withoutErrorHandling();
+            ->withoutErrorHandling()
+            ->when($tool instanceof Concurrent, fn (PrismTool $prismTool) => $prismTool->concurrent());
     }
 
     /**
