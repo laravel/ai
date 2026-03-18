@@ -378,8 +378,13 @@ class PrismGateway implements Gateway
 
     /**
      * Map the given Laravel AI provider to a Prism provider.
+     *
+     * Built-in drivers are mapped to their corresponding Prism provider enum.
+     * Unknown drivers fall through as strings, allowing external Prism providers
+     * registered via PrismManager::extend() (e.g. prism-php/bedrock) to be
+     * resolved by Prism's own provider resolution.
      */
-    protected static function toPrismProvider(Provider $provider): PrismProvider
+    protected static function toPrismProvider(Provider $provider): PrismProvider|string
     {
         return match ($provider->driver()) {
             'anthropic' => PrismProvider::Anthropic,
@@ -393,7 +398,7 @@ class PrismGateway implements Gateway
             'openrouter' => PrismProvider::OpenRouter,
             'voyageai' => PrismProvider::VoyageAI,
             'xai' => PrismProvider::XAI,
-            default => throw new InvalidArgumentException('Gateway does not support provider ['.$provider.'].'),
+            default => $provider->driver(),
         };
     }
 
