@@ -25,11 +25,7 @@ trait MapsTools
         foreach ($tools as $tool) {
             if ($tool instanceof ProviderTool) {
                 $mapped[] = $this->mapProviderTool($tool, $provider);
-
-                continue;
-            }
-
-            if ($tool instanceof Tool) {
+            } elseif ($tool instanceof Tool) {
                 $mapped[] = $this->mapTool($tool);
             }
         }
@@ -53,6 +49,7 @@ trait MapsTools
 
         if (! empty($schema)) {
             $objectSchema = new ObjectSchema($schema);
+
             $schemaArray = $objectSchema->toSchema();
 
             $definition['parameters'] = [

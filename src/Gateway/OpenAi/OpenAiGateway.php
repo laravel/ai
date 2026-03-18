@@ -151,6 +151,66 @@ class OpenAiGateway implements Gateway
     }
 
     /**
+     * Send an image generation request.
+     */
+    protected function sendImageGenerationRequest(
+        ImageProvider $provider,
+        string $model,
+        string $prompt,
+        ?string $size,
+        ?string $quality,
+        ?int $timeout,
+    ) {
+        return $this->client($provider, $timeout ?? 120)->post('images/generations', [
+            'model' => $model,
+            'prompt' => $prompt,
+            'n' => 1,
+            'response_format' => 'b64_json',
+            ...$provider->defaultImageOptions($size, $quality),
+        ]);
+    }
+
+    /**
+     * Send an image edit request with attachments.
+     */
+    protected function sendImageEditRequest(
+        ImageProvider $provider,
+        string $model,
+        string $prompt,
+        array $attachments,
+        ?string $size,
+        ?string $quality,
+        ?int $timeout,
+    ) {
+        $request = $this->client($provider, $timeout ?? 120);
+
+        foreach ($attachments as $attachment) {
+            if (! $attachment instanceof File && ! $attachment instanceof UploadedFile) {
+                throw new InvalidArgumentException(
+                    'Unsupported attachment type ['.get_class($attachment).']'
+                );
+            }
+
+            $content = match (true) {
+                $attachment instanceof LocalImage => file_get_contents($attachment->path),
+                $attachment instanceof StoredImage => Storage::disk($attachment->disk)->get($attachment->path),
+                $attachment instanceof UploadedFile => $attachment->get(),
+                default => throw new InvalidArgumentException('Unsupported image attachment type ['.get_class($attachment).']'),
+            };
+
+            $request = $request->attach('image[]', $content, 'image.png');
+        }
+
+        return $request->post('images/edits', array_filter([
+            'model' => $model,
+            'prompt' => $prompt,
+            'n' => 1,
+            'response_format' => 'b64_json',
+            ...$provider->defaultImageOptions($size, $quality),
+        ]));
+    }
+
+    /**
      * Generate audio from the given text.
      */
     public function generateAudio(
@@ -267,65 +327,5 @@ class OpenAiGateway implements Gateway
             ->withToken($provider->providerCredentials()['key'])
             ->timeout($timeout ?? 60)
             ->throw();
-    }
-
-    /**
-     * Send an image generation request.
-     */
-    protected function sendImageGenerationRequest(
-        ImageProvider $provider,
-        string $model,
-        string $prompt,
-        ?string $size,
-        ?string $quality,
-        ?int $timeout,
-    ) {
-        return $this->client($provider, $timeout ?? 120)->post('images/generations', [
-            'model' => $model,
-            'prompt' => $prompt,
-            'n' => 1,
-            'response_format' => 'b64_json',
-            ...$provider->defaultImageOptions($size, $quality),
-        ]);
-    }
-
-    /**
-     * Send an image edit request with attachments.
-     */
-    protected function sendImageEditRequest(
-        ImageProvider $provider,
-        string $model,
-        string $prompt,
-        array $attachments,
-        ?string $size,
-        ?string $quality,
-        ?int $timeout,
-    ) {
-        $request = $this->client($provider, $timeout ?? 120);
-
-        foreach ($attachments as $attachment) {
-            if (! $attachment instanceof File && ! $attachment instanceof UploadedFile) {
-                throw new InvalidArgumentException(
-                    'Unsupported attachment type ['.get_class($attachment).']'
-                );
-            }
-
-            $content = match (true) {
-                $attachment instanceof LocalImage => file_get_contents($attachment->path),
-                $attachment instanceof StoredImage => Storage::disk($attachment->disk)->get($attachment->path),
-                $attachment instanceof UploadedFile => $attachment->get(),
-                default => throw new InvalidArgumentException('Unsupported image attachment type ['.get_class($attachment).']'),
-            };
-
-            $request = $request->attach('image[]', $content, 'image.png');
-        }
-
-        return $request->post('images/edits', array_filter([
-            'model' => $model,
-            'prompt' => $prompt,
-            'n' => 1,
-            'response_format' => 'b64_json',
-            ...$provider->defaultImageOptions($size, $quality),
-        ]));
     }
 }

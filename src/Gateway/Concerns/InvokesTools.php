@@ -24,15 +24,6 @@ trait InvokesTools
     }
 
     /**
-     * Initialize the tool invocation callbacks.
-     */
-    protected function initializeToolCallbacks(): void
-    {
-        $this->invokingToolCallback ??= fn () => true;
-        $this->toolInvokedCallback ??= fn () => true;
-    }
-
-    /**
      * Execute the given tool with the given arguments.
      */
     protected function executeTool(Tool $tool, array $arguments): string
@@ -57,5 +48,14 @@ trait InvokesTools
         }
 
         return null;
+    }
+
+    /**
+     * Initialize the tool invocation callbacks.
+     */
+    protected function initializeToolCallbacks(): void
+    {
+        $this->invokingToolCallback ??= fn () => true;
+        $this->toolInvokedCallback ??= fn () => true;
     }
 }
