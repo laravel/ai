@@ -51,6 +51,7 @@ trait BuildsTextRequests
     protected function buildSchemaFormat(array $schema): array
     {
         $objectSchema = new ObjectSchema($schema);
+
         $schemaArray = $objectSchema->toSchema();
 
         return [
