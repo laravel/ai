@@ -32,11 +32,15 @@ trait ParsesTextResponses
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
     ): TextResponse {
-        $steps = new Collection;
-        $allMessages = new Collection;
-
         return $this->processResponse(
-            $data, $provider, $structured, $tools, $schema, $steps, $allMessages, maxSteps: $options?->maxSteps,
+            $data,
+            $provider,
+            $structured,
+            $tools,
+            $schema,
+            new Collection,
+            new Collection,
+            maxSteps: $options?->maxSteps,
         );
     }
 
@@ -54,8 +58,8 @@ trait ParsesTextResponses
         int $depth = 0,
         ?int $maxSteps = null,
     ): TextResponse {
-        $output = data_get($data, 'output', []);
         $responseId = data_get($data, 'id', '');
+        $output = data_get($data, 'output', []);
         $model = data_get($data, 'model', '');
 
         $text = $this->extractText($output);
@@ -63,9 +67,9 @@ trait ParsesTextResponses
         $reasonings = $this->extractReasonings($output);
         $citations = $this->extractCitations($output);
         $usage = $this->extractUsage($data);
-        $finishReason = $this->mapFinishReason($data);
+        $finishReason = $this->extractFinishReason($data);
 
-        // Associate reasoning with tool calls
+        // Associate reasoning with tool calls...
         $mappedToolCalls = $this->mapToolCallsWithReasoning($toolCalls, $reasonings);
 
         $step = new Step(
@@ -79,16 +83,20 @@ trait ParsesTextResponses
 
         $steps->push($step);
 
-        // Build assistant message for conversation context
+        // Build assistant message for conversation context...
         $assistantMessage = new AssistantMessage($text, collect($mappedToolCalls));
+
         $messages->push($assistantMessage);
 
-        // Handle tool calls
-        if ($finishReason === FinishReason::ToolCalls && filled($mappedToolCalls) && $steps->count() < ($maxSteps ?? count($tools) * 2)) {
+        // Execute tool calls...
+        if ($finishReason === FinishReason::ToolCalls &&
+            filled($mappedToolCalls) &&
+            $steps->count() < ($maxSteps ?? count($tools) * 2)) {
             $toolResults = $this->executeToolCalls($mappedToolCalls, $tools);
 
-            // Update step with tool results
+            // Update step with tool results...
             $steps->pop();
+
             $steps->push(new Step(
                 $text,
                 $mappedToolCalls,
@@ -99,6 +107,7 @@ trait ParsesTextResponses
             ));
 
             $toolResultMessage = new ToolResultMessage(collect($toolResults));
+
             $messages->push($toolResultMessage);
 
             return $this->continueWithToolResults(
@@ -129,6 +138,38 @@ trait ParsesTextResponses
             $this->combineUsage($steps),
             new Meta($provider->name(), $model, $citations),
         ))->withMessages($messages)->withSteps($steps);
+    }
+
+    /**
+     * Execute tool calls and return tool results.
+     *
+     * @param  array<ToolCall>  $toolCalls
+     * @param  array<Tool>  $tools
+     * @return array<ToolResult>
+     */
+    protected function executeToolCalls(array $toolCalls, array $tools): array
+    {
+        $results = [];
+
+        foreach ($toolCalls as $toolCall) {
+            $tool = $this->findTool($toolCall->name, $tools);
+
+            if ($tool === null) {
+                continue;
+            }
+
+            $result = $this->executeTool($tool, $toolCall->arguments);
+
+            $results[] = new ToolResult(
+                $toolCall->id,
+                $toolCall->name,
+                $toolCall->arguments,
+                $result,
+                $toolCall->resultId,
+            );
+        }
+
+        return $results;
     }
 
     /**
@@ -168,55 +209,59 @@ trait ParsesTextResponses
 
         $data = $response->json();
 
-        $this->validateTextResponse($data);
+        if (isset($data['error'])) {
+            throw new AiException(
+                data_get($data, 'error.message', 'Unknown OpenAI error.'),
+            );
+        }
 
         return $this->processResponse($data, $provider, $structured, $tools, $schema, $steps, $messages, $depth, $maxSteps);
     }
 
     /**
-     * Execute tool calls and return tool results.
+     * Build the input array containing only tool results for a follow-up request.
      *
-     * @param  array<ToolCall>  $toolCalls
-     * @param  array<Tool>  $tools
-     * @return array<ToolResult>
+     * @param  array<ToolResult>  $toolResults
      */
-    protected function executeToolCalls(array $toolCalls, array $tools): array
+    protected function buildToolResultsInput(array $toolResults): array
     {
-        $results = [];
+        $input = [];
 
-        foreach ($toolCalls as $toolCall) {
-            $tool = $this->findTool($toolCall->name, $tools);
-
-            if ($tool === null) {
-                continue;
-            }
-
-            $result = $this->executeTool($tool, $toolCall->arguments);
-
-            $results[] = new ToolResult(
-                $toolCall->id,
-                $toolCall->name,
-                $toolCall->arguments,
-                $result,
-                $toolCall->resultId,
-            );
+        foreach ($toolResults as $result) {
+            $input[] = [
+                'type' => 'function_call_output',
+                'call_id' => $result->resultId,
+                'output' => $this->serializeToolResultOutput($result->result),
+            ];
         }
 
-        return $results;
+        return $input;
     }
 
     /**
-     * Extract text content from the output array.
+     * Serialize a tool result output value to a string.
+     */
+    protected function serializeToolResultOutput(mixed $output): string
+    {
+        if (is_string($output)) {
+            return $output;
+        }
+
+        return is_array($output) ? json_encode($output) : strval($output);
+    }
+
+    /**
+     * Extract the text content from the output array.
      */
     protected function extractText(array $output): string
     {
         $lastOutput = last($output);
 
-        if (! is_array($lastOutput)) {
-            return '';
+        if (is_array($lastOutput)) {
+            return data_get($lastOutput, 'content.0.text', '') ?? '';
         }
 
-        return data_get($lastOutput, 'content.0.text', '') ?? '';
+        return '';
     }
 
     /**
@@ -280,9 +325,9 @@ trait ParsesTextResponses
     }
 
     /**
-     * Map the finish reason from the OpenAI response.
+     * Extract and map the finish reason from the OpenAI response.
      */
-    protected function mapFinishReason(array $data): FinishReason
+    protected function extractFinishReason(array $data): FinishReason
     {
         $lastOutput = last(data_get($data, 'output', []));
         $status = data_get($lastOutput, 'status', data_get($data, 'status', ''));
@@ -328,49 +373,5 @@ trait ParsesTextResponses
             fn (Usage $carry, Step $step) => $carry->add($step->usage),
             new Usage(0, 0)
         );
-    }
-
-    /**
-     * Build the input array containing only tool results for a follow-up request.
-     *
-     * @param  array<ToolResult>  $toolResults
-     */
-    protected function buildToolResultsInput(array $toolResults): array
-    {
-        $input = [];
-
-        foreach ($toolResults as $result) {
-            $input[] = [
-                'type' => 'function_call_output',
-                'call_id' => $result->resultId,
-                'output' => $this->serializeToolResultOutput($result->result),
-            ];
-        }
-
-        return $input;
-    }
-
-    /**
-     * Serialize a tool result output value to a string.
-     */
-    protected function serializeToolResultOutput(mixed $output): string
-    {
-        if (is_string($output)) {
-            return $output;
-        }
-
-        return is_array($output) ? json_encode($output) : strval($output);
-    }
-
-    /**
-     * Validate the text response data.
-     */
-    protected function validateTextResponse(array $data): void
-    {
-        if (isset($data['error'])) {
-            throw new AiException(
-                data_get($data, 'error.message', 'Unknown OpenAI error'),
-            );
-        }
     }
 }
