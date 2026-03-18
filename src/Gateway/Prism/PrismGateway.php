@@ -15,6 +15,7 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Files\Image as ImageFile;
 use Laravel\Ai\Files\LocalImage;
@@ -36,6 +37,7 @@ use Prism\Prism\Exceptions\PrismException as PrismVendorException;
 use Prism\Prism\Facades\Prism;
 use Prism\Prism\ValueObjects\Media\Audio;
 use Prism\Prism\ValueObjects\Media\Image as PrismImage;
+use Prism\Prism\ValueObjects\Messages\SystemMessage;
 
 class PrismGateway implements Gateway
 {
@@ -70,12 +72,10 @@ class PrismGateway implements Gateway
             ! empty($schema),
         ];
 
-        if (! empty($instructions)) {
-            $request->withSystemPrompt($instructions);
-        }
+        $this->applySystemPrompt($request, $provider, $instructions, $options);
 
         if (count($tools) > 0) {
-            $this->addTools($request, $tools, $options);
+            $this->addTools($request, $provider, $tools, $options);
             $this->addProviderTools($provider, $request, $tools);
         }
 
@@ -131,12 +131,10 @@ class PrismGateway implements Gateway
             ! empty($schema),
         ];
 
-        if (! empty($instructions)) {
-            $request->withSystemPrompt($instructions);
-        }
+        $this->applySystemPrompt($request, $provider, $instructions, $options);
 
         if (count($tools) > 0) {
-            $this->addTools($request, $tools, $options);
+            $this->addTools($request, $provider, $tools, $options);
             $this->addProviderTools($provider, $request, $tools);
         }
 
@@ -163,6 +161,49 @@ class PrismGateway implements Gateway
     protected function toPrismMessages(array $messages): array
     {
         return PrismMessages::fromLaravelMessages(new Collection($messages))->all();
+    }
+
+    /**
+     * Apply the system prompt with optional cache control.
+     *
+     * When the agent specifies a `system_prompt_caching` provider option, the system
+     * prompt will be wrapped in a SystemMessage with the appropriate cache control
+     * options. This is primarily useful for Anthropic's prompt caching, which avoids
+     * re-processing large system prompts on every step of a multi-step agent loop.
+     *
+     * The option accepts a cache type string or an array with `type` and optional `ttl`:
+     *
+     *     // In the agent's providerOptions():
+     *     'system_prompt_caching' => 'ephemeral'
+     *     'system_prompt_caching' => ['type' => 'ephemeral', 'ttl' => '5m']
+     *
+     * Anthropic currently supports 'ephemeral' as the cache type, with TTL
+     * values of '5m' (default) or '1h'.
+     */
+    protected function applySystemPrompt(mixed $request, TextProvider $provider, ?string $instructions, ?TextGenerationOptions $options): void
+    {
+        if (empty($instructions)) {
+            return;
+        }
+
+        $caching = $options?->providerOptions(
+            Lab::tryFrom($provider->driver()) ?? $provider->driver()
+        )['system_prompt_caching'] ?? null;
+
+        if (is_null($caching)) {
+            $request->withSystemPrompt($instructions);
+
+            return;
+        }
+
+        $message = new SystemMessage($instructions);
+
+        $message->withProviderOptions(array_filter([
+            'cacheType' => is_array($caching) ? ($caching['type'] ?? 'ephemeral') : $caching,
+            'cacheTtl' => is_array($caching) ? ($caching['ttl'] ?? null) : null,
+        ]));
+
+        $request->withSystemPrompt($message);
     }
 
     /**

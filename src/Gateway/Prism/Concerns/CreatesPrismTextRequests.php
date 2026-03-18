@@ -64,6 +64,12 @@ trait CreatesPrismTextRequests
             Lab::tryFrom($provider->driver()) ?? $provider->driver()
         );
 
+        // Remove options consumed by PrismGateway before passing to Prism...
+        if (is_array($agentProviderOptions)) {
+            unset($agentProviderOptions['system_prompt_caching']);
+            $agentProviderOptions = $agentProviderOptions ?: null;
+        }
+
         if ($provider instanceof AnthropicProvider) {
             $providerOptions = array_filter([
                 'use_tool_calling' => $schema ? true : null,

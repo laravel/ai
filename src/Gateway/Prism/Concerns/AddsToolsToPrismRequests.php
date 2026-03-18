@@ -4,10 +4,12 @@ namespace Laravel\Ai\Gateway\Prism\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Collection;
+use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Prism\PrismTool;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
@@ -27,12 +29,12 @@ trait AddsToolsToPrismRequests
     /**
      * Add the given tools to the Prism request.
      */
-    protected function addTools($request, array $tools, ?TextGenerationOptions $options = null)
+    protected function addTools($request, Provider $provider, array $tools, ?TextGenerationOptions $options = null)
     {
         return $request
             ->withTools(
-                (new Collection($tools))->map(function ($tool) {
-                    return ! $tool instanceof ProviderTool ? $this->createPrismTool($tool) : null;
+                (new Collection($tools))->map(function ($tool) use ($provider) {
+                    return ! $tool instanceof ProviderTool ? $this->createPrismTool($tool, $provider) : null;
                 })->filter()->values()->all()
             )
             ->withToolChoice(ToolChoice::Auto)
@@ -44,13 +46,13 @@ trait AddsToolsToPrismRequests
     /**
      * Create a Prism tool from the given tool.
      */
-    protected function createPrismTool(Tool $tool): PrismTool
+    protected function createPrismTool(Tool $tool, ?Provider $provider = null): PrismTool
     {
         $toolName = method_exists($tool, 'name')
             ? $tool->name()
             : class_basename($tool);
 
-        return (new PrismTool)
+        $prismTool = (new PrismTool)
             ->as($toolName)
             ->for((string) $tool->description())
             ->when(
@@ -61,6 +63,18 @@ trait AddsToolsToPrismRequests
             )
             ->using(fn ($arguments) => $this->invokeTool($tool, $arguments))
             ->withoutErrorHandling();
+
+        if ($provider && $tool instanceof HasProviderOptions) {
+            $providerOptions = $tool->providerOptions(
+                Lab::tryFrom($provider->driver()) ?? $provider->driver()
+            );
+
+            if (! empty($providerOptions)) {
+                $prismTool->withProviderOptions($providerOptions);
+            }
+        }
+
+        return $prismTool;
     }
 
     /**
