@@ -22,6 +22,32 @@ use Laravel\Ai\Responses\TextResponse;
 trait ParsesTextResponses
 {
     /**
+     * Validate the OpenAI response data.
+     *
+     * @throws \Laravel\Ai\Exceptions\AiException
+     */
+    protected function validateTextResponse(array $data): void
+    {
+        if (! $data || isset($data['error'])) {
+            throw new AiException(sprintf(
+                'OpenAI Error: [%s] %s',
+                $data['error']['type'] ?? 'unknown',
+                $data['error']['message'] ?? 'Unknown OpenAI error.',
+            ));
+        }
+
+        if (($data['status'] ?? '') === 'failed') {
+            $error = $data['error'] ?? [];
+
+            throw new AiException(sprintf(
+                'OpenAI Error: [%s] %s',
+                $error['code'] ?? 'unknown',
+                $error['message'] ?? 'The response failed without an error message.',
+            ));
+        }
+    }
+
+    /**
      * Parse the OpenAI response data into a TextResponse.
      */
     protected function parseTextResponse(
@@ -58,9 +84,9 @@ trait ParsesTextResponses
         int $depth = 0,
         ?int $maxSteps = null,
     ): TextResponse {
-        $responseId = data_get($data, 'id', '');
-        $output = data_get($data, 'output', []);
-        $model = data_get($data, 'model', '');
+        $responseId = $data['id'] ?? '';
+        $output = $data['output'] ?? [];
+        $model = $data['model'] ?? '';
 
         $text = $this->extractText($output);
         $toolCalls = $this->extractToolCalls($output);
@@ -209,11 +235,7 @@ trait ParsesTextResponses
 
         $data = $response->json();
 
-        if (isset($data['error'])) {
-            throw new AiException(
-                data_get($data, 'error.message', 'Unknown OpenAI error.'),
-            );
-        }
+        $this->validateTextResponse($data);
 
         return $this->processResponse($data, $provider, $structured, $tools, $schema, $steps, $messages, $depth, $maxSteps);
     }
@@ -258,7 +280,7 @@ trait ParsesTextResponses
         $lastOutput = last($output);
 
         if (is_array($lastOutput)) {
-            return data_get($lastOutput, 'content.0.text', '') ?? '';
+            return $lastOutput['content'][0]['text'] ?? '';
         }
 
         return '';
@@ -312,15 +334,16 @@ trait ParsesTextResponses
      */
     protected function extractUsage(array $data): Usage
     {
-        $inputTokens = data_get($data, 'usage.input_tokens', 0);
-        $cachedTokens = data_get($data, 'usage.input_tokens_details.cached_tokens', 0);
+        $usage = $data['usage'] ?? [];
+        $inputTokens = $usage['input_tokens'] ?? 0;
+        $cachedTokens = $usage['input_tokens_details']['cached_tokens'] ?? 0;
 
         return new Usage(
             $inputTokens - $cachedTokens,
-            data_get($data, 'usage.output_tokens', 0),
+            $usage['output_tokens'] ?? 0,
             0,
             $cachedTokens,
-            data_get($data, 'usage.output_tokens_details.reasoning_tokens', 0),
+            $usage['output_tokens_details']['reasoning_tokens'] ?? 0,
         );
     }
 
@@ -329,9 +352,9 @@ trait ParsesTextResponses
      */
     protected function extractFinishReason(array $data): FinishReason
     {
-        $lastOutput = last(data_get($data, 'output', []));
-        $status = data_get($lastOutput, 'status', data_get($data, 'status', ''));
-        $type = data_get($lastOutput, 'type', '');
+        $lastOutput = last($data['output'] ?? []);
+        $status = $lastOutput['status'] ?? $data['status'] ?? '';
+        $type = $lastOutput['type'] ?? '';
 
         return match ($status) {
             'incomplete' => FinishReason::Length,
@@ -355,12 +378,12 @@ trait ParsesTextResponses
         $firstReasoning = $reasonings[0] ?? null;
 
         return array_map(fn (array $tc) => new ToolCall(
-            data_get($tc, 'id', ''),
-            data_get($tc, 'name', ''),
-            json_decode(data_get($tc, 'arguments', '{}'), true) ?? [],
-            data_get($tc, 'call_id'),
-            $firstReasoning ? data_get($firstReasoning, 'id') : null,
-            $firstReasoning ? data_get($firstReasoning, 'summary') : null,
+            $tc['id'] ?? '',
+            $tc['name'] ?? '',
+            json_decode($tc['arguments'] ?? '{}', true) ?? [],
+            $tc['call_id'] ?? null,
+            $firstReasoning ? $firstReasoning['id'] ?? null : null,
+            $firstReasoning ? $firstReasoning['summary'] ?? null : null,
         ), $toolCalls);
     }
 

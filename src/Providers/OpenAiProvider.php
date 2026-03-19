@@ -44,7 +44,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     {
         return array_filter([
             'vector_store_ids' => $search->ids(),
-            'filters' => ! empty($search->filters) ? [
+            'filters' => filled($search->filters) ? [
                 'type' => 'and',
                 'filters' => (new Collection($search->filters))->map(fn ($filter) => match ($filter['type']) {
                     default => [
@@ -63,7 +63,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     public function webSearchToolOptions(WebSearch $search): array
     {
         return array_filter([
-            'filters' => ! empty($search->allowedDomains)
+            'filters' => filled($search->allowedDomains)
                 ? ['allowed_domains' => $search->allowedDomains]
                 : null,
             'user_location' => $search->hasLocation()

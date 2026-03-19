@@ -47,7 +47,7 @@ trait MapsTools
             'strict' => true,
         ];
 
-        if (! empty($schema)) {
+        if (filled($schema)) {
             $objectSchema = new ObjectSchema($schema);
 
             $schemaArray = $objectSchema->toSchema();

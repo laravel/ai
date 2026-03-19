@@ -59,13 +59,13 @@ trait HandlesTextStreaming
         $usage = null;
 
         foreach ($this->parseServerSentEvents($streamBody) as $data) {
-            $type = data_get($data, 'type', '');
+            $type = $data['type'] ?? '';
 
             if ($type === 'error') {
                 yield (new Error(
                     $this->generateEventId(),
-                    data_get($data, 'error.code', 'unknown_error'),
-                    data_get($data, 'error.message', 'Unknown error'),
+                    $data['error']['code'] ?? 'unknown_error',
+                    $data['error']['message'] ?? 'Unknown error',
                     false,
                     time(),
                 ))->withInvocationId($invocationId);
@@ -75,12 +75,12 @@ trait HandlesTextStreaming
 
             if ($type === 'response.created' && ! $streamStartEmitted) {
                 $streamStartEmitted = true;
-                $responseId = data_get($data, 'response.id', '');
+                $responseId = $data['response']['id'] ?? '';
 
                 yield (new StreamStart(
                     $this->generateEventId(),
                     $provider->name(),
-                    data_get($data, 'response.model', $model),
+                    $data['response']['model'] ?? $model,
                     time(),
                 ))->withInvocationId($invocationId);
 
@@ -88,7 +88,7 @@ trait HandlesTextStreaming
             }
 
             if ($type === 'response.reasoning_summary_text.delta') {
-                $delta = (string) data_get($data, 'delta', '');
+                $delta = (string) ($data['delta'] ?? '');
 
                 if ($delta !== '') {
                     if ($reasoningId === '') {
@@ -112,10 +112,10 @@ trait HandlesTextStreaming
                 continue;
             }
 
-            if ($type === 'response.output_item.done' && data_get($data, 'item.type') === 'reasoning') {
+            if ($type === 'response.output_item.done' && ($data['item']['type'] ?? '') === 'reasoning') {
                 $reasoningItems[] = [
-                    'id' => data_get($data, 'item.id'),
-                    'summary' => data_get($data, 'item.summary', []),
+                    'id' => $data['item']['id'] ?? null,
+                    'summary' => $data['item']['summary'] ?? [],
                 ];
 
                 if ($reasoningId !== '') {
@@ -132,14 +132,14 @@ trait HandlesTextStreaming
             }
 
             if ($type === 'response.output_item.done') {
-                $itemType = data_get($data, 'item.type', '');
+                $itemType = $data['item']['type'] ?? '';
 
                 if ($itemType !== 'function_call' && str_ends_with((string) $itemType, '_call')) {
                     yield (new ProviderToolEvent(
                         $this->generateEventId(),
-                        data_get($data, 'item.id', ''),
+                        $data['item']['id'] ?? '',
                         $itemType,
-                        data_get($data, 'item', []),
+                        $data['item'] ?? [],
                         'completed',
                         time(),
                     ))->withInvocationId($invocationId);
@@ -154,7 +154,7 @@ trait HandlesTextStreaming
                 if (count($parts) === 3 && str_ends_with($parts[1], '_call')) {
                     yield (new ProviderToolEvent(
                         $this->generateEventId(),
-                        data_get($data, 'item_id', ''),
+                        $data['item_id'] ?? '',
                         $parts[1],
                         $data,
                         $parts[2],
@@ -165,13 +165,13 @@ trait HandlesTextStreaming
                 }
             }
 
-            if (data_get($data, 'item.type') === 'function_call' && $type === 'response.output_item.added') {
-                $index = (int) data_get($data, 'output_index', count($pendingToolCalls));
+            if (($data['item']['type'] ?? '') === 'function_call' && $type === 'response.output_item.added') {
+                $index = (int) ($data['output_index'] ?? count($pendingToolCalls));
 
                 $toolCall = [
-                    'id' => data_get($data, 'item.id'),
-                    'call_id' => data_get($data, 'item.call_id'),
-                    'name' => data_get($data, 'item.name'),
+                    'id' => $data['item']['id'] ?? null,
+                    'call_id' => $data['item']['call_id'] ?? null,
+                    'name' => $data['item']['name'] ?? null,
                     'arguments' => '',
                 ];
 
@@ -187,11 +187,11 @@ trait HandlesTextStreaming
             }
 
             if ($type === 'response.function_call_arguments.delta') {
-                $callId = data_get($data, 'item_id');
+                $callId = $data['item_id'] ?? null;
 
                 foreach ($pendingToolCalls as &$call) {
                     if (($call['id'] ?? null) === $callId) {
-                        $call['arguments'] .= data_get($data, 'delta', '');
+                        $call['arguments'] .= $data['delta'] ?? '';
                         break;
                     }
                 }
@@ -201,8 +201,8 @@ trait HandlesTextStreaming
             }
 
             if ($type === 'response.function_call_arguments.done') {
-                $callId = data_get($data, 'item_id');
-                $arguments = data_get($data, 'arguments', '');
+                $callId = $data['item_id'] ?? null;
+                $arguments = $data['arguments'] ?? '';
 
                 foreach ($pendingToolCalls as &$call) {
                     if (($call['id'] ?? null) === $callId) {
@@ -232,7 +232,7 @@ trait HandlesTextStreaming
             }
 
             if ($type === 'response.output_text.delta') {
-                $textDelta = (string) data_get($data, 'delta', '');
+                $textDelta = (string) ($data['delta'] ?? '');
 
                 if ($textDelta !== '') {
                     if (! $textStartEmitted) {
@@ -269,14 +269,16 @@ trait HandlesTextStreaming
             }
 
             if ($type === 'response.completed') {
-                $responseId = data_get($data, 'response.id', $responseId);
+                $response = $data['response'] ?? [];
+                $responseId = $response['id'] ?? $responseId;
+                $responseUsage = $response['usage'] ?? [];
 
                 $usage = new Usage(
-                    data_get($data, 'response.usage.input_tokens', 0) - data_get($data, 'response.usage.input_tokens_details.cached_tokens', 0),
-                    data_get($data, 'response.usage.output_tokens', 0),
+                    ($responseUsage['input_tokens'] ?? 0) - ($responseUsage['input_tokens_details']['cached_tokens'] ?? 0),
+                    $responseUsage['output_tokens'] ?? 0,
                     0,
-                    data_get($data, 'response.usage.input_tokens_details.cached_tokens', 0),
-                    data_get($data, 'response.usage.output_tokens_details.reasoning_tokens', 0),
+                    $responseUsage['input_tokens_details']['cached_tokens'] ?? 0,
+                    $responseUsage['output_tokens_details']['reasoning_tokens'] ?? 0,
                 );
             }
         }
@@ -392,12 +394,12 @@ trait HandlesTextStreaming
     protected function mapStreamToolCalls(array $toolCalls): array
     {
         return array_map(fn (array $tc) => new ToolCall(
-            data_get($tc, 'id', ''),
-            data_get($tc, 'name', ''),
-            json_decode(data_get($tc, 'arguments', '{}'), true) ?? [],
-            data_get($tc, 'call_id'),
-            data_get($tc, 'reasoning_id'),
-            data_get($tc, 'reasoning_summary'),
+            $tc['id'] ?? '',
+            $tc['name'] ?? '',
+            json_decode($tc['arguments'] ?? '{}', true) ?? [],
+            $tc['call_id'] ?? null,
+            $tc['reasoning_id'] ?? null,
+            $tc['reasoning_summary'] ?? null,
         ), array_values($toolCalls));
     }
 }

@@ -77,7 +77,7 @@ class OpenAiGateway implements Gateway
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, ! empty($schema), $tools, $schema, $options);
+        return $this->parseTextResponse($data, $provider, filled($schema), $tools, $schema, $options);
     }
 
     /**
@@ -164,8 +164,6 @@ class OpenAiGateway implements Gateway
         return $this->client($provider, $timeout ?? 120)->post('images/generations', [
             'model' => $model,
             'prompt' => $prompt,
-            'n' => 1,
-            'response_format' => 'b64_json',
             ...$provider->defaultImageOptions($size, $quality),
         ]);
     }
@@ -204,8 +202,6 @@ class OpenAiGateway implements Gateway
         return $request->post('images/edits', array_filter([
             'model' => $model,
             'prompt' => $prompt,
-            'n' => 1,
-            'response_format' => 'b64_json',
             ...$provider->defaultImageOptions($size, $quality),
         ]));
     }
@@ -277,14 +273,14 @@ class OpenAiGateway implements Gateway
         return new TranscriptionResponse(
             $data['text'] ?? '',
             collect($data['segments'] ?? [])->map(fn (array $segment) => new TranscriptionSegment(
-                $segment['text'],
+                $segment['text'] ?? '',
                 $segment['speaker'] ?? '',
                 $segment['start'] ?? 0,
                 $segment['end'] ?? 0,
             )),
             new Usage(
-                data_get($data, 'usage.input_tokens', 0),
-                data_get($data, 'usage.total_tokens', 0),
+                $data['usage']['input_tokens'] ?? 0,
+                $data['usage']['total_tokens'] ?? 0,
             ),
             new Meta($provider->name(), $model),
         );

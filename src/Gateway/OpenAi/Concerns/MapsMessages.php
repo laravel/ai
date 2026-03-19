@@ -61,7 +61,7 @@ trait MapsMessages
      */
     protected function mapAssistantMessage(AssistantMessage|Message $message, array &$input): void
     {
-        if ($message->content !== '' && $message->content !== '0') {
+        if (filled($message->content)) {
             $input[] = [
                 'role' => 'assistant',
                 'content' => [
