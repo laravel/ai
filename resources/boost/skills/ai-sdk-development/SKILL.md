@@ -1,7 +1,9 @@
 ---
 name: ai-sdk-development
-description: TRIGGER when working with `laravel/ai` — Laravel's official first-party AI SDK. Covers AI agents, chatbots, text generation, image generation, audio/TTS, transcription/STT, embeddings, RAG, vector stores, reranking, structured output, streaming, conversation memory, tools, queueing, broadcasting, and provider failover across OpenAI, Anthropic, Gemini, Azure, Groq, xAI, DeepSeek, Mistral, Ollama, ElevenLabs, Cohere, Jina, and VoyageAI. Invoke when the user references `laravel/ai`, the `Laravel\Ai\` namespace, or this project's AI features — not for Prism PHP or other AI packages used directly.
-
+description: TRIGGER when working with ai-sdk which is Laravel official first-party AI SDK. Covers AI agents, chatbots, text generation, image generation, audio/TTS, transcription/STT, embeddings, RAG, vector stores, reranking, structured output, streaming, conversation memory, tools, queueing, broadcasting, and provider failover across OpenAI, Anthropic, Gemini, Azure, Groq, xAI, DeepSeek, Mistral, Ollama, ElevenLabs, Cohere, Jina, and VoyageAI. Invoke when the user references ai-sdk, the `Laravel\Ai\` namespace, or this project's AI features — not for Prism PHP or other AI packages used directly.
+license: MIT
+metadata:
+  author: laravel
 ---
 
 # Developing with the Laravel AI SDK
@@ -54,6 +56,7 @@ Vector stores? → `Stores::create()`
 
 ```php
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 
 class SalesCoach implements Agent
@@ -69,6 +72,17 @@ class SalesCoach implements Agent
 // Prompting
 $response = (new SalesCoach)->prompt('Analyze this transcript...');
 echo $response->text;
+
+// Container resolution with dependency injection
+$agent = SalesCoach::make(user: $user);
+
+// Override provider, model, or timeout per-prompt
+$response = (new SalesCoach)->prompt(
+    'Analyze this transcript...',
+    provider: Lab::Anthropic,
+    model: 'claude-haiku-4-5-20251001',
+    timeout: 120,
+);
 
 // Streaming (returns SSE response from a route)
 return (new SalesCoach)->stream('Analyze this transcript...');
@@ -246,9 +260,11 @@ $store->add(Document::fromStorage('manual.pdf')); // Store + add in one step
 ### PHP Attributes
 
 ```php
-use Laravel\Ai\Attributes\{Provider, MaxSteps, MaxTokens, Temperature, Timeout};
+use Laravel\Ai\Attributes\{Provider, Model, MaxSteps, MaxTokens, Temperature, Timeout};
+use Laravel\Ai\Enums\Lab;
 
-#[Provider('anthropic')]
+#[Provider(Lab::Anthropic)]
+#[Model('claude-haiku-4-5-20251001')]
 #[MaxSteps(10)]
 #[MaxTokens(4096)]
 #[Temperature(0.7)]
@@ -314,7 +330,7 @@ $response = (new ChatBot)->continue($conversationId, as: $user)->prompt('More...
 ### Failover
 
 ```php
-$response = (new MyAgent)->prompt('Hello', provider: ['openai', 'anthropic']);
+$response = (new MyAgent)->prompt('Hello', provider: [Lab::OpenAI, Lab::Anthropic]);
 ```
 
 ## Testing and Faking
@@ -371,6 +387,7 @@ $store->assertAdded('file_id');
 - Agent pattern: Implement the `Agent` interface and use the `Promptable` trait
 - Optional interfaces: `HasTools`, `HasMiddleware`, `HasStructuredOutput`, `Conversational`
 - Entry-point classes: `Image`, `Audio`, `Transcription`, `Embeddings`, `Reranking`, `Stores`
+- Provider enum: `Laravel\Ai\Enums\Lab` (prefer over plain strings)
 - Artisan commands: `php artisan make:agent`, `php artisan make:tool`
 - Global helper: `agent()` for anonymous agents
 
@@ -401,14 +418,23 @@ Use agents and entry-point classes (`Image`, `Audio`, etc.) — not `Prism::text
 
 ## Provider Support
 
-| Provider   | Text | Image | Audio | STT | Embeddings | Reranking | Files | Stores |
-| ---------- | ---- | ----- | ----- | --- | ---------- | --------- | ----- | ------ |
-| OpenAI     | Y    | Y     | Y     | Y   | Y          | -         | Y     | Y      |
-| Anthropic  | Y    | -     | -     | -   | -          | -         | Y     | -      |
-| Gemini     | Y    | Y     | -     | -   | Y          | -         | Y     | Y      |
-| xAI        | Y    | Y     | -     | -   | -          | -         | -     | -      |
-| Groq       | Y    | -     | -     | -   | -          | -         | -     | -      |
-| OpenRouter | Y    | -     | -     | -   | -          | -         | -     | -      |
-| ElevenLabs | -    | -     | Y     | Y   | -          | -         | -     | -      |
-| Cohere     | -    | -     | -     | -   | Y          | Y         | -     | -      |
-| Jina       | -    | -     | -     | -   | Y          | Y         | -     | -      |
+| Feature    | Providers                                                       |
+| ---------- | --------------------------------------------------------------- |
+| Text       | OpenAI, Anthropic, Gemini, Azure, Groq, xAI, DeepSeek, Mistral, Ollama |
+| Images     | OpenAI, Gemini, xAI                                            |
+| TTS        | OpenAI, ElevenLabs                                              |
+| STT        | OpenAI, ElevenLabs, Mistral                                     |
+| Embeddings | OpenAI, Gemini, Azure, Cohere, Mistral, Jina, VoyageAI         |
+| Reranking  | Cohere, Jina                                                    |
+| Files      | OpenAI, Anthropic, Gemini                                       |
+
+Use the `Laravel\Ai\Enums\Lab` enum to reference providers in code instead of plain strings:
+
+```php
+use Laravel\Ai\Enums\Lab;
+
+Lab::Anthropic;
+Lab::OpenAI;
+Lab::Gemini;
+// ...
+```
