@@ -38,6 +38,7 @@ class PrismSteps
             static::toLaravelFinishReason($step->finishReason),
             PrismUsage::toLaravelUsage($step->usage),
             new Meta($provider->name(), $step->meta->model),
+            $step->additionalContent,
         );
     }
 
@@ -54,6 +55,7 @@ class PrismSteps
             static::toLaravelFinishReason($step->finishReason),
             PrismUsage::toLaravelUsage($step->usage),
             new Meta($provider->name(), $step->meta->model),
+            $step->additionalContent,
         );
     }
 

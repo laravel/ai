@@ -10,6 +10,7 @@ class Step implements Arrayable, JsonSerializable
     /**
      * @param  array<int, ToolCall>  $toolCalls
      * @param  array<int, ToolResult>  $toolResults
+     * @param  array<string, mixed>  $additionalContent
      */
     public function __construct(
         public string $text,
@@ -18,6 +19,7 @@ class Step implements Arrayable, JsonSerializable
         public FinishReason $finishReason,
         public Usage $usage,
         public Meta $meta,
+        public array $additionalContent = [],
     ) {}
 
     /**
@@ -32,6 +34,7 @@ class Step implements Arrayable, JsonSerializable
             'finish_reason' => $this->finishReason->value,
             'usage' => $this->usage,
             'meta' => $this->meta,
+            'additional_content' => $this->additionalContent,
         ];
     }
 
