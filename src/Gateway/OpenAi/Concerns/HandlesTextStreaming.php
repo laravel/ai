@@ -25,14 +25,6 @@ use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 trait HandlesTextStreaming
 {
     /**
-     * Generate a lowercase UUID v7 for use as a stream event ID.
-     */
-    protected function generateEventId(): string
-    {
-        return strtolower((string) Str::uuid7());
-    }
-
-    /**
      * Process an OpenAI streaming response and yield Laravel stream events.
      */
     protected function processTextStream(
@@ -81,6 +73,43 @@ trait HandlesTextStreaming
                     $this->generateEventId(),
                     $provider->name(),
                     $data['response']['model'] ?? $model,
+                    time(),
+                ))->withInvocationId($invocationId);
+
+                continue;
+            }
+
+            if ($type === 'response.output_text.delta') {
+                $textDelta = (string) ($data['delta'] ?? '');
+
+                if ($textDelta !== '') {
+                    if (! $textStartEmitted) {
+                        $textStartEmitted = true;
+
+                        yield (new TextStart(
+                            $this->generateEventId(),
+                            $messageId,
+                            time(),
+                        ))->withInvocationId($invocationId);
+                    }
+
+                    $currentText .= $textDelta;
+
+                    yield (new TextDelta(
+                        $this->generateEventId(),
+                        $messageId,
+                        $textDelta,
+                        time(),
+                    ))->withInvocationId($invocationId);
+                }
+
+                continue;
+            }
+
+            if ($type === 'response.output_text.done' && $textStartEmitted) {
+                yield (new TextEnd(
+                    $this->generateEventId(),
+                    $messageId,
                     time(),
                 ))->withInvocationId($invocationId);
 
@@ -177,6 +206,7 @@ trait HandlesTextStreaming
 
                 if (filled($reasoningItems)) {
                     $latestReasoning = end($reasoningItems);
+
                     $toolCall['reasoning_id'] = $latestReasoning['id'];
                     $toolCall['reasoning_summary'] = $latestReasoning['summary'] ?? [];
                 }
@@ -226,44 +256,8 @@ trait HandlesTextStreaming
                         break;
                     }
                 }
+
                 unset($call);
-
-                continue;
-            }
-
-            if ($type === 'response.output_text.delta') {
-                $textDelta = (string) ($data['delta'] ?? '');
-
-                if ($textDelta !== '') {
-                    if (! $textStartEmitted) {
-                        $textStartEmitted = true;
-
-                        yield (new TextStart(
-                            $this->generateEventId(),
-                            $messageId,
-                            time(),
-                        ))->withInvocationId($invocationId);
-                    }
-
-                    $currentText .= $textDelta;
-
-                    yield (new TextDelta(
-                        $this->generateEventId(),
-                        $messageId,
-                        $textDelta,
-                        time(),
-                    ))->withInvocationId($invocationId);
-                }
-
-                continue;
-            }
-
-            if ($type === 'response.output_text.done' && $textStartEmitted) {
-                yield (new TextEnd(
-                    $this->generateEventId(),
-                    $messageId,
-                    time(),
-                ))->withInvocationId($invocationId);
 
                 continue;
             }
@@ -321,6 +315,7 @@ trait HandlesTextStreaming
         $mappedToolCalls = $this->mapStreamToolCalls($pendingToolCalls);
 
         $toolResults = [];
+
         foreach ($mappedToolCalls as $toolCall) {
             $tool = $this->findTool($toolCall->name, $tools);
 
@@ -401,5 +396,13 @@ trait HandlesTextStreaming
             $tc['reasoning_id'] ?? null,
             $tc['reasoning_summary'] ?? null,
         ), array_values($toolCalls));
+    }
+
+    /**
+     * Generate a lowercase UUID v7 for use as a stream event ID.
+     */
+    protected function generateEventId(): string
+    {
+        return strtolower((string) Str::uuid7());
     }
 }
