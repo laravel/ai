@@ -141,7 +141,7 @@ trait ParsesTextResponses
             );
         }
 
-        // Build final response
+        // Build final response...
         $allToolCalls = $steps->flatMap(fn (Step $s) => $s->toolCalls);
         $allToolResults = $steps->flatMap(fn (Step $s) => $s->toolResults);
 
