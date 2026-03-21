@@ -22,6 +22,8 @@ class PendingAudioGeneration
 
     protected ?string $instructions = null;
 
+    protected int $timeout = 30;
+
     public function __construct(
         protected string $text,
     ) {}
@@ -67,6 +69,16 @@ class PendingAudioGeneration
     }
 
     /**
+     * Specify the timeout (in seconds) for the audio generation.
+     */
+    public function timeout(int $seconds = 30): self
+    {
+        $this->timeout = $seconds;
+
+        return $this;
+    }
+
+    /**
      * Generate the audio.
      */
     public function generate(Lab|array|string|null $provider = null, ?string $model = null): AudioResponse
@@ -84,7 +96,7 @@ class PendingAudioGeneration
 
             try {
                 return $provider->audio(
-                    $this->text, $this->voice, $this->instructions, $model
+                    $this->text, $this->voice, $this->instructions, $model, $this->timeout
                 );
             } catch (FailoverableException $e) {
                 $lastException = $e;
@@ -110,7 +122,8 @@ class PendingAudioGeneration
                     $this->voice,
                     $this->instructions,
                     $provider,
-                    $model
+                    $model,
+                    $this->timeout,
                 )
             );
 

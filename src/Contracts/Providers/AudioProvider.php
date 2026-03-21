@@ -15,6 +15,7 @@ interface AudioProvider
         string $voice = 'default-female',
         ?string $instructions = null,
         ?string $model = null,
+        int $timeout = 30,
     ): AudioResponse;
 
     /**
