@@ -1,6 +1,10 @@
 <?php
 
-namespace Tests\Integration;
+/**
+ * @group integration
+ */
+
+namespace Tests\Feature;
 
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Event;

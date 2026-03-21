@@ -1,6 +1,10 @@
 <?php
 
-namespace Tests\Integration;
+/**
+ * @group integration
+ */
+
+namespace Tests\Feature;
 
 use Illuminate\Support\Facades\Event;
 use Laravel\Ai\Events\CreatingStore;

@@ -1,6 +1,10 @@
 <?php
 
-namespace Tests\Integration;
+/**
+ * @group integration
+ */
+
+namespace Tests\Feature;
 
 use Laravel\Ai\Audio;
 use Laravel\Ai\Files;

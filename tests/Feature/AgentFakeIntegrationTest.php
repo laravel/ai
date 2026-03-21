@@ -1,6 +1,10 @@
 <?php
 
-namespace Tests\Integration;
+/**
+ * @group integration
+ */
+
+namespace Tests\Feature;
 
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\Feature\Agents\SecondaryAssistantAgent;
