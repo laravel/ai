@@ -1,11 +1,8 @@
 <?php
 
-/**
- * @group integration
- */
-
 namespace Tests\Feature;
 
+use PHPUnit\Framework\Attributes\Group;
 use Illuminate\Support\Facades\Event;
 use Laravel\Ai\Audio;
 use Laravel\Ai\Embeddings;
@@ -21,6 +18,7 @@ use Laravel\Ai\Transcription;
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\TestCase;
 
+#[Group('integration')]
 class AiProviderEnumIntegrationTest extends TestCase
 {
     public function test_agent_prompt_accepts_ai_provider_enum(): void

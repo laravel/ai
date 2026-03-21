@@ -1,11 +1,8 @@
 <?php
 
-/**
- * @group integration
- */
-
 namespace Tests\Feature;
 
+use PHPUnit\Framework\Attributes\Group;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Event;
 use Laravel\Ai\Events\Reranked;
@@ -14,6 +11,7 @@ use Laravel\Ai\Reranking as RerankingFacade;
 use Laravel\Ai\Responses\RerankingResponse;
 use Tests\TestCase;
 
+#[Group('integration')]
 class RerankingIntegrationTest extends TestCase
 {
     public function test_documents_can_be_reranked(): void

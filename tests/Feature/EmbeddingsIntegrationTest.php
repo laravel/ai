@@ -1,11 +1,8 @@
 <?php
 
-/**
- * @group integration
- */
-
 namespace Tests\Feature;
 
+use PHPUnit\Framework\Attributes\Group;
 use Illuminate\Support\Facades\Event;
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Events\EmbeddingsGenerated;
@@ -13,6 +10,7 @@ use Laravel\Ai\Events\GeneratingEmbeddings;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Tests\TestCase;
 
+#[Group('integration')]
 class EmbeddingsIntegrationTest extends TestCase
 {
     public function test_embeddings_can_be_generated(): void

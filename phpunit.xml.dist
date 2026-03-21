@@ -11,9 +11,7 @@
         <testsuite name="Feature">
             <directory suffix="Test.php">./tests/Feature</directory>
         </testsuite>
-        <testsuite name="Integration">
-            <group>integration</group>
-        </testsuite>
+
     </testsuites>
     <source>
         <include>

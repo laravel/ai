@@ -1,15 +1,13 @@
 <?php
 
-/**
- * @group integration
- */
-
 namespace Tests\Feature;
 
+use PHPUnit\Framework\Attributes\Group;
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\Feature\Agents\SecondaryAssistantAgent;
 use Tests\TestCase;
 
+#[Group('integration')]
 class AgentFakeIntegrationTest extends TestCase
 {
     protected $provider = 'groq';

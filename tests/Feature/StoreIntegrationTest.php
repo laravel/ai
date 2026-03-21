@@ -1,11 +1,8 @@
 <?php
 
-/**
- * @group integration
- */
-
 namespace Tests\Feature;
 
+use PHPUnit\Framework\Attributes\Group;
 use Illuminate\Support\Facades\Event;
 use Laravel\Ai\Events\CreatingStore;
 use Laravel\Ai\Events\StoreCreated;
@@ -19,6 +16,7 @@ use Tests\TestCase;
 use function Illuminate\Support\days;
 use function Laravel\Ai\agent;
 
+#[Group('integration')]
 class StoreIntegrationTest extends TestCase
 {
     protected $provider = 'openai';

@@ -1,14 +1,12 @@
 <?php
 
-/**
- * @group integration
- */
-
 namespace Tests\Feature;
 
+use PHPUnit\Framework\Attributes\Group;
 use Laravel\Ai\Image;
 use Tests\TestCase;
 
+#[Group('integration')]
 class ImageIntegrationTest extends TestCase
 {
     public function test_images_can_be_generated(): void

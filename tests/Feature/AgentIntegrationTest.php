@@ -1,11 +1,8 @@
 <?php
 
-/**
- * @group integration
- */
-
 namespace Tests\Feature;
 
+use PHPUnit\Framework\Attributes\Group;
 use Exception;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Collection;
@@ -28,6 +25,7 @@ use Tests\TestCase;
 
 use function Laravel\Ai\agent;
 
+#[Group('integration')]
 class AgentIntegrationTest extends TestCase
 {
     protected $provider = 'groq';

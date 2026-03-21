@@ -1,11 +1,8 @@
 <?php
 
-/**
- * @group integration
- */
-
 namespace Tests\Feature;
 
+use PHPUnit\Framework\Attributes\Group;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
@@ -16,6 +13,7 @@ use Laravel\Ai\Files\Document;
 use RuntimeException;
 use Tests\TestCase;
 
+#[Group('integration')]
 class FileIntegrationTest extends TestCase
 {
     protected $provider = 'anthropic';

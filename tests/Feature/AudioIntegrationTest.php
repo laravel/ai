@@ -1,16 +1,14 @@
 <?php
 
-/**
- * @group integration
- */
-
 namespace Tests\Feature;
 
+use PHPUnit\Framework\Attributes\Group;
 use Laravel\Ai\Audio;
 use Laravel\Ai\Files;
 use Laravel\Ai\Transcription;
 use Tests\TestCase;
 
+#[Group('integration')]
 class AudioIntegrationTest extends TestCase
 {
     public function test_audio_can_be_generated_and_transcribed(): void
