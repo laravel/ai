@@ -43,7 +43,8 @@ class GeminiAudioGateway implements AudioGateway
         string $model,
         string $text,
         string $voice,
-        ?string $instructions = null): AudioResponse
+        ?string $instructions = null,
+        int $timeout = 30): AudioResponse
     {
         $apiKey = $provider->providerCredentials()['key'];
 
