@@ -5,15 +5,19 @@ namespace Laravel\Ai\Gateway\Prism;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
+use Laravel\Ai\Files\Base64Audio;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Files\File;
+use Laravel\Ai\Files\LocalAudio;
 use Laravel\Ai\Files\LocalDocument;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\ProviderDocument;
 use Laravel\Ai\Files\ProviderImage;
+use Laravel\Ai\Files\RemoteAudio;
 use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Files\RemoteImage;
+use Laravel\Ai\Files\StoredAudio;
 use Laravel\Ai\Files\StoredDocument;
 use Laravel\Ai\Files\StoredImage;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -27,6 +31,8 @@ use Prism\Prism\ValueObjects\Media\Image as PrismImage;
 use Prism\Prism\ValueObjects\Messages\AssistantMessage as PrismAssistantMessage;
 use Prism\Prism\ValueObjects\Messages\ToolResultMessage as PrismToolResultMessage;
 use Prism\Prism\ValueObjects\Messages\UserMessage as PrismUserMessage;
+use Prism\Prism\ValueObjects\ToolCall as PrismToolCall;
+use Prism\Prism\ValueObjects\ToolResult as PrismToolResult;
 
 class PrismMessages
 {
@@ -37,6 +43,18 @@ class PrismMessages
     {
         return $messages
             ->map(function ($message) {
+                if ($message instanceof ToolResultMessage) {
+                    return new PrismToolResultMessage(
+                        $message->toolResults->map(fn ($toolResult) => new PrismToolResult(
+                            toolCallId: $toolResult->id,
+                            toolName: $toolResult->name,
+                            args: $toolResult->arguments,
+                            result: $toolResult->result,
+                            toolCallResultId: $toolResult->resultId,
+                        ))->all()
+                    );
+                }
+
                 $message = Message::tryFrom($message);
 
                 if ($message->role === MessageRole::User) {
@@ -47,7 +65,21 @@ class PrismMessages
                 }
 
                 if ($message->role === MessageRole::Assistant) {
-                    return new PrismAssistantMessage($message->content);
+                    $toolCalls = $message instanceof AssistantMessage && $message->toolCalls->isNotEmpty()
+                        ? $message->toolCalls->map(fn ($toolCall) => new PrismToolCall(
+                            id: $toolCall->id,
+                            name: $toolCall->name,
+                            arguments: $toolCall->arguments,
+                            resultId: $toolCall->resultId,
+                            reasoningId: $toolCall->reasoningId,
+                            reasoningSummary: $toolCall->reasoningSummary,
+                        ))->all()
+                        : [];
+
+                    return new PrismAssistantMessage(
+                        $message->content ?? '',
+                        toolCalls: $toolCalls,
+                    );
                 }
             })->filter()->values();
     }
@@ -70,6 +102,10 @@ class PrismMessages
                 $attachment instanceof LocalImage => PrismImage::fromLocalPath($attachment->path, $attachment->mime),
                 $attachment instanceof RemoteImage => PrismImage::fromUrl($attachment->url),
                 $attachment instanceof StoredImage => PrismImage::fromStoragePath($attachment->path, $attachment->disk),
+                $attachment instanceof Base64Audio => PrismAudio::fromBase64($attachment->base64, $attachment->mime),
+                $attachment instanceof LocalAudio => PrismAudio::fromLocalPath($attachment->path, $attachment->mime),
+                $attachment instanceof RemoteAudio => PrismAudio::fromUrl($attachment->url),
+                $attachment instanceof StoredAudio => PrismAudio::fromStoragePath($attachment->path, $attachment->disk),
                 $attachment instanceof ProviderDocument => PrismDocument::fromFileId($attachment->id),
                 $attachment instanceof Base64Document => PrismDocument::fromBase64($attachment->base64, $attachment->mime),
                 $attachment instanceof LocalDocument => PrismDocument::fromPath($attachment->path),

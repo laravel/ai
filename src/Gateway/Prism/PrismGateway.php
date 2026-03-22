@@ -79,9 +79,11 @@ class PrismGateway implements Gateway
             $this->addProviderTools($provider, $request, $tools);
         }
 
+        $prismMessages = $this->toPrismMessages($messages);
+
         try {
             $response = $request
-                ->withMessages($this->toPrismMessages($messages))
+                ->withMessages($prismMessages)
                 ->{$structured ? 'asStructured' : 'asText'}();
         } catch (PrismVendorException $e) {
             throw PrismException::toAiException($e, $provider, $model);
@@ -106,7 +108,7 @@ class PrismGateway implements Gateway
                 PrismUsage::toLaravelUsage($response->usage),
                 new Meta($provider->name(), $response->meta->model, $citations),
             ))->withMessages(
-                PrismMessages::toLaravelMessages($response->messages)
+                PrismMessages::toLaravelMessages($response->messages)->slice(count($prismMessages))->values()
             )->withSteps(PrismSteps::toLaravelSteps($response->steps, $provider));
     }
 
@@ -240,6 +242,7 @@ class PrismGateway implements Gateway
         string $text,
         string $voice,
         ?string $instructions = null,
+        int $timeout = 30,
     ): AudioResponse {
         $voice = match ($voice) {
             'default-male' => 'ash',
@@ -253,6 +256,9 @@ class PrismGateway implements Gateway
                     ...$provider->additionalConfiguration(),
                     'api_key' => $provider->providerCredentials()['key'],
                 ]))
+                ->withClientOptions([
+                    'timeout' => $timeout,
+                ])
                 ->withInput($text)
                 ->withVoice($voice)
                 ->withProviderOptions(array_filter([
@@ -336,16 +342,21 @@ class PrismGateway implements Gateway
         EmbeddingProvider $provider,
         string $model,
         array $inputs,
-        int $dimensions): EmbeddingsResponse
-    {
+        int $dimensions,
+        int $timeout = 30,
+    ): EmbeddingsResponse {
         $request = tap(
             Prism::embeddings(),
             fn ($prism) => $this->configure($prism, $provider, $model)
-        );
+        )->withClientOptions([
+            'timeout' => $timeout,
+        ]);
 
         $request->withProviderOptions(match ($provider->driver()) {
             'gemini' => ['outputDimensionality' => $dimensions],
+            'ollama' => ['dimensions' => $dimensions],
             'openai' => ['dimensions' => $dimensions],
+            'openrouter' => ['dimensions' => $dimensions],
             'voyageai' => ['outputDimension' => $dimensions],
             default => [],
         });

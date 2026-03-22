@@ -7,6 +7,7 @@ use Illuminate\Filesystem\Filesystem;
 use JsonSerializable;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
+use RuntimeException;
 
 class LocalDocument extends Document implements Arrayable, JsonSerializable, StorableFile
 {
@@ -24,7 +25,13 @@ class LocalDocument extends Document implements Arrayable, JsonSerializable, Sto
      */
     public function content(): string
     {
-        return file_get_contents($this->path);
+        $content = file_get_contents($this->path);
+
+        if ($content === false) {
+            throw new RuntimeException("File does not exist at path [{$this->path}]");
+        }
+
+        return $content;
     }
 
     /**

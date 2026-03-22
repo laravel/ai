@@ -25,6 +25,8 @@ class PendingEmbeddingsGeneration
 
     protected ?int $cacheSeconds = null;
 
+    protected int $timeout = 30;
+
     public function __construct(
         protected array $inputs,
     ) {}
@@ -45,6 +47,16 @@ class PendingEmbeddingsGeneration
     public function cache(?int $seconds = null): self
     {
         $this->cacheSeconds = $seconds ?? config('ai.caching.embeddings.seconds', 60 * 60 * 24 * 30);
+
+        return $this;
+    }
+
+    /**
+     * Specify the timeout (in seconds) for the embeddings generation.
+     */
+    public function timeout(int $seconds = 30): self
+    {
+        $this->timeout = $seconds;
 
         return $this;
     }
@@ -73,7 +85,7 @@ class PendingEmbeddingsGeneration
 
             try {
                 return tap(
-                    $provider->embeddings($this->inputs, $dimensions, $model),
+                    $provider->embeddings($this->inputs, $dimensions, $model, $this->timeout),
                     fn ($response) => $this->cacheEmbeddings($provider, $model, $dimensions, $response)
                 );
             } catch (FailoverableException $e) {
@@ -146,7 +158,8 @@ class PendingEmbeddingsGeneration
                     $this->inputs,
                     $this->dimensions,
                     $provider,
-                    $model
+                    $model,
+                    $this->timeout,
                 )
             );
 

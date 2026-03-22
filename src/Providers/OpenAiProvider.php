@@ -82,7 +82,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function defaultTextModel(): string
     {
-        return $this->config['models']['text']['default'] ?? 'gpt-5.2';
+        return $this->config['models']['text']['default'] ?? 'gpt-5.4';
     }
 
     /**
@@ -90,7 +90,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function cheapestTextModel(): string
     {
-        return $this->config['models']['text']['cheapest'] ?? 'gpt-5-nano';
+        return $this->config['models']['text']['cheapest'] ?? 'gpt-5.4-nano';
     }
 
     /**
@@ -98,7 +98,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function smartestTextModel(): string
     {
-        return $this->config['models']['text']['smartest'] ?? 'gpt-5.2-pro';
+        return $this->config['models']['text']['smartest'] ?? 'gpt-5.4-pro';
     }
 
     /**
