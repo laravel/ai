@@ -2,12 +2,14 @@
 
 namespace Laravel\Ai\Contracts;
 
+use Laravel\Ai\Messages\Message;
+
 interface Conversational
 {
     /**
      * Get the list of messages comprising the conversation so far.
      *
-     * @return \Laravel\Ai\Messages\Message[]
+     * @return Message[]
      */
     public function messages(): iterable;
 }

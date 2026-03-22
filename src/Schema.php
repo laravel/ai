@@ -54,9 +54,6 @@ class Schema implements PrismSchema, Schemable
      */
     public function toSchema(): array
     {
-        return [
-            'name' => $this->name,
-            ...$this->schema->toArray(),
-        ];
+        return $this->schema->toArray();
     }
 }

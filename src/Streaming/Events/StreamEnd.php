@@ -23,7 +23,7 @@ class StreamEnd extends StreamEvent
     {
         $events = is_array($events) ? new Collection($events) : $events;
 
-        return (new Collection($events))->whereInstanceOf(StreamEnd::class)
+        return $events->whereInstanceOf(StreamEnd::class)
             ->values()
             ->map
             ->usage

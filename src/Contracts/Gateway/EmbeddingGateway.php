@@ -12,5 +12,5 @@ interface EmbeddingGateway
      *
      * @param  string[]  $inputs
      */
-    public function generateEmbeddings(EmbeddingProvider $provider, string $model, array $inputs, int $dimensions): EmbeddingsResponse;
+    public function generateEmbeddings(EmbeddingProvider $provider, string $model, array $inputs, int $dimensions, int $timeout = 30): EmbeddingsResponse;
 }
