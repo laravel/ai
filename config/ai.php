@@ -16,18 +16,6 @@ return [
     'default' => 'openai',
     'default_for_images' => 'gemini',
     'default_for_videos' => 'openai',
-
-    /*
-    |--------------------------------------------------------------------------
-    | Video queue
-    |--------------------------------------------------------------------------
-    |
-    | When set, queued video generation jobs are dispatched to this queue name.
-    | Application code may still override via QueuedVideoResponse::onQueue().
-    |
-    */
-
-    'video_queue' => env('AI_VIDEO_QUEUE'),
     'default_for_audio' => 'openai',
     'default_for_transcription' => 'openai',
     'default_for_embeddings' => 'openai',
@@ -138,5 +126,18 @@ return [
             'key' => env('XAI_API_KEY'),
         ],
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Video generation queue
+    |--------------------------------------------------------------------------
+    |
+    | When set to a non-empty string, queued video jobs use this queue name.
+    | When null or empty, jobs use the connection's default queue. Application
+    | code may still override via QueuedVideoResponse::onQueue().
+    |
+    */
+
+    'video_queue' => env('AI_SDK_VIDEO_GENERATION_QUEUE'),
 
 ];
