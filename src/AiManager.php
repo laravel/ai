@@ -43,6 +43,7 @@ class AiManager extends MultipleInstanceManager
     use Concerns\InteractsWithFakeReranking;
     use Concerns\InteractsWithFakeStores;
     use Concerns\InteractsWithFakeTranscriptions;
+    use Concerns\InteractsWithFakeVideos;
 
     /**
      * The key name of the "driver" equivalent configuration option.
@@ -178,13 +179,17 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
-     * Get a video provider instance (video fakes are not yet supported; returns the real provider).
+     * Get a video provider instance, using a fake gateway if video is faked.
      *
      * @throws LogicException
      */
     public function fakeableVideoProvider(?string $name = null): VideoProvider
     {
-        return $this->videoProvider($name);
+        $provider = $this->videoProvider($name);
+
+        return $this->videosAreFaked()
+            ? (clone $provider)->useVideoGateway($this->fakeVideoGateway())
+            : $provider;
     }
 
     /**

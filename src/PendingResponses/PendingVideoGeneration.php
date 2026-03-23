@@ -7,7 +7,9 @@ use Laravel\Ai\Ai;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
+use Laravel\Ai\FakePendingDispatch;
 use Laravel\Ai\Jobs\GenerateVideo;
+use Laravel\Ai\Prompts\QueuedVideoPrompt;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\QueuedVideoResponse;
 use Laravel\Ai\Responses\VideoResponse;
@@ -110,8 +112,28 @@ class PendingVideoGeneration
      */
     public function queue(Lab|array|string|null $provider = null, ?string $model = null): QueuedVideoResponse
     {
-        return new QueuedVideoResponse(
-            GenerateVideo::dispatch($this, $provider, $model),
-        );
+        if (Ai::videosAreFaked()) {
+            Ai::recordVideoGeneration(
+                new QueuedVideoPrompt(
+                    $this->prompt,
+                    $this->seconds,
+                    $this->size,
+                    $provider,
+                    $model,
+                )
+            );
+
+            return new QueuedVideoResponse(new FakePendingDispatch);
+        }
+
+        $dispatch = GenerateVideo::dispatch($this, $provider, $model);
+
+        $queueName = config('ai.video_queue');
+
+        if (is_string($queueName) && $queueName !== '') {
+            $dispatch->onQueue($queueName);
+        }
+
+        return new QueuedVideoResponse($dispatch);
     }
 }

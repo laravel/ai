@@ -2,6 +2,8 @@
 
 namespace Laravel\Ai\Providers\Concerns;
 
+use Laravel\Ai\Ai;
+use Laravel\Ai\Prompts\VideoPrompt;
 use Laravel\Ai\Responses\VideoResponse;
 
 trait GeneratesVideos
@@ -24,10 +26,22 @@ trait GeneratesVideos
 
         $options = $this->defaultVideoOptions($seconds, $size);
 
+        $videoPrompt = new VideoPrompt(
+            $prompt,
+            $options['seconds'],
+            $options['size'],
+            $this,
+            $model,
+        );
+
+        if (Ai::videosAreFaked()) {
+            Ai::recordVideoGeneration($videoPrompt);
+        }
+
         return $this->videoGateway()->generateVideo(
             $this,
             $model,
-            $prompt,
+            $videoPrompt->prompt,
             $options['seconds'],
             $options['size'],
             $timeout,

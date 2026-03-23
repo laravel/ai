@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway;
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Sleep;
 use Laravel\Ai\Contracts\Gateway\VideoGateway;
 use Laravel\Ai\Contracts\Providers\VideoProvider;
 use Laravel\Ai\Responses\Data\GeneratedVideo;
@@ -59,14 +60,13 @@ class OpenAiVideoGateway implements VideoGateway
         }
 
         $status = 'queued';
-        $progress = 0;
 
         while (in_array($status, ['queued', 'in_progress'], true)) {
             if ($deadline !== null && microtime(true) > $deadline) {
                 throw new RuntimeException('OpenAI video generation timed out after '.$timeout.' seconds.');
             }
 
-            sleep($pollIntervalSeconds);
+            Sleep::for($pollIntervalSeconds)->seconds();
 
             $poll = Http::withToken($key)
                 ->timeout(60)
@@ -77,7 +77,6 @@ class OpenAiVideoGateway implements VideoGateway
             }
 
             $status = (string) $poll->json('status', 'failed');
-            $progress = (int) $poll->json('progress', 0);
 
             if ($status === 'failed') {
                 $message = $poll->json('error.message') ?? $poll->body();

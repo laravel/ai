@@ -16,6 +16,18 @@ return [
     'default' => 'openai',
     'default_for_images' => 'gemini',
     'default_for_videos' => 'openai',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Video queue
+    |--------------------------------------------------------------------------
+    |
+    | When set, queued video generation jobs are dispatched to this queue name.
+    | Application code may still override via QueuedVideoResponse::onQueue().
+    |
+    */
+
+    'video_queue' => env('AI_VIDEO_QUEUE'),
     'default_for_audio' => 'openai',
     'default_for_transcription' => 'openai',
     'default_for_embeddings' => 'openai',
