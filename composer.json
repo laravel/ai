@@ -1,6 +1,5 @@
 {
     "name": "laravel/ai",
-    "version": "dev-main",
     "description": "The official AI SDK for Laravel.",
     "license": "MIT",
     "keywords": [
