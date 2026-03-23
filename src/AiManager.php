@@ -13,6 +13,7 @@ use Laravel\Ai\Contracts\Providers\RerankingProvider;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Contracts\Providers\VideoProvider;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Prism\PrismGateway;
 use Laravel\Ai\Providers\AnthropicProvider;
@@ -160,6 +161,30 @@ class AiManager extends MultipleInstanceManager
         return $this->imagesAreFaked()
             ? (clone $provider)->useImageGateway($this->fakeImageGateway())
             : $provider;
+    }
+
+    /**
+     * Get a provider instance by name.
+     *
+     * @throws LogicException
+     */
+    public function videoProvider(?string $name = null): VideoProvider
+    {
+        return tap($this->instance($name), function ($instance) {
+            if (! $instance instanceof VideoProvider) {
+                throw new LogicException('Provider ['.$instance::class.'] does not support video generation.');
+            }
+        });
+    }
+
+    /**
+     * Get a video provider instance (video fakes are not yet supported; returns the real provider).
+     *
+     * @throws LogicException
+     */
+    public function fakeableVideoProvider(?string $name = null): VideoProvider
+    {
+        return $this->videoProvider($name);
     }
 
     /**
