@@ -38,6 +38,10 @@ trait CreatesPrismTextRequests
             $request = $request->usingTemperature($options->temperature);
         }
 
+        if (! is_null($options?->topP)) {
+            $request = $request->usingTopP($options->topP);
+        }
+
         return $request->withClientOptions(['timeout' => $timeout ?? 60]);
     }
 

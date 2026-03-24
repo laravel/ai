@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway;
 use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Attributes\MaxTokens;
 use Laravel\Ai\Attributes\Temperature;
+use Laravel\Ai\Attributes\TopP;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Enums\Lab;
@@ -17,6 +18,7 @@ class TextGenerationOptions
         public readonly ?int $maxTokens = null,
         public readonly ?float $temperature = null,
         public readonly ?Agent $agent = null,
+        public readonly ?float $topP = null,
     ) {
         //
     }
@@ -45,12 +47,14 @@ class TextGenerationOptions
         $maxSteps = $reflection->getAttributes(MaxSteps::class);
         $maxTokens = $reflection->getAttributes(MaxTokens::class);
         $temperature = $reflection->getAttributes(Temperature::class);
+        $topP = $reflection->getAttributes(TopP::class);
 
         return new self(
             maxSteps: ! empty($maxSteps) ? $maxSteps[0]->newInstance()->value : null,
             maxTokens: ! empty($maxTokens) ? $maxTokens[0]->newInstance()->value : null,
             temperature: ! empty($temperature) ? $temperature[0]->newInstance()->value : null,
             agent: $agent,
+            topP: ! empty($topP) ? $topP[0]->newInstance()->value : null,
         );
     }
 }
