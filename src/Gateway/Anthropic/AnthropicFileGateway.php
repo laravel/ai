@@ -1,18 +1,20 @@
 <?php
 
-namespace Laravel\Ai\Gateway;
+namespace Laravel\Ai\Gateway\Anthropic;
 
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Providers\FileProvider;
+use Laravel\Ai\Gateway\Concerns\HandlesRateLimiting;
+use Laravel\Ai\Gateway\Concerns\PreparesStorableFiles;
 use Laravel\Ai\Responses\FileResponse;
 use Laravel\Ai\Responses\StoredFileResponse;
 
 class AnthropicFileGateway implements FileGateway
 {
-    use Concerns\HandlesRateLimiting;
-    use Concerns\PreparesStorableFiles;
+    use HandlesRateLimiting;
+    use PreparesStorableFiles;
 
     /**
      * Get a file by its ID.
