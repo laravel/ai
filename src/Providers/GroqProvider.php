@@ -2,13 +2,29 @@
 
 namespace Laravel\Ai\Providers;
 
+use Illuminate\Contracts\Events\Dispatcher;
+use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Gateway\Groq\GroqGateway;
 
 class GroqProvider extends Provider implements TextProvider
 {
     use Concerns\GeneratesText;
     use Concerns\HasTextGateway;
     use Concerns\StreamsText;
+
+    public function __construct(
+        protected array $config,
+        protected Dispatcher $events,
+    ) {}
+
+    /**
+     * Get the provider's text gateway.
+     */
+    public function textGateway(): TextGateway
+    {
+        return $this->textGateway ??= new GroqGateway($this->events);
+    }
 
     /**
      * Get the name of the default text model.
