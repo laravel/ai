@@ -258,7 +258,7 @@ class OpenAiGateway implements Gateway
         $response = $this->withRateLimitHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)
-                ->attach('file', $audio->content(), 'audio.mp3', ['Content-Type' => $audio->mimeType()])
+                ->attach('file', $audio->content(), $this->audioFilename($audio), ['Content-Type' => $audio->mimeType()])
                 ->post('audio/transcriptions', array_filter([
                     'model' => $model,
                     'language' => $language,
@@ -282,6 +282,32 @@ class OpenAiGateway implements Gateway
             ),
             new Meta($provider->name(), $model),
         );
+    }
+
+    /**
+     * Determine the appropriate filename for the audio file based on its MIME type.
+     *
+     * OpenAI's transcription API infers the audio format from the filename extension,
+     * not the Content-Type header, so the extension must match the actual audio format.
+     */
+    protected function audioFilename(TranscribableAudio $audio): string
+    {
+        if ($audio instanceof \Laravel\Ai\Contracts\Files\HasName && $audio->name()) {
+            return $audio->name();
+        }
+
+        $extension = match ($audio->mimeType()) {
+            'audio/webm' => 'webm',
+            'audio/ogg', 'audio/ogg; codecs=opus' => 'ogg',
+            'audio/wav', 'audio/x-wav' => 'wav',
+            'audio/mp4', 'audio/m4a', 'audio/x-m4a' => 'm4a',
+            'audio/flac', 'audio/x-flac' => 'flac',
+            'audio/mpeg', 'audio/mp3' => 'mp3',
+            'audio/mpga' => 'mpga',
+            default => 'mp3',
+        };
+
+        return "audio.{$extension}";
     }
 
     /**
