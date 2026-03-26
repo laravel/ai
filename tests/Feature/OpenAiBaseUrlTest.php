@@ -13,9 +13,11 @@ use function Laravel\Ai\agent;
 
 class OpenAiBaseUrlTest extends TestCase
 {
+    protected string $customUrl = 'http://localhost:1234/v1';
+
     public function test_openai_text_requests_use_the_configured_base_url(): void
     {
-        $this->configureOpenAiProvider('http://localhost:1234/v1/');
+        $this->configureOpenAiProvider($this->customUrl);
 
         Http::fake([
             '*' => Http::response([
@@ -42,19 +44,18 @@ class OpenAiBaseUrlTest extends TestCase
         $this->assertSame('Hello from local model', $response->text);
 
         Http::assertSentCount(1);
-        Http::assertSent(fn (Request $request) => $request->method() === 'POST'
-            && $request->url() === 'http://localhost:1234/v1/responses');
+        $this->assertRequestSent('POST', "{$this->customUrl}/responses");
     }
 
     public function test_openai_file_requests_use_the_configured_base_url(): void
     {
-        $this->configureOpenAiProvider('http://localhost:1234/v1/');
+        $this->configureOpenAiProvider($this->customUrl);
 
         Http::fake(function (Request $request) {
             return match ([$request->method(), $request->url()]) {
-                ['POST', 'http://localhost:1234/v1/files'] => Http::response(['id' => 'file_123']),
-                ['GET', 'http://localhost:1234/v1/files/file_123'] => Http::response(['id' => 'file_123']),
-                ['DELETE', 'http://localhost:1234/v1/files/file_123'] => Http::response(),
+                ['POST', "{$this->customUrl}/files"] => Http::response(['id' => 'file_123']),
+                ['GET', "{$this->customUrl}/files/file_123"] => Http::response(['id' => 'file_123']),
+                ['DELETE', "{$this->customUrl}/files/file_123"] => Http::response(),
                 default => Http::response(['unexpected_url' => $request->url()], 500),
             };
         });
@@ -72,22 +73,19 @@ class OpenAiBaseUrlTest extends TestCase
         $this->assertSame('file_123', $retrieved->id);
 
         Http::assertSentCount(3);
-        Http::assertSent(fn (Request $request) => $request->method() === 'POST'
-            && $request->url() === 'http://localhost:1234/v1/files');
-        Http::assertSent(fn (Request $request) => $request->method() === 'GET'
-            && $request->url() === 'http://localhost:1234/v1/files/file_123');
-        Http::assertSent(fn (Request $request) => $request->method() === 'DELETE'
-            && $request->url() === 'http://localhost:1234/v1/files/file_123');
+        $this->assertRequestSent('POST', "{$this->customUrl}/files");
+        $this->assertRequestSent('GET', "{$this->customUrl}/files/file_123");
+        $this->assertRequestSent('DELETE', "{$this->customUrl}/files/file_123");
     }
 
     public function test_openai_store_requests_use_the_configured_base_url(): void
     {
-        $this->configureOpenAiProvider('http://localhost:1234/v1/');
+        $this->configureOpenAiProvider($this->customUrl);
 
         Http::fake(function (Request $request) {
             return match ([$request->method(), $request->url()]) {
-                ['POST', 'http://localhost:1234/v1/vector_stores'] => Http::response(['id' => 'vs_123']),
-                ['GET', 'http://localhost:1234/v1/vector_stores/vs_123'] => Http::response([
+                ['POST', "{$this->customUrl}/vector_stores"] => Http::response(['id' => 'vs_123']),
+                ['GET', "{$this->customUrl}/vector_stores/vs_123"] => Http::response([
                     'id' => 'vs_123',
                     'name' => 'Local Store',
                     'status' => 'completed',
@@ -97,9 +95,9 @@ class OpenAiBaseUrlTest extends TestCase
                         'failed' => 0,
                     ],
                 ]),
-                ['POST', 'http://localhost:1234/v1/vector_stores/vs_123/files'] => Http::response(['id' => 'vsfile_123']),
-                ['DELETE', 'http://localhost:1234/v1/vector_stores/vs_123/files/vsfile_123'] => Http::response(['deleted' => true]),
-                ['DELETE', 'http://localhost:1234/v1/vector_stores/vs_123'] => Http::response(['deleted' => true]),
+                ['POST', "{$this->customUrl}/vector_stores/vs_123/files"] => Http::response(['id' => 'vsfile_123']),
+                ['DELETE', "{$this->customUrl}/vector_stores/vs_123/files/vsfile_123"] => Http::response(['deleted' => true]),
+                ['DELETE', "{$this->customUrl}/vector_stores/vs_123"] => Http::response(['deleted' => true]),
                 default => Http::response(['unexpected_url' => $request->url()], 500),
             };
         });
@@ -116,16 +114,11 @@ class OpenAiBaseUrlTest extends TestCase
         $this->assertTrue($deleted);
 
         Http::assertSentCount(5);
-        Http::assertSent(fn (Request $request) => $request->method() === 'POST'
-            && $request->url() === 'http://localhost:1234/v1/vector_stores');
-        Http::assertSent(fn (Request $request) => $request->method() === 'GET'
-            && $request->url() === 'http://localhost:1234/v1/vector_stores/vs_123');
-        Http::assertSent(fn (Request $request) => $request->method() === 'POST'
-            && $request->url() === 'http://localhost:1234/v1/vector_stores/vs_123/files');
-        Http::assertSent(fn (Request $request) => $request->method() === 'DELETE'
-            && $request->url() === 'http://localhost:1234/v1/vector_stores/vs_123/files/vsfile_123');
-        Http::assertSent(fn (Request $request) => $request->method() === 'DELETE'
-            && $request->url() === 'http://localhost:1234/v1/vector_stores/vs_123');
+        $this->assertRequestSent('POST', "{$this->customUrl}/vector_stores");
+        $this->assertRequestSent('GET', "{$this->customUrl}/vector_stores/vs_123");
+        $this->assertRequestSent('POST', "{$this->customUrl}/vector_stores/vs_123/files");
+        $this->assertRequestSent('DELETE', "{$this->customUrl}/vector_stores/vs_123/files/vsfile_123");
+        $this->assertRequestSent('DELETE', "{$this->customUrl}/vector_stores/vs_123");
     }
 
     public function test_openai_requests_fall_back_to_the_default_base_url(): void
@@ -157,22 +150,21 @@ class OpenAiBaseUrlTest extends TestCase
         $this->assertSame('Hello from OpenAI', $response->text);
 
         Http::assertSentCount(1);
-        Http::assertSent(fn (Request $request) => $request->method() === 'POST'
-            && $request->url() === 'https://api.openai.com/v1/responses');
+        $this->assertRequestSent('POST', 'https://api.openai.com/v1/responses');
     }
 
     protected function configureOpenAiProvider(?string $url = null): void
     {
-        $provider = config('ai.providers.openai');
+        config(['ai.providers.openai' => array_filter([
+            ...config('ai.providers.openai'),
+            'key' => 'test-key',
+            'url' => $url,
+        ])]);
+    }
 
-        $provider['key'] = 'test-key';
-
-        if ($url === null) {
-            unset($provider['url']);
-        } else {
-            $provider['url'] = $url;
-        }
-
-        config(['ai.providers.openai' => $provider]);
+    protected function assertRequestSent(string $method, string $url): void
+    {
+        Http::assertSent(fn (Request $request) => $request->method() === $method
+            && $request->url() === $url);
     }
 }

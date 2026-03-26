@@ -24,9 +24,6 @@ trait CreatesOpenAiClient
      */
     protected function baseUrl(Provider $provider): string
     {
-        $config = $provider->additionalConfiguration();
-        $url = trim((string) ($config['url'] ?? ''));
-
-        return rtrim($url !== '' ? $url : 'https://api.openai.com/v1', '/');
+        return rtrim($provider->additionalConfiguration()['url'] ?? 'https://api.openai.com/v1', '/');
     }
 }
