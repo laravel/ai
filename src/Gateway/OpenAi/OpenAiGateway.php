@@ -286,9 +286,6 @@ class OpenAiGateway implements Gateway
 
     /**
      * Determine the appropriate filename for the audio file based on its MIME type.
-     *
-     * OpenAI's transcription API infers the audio format from the filename extension,
-     * not the Content-Type header, so the extension must match the actual audio format.
      */
     protected function audioFilename(TranscribableAudio $audio): string
     {
