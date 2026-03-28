@@ -15,6 +15,7 @@ use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Contracts\Providers\VideoProvider;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Gateway\OpenAi\OpenAiGateway;
 use Laravel\Ai\Gateway\Prism\PrismGateway;
 use Laravel\Ai\Providers\AnthropicProvider;
 use Laravel\Ai\Providers\AzureOpenAiProvider;
@@ -427,7 +428,7 @@ class AiManager extends MultipleInstanceManager
     public function createOpenaiDriver(array $config): OpenAiProvider
     {
         return new OpenAiProvider(
-            new PrismGateway($this->app['events']),
+            new OpenAiGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)
         );

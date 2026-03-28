@@ -1,18 +1,20 @@
 <?php
 
-namespace Laravel\Ai\Gateway;
+namespace Laravel\Ai\Gateway\OpenAi;
 
-use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Providers\FileProvider;
+use Laravel\Ai\Gateway\Concerns\HandlesRateLimiting;
+use Laravel\Ai\Gateway\Concerns\PreparesStorableFiles;
 use Laravel\Ai\Responses\FileResponse;
 use Laravel\Ai\Responses\StoredFileResponse;
 
 class OpenAiFileGateway implements FileGateway
 {
-    use Concerns\HandlesRateLimiting;
-    use Concerns\PreparesStorableFiles;
+    use Concerns\CreatesOpenAiClient;
+    use HandlesRateLimiting;
+    use PreparesStorableFiles;
 
     /**
      * Get a file by its ID.
@@ -21,9 +23,8 @@ class OpenAiFileGateway implements FileGateway
     {
         $response = $this->withRateLimitHandling(
             $provider->name(),
-            fn () => Http::withToken($provider->providerCredentials()['key'])
-                ->get("https://api.openai.com/v1/files/{$fileId}")
-                ->throw()
+            fn () => $this->client($provider)
+                ->get("files/{$fileId}")
         );
 
         return new FileResponse(
@@ -42,12 +43,11 @@ class OpenAiFileGateway implements FileGateway
 
         $response = $this->withRateLimitHandling(
             $provider->name(),
-            fn () => Http::withToken($provider->providerCredentials()['key'])
+            fn () => $this->client($provider)
                 ->attach('file', $content, $name, ['Content-Type' => $mime])
-                ->post('https://api.openai.com/v1/files', [
+                ->post('files', [
                     'purpose' => 'user_data',
                 ])
-                ->throw()
         );
 
         return new StoredFileResponse($response->json('id'));
@@ -60,9 +60,8 @@ class OpenAiFileGateway implements FileGateway
     {
         $this->withRateLimitHandling(
             $provider->name(),
-            fn () => Http::withToken($provider->providerCredentials()['key'])
-                ->delete("https://api.openai.com/v1/files/{$fileId}")
-                ->throw()
+            fn () => $this->client($provider)
+                ->delete("files/{$fileId}")
         );
     }
 }
