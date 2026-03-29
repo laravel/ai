@@ -127,7 +127,7 @@ class DatabaseConversationStore implements ConversationStore
                         $toolCalls->map(fn ($toolCall) => new ToolCall(
                             id: $toolCall['id'],
                             name: $toolCall['name'],
-                            arguments: $toolCall['arguments'],
+                            arguments: $toolCall['arguments'] ?? $toolCall['input'] ?? [],
                             resultId: $toolCall['result_id'] ?? null,
                         ))
                     );
@@ -137,7 +137,7 @@ class DatabaseConversationStore implements ConversationStore
                             $toolResults->map(fn ($toolResult) => new ToolResult(
                                 id: $toolResult['id'],
                                 name: $toolResult['name'],
-                                arguments: $toolResult['arguments'],
+                                arguments: $toolResult['arguments'] ?? $toolResult['input'] ?? [],
                                 result: $toolResult['result'],
                                 resultId: $toolResult['result_id'] ?? null,
                             ))
