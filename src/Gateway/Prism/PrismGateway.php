@@ -307,12 +307,21 @@ class PrismGateway implements Gateway
                     ),
                 });
 
-            if ($provider->driver() === 'openai') {
-                $request->withProviderOptions(array_filter([
-                    'language' => $language,
-                    'response_format' => $diarize ? 'diarized_json' : null,
-                    'chunking_strategy' => $diarize ? 'auto' : null,
-                ]));
+            switch ($provider->driver()) {
+                case 'openai':
+                    $request->withProviderOptions(array_filter([
+                        'language' => $language,
+                        'response_format' => $diarize ? 'diarized_json' : null,
+                        'chunking_strategy' => $diarize ? 'auto' : null,
+                    ]));
+                    break;
+                case 'mistral':
+                    $request->withProviderOptions(array_filter([
+                        'diarize' => $diarize,
+                        'timestamp_granularities' => $diarize ? ['segment'] : null,
+                        'response_format' => $diarize ? 'json' : null,
+                    ]));
+                    break;
             }
 
             $response = $request->asText();
@@ -325,7 +334,7 @@ class PrismGateway implements Gateway
             (new Collection($response->additionalContent['segments'] ?? []))->map(function ($segment) {
                 return new TranscriptionSegment(
                     $segment['text'],
-                    $segment['speaker'],
+                    $segment['speaker'] ?? $segment['speaker_id'] ?? 'Unknown Speaker',
                     $segment['start'],
                     $segment['end'],
                 );
