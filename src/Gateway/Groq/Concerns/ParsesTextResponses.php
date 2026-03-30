@@ -88,11 +88,11 @@ trait ParsesTextResponses
         $usage = $this->extractUsage($data);
         $finishReason = $this->extractFinishReason($choice);
 
-        $mappedToolCalls = array_map(fn (array $tc) => new ToolCall(
-            $tc['id'] ?? '',
-            $tc['function']['name'] ?? '',
-            json_decode($tc['function']['arguments'] ?? '{}', true) ?? [],
-            $tc['id'] ?? null,
+        $mappedToolCalls = array_map(fn (array $toolCall) => new ToolCall(
+            $toolCall['id'] ?? '',
+            $toolCall['function']['name'] ?? '',
+            json_decode($toolCall['function']['arguments'] ?? '{}', true) ?? [],
+            $toolCall['id'] ?? null,
         ), $rawToolCalls);
 
         $step = new Step(
@@ -131,8 +131,17 @@ trait ParsesTextResponses
             $messages->push($toolResultMessage);
 
             return $this->continueWithToolResults(
-                $model, $provider, $structured, $tools, $schema, $steps, $messages,
-                $instructions, $originalMessages, $depth + 1, $maxSteps,
+                $model,
+                $provider,
+                $structured,
+                $tools,
+                $schema,
+                $steps,
+                $messages,
+                $instructions,
+                $originalMessages,
+                $depth + 1,
+                $maxSteps,
             );
         }
 
@@ -220,7 +229,7 @@ trait ParsesTextResponses
 
                 if ($msg->toolCalls->isNotEmpty()) {
                     $mapped['tool_calls'] = $msg->toolCalls->map(
-                        fn (ToolCall $tc) => $this->serializeToolCallToChat($tc)
+                        fn (ToolCall $toolCall) => $this->serializeToolCallToChat($toolCall)
                     )->all();
                 }
 
@@ -264,8 +273,17 @@ trait ParsesTextResponses
         $this->validateTextResponse($data);
 
         return $this->processResponse(
-            $data, $provider, $structured, $tools, $schema, $steps, $messages,
-            $instructions, $originalMessages, $depth, $maxSteps,
+            $data,
+            $provider,
+            $structured,
+            $tools,
+            $schema,
+            $steps,
+            $messages,
+            $instructions,
+            $originalMessages,
+            $depth,
+            $maxSteps,
         );
     }
 

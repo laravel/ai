@@ -43,22 +43,22 @@ trait MapsMessages
      */
     protected function mapUserMessage(UserMessage|Message $message, array &$chatMessages): void
     {
-        if ($message instanceof UserMessage && $message->attachments->isNotEmpty()) {
-            $content = [
-                ['type' => 'text', 'text' => $message->content],
-                ...$this->mapAttachments($message->attachments),
-            ];
-
-            $chatMessages[] = [
-                'role' => 'user',
-                'content' => $content,
-            ];
-        } else {
+        if (! $message instanceof UserMessage || $message->attachments->isEmpty()) {
             $chatMessages[] = [
                 'role' => 'user',
                 'content' => $message->content,
             ];
+
+            return;
         }
+
+        $chatMessages[] = [
+            'role' => 'user',
+            'content' => [
+                ['type' => 'text', 'text' => $message->content],
+                ...$this->mapAttachments($message->attachments),
+            ],
+        ];
     }
 
     /**
@@ -74,7 +74,7 @@ trait MapsMessages
 
         if ($message instanceof AssistantMessage && $message->toolCalls->isNotEmpty()) {
             $msg['tool_calls'] = $message->toolCalls->map(
-                fn (ToolCall $tc) => $this->serializeToolCallToChat($tc)
+                fn (ToolCall $toolCall) => $this->serializeToolCallToChat($toolCall)
             )->all();
         }
 
@@ -102,14 +102,14 @@ trait MapsMessages
     /**
      * Serialize a tool call DTO to Chat Completions array format.
      */
-    protected function serializeToolCallToChat(ToolCall $tc): array
+    protected function serializeToolCallToChat(ToolCall $toolCall): array
     {
         return [
-            'id' => $tc->resultId ?? $tc->id,
+            'id' => $toolCall->resultId ?? $toolCall->id,
             'type' => 'function',
             'function' => [
-                'name' => $tc->name,
-                'arguments' => json_encode($tc->arguments),
+                'name' => $toolCall->name,
+                'arguments' => json_encode($toolCall->arguments),
             ],
         ];
     }

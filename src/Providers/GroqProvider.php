@@ -13,10 +13,10 @@ class GroqProvider extends Provider implements TextProvider
     use Concerns\HasTextGateway;
     use Concerns\StreamsText;
 
-    public function __construct(
-        protected array $config,
-        protected Dispatcher $events,
-    ) {}
+    public function __construct(protected array $config, protected Dispatcher $events)
+    {
+        //
+    }
 
     /**
      * Get the provider's text gateway.

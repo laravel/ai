@@ -157,9 +157,19 @@ trait HandlesTextStreaming
             }
 
             yield from $this->handleStreamingToolCalls(
-                $invocationId, $provider, $model, $tools, $schema, $options,
-                $mappedToolCalls, $currentText, $instructions, $originalMessages,
-                $depth, $maxSteps, $priorChatMessages,
+                $invocationId,
+                $provider,
+                $model,
+                $tools,
+                $schema,
+                $options,
+                $mappedToolCalls,
+                $currentText,
+                $instructions,
+                $originalMessages,
+                $depth,
+                $maxSteps,
+                $priorChatMessages,
             );
 
             return;
@@ -229,7 +239,7 @@ trait HandlesTextStreaming
             }
 
             $assistantMsg['tool_calls'] = array_map(
-                fn (ToolCall $tc) => $this->serializeToolCallToChat($tc), $mappedToolCalls
+                fn (ToolCall $toolCall) => $this->serializeToolCallToChat($toolCall), $mappedToolCalls
             );
 
             $toolResultMessages = [];
@@ -277,9 +287,18 @@ trait HandlesTextStreaming
             );
 
             yield from $this->processTextStream(
-                $invocationId, $provider, $model, $tools, $schema, $options,
-                $response->getBody(), $instructions, $originalMessages,
-                $depth + 1, $maxSteps, $updatedPriorMessages,
+                $invocationId,
+                $provider,
+                $model,
+                $tools,
+                $schema,
+                $options,
+                $response->getBody(),
+                $instructions,
+                $originalMessages,
+                $depth + 1,
+                $maxSteps,
+                $updatedPriorMessages,
             );
         } else {
             yield (new StreamEnd(
@@ -298,11 +317,11 @@ trait HandlesTextStreaming
      */
     protected function mapStreamToolCalls(array $toolCalls): array
     {
-        return array_map(fn (array $tc) => new ToolCall(
-            $tc['id'] ?? '',
-            $tc['name'] ?? '',
-            json_decode($tc['arguments'] ?? '{}', true) ?? [],
-            $tc['id'] ?? null,
+        return array_map(fn (array $toolCall) => new ToolCall(
+            $toolCall['id'] ?? '',
+            $toolCall['name'] ?? '',
+            json_decode($toolCall['arguments'] ?? '{}', true) ?? [],
+            $toolCall['id'] ?? null,
         ), array_values($toolCalls));
     }
 

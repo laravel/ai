@@ -44,7 +44,13 @@ class GroqGateway implements TextGateway
         ?int $timeout = null,
     ): TextResponse {
         $body = $this->buildTextRequestBody(
-            $provider, $model, $instructions, $messages, $tools, $schema, $options,
+            $provider,
+            $model,
+            $instructions,
+            $messages,
+            $tools,
+            $schema,
+            $options,
         );
 
         $response = $this->withRateLimitHandling(
@@ -57,8 +63,14 @@ class GroqGateway implements TextGateway
         $this->validateTextResponse($data);
 
         return $this->parseTextResponse(
-            $data, $provider, filled($schema), $tools, $schema, $options,
-            $instructions, $messages,
+            $data,
+            $provider,
+            filled($schema),
+            $tools,
+            $schema,
+            $options,
+            $instructions,
+            $messages,
         );
     }
 
@@ -77,7 +89,13 @@ class GroqGateway implements TextGateway
         ?int $timeout = null,
     ): Generator {
         $body = $this->buildTextRequestBody(
-            $provider, $model, $instructions, $messages, $tools, $schema, $options,
+            $provider,
+            $model,
+            $instructions,
+            $messages,
+            $tools,
+            $schema,
+            $options,
         );
 
         $body['stream'] = true;
@@ -91,8 +109,15 @@ class GroqGateway implements TextGateway
         );
 
         yield from $this->processTextStream(
-            $invocationId, $provider, $model, $tools, $schema, $options,
-            $response->getBody(), $instructions, $messages,
+            $invocationId,
+            $provider,
+            $model,
+            $tools,
+            $schema,
+            $options,
+            $response->getBody(),
+            $instructions,
+            $messages,
         );
     }
 }

@@ -6,6 +6,7 @@ use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Tools\ProviderTool;
+use RuntimeException;
 
 trait MapsTools
 {
@@ -18,7 +19,7 @@ trait MapsTools
 
         foreach ($tools as $tool) {
             if ($tool instanceof ProviderTool) {
-                continue;
+                throw new RuntimeException('Groq does not support ['.class_basename($tool).'] provider tools.');
             }
 
             if ($tool instanceof Tool) {
