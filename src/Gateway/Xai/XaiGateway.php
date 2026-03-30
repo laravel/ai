@@ -4,20 +4,18 @@ namespace Laravel\Ai\Gateway\Xai;
 
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
-use Illuminate\Http\Client\PendingRequest;
-use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Gateway\Concerns\HandlesRateLimiting;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\TextGenerationOptions;
-use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\TextResponse;
 
 class XaiGateway implements TextGateway
 {
     use Concerns\BuildsTextRequests;
+    use Concerns\CreatesXaiClient;
     use Concerns\HandlesTextStreaming;
     use Concerns\MapsAttachments;
     use Concerns\MapsMessages;
@@ -92,16 +90,5 @@ class XaiGateway implements TextGateway
             $invocationId, $provider, $model, $tools, $schema, $options,
             $response->getBody(),
         );
-    }
-
-    /**
-     * Get an HTTP client for the xAI API.
-     */
-    protected function client(Provider $provider, ?int $timeout = null): PendingRequest
-    {
-        return Http::baseUrl('https://api.x.ai/v1')
-            ->withToken($provider->providerCredentials()['key'])
-            ->timeout($timeout ?? 60)
-            ->throw();
     }
 }

@@ -3,7 +3,6 @@
 namespace Laravel\Ai\Gateway\Xai;
 
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Files\Image as ImageFile;
@@ -15,6 +14,7 @@ use Laravel\Ai\Responses\ImageResponse;
 
 class XaiImageGateway implements ImageGateway
 {
+    use Concerns\CreatesXaiClient;
     use HandlesRateLimiting;
 
     /**
@@ -35,14 +35,12 @@ class XaiImageGateway implements ImageGateway
     ): ImageResponse {
         $response = $this->withRateLimitHandling(
             $provider->name(),
-            fn () => Http::withToken($provider->providerCredentials()['key'])
-                ->timeout($timeout ?? 120)
-                ->post('https://api.x.ai/v1/images/generations', [
+            fn () => $this->client($provider, $timeout ?? 120)
+                ->post('images/generations', [
                     'model' => $model,
                     'prompt' => $prompt,
                     'response_format' => 'b64_json',
                 ])
-                ->throw()
         );
 
         $response = $response->json();
