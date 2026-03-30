@@ -63,7 +63,6 @@ trait HandlesTextStreaming
             $choice = $data['choices'][0] ?? null;
 
             if (! $choice) {
-                // Usage-only chunk (final)...
                 if (isset($data['usage'])) {
                     $usage = new Usage(
                         $data['usage']['prompt_tokens'] ?? 0,
@@ -76,7 +75,6 @@ trait HandlesTextStreaming
 
             $delta = $choice['delta'] ?? [];
 
-            // Emit StreamStart on first chunk...
             if (! $streamStartEmitted) {
                 $streamStartEmitted = true;
 
@@ -88,7 +86,6 @@ trait HandlesTextStreaming
                 ))->withInvocationId($invocationId);
             }
 
-            // Text content delta...
             if (isset($delta['content']) && $delta['content'] !== '') {
                 if (! $textStartEmitted) {
                     $textStartEmitted = true;
@@ -110,7 +107,6 @@ trait HandlesTextStreaming
                 ))->withInvocationId($invocationId);
             }
 
-            // Tool call deltas (accumulated by index)...
             if (isset($delta['tool_calls'])) {
                 foreach ($delta['tool_calls'] as $tcDelta) {
                     $idx = $tcDelta['index'];
@@ -129,12 +125,10 @@ trait HandlesTextStreaming
                 }
             }
 
-            // Check finish reason...
             if (isset($choice['finish_reason']) && $choice['finish_reason'] !== null) {
                 $finishReason = $choice['finish_reason'];
             }
 
-            // Usage in final chunk...
             if (isset($data['usage'])) {
                 $usage = new Usage(
                     $data['usage']['prompt_tokens'] ?? 0,
@@ -143,7 +137,6 @@ trait HandlesTextStreaming
             }
         }
 
-        // Close text if it was started...
         if ($textStartEmitted) {
             yield (new TextEnd(
                 $this->generateEventId(),
@@ -152,7 +145,6 @@ trait HandlesTextStreaming
             ))->withInvocationId($invocationId);
         }
 
-        // Handle tool calls...
         if (filled($pendingToolCalls) && $finishReason === 'tool_calls') {
             $mappedToolCalls = $this->mapStreamToolCalls($pendingToolCalls);
 
@@ -230,7 +222,6 @@ trait HandlesTextStreaming
         }
 
         if ($depth + 1 < ($maxSteps ?? count($tools) * 2)) {
-            // Build the assistant message with tool calls for this round...
             $assistantMsg = ['role' => 'assistant'];
 
             if (filled($currentText)) {
@@ -241,7 +232,6 @@ trait HandlesTextStreaming
                 fn (ToolCall $tc) => $this->serializeToolCallToChat($tc), $mappedToolCalls
             );
 
-            // Build tool result messages for this round...
             $toolResultMessages = [];
 
             foreach ($toolResults as $toolResult) {
@@ -252,10 +242,8 @@ trait HandlesTextStreaming
                 ];
             }
 
-            // Accumulate this round's messages for future rounds...
             $updatedPriorMessages = [...$priorChatMessages, $assistantMsg, ...$toolResultMessages];
 
-            // Rebuild full conversation: original messages + all accumulated rounds...
             $chatMessages = [
                 ...$this->mapMessagesToChat($originalMessages, $instructions),
                 ...$updatedPriorMessages,
@@ -272,8 +260,8 @@ trait HandlesTextStreaming
                 $mappedTools = $this->mapTools($tools);
 
                 if (filled($mappedTools)) {
-                    $body['tools'] = $mappedTools;
                     $body['tool_choice'] = 'auto';
+                    $body['tools'] = $mappedTools;
                 }
             }
 

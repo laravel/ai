@@ -110,13 +110,11 @@ trait ParsesTextResponses
 
         $messages->push($assistantMessage);
 
-        // Execute tool calls...
         if ($finishReason === FinishReason::ToolCalls &&
             filled($mappedToolCalls) &&
             $steps->count() < ($maxSteps ?? count($tools) * 2)) {
             $toolResults = $this->executeToolCalls($mappedToolCalls, $tools);
 
-            // Update step with tool results...
             $steps->pop();
 
             $steps->push(new Step(
@@ -138,7 +136,6 @@ trait ParsesTextResponses
             );
         }
 
-        // Build final response...
         $allToolCalls = $steps->flatMap(fn (Step $s) => $s->toolCalls);
         $allToolResults = $steps->flatMap(fn (Step $s) => $s->toolResults);
 
@@ -211,10 +208,8 @@ trait ParsesTextResponses
         int $depth,
         ?int $maxSteps,
     ): TextResponse {
-        // Rebuild full conversation history for Chat Completions...
         $chatMessages = $this->mapMessagesToChat($originalMessages, $instructions);
 
-        // Append accumulated assistant and tool result messages...
         foreach ($messages as $msg) {
             if ($msg instanceof AssistantMessage) {
                 $mapped = ['role' => 'assistant'];
@@ -250,8 +245,8 @@ trait ParsesTextResponses
             $mappedTools = $this->mapTools($tools);
 
             if (filled($mappedTools)) {
-                $body['tools'] = $mappedTools;
                 $body['tool_choice'] = 'auto';
+                $body['tools'] = $mappedTools;
             }
         }
 

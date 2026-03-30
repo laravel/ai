@@ -30,8 +30,8 @@ trait BuildsTextRequests
             $mappedTools = $this->mapTools($tools);
 
             if (filled($mappedTools)) {
-                $body['tools'] = $mappedTools;
                 $body['tool_choice'] = 'auto';
+                $body['tools'] = $mappedTools;
             }
         }
 
