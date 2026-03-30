@@ -4,20 +4,18 @@ namespace Laravel\Ai\Gateway\Groq;
 
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
-use Illuminate\Http\Client\PendingRequest;
-use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Gateway\Concerns\HandlesRateLimiting;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\TextGenerationOptions;
-use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\TextResponse;
 
 class GroqGateway implements TextGateway
 {
     use Concerns\BuildsTextRequests;
+    use Concerns\CreatesGroqClient;
     use Concerns\HandlesTextStreaming;
     use Concerns\MapsAttachments;
     use Concerns\MapsMessages;
@@ -96,16 +94,5 @@ class GroqGateway implements TextGateway
             $invocationId, $provider, $model, $tools, $schema, $options,
             $response->getBody(), $instructions, $messages,
         );
-    }
-
-    /**
-     * Get an HTTP client for the Groq API.
-     */
-    protected function client(Provider $provider, ?int $timeout = null): PendingRequest
-    {
-        return Http::baseUrl('https://api.groq.com/openai/v1')
-            ->withToken($provider->providerCredentials()['key'])
-            ->timeout($timeout ?? 60)
-            ->throw();
     }
 }
