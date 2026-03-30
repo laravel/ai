@@ -4,16 +4,21 @@ namespace Laravel\Ai\Providers;
 
 use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
+use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
+use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Gateway\OpenRouter\OpenRouterGateway;
+use Laravel\Ai\Gateway\OpenRouterImageGateway;
 
-class OpenRouterProvider extends Provider implements EmbeddingProvider, TextProvider
+class OpenRouterProvider extends Provider implements EmbeddingProvider, ImageProvider, TextProvider
 {
     use Concerns\GeneratesEmbeddings;
+    use Concerns\GeneratesImages;
     use Concerns\GeneratesText;
     use Concerns\HasEmbeddingGateway;
+    use Concerns\HasImageGateway;
     use Concerns\HasTextGateway;
     use Concerns\StreamsText;
 
@@ -60,6 +65,34 @@ class OpenRouterProvider extends Provider implements EmbeddingProvider, TextProv
     public function smartestTextModel(): string
     {
         return $this->config['models']['text']['smartest'] ?? 'anthropic/claude-opus-4.6';
+    }
+
+    /**
+     * Get the provider's image gateway.
+     */
+    public function imageGateway(): ImageGateway
+    {
+        return $this->imageGateway ?? new OpenRouterImageGateway;
+    }
+
+    /**
+     * Get the name of the default image model.
+     */
+    public function defaultImageModel(): string
+    {
+        return $this->config['models']['image']['default'] ?? 'google/gemini-2.5-flash-image';
+    }
+
+    /**
+     * Get the default / normalized image options for the provider.
+     */
+    public function defaultImageOptions(?string $size = null, $quality = null): array
+    {
+        return array_filter([
+            'image_config' => array_filter([
+                'aspect_ratio' => $size,
+            ]),
+        ]);
     }
 
     /**
