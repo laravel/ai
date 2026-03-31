@@ -117,7 +117,7 @@ trait ParsesTextResponses
         // Execute tool calls...
         if ($finishReason === FinishReason::ToolCalls &&
             filled($mappedToolCalls) &&
-            $steps->count() < ($maxSteps ?? count($tools) * 2)) {
+            $steps->count() < ($maxSteps ?? round(count($tools) * 1.5))) {
             $toolResults = $this->executeToolCalls($mappedToolCalls, $tools);
 
             // Update step with tool results...
