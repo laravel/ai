@@ -21,7 +21,7 @@ class ToolResult extends StreamEvent
      */
     public function toArray(): array
     {
-        return [
+        $array = [
             'id' => $this->id,
             'invocation_id' => $this->invocationId,
             'type' => 'tool_result',
@@ -32,6 +32,12 @@ class ToolResult extends StreamEvent
             'error' => $this->error,
             'timestamp' => $this->timestamp,
         ];
+
+        if (! is_null($this->toolResult->meta)) {
+            $array['meta'] = $this->toolResult->meta;
+        }
+
+        return $array;
     }
 
     /**
@@ -39,10 +45,16 @@ class ToolResult extends StreamEvent
      */
     public function toVercelProtocolArray(): ?array
     {
-        return [
+        $array = [
             'type' => 'tool-output-available',
             'toolCallId' => $this->toolResult->id,
             'output' => $this->toolResult->result,
         ];
+
+        if (! is_null($this->toolResult->meta)) {
+            $array['meta'] = $this->toolResult->meta;
+        }
+
+        return $array;
     }
 }

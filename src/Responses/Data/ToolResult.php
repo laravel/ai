@@ -13,6 +13,7 @@ class ToolResult implements Arrayable, JsonSerializable
         public array $arguments,
         public $result,
         public ?string $resultId = null,
+        public ?array $meta = null,
     ) {}
 
     /**
@@ -20,13 +21,19 @@ class ToolResult implements Arrayable, JsonSerializable
      */
     public function toArray(): array
     {
-        return [
+        $array = [
             'id' => $this->id,
             'name' => $this->name,
             'arguments' => $this->arguments,
             'result' => $this->result,
             'result_id' => $this->resultId,
         ];
+
+        if (! is_null($this->meta)) {
+            $array['meta'] = $this->meta;
+        }
+
+        return $array;
     }
 
     /**

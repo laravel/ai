@@ -19,7 +19,7 @@ class ToolCall extends StreamEvent
      */
     public function toArray(): array
     {
-        return [
+        $array = [
             'id' => $this->id,
             'invocation_id' => $this->invocationId,
             'type' => 'tool_call',
@@ -29,6 +29,12 @@ class ToolCall extends StreamEvent
             'reasoning_id' => $this->toolCall->reasoningId,
             'timestamp' => $this->timestamp,
         ];
+
+        if (! is_null($this->toolCall->meta)) {
+            $array['meta'] = $this->toolCall->meta;
+        }
+
+        return $array;
     }
 
     /**
@@ -36,11 +42,17 @@ class ToolCall extends StreamEvent
      */
     public function toVercelProtocolArray(): ?array
     {
-        return [
+        $array = [
             'type' => 'tool-input-available',
             'toolCallId' => $this->toolCall->id,
             'toolName' => $this->toolCall->name,
             'input' => $this->toolCall->arguments,
         ];
+
+        if (! is_null($this->toolCall->meta)) {
+            $array['meta'] = $this->toolCall->meta;
+        }
+
+        return $array;
     }
 }

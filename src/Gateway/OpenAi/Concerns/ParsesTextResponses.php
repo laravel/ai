@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
 use Illuminate\Support\Collection;
+use Laravel\Ai\Contracts\HasToolMeta;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -184,7 +185,11 @@ trait ParsesTextResponses
                 continue;
             }
 
-            $result = $this->executeTool($tool, $toolCall->arguments);
+            if ($tool instanceof HasToolMeta) {
+                $toolCall->meta = $tool->toolMeta();
+            }
+
+            [$result, $meta] = $this->executeTool($tool, $toolCall->arguments);
 
             $results[] = new ToolResult(
                 $toolCall->id,
@@ -192,6 +197,7 @@ trait ParsesTextResponses
                 $toolCall->arguments,
                 $result,
                 $toolCall->resultId,
+                $meta,
             );
         }
 

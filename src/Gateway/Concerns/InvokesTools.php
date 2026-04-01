@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\Concerns;
 use Closure;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
+use Laravel\Ai\Tools\ToolResponse;
 
 trait InvokesTools
 {
@@ -25,15 +26,21 @@ trait InvokesTools
 
     /**
      * Execute the given tool with the given arguments.
+     *
+     * @return array{string, ?array}
      */
-    protected function executeTool(Tool $tool, array $arguments): string
+    protected function executeTool(Tool $tool, array $arguments): array
     {
         call_user_func($this->invokingToolCallback, $tool, $arguments);
 
-        return (string) tap(
-            $tool->handle(new Request($arguments)),
-            fn ($result) => call_user_func($this->toolInvokedCallback, $tool, $arguments, $result)
-        );
+        $response = $tool->handle(new Request($arguments));
+
+        $result = (string) $response;
+        $meta = $response instanceof ToolResponse ? $response->getMeta() : null;
+
+        call_user_func($this->toolInvokedCallback, $tool, $arguments, $result);
+
+        return [$result, $meta];
     }
 
     /**

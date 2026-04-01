@@ -14,6 +14,7 @@ class ToolCall implements Arrayable, JsonSerializable
         public ?string $resultId = null,
         public ?string $reasoningId = null,
         public ?array $reasoningSummary = null,
+        public ?array $meta = null,
     ) {}
 
     /**
@@ -21,7 +22,7 @@ class ToolCall implements Arrayable, JsonSerializable
      */
     public function toArray(): array
     {
-        return [
+        $array = [
             'id' => $this->id,
             'name' => $this->name,
             'arguments' => $this->arguments,
@@ -29,6 +30,12 @@ class ToolCall implements Arrayable, JsonSerializable
             'reasoning_id' => $this->reasoningId,
             'reasoning_summary' => $this->reasoningSummary,
         ];
+
+        if (! is_null($this->meta)) {
+            $array['meta'] = $this->meta;
+        }
+
+        return $array;
     }
 
     /**

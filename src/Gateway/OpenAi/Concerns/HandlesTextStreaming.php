@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
 use Generator;
 use Illuminate\Support\Str;
+use Laravel\Ai\Contracts\HasToolMeta;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -240,6 +241,9 @@ trait HandlesTextStreaming
                             $call['arguments'] = $arguments;
                         }
 
+                        $resolvedTool = $this->findTool($call['name'], $tools);
+                        $toolMeta = $resolvedTool instanceof HasToolMeta ? $resolvedTool->toolMeta() : null;
+
                         yield (new ToolCallEvent(
                             $this->generateEventId(),
                             new ToolCall(
@@ -249,6 +253,7 @@ trait HandlesTextStreaming
                                 $call['call_id'] ?? null,
                                 $call['reasoning_id'] ?? null,
                                 $call['reasoning_summary'] ?? null,
+                                $toolMeta,
                             ),
                             time(),
                         ))->withInvocationId($invocationId);
@@ -323,7 +328,7 @@ trait HandlesTextStreaming
                 continue;
             }
 
-            $result = $this->executeTool($tool, $toolCall->arguments);
+            [$result, $meta] = $this->executeTool($tool, $toolCall->arguments);
 
             $toolResult = new ToolResult(
                 $toolCall->id,
@@ -331,6 +336,7 @@ trait HandlesTextStreaming
                 $toolCall->arguments,
                 $result,
                 $toolCall->resultId,
+                $meta,
             );
 
             $toolResults[] = $toolResult;
