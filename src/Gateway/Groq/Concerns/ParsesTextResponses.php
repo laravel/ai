@@ -60,6 +60,7 @@ trait ParsesTextResponses
             instructions: $instructions,
             originalMessages: $originalMessages,
             maxSteps: $options?->maxSteps,
+            options: $options,
         );
     }
 
@@ -78,6 +79,7 @@ trait ParsesTextResponses
         array $originalMessages = [],
         int $depth = 0,
         ?int $maxSteps = null,
+        ?TextGenerationOptions $options = null,
     ): TextResponse {
         $choice = $data['choices'][0] ?? [];
         $message = $choice['message'] ?? [];
@@ -142,6 +144,7 @@ trait ParsesTextResponses
                 $originalMessages,
                 $depth + 1,
                 $maxSteps,
+                $options,
             );
         }
 
@@ -216,6 +219,7 @@ trait ParsesTextResponses
         array $originalMessages,
         int $depth,
         ?int $maxSteps,
+        ?TextGenerationOptions $options = null,
     ): TextResponse {
         $chatMessages = $this->mapMessagesToChat($originalMessages, $instructions);
 
@@ -263,6 +267,12 @@ trait ParsesTextResponses
             $body['response_format'] = $this->buildResponseFormat($schema);
         }
 
+        $providerOptions = $options?->providerOptions($provider->driver());
+
+        if (filled($providerOptions)) {
+            $body = array_merge($body, $providerOptions);
+        }
+
         $response = $this->withRateLimitHandling(
             $provider->name(),
             fn () => $this->client($provider)->post('chat/completions', $body),
@@ -284,6 +294,7 @@ trait ParsesTextResponses
             $originalMessages,
             $depth,
             $maxSteps,
+            $options,
         );
     }
 

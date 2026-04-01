@@ -279,6 +279,12 @@ trait HandlesTextStreaming
                 $body['response_format'] = $this->buildResponseFormat($schema);
             }
 
+            $providerOptions = $options?->providerOptions($provider->driver());
+
+            if (filled($providerOptions)) {
+                $body = array_merge($body, $providerOptions);
+            }
+
             $response = $this->withRateLimitHandling(
                 $provider->name(),
                 fn () => $this->client($provider)
