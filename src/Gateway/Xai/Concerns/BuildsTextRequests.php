@@ -42,6 +42,12 @@ trait BuildsTextRequests
             $body['temperature'] = $options->temperature;
         }
 
+        $providerOptions = $options?->providerOptions($provider->driver());
+
+        if (filled($providerOptions)) {
+            $body = array_merge($body, $providerOptions);
+        }
+
         return $body;
     }
 

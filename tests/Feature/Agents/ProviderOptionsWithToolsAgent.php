@@ -4,16 +4,25 @@ namespace Tests\Feature\Agents;
 
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasProviderOptions;
+use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
+use Tests\Feature\Tools\FixedNumberGenerator;
 
-class ProviderOptionsAgent implements Agent, HasProviderOptions
+class ProviderOptionsWithToolsAgent implements Agent, HasProviderOptions, HasTools
 {
     use Promptable;
 
     public function instructions(): string
     {
-        return 'You are a helpful assistant.';
+        return 'You are a helpful assistant that generates numbers.';
+    }
+
+    public function tools(): iterable
+    {
+        return [
+            new FixedNumberGenerator,
+        ];
     }
 
     public function providerOptions(Lab|string $provider): array
@@ -26,17 +35,9 @@ class ProviderOptionsAgent implements Agent, HasProviderOptions
                     'effort' => 'high',
                 ],
                 'frequency_penalty' => 0.5,
-                'presence_penalty' => 0.3,
-            ],
-            Lab::Anthropic => [
-                'thinking' => [
-                    'type' => 'enabled',
-                    'budget_tokens' => 10000,
-                ],
             ],
             Lab::xAI => [
                 'frequency_penalty' => 0.5,
-                'presence_penalty' => 0.3,
             ],
             default => [],
         };

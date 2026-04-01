@@ -344,7 +344,7 @@ trait HandlesTextStreaming
             ))->withInvocationId($invocationId);
         }
 
-        if ($depth + 1 < ($maxSteps ?? count($tools) * 2)) {
+        if ($depth + 1 < ($maxSteps ?? round(count($tools) * 1.5))) {
             $body = [
                 'model' => $model,
                 'previous_response_id' => $responseId,
@@ -358,6 +358,12 @@ trait HandlesTextStreaming
 
             if (filled($schema)) {
                 $body['text'] = $this->buildSchemaFormat($schema);
+            }
+
+            $providerOptions = $options?->providerOptions($provider->driver());
+
+            if (filled($providerOptions)) {
+                $body = array_merge($body, $providerOptions);
             }
 
             $response = $this->withRateLimitHandling(

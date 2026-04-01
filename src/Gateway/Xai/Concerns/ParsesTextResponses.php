@@ -67,6 +67,7 @@ trait ParsesTextResponses
             new Collection,
             new Collection,
             maxSteps: $options?->maxSteps,
+            options: $options,
         );
     }
 
@@ -83,6 +84,7 @@ trait ParsesTextResponses
         Collection $messages,
         int $depth = 0,
         ?int $maxSteps = null,
+        ?TextGenerationOptions $options = null,
     ): TextResponse {
         $responseId = $data['id'] ?? '';
         $output = $data['output'] ?? [];
@@ -117,7 +119,7 @@ trait ParsesTextResponses
         // Execute tool calls...
         if ($finishReason === FinishReason::ToolCalls &&
             filled($mappedToolCalls) &&
-            $steps->count() < ($maxSteps ?? count($tools) * 2)) {
+            $steps->count() < ($maxSteps ?? round(count($tools) * 1.5))) {
             $toolResults = $this->executeToolCalls($mappedToolCalls, $tools);
 
             // Update step with tool results...
@@ -137,7 +139,7 @@ trait ParsesTextResponses
             $messages->push($toolResultMessage);
 
             return $this->continueWithToolResults(
-                $responseId, $model, $provider, $structured, $tools, $schema, $steps, $messages, $toolResults, $depth + 1, $maxSteps,
+                $responseId, $model, $provider, $structured, $tools, $schema, $steps, $messages, $toolResults, $depth + 1, $maxSteps, $options,
             );
         }
 
@@ -213,6 +215,7 @@ trait ParsesTextResponses
         array $toolResults,
         int $depth,
         ?int $maxSteps,
+        ?TextGenerationOptions $options = null,
     ): TextResponse {
         $body = [
             'model' => $model,
@@ -228,6 +231,12 @@ trait ParsesTextResponses
             $body['text'] = $this->buildSchemaFormat($schema);
         }
 
+        $providerOptions = $options?->providerOptions($provider->driver());
+
+        if (filled($providerOptions)) {
+            $body = array_merge($body, $providerOptions);
+        }
+
         $response = $this->withRateLimitHandling(
             $provider->name(),
             fn () => $this->client($provider)->post('responses', $body),
@@ -237,7 +246,7 @@ trait ParsesTextResponses
 
         $this->validateTextResponse($data);
 
-        return $this->processResponse($data, $provider, $structured, $tools, $schema, $steps, $messages, $depth, $maxSteps);
+        return $this->processResponse($data, $provider, $structured, $tools, $schema, $steps, $messages, $depth, $maxSteps, $options);
     }
 
     /**
