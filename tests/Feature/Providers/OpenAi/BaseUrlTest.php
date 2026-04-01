@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Feature;
+namespace Tests\Feature\Providers\OpenAi;
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -11,7 +11,7 @@ use Tests\TestCase;
 
 use function Laravel\Ai\agent;
 
-class OpenAiBaseUrlTest extends TestCase
+class BaseUrlTest extends TestCase
 {
     protected string $customUrl = 'http://localhost:1234/v1';
 
