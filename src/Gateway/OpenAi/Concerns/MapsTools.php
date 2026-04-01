@@ -58,6 +58,13 @@ trait MapsTools
                 'required' => $schemaArray['required'] ?? [],
                 'additionalProperties' => false,
             ];
+        } else {
+            $definition['parameters'] = [
+                'type' => 'object',
+                'properties' => (object) [],
+                'required' => [],
+                'additionalProperties' => false,
+            ];
         }
 
         return $definition;
