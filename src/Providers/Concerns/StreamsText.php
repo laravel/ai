@@ -48,9 +48,9 @@ trait StreamsText
                     function () use ($invocationId, $prompt, $agent) {
                         $this->events->dispatch(new StreamingAgent($invocationId, $prompt));
 
-                        $messages = $agent instanceof Conversational ? $agent->messages() : [];
-
-                        $messages[] = new UserMessage($prompt->prompt, $prompt->attachments->all());
+                        $messages = collect($agent instanceof Conversational ? $agent->messages() : [])
+                            ->push(new UserMessage($prompt->prompt, $prompt->attachments->all()))
+                            ->all();
 
                         $this->listenForToolInvocations($invocationId, $agent);
 
