@@ -2,9 +2,11 @@
 
 namespace Tests\Feature\Providers\OpenAi;
 
+use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\Feature\Agents\ProviderOptionsAgent;
+use Tests\Feature\Agents\ProviderOptionsWithToolsAgent;
 use Tests\TestCase;
 
 use function Laravel\Ai\agent;
@@ -55,7 +57,50 @@ class ProviderOptionsTest extends TestCase
         });
     }
 
-    protected function fakeOpenAiResponse(string $text): \GuzzleHttp\Promise\PromiseInterface
+    public function test_provider_options_are_persisted_in_tool_call_follow_up_requests(): void
+    {
+        Http::fake([
+            '*' => Http::sequence([
+                $this->fakeOpenAiToolCallResponse(),
+                $this->fakeOpenAiResponse('The number is 72019'),
+            ]),
+        ]);
+
+        (new ProviderOptionsWithToolsAgent)->prompt('Give me a number', provider: 'openai');
+
+        $requests = Http::recorded(fn (Request $r) => true);
+
+        $this->assertGreaterThanOrEqual(2, count($requests));
+
+        $followUpBody = json_decode($requests[1][0]->body(), true);
+
+        $this->assertSame('high', data_get($followUpBody, 'reasoning.effort'));
+        $this->assertSame(0.5, data_get($followUpBody, 'frequency_penalty'));
+        $this->assertArrayHasKey('previous_response_id', $followUpBody);
+    }
+
+    protected function fakeOpenAiToolCallResponse(): PromiseInterface
+    {
+        return Http::response([
+            'id' => 'resp_tool_123',
+            'status' => 'completed',
+            'model' => 'gpt-5.4',
+            'output' => [[
+                'type' => 'function_call',
+                'id' => 'fc_123',
+                'call_id' => 'call_123',
+                'name' => 'FixedNumberGenerator',
+                'arguments' => '{}',
+                'status' => 'completed',
+            ]],
+            'usage' => [
+                'input_tokens' => 10,
+                'output_tokens' => 5,
+            ],
+        ]);
+    }
+
+    protected function fakeOpenAiResponse(string $text): PromiseInterface
     {
         return Http::response([
             'id' => 'resp_123',
