@@ -6,6 +6,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\Feature\Tools\FixedNumberGenerator;
 use Tests\Feature\Tools\RandomNumberGenerator;
+use GuzzleHttp\Promise\PromiseInterface;
 use Tests\TestCase;
 
 use function Laravel\Ai\agent;
@@ -65,7 +66,7 @@ class ToolMappingTest extends TestCase
         });
     }
 
-    protected function fakeOpenAiResponse(string $text): \GuzzleHttp\Promise\PromiseInterface
+    protected function fakeOpenAiResponse(string $text): PromiseInterface
     {
         return Http::response([
             'id' => 'resp_123',
