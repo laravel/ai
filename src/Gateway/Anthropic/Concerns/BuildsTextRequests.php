@@ -32,30 +32,39 @@ trait BuildsTextRequests
         }
 
         $mappedTools = filled($tools) ? $this->mapTools($tools, $provider) : [];
+        $providerOptions = $options?->providerOptions(Lab::Anthropic) ?? [];
 
         if (filled($schema)) {
             $mappedTools[] = $this->buildStructuredOutputTool($schema);
-
-            // When both regular tools and schema are present, force the model
-            // to always use a tool. It will pick the real tool when needed,
-            // then output_structured_data when done. When only structured
-            // output exists, force the specific tool directly.
-            $body['tool_choice'] = filled($tools)
-                ? ['type' => 'any']
-                : ['type' => 'tool', 'name' => 'output_structured_data'];
-        } elseif (filled($mappedTools)) {
-            $body['tool_choice'] = ['type' => 'auto'];
         }
 
         if (filled($mappedTools)) {
             $body['tools'] = $mappedTools;
+            $body['tool_choice'] = $this->resolveToolChoice($schema, $tools, $providerOptions);
         }
 
         if ($options?->temperature !== null) {
             $body['temperature'] = $options->temperature;
         }
 
-        return array_merge($body, $options?->providerOptions(Lab::Anthropic) ?? []);
+        return array_merge($body, $providerOptions);
+    }
+
+    /**
+     * Determine the tool_choice strategy for the request.
+     *
+     * Thinking mode only supports "auto" -- forced tool selection causes an API error.
+     * Without thinking: structured-only forces the synthetic tool, tools+schema uses "any".
+     */
+    protected function resolveToolChoice(?array $schema, array $tools, array $providerOptions): array
+    {
+        if (! filled($schema) || isset($providerOptions['thinking'])) {
+            return ['type' => 'auto'];
+        }
+
+        return filled($tools)
+            ? ['type' => 'any']
+            : ['type' => 'tool', 'name' => 'output_structured_data'];
     }
 
     /**

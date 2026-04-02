@@ -5,6 +5,7 @@ namespace Tests\Feature\Providers\Anthropic;
 use Illuminate\Support\Facades\Http;
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\Feature\Agents\StructuredAgent;
+use Tests\Feature\Agents\StructuredWithThinkingAgent;
 use Tests\Feature\Agents\ToolUsingAgent;
 
 class RequestMappingTest extends AnthropicTestCase
@@ -191,6 +192,34 @@ class RequestMappingTest extends AnthropicTestCase
 
         $this->assertSame(25, $response->usage->promptTokens);
         $this->assertSame(15, $response->usage->completionTokens);
+    }
+
+    public function test_structured_output_with_thinking_uses_auto_tool_choice(): void
+    {
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeStructuredResponse(['name' => 'Taylor', 'age' => 30]),
+        ]);
+
+        (new StructuredWithThinkingAgent)->prompt(
+            'Tell me about Taylor',
+            provider: 'anthropic',
+        );
+
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+
+            $hasStructuredTool = false;
+
+            foreach ($body['tools'] ?? [] as $tool) {
+                if ($tool['name'] === 'output_structured_data') {
+                    $hasStructuredTool = true;
+                }
+            }
+
+            return $hasStructuredTool
+                && $body['tool_choice']['type'] === 'auto'
+                && $body['thinking']['type'] === 'enabled';
+        });
     }
 
     public function test_structured_response_is_correctly_parsed(): void

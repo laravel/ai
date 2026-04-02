@@ -46,11 +46,16 @@ trait HandlesTextStreaming
         $streamStartEmitted = false;
         $textStartEmitted = false;
         $reasoningStartEmitted = false;
+
         $currentText = '';
-        $pendingToolCalls = [];
-        $currentToolIndex = -1;
         $currentBlockType = '';
+        $currentToolIndex = -1;
+        $pendingToolCalls = [];
         $responseContent = [];
+
+        $inputTokens = 0;
+        $cacheCreationTokens = 0;
+        $cacheReadTokens = 0;
         $usage = null;
         $stopReason = '';
 
@@ -71,6 +76,11 @@ trait HandlesTextStreaming
 
             if ($type === 'message_start' && ! $streamStartEmitted) {
                 $streamStartEmitted = true;
+
+                $messageStartUsage = $data['message']['usage'] ?? [];
+                $inputTokens = $messageStartUsage['input_tokens'] ?? 0;
+                $cacheCreationTokens = $messageStartUsage['cache_creation_input_tokens'] ?? 0;
+                $cacheReadTokens = $messageStartUsage['cache_read_input_tokens'] ?? 0;
 
                 yield (new StreamStart(
                     $this->generateEventId(),
@@ -266,8 +276,10 @@ trait HandlesTextStreaming
                 $deltaUsage = $data['usage'] ?? [];
 
                 $usage = new Usage(
-                    0,
+                    $inputTokens,
                     $deltaUsage['output_tokens'] ?? 0,
+                    $cacheCreationTokens,
+                    $cacheReadTokens,
                 );
             }
         }

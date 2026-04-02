@@ -262,6 +262,46 @@ class StreamingTest extends AnthropicTestCase
         ];
     }
 
+    public function test_streaming_captures_input_tokens_from_message_start(): void
+    {
+        Http::fake([
+            'api.anthropic.com/*' => Http::response(
+                body: $this->ssePayload([
+                    [
+                        'type' => 'message_start',
+                        'message' => [
+                            'id' => 'msg_1',
+                            'model' => 'claude-sonnet-4-6',
+                            'role' => 'assistant',
+                            'content' => [],
+                            'usage' => [
+                                'input_tokens' => 42,
+                                'output_tokens' => 0,
+                                'cache_creation_input_tokens' => 100,
+                                'cache_read_input_tokens' => 50,
+                            ],
+                        ],
+                    ],
+                    $this->contentBlockStart(0, ['type' => 'text', 'text' => '']),
+                    $this->contentBlockDelta(0, ['type' => 'text_delta', 'text' => 'Hello']),
+                    $this->contentBlockStop(0),
+                    $this->messageDelta('end_turn', 10),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $events = $this->collectStreamEvents();
+
+        $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+
+        $this->assertSame(42, $streamEnd->usage->promptTokens);
+        $this->assertSame(10, $streamEnd->usage->completionTokens);
+        $this->assertSame(100, $streamEnd->usage->cacheWriteInputTokens);
+        $this->assertSame(50, $streamEnd->usage->cacheReadInputTokens);
+    }
+
     protected function messageDelta(string $stopReason, int $outputTokens): array
     {
         return [

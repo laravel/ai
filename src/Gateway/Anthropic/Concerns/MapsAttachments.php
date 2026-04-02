@@ -53,7 +53,7 @@ trait MapsAttachments
                     'type' => 'image',
                     'source' => [
                         'type' => 'base64',
-                        'media_type' => $attachment->mime,
+                        'media_type' => $attachment->mimeType(),
                         'data' => base64_encode(file_get_contents($attachment->path)),
                     ],
                 ],
@@ -61,7 +61,7 @@ trait MapsAttachments
                     'type' => 'image',
                     'source' => [
                         'type' => 'base64',
-                        'media_type' => 'image/png',
+                        'media_type' => $attachment->mimeType(),
                         'data' => base64_encode(
                             Storage::disk($attachment->disk)->get($attachment->path)
                         ),
@@ -86,7 +86,7 @@ trait MapsAttachments
                     'type' => 'document',
                     'source' => [
                         'type' => 'base64',
-                        'media_type' => 'application/octet-stream',
+                        'media_type' => $attachment->mimeType(),
                         'data' => base64_encode(file_get_contents($attachment->path)),
                     ],
                 ],
@@ -101,7 +101,7 @@ trait MapsAttachments
                     'type' => 'document',
                     'source' => [
                         'type' => 'base64',
-                        'media_type' => 'application/octet-stream',
+                        'media_type' => $attachment->mimeType(),
                         'data' => base64_encode(
                             Storage::disk($attachment->disk)->get($attachment->path)
                         ),

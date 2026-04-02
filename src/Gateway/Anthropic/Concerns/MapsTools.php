@@ -11,6 +11,7 @@ use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\ProviderTool;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
+use LogicException;
 use RuntimeException;
 
 trait MapsTools
@@ -64,7 +65,7 @@ trait MapsTools
         return match (true) {
             $tool instanceof WebFetch => $this->mapWebFetchTool($tool, $provider),
             $tool instanceof WebSearch => $this->mapWebSearchTool($tool, $provider),
-            default => [],
+            default => throw new LogicException('Provider tool ['.get_class($tool).'] is not supported by Anthropic.'),
         };
     }
 
