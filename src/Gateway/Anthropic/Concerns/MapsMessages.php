@@ -55,9 +55,9 @@ trait MapsMessages
     protected function mapAssistantMessage(AssistantMessage|Message $message, array &$mapped): void
     {
         $content = [];
+        $hasToolCalls = $message instanceof AssistantMessage && $message->toolCalls->isNotEmpty();
 
-        if ($message instanceof AssistantMessage && $message->toolCalls->isNotEmpty()) {
-            // Add thinking blocks before tool calls...
+        if ($hasToolCalls) {
             $thinkingBlocks = $message->toolCalls
                 ->whereNotNull('reasoningId')
                 ->unique('reasoningId')
@@ -80,7 +80,7 @@ trait MapsMessages
             ];
         }
 
-        if ($message instanceof AssistantMessage && $message->toolCalls->isNotEmpty()) {
+        if ($hasToolCalls) {
             foreach ($message->toolCalls as $toolCall) {
                 $content[] = [
                     'type' => 'tool_use',

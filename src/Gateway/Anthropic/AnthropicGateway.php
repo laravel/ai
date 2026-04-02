@@ -4,8 +4,6 @@ namespace Laravel\Ai\Gateway\Anthropic;
 
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
-use Illuminate\Http\Client\PendingRequest;
-use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\Gateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
@@ -17,7 +15,6 @@ use Laravel\Ai\Gateway\Concerns\HandlesRateLimiting;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\TextGenerationOptions;
-use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
@@ -28,6 +25,7 @@ use LogicException;
 class AnthropicGateway implements Gateway
 {
     use Concerns\BuildsTextRequests;
+    use Concerns\CreatesAnthropicClient;
     use Concerns\HandlesTextStreaming;
     use Concerns\MapsAttachments;
     use Concerns\MapsMessages;
@@ -56,7 +54,13 @@ class AnthropicGateway implements Gateway
         ?int $timeout = null,
     ): TextResponse {
         $body = $this->buildTextRequestBody(
-            $provider, $model, $instructions, $messages, $tools, $schema, $options,
+            $provider,
+            $model,
+            $instructions,
+            $messages,
+            $tools,
+            $schema,
+            $options,
         );
 
         $response = $this->withRateLimitHandling(
@@ -68,7 +72,15 @@ class AnthropicGateway implements Gateway
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, filled($schema), $tools, $schema, $options, $body);
+        return $this->parseTextResponse(
+            $data,
+            $provider,
+            filled($schema),
+            $tools,
+            $schema,
+            $options,
+            $body,
+        );
     }
 
     /**
@@ -86,7 +98,13 @@ class AnthropicGateway implements Gateway
         ?int $timeout = null,
     ): Generator {
         $body = $this->buildTextRequestBody(
-            $provider, $model, $instructions, $messages, $tools, $schema, $options,
+            $provider,
+            $model,
+            $instructions,
+            $messages,
+            $tools,
+            $schema,
+            $options,
         );
 
         $body['stream'] = true;
@@ -99,15 +117,21 @@ class AnthropicGateway implements Gateway
         );
 
         yield from $this->processTextStream(
-            $invocationId, $provider, $model, $tools, $schema, $options,
-            $response->getBody(), $body,
+            $invocationId,
+            $provider,
+            $model,
+            $tools,
+            $schema,
+            $options,
+            $response->getBody(),
+            $body,
         );
     }
 
     /**
      * Generate an image.
      *
-     * @throws \LogicException
+     * @throws LogicException
      */
     public function generateImage(
         ImageProvider $provider,
@@ -124,7 +148,7 @@ class AnthropicGateway implements Gateway
     /**
      * Generate audio from the given text.
      *
-     * @throws \LogicException
+     * @throws LogicException
      */
     public function generateAudio(
         AudioProvider $provider,
@@ -140,7 +164,7 @@ class AnthropicGateway implements Gateway
     /**
      * Generate text from the given audio.
      *
-     * @throws \LogicException
+     * @throws LogicException
      */
     public function generateTranscription(
         TranscriptionProvider $provider,
@@ -156,7 +180,7 @@ class AnthropicGateway implements Gateway
     /**
      * Generate embeddings for the given inputs.
      *
-     * @throws \LogicException
+     * @throws LogicException
      */
     public function generateEmbeddings(
         EmbeddingProvider $provider,
@@ -166,20 +190,5 @@ class AnthropicGateway implements Gateway
         int $timeout = 30,
     ): EmbeddingsResponse {
         throw new LogicException('Anthropic does not support embeddings.');
-    }
-
-    /**
-     * Get an HTTP client for the Anthropic API.
-     */
-    protected function client(Provider $provider, ?int $timeout = null): PendingRequest
-    {
-        return Http::baseUrl('https://api.anthropic.com/v1')
-            ->withHeaders([
-                'x-api-key' => $provider->providerCredentials()['key'],
-                'anthropic-version' => '2023-06-01',
-                'anthropic-beta' => 'web-fetch-2025-09-10',
-            ])
-            ->timeout($timeout ?? 60)
-            ->throw();
     }
 }

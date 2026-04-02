@@ -40,29 +40,20 @@ trait MapsTools
     {
         $schema = $tool->schema(new JsonSchemaTypeFactory);
 
-        $definition = [
-            'name' => class_basename($tool),
-            'description' => (string) $tool->description(),
-        ];
+        $inputSchema = ['type' => 'object', 'properties' => (object) []];
 
         if (filled($schema)) {
-            $objectSchema = new ObjectSchema($schema);
+            $schemaArray = (new ObjectSchema($schema))->toSchema();
 
-            $schemaArray = $objectSchema->toSchema();
-
-            $definition['input_schema'] = [
-                'type' => 'object',
-                'properties' => (object) ($schemaArray['properties'] ?? []),
-                'required' => $schemaArray['required'] ?? [],
-            ];
-        } else {
-            $definition['input_schema'] = [
-                'type' => 'object',
-                'properties' => (object) [],
-            ];
+            $inputSchema['properties'] = (object) ($schemaArray['properties'] ?? []);
+            $inputSchema['required'] = $schemaArray['required'] ?? [];
         }
 
-        return $definition;
+        return [
+            'name' => class_basename($tool),
+            'description' => (string) $tool->description(),
+            'input_schema' => $inputSchema,
+        ];
     }
 
     /**

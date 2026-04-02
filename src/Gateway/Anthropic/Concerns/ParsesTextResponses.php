@@ -24,7 +24,7 @@ trait ParsesTextResponses
     /**
      * Validate the Anthropic response data.
      *
-     * @throws \Laravel\Ai\Exceptions\AiException
+     * @throws AiException
      */
     protected function validateTextResponse(array $data): void
     {
@@ -85,49 +85,39 @@ trait ParsesTextResponses
         $citations = $this->extractCitations($content);
         $usage = $this->extractUsage($data);
         $finishReason = $this->extractFinishReason($data);
-
-        $step = new Step(
-            $text,
-            $toolCalls,
-            [],
-            $finishReason,
-            $usage,
-            new Meta($provider->name(), $model, $citations),
-        );
-
-        $steps->push($step);
-
-        $assistantMessage = new AssistantMessage($text, collect($toolCalls));
-
-        $messages->push($assistantMessage);
+        $meta = new Meta($provider->name(), $model, $citations);
 
         $realToolCalls = array_filter($toolCalls, fn (ToolCall $tc) => $tc->name !== 'output_structured_data');
         $hasStructuredToolCall = count($realToolCalls) < count($toolCalls);
+        $toolResults = [];
 
-        if ($finishReason === FinishReason::ToolCalls &&
-            filled($realToolCalls) &&
-            $steps->count() < ($maxSteps ?? count($tools) * 2)) {
+        $shouldContinue = $finishReason === FinishReason::ToolCalls
+            && filled($realToolCalls)
+            && $depth + 1 < ($maxSteps ?? round(count($tools) * 1.5));
+
+        if ($shouldContinue) {
             $toolResults = $this->executeToolCalls($realToolCalls, $tools);
+        }
 
-            $steps->pop();
+        $steps->push(new Step($text, $toolCalls, $toolResults, $finishReason, $usage, $meta));
 
-            $steps->push(new Step(
-                $text,
-                $toolCalls,
-                $toolResults,
-                $finishReason,
-                $usage,
-                new Meta($provider->name(), $model, $citations),
-            ));
+        $messages->push(new AssistantMessage($text, collect($toolCalls)));
 
-            $toolResultMessage = new ToolResultMessage(collect($toolResults));
-
-            $messages->push($toolResultMessage);
+        if ($shouldContinue) {
+            $messages->push(new ToolResultMessage(collect($toolResults)));
 
             return $this->continueWithToolResults(
-                $data, $provider, $structured, $tools, $schema,
-                $steps, $messages, $requestBody, $toolResults,
-                $depth + 1, $maxSteps,
+                $data,
+                $provider,
+                $structured,
+                $tools,
+                $schema,
+                $steps,
+                $messages,
+                $requestBody,
+                $toolResults,
+                $depth + 1,
+                $maxSteps,
             );
         }
 
@@ -138,7 +128,7 @@ trait ParsesTextResponses
                 $structuredData,
                 json_encode($structuredData) ?: '',
                 $this->combineUsage($steps),
-                new Meta($provider->name(), $model, $citations),
+                $meta,
             ))->withToolCallsAndResults(
                 toolCalls: $steps->flatMap(fn (Step $s) => $s->toolCalls),
                 toolResults: $steps->flatMap(fn (Step $s) => $s->toolResults),
@@ -148,7 +138,7 @@ trait ParsesTextResponses
         return (new TextResponse(
             $text,
             $this->combineUsage($steps),
-            new Meta($provider->name(), $model, $citations),
+            $meta,
         ))->withMessages($messages)->withSteps($steps);
     }
 
@@ -232,8 +222,16 @@ trait ParsesTextResponses
         $this->validateTextResponse($data);
 
         return $this->processResponse(
-            $data, $provider, $structured, $tools, $schema,
-            $steps, $messages, $requestBody, $depth, $maxSteps,
+            $data,
+            $provider,
+            $structured,
+            $tools,
+            $schema,
+            $steps,
+            $messages,
+            $requestBody,
+            $depth,
+            $maxSteps,
         );
     }
 
@@ -242,11 +240,11 @@ trait ParsesTextResponses
      */
     protected function serializeToolResultOutput(mixed $output): string
     {
-        if (is_string($output)) {
-            return $output;
-        }
-
-        return is_array($output) ? json_encode($output) : strval($output);
+        return match (true) {
+            is_string($output) => $output,
+            is_array($output) => json_encode($output),
+            default => strval($output),
+        };
     }
 
     /**
@@ -254,15 +252,9 @@ trait ParsesTextResponses
      */
     protected function extractText(array $content): string
     {
-        $texts = [];
+        $textBlocks = array_filter($content, fn (array $block) => ($block['type'] ?? '') === 'text');
 
-        foreach ($content as $block) {
-            if (($block['type'] ?? '') === 'text') {
-                $texts[] = $block['text'] ?? '';
-            }
-        }
-
-        return implode('', $texts);
+        return implode('', array_column($textBlocks, 'text'));
     }
 
     /**
@@ -272,20 +264,14 @@ trait ParsesTextResponses
      */
     protected function extractToolCalls(array $content): array
     {
-        $toolCalls = [];
+        $toolUseBlocks = array_filter($content, fn (array $block) => ($block['type'] ?? '') === 'tool_use');
 
-        foreach ($content as $block) {
-            if (($block['type'] ?? '') === 'tool_use') {
-                $toolCalls[] = new ToolCall(
-                    $block['id'] ?? '',
-                    $block['name'] ?? '',
-                    $block['input'] ?? [],
-                    $block['id'] ?? null,
-                );
-            }
-        }
-
-        return $toolCalls;
+        return array_values(array_map(fn (array $block) => new ToolCall(
+            $block['id'] ?? '',
+            $block['name'] ?? '',
+            $block['input'] ?? [],
+            $block['id'] ?? null,
+        ), $toolUseBlocks));
     }
 
     /**
@@ -296,7 +282,9 @@ trait ParsesTextResponses
         $citations = new Collection;
 
         foreach ($content as $block) {
-            if (($block['type'] ?? '') === 'web_search_tool_result') {
+            $blockType = $block['type'] ?? '';
+
+            if ($blockType === 'web_search_tool_result') {
                 foreach ($block['search_results'] ?? [] as $result) {
                     $citations->push(new UrlCitation(
                         $result['url'] ?? '',
@@ -305,8 +293,7 @@ trait ParsesTextResponses
                 }
             }
 
-            // Also check for citations within text block annotations...
-            if (($block['type'] ?? '') === 'text') {
+            if ($blockType === 'text') {
                 foreach ($block['citations'] ?? [] as $citation) {
                     if (($citation['type'] ?? '') === 'web_search_result_location') {
                         $citations->push(new UrlCitation(

@@ -31,39 +31,31 @@ trait BuildsTextRequests
             $body['system'] = $instructions;
         }
 
-        if (filled($tools) || filled($schema)) {
-            $mappedTools = filled($tools) ? $this->mapTools($tools, $provider) : [];
+        $mappedTools = filled($tools) ? $this->mapTools($tools, $provider) : [];
 
-            if (filled($schema)) {
-                $mappedTools[] = $this->buildStructuredOutputTool($schema);
+        if (filled($schema)) {
+            $mappedTools[] = $this->buildStructuredOutputTool($schema);
 
-                // When both regular tools and schema are present, force the model
-                // to always use a tool. It will pick the real tool when needed,
-                // then output_structured_data when done. When only structured
-                // output exists, force the specific tool directly.
-                $body['tool_choice'] = filled($tools)
-                    ? ['type' => 'any']
-                    : ['type' => 'tool', 'name' => 'output_structured_data'];
-            } elseif (filled($mappedTools)) {
-                $body['tool_choice'] = ['type' => 'auto'];
-            }
-
-            if (filled($mappedTools)) {
-                $body['tools'] = $mappedTools;
-            }
+            // When both regular tools and schema are present, force the model
+            // to always use a tool. It will pick the real tool when needed,
+            // then output_structured_data when done. When only structured
+            // output exists, force the specific tool directly.
+            $body['tool_choice'] = filled($tools)
+                ? ['type' => 'any']
+                : ['type' => 'tool', 'name' => 'output_structured_data'];
+        } elseif (filled($mappedTools)) {
+            $body['tool_choice'] = ['type' => 'auto'];
         }
 
-        if (! is_null($options?->temperature)) {
+        if (filled($mappedTools)) {
+            $body['tools'] = $mappedTools;
+        }
+
+        if ($options?->temperature !== null) {
             $body['temperature'] = $options->temperature;
         }
 
-        $providerOptions = $options?->providerOptions(Lab::Anthropic);
-
-        if (! is_null($providerOptions)) {
-            $body = array_merge($body, $providerOptions);
-        }
-
-        return $body;
+        return array_merge($body, $options?->providerOptions(Lab::Anthropic) ?? []);
     }
 
     /**
@@ -71,9 +63,7 @@ trait BuildsTextRequests
      */
     protected function buildStructuredOutputTool(array $schema): array
     {
-        $objectSchema = new ObjectSchema($schema);
-
-        $schemaArray = $objectSchema->toSchema();
+        $schemaArray = (new ObjectSchema($schema))->toSchema();
 
         return [
             'name' => 'output_structured_data',

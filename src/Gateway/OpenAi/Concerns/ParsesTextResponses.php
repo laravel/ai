@@ -24,7 +24,7 @@ trait ParsesTextResponses
     /**
      * Validate the OpenAI response data.
      *
-     * @throws \Laravel\Ai\Exceptions\AiException
+     * @throws AiException
      */
     protected function validateTextResponse(array $data): void
     {
