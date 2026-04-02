@@ -2,9 +2,13 @@
 
 namespace Tests\Feature\Providers\Anthropic;
 
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Files\Base64Document;
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\Feature\Agents\ToolUsingAgent;
+
+use function Laravel\Ai\agent;
 
 class MessageMappingTest extends AnthropicTestCase
 {
@@ -80,6 +84,55 @@ class MessageMappingTest extends AnthropicTestCase
         $toolResultBlock = collect($toolResultMsg['content'])->firstWhere('type', 'tool_result');
         $this->assertSame($toolUseBlock['id'], $toolResultBlock['tool_use_id']);
         $this->assertNotEmpty($toolResultBlock['content']);
+    }
+
+    public function test_base64_pdf_document_maps_to_document_content_block(): void
+    {
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeTextResponse('I see a PDF'),
+        ]);
+
+        $pdf = new Base64Document(base64_encode('fake-pdf-content'), 'application/pdf');
+
+        agent('You are helpful.')->prompt(
+            'What is in this PDF?',
+            attachments: [$pdf],
+            provider: 'anthropic',
+        );
+
+        Http::assertSent(function ($request) {
+            $content = $request->data()['messages'][0]['content'];
+            $docBlock = $content[0];
+
+            return $docBlock['type'] === 'document'
+                && $docBlock['source']['type'] === 'base64'
+                && $docBlock['source']['media_type'] === 'application/pdf'
+                && $docBlock['source']['data'] === base64_encode('fake-pdf-content');
+        });
+    }
+
+    public function test_uploaded_pdf_file_maps_to_document_content_block(): void
+    {
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeTextResponse('I see a PDF'),
+        ]);
+
+        $file = UploadedFile::fake()->create('report.pdf', 100, 'application/pdf');
+
+        agent('You are helpful.')->prompt(
+            'What is in this file?',
+            attachments: [$file],
+            provider: 'anthropic',
+        );
+
+        Http::assertSent(function ($request) {
+            $content = $request->data()['messages'][0]['content'];
+            $docBlock = $content[0];
+
+            return $docBlock['type'] === 'document'
+                && $docBlock['source']['type'] === 'base64'
+                && $docBlock['source']['media_type'] === 'application/pdf';
+        });
     }
 
     public function test_system_instructions_are_not_in_messages_array(): void
