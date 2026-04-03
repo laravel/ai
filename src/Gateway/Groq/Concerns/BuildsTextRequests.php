@@ -1,9 +1,8 @@
 <?php
 
-namespace Laravel\Ai\Gateway\OpenAi\Concerns;
+namespace Laravel\Ai\Gateway\Groq\Concerns;
 
 use Illuminate\Support\Arr;
-use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
@@ -11,7 +10,7 @@ use Laravel\Ai\Providers\Provider;
 trait BuildsTextRequests
 {
     /**
-     * Build the request body for the OpenAI Responses API.
+     * Build the request body for the Chat Completions API.
      */
     protected function buildTextRequestBody(
         Provider $provider,
@@ -22,32 +21,35 @@ trait BuildsTextRequests
         ?array $schema,
         ?TextGenerationOptions $options,
     ): array {
-        $input = $this->mapMessagesToInput($messages, $instructions);
-
-        $body = ['model' => $model, 'input' => $input];
+        $body = [
+            'model' => $model,
+            'messages' => $this->mapMessagesToChat($messages, $instructions),
+        ];
 
         if (filled($tools)) {
-            $body['tool_choice'] = 'auto';
-            $body['tools'] = $this->mapTools($tools, $provider);
+            $mappedTools = $this->mapTools($tools);
+
+            if (filled($mappedTools)) {
+                $body['tool_choice'] = 'auto';
+                $body['tools'] = $mappedTools;
+            }
         }
 
         if (filled($schema)) {
-            $body['text'] = $this->buildSchemaFormat($schema);
+            $body['response_format'] = $this->buildResponseFormat($schema);
         }
 
         if (! is_null($options?->maxTokens)) {
-            $body['max_output_tokens'] = $options->maxTokens;
+            $body['max_completion_tokens'] = $options->maxTokens;
         }
 
         if (! is_null($options?->temperature)) {
             $body['temperature'] = $options->temperature;
         }
 
-        $providerOptions = $options?->providerOptions(
-            Lab::tryFrom($provider->driver()) ?? $provider->driver()
-        );
+        $providerOptions = $options?->providerOptions($provider->driver());
 
-        if (! is_null($providerOptions)) {
+        if (filled($providerOptions)) {
             $body = array_merge($body, $providerOptions);
         }
 
@@ -55,17 +57,17 @@ trait BuildsTextRequests
     }
 
     /**
-     * Build the text format options for structured output.
+     * Build the response format options for structured output.
      */
-    protected function buildSchemaFormat(array $schema): array
+    protected function buildResponseFormat(array $schema): array
     {
         $objectSchema = new ObjectSchema($schema);
 
         $schemaArray = $objectSchema->toSchema();
 
         return [
-            'format' => [
-                'type' => 'json_schema',
+            'type' => 'json_schema',
+            'json_schema' => [
                 'name' => $schemaArray['name'] ?? 'schema_definition',
                 'schema' => Arr::except($schemaArray, ['name']),
                 'strict' => true,

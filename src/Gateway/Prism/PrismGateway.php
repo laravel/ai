@@ -385,7 +385,6 @@ class PrismGateway implements Gateway
             'azure' => PrismProvider::OpenAI,
             'deepseek' => PrismProvider::DeepSeek,
             'gemini' => PrismProvider::Gemini,
-            'groq' => PrismProvider::Groq,
             'mistral' => PrismProvider::Mistral,
             'ollama' => PrismProvider::Ollama,
             'openai' => PrismProvider::OpenAI,

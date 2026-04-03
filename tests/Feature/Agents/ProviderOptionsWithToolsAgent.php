@@ -42,6 +42,9 @@ class ProviderOptionsWithToolsAgent implements Agent, HasProviderOptions, HasToo
                 ],
                 'frequency_penalty' => 0.5,
             ],
+            Lab::Groq => [
+                'frequency_penalty' => 0.5,
+            ],
             default => [],
         };
     }

@@ -344,7 +344,7 @@ trait HandlesTextStreaming
             ))->withInvocationId($invocationId);
         }
 
-        if ($depth + 1 < ($maxSteps ?? count($tools) * 2)) {
+        if ($depth + 1 < ($maxSteps ?? round(count($tools) * 1.5))) {
             $body = [
                 'model' => $model,
                 'previous_response_id' => $responseId,
