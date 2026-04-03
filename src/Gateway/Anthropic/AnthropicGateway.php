@@ -83,7 +83,7 @@ class AnthropicGateway implements Gateway
 
                 if ($status === 529) {
                     throw new ProviderOverloadedException(
-                        'AI provider ['.$providerName.'] is overloaded.',
+                        "Anthropic [{$providerName}]: The API is temporarily overloaded.",
                         code: $e->getCode(),
                         previous: $e,
                     );
