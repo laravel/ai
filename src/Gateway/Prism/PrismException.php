@@ -42,10 +42,9 @@ class PrismException
         }
 
         if ($e instanceof PrismProviderOverloadedException) {
-            throw new ProviderOverloadedException(
-                'AI provider ['.$provider->name().'] is overloaded.',
-                code: $e->getCode(),
-                previous: $e->getPrevious());
+            throw ProviderOverloadedException::forProvider(
+                $provider->name(), $e->getCode(), $e->getPrevious()
+            );
         }
 
         if (str_starts_with($e->getMessage(), 'Calling ') &&
