@@ -59,6 +59,35 @@ trait HandlesTextStreaming
         $usage = null;
         $stopReason = '';
 
+        $emitTextStart = function () use (&$textStartEmitted, $messageId, $invocationId) {
+            if ($textStartEmitted) {
+                return null;
+            }
+
+            $textStartEmitted = true;
+
+            return (new TextStart(
+                $this->generateEventId(),
+                $messageId,
+                time(),
+            ))->withInvocationId($invocationId);
+        };
+
+        $emitReasoningStart = function () use (&$reasoningStartEmitted, &$reasoningId, $invocationId) {
+            if ($reasoningStartEmitted) {
+                return null;
+            }
+
+            $reasoningStartEmitted = true;
+            $reasoningId = $this->generateEventId();
+
+            return (new ReasoningStart(
+                $this->generateEventId(),
+                $reasoningId,
+                time(),
+            ))->withInvocationId($invocationId);
+        };
+
         foreach ($this->parseServerSentEvents($streamBody) as $data) {
             $type = $data['type'] ?? '';
 
@@ -97,25 +126,12 @@ trait HandlesTextStreaming
                 $currentBlockType = $blockType;
 
                 if ($blockType === 'text') {
-                    if (! $textStartEmitted) {
-                        $textStartEmitted = true;
-
-                        yield (new TextStart(
-                            $this->generateEventId(),
-                            $messageId,
-                            time(),
-                        ))->withInvocationId($invocationId);
+                    if ($event = $emitTextStart()) {
+                        yield $event;
                     }
                 } elseif ($blockType === 'thinking') {
-                    if (! $reasoningStartEmitted) {
-                        $reasoningStartEmitted = true;
-                        $reasoningId = $this->generateEventId();
-
-                        yield (new ReasoningStart(
-                            $this->generateEventId(),
-                            $reasoningId,
-                            time(),
-                        ))->withInvocationId($invocationId);
+                    if ($event = $emitReasoningStart()) {
+                        yield $event;
                     }
                 } elseif ($blockType === 'tool_use') {
                     $currentToolIndex++;
@@ -160,14 +176,8 @@ trait HandlesTextStreaming
                     $textDelta = (string) ($data['delta']['text'] ?? '');
 
                     if ($textDelta !== '') {
-                        if (! $textStartEmitted) {
-                            $textStartEmitted = true;
-
-                            yield (new TextStart(
-                                $this->generateEventId(),
-                                $messageId,
-                                time(),
-                            ))->withInvocationId($invocationId);
+                        if ($event = $emitTextStart()) {
+                            yield $event;
                         }
 
                         $currentText .= $textDelta;
@@ -183,15 +193,8 @@ trait HandlesTextStreaming
                     $delta = (string) ($data['delta']['thinking'] ?? '');
 
                     if ($delta !== '') {
-                        if (! $reasoningStartEmitted) {
-                            $reasoningStartEmitted = true;
-                            $reasoningId = $this->generateEventId();
-
-                            yield (new ReasoningStart(
-                                $this->generateEventId(),
-                                $reasoningId,
-                                time(),
-                            ))->withInvocationId($invocationId);
+                        if ($event = $emitReasoningStart()) {
+                            yield $event;
                         }
 
                         yield (new ReasoningDelta(
@@ -358,56 +361,52 @@ trait HandlesTextStreaming
             ))->withInvocationId($invocationId);
         }
 
-        if ($depth + 1 < ($maxSteps ?? round(count($tools) * 1.5))) {
-            $requestBody['messages'][] = [
-                'role' => 'assistant',
-                'content' => array_values($responseContent),
-            ];
-
-            $toolResultContent = [];
-
-            foreach ($toolResults as $result) {
-                $toolResultContent[] = [
-                    'type' => 'tool_result',
-                    'tool_use_id' => $result->id,
-                    'content' => $this->serializeToolResultOutput($result->result),
-                ];
-            }
-
-            $requestBody['messages'][] = [
-                'role' => 'user',
-                'content' => $toolResultContent,
-            ];
-
-            $requestBody['stream'] = true;
-
-            $response = $this->withRateLimitHandling(
-                $provider->name(),
-                fn () => $this->client($provider)
-                    ->withOptions(['stream' => true])
-                    ->post('messages', $requestBody),
-            );
-
-            yield from $this->processTextStream(
-                $invocationId,
-                $provider,
-                $model,
-                $tools,
-                $schema,
-                $options,
-                $response->getBody(),
-                $requestBody,
-                $depth + 1,
-                $maxSteps,
-            );
-        } else {
+        if ($depth + 1 >= ($maxSteps ?? round(count($tools) * 1.5))) {
             yield (new StreamEnd(
                 $this->generateEventId(),
                 'stop',
                 new Usage(0, 0),
                 time(),
             ))->withInvocationId($invocationId);
+
+            return;
         }
+
+        $requestBody['messages'][] = [
+            'role' => 'assistant',
+            'content' => array_values($responseContent),
+        ];
+
+        $requestBody['messages'][] = [
+            'role' => 'user',
+            'content' => array_map(fn (ToolResult $result) => [
+                'type' => 'tool_result',
+                'tool_use_id' => $result->id,
+                'content' => $this->serializeToolResultOutput($result->result),
+            ], $toolResults),
+        ];
+
+        $requestBody['stream'] = true;
+
+        $response = $this->withRateLimitHandling(
+            $provider->name(),
+            fn () => $this->client($provider)
+                ->withOptions(['stream' => true])
+                ->post('messages', $requestBody),
+        );
+
+        yield from $this->processTextStream(
+            $invocationId,
+            $provider,
+            $model,
+            $tools,
+            $schema,
+            $options,
+            $response->getBody(),
+            $requestBody,
+            $depth + 1,
+            $maxSteps,
+        );
     }
 
     /**
