@@ -34,13 +34,27 @@ trait BuildsTextRequests
         $mappedTools = filled($tools) ? $this->mapTools($tools, $provider) : [];
         $providerOptions = $options?->providerOptions(Lab::Anthropic) ?? [];
 
-        if (filled($schema)) {
-            $mappedTools[] = $this->buildStructuredOutputTool($schema);
-        }
+        if (filled($schema) && $this->supportsNativeStructuredOutput($provider)) {
+            $body['output_config'] = [
+                'format' => [
+                    'type' => 'json_schema',
+                    'schema' => (new ObjectSchema($schema))->toSchema(),
+                ],
+            ];
 
-        if (filled($mappedTools)) {
-            $body['tools'] = $mappedTools;
-            $body['tool_choice'] = $this->resolveToolChoice($schema, $tools, $providerOptions);
+            if (filled($mappedTools)) {
+                $body['tools'] = $mappedTools;
+                $body['tool_choice'] = ['type' => 'auto'];
+            }
+        } else {
+            if (filled($schema)) {
+                $mappedTools[] = $this->buildStructuredOutputTool($schema);
+            }
+
+            if (filled($mappedTools)) {
+                $body['tools'] = $mappedTools;
+                $body['tool_choice'] = $this->resolveToolChoice($schema, $tools, $providerOptions);
+            }
         }
 
         if ($options?->temperature !== null) {
@@ -65,6 +79,16 @@ trait BuildsTextRequests
         return filled($tools)
             ? ['type' => 'any']
             : ['type' => 'tool', 'name' => 'output_structured_data'];
+    }
+
+    /**
+     * Determine if the provider supports native structured output via output_config.
+     */
+    protected function supportsNativeStructuredOutput(Provider $provider): bool
+    {
+        $beta = $provider->additionalConfiguration()['anthropic_beta'] ?? '';
+
+        return str_contains($beta, 'structured-outputs');
     }
 
     /**

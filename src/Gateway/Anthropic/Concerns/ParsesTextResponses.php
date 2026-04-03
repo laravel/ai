@@ -124,6 +124,10 @@ trait ParsesTextResponses
         if ($structured || $hasStructuredToolCall) {
             $structuredData = $this->extractStructuredOutput($content);
 
+            if (empty($structuredData) && filled($text)) {
+                $structuredData = json_decode($text, true) ?? [];
+            }
+
             return (new StructuredTextResponse(
                 $structuredData,
                 json_encode($structuredData) ?: '',
@@ -329,7 +333,7 @@ trait ParsesTextResponses
     protected function extractFinishReason(array $data): FinishReason
     {
         return match ($data['stop_reason'] ?? '') {
-            'end_turn' => FinishReason::Stop,
+            'end_turn', 'stop_sequence' => FinishReason::Stop,
             'tool_use' => FinishReason::ToolCalls,
             'max_tokens' => FinishReason::Length,
             default => FinishReason::Unknown,

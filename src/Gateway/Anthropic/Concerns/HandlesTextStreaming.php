@@ -8,7 +8,9 @@ use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
+use Laravel\Ai\Responses\Data\UrlCitation;
 use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ProviderToolEvent;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
@@ -49,6 +51,10 @@ trait HandlesTextStreaming
 
         $currentText = '';
         $currentBlockType = '';
+        $currentBlockIndex = -1;
+        $currentBlockText = '';
+        $currentThinkingText = '';
+        $currentSignature = '';
         $currentToolIndex = -1;
         $pendingToolCalls = [];
         $responseContent = [];
@@ -124,12 +130,18 @@ trait HandlesTextStreaming
             if ($type === 'content_block_start') {
                 $blockType = $data['content_block']['type'] ?? '';
                 $currentBlockType = $blockType;
+                $currentBlockIndex = $data['index'] ?? count($responseContent);
 
                 if ($blockType === 'text') {
+                    $currentBlockText = '';
+
                     if ($event = $emitTextStart()) {
                         yield $event;
                     }
                 } elseif ($blockType === 'thinking') {
+                    $currentThinkingText = '';
+                    $currentSignature = '';
+
                     if ($event = $emitReasoningStart()) {
                         yield $event;
                     }
@@ -181,6 +193,7 @@ trait HandlesTextStreaming
                         }
 
                         $currentText .= $textDelta;
+                        $currentBlockText .= $textDelta;
 
                         yield (new TextDelta(
                             $this->generateEventId(),
@@ -197,10 +210,25 @@ trait HandlesTextStreaming
                             yield $event;
                         }
 
+                        $currentThinkingText .= $delta;
+
                         yield (new ReasoningDelta(
                             $this->generateEventId(),
                             $reasoningId,
                             $delta,
+                            time(),
+                        ))->withInvocationId($invocationId);
+                    }
+                } elseif ($deltaType === 'signature_delta') {
+                    $currentSignature .= (string) ($data['delta']['signature'] ?? '');
+                } elseif ($deltaType === 'citations_delta' && $currentBlockType === 'text') {
+                    $citationData = $data['delta']['citation'] ?? null;
+
+                    if ($citationData && ($citationData['type'] ?? '') === 'web_search_result_location') {
+                        yield (new CitationEvent(
+                            $this->generateEventId(),
+                            $messageId,
+                            new UrlCitation($citationData['url'] ?? '', $citationData['title'] ?? null),
                             time(),
                         ))->withInvocationId($invocationId);
                     }
@@ -217,6 +245,10 @@ trait HandlesTextStreaming
 
             if ($type === 'content_block_stop') {
                 if ($currentBlockType === 'text' && $textStartEmitted) {
+                    if (isset($responseContent[$currentBlockIndex])) {
+                        $responseContent[$currentBlockIndex]['text'] = $currentBlockText;
+                    }
+
                     yield (new TextEnd(
                         $this->generateEventId(),
                         $messageId,
@@ -225,6 +257,11 @@ trait HandlesTextStreaming
 
                     $textStartEmitted = false;
                 } elseif ($currentBlockType === 'thinking' && $reasoningStartEmitted) {
+                    if (isset($responseContent[$currentBlockIndex])) {
+                        $responseContent[$currentBlockIndex]['thinking'] = $currentThinkingText;
+                        $responseContent[$currentBlockIndex]['signature'] = $currentSignature;
+                    }
+
                     yield (new ReasoningEnd(
                         $this->generateEventId(),
                         $reasoningId,

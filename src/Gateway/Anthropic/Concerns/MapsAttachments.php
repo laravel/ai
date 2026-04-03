@@ -26,7 +26,7 @@ trait MapsAttachments
     protected function mapAttachments(Collection $attachments): array
     {
         return $attachments->map(function (File|UploadedFile $attachment) {
-            return match (true) {
+            $mapped = match (true) {
                 $attachment instanceof ProviderImage => [
                     'type' => 'image',
                     'source' => [
@@ -125,6 +125,12 @@ trait MapsAttachments
                 ],
                 default => throw new InvalidArgumentException('Unsupported attachment type ['.get_class($attachment).']'),
             };
+
+            if (($mapped['type'] ?? '') === 'document' && $attachment instanceof File && filled($attachment->name)) {
+                $mapped['title'] = $attachment->name;
+            }
+
+            return $mapped;
         })->all();
     }
 
