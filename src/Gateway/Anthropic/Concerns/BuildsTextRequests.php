@@ -32,6 +32,7 @@ trait BuildsTextRequests
         }
 
         $mappedTools = filled($tools) ? $this->mapTools($tools, $provider) : [];
+
         $providerOptions = $options?->providerOptions(Lab::Anthropic) ?? [];
 
         if (filled($schema) && $this->supportsNativeStructuredOutput($provider)) {
@@ -68,6 +69,7 @@ trait BuildsTextRequests
      * Determine the tool_choice strategy for the request.
      *
      * Thinking mode only supports "auto" -- forced tool selection causes an API error.
+     *
      * Without thinking: structured-only forces the synthetic tool, tools+schema uses "any".
      */
     protected function resolveToolChoice(?array $schema, array $tools, array $providerOptions): array
