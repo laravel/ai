@@ -34,6 +34,10 @@ class ProviderOptionsAgent implements Agent, HasProviderOptions
                     'budget_tokens' => 10000,
                 ],
             ],
+            Lab::Groq => [
+                'frequency_penalty' => 0.5,
+                'presence_penalty' => 0.3,
+            ],
             default => [],
         };
     }

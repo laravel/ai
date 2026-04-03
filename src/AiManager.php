@@ -351,7 +351,6 @@ class AiManager extends MultipleInstanceManager
     public function createGroqDriver(array $config): GroqProvider
     {
         return new GroqProvider(
-            new PrismGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)
         );
