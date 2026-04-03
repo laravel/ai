@@ -411,7 +411,7 @@ trait HandlesTextStreaming
 
         $requestBody['messages'][] = [
             'role' => 'assistant',
-            'content' => array_values($responseContent),
+            'content' => $this->ensureToolInputIsObject(array_values($responseContent)),
         ];
 
         $requestBody['messages'][] = [

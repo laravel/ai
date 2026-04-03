@@ -2,8 +2,10 @@
 
 namespace Laravel\Ai\Gateway\Anthropic;
 
+use Closure;
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Http\Client\RequestException;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\Gateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
@@ -11,7 +13,9 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
-use Laravel\Ai\Gateway\Concerns\HandlesRateLimiting;
+use Laravel\Ai\Exceptions\InsufficientCreditsException;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -31,13 +35,73 @@ class AnthropicGateway implements Gateway
     use Concerns\MapsMessages;
     use Concerns\MapsTools;
     use Concerns\ParsesTextResponses;
-    use HandlesRateLimiting;
     use InvokesTools;
     use ParsesServerSentEvents;
+
+    /**
+     * Patterns that indicate an insufficient credits or quota error.
+     *
+     * @var list<string>
+     */
+    protected static array $insufficientCreditPatterns = [
+        'credit balance',
+        'insufficient',
+        'quota exceeded',
+        'exceeded your current quota',
+        'billing',
+    ];
 
     public function __construct(protected Dispatcher $events)
     {
         $this->initializeToolCallbacks();
+    }
+
+    /**
+     * Execute a callback with Anthropic-specific exception handling.
+     *
+     * Translates HTTP 429, 529, and insufficient credit errors into
+     * failoverable exceptions matching the Prism gateway behavior.
+     *
+     * @template T
+     *
+     * @param  Closure(): T  $callback
+     * @return T
+     */
+    protected function withRateLimitHandling(string $providerName, Closure $callback): mixed
+    {
+        try {
+            return $callback();
+        } catch (RequestException $e) {
+            if ($e->response !== null) {
+                $status = $e->response->status();
+
+                if ($status === 429) {
+                    throw RateLimitedException::forProvider(
+                        $providerName, $e->getCode(), $e
+                    );
+                }
+
+                if ($status === 529) {
+                    throw new ProviderOverloadedException(
+                        'AI provider ['.$providerName.'] is overloaded.',
+                        code: $e->getCode(),
+                        previous: $e,
+                    );
+                }
+
+                $message = strtolower($e->response->json('error.message', ''));
+
+                foreach (static::$insufficientCreditPatterns as $pattern) {
+                    if (str_contains($message, $pattern)) {
+                        throw InsufficientCreditsException::forProvider(
+                            $providerName, $e->getCode(), $e
+                        );
+                    }
+                }
+            }
+
+            throw $e;
+        }
     }
 
     /**
