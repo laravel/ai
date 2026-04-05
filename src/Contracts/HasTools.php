@@ -7,7 +7,7 @@ interface HasTools
     /**
      * Get the tools available to the agent.
      *
-     * @return Tool[]
+     * @return array<Tool|\Laravel\Ai\Providers\Tools\ProviderTool>
      */
     public function tools(): iterable;
 }
