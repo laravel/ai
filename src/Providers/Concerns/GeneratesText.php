@@ -56,13 +56,23 @@ trait GeneratesText
 
                 $this->listenForToolInvocations($invocationId, $agent);
 
+                $schema = $agent instanceof HasStructuredOutput
+                    ? $agent->schema(new JsonSchemaTypeFactory)
+                    : null;
+
+                if ($agent instanceof HasStructuredOutput && empty($schema)) {
+                    throw new \InvalidArgumentException(
+                        'Agents implementing HasStructuredOutput must return a non-empty schema from the schema() method.'
+                    );
+                }
+
                 $response = $this->textGateway()->generateText(
                     $this,
                     $prompt->model,
                     (string) $agent->instructions(),
                     $messages,
                     $agent instanceof HasTools ? $agent->tools() : [],
-                    $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null,
+                    $schema,
                     TextGenerationOptions::forAgent($agent),
                     $prompt->timeout,
                 );
