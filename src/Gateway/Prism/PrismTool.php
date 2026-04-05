@@ -40,10 +40,12 @@ class PrismTool extends Tool
     public static function toLaravelToolCall(PrismToolCall|array $toolCall): ToolCall
     {
         if (is_array($toolCall)) {
+            $arguments = $toolCall['arguments'] ?? $toolCall['input'] ?? [];
+
             return new ToolCall(
                 $toolCall['id'] ?? '',
                 $toolCall['name'] ?? '',
-                static::normalizeArguments($toolCall['arguments']['schema_definition'] ?? $toolCall['arguments'] ?? []),
+                static::normalizeArguments(is_array($arguments) ? ($arguments['schema_definition'] ?? $arguments) : $arguments),
                 $toolCall['resultId'] ?? null,
                 $toolCall['reasoningId'] ?? null,
                 $toolCall['reasoningSummary'] ?? null,
@@ -68,10 +70,12 @@ class PrismTool extends Tool
     public static function toLaravelToolResult(PrismToolResult|array $toolResult): ToolResult
     {
         if (is_array($toolResult)) {
+            $args = $toolResult['args'] ?? $toolResult['input'] ?? [];
+
             return new ToolResult(
                 $toolResult['toolCallId'] ?? $toolResult['tool_call_id'] ?? '',
                 $toolResult['toolName'] ?? $toolResult['tool_name'] ?? '',
-                static::normalizeArguments($toolResult['args']['schema_definition'] ?? $toolResult['args'] ?? []),
+                static::normalizeArguments(is_array($args) ? ($args['schema_definition'] ?? $args) : $args),
                 $toolResult['result'] ?? '',
                 $toolResult['toolCallResultId'] ?? $toolResult['tool_call_result_id'] ?? null,
             );
