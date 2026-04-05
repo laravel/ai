@@ -12,13 +12,33 @@ use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\Gateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
+use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Files\Audio as AudioFile;
+use Laravel\Ai\Files\Base64Audio;
+use Laravel\Ai\Files\Base64Document;
+use Laravel\Ai\Files\Base64Image;
+use Laravel\Ai\Files\Base64Video;
+use Laravel\Ai\Files\Document as DocumentFile;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Files\Image as ImageFile;
+use Laravel\Ai\Files\LocalAudio;
+use Laravel\Ai\Files\LocalDocument;
 use Laravel\Ai\Files\LocalImage;
+use Laravel\Ai\Files\LocalVideo;
+use Laravel\Ai\Files\ProviderDocument;
+use Laravel\Ai\Files\ProviderImage;
+use Laravel\Ai\Files\RemoteAudio;
+use Laravel\Ai\Files\RemoteDocument;
+use Laravel\Ai\Files\RemoteImage;
+use Laravel\Ai\Files\RemoteVideo;
+use Laravel\Ai\Files\StoredAudio;
+use Laravel\Ai\Files\StoredDocument;
 use Laravel\Ai\Files\StoredImage;
+use Laravel\Ai\Files\StoredVideo;
+use Laravel\Ai\Files\Video as VideoFile;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Providers\Provider;
@@ -34,8 +54,10 @@ use Laravel\Ai\Responses\TranscriptionResponse;
 use Prism\Prism\Enums\Provider as PrismProvider;
 use Prism\Prism\Exceptions\PrismException as PrismVendorException;
 use Prism\Prism\Facades\Prism;
-use Prism\Prism\ValueObjects\Media\Audio;
+use Prism\Prism\ValueObjects\Media\Audio as PrismAudio;
+use Prism\Prism\ValueObjects\Media\Document as PrismDocument;
 use Prism\Prism\ValueObjects\Media\Image as PrismImage;
+use Prism\Prism\ValueObjects\Media\Video as PrismVideo;
 
 class PrismGateway implements Gateway
 {
@@ -302,7 +324,7 @@ class PrismGateway implements Gateway
                     'timeout' => $timeout,
                 ])
                 ->withInput(match (true) {
-                    $audio instanceof TranscribableAudio => Audio::fromBase64(
+                    $audio instanceof TranscribableAudio => PrismAudio::fromBase64(
                         base64_encode($audio->content()), $audio->mimeType()
                     ),
                 });
@@ -361,7 +383,16 @@ class PrismGateway implements Gateway
             default => [],
         });
 
-        (new Collection($inputs))->each($request->fromInput(...));
+        (new Collection($inputs))->each(function ($input) use ($provider, $request) {
+            match (true) {
+                is_string($input) => $request->fromInput($input),
+                $input instanceof ImageFile => $request->fromImage($this->toPrismEmbeddingImage($provider, $input)),
+                $input instanceof AudioFile => $request->fromAudio($this->toPrismEmbeddingAudio($input)),
+                $input instanceof DocumentFile => $request->fromDocument($this->toPrismEmbeddingDocument($provider, $input)),
+                $input instanceof VideoFile => $request->fromVideo($this->toPrismEmbeddingVideo($input)),
+                default => throw new InvalidArgumentException('Unsupported embeddings input type ['.$input::class.']'),
+            };
+        });
 
         try {
             $response = $request->asEmbeddings();
@@ -373,6 +404,95 @@ class PrismGateway implements Gateway
             (new Collection($response->embeddings))->map->embedding->all(),
             $response->usage->tokens,
             new Meta($provider->name(), $model),
+        );
+    }
+
+    /**
+     * Convert the given Laravel embeddings image input to a Prism media value object.
+     */
+    protected function toPrismEmbeddingImage(EmbeddingProvider $provider, ImageFile $input): PrismImage
+    {
+        $prismInput = match (true) {
+            $input instanceof ProviderImage => PrismImage::fromUrl(
+                $this->resolveGeminiEmbeddingFileUri($provider, $input)
+            ),
+            $input instanceof Base64Image => PrismImage::fromBase64($input->base64, $input->mime),
+            $input instanceof LocalImage => PrismImage::fromLocalPath($input->path, $input->mime),
+            $input instanceof RemoteImage => PrismImage::fromUrl($input->url, $input->declaredMimeType()),
+            $input instanceof StoredImage => PrismImage::fromStoragePath($input->path, $input->disk),
+            default => throw new InvalidArgumentException('Unsupported image embeddings input type ['.$input::class.']'),
+        };
+
+        return $input->name() ? $prismInput->as($input->name()) : $prismInput;
+    }
+
+    /**
+     * Convert the given Laravel embeddings audio input to a Prism media value object.
+     */
+    protected function toPrismEmbeddingAudio(AudioFile $input): PrismAudio
+    {
+        $prismInput = match (true) {
+            $input instanceof Base64Audio => PrismAudio::fromBase64($input->base64, $input->mime),
+            $input instanceof LocalAudio => PrismAudio::fromLocalPath($input->path, $input->mime),
+            $input instanceof RemoteAudio => PrismAudio::fromUrl($input->url, $input->declaredMimeType()),
+            $input instanceof StoredAudio => PrismAudio::fromStoragePath($input->path, $input->disk),
+            default => throw new InvalidArgumentException('Unsupported audio embeddings input type ['.$input::class.']'),
+        };
+
+        return $input->name() ? $prismInput->as($input->name()) : $prismInput;
+    }
+
+    /**
+     * Convert the given Laravel embeddings document input to a Prism media value object.
+     */
+    protected function toPrismEmbeddingDocument(EmbeddingProvider $provider, DocumentFile $input): PrismDocument
+    {
+        $prismInput = match (true) {
+            $input instanceof ProviderDocument => PrismDocument::fromUrl(
+                $this->resolveGeminiEmbeddingFileUri($provider, $input),
+                $input->name(),
+            ),
+            $input instanceof Base64Document => PrismDocument::fromBase64($input->base64, $input->mime, $input->name()),
+            $input instanceof LocalDocument => PrismDocument::fromLocalPath($input->path, $input->name()),
+            $input instanceof RemoteDocument => PrismDocument::fromUrl($input->url, $input->name()),
+            $input instanceof StoredDocument => PrismDocument::fromStoragePath($input->path, $input->disk, $input->name()),
+            default => throw new InvalidArgumentException('Unsupported document embeddings input type ['.$input::class.']'),
+        };
+
+        return $input->name() ? $prismInput->as($input->name()) : $prismInput;
+    }
+
+    /**
+     * Convert the given Laravel embeddings video input to a Prism media value object.
+     */
+    protected function toPrismEmbeddingVideo(VideoFile $input): PrismVideo
+    {
+        $prismInput = match (true) {
+            $input instanceof Base64Video => PrismVideo::fromBase64($input->base64, $input->mime),
+            $input instanceof LocalVideo => PrismVideo::fromLocalPath($input->path, $input->mime),
+            $input instanceof RemoteVideo => PrismVideo::fromUrl($input->url, $input->declaredMimeType()),
+            $input instanceof StoredVideo => PrismVideo::fromStoragePath($input->path, $input->disk),
+            default => throw new InvalidArgumentException('Unsupported video embeddings input type ['.$input::class.']'),
+        };
+
+        return $input->name() ? $prismInput->as($input->name()) : $prismInput;
+    }
+
+    /**
+     * Resolve a Gemini file ID into the provider file URI required by Prism embeddings.
+     */
+    protected function resolveGeminiEmbeddingFileUri(EmbeddingProvider $provider, ProviderImage|ProviderDocument $input): string
+    {
+        if (! $provider instanceof FileProvider) {
+            throw new InvalidArgumentException(
+                'Provider ['.$provider->driver().'] does not support retrieving files for embeddings.'
+            );
+        }
+
+        $file = $provider->getFile($input->id());
+
+        return $file->uri() ?? throw new InvalidArgumentException(
+            'Provider file ['.$input->id().'] is missing a URI required for Gemini embeddings.'
         );
     }
 

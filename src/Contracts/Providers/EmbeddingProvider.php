@@ -3,6 +3,10 @@
 namespace Laravel\Ai\Contracts\Providers;
 
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
+use Laravel\Ai\Files\Audio;
+use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\Image;
+use Laravel\Ai\Files\Video;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 
 interface EmbeddingProvider
@@ -10,7 +14,7 @@ interface EmbeddingProvider
     /**
      * Get embedding vectors representing the given inputs.
      *
-     * @param  string[]  $inputs
+     * @param  array<int, string|Audio|Document|Image|Video>  $inputs
      */
     public function embeddings(array $inputs, ?int $dimensions = null, ?string $model = null, int $timeout = 30): EmbeddingsResponse;
 

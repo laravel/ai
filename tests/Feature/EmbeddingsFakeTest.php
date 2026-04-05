@@ -4,6 +4,10 @@ namespace Tests\Feature;
 
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Files\Audio;
+use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\Image;
+use Laravel\Ai\Files\Video;
 use Laravel\Ai\Prompts\EmbeddingsPrompt;
 use Laravel\Ai\Prompts\QueuedEmbeddingsPrompt;
 use RuntimeException;
@@ -38,6 +42,50 @@ class EmbeddingsFakeTest extends TestCase
         $response = Embeddings::for(['Hello', 'World', 'Test'])->generate();
 
         $this->assertCount(3, $response);
+    }
+
+    public function test_can_fake_embeddings_with_image_input(): void
+    {
+        Embeddings::fake();
+
+        $response = Embeddings::for([
+            Image::fromBase64(base64_encode('image-bytes'), 'image/png'),
+        ])->generate();
+
+        $this->assertCount(1, $response);
+    }
+
+    public function test_can_fake_embeddings_with_audio_input(): void
+    {
+        Embeddings::fake();
+
+        $response = Embeddings::for([
+            Audio::fromBase64(base64_encode('audio-bytes'), 'audio/mpeg'),
+        ])->generate();
+
+        $this->assertCount(1, $response);
+    }
+
+    public function test_can_fake_embeddings_with_document_input(): void
+    {
+        Embeddings::fake();
+
+        $response = Embeddings::for([
+            Document::fromBase64(base64_encode('%PDF-1.4 fake'), 'application/pdf'),
+        ])->generate();
+
+        $this->assertCount(1, $response);
+    }
+
+    public function test_can_fake_embeddings_with_video_input(): void
+    {
+        Embeddings::fake();
+
+        $response = Embeddings::for([
+            Video::fromBase64(base64_encode('video-bytes'), 'video/mp4'),
+        ])->generate();
+
+        $this->assertCount(1, $response);
     }
 
     public function test_can_fake_embeddings_with_custom_response(): void
@@ -159,6 +207,28 @@ class EmbeddingsFakeTest extends TestCase
         });
     }
 
+    public function test_contains_ignores_non_text_inputs(): void
+    {
+        Embeddings::fake();
+
+        Embeddings::for([
+            Image::fromBase64(base64_encode('image-bytes'), 'image/png'),
+        ])->generate();
+
+        Embeddings::assertGenerated(fn (EmbeddingsPrompt $prompt) => ! $prompt->contains('Hello'));
+    }
+
+    public function test_queued_contains_ignores_non_text_inputs(): void
+    {
+        Embeddings::fake();
+
+        Embeddings::for([
+            Video::fromBase64(base64_encode('video-bytes'), 'video/mp4'),
+        ])->queue();
+
+        Embeddings::assertQueued(fn (QueuedEmbeddingsPrompt $prompt) => ! $prompt->contains('Hello'));
+    }
+
     public function test_can_assert_no_embeddings_were_queued(): void
     {
         Embeddings::fake();
@@ -207,5 +277,45 @@ class EmbeddingsFakeTest extends TestCase
         Embeddings::assertQueued(function (QueuedEmbeddingsPrompt $prompt) {
             return $prompt->timeout === 90 && $prompt->count() === 1;
         });
+    }
+
+    public function test_cached_embeddings_with_media_inputs_use_content_hashes(): void
+    {
+        config([
+            'cache.default' => 'array',
+            'ai.caching.embeddings.store' => 'array',
+        ]);
+
+        $path = tempnam(sys_get_temp_dir(), 'ai-embedding-');
+
+        file_put_contents($path, 'first-version');
+
+        try {
+            $calls = 0;
+
+            Embeddings::fake(function (EmbeddingsPrompt $prompt) use (&$calls) {
+                $calls++;
+
+                return array_map(
+                    fn () => array_fill(0, $prompt->dimensions, 0.1),
+                    $prompt->inputs
+                );
+            });
+
+            $request = fn () => Embeddings::for([
+                Document::fromPath($path),
+            ])->cache(60)->generate();
+
+            $request();
+            $request();
+
+            file_put_contents($path, 'second-version');
+
+            $request();
+
+            $this->assertSame(2, $calls);
+        } finally {
+            @unlink($path);
+        }
     }
 }

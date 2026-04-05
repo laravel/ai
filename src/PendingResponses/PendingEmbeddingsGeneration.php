@@ -5,11 +5,22 @@ namespace Laravel\Ai\PendingResponses;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Traits\Conditionable;
+use InvalidArgumentException;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Contracts\Files\HasProviderId;
+use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\FakePendingDispatch;
+use Laravel\Ai\Files\Audio;
+use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\Image;
+use Laravel\Ai\Files\RemoteAudio;
+use Laravel\Ai\Files\RemoteDocument;
+use Laravel\Ai\Files\RemoteImage;
+use Laravel\Ai\Files\RemoteVideo;
+use Laravel\Ai\Files\Video;
 use Laravel\Ai\Jobs\GenerateEmbeddings;
 use Laravel\Ai\Prompts\QueuedEmbeddingsPrompt;
 use Laravel\Ai\Providers\Provider;
@@ -144,7 +155,60 @@ class PendingEmbeddingsGeneration
      */
     protected function cacheKey(Provider $provider, string $model, int $dimensions): string
     {
-        return 'laravel-embeddings:'.hash('sha256', $provider->driver().'-'.$model.'-'.$dimensions.'-'.implode('-', $this->inputs));
+        return 'laravel-embeddings:'.hash('sha256', json_encode([
+            'driver' => $provider->driver(),
+            'model' => $model,
+            'dimensions' => $dimensions,
+            'inputs' => array_map($this->normalizeInputForCache(...), $this->inputs),
+        ], JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * Normalize an embeddings input into a deterministic cache representation.
+     */
+    protected function normalizeInputForCache(mixed $input): array
+    {
+        if (is_string($input)) {
+            return [
+                'type' => 'text',
+                'value' => $input,
+            ];
+        }
+
+        $type = match (true) {
+            $input instanceof Image => 'image',
+            $input instanceof Audio => 'audio',
+            $input instanceof Document => 'document',
+            $input instanceof Video => 'video',
+            default => throw new InvalidArgumentException('Unsupported embeddings input type ['.$input::class.']'),
+        };
+
+        return match (true) {
+            $input instanceof HasProviderId => [
+                'type' => $type,
+                'source' => 'provider',
+                'id' => $input->id(),
+                'name' => $input->name(),
+            ],
+            $input instanceof RemoteImage,
+            $input instanceof RemoteAudio,
+            $input instanceof RemoteDocument,
+            $input instanceof RemoteVideo => [
+                'type' => $type,
+                'source' => 'remote',
+                'url' => $input->url,
+                'mime' => $input->declaredMimeType(),
+                'name' => $input->name(),
+            ],
+            $input instanceof StorableFile => [
+                'type' => $type,
+                'source' => 'content',
+                'hash' => hash('sha256', $input->content()),
+                'mime' => $input->mimeType(),
+                'name' => $input->name(),
+            ],
+            default => throw new InvalidArgumentException('Unsupported embeddings input type ['.$input::class.']'),
+        };
     }
 
     /**

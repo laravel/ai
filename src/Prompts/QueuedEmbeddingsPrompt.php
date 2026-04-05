@@ -21,7 +21,7 @@ class QueuedEmbeddingsPrompt implements Countable
      */
     public function contains(string $string): bool
     {
-        return array_any($this->inputs, fn ($input) => Str::contains($input, $string));
+        return array_any($this->inputs, fn ($input) => is_string($input) && Str::contains($input, $string));
     }
 
     /**

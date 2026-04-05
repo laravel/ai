@@ -3,6 +3,10 @@
 namespace Laravel\Ai;
 
 use Closure;
+use Laravel\Ai\Files\Audio;
+use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\Image;
+use Laravel\Ai\Files\Video;
 use Laravel\Ai\Gateway\FakeEmbeddingGateway;
 use Laravel\Ai\PendingResponses\PendingEmbeddingsGeneration;
 
@@ -11,7 +15,7 @@ class Embeddings
     /**
      * Get embedding vectors representing the given inputs.
      *
-     * @param  string[]  $inputs
+     * @param  array<int, string|Audio|Document|Image|Video>  $inputs
      */
     public static function for(array $inputs): PendingEmbeddingsGeneration
     {
