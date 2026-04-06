@@ -23,8 +23,7 @@ class ObjectSchema extends Schema implements HasSchemaType
     }
 
     /**
-     * Get the array representation of the schema with additional properties
-     * disabled on all nested objects, as required by OpenAI strict mode.
+     * Get the array representation of the schema with additional properties disabled on all nested objects.
      *
      * @return array<string, mixed>
      */
