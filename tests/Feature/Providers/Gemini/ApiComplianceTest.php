@@ -11,6 +11,7 @@ use Laravel\Ai\Streaming\Events\ReasoningStart;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\Feature\Agents\ProviderOptionsAgent;
+use Tests\Feature\Agents\ProviderOptionsWithToolsAgent;
 use Tests\Feature\Agents\StructuredAgent;
 use Tests\Feature\Agents\ToolUsingAgent;
 use Tests\Feature\Tools\FixedNumberGenerator;
@@ -24,8 +25,6 @@ use function Laravel\Ai\agent;
  */
 class ApiComplianceTest extends GeminiTestCase
 {
-    // ─── Text Generation ────────────────────────────────────────────
-
     public function test_text_request_uses_contents_array_with_parts(): void
     {
         Http::fake([
@@ -54,8 +53,6 @@ class ApiComplianceTest extends GeminiTestCase
             return $request->data()['contents'][0]['role'] === 'user';
         });
     }
-
-    // ─── System Instruction ─────────────────────────────────────────
 
     public function test_system_instruction_uses_snake_case_field_name(): void
     {
@@ -93,8 +90,6 @@ class ApiComplianceTest extends GeminiTestCase
             return isset($body['system_instruction']);
         });
     }
-
-    // ─── Function Calling ───────────────────────────────────────────
 
     public function test_tools_use_function_declarations_key(): void
     {
@@ -279,8 +274,6 @@ class ApiComplianceTest extends GeminiTestCase
         $this->assertContains('call_2', $functionResponseIds);
     }
 
-    // ─── Structured Output ──────────────────────────────────────────
-
     public function test_structured_output_sets_response_mime_type_to_json(): void
     {
         Http::fake([
@@ -327,8 +320,6 @@ class ApiComplianceTest extends GeminiTestCase
                 && ! isset($schema['name']);
         });
     }
-
-    // ─── Thinking / Reasoning ───────────────────────────────────────
 
     public function test_thinking_config_is_passed_in_generation_config(): void
     {
@@ -396,8 +387,6 @@ class ApiComplianceTest extends GeminiTestCase
 
         $this->assertSame(100, $response->usage->reasoningTokens);
     }
-
-    // ─── Grounding / Citations ──────────────────────────────────────
 
     public function test_grounding_metadata_citations_are_filtered_through_supports(): void
     {
@@ -518,8 +507,6 @@ class ApiComplianceTest extends GeminiTestCase
         $this->assertCount(1, $response->meta->citations);
     }
 
-    // ─── Usage Metadata ─────────────────────────────────────────────
-
     public function test_usage_metadata_maps_all_token_fields(): void
     {
         Http::fake([
@@ -566,8 +553,6 @@ class ApiComplianceTest extends GeminiTestCase
         $this->assertSame(100, $response->usage->promptTokens);
         $this->assertSame(50, $response->usage->completionTokens);
     }
-
-    // ─── Finish Reasons ─────────────────────────────────────────────
 
     public function test_stop_finish_reason_maps_correctly(): void
     {
@@ -648,8 +633,6 @@ class ApiComplianceTest extends GeminiTestCase
         $this->assertSame(FinishReason::ContentFilter, $response->steps->last()->finishReason);
     }
 
-    // ─── Streaming ──────────────────────────────────────────────────
-
     public function test_streaming_thinking_parts_use_thought_boolean(): void
     {
         Http::fake([
@@ -715,8 +698,6 @@ class ApiComplianceTest extends GeminiTestCase
         $this->assertSame('gemini-3-flash-preview', $streamStart->model);
     }
 
-    // ─── Error Response ─────────────────────────────────────────────
-
     public function test_error_in_response_data_throws_ai_exception(): void
     {
         Http::fake([
@@ -734,7 +715,89 @@ class ApiComplianceTest extends GeminiTestCase
         (new AssistantAgent)->prompt('Hi', provider: 'gemini');
     }
 
-    // ─── Multi-turn Conversation ────────────────────────────────────
+    public function test_thinking_parts_are_excluded_from_tool_call_continuation(): void
+    {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::sequence([
+                Http::response([
+                    'candidates' => [[
+                        'content' => [
+                            'parts' => [
+                                ['text' => 'Let me think about this...', 'thought' => true],
+                                ['functionCall' => ['id' => 'call_1', 'name' => 'FixedNumberGenerator', 'args' => (object) []]],
+                            ],
+                            'role' => 'model',
+                        ],
+                        'finishReason' => 'STOP',
+                    ]],
+                    'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5],
+                ]),
+                $this->fakeTextResponse('The number is 72019'),
+            ]),
+        ]);
+
+        (new ToolUsingAgent(fixed: true))->prompt('Generate', provider: 'gemini');
+
+        $recorded = Http::recorded();
+        $this->assertCount(2, $recorded);
+
+        $followUpContents = $recorded[1][0]->data()['contents'];
+
+        foreach ($followUpContents as $content) {
+            if ($content['role'] === 'model') {
+                foreach ($content['parts'] as $part) {
+                    $this->assertFalse(
+                        $part['thought'] ?? false,
+                        'Thinking parts should be excluded from tool call continuation'
+                    );
+                }
+            }
+        }
+    }
+
+    public function test_streaming_thinking_parts_are_excluded_from_tool_call_continuation(): void
+    {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::sequence([
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->geminiChunk([
+                            ['text' => 'thinking...', 'thought' => true],
+                            ['functionCall' => ['id' => 'call_1', 'name' => 'FixedNumberGenerator', 'args' => (object) []]],
+                        ]),
+                        $this->geminiChunkWithUsage([], 10, 5),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->geminiChunkWithUsage([['text' => 'Done']], 20, 10),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+            ]),
+        ]);
+
+        $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+        $recorded = Http::recorded();
+        $this->assertCount(2, $recorded);
+
+        $followUpContents = $recorded[1][0]->data()['contents'];
+
+        foreach ($followUpContents as $content) {
+            if ($content['role'] === 'model') {
+                foreach ($content['parts'] as $part) {
+                    $this->assertFalse(
+                        $part['thought'] ?? false,
+                        'Streaming: thinking parts should be excluded from tool call continuation'
+                    );
+                }
+            }
+        }
+    }
 
     public function test_model_role_is_used_for_assistant_messages_in_follow_up(): void
     {
@@ -789,8 +852,6 @@ class ApiComplianceTest extends GeminiTestCase
 
         $this->assertTrue($hasFunctionResponseInUserRole, 'Function responses should be in user role');
     }
-
-    // ─── Helpers ────────────────────────────────────────────────────
 
     protected function collectStreamEvents(?object $agent = null): array
     {

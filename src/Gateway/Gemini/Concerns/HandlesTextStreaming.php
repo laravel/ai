@@ -78,7 +78,7 @@ trait HandlesTextStreaming
             $parts = $candidate['content']['parts'] ?? [];
 
             foreach ($parts as $part) {
-                if (isset($part['text']) && ($part['thought'] ?? false)) {
+                if (isset($part['text']) && $this->isThinkingPart($part)) {
                     $modelParts[] = $part;
                     $delta = $part['text'];
 
@@ -255,7 +255,7 @@ trait HandlesTextStreaming
         }
 
         if ($depth + 1 < ($maxSteps ?? count($tools) * 2)) {
-            $contents[] = ['role' => 'model', 'parts' => $modelParts];
+            $contents[] = ['role' => 'model', 'parts' => $this->excludeThinkingParts($modelParts)];
             $contents[] = ['role' => 'user', 'parts' => $this->buildFunctionResponseParts($toolResults)];
 
             $body = $this->rebuildContinuationBody($contents, $instructions, $tools, $schema, $options, $provider);

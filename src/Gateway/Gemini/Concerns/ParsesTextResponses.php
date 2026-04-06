@@ -113,7 +113,7 @@ trait ParsesTextResponses
         if (filled($toolResults)) {
             $messages->push(new ToolResultMessage(collect($toolResults)));
 
-            $contents[] = ['role' => 'model', 'parts' => $parts];
+            $contents[] = ['role' => 'model', 'parts' => $this->excludeThinkingParts($parts)];
             $contents[] = ['role' => 'user', 'parts' => $this->buildFunctionResponseParts($toolResults)];
 
             return $this->continueWithToolResults(
@@ -213,6 +213,28 @@ trait ParsesTextResponses
     }
 
     /**
+     * Determine if a response part is a thinking/thought part.
+     */
+    protected function isThinkingPart(array $part): bool
+    {
+        return $part['thought'] ?? false;
+    }
+
+    /**
+     * Filter out thinking parts from the response, keeping only text and functionCall parts.
+     *
+     * Gemini may reject thought content in the conversation history, so these
+     * must be excluded from continuation requests.
+     */
+    protected function excludeThinkingParts(array $parts): array
+    {
+        return array_values(array_filter(
+            $parts,
+            fn (array $part) => ! $this->isThinkingPart($part),
+        ));
+    }
+
+    /**
      * Extract the text content from the response parts, excluding thinking parts.
      */
     protected function extractText(array $parts): string
@@ -220,7 +242,7 @@ trait ParsesTextResponses
         $textParts = [];
 
         foreach ($parts as $part) {
-            if (isset($part['text']) && ! ($part['thought'] ?? false)) {
+            if (isset($part['text']) && ! $this->isThinkingPart($part)) {
                 $textParts[] = $part['text'];
             }
         }

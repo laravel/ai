@@ -105,16 +105,21 @@ trait BuildsTextRequests
      */
     protected function buildFunctionResponseParts(array $toolResults): array
     {
-        return array_map(fn ($result) => [
-            'functionResponse' => array_filter([
+        return array_map(function ($result) {
+            $functionResponse = [
                 'name' => $result->name,
-                'id' => $result->id,
                 'response' => [
                     'name' => $result->name,
                     'content' => $this->serializeToolResultOutput($result->result),
                 ],
-            ]),
-        ], $toolResults);
+            ];
+
+            if ($result->id !== null) {
+                $functionResponse['id'] = $result->id;
+            }
+
+            return ['functionResponse' => $functionResponse];
+        }, $toolResults);
     }
 
     /**
