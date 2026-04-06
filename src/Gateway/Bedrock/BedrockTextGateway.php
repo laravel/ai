@@ -81,6 +81,26 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
         $totalInputTokens = 0;
         $totalOutputTokens = 0;
 
+        // When a schema is provided, inject a synthetic tool that forces the model
+        // to return structured output via Bedrock's tool-use mechanism.
+        $structuredOutputToolName = null;
+        if ($schema) {
+            $structuredOutputToolName = 'structured_output';
+            $schemaTools = [
+                [
+                    'toolSpec' => [
+                        'name'        => $structuredOutputToolName,
+                        'description' => 'Return the response as a structured JSON object matching the provided schema.',
+                        'inputSchema' => [
+                            'json' => (new ObjectSchema($schema))->toArray(),
+                        ],
+                    ],
+                ],
+            ];
+            // Real agent tools (if any) come after the structured output tool
+            $schemaTools = array_merge($schemaTools, $this->formatTools($tools));
+        }
+
         while ($step < $maxSteps) {
             $parameters = [
                 'modelId' => $model,
@@ -93,7 +113,13 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                 ];
             }
 
-            if (! empty($tools)) {
+            if ($structuredOutputToolName) {
+                // Force structured output via tool use
+                $parameters['toolConfig'] = [
+                    'tools'      => $schemaTools,
+                    'toolChoice' => ['tool' => ['name' => $structuredOutputToolName]],
+                ];
+            } elseif (! empty($tools)) {
                 $parameters['toolConfig'] = [
                     'tools' => $this->formatTools($tools),
                 ];
@@ -138,6 +164,12 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                 if (isset($block['text'])) {
                     $output .= $block['text'];
                 } elseif (isset($block['toolUse'])) {
+                    // Intercept the structured_output tool call — capture its input as JSON
+                    if ($structuredOutputToolName && $block['toolUse']['name'] === $structuredOutputToolName) {
+                        $finalOutput = json_encode($block['toolUse']['input'] ?? []);
+                        continue;
+                    }
+
                     $toolCalls[] = new ToolCall(
                         $block['toolUse']['toolUseId'],
                         $block['toolUse']['name'],
@@ -146,7 +178,9 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                 }
             }
 
-            $finalOutput = $output;
+            if (! $structuredOutputToolName) {
+                $finalOutput = $output;
+            }
             $step++;
 
             // If no tool calls, we're done
