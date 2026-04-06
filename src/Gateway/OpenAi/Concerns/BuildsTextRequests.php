@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
 use Illuminate\Support\Arr;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
@@ -40,6 +41,14 @@ trait BuildsTextRequests
 
         if (! is_null($options?->temperature)) {
             $body['temperature'] = $options->temperature;
+        }
+
+        $providerOptions = $options?->providerOptions(
+            Lab::tryFrom($provider->driver()) ?? $provider->driver()
+        );
+
+        if (! is_null($providerOptions)) {
+            $body = array_merge($body, $providerOptions);
         }
 
         return $body;

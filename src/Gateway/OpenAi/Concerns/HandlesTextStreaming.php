@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
 use Generator;
 use Illuminate\Support\Str;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -344,7 +345,7 @@ trait HandlesTextStreaming
             ))->withInvocationId($invocationId);
         }
 
-        if ($depth + 1 < ($maxSteps ?? count($tools) * 2)) {
+        if ($depth + 1 < ($maxSteps ?? round(count($tools) * 1.5))) {
             $body = [
                 'model' => $model,
                 'previous_response_id' => $responseId,
@@ -358,6 +359,14 @@ trait HandlesTextStreaming
 
             if (filled($schema)) {
                 $body['text'] = $this->buildSchemaFormat($schema);
+            }
+
+            $providerOptions = $options?->providerOptions(
+                Lab::tryFrom($provider->driver()) ?? $provider->driver()
+            );
+
+            if (! is_null($providerOptions)) {
+                $body = array_merge($body, $providerOptions);
             }
 
             $response = $this->withRateLimitHandling(

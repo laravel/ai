@@ -3,10 +3,12 @@
 namespace Tests\Unit\Gateway\Prism;
 
 use Laravel\Ai\Gateway\Prism\PrismStreamEvent;
+use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use PHPUnit\Framework\TestCase;
 use Prism\Prism\Enums\FinishReason;
+use Prism\Prism\Streaming\Events\ErrorEvent;
 use Prism\Prism\Streaming\Events\StreamEndEvent;
 use Prism\Prism\Streaming\Events\ThinkingCompleteEvent;
 use Prism\Prism\ValueObjects\Usage;
@@ -79,7 +81,7 @@ class PrismStreamEventTest extends TestCase
 
     public function test_error_event_maps_correctly(): void
     {
-        $event = new \Prism\Prism\Streaming\Events\ErrorEvent(
+        $event = new ErrorEvent(
             id: 'event-5',
             timestamp: 1234567890,
             errorType: 'server_error',
@@ -90,9 +92,9 @@ class PrismStreamEventTest extends TestCase
 
         $result = PrismStreamEvent::toLaravelStreamEvent('invocation-1', $event, 'openai', 'gpt-4');
 
-        $this->assertInstanceOf(\Laravel\Ai\Streaming\Events\Error::class, $result);
+        $this->assertInstanceOf(Error::class, $result);
 
-        /** @var \Laravel\Ai\Streaming\Events\Error $result */
+        /** @var Error $result */
         $this->assertEquals('event-5', $result->id);
         $this->assertEquals('server_error', $result->type);
         $this->assertEquals('Something went wrong', $result->message);

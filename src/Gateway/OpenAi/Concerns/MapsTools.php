@@ -40,27 +40,22 @@ trait MapsTools
     {
         $schema = $tool->schema(new JsonSchemaTypeFactory);
 
-        $definition = [
+        $schemaArray = filled($schema)
+            ? (new ObjectSchema($schema))->toSchema()
+            : [];
+
+        return [
             'type' => 'function',
             'name' => class_basename($tool),
             'description' => (string) $tool->description(),
             'strict' => true,
-        ];
-
-        if (filled($schema)) {
-            $objectSchema = new ObjectSchema($schema);
-
-            $schemaArray = $objectSchema->toSchema();
-
-            $definition['parameters'] = [
+            'parameters' => [
                 'type' => 'object',
-                'properties' => $schemaArray['properties'] ?? [],
+                'properties' => $schemaArray['properties'] ?? (object) [],
                 'required' => $schemaArray['required'] ?? [],
                 'additionalProperties' => false,
-            ];
-        }
-
-        return $definition;
+            ],
+        ];
     }
 
     /**
