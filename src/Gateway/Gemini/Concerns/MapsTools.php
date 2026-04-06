@@ -41,7 +41,7 @@ trait MapsTools
         $toolsArray = [];
 
         if (filled($functionDeclarations)) {
-            $toolsArray[] = ['functionDeclarations' => $functionDeclarations];
+            $toolsArray[] = ['function_declarations' => $functionDeclarations];
         }
 
         foreach ($providerTools as $providerTool) {
@@ -64,9 +64,7 @@ trait MapsTools
         ];
 
         if (filled($schema)) {
-            $objectSchema = new ObjectSchema($schema);
-
-            $schemaArray = $objectSchema->toSchema();
+            $schemaArray = (new ObjectSchema($schema))->toSchema();
 
             $definition['parameters'] = Arr::except([
                 'type' => 'object',

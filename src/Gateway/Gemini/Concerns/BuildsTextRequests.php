@@ -7,6 +7,7 @@ use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Responses\Data\ToolResult;
 
 trait BuildsTextRequests
 {
@@ -57,23 +58,23 @@ trait BuildsTextRequests
         $body = ['contents' => $contents];
 
         if (filled($instructions)) {
-            $body['systemInstruction'] = [
+            $body['system_instruction'] = [
                 'parts' => [['text' => $instructions]],
             ];
         }
 
         if (filled($tools)) {
             $body['tools'] = $this->mapTools($tools, $provider);
-            $body['toolConfig'] = [
-                'functionCallingConfig' => ['mode' => 'AUTO'],
+            $body['tool_config'] = [
+                'function_calling_config' => ['mode' => 'AUTO'],
             ];
         }
 
         $generationConfig = [];
 
         if (filled($schema)) {
-            $generationConfig['responseMimeType'] = 'application/json';
-            $generationConfig['responseSchema'] = $this->buildResponseSchema($schema);
+            $generationConfig['response_mime_type'] = 'application/json';
+            $generationConfig['response_schema'] = $this->buildResponseSchema($schema);
         }
 
         if (! is_null($options?->maxTokens)) {
@@ -100,7 +101,7 @@ trait BuildsTextRequests
     /**
      * Build function response parts from tool results for the Gemini API.
      *
-     * @param  array<\Laravel\Ai\Responses\Data\ToolResult>  $toolResults
+     * @param  array<ToolResult>  $toolResults
      */
     protected function buildFunctionResponseParts(array $toolResults): array
     {
@@ -108,7 +109,10 @@ trait BuildsTextRequests
             'functionResponse' => array_filter([
                 'name' => $result->name,
                 'id' => $result->id,
-                'response' => ['content' => $this->serializeToolResultOutput($result->result)],
+                'response' => [
+                    'name' => $result->name,
+                    'content' => $this->serializeToolResultOutput($result->result),
+                ],
             ]),
         ], $toolResults);
     }

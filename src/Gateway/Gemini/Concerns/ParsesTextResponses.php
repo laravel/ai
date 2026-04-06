@@ -25,7 +25,7 @@ trait ParsesTextResponses
     /**
      * Validate the Gemini response data.
      *
-     * @throws \Laravel\Ai\Exceptions\AiException
+     * @throws AiException
      */
     protected function validateTextResponse(array $data): void
     {
@@ -268,6 +268,8 @@ trait ParsesTextResponses
         $citations = new Collection;
 
         $candidate = $data['candidates'][0] ?? [];
+
+        // Legacy citation metadata format...
         $sources = $candidate['citationMetadata']['citationSources'] ?? [];
 
         foreach ($sources as $source) {
@@ -279,7 +281,32 @@ trait ParsesTextResponses
             }
         }
 
-        return $citations->unique('title')->values();
+        // Grounding metadata format (Google Search grounding)...
+        // Only include chunks actually referenced via groundingSupports,
+        // not every retrieved result in groundingChunks.
+        $groundingChunks = $candidate['groundingMetadata']['groundingChunks'] ?? [];
+        $groundingSupports = $candidate['groundingMetadata']['groundingSupports'] ?? [];
+
+        $referencedIndices = [];
+
+        foreach ($groundingSupports as $support) {
+            foreach ($support['groundingChunkIndices'] ?? [] as $index) {
+                $referencedIndices[$index] = true;
+            }
+        }
+
+        foreach ($referencedIndices as $index => $_) {
+            $web = $groundingChunks[$index]['web'] ?? [];
+
+            if (isset($web['uri'])) {
+                $citations->push(new UrlCitation(
+                    $web['uri'],
+                    $web['title'] ?? null,
+                ));
+            }
+        }
+
+        return $citations->unique('url')->values();
     }
 
     /**
@@ -316,8 +343,7 @@ trait ParsesTextResponses
         return match ($reason) {
             'STOP' => FinishReason::Stop,
             'MAX_TOKENS' => FinishReason::Length,
-            'SAFETY', 'RECITATION', 'BLOCKLIST', 'PROHIBITED_CONTENT', 'SPII' => FinishReason::ContentFilter,
-            'MALFORMED_FUNCTION_CALL' => FinishReason::Error,
+            'SAFETY', 'RECITATION', 'BLOCKLIST', 'PROHIBITED_CONTENT', 'SPII', 'MALFORMED_FUNCTION_CALL' => FinishReason::ContentFilter,
             default => FinishReason::Unknown,
         };
     }

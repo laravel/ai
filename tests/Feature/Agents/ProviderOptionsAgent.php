@@ -38,6 +38,11 @@ class ProviderOptionsAgent implements Agent, HasProviderOptions
                 'frequency_penalty' => 0.5,
                 'presence_penalty' => 0.3,
             ],
+            Lab::Gemini => [
+                'thinkingConfig' => [
+                    'thinkingBudget' => 10000,
+                ],
+            ],
             default => [],
         };
     }

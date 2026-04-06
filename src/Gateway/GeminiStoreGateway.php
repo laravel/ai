@@ -7,6 +7,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
+use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\StoreFileCounts;
 use Laravel\Ai\Store;
 
@@ -23,7 +24,7 @@ class GeminiStoreGateway implements StoreGateway
 
         $response = $this->withRateLimitHandling($provider->name(), fn () => Http::withHeaders([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
-        ])->get("https://generativelanguage.googleapis.com/v1beta/{$storeId}")->throw());
+        ])->get($this->baseUrl($provider)."/{$storeId}")->throw());
 
         return new Store(
             provider: $provider,
@@ -52,7 +53,7 @@ class GeminiStoreGateway implements StoreGateway
 
         $response = $this->withRateLimitHandling($provider->name(), fn () => Http::withHeaders([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
-        ])->post('https://generativelanguage.googleapis.com/v1beta/fileSearchStores', [
+        ])->post($this->baseUrl($provider).'/fileSearchStores', [
             'displayName' => $name,
         ])->throw());
 
@@ -77,7 +78,7 @@ class GeminiStoreGateway implements StoreGateway
 
         $response = $this->withRateLimitHandling($provider->name(), fn () => Http::withHeaders([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
-        ])->post("https://generativelanguage.googleapis.com/v1beta/{$storeId}:importFile", array_filter([
+        ])->post($this->baseUrl($provider)."/{$storeId}:importFile", array_filter([
             'fileName' => $fileId,
             'customMetadata' => ! empty($metadata) ? $this->formatMetadata($metadata) : null,
         ]))->throw());
@@ -109,7 +110,7 @@ class GeminiStoreGateway implements StoreGateway
 
         $this->withRateLimitHandling($provider->name(), fn () => Http::withHeaders([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
-        ])->delete("https://generativelanguage.googleapis.com/v1beta/{$documentId}", [
+        ])->delete($this->baseUrl($provider)."/{$documentId}", [
             'force' => true,
         ])->throw());
 
@@ -125,9 +126,17 @@ class GeminiStoreGateway implements StoreGateway
 
         $this->withRateLimitHandling($provider->name(), fn () => Http::withHeaders([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
-        ])->delete("https://generativelanguage.googleapis.com/v1beta/{$storeId}")->throw());
+        ])->delete($this->baseUrl($provider)."/{$storeId}")->throw());
 
         return true;
+    }
+
+    /**
+     * Get the base URL for the Gemini API.
+     */
+    protected function baseUrl(Provider $provider): string
+    {
+        return rtrim($provider->additionalConfiguration()['url'] ?? 'https://generativelanguage.googleapis.com/v1beta', '/');
     }
 
     /**

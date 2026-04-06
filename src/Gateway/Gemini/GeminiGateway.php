@@ -199,7 +199,7 @@ class GeminiGateway implements Gateway
     /**
      * Generate audio from the given text.
      *
-     * @throws \LogicException
+     * @throws LogicException
      */
     public function generateAudio(
         AudioProvider $provider,
@@ -215,7 +215,7 @@ class GeminiGateway implements Gateway
     /**
      * Generate text from the given audio.
      *
-     * @throws \LogicException
+     * @throws LogicException
      */
     public function generateTranscription(
         TranscriptionProvider $provider,
@@ -233,7 +233,9 @@ class GeminiGateway implements Gateway
      */
     protected function client(Provider $provider, ?int $timeout = null): PendingRequest
     {
-        return Http::baseUrl('https://generativelanguage.googleapis.com/v1beta/')
+        $config = $provider->additionalConfiguration();
+
+        return Http::baseUrl(rtrim($config['url'] ?? 'https://generativelanguage.googleapis.com/v1beta/', '/'))
             ->withHeaders(['x-goog-api-key' => $provider->providerCredentials()['key']])
             ->timeout($timeout ?? 60)
             ->throw();
