@@ -41,7 +41,9 @@ class ObjectSchema extends Schema implements HasSchemaType
      */
     protected static function disableAdditionalProperties(array $schema): array
     {
-        if (($schema['type'] ?? null) === 'object') {
+        $type = $schema['type'] ?? null;
+
+        if ($type === 'object' || (is_array($type) && in_array('object', $type))) {
             $schema['additionalProperties'] = false;
 
             foreach ($schema['properties'] ?? [] as $key => $property) {

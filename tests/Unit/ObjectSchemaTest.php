@@ -84,4 +84,22 @@ class ObjectSchemaTest extends TestCase
 
         $this->assertFalse($result['properties']['matrix']['items']['items']['additionalProperties']);
     }
+
+    public function test_nullable_nested_objects_include_additional_properties_false(): void
+    {
+        $schema = new JsonSchemaTypeFactory;
+
+        $objectSchema = new ObjectSchema([
+            'name' => $schema->string()->required(),
+            'address' => $schema->object([
+                'street' => $schema->string()->required(),
+                'city' => $schema->string()->required(),
+            ])->nullable(),
+        ]);
+
+        $result = $objectSchema->toSchema();
+
+        $this->assertFalse($result['additionalProperties']);
+        $this->assertFalse($result['properties']['address']['additionalProperties']);
+    }
 }
