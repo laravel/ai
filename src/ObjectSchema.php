@@ -2,9 +2,7 @@
 
 namespace Laravel\Ai;
 
-use Illuminate\JsonSchema\Types\ArrayType;
 use Illuminate\JsonSchema\Types\ObjectType;
-use Illuminate\JsonSchema\Types\Type;
 use Prism\Prism\Contracts\HasSchemaType;
 
 class ObjectSchema extends Schema implements HasSchemaType
@@ -17,45 +15,47 @@ class ObjectSchema extends Schema implements HasSchemaType
         string $name = 'schema_definition',
         bool $strict = true
     ) {
-        $rootType = (new ObjectType($schema))->withoutAdditionalProperties();
-
-        static::disableAdditionalPropertiesRecursively($schema);
-
         parent::__construct(
-            schema: $rootType,
+            schema: (new ObjectType($schema))->withoutAdditionalProperties(),
             name: $name,
             strict: $strict
         );
     }
 
     /**
-     * Recursively disable additional properties on all nested object types.
+     * Get the array representation of the schema with additional properties
+     * disabled on all nested objects, as required by OpenAI strict mode.
      *
-     * @param  array<string, Type>  $properties
+     * @return array<string, mixed>
      */
-    protected static function disableAdditionalPropertiesRecursively(array $properties): void
+    public function toSchema(): array
     {
-        foreach ($properties as $property) {
-            if ($property instanceof ObjectType) {
-                $property->withoutAdditionalProperties();
+        return static::disableAdditionalProperties(parent::toSchema());
+    }
 
-                $nested = (fn () => $this->properties)->call($property);
+    /**
+     * Recursively set "additionalProperties" to false on all object nodes.
+     *
+     * @param  array<string, mixed>  $schema
+     * @return array<string, mixed>
+     */
+    protected static function disableAdditionalProperties(array $schema): array
+    {
+        if (($schema['type'] ?? null) === 'object') {
+            $schema['additionalProperties'] = false;
 
-                static::disableAdditionalPropertiesRecursively($nested);
-            } elseif ($property instanceof ArrayType) {
-                $items = (fn () => $this->items)->call($property);
-
-                if ($items instanceof ObjectType) {
-                    $items->withoutAdditionalProperties();
-
-                    $nested = (fn () => $this->properties)->call($items);
-
-                    static::disableAdditionalPropertiesRecursively($nested);
-                } elseif ($items instanceof ArrayType) {
-                    static::disableAdditionalPropertiesRecursively(['items' => $items]);
+            foreach ($schema['properties'] ?? [] as $key => $property) {
+                if (is_array($property)) {
+                    $schema['properties'][$key] = static::disableAdditionalProperties($property);
                 }
             }
         }
+
+        if (is_array($schema['items'] ?? null)) {
+            $schema['items'] = static::disableAdditionalProperties($schema['items']);
+        }
+
+        return $schema;
     }
 
     /**
