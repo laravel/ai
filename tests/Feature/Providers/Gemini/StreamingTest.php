@@ -147,6 +147,69 @@ class StreamingTest extends GeminiTestCase
         $this->assertSame(5, $streamEnd->usage->cacheReadInputTokens);
     }
 
+    public function test_streaming_thinking_parts_are_excluded_from_tool_call_continuation(): void
+    {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::sequence([
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->geminiChunk([
+                            ['text' => 'thinking...', 'thought' => true],
+                            ['functionCall' => ['id' => 'call_1', 'name' => 'FixedNumberGenerator', 'args' => (object) []]],
+                        ]),
+                        $this->geminiChunkWithUsage([], 10, 5),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->geminiChunkWithUsage([['text' => 'Done']], 20, 10),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+            ]),
+        ]);
+
+        $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+        $recorded = Http::recorded();
+        $this->assertCount(2, $recorded);
+
+        $followUpContents = $recorded[1][0]->data()['contents'];
+
+        foreach ($followUpContents as $content) {
+            if ($content['role'] === 'model') {
+                foreach ($content['parts'] as $part) {
+                    $this->assertFalse(
+                        $part['thought'] ?? false,
+                        'Streaming: thinking parts should be excluded from tool call continuation'
+                    );
+                }
+            }
+        }
+    }
+
+    public function test_streaming_uses_sse_endpoint_with_alt_parameter(): void
+    {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response(
+                body: $this->ssePayload([
+                    $this->geminiChunkWithUsage([['text' => 'Hello']], 10, 5),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $this->collectStreamEvents();
+
+        Http::assertSent(function ($request) {
+            return str_contains($request->url(), 'streamGenerateContent?alt=sse');
+        });
+    }
+
     /**
      * Collect all stream events from the agent's stream response.
      */
