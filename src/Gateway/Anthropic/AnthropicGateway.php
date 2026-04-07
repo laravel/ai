@@ -204,6 +204,7 @@ class AnthropicGateway implements Gateway
         array $inputs,
         int $dimensions,
         int $timeout = 30,
+        bool $truncate = true,
     ): EmbeddingsResponse {
         throw new LogicException('Anthropic does not support embeddings.');
     }

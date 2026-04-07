@@ -14,6 +14,7 @@ class EmbeddingsPrompt implements Countable
         public readonly EmbeddingProvider $provider,
         public readonly string $model,
         public readonly int $timeout = 30,
+        public readonly bool $truncate = true,
     ) {}
 
     /**

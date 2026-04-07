@@ -27,12 +27,14 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
         array $inputs,
         int $dimensions,
         int $timeout = 30,
+        bool $truncate = true,
     ): EmbeddingsResponse {
         $response = $this->client($provider, $timeout)->post('/embeddings', [
             'model' => $model,
             'input' => array_map(fn (string $text) => ['text' => $text], $inputs),
             'dimensions' => $dimensions,
             'task' => 'retrieval.passage',
+            'truncate' => $truncate,
         ]);
 
         $data = $response->json();

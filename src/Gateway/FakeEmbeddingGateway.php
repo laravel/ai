@@ -32,8 +32,9 @@ class FakeEmbeddingGateway implements EmbeddingGateway
         array $inputs,
         int $dimensions,
         int $timeout = 30,
+        bool $truncate = true,
     ): EmbeddingsResponse {
-        $prompt = new EmbeddingsPrompt($inputs, $dimensions, $provider, $model, $timeout);
+        $prompt = new EmbeddingsPrompt($inputs, $dimensions, $provider, $model, $timeout, $truncate);
 
         return $this->nextResponse($provider, $model, $prompt);
     }

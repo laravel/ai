@@ -27,12 +27,14 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway
         array $inputs,
         int $dimensions,
         int $timeout = 30,
+        bool $truncate = true,
     ): EmbeddingsResponse {
         $response = $this->client($provider, $timeout)->post('/embed', [
             'model' => $model,
             'texts' => $inputs,
             'input_type' => 'search_document',
             'embedding_types' => ['float'],
+            'truncate' => $truncate ? 'END' : 'NONE',
         ]);
 
         $data = $response->json();

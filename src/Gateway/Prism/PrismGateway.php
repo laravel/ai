@@ -344,6 +344,7 @@ class PrismGateway implements Gateway
         array $inputs,
         int $dimensions,
         int $timeout = 30,
+        bool $truncate = true,
     ): EmbeddingsResponse {
         $request = tap(
             Prism::embeddings(),
@@ -353,11 +354,11 @@ class PrismGateway implements Gateway
         ]);
 
         $request->withProviderOptions(match ($provider->driver()) {
-            'gemini' => ['outputDimensionality' => $dimensions],
-            'ollama' => ['dimensions' => $dimensions],
+            'gemini' => ['outputDimensionality' => $dimensions, 'autoTruncate' => $truncate],
+            'ollama' => ['dimensions' => $dimensions, 'truncate' => $truncate],
             'openai' => ['dimensions' => $dimensions],
             'openrouter' => ['dimensions' => $dimensions],
-            'voyageai' => ['outputDimension' => $dimensions],
+            'voyageai' => ['outputDimension' => $dimensions, 'truncation' => $truncate],
             default => [],
         });
 

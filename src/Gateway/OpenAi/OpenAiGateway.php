@@ -316,6 +316,7 @@ class OpenAiGateway implements Gateway
         array $inputs,
         int $dimensions,
         int $timeout = 30,
+        bool $truncate = true,
     ): EmbeddingsResponse {
         $response = $this->withRateLimitHandling(
             $provider->name(),
