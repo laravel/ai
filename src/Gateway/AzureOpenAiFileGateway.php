@@ -6,7 +6,7 @@ use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 
-class AzureOpenAiFileGateway extends OpenAiFileGateway
+class AzureOpenAiFileGateway extends OpenAi\OpenAiFileGateway
 {
     /**
      * Get a configured HTTP client for the given provider.

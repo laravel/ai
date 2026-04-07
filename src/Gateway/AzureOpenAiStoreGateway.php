@@ -6,7 +6,7 @@ use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
 
-class AzureOpenAiStoreGateway extends OpenAiStoreGateway
+class AzureOpenAiStoreGateway extends OpenAi\OpenAiStoreGateway
 {
     /**
      * Get a configured HTTP client for the given provider.
