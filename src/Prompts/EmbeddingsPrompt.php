@@ -13,6 +13,7 @@ class EmbeddingsPrompt implements Countable
         public readonly int $dimensions,
         public readonly EmbeddingProvider $provider,
         public readonly string $model,
+        public readonly int $timeout = 30,
     ) {}
 
     /**

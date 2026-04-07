@@ -119,7 +119,6 @@ trait AddsToolsToPrismRequests
             : throw new RuntimeException('Provider ['.$provider->name().'] does not support web fetch.');
 
         return match ($provider->driver()) {
-            'anthropic' => new PrismProviderTool('web_fetch_20250910', 'web_fetch', options: $options),
             'gemini' => new PrismProviderTool('url_context'),
         };
     }
@@ -134,7 +133,6 @@ trait AddsToolsToPrismRequests
             : throw new RuntimeException('Provider ['.$provider->name().'] does not support web search.');
 
         return match ($provider->driver()) {
-            'anthropic' => new PrismProviderTool('web_search_20250305', 'web_search', options: $options),
             'gemini' => new PrismProviderTool('google_search'),
             'azure', 'openai' => new PrismProviderTool('web_search', options: $options),
         };

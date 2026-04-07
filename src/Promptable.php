@@ -24,6 +24,7 @@ use Laravel\Ai\Responses\QueuedAgentResponse;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use ReflectionClass;
+use RuntimeException;
 
 trait Promptable
 {
@@ -141,6 +142,8 @@ trait Promptable
     {
         $providers = $this->getProvidersAndModels($provider, $model);
 
+        $lastException = null;
+
         foreach ($providers as $provider => $model) {
             $provider = Ai::textProviderFor($this, $provider);
 
@@ -149,13 +152,15 @@ trait Promptable
             try {
                 return $callback($provider, $model);
             } catch (FailoverableException $e) {
+                $lastException = $e;
+
                 event(new AgentFailedOver($this, $provider, $model, $e));
 
                 continue;
             }
         }
 
-        throw $e;
+        throw $lastException ?? new RuntimeException('No AI providers were configured.');
     }
 
     /**

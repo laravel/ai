@@ -7,9 +7,9 @@ use Laravel\SerializableClosure\SerializableClosure;
 
 trait InvokesQueuedResponseCallbacks
 {
-    protected $thenCallbacks = [];
+    protected array $thenCallbacks = [];
 
-    protected $catchCallbacks = [];
+    protected array $catchCallbacks = [];
 
     /**
      * Invoke the given Closure then invoke the "then" callbacks.
@@ -47,11 +47,8 @@ trait InvokesQueuedResponseCallbacks
 
     /**
      * Handle a job failure.
-     *
-     * @param  \Throwable  $e
-     * @return void
      */
-    public function failed($e)
+    public function failed(\Throwable $e): void
     {
         foreach ($this->catchCallbacks as $callback) {
             $callback($e);

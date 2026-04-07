@@ -3,9 +3,9 @@
 namespace Laravel\Ai\Gateway\Prism\Concerns;
 
 use Laravel\Ai\Contracts\Prompt;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
-use Laravel\Ai\Providers\AnthropicProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Providers\Provider;
 use Prism\Prism\Facades\Prism;
@@ -59,12 +59,12 @@ trait CreatesPrismTextRequests
      */
     protected function withProviderOptions($request, Provider $provider, ?array $schema, ?TextGenerationOptions $options)
     {
-        if ($provider instanceof AnthropicProvider) {
-            return $request
-                ->withProviderOptions(array_filter([
-                    'use_tool_calling' => $schema ? true : null,
-                ]))
-                ->withMaxTokens($options?->maxTokens ?? 64_000);
+        $agentProviderOptions = $options?->providerOptions(
+            Lab::tryFrom($provider->driver()) ?? $provider->driver()
+        );
+
+        if (! is_null($agentProviderOptions)) {
+            $request = $request->withProviderOptions($agentProviderOptions);
         }
 
         if (! is_null($options?->maxTokens)) {
@@ -84,9 +84,6 @@ trait CreatesPrismTextRequests
             $model,
             array_filter([
                 ...$provider->additionalConfiguration(),
-                ...($provider->driver() === 'anthropic')
-                   ? ['anthropic_beta' => 'web-fetch-2025-09-10']
-                   : [],
                 'api_key' => $provider->providerCredentials()['key'],
             ]),
         );

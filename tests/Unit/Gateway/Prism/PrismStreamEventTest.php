@@ -3,10 +3,12 @@
 namespace Tests\Unit\Gateway\Prism;
 
 use Laravel\Ai\Gateway\Prism\PrismStreamEvent;
+use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use PHPUnit\Framework\TestCase;
 use Prism\Prism\Enums\FinishReason;
+use Prism\Prism\Streaming\Events\ErrorEvent;
 use Prism\Prism\Streaming\Events\StreamEndEvent;
 use Prism\Prism\Streaming\Events\ThinkingCompleteEvent;
 use Prism\Prism\ValueObjects\Usage;
@@ -75,5 +77,29 @@ class PrismStreamEventTest extends TestCase
         $this->assertInstanceOf(StreamEnd::class, $result);
         $this->assertEquals(100, $result->usage->promptTokens);
         $this->assertEquals(50, $result->usage->completionTokens);
+    }
+
+    public function test_error_event_maps_correctly(): void
+    {
+        $event = new ErrorEvent(
+            id: 'event-5',
+            timestamp: 1234567890,
+            errorType: 'server_error',
+            message: 'Something went wrong',
+            recoverable: false,
+            metadata: ['foo' => 'bar'],
+        );
+
+        $result = PrismStreamEvent::toLaravelStreamEvent('invocation-1', $event, 'openai', 'gpt-4');
+
+        $this->assertInstanceOf(Error::class, $result);
+
+        /** @var Error $result */
+        $this->assertEquals('event-5', $result->id);
+        $this->assertEquals('server_error', $result->type);
+        $this->assertEquals('Something went wrong', $result->message);
+        $this->assertFalse($result->recoverable);
+        $this->assertEquals(1234567890, $result->timestamp);
+        $this->assertEquals(['foo' => 'bar'], $result->metadata);
     }
 }

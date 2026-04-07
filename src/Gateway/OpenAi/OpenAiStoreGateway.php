@@ -1,20 +1,20 @@
 <?php
 
-namespace Laravel\Ai\Gateway;
+namespace Laravel\Ai\Gateway\OpenAi;
 
 use DateInterval;
-use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
+use Laravel\Ai\Gateway\Concerns\HandlesRateLimiting;
 use Laravel\Ai\Responses\Data\StoreFileCounts;
 use Laravel\Ai\Store;
 
 class OpenAiStoreGateway implements StoreGateway
 {
-    use Concerns\HandlesRateLimiting;
+    use Concerns\CreatesOpenAiClient;
+    use HandlesRateLimiting;
 
     /**
      * Get a vector store by its ID.
@@ -25,7 +25,6 @@ class OpenAiStoreGateway implements StoreGateway
             $provider->name(),
             fn () => $this->client($provider)
                 ->get("vector_stores/{$storeId}")
-                ->throw()
         );
 
         return new Store(
@@ -65,7 +64,6 @@ class OpenAiStoreGateway implements StoreGateway
                         'days' => $this->intervalToDays($expiresWhenIdleFor),
                     ] : null,
                 ]))
-                ->throw()
         );
 
         return $this->getStore($provider, $response->json('id'));
@@ -81,9 +79,8 @@ class OpenAiStoreGateway implements StoreGateway
             fn () => $this->client($provider)
                 ->post("vector_stores/{$storeId}/files", array_filter([
                     'file_id' => $fileId,
-                    'attributes' => ! empty($metadata) ? $metadata : null,
+                    'attributes' => filled($metadata) ? $metadata : null,
                 ]))
-                ->throw()
         );
 
         return $response->json('id');
@@ -98,7 +95,6 @@ class OpenAiStoreGateway implements StoreGateway
             $provider->name(),
             fn () => $this->client($provider)
                 ->delete("vector_stores/{$storeId}/files/{$documentId}")
-                ->throw()
         );
 
         return $response->json('deleted', false);
@@ -113,7 +109,6 @@ class OpenAiStoreGateway implements StoreGateway
             $provider->name(),
             fn () => $this->client($provider)
                 ->delete("vector_stores/{$storeId}")
-                ->throw()
         );
 
         return $response->json('deleted', false);
@@ -125,14 +120,5 @@ class OpenAiStoreGateway implements StoreGateway
     protected function intervalToDays(DateInterval $interval): int
     {
         return max(1, (int) Carbon::now()->diff(Carbon::now()->add($interval))->days);
-    }
-
-    /**
-     * Get a configured HTTP client for the given provider.
-     */
-    protected function client(StoreProvider $provider): PendingRequest
-    {
-        return Http::withToken($provider->providerCredentials()['key'])
-            ->baseUrl('https://api.openai.com/v1');
     }
 }

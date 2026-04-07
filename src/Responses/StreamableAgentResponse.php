@@ -4,12 +4,14 @@ namespace Laravel\Ai\Responses;
 
 use Closure;
 use Illuminate\Contracts\Support\Responsable;
+use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use IteratorAggregate;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\TextDelta;
+use Symfony\Component\HttpFoundation\Response;
 use Traversable;
 
 class StreamableAgentResponse implements IteratorAggregate, Responsable
@@ -23,6 +25,8 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     public Collection $events;
 
     public ?string $conversationId = null;
+
+    public ?object $conversationUser = null;
 
     protected array $thenCallbacks = [];
 
@@ -72,9 +76,10 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     /**
      * Set the conversation UUID for this response.
      */
-    public function withinConversation(?string $conversationId): self
+    public function withinConversation(?string $conversationId, ?object $conversationUser = null): self
     {
         $this->conversationId = $conversationId;
+        $this->conversationUser = $conversationUser;
 
         return $this;
     }
@@ -94,43 +99,20 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     /**
      * Create an HTTP response that represents the object.
      *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Symfony\Component\HttpFoundation\Response
+     * @param  Request  $request
      */
-    public function toResponse($request)
+    public function toResponse($request): Response
     {
         if ($this->usesVercelProtocol) {
             return $this->toVercelProtocolResponse();
         }
 
-        $stream = function (): iterable {
+        return response()->stream(function () {
             foreach ($this as $event) {
                 yield 'data: '.((string) $event)."\n\n";
             }
 
             yield "data: [DONE]\n\n";
-        };
-
-        return response()->stream(function () use ($stream): void {
-            $result = $stream();
-
-            if (! is_iterable($result)) {
-                return;
-            }
-
-            foreach ($result as $message) {
-                if (connection_aborted()) {
-                    return;
-                }
-
-                echo (string) $message;
-
-                if (ob_get_level() > 0) {
-                    ob_flush();
-                }
-
-                flush();
-            }
         }, headers: ['Content-Type' => 'text/event-stream']);
     }
 

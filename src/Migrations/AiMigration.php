@@ -8,10 +8,8 @@ abstract class AiMigration extends Migration
 {
     /**
      * Get the migration connection name.
-     *
-     * @return string
      */
-    public function getConnection()
+    public function getConnection(): ?string
     {
         return config('database.default');
     }

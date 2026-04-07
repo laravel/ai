@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Tests\Feature\Agents\AssistantAgent;
@@ -35,7 +36,7 @@ class AgentAttributeTest extends TestCase
         (new AttributeAgent)->prompt('Hello');
 
         AttributeAgent::assertPrompted(function (AgentPrompt $prompt) {
-            return $prompt->provider->name() === \Laravel\Ai\Enums\Lab::Anthropic->value;
+            return $prompt->provider->name() === Lab::Anthropic->value;
         });
     }
 }

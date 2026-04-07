@@ -1,19 +1,20 @@
 <?php
 
-namespace Laravel\Ai\Gateway;
+namespace Laravel\Ai\Gateway\OpenAi;
 
-use Illuminate\Http\Client\PendingRequest;
-use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Providers\FileProvider;
+use Laravel\Ai\Gateway\Concerns\HandlesRateLimiting;
+use Laravel\Ai\Gateway\Concerns\PreparesStorableFiles;
 use Laravel\Ai\Responses\FileResponse;
 use Laravel\Ai\Responses\StoredFileResponse;
 
 class OpenAiFileGateway implements FileGateway
 {
-    use Concerns\HandlesRateLimiting;
-    use Concerns\PreparesStorableFiles;
+    use Concerns\CreatesOpenAiClient;
+    use HandlesRateLimiting;
+    use PreparesStorableFiles;
 
     /**
      * Get a file by its ID.
@@ -24,7 +25,6 @@ class OpenAiFileGateway implements FileGateway
             $provider->name(),
             fn () => $this->client($provider)
                 ->get("files/{$fileId}")
-                ->throw()
         );
 
         return new FileResponse(
@@ -46,9 +46,8 @@ class OpenAiFileGateway implements FileGateway
             fn () => $this->client($provider)
                 ->attach('file', $content, $name, ['Content-Type' => $mime])
                 ->post('files', [
-                    'purpose' => $this->filePurpose(),
+                    'purpose' => 'user_data',
                 ])
-                ->throw()
         );
 
         return new StoredFileResponse($response->json('id'));
@@ -63,24 +62,6 @@ class OpenAiFileGateway implements FileGateway
             $provider->name(),
             fn () => $this->client($provider)
                 ->delete("files/{$fileId}")
-                ->throw()
         );
-    }
-
-    /**
-     * Get the file upload purpose.
-     */
-    protected function filePurpose(): string
-    {
-        return 'user_data';
-    }
-
-    /**
-     * Get a configured HTTP client for the given provider.
-     */
-    protected function client(FileProvider $provider): PendingRequest
-    {
-        return Http::withToken($provider->providerCredentials()['key'])
-            ->baseUrl('https://api.openai.com/v1');
     }
 }

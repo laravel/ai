@@ -25,9 +25,10 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway
         EmbeddingProvider $provider,
         string $model,
         array $inputs,
-        int $dimensions
+        int $dimensions,
+        int $timeout = 30,
     ): EmbeddingsResponse {
-        $response = $this->client($provider)->post('/embed', [
+        $response = $this->client($provider, $timeout)->post('/embed', [
             'model' => $model,
             'texts' => $inputs,
             'input_type' => 'search_document',
@@ -79,7 +80,7 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway
     /**
      * Get an HTTP client for the Cohere API.
      */
-    protected function client(EmbeddingProvider|RerankingProvider $provider): PendingRequest
+    protected function client(EmbeddingProvider|RerankingProvider $provider, int $timeout = 30): PendingRequest
     {
         $config = $provider->additionalConfiguration();
 
@@ -88,6 +89,7 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway
                 'Authorization' => 'Bearer '.$provider->providerCredentials()['key'],
                 'Content-Type' => 'application/json',
             ])
+            ->timeout($timeout)
             ->throw();
     }
 }

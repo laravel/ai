@@ -77,7 +77,7 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FilePro
      */
     public function defaultEmbeddingsDimensions(): int
     {
-        return 1536;
+        return $this->config['models']['embeddings']['dimensions'] ?? 1536;
     }
 
     /**
@@ -97,6 +97,10 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FilePro
     protected function buildAzureBaseUrl(): string
     {
         $url = rtrim($this->config['url'] ?? '', '/');
+
+        if (str_contains($url, '/openai/v1')) {
+            return $url;
+        }
 
         return "{$url}/openai/v1";
     }

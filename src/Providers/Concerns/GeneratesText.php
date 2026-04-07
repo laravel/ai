@@ -73,6 +73,7 @@ trait GeneratesText
                         ->withSteps($response->steps)
                     : (new AgentResponse($invocationId, $response->text, $response->usage, $response->meta))
                         ->withMessages($response->messages)
+                        ->withToolCallsAndResults($response->toolCalls, $response->toolResults)
                         ->withSteps($response->steps);
             });
 

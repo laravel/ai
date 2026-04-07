@@ -76,12 +76,14 @@ class PrismGateway implements Gateway
 
         if (count($tools) > 0) {
             $this->addTools($request, $tools, $options);
-            $this->addProviderTools($provider, $request, $tools, $options);
+            $this->addProviderTools($provider, $request, $tools);
         }
+
+        $prismMessages = $this->toPrismMessages($messages);
 
         try {
             $response = $request
-                ->withMessages($this->toPrismMessages($messages))
+                ->withMessages($prismMessages)
                 ->{$structured ? 'asStructured' : 'asText'}();
         } catch (PrismVendorException $e) {
             throw PrismException::toAiException($e, $provider, $model);
@@ -106,7 +108,7 @@ class PrismGateway implements Gateway
                 PrismUsage::toLaravelUsage($response->usage),
                 new Meta($provider->name(), $response->meta->model, $citations),
             ))->withMessages(
-                PrismMessages::toLaravelMessages($response->messages)
+                PrismMessages::toLaravelMessages($response->messages)->slice(count($prismMessages))->values()
             )->withSteps(PrismSteps::toLaravelSteps($response->steps, $provider));
     }
 
@@ -135,7 +137,7 @@ class PrismGateway implements Gateway
 
         if (count($tools) > 0) {
             $this->addTools($request, $tools, $options);
-            $this->addProviderTools($provider, $request, $tools, $options);
+            $this->addProviderTools($provider, $request, $tools);
         }
 
         try {
@@ -240,6 +242,7 @@ class PrismGateway implements Gateway
         string $text,
         string $voice,
         ?string $instructions = null,
+        int $timeout = 30,
     ): AudioResponse {
         $voice = match ($voice) {
             'default-male' => 'ash',
@@ -253,6 +256,9 @@ class PrismGateway implements Gateway
                     ...$provider->additionalConfiguration(),
                     'api_key' => $provider->providerCredentials()['key'],
                 ]))
+                ->withClientOptions([
+                    'timeout' => $timeout,
+                ])
                 ->withInput($text)
                 ->withVoice($voice)
                 ->withProviderOptions(array_filter([
@@ -280,6 +286,7 @@ class PrismGateway implements Gateway
         TranscribableAudio $audio,
         ?string $language = null,
         bool $diarize = false,
+        int $timeout = 30
     ): TranscriptionResponse {
         try {
             if ($provider->driver() === 'openai' && ! $diarize) {
@@ -291,6 +298,9 @@ class PrismGateway implements Gateway
                     ...$provider->additionalConfiguration(),
                     'api_key' => $provider->providerCredentials()['key'],
                 ]))
+                ->withClientOptions([
+                    'timeout' => $timeout,
+                ])
                 ->withInput(match (true) {
                     $audio instanceof TranscribableAudio => Audio::fromBase64(
                         base64_encode($audio->content()), $audio->mimeType()
@@ -312,7 +322,7 @@ class PrismGateway implements Gateway
 
         return new TranscriptionResponse(
             $response->text,
-            new Collection($response->additionalContent['segments'] ?? [])->map(function ($segment) {
+            (new Collection($response->additionalContent['segments'] ?? []))->map(function ($segment) {
                 return new TranscriptionSegment(
                     $segment['text'],
                     $segment['speaker'],
@@ -332,22 +342,32 @@ class PrismGateway implements Gateway
         EmbeddingProvider $provider,
         string $model,
         array $inputs,
-        int $dimensions): EmbeddingsResponse
-    {
+        int $dimensions,
+        int $timeout = 30,
+    ): EmbeddingsResponse {
         $request = tap(
             Prism::embeddings(),
             fn ($prism) => $this->configure($prism, $provider, $model)
-        );
+        )->withClientOptions([
+            'timeout' => $timeout,
+        ]);
 
         $request->withProviderOptions(match ($provider->driver()) {
             'gemini' => ['outputDimensionality' => $dimensions],
+            'ollama' => ['dimensions' => $dimensions],
             'openai' => ['dimensions' => $dimensions],
+            'openrouter' => ['dimensions' => $dimensions],
+            'voyageai' => ['outputDimension' => $dimensions],
             default => [],
         });
 
         (new Collection($inputs))->each($request->fromInput(...));
 
-        $response = $request->asEmbeddings();
+        try {
+            $response = $request->asEmbeddings();
+        } catch (PrismVendorException $e) {
+            throw PrismException::toAiException($e, $provider, $model);
+        }
 
         return new EmbeddingsResponse(
             (new Collection($response->embeddings))->map->embedding->all(),
@@ -362,11 +382,9 @@ class PrismGateway implements Gateway
     protected static function toPrismProvider(Provider $provider): PrismProvider
     {
         return match ($provider->driver()) {
-            'anthropic' => PrismProvider::Anthropic,
-            'azure' => PrismProvider::OpenAI, 
+            'azure' => PrismProvider::OpenAI,
             'deepseek' => PrismProvider::DeepSeek,
             'gemini' => PrismProvider::Gemini,
-            'groq' => PrismProvider::Groq,
             'mistral' => PrismProvider::Mistral,
             'ollama' => PrismProvider::Ollama,
             'openai' => PrismProvider::OpenAI,

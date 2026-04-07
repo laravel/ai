@@ -14,8 +14,8 @@ use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
-use Laravel\Ai\Gateway\OpenAiFileGateway;
-use Laravel\Ai\Gateway\OpenAiStoreGateway;
+use Laravel\Ai\Gateway\OpenAi\OpenAiFileGateway;
+use Laravel\Ai\Gateway\OpenAi\OpenAiStoreGateway;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 
@@ -44,7 +44,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     {
         return array_filter([
             'vector_store_ids' => $search->ids(),
-            'filters' => ! empty($search->filters) ? [
+            'filters' => filled($search->filters) ? [
                 'type' => 'and',
                 'filters' => (new Collection($search->filters))->map(fn ($filter) => match ($filter['type']) {
                     default => [
@@ -63,7 +63,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     public function webSearchToolOptions(WebSearch $search): array
     {
         return array_filter([
-            'filters' => ! empty($search->allowedDomains)
+            'filters' => filled($search->allowedDomains)
                 ? ['allowed_domains' => $search->allowedDomains]
                 : null,
             'user_location' => $search->hasLocation()
@@ -82,7 +82,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function defaultTextModel(): string
     {
-        return 'gpt-5.2';
+        return $this->config['models']['text']['default'] ?? 'gpt-5.4';
     }
 
     /**
@@ -90,7 +90,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function cheapestTextModel(): string
     {
-        return 'gpt-5-nano';
+        return $this->config['models']['text']['cheapest'] ?? 'gpt-5.4-nano';
     }
 
     /**
@@ -98,7 +98,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function smartestTextModel(): string
     {
-        return 'gpt-5.2-pro';
+        return $this->config['models']['text']['smartest'] ?? 'gpt-5.4-pro';
     }
 
     /**
@@ -106,7 +106,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function defaultImageModel(): string
     {
-        return 'gpt-image-1.5';
+        return $this->config['models']['image']['default'] ?? 'gpt-image-1.5';
     }
 
     /**
@@ -132,7 +132,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function defaultAudioModel(): string
     {
-        return 'gpt-4o-mini-tts';
+        return $this->config['models']['audio']['default'] ?? 'gpt-4o-mini-tts';
     }
 
     /**
@@ -140,7 +140,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function defaultTranscriptionModel(): string
     {
-        return 'gpt-4o-transcribe-diarize';
+        return $this->config['models']['transcription']['default'] ?? 'gpt-4o-transcribe-diarize';
     }
 
     /**
@@ -148,7 +148,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function defaultEmbeddingsModel(): string
     {
-        return 'text-embedding-3-small';
+        return $this->config['models']['embeddings']['default'] ?? 'text-embedding-3-small';
     }
 
     /**
@@ -156,7 +156,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function defaultEmbeddingsDimensions(): int
     {
-        return 1536;
+        return $this->config['models']['embeddings']['dimensions'] ?? 1536;
     }
 
     /**

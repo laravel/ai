@@ -14,6 +14,8 @@ use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Gateway\Anthropic\AnthropicGateway;
+use Laravel\Ai\Gateway\OpenAi\OpenAiGateway;
 use Laravel\Ai\Gateway\Prism\PrismGateway;
 use Laravel\Ai\Providers\AnthropicProvider;
 use Laravel\Ai\Providers\AzureOpenAiProvider;
@@ -52,6 +54,8 @@ class AiManager extends MultipleInstanceManager
 
     /**
      * Get a provider instance by name.
+     *
+     * @throws LogicException
      */
     public function audioProvider(?string $name = null): AudioProvider
     {
@@ -64,6 +68,8 @@ class AiManager extends MultipleInstanceManager
 
     /**
      * Get an audio provider instance, using a fake gateway if audio is faked.
+     *
+     * @throws LogicException
      */
     public function fakeableAudioProvider(?string $name = null): AudioProvider
     {
@@ -76,6 +82,8 @@ class AiManager extends MultipleInstanceManager
 
     /**
      * Get a provider instance by name.
+     *
+     * @throws LogicException
      */
     public function embeddingProvider(?string $name = null): EmbeddingProvider
     {
@@ -88,6 +96,8 @@ class AiManager extends MultipleInstanceManager
 
     /**
      * Get an embedding provider instance, using a fake gateway if embeddings are faked.
+     *
+     * @throws LogicException
      */
     public function fakeableEmbeddingProvider(?string $name = null): EmbeddingProvider
     {
@@ -100,6 +110,8 @@ class AiManager extends MultipleInstanceManager
 
     /**
      * Get a reranking provider instance by name.
+     *
+     * @throws LogicException
      */
     public function rerankingProvider(?string $name = null): RerankingProvider
     {
@@ -112,6 +124,8 @@ class AiManager extends MultipleInstanceManager
 
     /**
      * Get a reranking provider instance, using a fake gateway if reranking is faked.
+     *
+     * @throws LogicException
      */
     public function fakeableRerankingProvider(?string $name = null): RerankingProvider
     {
@@ -124,6 +138,8 @@ class AiManager extends MultipleInstanceManager
 
     /**
      * Get a provider instance by name.
+     *
+     * @throws LogicException
      */
     public function imageProvider(?string $name = null): ImageProvider
     {
@@ -136,6 +152,8 @@ class AiManager extends MultipleInstanceManager
 
     /**
      * Get an image provider instance, using a fake gateway if images are faked.
+     *
+     * @throws LogicException
      */
     public function fakeableImageProvider(?string $name = null): ImageProvider
     {
@@ -148,6 +166,8 @@ class AiManager extends MultipleInstanceManager
 
     /**
      * Get a provider instance by name.
+     *
+     * @throws LogicException
      */
     public function textProvider(?string $name = null): TextProvider
     {
@@ -160,6 +180,8 @@ class AiManager extends MultipleInstanceManager
 
     /**
      * Get a provider instance for an agent by name.
+     *
+     * @throws LogicException
      */
     public function textProviderFor(Agent $agent, ?string $name = null): TextProvider
     {
@@ -172,6 +194,8 @@ class AiManager extends MultipleInstanceManager
 
     /**
      * Get a provider instance by name.
+     *
+     * @throws LogicException
      */
     public function transcriptionProvider(?string $name = null): TranscriptionProvider
     {
@@ -184,6 +208,8 @@ class AiManager extends MultipleInstanceManager
 
     /**
      * Get a transcription provider instance, using a fake gateway if transcriptions are faked.
+     *
+     * @throws LogicException
      */
     public function fakeableTranscriptionProvider(?string $name = null): TranscriptionProvider
     {
@@ -196,6 +222,8 @@ class AiManager extends MultipleInstanceManager
 
     /**
      * Get a file provider instance by name.
+     *
+     * @throws LogicException
      */
     public function fileProvider(?string $name = null): FileProvider
     {
@@ -208,6 +236,8 @@ class AiManager extends MultipleInstanceManager
 
     /**
      * Get a file provider instance, using a fake gateway if files are faked.
+     *
+     * @throws LogicException
      */
     public function fakeableFileProvider(?string $name = null): FileProvider
     {
@@ -220,6 +250,8 @@ class AiManager extends MultipleInstanceManager
 
     /**
      * Get a store provider instance by name.
+     *
+     * @throws LogicException
      */
     public function storeProvider(?string $name = null): StoreProvider
     {
@@ -232,6 +264,8 @@ class AiManager extends MultipleInstanceManager
 
     /**
      * Get a store provider instance, using a fake gateway if stores are faked.
+     *
+     * @throws LogicException
      */
     public function fakeableStoreProvider(?string $name = null): StoreProvider
     {
@@ -248,7 +282,7 @@ class AiManager extends MultipleInstanceManager
     public function createAnthropicDriver(array $config): AnthropicProvider
     {
         return new AnthropicProvider(
-            new PrismGateway($this->app['events']),
+            new AnthropicGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)
         );
@@ -318,7 +352,6 @@ class AiManager extends MultipleInstanceManager
     public function createGroqDriver(array $config): GroqProvider
     {
         return new GroqProvider(
-            new PrismGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)
         );
@@ -365,7 +398,7 @@ class AiManager extends MultipleInstanceManager
     public function createOpenaiDriver(array $config): OpenAiProvider
     {
         return new OpenAiProvider(
-            new PrismGateway($this->app['events']),
+            new OpenAiGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)
         );
@@ -409,10 +442,8 @@ class AiManager extends MultipleInstanceManager
 
     /**
      * Get the default instance name.
-     *
-     * @return string
      */
-    public function getDefaultInstance()
+    public function getDefaultInstance(): string
     {
         $default = $this->app['config']['ai.default'];
 
@@ -423,9 +454,8 @@ class AiManager extends MultipleInstanceManager
      * Set the default instance name.
      *
      * @param  string  $name
-     * @return void
      */
-    public function setDefaultInstance($name)
+    public function setDefaultInstance($name): void
     {
         $this->app['config']['ai.default'] = $name;
     }
@@ -434,9 +464,8 @@ class AiManager extends MultipleInstanceManager
      * Get the instance specific configuration.
      *
      * @param  string  $name
-     * @return array
      */
-    public function getInstanceConfig($name)
+    public function getInstanceConfig($name): array
     {
         $config = $this->app['config']->get(
             'ai.providers.'.$name, ['driver' => $name],

@@ -25,6 +25,8 @@ class PendingEmbeddingsGeneration
 
     protected ?int $cacheSeconds = null;
 
+    protected int $timeout = 30;
+
     public function __construct(
         protected array $inputs,
     ) {}
@@ -50,6 +52,16 @@ class PendingEmbeddingsGeneration
     }
 
     /**
+     * Specify the timeout (in seconds) for the embeddings generation.
+     */
+    public function timeout(int $seconds = 30): self
+    {
+        $this->timeout = $seconds;
+
+        return $this;
+    }
+
+    /**
      * Generate the embeddings.
      */
     public function generate(Lab|array|string|null $provider = null, ?string $model = null): EmbeddingsResponse
@@ -57,6 +69,8 @@ class PendingEmbeddingsGeneration
         $providers = Provider::formatProviderAndModelList(
             $provider ?? config('ai.default_for_embeddings'), $model
         );
+
+        $lastException = null;
 
         foreach ($providers as $provider => $model) {
             $provider = Ai::fakeableEmbeddingProvider($provider);
@@ -71,17 +85,19 @@ class PendingEmbeddingsGeneration
 
             try {
                 return tap(
-                    $provider->embeddings($this->inputs, $dimensions, $model),
+                    $provider->embeddings($this->inputs, $dimensions, $model, $this->timeout),
                     fn ($response) => $this->cacheEmbeddings($provider, $model, $dimensions, $response)
                 );
             } catch (FailoverableException $e) {
+                $lastException = $e;
+
                 event(new ProviderFailedOver($provider, $model, $e));
 
                 continue;
             }
         }
 
-        throw $e;
+        throw $lastException;
     }
 
     /**
@@ -142,7 +158,8 @@ class PendingEmbeddingsGeneration
                     $this->inputs,
                     $this->dimensions,
                     $provider,
-                    $model
+                    $model,
+                    $this->timeout,
                 )
             );
 

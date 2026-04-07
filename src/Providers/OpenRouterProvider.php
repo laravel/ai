@@ -2,11 +2,14 @@
 
 namespace Laravel\Ai\Providers;
 
+use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 
-class OpenRouterProvider extends Provider implements TextProvider
+class OpenRouterProvider extends Provider implements EmbeddingProvider, TextProvider
 {
+    use Concerns\GeneratesEmbeddings;
     use Concerns\GeneratesText;
+    use Concerns\HasEmbeddingGateway;
     use Concerns\HasTextGateway;
     use Concerns\StreamsText;
 
@@ -15,7 +18,7 @@ class OpenRouterProvider extends Provider implements TextProvider
      */
     public function defaultTextModel(): string
     {
-        return 'anthropic/claude-sonnet-4.5';
+        return $this->config['models']['text']['default'] ?? 'anthropic/claude-sonnet-4.6';
     }
 
     /**
@@ -23,7 +26,7 @@ class OpenRouterProvider extends Provider implements TextProvider
      */
     public function cheapestTextModel(): string
     {
-        return 'anthropic/claude-haiku-4.5';
+        return $this->config['models']['text']['cheapest'] ?? 'anthropic/claude-haiku-4.5';
     }
 
     /**
@@ -31,6 +34,22 @@ class OpenRouterProvider extends Provider implements TextProvider
      */
     public function smartestTextModel(): string
     {
-        return 'anthropic/claude-opus-4.5';
+        return $this->config['models']['text']['smartest'] ?? 'anthropic/claude-opus-4.6';
+    }
+
+    /**
+     * Get the name of the default embeddings model.
+     */
+    public function defaultEmbeddingsModel(): string
+    {
+        return $this->config['models']['embeddings']['default'] ?? 'google/gemini-embedding-001';
+    }
+
+    /**
+     * Get the default dimensions of the default embeddings model.
+     */
+    public function defaultEmbeddingsDimensions(): int
+    {
+        return $this->config['models']['embeddings']['dimensions'] ?? 1536;
     }
 }
