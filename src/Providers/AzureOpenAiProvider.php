@@ -11,8 +11,8 @@ use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
-use Laravel\Ai\Gateway\AzureOpenAiFileGateway;
-use Laravel\Ai\Gateway\AzureOpenAiStoreGateway;
+use Laravel\Ai\Gateway\AzureOpenAi\AzureOpenAiFileGateway;
+use Laravel\Ai\Gateway\AzureOpenAi\AzureOpenAiStoreGateway;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 
