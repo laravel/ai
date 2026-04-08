@@ -23,7 +23,7 @@ trait ParsesTextResponses
     /**
      * Validate the Groq response data.
      *
-     * @throws \Laravel\Ai\Exceptions\AiException
+     * @throws AiException
      */
     protected function validateTextResponse(array $data): void
     {
@@ -48,6 +48,7 @@ trait ParsesTextResponses
         ?TextGenerationOptions $options = null,
         ?string $instructions = null,
         array $originalMessages = [],
+        ?int $timeout = null,
     ): TextResponse {
         return $this->processResponse(
             $data,
@@ -61,6 +62,7 @@ trait ParsesTextResponses
             originalMessages: $originalMessages,
             maxSteps: $options?->maxSteps,
             options: $options,
+            timeout: $timeout,
         );
     }
 
@@ -80,6 +82,7 @@ trait ParsesTextResponses
         int $depth = 0,
         ?int $maxSteps = null,
         ?TextGenerationOptions $options = null,
+        ?int $timeout = null,
     ): TextResponse {
         $choice = $data['choices'][0] ?? [];
         $message = $choice['message'] ?? [];
@@ -145,6 +148,7 @@ trait ParsesTextResponses
                 $depth + 1,
                 $maxSteps,
                 $options,
+                $timeout,
             );
         }
 
@@ -220,6 +224,7 @@ trait ParsesTextResponses
         int $depth,
         ?int $maxSteps,
         ?TextGenerationOptions $options = null,
+        ?int $timeout = null,
     ): TextResponse {
         $chatMessages = $this->mapMessagesToChat($originalMessages, $instructions);
 
@@ -275,7 +280,7 @@ trait ParsesTextResponses
 
         $response = $this->withRateLimitHandling(
             $provider->name(),
-            fn () => $this->client($provider)->post('chat/completions', $body),
+            fn () => $this->client($provider, $timeout)->post('chat/completions', $body),
         );
 
         $data = $response->json();
@@ -295,6 +300,7 @@ trait ParsesTextResponses
             $depth,
             $maxSteps,
             $options,
+            $timeout,
         );
     }
 

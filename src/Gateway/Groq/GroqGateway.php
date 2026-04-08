@@ -71,6 +71,7 @@ class GroqGateway implements TextGateway
             $options,
             $instructions,
             $messages,
+            $timeout,
         );
     }
 
@@ -118,6 +119,10 @@ class GroqGateway implements TextGateway
             $response->getBody(),
             $instructions,
             $messages,
+            0,
+            null,
+            [],
+            $timeout,
         );
     }
 }

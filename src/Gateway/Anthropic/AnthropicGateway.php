@@ -96,6 +96,7 @@ class AnthropicGateway implements Gateway
             $schema,
             $options,
             $body,
+            $timeout,
         );
     }
 
@@ -141,6 +142,9 @@ class AnthropicGateway implements Gateway
             $options,
             $response->getBody(),
             $body,
+            0,
+            null,
+            $timeout,
         );
     }
 

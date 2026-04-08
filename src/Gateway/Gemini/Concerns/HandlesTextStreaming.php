@@ -37,6 +37,7 @@ trait HandlesTextStreaming
         ?string $instructions = null,
         int $depth = 0,
         ?int $maxSteps = null,
+        ?int $timeout = null,
     ): Generator {
         $maxSteps ??= $options?->maxSteps;
 
@@ -182,7 +183,7 @@ trait HandlesTextStreaming
             yield from $this->handleStreamingToolCalls(
                 $invocationId, $provider, $model, $tools, $schema, $options,
                 $pendingToolCalls, $contents, $instructions,
-                $modelParts, $depth, $maxSteps,
+                $modelParts, $depth, $maxSteps, $timeout,
             );
 
             return;
@@ -212,6 +213,7 @@ trait HandlesTextStreaming
         array $modelParts,
         int $depth,
         ?int $maxSteps,
+        ?int $timeout = null,
     ): Generator {
         $mappedToolCalls = $this->mapToolCalls($pendingToolCalls);
 
@@ -262,7 +264,7 @@ trait HandlesTextStreaming
 
             $response = $this->withRateLimitHandling(
                 $provider->name(),
-                fn () => $this->client($provider)
+                fn () => $this->client($provider, $timeout)
                     ->withOptions(['stream' => true])
                     ->post("models/{$model}:streamGenerateContent?alt=sse", $body),
             );
@@ -270,7 +272,7 @@ trait HandlesTextStreaming
             yield from $this->processTextStream(
                 $invocationId, $provider, $model, $tools, $schema, $options,
                 $response->getBody(), $contents, $instructions,
-                $depth + 1, $maxSteps,
+                $depth + 1, $maxSteps, $timeout,
             );
         } else {
             yield (new StreamEnd(

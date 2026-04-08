@@ -40,6 +40,7 @@ trait HandlesTextStreaming
         array $requestBody = [],
         int $depth = 0,
         ?int $maxSteps = null,
+        ?int $timeout = null,
     ): Generator {
         $maxSteps ??= $options?->maxSteps;
 
@@ -337,6 +338,7 @@ trait HandlesTextStreaming
                 $requestBody,
                 $depth,
                 $maxSteps,
+                $timeout,
             );
 
             return;
@@ -365,6 +367,7 @@ trait HandlesTextStreaming
         array $requestBody,
         int $depth,
         ?int $maxSteps,
+        ?int $timeout = null,
     ): Generator {
         $mappedToolCalls = $this->mapStreamToolCalls($pendingToolCalls);
 
@@ -427,7 +430,7 @@ trait HandlesTextStreaming
 
         $response = $this->withRateLimitHandling(
             $provider->name(),
-            fn () => $this->client($provider)
+            fn () => $this->client($provider, $timeout)
                 ->withOptions(['stream' => true])
                 ->post('messages', $requestBody),
         );
@@ -443,6 +446,7 @@ trait HandlesTextStreaming
             $requestBody,
             $depth + 1,
             $maxSteps,
+            $timeout,
         );
     }
 

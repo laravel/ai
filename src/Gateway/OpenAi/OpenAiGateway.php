@@ -7,6 +7,7 @@ use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
+use Laravel\Ai\Contracts\Files\HasName;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\Gateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
@@ -75,7 +76,7 @@ class OpenAiGateway implements Gateway
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, filled($schema), $tools, $schema, $options);
+        return $this->parseTextResponse($data, $provider, filled($schema), $tools, $schema, $options, $timeout);
     }
 
     /**
@@ -107,7 +108,7 @@ class OpenAiGateway implements Gateway
 
         yield from $this->processTextStream(
             $invocationId, $provider, $model, $tools, $schema, $options,
-            $response->getBody(),
+            $response->getBody(), 0, null, $timeout,
         );
     }
 
@@ -289,7 +290,7 @@ class OpenAiGateway implements Gateway
      */
     protected function audioFilename(TranscribableAudio $audio): string
     {
-        if ($audio instanceof \Laravel\Ai\Contracts\Files\HasName && $audio->name()) {
+        if ($audio instanceof HasName && $audio->name()) {
             return $audio->name();
         }
 

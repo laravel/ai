@@ -58,6 +58,7 @@ trait ParsesTextResponses
         array $tools = [],
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
+        ?int $timeout = null,
     ): TextResponse {
         return $this->processResponse(
             $data,
@@ -69,6 +70,7 @@ trait ParsesTextResponses
             new Collection,
             maxSteps: $options?->maxSteps,
             options: $options,
+            timeout: $timeout,
         );
     }
 
@@ -86,6 +88,7 @@ trait ParsesTextResponses
         int $depth = 0,
         ?int $maxSteps = null,
         ?TextGenerationOptions $options = null,
+        ?int $timeout = null,
     ): TextResponse {
         $responseId = $data['id'] ?? '';
         $output = $data['output'] ?? [];
@@ -140,7 +143,7 @@ trait ParsesTextResponses
             $messages->push($toolResultMessage);
 
             return $this->continueWithToolResults(
-                $responseId, $model, $provider, $structured, $tools, $schema, $steps, $messages, $toolResults, $depth + 1, $maxSteps, $options,
+                $responseId, $model, $provider, $structured, $tools, $schema, $steps, $messages, $toolResults, $depth + 1, $maxSteps, $options, $timeout,
             );
         }
 
@@ -217,6 +220,7 @@ trait ParsesTextResponses
         int $depth,
         ?int $maxSteps,
         ?TextGenerationOptions $options = null,
+        ?int $timeout = null,
     ): TextResponse {
         $body = [
             'model' => $model,
@@ -242,14 +246,14 @@ trait ParsesTextResponses
 
         $response = $this->withRateLimitHandling(
             $provider->name(),
-            fn () => $this->client($provider)->post('responses', $body),
+            fn () => $this->client($provider, $timeout)->post('responses', $body),
         );
 
         $data = $response->json();
 
         $this->validateTextResponse($data);
 
-        return $this->processResponse($data, $provider, $structured, $tools, $schema, $steps, $messages, $depth, $maxSteps, $options);
+        return $this->processResponse($data, $provider, $structured, $tools, $schema, $steps, $messages, $depth, $maxSteps, $options, $timeout);
     }
 
     /**
