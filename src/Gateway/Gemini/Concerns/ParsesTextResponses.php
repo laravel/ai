@@ -304,8 +304,6 @@ trait ParsesTextResponses
         }
 
         // Grounding metadata format (Google Search grounding)...
-        // Only include chunks actually referenced via groundingSupports,
-        // not every retrieved result in groundingChunks.
         $groundingChunks = $candidate['groundingMetadata']['groundingChunks'] ?? [];
         $groundingSupports = $candidate['groundingMetadata']['groundingSupports'] ?? [];
 
