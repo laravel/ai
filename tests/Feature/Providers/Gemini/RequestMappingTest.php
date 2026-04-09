@@ -156,7 +156,8 @@ class RequestMappingTest extends GeminiTestCase
             $config = $body['generationConfig'] ?? [];
 
             return ($config['response_mime_type'] ?? '') === 'application/json'
-                && isset($config['response_json_schema']);
+                && isset($config['response_json_schema'])
+                && ! isset($config['response_schema']);
         });
     }
 
@@ -227,9 +228,13 @@ class RequestMappingTest extends GeminiTestCase
 
         Http::assertSent(function ($request) {
             $config = $request->data()['generationConfig'] ?? [];
+            $schema = $config['response_json_schema'] ?? [];
+            $itemSchema = $schema['properties']['elements']['items'] ?? [];
 
             return isset($config['response_json_schema'])
-                && ! isset($config['response_schema']);
+                && ! isset($config['response_schema'])
+                && isset($itemSchema['additionalProperties'])
+                && $itemSchema['additionalProperties'] === false;
         });
     }
 
