@@ -80,7 +80,7 @@ trait MapsMessages
                 ->map(fn ($toolCall) => [
                     'type' => 'reasoning',
                     'id' => $toolCall->reasoningId,
-                    'summary' => $toolCall->reasoningSummary,
+                    'summary' => $toolCall->reasoningSummary ?? [],
                 ])
                 ->values()
                 ->all();

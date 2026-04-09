@@ -123,7 +123,7 @@ class DatabaseConversationStore implements ConversationStore
                     $messages = [];
 
                     $messages[] = new AssistantMessage(
-                        $record->content ?: '',
+                        '',
                         $toolCalls->map(fn ($toolCall) => new ToolCall(
                             id: $toolCall['id'],
                             name: $toolCall['name'],
@@ -144,6 +144,10 @@ class DatabaseConversationStore implements ConversationStore
                                 resultId: $toolResult['result_id'] ?? null,
                             ))
                         );
+                    }
+
+                    if (filled($record->content)) {
+                        $messages[] = new AssistantMessage($record->content);
                     }
 
                     return $messages;

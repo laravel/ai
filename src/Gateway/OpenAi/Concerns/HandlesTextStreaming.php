@@ -241,6 +241,14 @@ trait HandlesTextStreaming
                             $call['arguments'] = $arguments;
                         }
 
+                        // Capture reasoning if not yet set (output_item.done for reasoning
+                        // may fire after output_item.added for function_call in the stream)
+                        if (! isset($call['reasoning_id']) && filled($reasoningItems)) {
+                            $latestReasoning = end($reasoningItems);
+                            $call['reasoning_id'] = $latestReasoning['id'];
+                            $call['reasoning_summary'] = $latestReasoning['summary'] ?? [];
+                        }
+
                         yield (new ToolCallEvent(
                             $this->generateEventId(),
                             new ToolCall(
