@@ -23,7 +23,7 @@ trait ParsesTextResponses
     /**
      * Validate the Groq response data.
      *
-     * @throws \Laravel\Ai\Exceptions\AiException
+     * @throws AiException
      */
     protected function validateTextResponse(array $data): void
     {

@@ -2,11 +2,11 @@
 
 namespace Tests\Feature\Providers\OpenAi;
 
+use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\Feature\Tools\FixedNumberGenerator;
 use Tests\Feature\Tools\RandomNumberGenerator;
-use GuzzleHttp\Promise\PromiseInterface;
 use Tests\TestCase;
 
 use function Laravel\Ai\agent;

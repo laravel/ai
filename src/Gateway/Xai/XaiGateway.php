@@ -56,7 +56,7 @@ class XaiGateway implements TextGateway
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, filled($schema), $tools, $schema, $options);
+        return $this->parseTextResponse($data, $provider, filled($schema), $tools, $schema, $options, $timeout);
     }
 
     /**
@@ -89,6 +89,7 @@ class XaiGateway implements TextGateway
         yield from $this->processTextStream(
             $invocationId, $provider, $model, $tools, $schema, $options,
             $response->getBody(),
+            timeout: $timeout,
         );
     }
 }
