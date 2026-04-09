@@ -27,13 +27,22 @@ trait BuildsTextRequests
             'max_tokens' => $options?->maxTokens ?? 64_000,
         ];
 
+        $providerOptions = $options?->providerOptions(Lab::Anthropic) ?? [];
+        $cacheControl = $providerOptions['cache_control'] ?? null;
+
+        unset($providerOptions['cache_control']);
+
         if (filled($instructions)) {
-            $body['system'] = $instructions;
+            $body['system'] = filled($cacheControl)
+                ? [[
+                    'type' => 'text',
+                    'text' => $instructions,
+                    'cache_control' => $cacheControl,
+                ]]
+                : $instructions;
         }
 
         $mappedTools = filled($tools) ? $this->mapTools($tools, $provider) : [];
-
-        $providerOptions = $options?->providerOptions(Lab::Anthropic) ?? [];
 
         if (filled($schema) && $this->supportsNativeStructuredOutput($provider)) {
             $body['output_config'] = [
