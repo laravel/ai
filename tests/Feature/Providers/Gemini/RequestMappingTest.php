@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Responses\Data\FinishReason;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Feature\Agents\AssistantAgent;
+use Tests\Feature\Agents\NestedStructuredAgent;
+use Tests\Feature\Agents\NullableStructuredAgent;
 use Tests\Feature\Agents\StructuredAgent;
 use Tests\Feature\Agents\ToolUsingAgent;
 
@@ -138,7 +140,7 @@ class RequestMappingTest extends GeminiTestCase
         $this->assertSame(50, $response->usage->completionTokens);
     }
 
-    public function test_structured_output_uses_response_schema(): void
+    public function test_structured_output_uses_response_json_schema(): void
     {
         Http::fake([
             'generativelanguage.googleapis.com/*' => $this->fakeStructuredResponse(['symbol' => 'Fe']),
@@ -154,7 +156,7 @@ class RequestMappingTest extends GeminiTestCase
             $config = $body['generationConfig'] ?? [];
 
             return ($config['response_mime_type'] ?? '') === 'application/json'
-                && isset($config['response_schema']);
+                && isset($config['response_json_schema']);
         });
     }
 
@@ -213,19 +215,42 @@ class RequestMappingTest extends GeminiTestCase
         $this->assertSame('call_abc123', $toolCall->id);
     }
 
-    public function test_structured_response_schema_excludes_additional_properties(): void
+    public function test_nested_structured_output_uses_response_json_schema(): void
     {
         Http::fake([
-            'generativelanguage.googleapis.com/*' => $this->fakeStructuredResponse(['symbol' => 'Fe']),
+            'generativelanguage.googleapis.com/*' => $this->fakeStructuredResponse([
+                'elements' => [['atomicNumber' => 1, 'symbol' => 'H']],
+            ]),
         ]);
 
-        (new StructuredAgent)->prompt('Iron symbol?', provider: 'gemini');
+        (new NestedStructuredAgent)->prompt('List noble gases?', provider: 'gemini');
 
         Http::assertSent(function ($request) {
-            $schema = $request->data()['generationConfig']['response_schema'] ?? [];
+            $config = $request->data()['generationConfig'] ?? [];
 
-            return ! isset($schema['additionalProperties'])
-                && ! isset($schema['name']);
+            return isset($config['response_json_schema'])
+                && ! isset($config['response_schema']);
+        });
+    }
+
+    public function test_nullable_schema_types_are_preserved_in_response_json_schema(): void
+    {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => $this->fakeStructuredResponse([
+                'symbol' => 'He',
+                'meltingPoint' => null,
+                'boilingPoint' => -268.9,
+            ]),
+        ]);
+
+        (new NullableStructuredAgent)->prompt('Properties of Helium?', provider: 'gemini');
+
+        Http::assertSent(function ($request) {
+            $schema = $request->data()['generationConfig']['response_json_schema'] ?? [];
+            $props = $schema['properties'] ?? [];
+
+            return $props['meltingPoint']['type'] === ['number', 'null']
+                && $props['boilingPoint']['type'] === ['number', 'null'];
         });
     }
 
