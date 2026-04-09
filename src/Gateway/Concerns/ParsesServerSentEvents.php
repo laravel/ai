@@ -11,37 +11,48 @@ trait ParsesServerSentEvents
      */
     protected function parseServerSentEvents($streamBody): Generator
     {
+        while (! $streamBody->eof()) {
+            $line = trim($this->readLine($streamBody));
+
+            if ($line === '' || ! str_starts_with($line, 'data:')) {
+                continue;
+            }
+
+            $data = trim(substr($line, 5));
+
+            if ($data === '[DONE]') {
+                return;
+            }
+
+            $decoded = json_decode($data, true);
+
+            if (json_last_error() === JSON_ERROR_NONE && $decoded !== null) {
+                yield $decoded;
+            }
+        }
+    }
+
+    /**
+     * Read a single line from the stream, byte by byte, to prevent event batching.
+     */
+    protected function readLine($streamBody): string
+    {
         $buffer = '';
 
         while (! $streamBody->eof()) {
-            $buffer .= $streamBody->read(8192);
+            $byte = $streamBody->read(1);
 
-            while (($pos = strpos($buffer, "\n")) !== false) {
-                $line = substr($buffer, 0, $pos);
-                $buffer = substr($buffer, $pos + 1);
+            if ($byte === '') {
+                return $buffer;
+            }
 
-                $line = trim($line);
+            $buffer .= $byte;
 
-                if ($line === '') {
-                    continue;
-                }
-
-                if (! str_starts_with($line, 'data:')) {
-                    continue;
-                }
-
-                $data = trim(substr($line, 5));
-
-                if ($data === '[DONE]') {
-                    return;
-                }
-
-                $decoded = json_decode($data, true);
-
-                if (json_last_error() === JSON_ERROR_NONE && $decoded !== null) {
-                    yield $decoded;
-                }
+            if ($byte === "\n") {
+                break;
             }
         }
+
+        return $buffer;
     }
 }

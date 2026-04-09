@@ -30,6 +30,12 @@ class ProviderOptionsWithToolsAgent implements Agent, HasProviderOptions, HasToo
         $provider = is_string($provider) ? Lab::tryFrom($provider) : $provider;
 
         return match ($provider) {
+            Lab::Anthropic => [
+                'thinking' => [
+                    'type' => 'enabled',
+                    'budget_tokens' => 10000,
+                ],
+            ],
             Lab::OpenAI => [
                 'reasoning' => [
                     'effort' => 'high',
@@ -38,6 +44,14 @@ class ProviderOptionsWithToolsAgent implements Agent, HasProviderOptions, HasToo
             ],
             Lab::xAI => [
                 'frequency_penalty' => 0.5,
+            ],
+            Lab::Groq => [
+                'frequency_penalty' => 0.5,
+            ],
+            Lab::Gemini => [
+                'thinkingConfig' => [
+                    'thinkingBudget' => 10000,
+                ],
             ],
             default => [],
         };

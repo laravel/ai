@@ -66,7 +66,7 @@ class AgentProviderOptionsTest extends TestCase
     {
         $options = TextGenerationOptions::forAgent(new ProviderOptionsAgent);
 
-        $providerOptions = $options->providerOptions(Lab::Gemini);
+        $providerOptions = $options->providerOptions(Lab::DeepSeek);
 
         $this->assertEquals([], $providerOptions);
     }

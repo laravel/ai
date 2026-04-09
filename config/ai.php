@@ -53,6 +53,7 @@ return [
         'anthropic' => [
             'driver' => 'anthropic',
             'key' => env('ANTHROPIC_API_KEY'),
+            'url' => env('ANTHROPIC_URL', 'https://api.anthropic.com/v1'),
         ],
 
         'azure' => [
@@ -87,6 +88,7 @@ return [
         'groq' => [
             'driver' => 'groq',
             'key' => env('GROQ_API_KEY'),
+            'url' => env('GROQ_URL', 'https://api.groq.com/openai/v1'),
         ],
 
         'jina' => [
@@ -108,6 +110,7 @@ return [
         'openai' => [
             'driver' => 'openai',
             'key' => env('OPENAI_API_KEY'),
+            'url' => env('OPENAI_URL', 'https://api.openai.com/v1'),
         ],
 
         'openrouter' => [

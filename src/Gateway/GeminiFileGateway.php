@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Providers\FileProvider;
+use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\FileResponse;
 use Laravel\Ai\Responses\StoredFileResponse;
 
@@ -23,7 +24,7 @@ class GeminiFileGateway implements FileGateway
 
         $response = $this->withRateLimitHandling($provider->name(), fn () => Http::withHeaders([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
-        ])->get("https://generativelanguage.googleapis.com/v1beta/{$fileId}")->throw());
+        ])->get($this->baseUrl($provider)."/{$fileId}")->throw());
 
         return new FileResponse(
             id: $response->json('name'),
@@ -40,11 +41,13 @@ class GeminiFileGateway implements FileGateway
     ): StoredFileResponse {
         [$content, $mime, $name] = $this->prepareStorableFile($file);
 
+        $uploadUrl = str_replace('/v1beta', '/upload/v1beta', $this->baseUrl($provider));
+
         $response = $this->withRateLimitHandling($provider->name(), fn () => Http::withHeaders([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
         ])->attach(
             'file', $content, $name, ['Content-Type' => $mime]
-        )->post('https://generativelanguage.googleapis.com/upload/v1beta/files', [
+        )->post("{$uploadUrl}/files", [
             'file' => ['display_name' => $name],
         ])->throw());
 
@@ -60,6 +63,14 @@ class GeminiFileGateway implements FileGateway
 
         $this->withRateLimitHandling($provider->name(), fn () => Http::withHeaders([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
-        ])->delete("https://generativelanguage.googleapis.com/v1beta/{$fileId}")->throw());
+        ])->delete($this->baseUrl($provider)."/{$fileId}")->throw());
+    }
+
+    /**
+     * Get the base URL for the Gemini API.
+     */
+    protected function baseUrl(Provider $provider): string
+    {
+        return rtrim($provider->additionalConfiguration()['url'] ?? 'https://generativelanguage.googleapis.com/v1beta', '/');
     }
 }

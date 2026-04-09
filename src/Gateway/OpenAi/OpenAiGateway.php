@@ -4,9 +4,7 @@ namespace Laravel\Ai\Gateway\OpenAi;
 
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
-use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
@@ -23,7 +21,6 @@ use Laravel\Ai\Gateway\Concerns\HandlesRateLimiting;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\TextGenerationOptions;
-use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
@@ -37,6 +34,7 @@ use Laravel\Ai\Responses\TranscriptionResponse;
 class OpenAiGateway implements Gateway
 {
     use Concerns\BuildsTextRequests;
+    use Concerns\CreatesOpenAiClient;
     use Concerns\HandlesTextStreaming;
     use Concerns\MapsAttachments;
     use Concerns\MapsMessages;
@@ -260,7 +258,7 @@ class OpenAiGateway implements Gateway
         $response = $this->withRateLimitHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)
-                ->attach('file', $audio->content(), 'audio.mp3', ['Content-Type' => $audio->mimeType()])
+                ->attach('file', $audio->content(), $this->audioFilename($audio), ['Content-Type' => $audio->mimeType()])
                 ->post('audio/transcriptions', array_filter([
                     'model' => $model,
                     'language' => $language,
@@ -284,6 +282,29 @@ class OpenAiGateway implements Gateway
             ),
             new Meta($provider->name(), $model),
         );
+    }
+
+    /**
+     * Determine the appropriate filename for the audio file based on its MIME type.
+     */
+    protected function audioFilename(TranscribableAudio $audio): string
+    {
+        if ($audio instanceof \Laravel\Ai\Contracts\Files\HasName && $audio->name()) {
+            return $audio->name();
+        }
+
+        $extension = match ($audio->mimeType()) {
+            'audio/webm' => 'webm',
+            'audio/ogg', 'audio/ogg; codecs=opus' => 'ogg',
+            'audio/wav', 'audio/x-wav' => 'wav',
+            'audio/mp4', 'audio/m4a', 'audio/x-m4a' => 'm4a',
+            'audio/flac', 'audio/x-flac' => 'flac',
+            'audio/mpeg', 'audio/mp3' => 'mp3',
+            'audio/mpga' => 'mpga',
+            default => 'mp3',
+        };
+
+        return "audio.{$extension}";
     }
 
     /**
@@ -312,16 +333,5 @@ class OpenAiGateway implements Gateway
             $data['usage']['prompt_tokens'] ?? 0,
             new Meta($provider->name(), $model),
         );
-    }
-
-    /**
-     * Get an HTTP client for the OpenAI API.
-     */
-    protected function client(Provider $provider, ?int $timeout = null): PendingRequest
-    {
-        return Http::baseUrl('https://api.openai.com/v1')
-            ->withToken($provider->providerCredentials()['key'])
-            ->timeout($timeout ?? 60)
-            ->throw();
     }
 }
