@@ -157,12 +157,16 @@ class GeminiGateway implements Gateway
                 $part['inlineData']['mimeType'],
             ));
 
-        $promptTokens = $data['usageMetadata']['promptTokenCount'] ?? 0;
-        $candidatesTokens = $data['usageMetadata']['candidatesTokenCount'] ?? 0;
-        $imageTokens = array_filter($data['usageMetadata']['candidatesTokensDetails'], fn ($detail) => $detail['modality'] === 'IMAGE')[0]['tokenCount'] ?? 0;
+        $usage = $data['usageMetadata'] ?? [];
+        $promptTokens = $usage['promptTokenCount'] ?? 0;
+        $cachedTokens = $usage['cachedContentTokenCount'] ?? 0;
+        $candidateTokens = $usage['candidatesTokenCount'] ?? 0;
+        $reasoningTokens = $usage['thoughtsTokenCount'] ?? 0;
+        $imageTokens = array_filter($usage['candidatesTokensDetails'], fn ($detail) => $detail['modality'] === 'IMAGE')[0]['tokenCount'] ?? 0;
+
         return new ImageResponse(
             $images,
-            new Usage($promptTokens, $candidatesTokens - $imageTokens, 0, 0, $imageTokens),
+            new Usage($promptTokens - $cachedTokens, $candidateTokens - $imageTokens, 0, $cachedTokens, $reasoningTokens, $imageTokens),
             new Meta($provider->name(), $model),
         );
     }
