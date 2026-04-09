@@ -262,39 +262,12 @@ trait HandlesTextStreaming
                 ...$updatedPriorMessages,
             ];
 
-            $body = [
+            $body = $this->applyTextOptions([
                 'model' => $model,
                 'messages' => $chatMessages,
                 'stream' => true,
                 'stream_options' => ['include_usage' => true],
-            ];
-
-            if (filled($tools)) {
-                $mappedTools = $this->mapTools($tools);
-
-                if (filled($mappedTools)) {
-                    $body['tool_choice'] = 'auto';
-                    $body['tools'] = $mappedTools;
-                }
-            }
-
-            if (filled($schema)) {
-                $body['response_format'] = $this->buildResponseFormat($schema);
-            }
-
-            if (! is_null($options?->maxTokens)) {
-                $body['max_tokens'] = $options->maxTokens;
-            }
-
-            if (! is_null($options?->temperature)) {
-                $body['temperature'] = $options->temperature;
-            }
-
-            $providerOptions = $options?->providerOptions($provider->driver());
-
-            if (filled($providerOptions)) {
-                $body = array_merge($body, $providerOptions);
-            }
+            ], $provider, $tools, $schema, $options);
 
             $response = $this->withRateLimitHandling(
                 $provider->name(),

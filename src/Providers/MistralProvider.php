@@ -21,9 +21,19 @@ class MistralProvider extends Provider implements EmbeddingProvider, TextProvide
     use Concerns\HasTranscriptionGateway;
     use Concerns\StreamsText;
 
+    protected ?MistralGateway $mistralGateway = null;
+
     public function __construct(protected array $config, protected Dispatcher $events)
     {
         //
+    }
+
+    /**
+     * Get the shared Mistral gateway instance.
+     */
+    protected function mistralGateway(): MistralGateway
+    {
+        return $this->mistralGateway ??= new MistralGateway($this->events);
     }
 
     /**
@@ -31,7 +41,7 @@ class MistralProvider extends Provider implements EmbeddingProvider, TextProvide
      */
     public function textGateway(): TextGateway
     {
-        return $this->textGateway ??= new MistralGateway($this->events);
+        return $this->mistralGateway();
     }
 
     /**
@@ -39,7 +49,7 @@ class MistralProvider extends Provider implements EmbeddingProvider, TextProvide
      */
     public function embeddingGateway(): EmbeddingGateway
     {
-        return $this->embeddingGateway ??= new MistralGateway($this->events);
+        return $this->mistralGateway();
     }
 
     /**
@@ -47,7 +57,7 @@ class MistralProvider extends Provider implements EmbeddingProvider, TextProvide
      */
     public function transcriptionGateway(): TranscriptionGateway
     {
-        return $this->transcriptionGateway ??= new MistralGateway($this->events);
+        return $this->mistralGateway();
     }
 
     /**

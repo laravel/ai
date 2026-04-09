@@ -26,6 +26,19 @@ trait BuildsTextRequests
             'messages' => $this->mapMessagesToChat($messages, $instructions),
         ];
 
+        return $this->applyTextOptions($body, $provider, $tools, $schema, $options);
+    }
+
+    /**
+     * Apply tools, schema, and generation options to a request body.
+     */
+    protected function applyTextOptions(
+        array $body,
+        Provider $provider,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options,
+    ): array {
         if (filled($tools)) {
             $mappedTools = $this->mapTools($tools);
 
