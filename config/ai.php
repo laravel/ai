@@ -99,6 +99,7 @@ return [
         'mistral' => [
             'driver' => 'mistral',
             'key' => env('MISTRAL_API_KEY'),
+            'url' => env('MISTRAL_URL', 'https://api.mistral.ai/v1'),
         ],
 
         'ollama' => [

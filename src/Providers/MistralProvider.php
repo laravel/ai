@@ -2,9 +2,11 @@
 
 namespace Laravel\Ai\Providers;
 
+use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Gateway\Mistral\MistralGateway;
 
 class MistralProvider extends Provider implements EmbeddingProvider, TextProvider, TranscriptionProvider
 {
@@ -15,6 +17,14 @@ class MistralProvider extends Provider implements EmbeddingProvider, TextProvide
     use Concerns\HasTextGateway;
     use Concerns\HasTranscriptionGateway;
     use Concerns\StreamsText;
+
+    /**
+     * Get the provider's text gateway.
+     */
+    public function textGateway(): TextGateway
+    {
+        return $this->textGateway ??= new MistralGateway($this->events);
+    }
 
     /**
      * Get the name of the default text model.
