@@ -5,11 +5,8 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Files\Base64Document;
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\Feature\Agents\ToolUsingAgent;
-use Tests\Feature\Providers\Anthropic\AnthropicHelpers;
 
 use function Laravel\Ai\agent;
-
-uses(AnthropicHelpers::class);
 
 test('user message maps to anthropic format', function () {
     Http::fake([

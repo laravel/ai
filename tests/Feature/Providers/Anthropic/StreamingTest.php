@@ -14,9 +14,6 @@ use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\Feature\Agents\ProviderOptionsWithToolsAgent;
-use Tests\Feature\Providers\Anthropic\AnthropicHelpers;
-
-uses(AnthropicHelpers::class);
 
 test('streaming emits text events', function () {
     Http::fake([

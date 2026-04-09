@@ -3,11 +3,8 @@
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Tests\Feature\Agents\ToolUsingAgent;
-use Tests\Feature\Providers\Anthropic\AnthropicHelpers;
 
 use function Laravel\Ai\agent;
-
-uses(AnthropicHelpers::class);
 
 test('tool parameters are not wrapped in schema definition', function () {
     Http::fake([

@@ -2,9 +2,6 @@
 
 use Illuminate\Support\Facades\Http;
 use Tests\Feature\Agents\ToolUsingAgent;
-use Tests\Feature\Providers\Gemini\GeminiHelpers;
-
-uses(GeminiHelpers::class);
 
 test('empty schema omits parameters key', function () {
     Http::fake([

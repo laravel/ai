@@ -4,9 +4,6 @@ use Illuminate\Support\Facades\Http;
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\Feature\Agents\ProviderOptionsAgent;
 use Tests\Feature\Agents\ProviderOptionsWithToolsAgent;
-use Tests\Feature\Providers\Gemini\GeminiHelpers;
-
-uses(GeminiHelpers::class);
 
 test('provider options are included in generation config', function () {
     Http::fake([

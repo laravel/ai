@@ -3,9 +3,6 @@
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Support\Facades\Http;
 use Tests\Feature\Agents\ToolUsingAgent;
-use Tests\Feature\Providers\Anthropic\AnthropicHelpers;
-
-uses(AnthropicHelpers::class);
 
 test('tool calls trigger follow up request', function () {
     Http::fake([

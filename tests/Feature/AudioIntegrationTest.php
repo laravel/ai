@@ -11,7 +11,7 @@ test('audio can be generated and transcribed', function () {
     Event::fake();
 
     $response = Audio::of('Hello there! How are you today?')->generate();
-    expect('openai')->toEqual($response->meta->provider);
+    expect($response->meta->provider)->toEqual('openai');
 
     Event::assertDispatched(GeneratingAudio::class, fn (GeneratingAudio $event) => $event->prompt->timeout === 30);
     Event::assertDispatched(AudioGenerated::class, fn (AudioGenerated $event) => $event->prompt->timeout === 30);

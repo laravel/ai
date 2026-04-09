@@ -5,9 +5,6 @@ use Laravel\Ai\Responses\Data\FinishReason;
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\Feature\Agents\StructuredAgent;
 use Tests\Feature\Agents\ToolUsingAgent;
-use Tests\Feature\Providers\Gemini\GeminiHelpers;
-
-uses(GeminiHelpers::class);
 
 test('request includes model in url and contents', function () {
     Http::fake([

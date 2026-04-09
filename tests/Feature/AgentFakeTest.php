@@ -185,7 +185,7 @@ test('assert queued does not throw undefined key when agent was never queued', f
     // Should fail the assertion gracefully, not throw an undefined array key error.
     try {
         AssistantAgent::assertQueued('Some prompt');
-        $this->fail('Expected assertion to fail.');
+        test()->fail('Expected assertion to fail.');
     } catch (AssertionFailedError $e) {
         expect($e->getMessage())->toContain('An expected queued prompt was not received.');
     }

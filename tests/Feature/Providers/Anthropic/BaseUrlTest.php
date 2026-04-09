@@ -2,9 +2,6 @@
 
 use Illuminate\Support\Facades\Http;
 use Tests\Feature\Agents\AssistantAgent;
-use Tests\Feature\Providers\Anthropic\AnthropicHelpers;
-
-uses(AnthropicHelpers::class);
 
 test('anthropic requests use the configured base url', function () {
     config(['ai.providers.anthropic.url' => 'https://custom-proxy.example.com/v1']);

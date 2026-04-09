@@ -4,11 +4,8 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Files\Base64Document;
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\Feature\Agents\ToolUsingAgent;
-use Tests\Feature\Providers\Gemini\GeminiHelpers;
 
 use function Laravel\Ai\agent;
-
-uses(GeminiHelpers::class);
 
 test('user message maps to gemini format', function () {
     Http::fake([

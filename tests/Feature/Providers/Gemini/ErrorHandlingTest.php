@@ -5,9 +5,6 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Tests\Feature\Agents\AssistantAgent;
-use Tests\Feature\Providers\Gemini\GeminiHelpers;
-
-uses(GeminiHelpers::class);
 
 test('http error response throws request exception', function () {
     Http::fake([

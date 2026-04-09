@@ -5,9 +5,6 @@ use Tests\Feature\Agents\AssistantAgent;
 use Tests\Feature\Agents\StructuredAgent;
 use Tests\Feature\Agents\StructuredWithThinkingAgent;
 use Tests\Feature\Agents\ToolUsingAgent;
-use Tests\Feature\Providers\Anthropic\AnthropicHelpers;
-
-uses(AnthropicHelpers::class);
 
 test('request includes model and messages', function () {
     Http::fake([
