@@ -181,9 +181,19 @@ trait HandlesTextStreaming
         // Handle pending tool calls...
         if (filled($pendingToolCalls)) {
             yield from $this->handleStreamingToolCalls(
-                $invocationId, $provider, $model, $tools, $schema, $options,
-                $pendingToolCalls, $contents, $instructions,
-                $modelParts, $depth, $maxSteps, $timeout,
+                $invocationId,
+                $provider,
+                $model,
+                $tools,
+                $schema,
+                $options,
+                $pendingToolCalls,
+                $contents,
+                $instructions,
+                $modelParts,
+                $depth,
+                $maxSteps,
+                $timeout,
             );
 
             return;
@@ -270,9 +280,18 @@ trait HandlesTextStreaming
             );
 
             yield from $this->processTextStream(
-                $invocationId, $provider, $model, $tools, $schema, $options,
-                $response->getBody(), $contents, $instructions,
-                $depth + 1, $maxSteps, $timeout,
+                $invocationId,
+                $provider,
+                $model,
+                $tools,
+                $schema,
+                $options,
+                $response->getBody(),
+                $contents,
+                $instructions,
+                $depth + 1,
+                $maxSteps,
+                $timeout,
             );
         } else {
             yield (new StreamEnd(

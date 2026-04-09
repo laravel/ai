@@ -76,7 +76,15 @@ class OpenAiGateway implements Gateway
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, filled($schema), $tools, $schema, $options, $timeout);
+        return $this->parseTextResponse(
+            $data,
+            $provider,
+            filled($schema),
+            $tools,
+            $schema,
+            $options,
+            $timeout,
+        );
     }
 
     /**
@@ -107,8 +115,16 @@ class OpenAiGateway implements Gateway
         );
 
         yield from $this->processTextStream(
-            $invocationId, $provider, $model, $tools, $schema, $options,
-            $response->getBody(), 0, null, $timeout,
+            $invocationId,
+            $provider,
+            $model,
+            $tools,
+            $schema,
+            $options,
+            $response->getBody(),
+            0,
+            null,
+            $timeout,
         );
     }
 

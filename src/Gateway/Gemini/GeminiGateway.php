@@ -73,7 +73,16 @@ class GeminiGateway implements Gateway
         $this->validateTextResponse($data);
 
         return $this->parseTextResponse(
-            $data, $provider, $model, filled($schema), $tools, $schema, $options, $contents, $instructions, $timeout,
+            $data,
+            $provider,
+            $model,
+            filled($schema),
+            $tools,
+            $schema,
+            $options,
+            $contents,
+            $instructions,
+            $timeout,
         );
     }
 
@@ -103,8 +112,18 @@ class GeminiGateway implements Gateway
         );
 
         yield from $this->processTextStream(
-            $invocationId, $provider, $model, $tools, $schema, $options,
-            $response->getBody(), $contents, $instructions, 0, null, $timeout,
+            $invocationId,
+            $provider,
+            $model,
+            $tools,
+            $schema,
+            $options,
+            $response->getBody(),
+            $contents,
+            $instructions,
+            0,
+            null,
+            $timeout,
         );
     }
 

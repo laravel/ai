@@ -143,7 +143,19 @@ trait ParsesTextResponses
             $messages->push($toolResultMessage);
 
             return $this->continueWithToolResults(
-                $responseId, $model, $provider, $structured, $tools, $schema, $steps, $messages, $toolResults, $depth + 1, $maxSteps, $options, $timeout,
+                $responseId,
+                $model,
+                $provider,
+                $structured,
+                $tools,
+                $schema,
+                $steps,
+                $messages,
+                $toolResults,
+                $depth + 1,
+                $maxSteps,
+                $options,
+                $timeout,
             );
         }
 
@@ -261,7 +273,19 @@ trait ParsesTextResponses
 
         $this->validateTextResponse($data);
 
-        return $this->processResponse($data, $provider, $structured, $tools, $schema, $steps, $messages, $depth, $maxSteps, $options, $timeout);
+        return $this->processResponse(
+            $data,
+            $provider,
+            $structured,
+            $tools,
+            $schema,
+            $steps,
+            $messages,
+            $depth,
+            $maxSteps,
+            $options,
+            $timeout,
+        );
     }
 
     /**

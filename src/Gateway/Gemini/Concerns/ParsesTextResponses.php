@@ -120,9 +120,19 @@ trait ParsesTextResponses
             $contents[] = ['role' => 'user', 'parts' => $this->buildFunctionResponseParts($toolResults)];
 
             return $this->continueWithToolResults(
-                $model, $provider, $structured, $tools, $schema,
-                $steps, $messages, $contents, $instructions, $options,
-                $depth + 1, $maxSteps, $timeout,
+                $model,
+                $provider,
+                $structured,
+                $tools,
+                $schema,
+                $steps,
+                $messages,
+                $contents,
+                $instructions,
+                $options,
+                $depth + 1,
+                $maxSteps,
+                $timeout,
             );
         }
 
@@ -210,9 +220,20 @@ trait ParsesTextResponses
         $this->validateTextResponse($data);
 
         return $this->processResponse(
-            $data, $provider, $model, $structured, $tools, $schema,
-            $steps, $messages, $contents, $instructions, $options,
-            $depth, $maxSteps, $timeout,
+            $data,
+            $provider,
+            $model,
+            $structured,
+            $tools,
+            $schema,
+            $steps,
+            $messages,
+            $contents,
+            $instructions,
+            $options,
+            $depth,
+            $maxSteps,
+            $timeout,
         );
     }
 
