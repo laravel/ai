@@ -36,6 +36,7 @@ trait HandlesTextStreaming
         int $depth = 0,
         ?int $maxSteps = null,
         array $priorChatMessages = [],
+        ?int $timeout = null,
     ): Generator {
         $maxSteps ??= $options?->maxSteps;
 
@@ -170,6 +171,7 @@ trait HandlesTextStreaming
                 $depth,
                 $maxSteps,
                 $priorChatMessages,
+                $timeout,
             );
 
             return;
@@ -200,6 +202,7 @@ trait HandlesTextStreaming
         int $depth,
         ?int $maxSteps,
         array $priorChatMessages,
+        ?int $timeout = null,
     ): Generator {
         $toolResults = [];
 
@@ -279,6 +282,14 @@ trait HandlesTextStreaming
                 $body['response_format'] = $this->buildResponseFormat($schema);
             }
 
+            if (! is_null($options?->maxTokens)) {
+                $body['max_tokens'] = $options->maxTokens;
+            }
+
+            if (! is_null($options?->temperature)) {
+                $body['temperature'] = $options->temperature;
+            }
+
             $providerOptions = $options?->providerOptions($provider->driver());
 
             if (filled($providerOptions)) {
@@ -287,7 +298,7 @@ trait HandlesTextStreaming
 
             $response = $this->withRateLimitHandling(
                 $provider->name(),
-                fn () => $this->client($provider)
+                fn () => $this->client($provider, $timeout)
                     ->withOptions(['stream' => true])
                     ->post('chat/completions', $body),
             );
@@ -305,6 +316,7 @@ trait HandlesTextStreaming
                 $depth + 1,
                 $maxSteps,
                 $updatedPriorMessages,
+                $timeout,
             );
         } else {
             yield (new StreamEnd(

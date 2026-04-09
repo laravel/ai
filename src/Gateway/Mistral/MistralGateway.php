@@ -4,15 +4,26 @@ namespace Laravel\Ai\Gateway\Mistral;
 
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
+use Laravel\Ai\Contracts\Files\HasName;
+use Laravel\Ai\Contracts\Files\TranscribableAudio;
+use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
+use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
+use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Gateway\Concerns\HandlesRateLimiting;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\TranscriptionSegment;
+use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\TextResponse;
+use Laravel\Ai\Responses\TranscriptionResponse;
 
-class MistralGateway implements TextGateway
+class MistralGateway implements EmbeddingGateway, TextGateway, TranscriptionGateway
 {
     use Concerns\BuildsTextRequests;
     use Concerns\CreatesMistralClient;
@@ -71,6 +82,7 @@ class MistralGateway implements TextGateway
             $options,
             $instructions,
             $messages,
+            $timeout,
         );
     }
 
@@ -118,6 +130,96 @@ class MistralGateway implements TextGateway
             $response->getBody(),
             $instructions,
             $messages,
+            timeout: $timeout,
         );
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function generateEmbeddings(
+        EmbeddingProvider $provider,
+        string $model,
+        array $inputs,
+        int $dimensions,
+        int $timeout = 30,
+    ): EmbeddingsResponse {
+        $response = $this->withRateLimitHandling(
+            $provider->name(),
+            fn () => $this->client($provider, $timeout)->post('embeddings', [
+                'model' => $model,
+                'input' => $inputs,
+            ]),
+        );
+
+        $data = $response->json();
+
+        return new EmbeddingsResponse(
+            collect($data['data'] ?? [])->pluck('embedding')->all(),
+            $data['usage']['total_tokens'] ?? 0,
+            new Meta($provider->name(), $model),
+        );
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function generateTranscription(
+        TranscriptionProvider $provider,
+        string $model,
+        TranscribableAudio $audio,
+        ?string $language = null,
+        bool $diarize = false,
+        int $timeout = 30,
+    ): TranscriptionResponse {
+        $response = $this->withRateLimitHandling(
+            $provider->name(),
+            fn () => $this->client($provider, $timeout)
+                ->attach('file', $audio->content(), $this->audioFilename($audio), ['Content-Type' => $audio->mimeType()])
+                ->post('audio/transcriptions', array_filter([
+                    'model' => $model,
+                    'language' => $language,
+                ])),
+        );
+
+        $data = $response->json();
+
+        return new TranscriptionResponse(
+            $data['text'] ?? '',
+            collect($data['segments'] ?? [])->map(fn (array $segment) => new TranscriptionSegment(
+                $segment['text'] ?? '',
+                $segment['speaker'] ?? '',
+                $segment['start'] ?? 0,
+                $segment['end'] ?? 0,
+            )),
+            new Usage(
+                $data['usage']['prompt_tokens'] ?? 0,
+                $data['usage']['completion_tokens'] ?? 0,
+            ),
+            new Meta($provider->name(), $model),
+        );
+    }
+
+    /**
+     * Determine the appropriate filename for the audio file based on its MIME type.
+     */
+    protected function audioFilename(TranscribableAudio $audio): string
+    {
+        if ($audio instanceof HasName && $audio->name()) {
+            return $audio->name();
+        }
+
+        $extension = match ($audio->mimeType()) {
+            'audio/webm' => 'webm',
+            'audio/ogg', 'audio/ogg; codecs=opus' => 'ogg',
+            'audio/wav', 'audio/x-wav' => 'wav',
+            'audio/mp4', 'audio/m4a', 'audio/x-m4a' => 'm4a',
+            'audio/flac', 'audio/x-flac' => 'flac',
+            'audio/mpeg', 'audio/mp3' => 'mp3',
+            'audio/mpga' => 'mpga',
+            default => 'mp3',
+        };
+
+        return "audio.{$extension}";
     }
 }
