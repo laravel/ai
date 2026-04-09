@@ -1,13 +1,12 @@
 <?php
 
-use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Support\Facades\Http;
 use Tests\Feature\Agents\ToolUsingAgent;
 
 test('tool calls trigger follow up request', function () {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::sequence([
-            geminiFakeUniqueToolCallResponse(),
+            $this->fakeUniqueToolCallResponse(),
             $this->fakeTextResponse('The number is 72019'),
         ]),
     ]);
@@ -51,11 +50,11 @@ test('tool calls trigger follow up request', function () {
 test('max steps limits tool call depth', function () {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::sequence([
-            geminiFakeUniqueToolCallResponse(),
-            geminiFakeUniqueToolCallResponse(),
-            geminiFakeUniqueToolCallResponse(),
-            geminiFakeUniqueToolCallResponse(),
-            geminiFakeUniqueToolCallResponse(),
+            $this->fakeUniqueToolCallResponse(),
+            $this->fakeUniqueToolCallResponse(),
+            $this->fakeUniqueToolCallResponse(),
+            $this->fakeUniqueToolCallResponse(),
+            $this->fakeUniqueToolCallResponse(),
             $this->fakeTextResponse('Done'),
         ]),
     ]);
@@ -184,31 +183,3 @@ test('thinking parts are excluded from tool call continuation', function () {
         }
     }
 });
-
-/**
- * Create a tool call response with unique IDs for use in sequences.
- */
-function geminiFakeUniqueToolCallResponse(): PromiseInterface
-{
-    return Http::response([
-        'candidates' => [[
-            'content' => [
-                'parts' => [[
-                    'functionCall' => [
-                        'id' => 'call_'.uniqid(),
-                        'name' => 'FixedNumberGenerator',
-                        'args' => (object) [],
-                    ],
-                ]],
-                'role' => 'model',
-            ],
-            'finishReason' => 'STOP',
-        ]],
-        'usageMetadata' => [
-            'promptTokenCount' => 10,
-            'candidatesTokenCount' => 5,
-            'totalTokenCount' => 15,
-        ],
-        'modelVersion' => 'gemini-3-flash-preview',
-    ]);
-}

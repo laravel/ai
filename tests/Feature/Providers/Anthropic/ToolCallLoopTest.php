@@ -1,13 +1,12 @@
 <?php
 
-use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Support\Facades\Http;
 use Tests\Feature\Agents\ToolUsingAgent;
 
 test('tool calls trigger follow up request', function () {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence([
-            anthropicFakeUniqueToolCallResponse(),
+            $this->fakeUniqueToolCallResponse(),
             $this->fakeTextResponse('The number is 72019'),
         ]),
     ]);
@@ -51,9 +50,9 @@ test('tool calls trigger follow up request', function () {
 test('max steps limits tool call depth', function () {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence([
-            anthropicFakeUniqueToolCallResponse(),
-            anthropicFakeUniqueToolCallResponse(),
-            anthropicFakeUniqueToolCallResponse(),
+            $this->fakeUniqueToolCallResponse(),
+            $this->fakeUniqueToolCallResponse(),
+            $this->fakeUniqueToolCallResponse(),
             $this->fakeTextResponse('Done'),
         ]),
     ]);
@@ -70,24 +69,3 @@ test('max steps limits tool call depth', function () {
     // So max 3 requests before stopping (initial + 2 follow-ups)
     expect(count($recorded))->toBeLessThanOrEqual(3);
 });
-
-/**
- * Create a tool call response with unique IDs for use in sequences.
- */
-function anthropicFakeUniqueToolCallResponse(): PromiseInterface
-{
-    return Http::response([
-        'id' => 'msg_tool_'.uniqid(),
-        'type' => 'message',
-        'role' => 'assistant',
-        'model' => 'claude-sonnet-4-6',
-        'content' => [[
-            'type' => 'tool_use',
-            'id' => 'toolu_'.uniqid(),
-            'name' => 'FixedNumberGenerator',
-            'input' => (object) [],
-        ]],
-        'stop_reason' => 'tool_use',
-        'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
-    ]);
-}
