@@ -1,15 +1,15 @@
 {
-    "name": "laravel/ai",
-    "description": "The official AI SDK for Laravel.",
+    "name": "alexbaldo/laravel-ai",
+    "description": "Fork of the official AI SDK for Laravel.",
     "license": "MIT",
     "keywords": [
         "laravel",
         "ai"
     ],
-    "homepage": "https://github.com/laravel/ai",
+    "homepage": "https://github.com/alexbaldo/laravel-ai",
     "support": {
-        "issues": "https://github.com/laravel/ai/issues",
-        "source": "https://github.com/laravel/ai"
+        "issues": "https://github.com/alexbaldo/laravel-ai/issues",
+        "source": "https://github.com/alexbaldo/laravel-ai"
     },
     "require": {
         "php": "^8.3",
