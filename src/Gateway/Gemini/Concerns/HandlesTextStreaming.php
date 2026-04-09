@@ -256,7 +256,7 @@ trait HandlesTextStreaming
             ))->withInvocationId($invocationId);
         }
 
-        if ($depth + 1 < ($maxSteps ?? count($tools) * 2)) {
+        if ($depth + 1 < ($maxSteps ?? round(count($tools) * 1.5))) {
             $contents[] = ['role' => 'model', 'parts' => $this->excludeThinkingParts($modelParts)];
             $contents[] = ['role' => 'user', 'parts' => $this->buildFunctionResponseParts($toolResults)];
 

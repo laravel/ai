@@ -236,6 +236,14 @@ trait ParsesTextResponses
             $body['text'] = $this->buildSchemaFormat($schema);
         }
 
+        if (! is_null($options?->temperature)) {
+            $body['temperature'] = $options->temperature;
+        }
+
+        if (! is_null($options?->maxTokens)) {
+            $body['max_output_tokens'] = $options->maxTokens;
+        }
+
         $providerOptions = $options?->providerOptions(
             Lab::tryFrom($provider->driver()) ?? $provider->driver()
         );
