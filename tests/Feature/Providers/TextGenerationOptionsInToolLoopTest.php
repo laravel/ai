@@ -38,8 +38,6 @@ class TextGenOptionsToolAgent implements Agent, HasTools
 
 class TextGenerationOptionsInToolLoopTest extends TestCase
 {
-    // ── OpenAI ────────────────────────────────────────────────────────
-
     public function test_openai_temperature_and_max_tokens_are_preserved_in_tool_call_follow_up(): void
     {
         Http::fake([
@@ -68,8 +66,6 @@ class TextGenerationOptionsInToolLoopTest extends TestCase
                 && isset($request['previous_response_id']),
         ]);
     }
-
-    // ── Groq ──────────────────────────────────────────────────────────
 
     public function test_groq_temperature_and_max_tokens_are_preserved_in_tool_call_follow_up(): void
     {
@@ -101,8 +97,6 @@ class TextGenerationOptionsInToolLoopTest extends TestCase
                 && $request['max_completion_tokens'] === 1024,
         ]);
     }
-
-    // ── OpenAI response helpers ───────────────────────────────────────
 
     protected function fakeOpenAiToolCallResponse(): PromiseInterface
     {
@@ -136,8 +130,6 @@ class TextGenerationOptionsInToolLoopTest extends TestCase
             'usage' => ['input_tokens' => 1, 'output_tokens' => 1],
         ]);
     }
-
-    // ── Groq response helpers ─────────────────────────────────────────
 
     protected function fakeGroqToolCallResponse(): PromiseInterface
     {

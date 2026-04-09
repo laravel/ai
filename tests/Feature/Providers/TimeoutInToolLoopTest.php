@@ -193,8 +193,6 @@ class TimeoutInToolLoopTest extends TestCase
         $this->assertSame(300, $spy->capturedTimeouts[1]);
     }
 
-    // OpenAI response helpers
-
     protected function fakeOpenAiToolCallResponse(): PromiseInterface
     {
         return Http::response([
@@ -228,8 +226,6 @@ class TimeoutInToolLoopTest extends TestCase
         ]);
     }
 
-    // Anthropic response helpers
-
     protected function fakeAnthropicToolCallResponse(): PromiseInterface
     {
         return Http::response([
@@ -260,8 +256,6 @@ class TimeoutInToolLoopTest extends TestCase
             'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
         ]);
     }
-
-    // Groq response helpers
 
     protected function fakeGroqToolCallResponse(): PromiseInterface
     {
@@ -303,8 +297,6 @@ class TimeoutInToolLoopTest extends TestCase
             'usage' => ['prompt_tokens' => 1, 'completion_tokens' => 1],
         ]);
     }
-
-    // Gemini response helpers
 
     protected function fakeGeminiToolCallResponse(): PromiseInterface
     {
