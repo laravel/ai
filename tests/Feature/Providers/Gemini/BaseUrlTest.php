@@ -1,43 +1,39 @@
 <?php
 
-namespace Tests\Feature\Providers\Gemini;
-
 use Illuminate\Support\Facades\Http;
 use Tests\Feature\Agents\AssistantAgent;
+use Tests\Feature\Providers\Gemini\GeminiHelpers;
 
-class BaseUrlTest extends GeminiTestCase
-{
-    public function test_gemini_requests_use_the_configured_base_url(): void
-    {
-        config(['ai.providers.gemini.url' => 'https://custom-proxy.example.com/v1']);
+uses(GeminiHelpers::class);
 
-        Http::fake([
-            'custom-proxy.example.com/*' => $this->fakeTextResponse(),
-        ]);
+test('gemini requests use the configured base url', function () {
+    config(['ai.providers.gemini.url' => 'https://custom-proxy.example.com/v1']);
 
-        (new AssistantAgent)->prompt(
-            'Hi',
-            provider: 'gemini',
-        );
+    Http::fake([
+        'custom-proxy.example.com/*' => $this->fakeTextResponse(),
+    ]);
 
-        Http::assertSent(function ($request) {
-            return str_contains($request->url(), 'https://custom-proxy.example.com/v1');
-        });
-    }
+    (new AssistantAgent)->prompt(
+        'Hi',
+        provider: 'gemini',
+    );
 
-    public function test_gemini_requests_fall_back_to_the_default_base_url(): void
-    {
-        Http::fake([
-            'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
-        ]);
+    Http::assertSent(function ($request) {
+        return str_contains($request->url(), 'https://custom-proxy.example.com/v1');
+    });
+});
 
-        (new AssistantAgent)->prompt(
-            'Hi',
-            provider: 'gemini',
-        );
+test('gemini requests fall back to the default base url', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
+    ]);
 
-        Http::assertSent(function ($request) {
-            return str_contains($request->url(), 'generativelanguage.googleapis.com');
-        });
-    }
-}
+    (new AssistantAgent)->prompt(
+        'Hi',
+        provider: 'gemini',
+    );
+
+    Http::assertSent(function ($request) {
+        return str_contains($request->url(), 'generativelanguage.googleapis.com');
+    });
+});

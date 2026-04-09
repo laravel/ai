@@ -1,100 +1,96 @@
 <?php
 
-namespace Tests\Feature\Providers\Anthropic;
-
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Support\Facades\Http;
 use Tests\Feature\Agents\ToolUsingAgent;
+use Tests\Feature\Providers\Anthropic\AnthropicHelpers;
 
-class ToolCallLoopTest extends AnthropicTestCase
-{
-    public function test_tool_calls_trigger_follow_up_request(): void
-    {
-        Http::fake([
-            'api.anthropic.com/*' => Http::sequence([
-                $this->fakeUniqueToolCallResponse(),
-                $this->fakeTextResponse('The number is 72019'),
-            ]),
-        ]);
+uses(AnthropicHelpers::class);
 
-        $response = (new ToolUsingAgent(fixed: true))->prompt(
-            'Generate a random number',
-            provider: 'anthropic',
-        );
+test('tool calls trigger follow up request', function () {
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            anthropicFakeUniqueToolCallResponse(),
+            $this->fakeTextResponse('The number is 72019'),
+        ]),
+    ]);
 
-        $recorded = Http::recorded();
+    $response = (new ToolUsingAgent(fixed: true))->prompt(
+        'Generate a random number',
+        provider: 'anthropic',
+    );
 
-        $this->assertCount(2, $recorded);
+    $recorded = Http::recorded();
 
-        $followUpBody = $recorded[1][0]->data();
+    expect($recorded)->toHaveCount(2);
 
-        $hasAssistantWithToolUse = false;
-        $hasToolResult = false;
+    $followUpBody = $recorded[1][0]->data();
 
-        foreach ($followUpBody['messages'] as $message) {
-            if ($message['role'] === 'assistant') {
-                foreach ($message['content'] as $block) {
-                    if (($block['type'] ?? '') === 'tool_use') {
-                        $hasAssistantWithToolUse = true;
-                    }
-                }
-            }
+    $hasAssistantWithToolUse = false;
+    $hasToolResult = false;
 
-            if ($message['role'] === 'user') {
-                foreach ($message['content'] ?? [] as $block) {
-                    if (($block['type'] ?? '') === 'tool_result') {
-                        $hasToolResult = true;
-                    }
+    foreach ($followUpBody['messages'] as $message) {
+        if ($message['role'] === 'assistant') {
+            foreach ($message['content'] as $block) {
+                if (($block['type'] ?? '') === 'tool_use') {
+                    $hasAssistantWithToolUse = true;
                 }
             }
         }
 
-        $this->assertTrue($hasAssistantWithToolUse, 'Follow-up request should include assistant message with tool_use block');
-        $this->assertTrue($hasToolResult, 'Follow-up request should include user message with tool_result block');
+        if ($message['role'] === 'user') {
+            foreach ($message['content'] ?? [] as $block) {
+                if (($block['type'] ?? '') === 'tool_result') {
+                    $hasToolResult = true;
+                }
+            }
+        }
     }
 
-    public function test_max_steps_limits_tool_call_depth(): void
-    {
-        Http::fake([
-            'api.anthropic.com/*' => Http::sequence([
-                $this->fakeUniqueToolCallResponse(),
-                $this->fakeUniqueToolCallResponse(),
-                $this->fakeUniqueToolCallResponse(),
-                $this->fakeTextResponse('Done'),
-            ]),
-        ]);
+    expect($hasAssistantWithToolUse)->toBeTrue('Follow-up request should include assistant message with tool_use block');
+    expect($hasToolResult)->toBeTrue('Follow-up request should include user message with tool_result block');
+});
 
-        $response = (new ToolUsingAgent(fixed: true))->prompt(
-            'Generate numbers',
-            provider: 'anthropic',
-        );
+test('max steps limits tool call depth', function () {
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            anthropicFakeUniqueToolCallResponse(),
+            anthropicFakeUniqueToolCallResponse(),
+            anthropicFakeUniqueToolCallResponse(),
+            $this->fakeTextResponse('Done'),
+        ]),
+    ]);
 
-        $recorded = Http::recorded();
+    $response = (new ToolUsingAgent(fixed: true))->prompt(
+        'Generate numbers',
+        provider: 'anthropic',
+    );
 
-        // ToolUsingAgent has 1 tool + structured output tool = 2 tools
-        // maxSteps = round(2 * 1.5) = 3
-        // So max 3 requests before stopping (initial + 2 follow-ups)
-        $this->assertLessThanOrEqual(3, count($recorded));
-    }
+    $recorded = Http::recorded();
 
-    /**
-     * Create a tool call response with unique IDs for use in sequences.
-     */
-    protected function fakeUniqueToolCallResponse(): PromiseInterface
-    {
-        return Http::response([
-            'id' => 'msg_tool_'.uniqid(),
-            'type' => 'message',
-            'role' => 'assistant',
-            'model' => 'claude-sonnet-4-6',
-            'content' => [[
-                'type' => 'tool_use',
-                'id' => 'toolu_'.uniqid(),
-                'name' => 'FixedNumberGenerator',
-                'input' => (object) [],
-            ]],
-            'stop_reason' => 'tool_use',
-            'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
-        ]);
-    }
+    // ToolUsingAgent has 1 tool + structured output tool = 2 tools
+    // maxSteps = round(2 * 1.5) = 3
+    // So max 3 requests before stopping (initial + 2 follow-ups)
+    expect(count($recorded))->toBeLessThanOrEqual(3);
+});
+
+/**
+ * Create a tool call response with unique IDs for use in sequences.
+ */
+function anthropicFakeUniqueToolCallResponse(): PromiseInterface
+{
+    return Http::response([
+        'id' => 'msg_tool_'.uniqid(),
+        'type' => 'message',
+        'role' => 'assistant',
+        'model' => 'claude-sonnet-4-6',
+        'content' => [[
+            'type' => 'tool_use',
+            'id' => 'toolu_'.uniqid(),
+            'name' => 'FixedNumberGenerator',
+            'input' => (object) [],
+        ]],
+        'stop_reason' => 'tool_use',
+        'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+    ]);
 }

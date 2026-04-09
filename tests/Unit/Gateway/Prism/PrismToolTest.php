@@ -1,139 +1,125 @@
 <?php
 
-namespace Tests\Unit\Gateway\Prism;
-
 use Laravel\Ai\Gateway\Prism\PrismTool;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
-use PHPUnit\Framework\TestCase;
 use Prism\Prism\ValueObjects\ToolCall as PrismToolCall;
 use Prism\Prism\ValueObjects\ToolResult as PrismToolResult;
 
-class PrismToolTest extends TestCase
-{
-    public function test_to_laravel_tool_call_from_array_unwraps_schema_definition(): void
-    {
-        $result = PrismTool::toLaravelToolCall([
-            'id' => 'call_1',
-            'name' => 'search',
-            'arguments' => ['schema_definition' => ['query' => 'test']],
-        ]);
+test('to laravel tool call from array unwraps schema definition', function () {
+    $result = PrismTool::toLaravelToolCall([
+        'id' => 'call_1',
+        'name' => 'search',
+        'arguments' => ['schema_definition' => ['query' => 'test']],
+    ]);
 
-        $this->assertInstanceOf(ToolCall::class, $result);
-        $this->assertSame('call_1', $result->id);
-        $this->assertSame('search', $result->name);
-        $this->assertSame(['query' => 'test'], $result->arguments);
-    }
+    expect($result)->toBeInstanceOf(ToolCall::class);
+    expect($result->id)->toBe('call_1');
+    expect($result->name)->toBe('search');
+    expect($result->arguments)->toBe(['query' => 'test']);
+});
 
-    public function test_to_laravel_tool_call_from_array_uses_raw_arguments_when_schema_definition_is_missing(): void
-    {
-        $result = PrismTool::toLaravelToolCall([
-            'id' => 'call_2',
-            'name' => 'search',
-            'arguments' => ['query' => 'test'],
-        ]);
+test('to laravel tool call from array uses raw arguments when schema definition is missing', function () {
+    $result = PrismTool::toLaravelToolCall([
+        'id' => 'call_2',
+        'name' => 'search',
+        'arguments' => ['query' => 'test'],
+    ]);
 
-        $this->assertInstanceOf(ToolCall::class, $result);
-        $this->assertSame(['query' => 'test'], $result->arguments);
-    }
+    expect($result)->toBeInstanceOf(ToolCall::class);
+    expect($result->arguments)->toBe(['query' => 'test']);
+});
 
-    public function test_to_laravel_tool_call_from_object_unwraps_schema_definition(): void
-    {
-        $prismToolCall = new PrismToolCall(
-            id: 'call_3',
-            name: 'search',
-            arguments: ['schema_definition' => ['query' => 'test']],
-            resultId: 'res_1',
-            reasoningId: 'reason_1',
-            reasoningSummary: ['summary'],
-        );
+test('to laravel tool call from object unwraps schema definition', function () {
+    $prismToolCall = new PrismToolCall(
+        id: 'call_3',
+        name: 'search',
+        arguments: ['schema_definition' => ['query' => 'test']],
+        resultId: 'res_1',
+        reasoningId: 'reason_1',
+        reasoningSummary: ['summary'],
+    );
 
-        $result = PrismTool::toLaravelToolCall($prismToolCall);
+    $result = PrismTool::toLaravelToolCall($prismToolCall);
 
-        $this->assertInstanceOf(ToolCall::class, $result);
-        $this->assertSame('call_3', $result->id);
-        $this->assertSame('search', $result->name);
-        $this->assertSame(['query' => 'test'], $result->arguments);
-        $this->assertSame('res_1', $result->resultId);
-        $this->assertSame('reason_1', $result->reasoningId);
-        $this->assertSame(['summary'], $result->reasoningSummary);
-    }
+    expect($result)->toBeInstanceOf(ToolCall::class);
+    expect($result->id)->toBe('call_3');
+    expect($result->name)->toBe('search');
+    expect($result->arguments)->toBe(['query' => 'test']);
+    expect($result->resultId)->toBe('res_1');
+    expect($result->reasoningId)->toBe('reason_1');
+    expect($result->reasoningSummary)->toBe(['summary']);
+});
 
-    public function test_to_laravel_tool_call_from_object_uses_raw_arguments_when_schema_definition_is_missing(): void
-    {
-        $prismToolCall = new PrismToolCall(
-            id: 'call_4',
-            name: 'search',
-            arguments: ['query' => 'test', 'limit' => 10],
-        );
+test('to laravel tool call from object uses raw arguments when schema definition is missing', function () {
+    $prismToolCall = new PrismToolCall(
+        id: 'call_4',
+        name: 'search',
+        arguments: ['query' => 'test', 'limit' => 10],
+    );
 
-        $result = PrismTool::toLaravelToolCall($prismToolCall);
+    $result = PrismTool::toLaravelToolCall($prismToolCall);
 
-        $this->assertInstanceOf(ToolCall::class, $result);
-        $this->assertSame(['query' => 'test', 'limit' => 10], $result->arguments);
-    }
+    expect($result)->toBeInstanceOf(ToolCall::class);
+    expect($result->arguments)->toBe(['query' => 'test', 'limit' => 10]);
+});
 
-    public function test_to_laravel_tool_result_from_array_unwraps_schema_definition(): void
-    {
-        $result = PrismTool::toLaravelToolResult([
-            'toolCallId' => 'call_1',
-            'toolName' => 'search',
-            'args' => ['schema_definition' => ['query' => 'test']],
-            'result' => 'found it',
-        ]);
+test('to laravel tool result from array unwraps schema definition', function () {
+    $result = PrismTool::toLaravelToolResult([
+        'toolCallId' => 'call_1',
+        'toolName' => 'search',
+        'args' => ['schema_definition' => ['query' => 'test']],
+        'result' => 'found it',
+    ]);
 
-        $this->assertInstanceOf(ToolResult::class, $result);
-        $this->assertSame('call_1', $result->id);
-        $this->assertSame('search', $result->name);
-        $this->assertSame(['query' => 'test'], $result->arguments);
-        $this->assertSame('found it', $result->result);
-    }
+    expect($result)->toBeInstanceOf(ToolResult::class);
+    expect($result->id)->toBe('call_1');
+    expect($result->name)->toBe('search');
+    expect($result->arguments)->toBe(['query' => 'test']);
+    expect($result->result)->toBe('found it');
+});
 
-    public function test_to_laravel_tool_result_from_array_uses_raw_args_when_schema_definition_is_missing(): void
-    {
-        $result = PrismTool::toLaravelToolResult([
-            'toolCallId' => 'call_2',
-            'toolName' => 'search',
-            'args' => ['query' => 'test'],
-            'result' => 'found it',
-        ]);
+test('to laravel tool result from array uses raw args when schema definition is missing', function () {
+    $result = PrismTool::toLaravelToolResult([
+        'toolCallId' => 'call_2',
+        'toolName' => 'search',
+        'args' => ['query' => 'test'],
+        'result' => 'found it',
+    ]);
 
-        $this->assertInstanceOf(ToolResult::class, $result);
-        $this->assertSame(['query' => 'test'], $result->arguments);
-    }
+    expect($result)->toBeInstanceOf(ToolResult::class);
+    expect($result->arguments)->toBe(['query' => 'test']);
+});
 
-    public function test_to_laravel_tool_result_from_object_unwraps_schema_definition(): void
-    {
-        $prismToolResult = new PrismToolResult(
-            toolCallId: 'call_3',
-            toolName: 'search',
-            args: ['schema_definition' => ['query' => 'test']],
-            result: 'found it',
-            toolCallResultId: 'res_1',
-        );
+test('to laravel tool result from object unwraps schema definition', function () {
+    $prismToolResult = new PrismToolResult(
+        toolCallId: 'call_3',
+        toolName: 'search',
+        args: ['schema_definition' => ['query' => 'test']],
+        result: 'found it',
+        toolCallResultId: 'res_1',
+    );
 
-        $result = PrismTool::toLaravelToolResult($prismToolResult);
+    $result = PrismTool::toLaravelToolResult($prismToolResult);
 
-        $this->assertInstanceOf(ToolResult::class, $result);
-        $this->assertSame('call_3', $result->id);
-        $this->assertSame('search', $result->name);
-        $this->assertSame(['query' => 'test'], $result->arguments);
-        $this->assertSame('found it', $result->result);
-        $this->assertSame('res_1', $result->resultId);
-    }
+    expect($result)->toBeInstanceOf(ToolResult::class);
+    expect($result->id)->toBe('call_3');
+    expect($result->name)->toBe('search');
+    expect($result->arguments)->toBe(['query' => 'test']);
+    expect($result->result)->toBe('found it');
+    expect($result->resultId)->toBe('res_1');
+});
 
-    public function test_to_laravel_tool_result_from_object_uses_raw_args_when_schema_definition_is_missing(): void
-    {
-        $prismToolResult = new PrismToolResult(
-            toolCallId: 'call_4',
-            toolName: 'search',
-            args: ['query' => 'test', 'limit' => 10],
-            result: 'found it',
-        );
+test('to laravel tool result from object uses raw args when schema definition is missing', function () {
+    $prismToolResult = new PrismToolResult(
+        toolCallId: 'call_4',
+        toolName: 'search',
+        args: ['query' => 'test', 'limit' => 10],
+        result: 'found it',
+    );
 
-        $result = PrismTool::toLaravelToolResult($prismToolResult);
+    $result = PrismTool::toLaravelToolResult($prismToolResult);
 
-        $this->assertInstanceOf(ToolResult::class, $result);
-        $this->assertSame(['query' => 'test', 'limit' => 10], $result->arguments);
-    }
-}
+    expect($result)->toBeInstanceOf(ToolResult::class);
+    expect($result->arguments)->toBe(['query' => 'test', 'limit' => 10]);
+});

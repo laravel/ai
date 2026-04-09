@@ -1,77 +1,72 @@
 <?php
 
-namespace Tests\Feature\Providers\Anthropic;
-
 use Illuminate\Support\Facades\Http;
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\Feature\Agents\ProviderOptionsAgent;
 use Tests\Feature\Agents\ProviderOptionsWithToolsAgent;
+use Tests\Feature\Providers\Anthropic\AnthropicHelpers;
 
-class ProviderOptionsTest extends AnthropicTestCase
-{
-    public function test_provider_options_are_included_in_anthropic_request_body(): void
-    {
-        Http::fake([
-            'api.anthropic.com/*' => $this->fakeTextResponse(),
-        ]);
+uses(AnthropicHelpers::class);
 
-        (new ProviderOptionsAgent)->prompt(
-            'Hi',
-            provider: 'anthropic',
-        );
+test('provider options are included in anthropic request body', function () {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse(),
+    ]);
 
-        Http::assertSent(function ($request) {
-            $body = $request->data();
+    (new ProviderOptionsAgent)->prompt(
+        'Hi',
+        provider: 'anthropic',
+    );
 
-            return isset($body['thinking'])
-                && $body['thinking']['type'] === 'enabled'
-                && $body['thinking']['budget_tokens'] === 10000;
-        });
-    }
+    Http::assertSent(function ($request) {
+        $body = $request->data();
 
-    public function test_request_body_does_not_contain_provider_options_when_agent_does_not_implement_interface(): void
-    {
-        Http::fake([
-            'api.anthropic.com/*' => $this->fakeTextResponse(),
-        ]);
+        return isset($body['thinking'])
+            && $body['thinking']['type'] === 'enabled'
+            && $body['thinking']['budget_tokens'] === 10000;
+    });
+});
 
-        (new AssistantAgent)->prompt(
-            'Hi',
-            provider: 'anthropic',
-        );
+test('request body does not contain provider options when agent does not implement interface', function () {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse(),
+    ]);
 
-        Http::assertSent(function ($request) {
-            return ! isset($request->data()['thinking']);
-        });
-    }
+    (new AssistantAgent)->prompt(
+        'Hi',
+        provider: 'anthropic',
+    );
 
-    public function test_provider_options_are_persisted_in_tool_call_follow_up_requests(): void
-    {
-        Http::fake([
-            'api.anthropic.com/*' => Http::sequence([
-                $this->fakeToolCallResponse(),
-                $this->fakeTextResponse('The number is 72019'),
-            ]),
-        ]);
+    Http::assertSent(function ($request) {
+        return ! isset($request->data()['thinking']);
+    });
+});
 
-        $response = (new ProviderOptionsWithToolsAgent)->prompt(
-            'Generate a random number',
-            provider: 'anthropic',
-        );
+test('provider options are persisted in tool call follow up requests', function () {
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            $this->fakeToolCallResponse(),
+            $this->fakeTextResponse('The number is 72019'),
+        ]),
+    ]);
 
-        $this->assertSame('The number is 72019', $response->text);
+    $response = (new ProviderOptionsWithToolsAgent)->prompt(
+        'Generate a random number',
+        provider: 'anthropic',
+    );
 
-        $recorded = Http::recorded();
+    expect($response->text)->toBe('The number is 72019');
 
-        $this->assertCount(2, $recorded);
+    $recorded = Http::recorded();
 
-        $firstBody = $recorded[0][0]->data();
-        $this->assertSame('enabled', $firstBody['thinking']['type']);
-        $this->assertSame(10000, $firstBody['thinking']['budget_tokens']);
+    expect($recorded)->toHaveCount(2);
 
-        $secondBody = $recorded[1][0]->data();
-        $this->assertArrayHasKey('thinking', $secondBody);
-        $this->assertSame('enabled', $secondBody['thinking']['type']);
-        $this->assertSame(10000, $secondBody['thinking']['budget_tokens']);
-    }
-}
+    $firstBody = $recorded[0][0]->data();
+    expect($firstBody['thinking']['type'])->toBe('enabled');
+    expect($firstBody['thinking']['budget_tokens'])->toBe(10000);
+
+    $secondBody = $recorded[1][0]->data();
+    expect($secondBody)->toHaveKey('thinking');
+    expect($secondBody['thinking']['type'])->toBe('enabled');
+    expect($secondBody['thinking']['budget_tokens'])->toBe(10000);
+});

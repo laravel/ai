@@ -1,7 +1,5 @@
 <?php
 
-namespace Tests\Feature;
-
 use Illuminate\Support\Facades\Event;
 use Laravel\Ai\Audio;
 use Laravel\Ai\Embeddings;
@@ -15,109 +13,96 @@ use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Transcription;
 use Tests\Feature\Agents\AssistantAgent;
-use Tests\TestCase;
 
-class AiProviderEnumIntegrationTest extends TestCase
-{
-    public function test_agent_prompt_accepts_ai_provider_enum(): void
-    {
-        Event::fake();
+test('agent prompt accepts ai provider enum', function () {
+    Event::fake();
 
-        $response = (new AssistantAgent)->prompt(
-            'What is the name of the PHP framework created by Taylor Otwell?',
-            provider: Lab::Groq,
-            model: 'openai/gpt-oss-20b',
-        );
+    $response = (new AssistantAgent)->prompt(
+        'What is the name of the PHP framework created by Taylor Otwell?',
+        provider: Lab::Groq,
+        model: 'openai/gpt-oss-20b',
+    );
 
-        $this->assertTrue(str_contains($response->text, 'Laravel'));
-        $this->assertEquals('groq', $response->meta->provider);
+    expect(str_contains($response->text, 'Laravel'))->toBeTrue();
+    expect($response->meta->provider)->toEqual('groq');
 
-        Event::assertDispatched(AgentPrompted::class);
+    Event::assertDispatched(AgentPrompted::class);
+});
+
+test('agent stream accepts ai provider enum', function () {
+    Event::fake();
+
+    $response = (new AssistantAgent)->stream(
+        'What is the name of the PHP framework created by Taylor Otwell?',
+        provider: Lab::Groq,
+        model: 'openai/gpt-oss-20b',
+    );
+
+    $events = [];
+
+    foreach ($response as $event) {
+        $events[] = $event;
     }
 
-    public function test_agent_stream_accepts_ai_provider_enum(): void
-    {
-        Event::fake();
+    expect(collect($events)->whereInstanceOf(TextDelta::class)->isNotEmpty())->toBeTrue();
+    expect(str_contains($response->text, 'Laravel'))->toBeTrue();
 
-        $response = (new AssistantAgent)->stream(
-            'What is the name of the PHP framework created by Taylor Otwell?',
-            provider: Lab::Groq,
-            model: 'openai/gpt-oss-20b',
-        );
+    Event::assertDispatched(AgentStreamed::class);
+});
 
-        $events = [];
+test('agent queue accepts ai provider enum', function () {
+    (new AssistantAgent)->queue(
+        'What is the name of the PHP framework created by Taylor Otwell?',
+        provider: Lab::Groq,
+        model: 'openai/gpt-oss-20b',
+    )->then(function (AgentResponse $response) {
+        $_ENV['__testing.enum_queue_response'] = $response;
+    });
 
-        foreach ($response as $event) {
-            $events[] = $event;
-        }
+    $response = $_ENV['__testing.enum_queue_response'];
 
-        $this->assertTrue(
-            collect($events)->whereInstanceOf(TextDelta::class)->isNotEmpty()
-        );
-        $this->assertTrue(str_contains($response->text, 'Laravel'));
+    expect(str_contains($response->text, 'Laravel'))->toBeTrue();
 
-        Event::assertDispatched(AgentStreamed::class);
-    }
+    unset($_ENV['__testing.enum_queue_response']);
+});
 
-    public function test_agent_queue_accepts_ai_provider_enum(): void
-    {
-        (new AssistantAgent)->queue(
-            'What is the name of the PHP framework created by Taylor Otwell?',
-            provider: Lab::Groq,
-            model: 'openai/gpt-oss-20b',
-        )->then(function (AgentResponse $response) {
-            $_ENV['__testing.enum_queue_response'] = $response;
-        });
+test('agent prompt accepts array of ai provider enum values for failover', function () {
+    $response = (new AssistantAgent)->prompt(
+        'What is the name of the PHP framework created by Taylor Otwell?',
+        provider: [Lab::Groq],
+        model: 'openai/gpt-oss-20b',
+    );
 
-        $response = $_ENV['__testing.enum_queue_response'];
+    expect(str_contains($response->text, 'Laravel'))->toBeTrue();
+    expect($response->meta->provider)->toEqual('groq');
+});
 
-        $this->assertTrue(str_contains($response->text, 'Laravel'));
+test('embeddings generate accepts ai provider enum', function () {
+    Event::fake();
 
-        unset($_ENV['__testing.enum_queue_response']);
-    }
+    $response = Embeddings::for(['I love to watch Star Trek.'])
+        ->generate(provider: Lab::OpenAI);
 
-    public function test_agent_prompt_accepts_array_of_ai_provider_enum_values_for_failover(): void
-    {
-        $response = (new AssistantAgent)->prompt(
-            'What is the name of the PHP framework created by Taylor Otwell?',
-            provider: [Lab::Groq],
-            model: 'openai/gpt-oss-20b',
-        );
+    expect($response)->toBeInstanceOf(EmbeddingsResponse::class);
+    expect(count($response->embeddings[0]) === 1536)->toBeTrue();
+    expect($response->meta->provider)->toEqual('openai');
 
-        $this->assertTrue(str_contains($response->text, 'Laravel'));
-        $this->assertEquals('groq', $response->meta->provider);
-    }
+    Event::assertDispatched(GeneratingEmbeddings::class);
+    Event::assertDispatched(EmbeddingsGenerated::class);
+});
 
-    public function test_embeddings_generate_accepts_ai_provider_enum(): void
-    {
-        Event::fake();
+test('audio generate accepts ai provider enum', function () {
+    $response = Audio::of('Hello there! How are you today?')
+        ->generate(provider: Lab::OpenAI);
 
-        $response = Embeddings::for(['I love to watch Star Trek.'])
-            ->generate(provider: Lab::OpenAI);
+    expect($response->meta->provider)->toEqual('openai');
+});
 
-        $this->assertInstanceOf(EmbeddingsResponse::class, $response);
-        $this->assertTrue(count($response->embeddings[0]) === 1536);
-        $this->assertEquals('openai', $response->meta->provider);
+test('transcription generate accepts ai provider enum', function () {
+    $audio = Audio::of('Hello there! How are you today?')->generate();
 
-        Event::assertDispatched(GeneratingEmbeddings::class);
-        Event::assertDispatched(EmbeddingsGenerated::class);
-    }
+    $transcription = Transcription::of($audio->audio)
+        ->generate(provider: Lab::OpenAI);
 
-    public function test_audio_generate_accepts_ai_provider_enum(): void
-    {
-        $response = Audio::of('Hello there! How are you today?')
-            ->generate(provider: Lab::OpenAI);
-
-        $this->assertEquals('openai', $response->meta->provider);
-    }
-
-    public function test_transcription_generate_accepts_ai_provider_enum(): void
-    {
-        $audio = Audio::of('Hello there! How are you today?')->generate();
-
-        $transcription = Transcription::of($audio->audio)
-            ->generate(provider: Lab::OpenAI);
-
-        $this->assertTrue(str_contains(strtolower((string) $transcription), 'how are you today'));
-    }
-}
+    expect(str_contains(strtolower((string) $transcription), 'how are you today'))->toBeTrue();
+});

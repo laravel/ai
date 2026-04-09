@@ -1,43 +1,35 @@
 <?php
 
-namespace Tests\Unit\Gateway\Prism;
-
 use Laravel\Ai\Gateway\Prism\PrismUsage;
 use Laravel\Ai\Responses\Data\Usage;
-use PHPUnit\Framework\TestCase;
 use Prism\Prism\ValueObjects\Usage as PrismUsageValueObject;
 
-class PrismUsageTest extends TestCase
-{
-    public function test_converts_prism_usage_to_laravel_usage(): void
-    {
-        $prismUsage = new PrismUsageValueObject(
-            promptTokens: 100,
-            completionTokens: 50,
-            cacheWriteInputTokens: 10,
-            cacheReadInputTokens: 5,
-            thoughtTokens: 20,
-        );
+test('converts prism usage to laravel usage', function () {
+    $prismUsage = new PrismUsageValueObject(
+        promptTokens: 100,
+        completionTokens: 50,
+        cacheWriteInputTokens: 10,
+        cacheReadInputTokens: 5,
+        thoughtTokens: 20,
+    );
 
-        $usage = PrismUsage::toLaravelUsage($prismUsage);
+    $usage = PrismUsage::toLaravelUsage($prismUsage);
 
-        $this->assertInstanceOf(Usage::class, $usage);
-        $this->assertEquals(100, $usage->promptTokens);
-        $this->assertEquals(50, $usage->completionTokens);
-        $this->assertEquals(10, $usage->cacheWriteInputTokens);
-        $this->assertEquals(5, $usage->cacheReadInputTokens);
-        $this->assertEquals(20, $usage->reasoningTokens);
-    }
+    expect($usage)->toBeInstanceOf(Usage::class);
+    expect($usage->promptTokens)->toEqual(100);
+    expect($usage->completionTokens)->toEqual(50);
+    expect($usage->cacheWriteInputTokens)->toEqual(10);
+    expect($usage->cacheReadInputTokens)->toEqual(5);
+    expect($usage->reasoningTokens)->toEqual(20);
+});
 
-    public function test_handles_null_usage(): void
-    {
-        $usage = PrismUsage::toLaravelUsage(null);
+test('handles null usage', function () {
+    $usage = PrismUsage::toLaravelUsage(null);
 
-        $this->assertInstanceOf(Usage::class, $usage);
-        $this->assertEquals(0, $usage->promptTokens);
-        $this->assertEquals(0, $usage->completionTokens);
-        $this->assertEquals(0, $usage->cacheWriteInputTokens);
-        $this->assertEquals(0, $usage->cacheReadInputTokens);
-        $this->assertEquals(0, $usage->reasoningTokens);
-    }
-}
+    expect($usage)->toBeInstanceOf(Usage::class);
+    expect($usage->promptTokens)->toEqual(0);
+    expect($usage->completionTokens)->toEqual(0);
+    expect($usage->cacheWriteInputTokens)->toEqual(0);
+    expect($usage->cacheReadInputTokens)->toEqual(0);
+    expect($usage->reasoningTokens)->toEqual(0);
+});

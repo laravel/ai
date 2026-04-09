@@ -1,37 +1,29 @@
 <?php
 
-namespace Tests\Feature;
-
 use Illuminate\Support\Facades\Event;
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Events\EmbeddingsGenerated;
 use Laravel\Ai\Events\GeneratingEmbeddings;
 use Laravel\Ai\Responses\EmbeddingsResponse;
-use Tests\TestCase;
 
-class EmbeddingsIntegrationTest extends TestCase
-{
-    public function test_embeddings_can_be_generated(): void
-    {
-        Event::fake();
+test('embeddings can be generated', function () {
+    Event::fake();
 
-        $response = Embeddings::for(['I love to watch Star Trek.'])->generate();
+    $response = Embeddings::for(['I love to watch Star Trek.'])->generate();
 
-        $this->assertInstanceOf(EmbeddingsResponse::class, $response);
-        $this->assertCount(1536, $response->embeddings[0]);
-        $this->assertEquals('openai', $response->meta->provider);
+    expect($response)->toBeInstanceOf(EmbeddingsResponse::class);
+    expect($response->embeddings[0])->toHaveCount(1536);
+    expect($response->meta->provider)->toEqual('openai');
 
-        Event::assertDispatched(GeneratingEmbeddings::class, fn (GeneratingEmbeddings $event) => $event->prompt->timeout === 30);
-        Event::assertDispatched(EmbeddingsGenerated::class, fn (EmbeddingsGenerated $event) => $event->prompt->timeout === 30);
-    }
+    Event::assertDispatched(GeneratingEmbeddings::class, fn (GeneratingEmbeddings $event) => $event->prompt->timeout === 30);
+    Event::assertDispatched(EmbeddingsGenerated::class, fn (EmbeddingsGenerated $event) => $event->prompt->timeout === 30);
+});
 
-    public function test_embeddings_can_be_generated_with_custom_dimensions(): void
-    {
-        $response = Embeddings::for(['test text'])
-            ->dimensions(256)
-            ->generate();
+test('embeddings can be generated with custom dimensions', function () {
+    $response = Embeddings::for(['test text'])
+        ->dimensions(256)
+        ->generate();
 
-        $this->assertInstanceOf(EmbeddingsResponse::class, $response);
-        $this->assertEquals(256, count($response->embeddings[0]));
-    }
-}
+    expect($response)->toBeInstanceOf(EmbeddingsResponse::class);
+    expect(count($response->embeddings[0]))->toEqual(256);
+});

@@ -1,7 +1,5 @@
 <?php
 
-namespace Tests\Feature\Providers\Anthropic;
-
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ProviderToolEvent;
@@ -16,298 +14,291 @@ use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\Feature\Agents\ProviderOptionsWithToolsAgent;
+use Tests\Feature\Providers\Anthropic\AnthropicHelpers;
 
-class StreamingTest extends AnthropicTestCase
-{
-    public function test_streaming_emits_text_events(): void
-    {
-        Http::fake([
-            'api.anthropic.com/*' => Http::response(
-                body: $this->ssePayload([
-                    $this->messageStart(),
-                    $this->contentBlockStart(0, ['type' => 'text', 'text' => '']),
-                    $this->contentBlockDelta(0, ['type' => 'text_delta', 'text' => 'Hello']),
-                    $this->contentBlockDelta(0, ['type' => 'text_delta', 'text' => ' world']),
-                    $this->contentBlockStop(0),
-                    $this->messageDelta('end_turn', 10),
-                ]),
-                status: 200,
-                headers: ['Content-Type' => 'text/event-stream'],
-            ),
-        ]);
+uses(AnthropicHelpers::class);
 
-        $events = $this->collectStreamEvents();
-
-        $this->assertInstanceOf(StreamStart::class, $events[0]);
-        $this->assertInstanceOf(TextStart::class, $events[1]);
-        $this->assertInstanceOf(TextDelta::class, $events[2]);
-        $this->assertSame('Hello', $events[2]->delta);
-        $this->assertInstanceOf(TextDelta::class, $events[3]);
-        $this->assertSame(' world', $events[3]->delta);
-        $this->assertInstanceOf(TextEnd::class, $events[4]);
-        $this->assertInstanceOf(StreamEnd::class, $events[5]);
-    }
-
-    public function test_streaming_handles_tool_calls(): void
-    {
-        Http::fake([
-            'api.anthropic.com/*' => Http::sequence([
-                Http::response(
-                    body: $this->ssePayload([
-                        $this->messageStart(),
-                        $this->contentBlockStart(0, ['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'FixedNumberGenerator', 'input' => '']),
-                        $this->contentBlockDelta(0, ['type' => 'input_json_delta', 'partial_json' => '{}']),
-                        $this->contentBlockStop(0),
-                        $this->messageDelta('tool_use', 5),
-                    ]),
-                    status: 200,
-                    headers: ['Content-Type' => 'text/event-stream'],
-                ),
-                Http::response([
-                    'id' => 'msg_2',
-                    'type' => 'message',
-                    'role' => 'assistant',
-                    'model' => 'claude-sonnet-4-6',
-                    'content' => [['type' => 'text', 'text' => 'The number is 72019']],
-                    'stop_reason' => 'end_turn',
-                    'usage' => ['input_tokens' => 20, 'output_tokens' => 10],
-                ]),
+test('streaming emits text events', function () {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response(
+            body: anthropicSsePayload([
+                messageStart(),
+                contentBlockStart(0, ['type' => 'text', 'text' => '']),
+                contentBlockDelta(0, ['type' => 'text_delta', 'text' => 'Hello']),
+                contentBlockDelta(0, ['type' => 'text_delta', 'text' => ' world']),
+                contentBlockStop(0),
+                messageDelta('end_turn', 10),
             ]),
-        ]);
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
 
-        $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+    $events = anthropicCollectStreamEvents();
 
-        $toolCallEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolCallEvent));
+    expect($events[0])->toBeInstanceOf(StreamStart::class);
+    expect($events[1])->toBeInstanceOf(TextStart::class);
+    expect($events[2])->toBeInstanceOf(TextDelta::class);
+    expect($events[2]->delta)->toBe('Hello');
+    expect($events[3])->toBeInstanceOf(TextDelta::class);
+    expect($events[3]->delta)->toBe(' world');
+    expect($events[4])->toBeInstanceOf(TextEnd::class);
+    expect($events[5])->toBeInstanceOf(StreamEnd::class);
+});
 
-        $this->assertNotEmpty($toolCallEvents);
-        $this->assertSame('FixedNumberGenerator', $toolCallEvents[0]->toolCall->name);
-        $this->assertSame('toolu_1', $toolCallEvents[0]->toolCall->id);
-    }
-
-    public function test_streaming_handles_thinking_blocks(): void
-    {
-        Http::fake([
-            'api.anthropic.com/*' => Http::response(
-                body: $this->ssePayload([
-                    $this->messageStart(),
-                    $this->contentBlockStart(0, ['type' => 'thinking', 'thinking' => '']),
-                    $this->contentBlockDelta(0, ['type' => 'thinking_delta', 'thinking' => 'Let me think...']),
-                    $this->contentBlockStop(0),
-                    $this->contentBlockStart(1, ['type' => 'text', 'text' => '']),
-                    $this->contentBlockDelta(1, ['type' => 'text_delta', 'text' => 'Answer']),
-                    $this->contentBlockStop(1),
-                    $this->messageDelta('end_turn', 15),
+test('streaming handles tool calls', function () {
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            Http::response(
+                body: anthropicSsePayload([
+                    messageStart(),
+                    contentBlockStart(0, ['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'FixedNumberGenerator', 'input' => '']),
+                    contentBlockDelta(0, ['type' => 'input_json_delta', 'partial_json' => '{}']),
+                    contentBlockStop(0),
+                    messageDelta('tool_use', 5),
                 ]),
                 status: 200,
                 headers: ['Content-Type' => 'text/event-stream'],
             ),
-        ]);
-
-        $events = $this->collectStreamEvents();
-
-        $types = array_map(fn ($e) => $e::class, $events);
-
-        $this->assertContains(ReasoningStart::class, $types);
-        $this->assertContains(ReasoningDelta::class, $types);
-        $this->assertContains(ReasoningEnd::class, $types);
-
-        $reasoningDelta = array_values(array_filter($events, fn ($e) => $e instanceof ReasoningDelta))[0];
-        $this->assertSame('Let me think...', $reasoningDelta->delta);
-    }
-
-    public function test_streaming_handles_server_tool_use(): void
-    {
-        Http::fake([
-            'api.anthropic.com/*' => Http::response(
-                body: $this->ssePayload([
-                    $this->messageStart(),
-                    $this->contentBlockStart(0, ['type' => 'server_tool_use', 'id' => 'srvtoolu_1', 'name' => 'web_search']),
-                    $this->contentBlockStop(0),
-                    $this->contentBlockStart(1, ['type' => 'text', 'text' => '']),
-                    $this->contentBlockDelta(1, ['type' => 'text_delta', 'text' => 'Result']),
-                    $this->contentBlockStop(1),
-                    $this->messageDelta('end_turn', 10),
-                ]),
-                status: 200,
-                headers: ['Content-Type' => 'text/event-stream'],
-            ),
-        ]);
-
-        $events = $this->collectStreamEvents();
-
-        $providerEvents = array_values(array_filter($events, fn ($e) => $e instanceof ProviderToolEvent));
-
-        $this->assertCount(2, $providerEvents);
-        $this->assertSame('started', $providerEvents[0]->status);
-        $this->assertSame('completed', $providerEvents[1]->status);
-        $this->assertSame('srvtoolu_1', $providerEvents[0]->itemId);
-    }
-
-    public function test_streaming_handles_provider_tool_results(): void
-    {
-        Http::fake([
-            'api.anthropic.com/*' => Http::response(
-                body: $this->ssePayload([
-                    $this->messageStart(),
-                    $this->contentBlockStart(0, ['type' => 'web_search_tool_result', 'tool_use_id' => 'srvtoolu_1', 'search_results' => []]),
-                    $this->contentBlockStop(0),
-                    $this->contentBlockStart(1, ['type' => 'text', 'text' => '']),
-                    $this->contentBlockDelta(1, ['type' => 'text_delta', 'text' => 'Found it']),
-                    $this->contentBlockStop(1),
-                    $this->messageDelta('end_turn', 10),
-                ]),
-                status: 200,
-                headers: ['Content-Type' => 'text/event-stream'],
-            ),
-        ]);
-
-        $events = $this->collectStreamEvents();
-
-        $providerEvents = array_values(array_filter($events, fn ($e) => $e instanceof ProviderToolEvent));
-
-        $this->assertNotEmpty($providerEvents);
-        $this->assertSame('result_received', $providerEvents[0]->status);
-        $this->assertSame('web_search_tool_result', $providerEvents[0]->type);
-    }
-
-    public function test_streaming_error_event_stops_stream(): void
-    {
-        Http::fake([
-            'api.anthropic.com/*' => Http::response(
-                body: $this->ssePayload([
-                    ['type' => 'error', 'error' => ['type' => 'overloaded_error', 'message' => 'Server overloaded']],
-                ]),
-                status: 200,
-                headers: ['Content-Type' => 'text/event-stream'],
-            ),
-        ]);
-
-        $events = $this->collectStreamEvents();
-
-        $this->assertCount(1, $events);
-        $this->assertInstanceOf(Error::class, $events[0]);
-        $this->assertSame('overloaded_error', $events[0]->type);
-        $this->assertSame('Server overloaded', $events[0]->message);
-    }
-
-    /**
-     * Collect all stream events from the agent's stream response.
-     */
-    protected function collectStreamEvents(?object $agent = null): array
-    {
-        $agent ??= new AssistantAgent;
-
-        $response = $agent->stream(
-            'Hello',
-            provider: 'anthropic',
-        );
-
-        $events = [];
-
-        foreach ($response as $event) {
-            $events[] = $event;
-        }
-
-        return $events;
-    }
-
-    protected function ssePayload(array $events): string
-    {
-        $lines = [];
-
-        foreach ($events as $event) {
-            $lines[] = 'data: '.json_encode($event);
-        }
-
-        return implode("\n\n", $lines)."\n\n";
-    }
-
-    protected function messageStart(): array
-    {
-        return [
-            'type' => 'message_start',
-            'message' => [
-                'id' => 'msg_1',
-                'model' => 'claude-sonnet-4-6',
+            Http::response([
+                'id' => 'msg_2',
+                'type' => 'message',
                 'role' => 'assistant',
-                'content' => [],
-                'usage' => ['input_tokens' => 10, 'output_tokens' => 0],
-            ],
-        ];
+                'model' => 'claude-sonnet-4-6',
+                'content' => [['type' => 'text', 'text' => 'The number is 72019']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 20, 'output_tokens' => 10],
+            ]),
+        ]),
+    ]);
+
+    $events = anthropicCollectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+    $toolCallEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolCallEvent));
+
+    expect($toolCallEvents)->not->toBeEmpty();
+    expect($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator');
+    expect($toolCallEvents[0]->toolCall->id)->toBe('toolu_1');
+});
+
+test('streaming handles thinking blocks', function () {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response(
+            body: anthropicSsePayload([
+                messageStart(),
+                contentBlockStart(0, ['type' => 'thinking', 'thinking' => '']),
+                contentBlockDelta(0, ['type' => 'thinking_delta', 'thinking' => 'Let me think...']),
+                contentBlockStop(0),
+                contentBlockStart(1, ['type' => 'text', 'text' => '']),
+                contentBlockDelta(1, ['type' => 'text_delta', 'text' => 'Answer']),
+                contentBlockStop(1),
+                messageDelta('end_turn', 15),
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = anthropicCollectStreamEvents();
+
+    $types = array_map(fn ($e) => $e::class, $events);
+
+    expect($types)->toContain(ReasoningStart::class);
+    expect($types)->toContain(ReasoningDelta::class);
+    expect($types)->toContain(ReasoningEnd::class);
+
+    $reasoningDelta = array_values(array_filter($events, fn ($e) => $e instanceof ReasoningDelta))[0];
+    expect($reasoningDelta->delta)->toBe('Let me think...');
+});
+
+test('streaming handles server tool use', function () {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response(
+            body: anthropicSsePayload([
+                messageStart(),
+                contentBlockStart(0, ['type' => 'server_tool_use', 'id' => 'srvtoolu_1', 'name' => 'web_search']),
+                contentBlockStop(0),
+                contentBlockStart(1, ['type' => 'text', 'text' => '']),
+                contentBlockDelta(1, ['type' => 'text_delta', 'text' => 'Result']),
+                contentBlockStop(1),
+                messageDelta('end_turn', 10),
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = anthropicCollectStreamEvents();
+
+    $providerEvents = array_values(array_filter($events, fn ($e) => $e instanceof ProviderToolEvent));
+
+    expect($providerEvents)->toHaveCount(2);
+    expect($providerEvents[0]->status)->toBe('started');
+    expect($providerEvents[1]->status)->toBe('completed');
+    expect($providerEvents[0]->itemId)->toBe('srvtoolu_1');
+});
+
+test('streaming handles provider tool results', function () {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response(
+            body: anthropicSsePayload([
+                messageStart(),
+                contentBlockStart(0, ['type' => 'web_search_tool_result', 'tool_use_id' => 'srvtoolu_1', 'search_results' => []]),
+                contentBlockStop(0),
+                contentBlockStart(1, ['type' => 'text', 'text' => '']),
+                contentBlockDelta(1, ['type' => 'text_delta', 'text' => 'Found it']),
+                contentBlockStop(1),
+                messageDelta('end_turn', 10),
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = anthropicCollectStreamEvents();
+
+    $providerEvents = array_values(array_filter($events, fn ($e) => $e instanceof ProviderToolEvent));
+
+    expect($providerEvents)->not->toBeEmpty();
+    expect($providerEvents[0]->status)->toBe('result_received');
+    expect($providerEvents[0]->type)->toBe('web_search_tool_result');
+});
+
+test('streaming error event stops stream', function () {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response(
+            body: anthropicSsePayload([
+                ['type' => 'error', 'error' => ['type' => 'overloaded_error', 'message' => 'Server overloaded']],
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = anthropicCollectStreamEvents();
+
+    expect($events)->toHaveCount(1);
+    expect($events[0])->toBeInstanceOf(Error::class);
+    expect($events[0]->type)->toBe('overloaded_error');
+    expect($events[0]->message)->toBe('Server overloaded');
+});
+
+/**
+ * Collect all stream events from the agent's stream response.
+ */
+function anthropicCollectStreamEvents(?object $agent = null): array
+{
+    $agent ??= new AssistantAgent;
+
+    $response = $agent->stream(
+        'Hello',
+        provider: 'anthropic',
+    );
+
+    $events = [];
+
+    foreach ($response as $event) {
+        $events[] = $event;
     }
 
-    protected function contentBlockStart(int $index, array $contentBlock): array
-    {
-        return [
-            'type' => 'content_block_start',
-            'index' => $index,
-            'content_block' => $contentBlock,
-        ];
+    return $events;
+}
+
+function anthropicSsePayload(array $events): string
+{
+    $lines = [];
+
+    foreach ($events as $event) {
+        $lines[] = 'data: '.json_encode($event);
     }
 
-    protected function contentBlockDelta(int $index, array $delta): array
-    {
-        return [
-            'type' => 'content_block_delta',
-            'index' => $index,
-            'delta' => $delta,
-        ];
-    }
+    return implode("\n\n", $lines)."\n\n";
+}
 
-    protected function contentBlockStop(int $index): array
-    {
-        return [
-            'type' => 'content_block_stop',
-            'index' => $index,
-        ];
-    }
+function messageStart(): array
+{
+    return [
+        'type' => 'message_start',
+        'message' => [
+            'id' => 'msg_1',
+            'model' => 'claude-sonnet-4-6',
+            'role' => 'assistant',
+            'content' => [],
+            'usage' => ['input_tokens' => 10, 'output_tokens' => 0],
+        ],
+    ];
+}
 
-    public function test_streaming_captures_input_tokens_from_message_start(): void
-    {
-        Http::fake([
-            'api.anthropic.com/*' => Http::response(
-                body: $this->ssePayload([
-                    [
-                        'type' => 'message_start',
-                        'message' => [
-                            'id' => 'msg_1',
-                            'model' => 'claude-sonnet-4-6',
-                            'role' => 'assistant',
-                            'content' => [],
-                            'usage' => [
-                                'input_tokens' => 42,
-                                'output_tokens' => 0,
-                                'cache_creation_input_tokens' => 100,
-                                'cache_read_input_tokens' => 50,
-                            ],
+function contentBlockStart(int $index, array $contentBlock): array
+{
+    return [
+        'type' => 'content_block_start',
+        'index' => $index,
+        'content_block' => $contentBlock,
+    ];
+}
+
+function contentBlockDelta(int $index, array $delta): array
+{
+    return [
+        'type' => 'content_block_delta',
+        'index' => $index,
+        'delta' => $delta,
+    ];
+}
+
+function contentBlockStop(int $index): array
+{
+    return [
+        'type' => 'content_block_stop',
+        'index' => $index,
+    ];
+}
+
+test('streaming captures input tokens from message start', function () {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response(
+            body: anthropicSsePayload([
+                [
+                    'type' => 'message_start',
+                    'message' => [
+                        'id' => 'msg_1',
+                        'model' => 'claude-sonnet-4-6',
+                        'role' => 'assistant',
+                        'content' => [],
+                        'usage' => [
+                            'input_tokens' => 42,
+                            'output_tokens' => 0,
+                            'cache_creation_input_tokens' => 100,
+                            'cache_read_input_tokens' => 50,
                         ],
                     ],
-                    $this->contentBlockStart(0, ['type' => 'text', 'text' => '']),
-                    $this->contentBlockDelta(0, ['type' => 'text_delta', 'text' => 'Hello']),
-                    $this->contentBlockStop(0),
-                    $this->messageDelta('end_turn', 10),
-                ]),
-                status: 200,
-                headers: ['Content-Type' => 'text/event-stream'],
-            ),
-        ]);
+                ],
+                contentBlockStart(0, ['type' => 'text', 'text' => '']),
+                contentBlockDelta(0, ['type' => 'text_delta', 'text' => 'Hello']),
+                contentBlockStop(0),
+                messageDelta('end_turn', 10),
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
 
-        $events = $this->collectStreamEvents();
+    $events = anthropicCollectStreamEvents();
 
-        $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+    $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
 
-        $this->assertSame(42, $streamEnd->usage->promptTokens);
-        $this->assertSame(10, $streamEnd->usage->completionTokens);
-        $this->assertSame(100, $streamEnd->usage->cacheWriteInputTokens);
-        $this->assertSame(50, $streamEnd->usage->cacheReadInputTokens);
-    }
+    expect($streamEnd->usage->promptTokens)->toBe(42);
+    expect($streamEnd->usage->completionTokens)->toBe(10);
+    expect($streamEnd->usage->cacheWriteInputTokens)->toBe(100);
+    expect($streamEnd->usage->cacheReadInputTokens)->toBe(50);
+});
 
-    protected function messageDelta(string $stopReason, int $outputTokens): array
-    {
-        return [
-            'type' => 'message_delta',
-            'delta' => ['stop_reason' => $stopReason],
-            'usage' => ['output_tokens' => $outputTokens],
-        ];
-    }
+function messageDelta(string $stopReason, int $outputTokens): array
+{
+    return [
+        'type' => 'message_delta',
+        'delta' => ['stop_reason' => $stopReason],
+        'usage' => ['output_tokens' => $outputTokens],
+    ];
 }

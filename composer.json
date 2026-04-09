@@ -26,7 +26,9 @@
     "require-dev": {
         "laravel/pint": "^1.26",
         "mockery/mockery": "^1.6.12",
-        "orchestra/testbench": "^10.6|^11.0"
+        "orchestra/testbench": "^10.6|^11.0",
+        "pestphp/pest": "*",
+        "pestphp/pest-plugin-laravel": "*"
     },
     "minimum-stability": "dev",
     "prefer-stable": true,
@@ -44,7 +46,10 @@
         }
     },
     "config": {
-        "sort-packages": true
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
     },
     "extra": {
         "branch-alias": {

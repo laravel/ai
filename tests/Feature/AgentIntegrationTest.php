@@ -1,8 +1,5 @@
 <?php
 
-namespace Tests\Feature;
-
-use Exception;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Event;
@@ -20,250 +17,232 @@ use Tests\Feature\Agents\AssistantAgent;
 use Tests\Feature\Agents\ConversationalAgent;
 use Tests\Feature\Agents\StructuredAgent;
 use Tests\Feature\Agents\ToolUsingAgent;
-use Tests\TestCase;
 
 use function Laravel\Ai\agent;
 
-class AgentIntegrationTest extends TestCase
-{
-    protected $provider = 'groq';
+beforeEach(function () {
+    $this->provider = 'groq';
+    $this->model = 'openai/gpt-oss-20b';
+    $this->toolProvider = 'anthropic';
+    $this->toolModel = 'claude-haiku-4-5-20251001';
+});
 
-    protected $model = 'openai/gpt-oss-20b';
+test('agents can get a simple text response', function () {
+    Event::fake();
 
-    protected $toolProvider = 'anthropic';
+    $agent = new AssistantAgent;
 
-    protected $toolModel = 'claude-haiku-4-5-20251001';
+    $response = $agent->prompt(
+        'What is the name of the PHP framework created by Taylor Otwell?',
+        provider: $this->provider,
+        model: $this->model,
+    );
 
-    public function test_agents_can_get_a_simple_text_response(): void
-    {
-        Event::fake();
+    expect(str_contains($response->text, 'Laravel'))->toBeTrue();
+    expect(Str::isUuid($response->invocationId, 7))->toBeTrue();
+    expect($response->messages->count() > 0)->toBeTrue();
+    expect($response->meta->provider)->toEqual('groq');
+    expect($response->meta->model)->toEqual('openai/gpt-oss-20b');
+    expect($response->steps->count() > 0)->toBeTrue();
 
-        $agent = new AssistantAgent;
+    Event::assertDispatched(PromptingAgent::class);
+    Event::assertDispatched(AgentPrompted::class);
+});
 
-        $response = $agent->prompt(
-            'What is the name of the PHP framework created by Taylor Otwell?',
-            provider: $this->provider,
-            model: $this->model,
-        );
+test('ad hoc agents can be prompted', function () {
+    $response = agent()->prompt(
+        'What is the name of the PHP framework created by Taylor Otwell?',
+        provider: $this->provider,
+        model: $this->model,
+    );
 
-        $this->assertTrue(str_contains($response->text, 'Laravel'));
-        $this->assertTrue(Str::isUuid($response->invocationId, 7));
-        $this->assertTrue($response->messages->count() > 0);
-        $this->assertEquals('groq', $response->meta->provider);
-        $this->assertEquals('openai/gpt-oss-20b', $response->meta->model);
-        $this->assertTrue($response->steps->count() > 0);
+    expect(str_contains($response->text, 'Laravel'))->toBeTrue();
+});
 
-        Event::assertDispatched(PromptingAgent::class);
-        Event::assertDispatched(AgentPrompted::class);
+test('agents can stream a response', function () {
+    Event::fake();
+
+    $agent = new AssistantAgent;
+
+    $response = $agent->stream(
+        'What is the name of the PHP framework created by Taylor Otwell?',
+        provider: $this->provider,
+        model: $this->model,
+    )->then(function (StreamedAgentResponse $response) {
+        $_SERVER['__testing.response'] = $response;
+    })->then(function () {
+        $_SERVER['__testing.invoked'] = true;
+    });
+
+    $events = [];
+
+    foreach ($response as $event) {
+        $events[] = $event;
     }
 
-    public function test_ad_hoc_agents_can_be_prompted(): void
-    {
-        $response = agent()->prompt(
-            'What is the name of the PHP framework created by Taylor Otwell?',
-            provider: $this->provider,
-            model: $this->model,
-        );
+    expect((new Collection($events))
+        ->whereInstanceOf(TextDelta::class)
+        ->isNotEmpty())->toBeTrue();
 
-        $this->assertTrue(str_contains($response->text, 'Laravel'));
-    }
+    expect(str_contains($response->text, 'Laravel'))->toBeTrue();
+    expect($_SERVER['__testing.response']->events)->toHaveCount(count($events));
+    expect($_SERVER['__testing.invoked'])->toBeTrue();
 
-    public function test_agents_can_stream_a_response(): void
-    {
-        Event::fake();
+    Event::assertDispatched(StreamingAgent::class);
+    Event::assertDispatched(AgentStreamed::class);
 
-        $agent = new AssistantAgent;
+    unset($_SERVER['__testing.response']);
+    unset($_SERVER['__testing.invoked']);
+});
 
-        $response = $agent->stream(
-            'What is the name of the PHP framework created by Taylor Otwell?',
-            provider: $this->provider,
-            model: $this->model,
-        )->then(function (StreamedAgentResponse $response) {
-            $_SERVER['__testing.response'] = $response;
-        })->then(function () {
-            $_SERVER['__testing.invoked'] = true;
-        });
+test('agents can queue a response', function () {
+    $agent = new AssistantAgent;
 
-        $events = [];
+    $agent->queue(
+        'What is the name of the PHP framework created by Taylor Otwell?',
+        provider: $this->provider,
+        model: $this->model,
+    )->then(function (AgentResponse $response) {
+        $_ENV['__testing.response'] = $response;
+    });
 
-        foreach ($response as $event) {
-            $events[] = $event;
-        }
+    $response = $_ENV['__testing.response'];
 
-        $this->assertTrue(
-            (new Collection($events))
-                ->whereInstanceOf(TextDelta::class)
-                ->isNotEmpty()
-        );
+    expect(str_contains($response->text, 'Laravel'))->toBeTrue();
 
-        $this->assertTrue(str_contains($response->text, 'Laravel'));
-        $this->assertCount(count($events), $_SERVER['__testing.response']->events);
-        $this->assertTrue($_SERVER['__testing.invoked']);
+    unset($_SERVER['__testing.response']);
+});
 
-        Event::assertDispatched(StreamingAgent::class);
-        Event::assertDispatched(AgentStreamed::class);
+test('ad hoc agents can queue a response', function () {
+    agent()->queue(
+        'What is the name of the PHP framework created by Taylor Otwell?',
+        provider: $this->provider,
+        model: $this->model,
+    )->then(function (AgentResponse $response) {
+        $_ENV['__testing.response'] = $response;
+    });
 
-        unset($_SERVER['__testing.response']);
-        unset($_SERVER['__testing.invoked']);
-    }
+    $response = $_ENV['__testing.response'];
 
-    public function test_agents_can_queue_a_response(): void
-    {
-        $agent = new AssistantAgent;
+    expect(str_contains($response->text, 'Laravel'))->toBeTrue();
 
-        $agent->queue(
-            'What is the name of the PHP framework created by Taylor Otwell?',
-            provider: $this->provider,
-            model: $this->model,
-        )->then(function (AgentResponse $response) {
-            $_ENV['__testing.response'] = $response;
-        });
+    unset($_SERVER['__testing.response']);
+});
 
-        $response = $_ENV['__testing.response'];
+test('ad hoc structured agents can queue a response', function () {
+    agent(
+        schema: fn ($schema) => [
+            'symbol' => $schema->string()->required(),
+        ]
+    )->queue(
+        'What is the chemical symbol for silver?',
+        provider: $this->provider,
+        model: $this->model,
+    )->then(function (AgentResponse $response) {
+        $_ENV['__testing.response'] = $response;
+    });
 
-        $this->assertTrue(str_contains($response->text, 'Laravel'));
+    $response = $_ENV['__testing.response'];
 
-        unset($_SERVER['__testing.response']);
-    }
+    expect(strtolower($response['symbol']))->toEqual('ag');
 
-    public function test_ad_hoc_agents_can_queue_a_response(): void
-    {
-        agent()->queue(
-            'What is the name of the PHP framework created by Taylor Otwell?',
-            provider: $this->provider,
-            model: $this->model,
-        )->then(function (AgentResponse $response) {
-            $_ENV['__testing.response'] = $response;
-        });
+    unset($_SERVER['__testing.response']);
+});
 
-        $response = $_ENV['__testing.response'];
+test('agents can have conversation state', function () {
+    $agent = new ConversationalAgent;
 
-        $this->assertTrue(str_contains($response->text, 'Laravel'));
+    $response = $agent->prompt(
+        'What did I say my name was?',
+        provider: $this->provider,
+        model: $this->model,
+    );
 
-        unset($_SERVER['__testing.response']);
-    }
+    expect(str_contains($response->text, 'Taylor'))->toBeTrue();
+});
 
-    public function test_ad_hoc_structured_agents_can_queue_a_response(): void
-    {
-        agent(
-            schema: fn ($schema) => [
-                'symbol' => $schema->string()->required(),
-            ]
-        )->queue(
-            'What is the chemical symbol for silver?',
-            provider: $this->provider,
-            model: $this->model,
-        )->then(function (AgentResponse $response) {
-            $_ENV['__testing.response'] = $response;
-        });
+test('agents can have structured output', function () {
+    $agent = new StructuredAgent;
 
-        $response = $_ENV['__testing.response'];
+    $response = $agent->prompt(
+        'What is the chemical symbol for silver?',
+        provider: $this->provider,
+        model: $this->model,
+    );
 
-        $this->assertEquals('ag', strtolower($response['symbol']));
+    expect(strtolower($response['symbol']))->toEqual('ag');
+    expect($response->steps->count() > 0)->toBeTrue();
+});
 
-        unset($_SERVER['__testing.response']);
-    }
+test('ad hoc agents can have structured output', function () {
+    $response = agent(
+        schema: fn (JsonSchema $schema) => [
+            'symbol' => $schema->string()->required(),
+        ],
+    )->prompt(
+        'What is the chemical symbol for silver?',
+        provider: $this->provider,
+        model: $this->model,
+    );
 
-    public function test_agents_can_have_conversation_state(): void
-    {
-        $agent = new ConversationalAgent;
+    expect(strtolower($response['symbol']))->toEqual('ag');
+});
 
-        $response = $agent->prompt(
-            'What did I say my name was?',
-            provider: $this->provider,
-            model: $this->model,
-        );
+test('agents can use tools', function () {
+    Event::fake();
 
-        $this->assertTrue(str_contains($response->text, 'Taylor'));
-    }
+    // Verify with a random number...
+    $agent = new ToolUsingAgent;
 
-    public function test_agents_can_have_structured_output(): void
-    {
-        $agent = new StructuredAgent;
+    $response = $agent->prompt(
+        'Can I have a random number between 1 and 1000?',
+        provider: $this->toolProvider,
+        model: $this->toolModel,
+    );
 
-        $response = $agent->prompt(
-            'What is the chemical symbol for silver?',
-            provider: $this->provider,
-            model: $this->model,
-        );
+    expect($response['number'] >= 1 && $response['number'] <= 1000)->toBeTrue();
+    expect($response->toolCalls)->toHaveCount(1);
+    expect($response->toolResults)->toHaveCount(1);
 
-        $this->assertEquals('ag', strtolower($response['symbol']));
-        $this->assertTrue($response->steps->count() > 0);
-    }
+    Event::assertDispatched(InvokingTool::class);
 
-    public function test_ad_hoc_agents_can_have_structured_output(): void
-    {
-        $response = agent(
-            schema: fn (JsonSchema $schema) => [
-                'symbol' => $schema->string()->required(),
-            ],
-        )->prompt(
-            'What is the chemical symbol for silver?',
-            provider: $this->provider,
-            model: $this->model,
-        );
+    Event::assertDispatched(ToolInvoked::class, function ($event) {
+        return ! is_null($event->toolInvocationId);
+    });
 
-        $this->assertEquals('ag', strtolower($response['symbol']));
-    }
+    // Verify with a fixed response...
+    $agent = new ToolUsingAgent(fixed: true);
 
-    public function test_agents_can_use_tools(): void
-    {
-        Event::fake();
+    $response = $agent->prompt(
+        'Can I have a random number?',
+        provider: $this->toolProvider,
+        model: $this->toolModel,
+    );
 
-        // Verify with a random number...
-        $agent = new ToolUsingAgent;
+    expect($response['number'])->toBe(72019);
+});
 
+test('agent tool exception handling is not magical', function () {
+    Event::fake();
+
+    $agent = new ToolUsingAgent(toolThrowsException: true);
+
+    $caught = false;
+
+    try {
         $response = $agent->prompt(
             'Can I have a random number between 1 and 1000?',
             provider: $this->toolProvider,
             model: $this->toolModel,
         );
 
-        $this->assertTrue($response['number'] >= 1 && $response['number'] <= 1000);
-        $this->assertCount(1, $response->toolCalls);
-        $this->assertCount(1, $response->toolResults);
+        $text = $response->text;
+    } catch (Exception $e) {
+        $caught = true;
 
-        Event::assertDispatched(InvokingTool::class);
-
-        Event::assertDispatched(ToolInvoked::class, function ($event) {
-            return ! is_null($event->toolInvocationId);
-        });
-
-        // Verify with a fixed response...
-        $agent = new ToolUsingAgent(fixed: true);
-
-        $response = $agent->prompt(
-            'Can I have a random number?',
-            provider: $this->toolProvider,
-            model: $this->toolModel,
-        );
-
-        $this->assertSame(72019, $response['number']);
+        expect($e)->toBeInstanceOf(Exception::class);
+        expect($e->getMessage())->toEqual('Forced to throw exception.');
     }
 
-    public function test_agent_tool_exception_handling_is_not_magical(): void
-    {
-        Event::fake();
-
-        $agent = new ToolUsingAgent(toolThrowsException: true);
-
-        $caught = false;
-
-        try {
-            $response = $agent->prompt(
-                'Can I have a random number between 1 and 1000?',
-                provider: $this->toolProvider,
-                model: $this->toolModel,
-            );
-
-            $text = $response->text;
-        } catch (Exception $e) {
-            $caught = true;
-
-            $this->assertInstanceOf(Exception::class, $e);
-            $this->assertEquals('Forced to throw exception.', $e->getMessage());
-        }
-
-        $this->assertTrue($caught);
-    }
-}
+    expect($caught)->toBeTrue();
+});

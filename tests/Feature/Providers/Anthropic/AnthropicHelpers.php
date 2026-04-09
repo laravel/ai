@@ -4,9 +4,8 @@ namespace Tests\Feature\Providers\Anthropic;
 
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Support\Facades\Http;
-use Tests\TestCase;
 
-abstract class AnthropicTestCase extends TestCase
+trait AnthropicHelpers
 {
     protected function fakeTextResponse(string $text = 'Hello'): PromiseInterface
     {

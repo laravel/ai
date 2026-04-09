@@ -1,84 +1,75 @@
 <?php
 
-namespace Tests\Feature\Providers\Anthropic;
-
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Providers\Tools\FileSearch;
-use LogicException;
 use Tests\Feature\Agents\ToolUsingAgent;
+use Tests\Feature\Providers\Anthropic\AnthropicHelpers;
 
 use function Laravel\Ai\agent;
 
-class ToolMappingTest extends AnthropicTestCase
-{
-    public function test_tool_parameters_are_not_wrapped_in_schema_definition(): void
-    {
-        Http::fake([
-            'api.anthropic.com/*' => $this->fakeTextResponse('The number is 42'),
-        ]);
+uses(AnthropicHelpers::class);
 
-        (new ToolUsingAgent(fixed: true))->prompt(
-            'Generate a number',
-            provider: 'anthropic',
-        );
+test('tool parameters are not wrapped in schema definition', function () {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('The number is 42'),
+    ]);
 
-        Http::assertSent(function ($request) {
-            $tools = $request->data()['tools'] ?? [];
+    (new ToolUsingAgent(fixed: true))->prompt(
+        'Generate a number',
+        provider: 'anthropic',
+    );
 
-            foreach ($tools as $tool) {
-                if ($tool['name'] === 'FixedNumberGenerator') {
-                    $properties = (array) ($tool['input_schema']['properties'] ?? []);
+    Http::assertSent(function ($request) {
+        $tools = $request->data()['tools'] ?? [];
 
-                    return $tool['input_schema']['type'] === 'object'
-                        && ! isset($properties['schema_definition']);
-                }
+        foreach ($tools as $tool) {
+            if ($tool['name'] === 'FixedNumberGenerator') {
+                $properties = (array) ($tool['input_schema']['properties'] ?? []);
+
+                return $tool['input_schema']['type'] === 'object'
+                    && ! isset($properties['schema_definition']);
             }
+        }
 
-            return false;
-        });
-    }
+        return false;
+    });
+});
 
-    public function test_unsupported_provider_tool_throws_logic_exception(): void
-    {
-        Http::fake([
-            'api.anthropic.com/*' => $this->fakeTextResponse(),
-        ]);
+test('unsupported provider tool throws logic exception', function () {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse(),
+    ]);
 
-        $this->expectException(LogicException::class);
-        $this->expectExceptionMessage('is not supported by Anthropic');
+    agent(
+        'Test unsupported tool',
+        tools: [new FileSearch(['store_1'])],
+    )->prompt(
+        'Search for something',
+        provider: 'anthropic',
+    );
+})->throws(LogicException::class, 'is not supported by Anthropic');
 
-        agent(
-            'Test unsupported tool',
-            tools: [new FileSearch(['store_1'])],
-        )->prompt(
-            'Search for something',
-            provider: 'anthropic',
-        );
-    }
+test('empty schema still includes input schema with type object', function () {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('The number is 42'),
+    ]);
 
-    public function test_empty_schema_still_includes_input_schema_with_type_object(): void
-    {
-        Http::fake([
-            'api.anthropic.com/*' => $this->fakeTextResponse('The number is 42'),
-        ]);
+    (new ToolUsingAgent(fixed: true))->prompt(
+        'Generate a number',
+        provider: 'anthropic',
+    );
 
-        (new ToolUsingAgent(fixed: true))->prompt(
-            'Generate a number',
-            provider: 'anthropic',
-        );
+    Http::assertSent(function ($request) {
+        $tools = $request->data()['tools'] ?? [];
 
-        Http::assertSent(function ($request) {
-            $tools = $request->data()['tools'] ?? [];
-
-            foreach ($tools as $tool) {
-                if ($tool['name'] === 'FixedNumberGenerator') {
-                    return isset($tool['input_schema'])
-                        && $tool['input_schema']['type'] === 'object'
-                        && isset($tool['input_schema']['properties']);
-                }
+        foreach ($tools as $tool) {
+            if ($tool['name'] === 'FixedNumberGenerator') {
+                return isset($tool['input_schema'])
+                    && $tool['input_schema']['type'] === 'object'
+                    && isset($tool['input_schema']['properties']);
             }
+        }
 
-            return false;
-        });
-    }
-}
+        return false;
+    });
+});

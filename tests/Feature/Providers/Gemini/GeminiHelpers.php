@@ -4,9 +4,8 @@ namespace Tests\Feature\Providers\Gemini;
 
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Support\Facades\Http;
-use Tests\TestCase;
 
-abstract class GeminiTestCase extends TestCase
+trait GeminiHelpers
 {
     protected function fakeTextResponse(string $text = 'Hello'): PromiseInterface
     {

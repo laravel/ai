@@ -1,77 +1,72 @@
 <?php
 
-namespace Tests\Feature\Providers\Gemini;
-
 use Illuminate\Support\Facades\Http;
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\Feature\Agents\ProviderOptionsAgent;
 use Tests\Feature\Agents\ProviderOptionsWithToolsAgent;
+use Tests\Feature\Providers\Gemini\GeminiHelpers;
 
-class ProviderOptionsTest extends GeminiTestCase
-{
-    public function test_provider_options_are_included_in_generation_config(): void
-    {
-        Http::fake([
-            'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
-        ]);
+uses(GeminiHelpers::class);
 
-        (new ProviderOptionsAgent)->prompt(
-            'Hi',
-            provider: 'gemini',
-        );
+test('provider options are included in generation config', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
+    ]);
 
-        Http::assertSent(function ($request) {
-            $body = $request->data();
-            $config = $body['generationConfig'] ?? [];
+    (new ProviderOptionsAgent)->prompt(
+        'Hi',
+        provider: 'gemini',
+    );
 
-            return isset($config['thinkingConfig'])
-                && $config['thinkingConfig']['thinkingBudget'] === 10000;
-        });
-    }
+    Http::assertSent(function ($request) {
+        $body = $request->data();
+        $config = $body['generationConfig'] ?? [];
 
-    public function test_request_body_does_not_contain_provider_options_when_agent_does_not_implement_interface(): void
-    {
-        Http::fake([
-            'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
-        ]);
+        return isset($config['thinkingConfig'])
+            && $config['thinkingConfig']['thinkingBudget'] === 10000;
+    });
+});
 
-        (new AssistantAgent)->prompt(
-            'Hi',
-            provider: 'gemini',
-        );
+test('request body does not contain provider options when agent does not implement interface', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
+    ]);
 
-        Http::assertSent(function ($request) {
-            $config = $request->data()['generationConfig'] ?? [];
+    (new AssistantAgent)->prompt(
+        'Hi',
+        provider: 'gemini',
+    );
 
-            return ! isset($config['thinkingConfig']);
-        });
-    }
+    Http::assertSent(function ($request) {
+        $config = $request->data()['generationConfig'] ?? [];
 
-    public function test_provider_options_are_persisted_in_tool_call_follow_up_requests(): void
-    {
-        Http::fake([
-            'generativelanguage.googleapis.com/*' => Http::sequence([
-                $this->fakeToolCallResponse(),
-                $this->fakeTextResponse('The number is 72019'),
-            ]),
-        ]);
+        return ! isset($config['thinkingConfig']);
+    });
+});
 
-        $response = (new ProviderOptionsWithToolsAgent)->prompt(
-            'Generate a random number',
-            provider: 'gemini',
-        );
+test('provider options are persisted in tool call follow up requests', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::sequence([
+            $this->fakeToolCallResponse(),
+            $this->fakeTextResponse('The number is 72019'),
+        ]),
+    ]);
 
-        $this->assertSame('The number is 72019', $response->text);
+    $response = (new ProviderOptionsWithToolsAgent)->prompt(
+        'Generate a random number',
+        provider: 'gemini',
+    );
 
-        $recorded = Http::recorded();
+    expect($response->text)->toBe('The number is 72019');
 
-        $this->assertCount(2, $recorded);
+    $recorded = Http::recorded();
 
-        $firstConfig = $recorded[0][0]->data()['generationConfig'] ?? [];
-        $this->assertSame(10000, $firstConfig['thinkingConfig']['thinkingBudget']);
+    expect($recorded)->toHaveCount(2);
 
-        $secondConfig = $recorded[1][0]->data()['generationConfig'] ?? [];
-        $this->assertArrayHasKey('thinkingConfig', $secondConfig);
-        $this->assertSame(10000, $secondConfig['thinkingConfig']['thinkingBudget']);
-    }
-}
+    $firstConfig = $recorded[0][0]->data()['generationConfig'] ?? [];
+    expect($firstConfig['thinkingConfig']['thinkingBudget'])->toBe(10000);
+
+    $secondConfig = $recorded[1][0]->data()['generationConfig'] ?? [];
+    expect($secondConfig)->toHaveKey('thinkingConfig');
+    expect($secondConfig['thinkingConfig']['thinkingBudget'])->toBe(10000);
+});

@@ -1,160 +1,150 @@
 <?php
 
-namespace Tests\Unit\Gateway\Prism;
-
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Gateway\Prism\Concerns\AddsToolsToPrismRequests;
 use Laravel\Ai\Tools\Request;
-use PHPUnit\Framework\TestCase;
-use Stringable;
 
-class AddsToolsToPrismRequestsTest extends TestCase
-{
-    public function test_invoke_tool_unwraps_schema_definition(): void
+test('invoke tool unwraps schema definition', function () {
+    $tool = new class implements Tool
     {
-        $tool = new class implements Tool
+        public array $receivedArguments = [];
+
+        public function description(): Stringable|string
         {
-            public array $receivedArguments = [];
+            return 'Test tool';
+        }
 
-            public function description(): Stringable|string
-            {
-                return 'Test tool';
-            }
-
-            public function handle(Request $request): Stringable|string
-            {
-                $this->receivedArguments = $request->all();
-
-                return 'result';
-            }
-
-            public function schema(JsonSchema $schema): array
-            {
-                return [];
-            }
-        };
-
-        $handler = new class
+        public function handle(Request $request): Stringable|string
         {
-            use AddsToolsToPrismRequests;
+            $this->receivedArguments = $request->all();
 
-            protected $invokingToolCallback;
+            return 'result';
+        }
 
-            protected $toolInvokedCallback;
+        public function schema(JsonSchema $schema): array
+        {
+            return [];
+        }
+    };
 
-            public function __construct()
-            {
-                $this->invokingToolCallback = fn () => null;
-                $this->toolInvokedCallback = fn () => null;
-            }
-
-            public function callInvokeTool(Tool $tool, array $arguments): string
-            {
-                return $this->invokeTool($tool, $arguments);
-            }
-        };
-
-        $handler->callInvokeTool($tool, ['schema_definition' => ['query' => 'test']]);
-
-        $this->assertEquals(['query' => 'test'], $tool->receivedArguments);
-    }
-
-    public function test_invoke_tool_falls_back_to_raw_arguments_when_schema_definition_is_missing(): void
+    $handler = new class
     {
-        $tool = new class implements Tool
+        use AddsToolsToPrismRequests;
+
+        protected $invokingToolCallback;
+
+        protected $toolInvokedCallback;
+
+        public function __construct()
         {
-            public array $receivedArguments = [];
+            $this->invokingToolCallback = fn () => null;
+            $this->toolInvokedCallback = fn () => null;
+        }
 
-            public function description(): Stringable|string
-            {
-                return 'Test tool';
-            }
-
-            public function handle(Request $request): Stringable|string
-            {
-                $this->receivedArguments = $request->all();
-
-                return 'result';
-            }
-
-            public function schema(JsonSchema $schema): array
-            {
-                return [];
-            }
-        };
-
-        $handler = new class
+        public function callInvokeTool(Tool $tool, array $arguments): string
         {
-            use AddsToolsToPrismRequests;
+            return $this->invokeTool($tool, $arguments);
+        }
+    };
 
-            protected $invokingToolCallback;
+    $handler->callInvokeTool($tool, ['schema_definition' => ['query' => 'test']]);
 
-            protected $toolInvokedCallback;
+    expect($tool->receivedArguments)->toEqual(['query' => 'test']);
+});
 
-            public function __construct()
-            {
-                $this->invokingToolCallback = fn () => null;
-                $this->toolInvokedCallback = fn () => null;
-            }
-
-            public function callInvokeTool(Tool $tool, array $arguments): string
-            {
-                return $this->invokeTool($tool, $arguments);
-            }
-        };
-
-        $handler->callInvokeTool($tool, ['query' => 'test']);
-
-        $this->assertEquals(['query' => 'test'], $tool->receivedArguments);
-    }
-
-    public function test_invoke_tool_handles_empty_arguments(): void
+test('invoke tool falls back to raw arguments when schema definition is missing', function () {
+    $tool = new class implements Tool
     {
-        $tool = new class implements Tool
+        public array $receivedArguments = [];
+
+        public function description(): Stringable|string
         {
-            public array $receivedArguments = [];
+            return 'Test tool';
+        }
 
-            public function description(): Stringable|string
-            {
-                return 'Test tool';
-            }
-
-            public function handle(Request $request): Stringable|string
-            {
-                $this->receivedArguments = $request->all();
-
-                return 'result';
-            }
-
-            public function schema(JsonSchema $schema): array
-            {
-                return [];
-            }
-        };
-
-        $handler = new class
+        public function handle(Request $request): Stringable|string
         {
-            use AddsToolsToPrismRequests;
+            $this->receivedArguments = $request->all();
 
-            protected $invokingToolCallback;
+            return 'result';
+        }
 
-            protected $toolInvokedCallback;
+        public function schema(JsonSchema $schema): array
+        {
+            return [];
+        }
+    };
 
-            public function __construct()
-            {
-                $this->invokingToolCallback = fn () => null;
-                $this->toolInvokedCallback = fn () => null;
-            }
+    $handler = new class
+    {
+        use AddsToolsToPrismRequests;
 
-            public function callInvokeTool(Tool $tool, array $arguments): string
-            {
-                return $this->invokeTool($tool, $arguments);
-            }
-        };
+        protected $invokingToolCallback;
 
-        $handler->callInvokeTool($tool, []);
+        protected $toolInvokedCallback;
 
-        $this->assertEquals([], $tool->receivedArguments);
-    }
-}
+        public function __construct()
+        {
+            $this->invokingToolCallback = fn () => null;
+            $this->toolInvokedCallback = fn () => null;
+        }
+
+        public function callInvokeTool(Tool $tool, array $arguments): string
+        {
+            return $this->invokeTool($tool, $arguments);
+        }
+    };
+
+    $handler->callInvokeTool($tool, ['query' => 'test']);
+
+    expect($tool->receivedArguments)->toEqual(['query' => 'test']);
+});
+
+test('invoke tool handles empty arguments', function () {
+    $tool = new class implements Tool
+    {
+        public array $receivedArguments = [];
+
+        public function description(): Stringable|string
+        {
+            return 'Test tool';
+        }
+
+        public function handle(Request $request): Stringable|string
+        {
+            $this->receivedArguments = $request->all();
+
+            return 'result';
+        }
+
+        public function schema(JsonSchema $schema): array
+        {
+            return [];
+        }
+    };
+
+    $handler = new class
+    {
+        use AddsToolsToPrismRequests;
+
+        protected $invokingToolCallback;
+
+        protected $toolInvokedCallback;
+
+        public function __construct()
+        {
+            $this->invokingToolCallback = fn () => null;
+            $this->toolInvokedCallback = fn () => null;
+        }
+
+        public function callInvokeTool(Tool $tool, array $arguments): string
+        {
+            return $this->invokeTool($tool, $arguments);
+        }
+    };
+
+    $handler->callInvokeTool($tool, []);
+
+    expect($tool->receivedArguments)->toEqual([]);
+});

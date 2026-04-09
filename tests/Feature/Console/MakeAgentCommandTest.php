@@ -1,42 +1,32 @@
 <?php
 
-namespace Tests\Feature\Console;
+test('can create an agent class', function () {
+    $response = $this->artisan('make:agent', [
+        'name' => 'TestAgent',
+    ]);
 
-use Tests\TestCase;
+    $response->assertExitCode(0)->run();
 
-class MakeAgentCommandTest extends TestCase
-{
-    public function test_can_create_an_agent_class(): void
-    {
-        $response = $this->artisan('make:agent', [
-            'name' => 'TestAgent',
-        ]);
+    expect(app_path('Ai/Agents/TestAgent.php'))->toBeFile();
+});
 
-        $response->assertExitCode(0)->run();
+test('can create a structured agent class', function () {
+    $response = $this->artisan('make:agent', [
+        'name' => 'StructuredAgent',
+        '--structured' => true,
+    ]);
 
-        $this->assertFileExists(app_path('Ai/Agents/TestAgent.php'));
-    }
+    $response->assertExitCode(0)->run();
 
-    public function test_can_create_a_structured_agent_class(): void
-    {
-        $response = $this->artisan('make:agent', [
-            'name' => 'StructuredAgent',
-            '--structured' => true,
-        ]);
+    expect(app_path('Ai/Agents/StructuredAgent.php'))->toBeFile();
+});
 
-        $response->assertExitCode(0)->run();
+test('may publish custom agent stubs', function () {
+    $this->artisan('vendor:publish', [
+        '--tag' => 'ai-stubs',
+        '--force' => true,
+    ])->assertExitCode(0)->run();
 
-        $this->assertFileExists(app_path('Ai/Agents/StructuredAgent.php'));
-    }
-
-    public function test_may_publish_custom_agent_stubs(): void
-    {
-        $this->artisan('vendor:publish', [
-            '--tag' => 'ai-stubs',
-            '--force' => true,
-        ])->assertExitCode(0)->run();
-
-        $this->assertFileExists(base_path('stubs/agent.stub'));
-        $this->assertFileExists(base_path('stubs/structured-agent.stub'));
-    }
-}
+    expect(base_path('stubs/agent.stub'))->toBeFile();
+    expect(base_path('stubs/structured-agent.stub'))->toBeFile();
+});
