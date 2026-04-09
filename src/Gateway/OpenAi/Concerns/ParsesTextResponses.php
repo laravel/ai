@@ -273,19 +273,7 @@ trait ParsesTextResponses
 
         $this->validateTextResponse($data);
 
-        return $this->processResponse(
-            $data,
-            $provider,
-            $structured,
-            $tools,
-            $schema,
-            $steps,
-            $messages,
-            $depth,
-            $maxSteps,
-            $options,
-            $timeout,
-        );
+        return $this->processResponse($data, $provider, $structured, $tools, $schema, $steps, $messages, $depth, $maxSteps, $options, $timeout);
     }
 
     /**
