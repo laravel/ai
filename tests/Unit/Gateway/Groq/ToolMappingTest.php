@@ -87,7 +87,6 @@ test('tool with empty schema includes parameters', function () {
     $function = $mapped[0]['function'];
 
     expect($function)->toHaveKey('parameters');
-    expect($function['parameters']['type'])->toEqual('object');
-    expect($function['parameters']['required'])->toEqual([]);
+    expect($function['parameters'])->toMatchArray(['type' => 'object', 'required' => []]);
     expect($function['parameters']['additionalProperties'])->toBeFalse();
 });

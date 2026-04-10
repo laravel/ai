@@ -146,5 +146,5 @@ test('invoke tool handles empty arguments', function () {
 
     $handler->callInvokeTool($tool, []);
 
-    expect($tool->receivedArguments)->toEqual([]);
+    expect($tool->receivedArguments)->toBeEmpty();
 });

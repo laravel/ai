@@ -59,7 +59,7 @@ test('text generation options return empty array for unknown provider', function
 
     $providerOptions = $options->providerOptions(Lab::DeepSeek);
 
-    expect($providerOptions)->toEqual([]);
+    expect($providerOptions)->toBeEmpty();
 });
 
 test('text generation options have null provider options when agent does not implement interface', function () {

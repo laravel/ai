@@ -10,18 +10,12 @@ use Tests\TestCase;
 
 require __DIR__.'/Expectations.php';
 
-uses(TestCase::class)->in('Feature', 'Unit');
-uses(AnthropicHelpers::class)->in('Feature/Providers/Anthropic');
-uses(GeminiHelpers::class)->in('Feature/Providers/Gemini');
-uses(GroqHelpers::class)->in('Feature/Providers/Groq');
-uses(MistralHelpers::class)->in('Feature/Providers/Mistral');
-uses(OpenAiHelpers::class)->in('Feature/Providers/OpenAi');
-uses(XaiHelpers::class)->in('Feature/Providers/Xai');
+pest()->extend(TestCase::class)->in('Feature', 'Unit');
+pest()->use(AnthropicHelpers::class)->group('provider-anthropic')->in('Feature/Providers/Anthropic');
+pest()->use(GeminiHelpers::class)->group('provider-gemini')->in('Feature/Providers/Gemini');
+pest()->use(GroqHelpers::class)->group('provider-groq')->in('Feature/Providers/Groq');
+pest()->use(MistralHelpers::class)->group('provider-mistral')->in('Feature/Providers/Mistral');
+pest()->use(OpenAiHelpers::class)->group('provider-openai')->in('Feature/Providers/OpenAi');
+pest()->use(XaiHelpers::class)->group('provider-xai')->in('Feature/Providers/Xai');
 
-uses()->group('provider-anthropic')->in('Feature/Providers/Anthropic');
-uses()->group('provider-gemini')->in('Feature/Providers/Gemini');
-uses()->group('provider-groq')->in('Feature/Providers/Groq');
-uses()->group('provider-mistral')->in('Feature/Providers/Mistral');
-uses()->group('provider-openai')->in('Feature/Providers/OpenAi');
-uses()->group('provider-xai')->in('Feature/Providers/Xai');
 uses()->group('providers')->in('Feature/Providers');

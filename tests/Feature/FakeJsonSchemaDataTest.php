@@ -26,6 +26,6 @@ test('structured data can be faked', function () {
     expect($response['age'])->toBeNumeric();
     expect($response['address'])->toBeArray();
     expect(['admin', 'editor'])->toContain($response['role']);
-    expect(array_is_list($response['skills']))->toBeTrue();
+    expect($response['skills'])->toBeList();
     expect($response['active'])->toBeBool();
 });
