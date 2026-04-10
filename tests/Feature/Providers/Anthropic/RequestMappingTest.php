@@ -180,9 +180,7 @@ describe('structured output', function () {
             'Tell me about Taylor',
             provider: 'anthropic',
         );
-
-        expect($response->structured['name'])->toBe('Taylor');
-        expect($response->structured['age'])->toBe(30);
+        expect($response->structured)->toMatchArray(['name' => 'Taylor', 'age' => 30]);
     });
 });
 

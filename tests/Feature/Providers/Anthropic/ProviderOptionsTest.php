@@ -59,11 +59,9 @@ test('provider options are persisted in tool call follow up requests', function 
     expect($recorded)->toHaveCount(2);
 
     $firstBody = $recorded[0][0]->data();
-    expect($firstBody['thinking']['type'])->toBe('enabled');
-    expect($firstBody['thinking']['budget_tokens'])->toBe(10000);
+    expect($firstBody['thinking'])->toMatchArray(['type' => 'enabled', 'budget_tokens' => 10000]);
 
     $secondBody = $recorded[1][0]->data();
     expect($secondBody)->toHaveKey('thinking');
-    expect($secondBody['thinking']['type'])->toBe('enabled');
-    expect($secondBody['thinking']['budget_tokens'])->toBe(10000);
+    expect($secondBody['thinking'])->toMatchArray(['type' => 'enabled', 'budget_tokens' => 10000]);
 });

@@ -40,10 +40,10 @@ test('agents can get a simple text response', function () {
 
     expect(str_contains($response->text, 'Laravel'))->toBeTrue();
     expect(Str::isUuid($response->invocationId, 7))->toBeTrue();
-    expect($response->messages->count() > 0)->toBeTrue();
+    expect($response->messages->count())->toBeGreaterThan(0);
     expect($response->meta->provider)->toEqual('groq');
     expect($response->meta->model)->toEqual('openai/gpt-oss-20b');
-    expect($response->steps->count() > 0)->toBeTrue();
+    expect($response->steps->count())->toBeGreaterThan(0);
 
     Event::assertDispatched(PromptingAgent::class);
     Event::assertDispatched(AgentPrompted::class);
@@ -85,7 +85,7 @@ test('agents can stream a response', function () {
         ->isNotEmpty())->toBeTrue();
 
     expect(str_contains($response->text, 'Laravel'))->toBeTrue();
-    expect($_SERVER['__testing.response']->events)->toHaveCount(count($events));
+    expect($_SERVER['__testing.response']->events)->toHaveSameSize($events);
     expect($_SERVER['__testing.invoked'])->toBeTrue();
 
     Event::assertDispatched(StreamingAgent::class);
@@ -171,7 +171,7 @@ test('agents can have structured output', function () {
     );
 
     expect(strtolower($response['symbol']))->toEqual('ag');
-    expect($response->steps->count() > 0)->toBeTrue();
+    expect($response->steps->count())->toBeGreaterThan(0);
 });
 
 test('ad hoc agents can have structured output', function () {
@@ -200,7 +200,7 @@ test('agents can use tools', function () {
         model: $this->toolModel,
     );
 
-    expect($response['number'] >= 1 && $response['number'] <= 1000)->toBeTrue();
+    expect($response['number'])->toBeBetween(1, 1000);
     expect($response->toolCalls)->toHaveCount(1);
     expect($response->toolResults)->toHaveCount(1);
 

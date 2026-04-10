@@ -25,5 +25,5 @@ test('embeddings can be generated with custom dimensions', function () {
         ->generate();
 
     expect($response)->toBeInstanceOf(EmbeddingsResponse::class);
-    expect(count($response->embeddings[0]))->toEqual(256);
+    expect($response->embeddings[0])->toHaveCount(256);
 });

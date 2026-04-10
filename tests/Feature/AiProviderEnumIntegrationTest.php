@@ -84,7 +84,7 @@ test('embeddings generate accepts ai provider enum', function () {
         ->generate(provider: Lab::OpenAI);
 
     expect($response)->toBeInstanceOf(EmbeddingsResponse::class);
-    expect(count($response->embeddings[0]) === 1536)->toBeTrue();
+    expect($response->embeddings[0])->toHaveCount(1536);
     expect($response->meta->provider)->toEqual('openai');
 
     Event::assertDispatched(GeneratingEmbeddings::class);

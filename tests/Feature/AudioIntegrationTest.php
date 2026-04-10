@@ -22,7 +22,7 @@ test('audio can be generated and transcribed', function () {
 
     $transcription = Transcription::of($response->audio)->diarize()->generate();
     expect(str_contains(strtolower((string) $transcription), 'how are you today'))->toBeTrue();
-    expect($transcription->segments->count() > 0)->toBeTrue();
+    expect($transcription->segments->count())->toBeGreaterThan(0);
 });
 
 test('transcription can be generated from local path', function () {
