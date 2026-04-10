@@ -24,9 +24,9 @@ test('then callback receives streamed agent response', function () {
 
     $job->handle();
 
-    expect($received)->not->toBeNull('then() callback was never invoked');
-    expect($received)->toBeInstanceOf(StreamedAgentResponse::class);
-    expect($received->text)->toBe('Hello world');
+    expect($received)->not->toBeNull('then() callback was never invoked')
+        ->toBeInstanceOf(StreamedAgentResponse::class)
+        ->and($received->text)->toBe('Hello world');
 });
 
 test('multiple then callbacks all receive streamed agent response', function () {
@@ -52,8 +52,8 @@ test('multiple then callbacks all receive streamed agent response', function () 
 
     $job->handle();
 
-    expect($receivedA)->toBeInstanceOf(StreamedAgentResponse::class);
-    expect($receivedB)->toBeInstanceOf(StreamedAgentResponse::class);
+    expect($receivedA)->toBeInstanceOf(StreamedAgentResponse::class)
+        ->and($receivedB)->toBeInstanceOf(StreamedAgentResponse::class);
 });
 
 test('streamed response passed to then is fully resolved', function () {
@@ -74,8 +74,8 @@ test('streamed response passed to then is fully resolved', function () {
 
     $job->handle();
 
-    expect($received)->not->toBeNull('then() callback was never invoked');
-    expect($received)->toBeInstanceOf(StreamedAgentResponse::class);
-    expect($received->events)->not->toBeEmpty();
-    expect($received->text)->toBe('Hello world');
+    expect($received)->not->toBeNull('then() callback was never invoked')
+        ->toBeInstanceOf(StreamedAgentResponse::class)
+        ->and($received->events)->not->toBeEmpty()
+        ->and($received->text)->toBe('Hello world');
 });

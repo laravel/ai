@@ -11,9 +11,9 @@ test('embeddings can be generated', function () {
 
     $response = Embeddings::for(['I love to watch Star Trek.'])->generate();
 
-    expect($response)->toBeInstanceOf(EmbeddingsResponse::class);
-    expect($response->embeddings[0])->toHaveCount(1536);
-    expect($response->meta->provider)->toEqual('openai');
+    expect($response)->toBeInstanceOf(EmbeddingsResponse::class)
+        ->and($response->embeddings[0])->toHaveCount(1536)
+        ->and($response->meta->provider)->toEqual('openai');
 
     Event::assertDispatched(GeneratingEmbeddings::class, fn (GeneratingEmbeddings $event) => $event->prompt->timeout === 30);
     Event::assertDispatched(EmbeddingsGenerated::class, fn (EmbeddingsGenerated $event) => $event->prompt->timeout === 30);
@@ -24,6 +24,6 @@ test('embeddings can be generated with custom dimensions', function () {
         ->dimensions(256)
         ->generate();
 
-    expect($response)->toBeInstanceOf(EmbeddingsResponse::class);
-    expect($response->embeddings[0])->toHaveCount(256);
+    expect($response)->toBeInstanceOf(EmbeddingsResponse::class)
+        ->and($response->embeddings[0])->toHaveCount(256);
 });

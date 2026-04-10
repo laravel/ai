@@ -23,6 +23,6 @@ test('faking one agent doesnt affect another agent', function () {
         model: $this->model,
     );
 
-    expect($fakeResponse->text)->toEqual('Fake response');
-    expect(str_contains($realResponse->text, 'Laravel'))->toBeTrue();
+    expect($fakeResponse->text)->toEqual('Fake response')
+        ->and(str_contains($realResponse->text, 'Laravel'))->toBeTrue();
 });

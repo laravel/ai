@@ -43,8 +43,8 @@ test('tool calls trigger follow up request', function () {
         }
     }
 
-    expect($hasModelWithFunctionCall)->toBeTrue('Follow-up request should include model message with functionCall');
-    expect($hasFunctionResponse)->toBeTrue('Follow-up request should include user message with functionResponse');
+    expect($hasModelWithFunctionCall)->toBeTrue('Follow-up request should include model message with functionCall')
+        ->and($hasFunctionResponse)->toBeTrue('Follow-up request should include user message with functionResponse');
 });
 
 test('max steps limits tool call depth', function () {
@@ -97,12 +97,12 @@ test('function response includes id for gemini 3', function () {
         }
     }
 
-    expect($functionResponsePart)->not->toBeNull('Follow-up should include functionResponse');
-    expect($functionResponsePart['name'])->toBe('FixedNumberGenerator');
-    expect($functionResponsePart)->toHaveKey('id');
-    expect($functionResponsePart)->toHaveKey('response');
-    expect($functionResponsePart['response'])->toHaveKey('name');
-    expect($functionResponsePart['response'])->toHaveKey('content');
+    expect($functionResponsePart)->not->toBeNull('Follow-up should include functionResponse')
+        ->and($functionResponsePart['name'])->toBe('FixedNumberGenerator')
+        ->and($functionResponsePart)->toHaveKey('id')
+        ->toHaveKey('response')
+        ->and($functionResponsePart['response'])->toHaveKey('name')
+        ->toHaveKey('content');
 });
 
 test('parallel function calls preserve unique ids', function () {
@@ -143,9 +143,9 @@ test('parallel function calls preserve unique ids', function () {
         }
     }
 
-    expect($functionResponseIds)->toHaveCount(2);
-    expect($functionResponseIds)->toContain('call_1');
-    expect($functionResponseIds)->toContain('call_2');
+    expect($functionResponseIds)->toHaveCount(2)
+        ->toContain('call_1')
+        ->toContain('call_2');
 });
 
 test('thinking parts are excluded from tool call continuation', function () {

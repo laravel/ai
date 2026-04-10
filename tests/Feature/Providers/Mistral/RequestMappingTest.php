@@ -145,8 +145,8 @@ test('response text is correctly parsed', function () {
 
     $response = agent()->prompt('Tell me about Laravel', provider: 'mistral');
 
-    expect($response->text)->toBe('Laravel is great');
-    expect($response->meta->provider)->toBe('mistral');
+    expect($response->text)->toBe('Laravel is great')
+        ->and($response->meta->provider)->toBe('mistral');
 });
 
 test('response usage is correctly parsed', function () {
@@ -167,8 +167,8 @@ test('response usage is correctly parsed', function () {
 
     $response = agent()->prompt('Hello', provider: 'mistral');
 
-    expect($response->usage->promptTokens)->toBe(10);
-    expect($response->usage->completionTokens)->toBe(5);
+    expect($response->usage->promptTokens)->toBe(10)
+        ->and($response->usage->completionTokens)->toBe(5);
 });
 
 test('structured response is correctly parsed', function () {

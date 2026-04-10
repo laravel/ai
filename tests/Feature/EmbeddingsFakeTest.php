@@ -11,8 +11,8 @@ describe('generating embeddings', function () {
 
         $response = Embeddings::for(['Hello world'])->generate();
 
-        expect($response)->toHaveCount(1);
-        expect($response->first())->toHaveCount(1536);
+        expect($response)->toHaveCount(1)
+            ->and($response->first())->toHaveCount(1536);
     });
 
     test('can fake embeddings with custom dimensions', function () {
@@ -20,8 +20,8 @@ describe('generating embeddings', function () {
 
         $response = Embeddings::for(['Hello world'])->dimensions(512)->generate();
 
-        expect($response)->toHaveCount(1);
-        expect($response->first())->toHaveCount(512);
+        expect($response)->toHaveCount(1)
+            ->and($response->first())->toHaveCount(512);
     });
 
     test('can fake embeddings with multiple inputs', function () {
@@ -54,8 +54,8 @@ describe('generating embeddings', function () {
 
         $response = Embeddings::for(['Hello', 'World'])->dimensions(256)->generate();
 
-        expect($response)->toHaveCount(2);
-        expect($response->first())->toHaveCount(256);
+        expect($response)->toHaveCount(2)
+            ->and($response->first())->toHaveCount(256);
     });
 
     test('embeddings timeout defaults to sdk fallback', function () {

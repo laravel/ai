@@ -20,11 +20,11 @@ test('thinking complete event maps to reasoning end', function () {
 
     $result = PrismStreamEvent::toLaravelStreamEvent('invocation-1', $event, 'openai', 'gpt-4');
 
-    expect($result)->toBeInstanceOf(ReasoningEnd::class);
-    expect($result->id)->toEqual('event-1');
-    expect($result->reasoningId)->toEqual('reasoning-1');
-    expect($result->timestamp)->toEqual(1234567890);
-    expect($result->summary)->toEqual(['text' => 'Summary of reasoning']);
+    expect($result)->toBeInstanceOf(ReasoningEnd::class)
+        ->and($result->id)->toEqual('event-1')
+        ->and($result->reasoningId)->toEqual('reasoning-1')
+        ->and($result->timestamp)->toEqual(1234567890)
+        ->and($result->summary)->toEqual(['text' => 'Summary of reasoning']);
 });
 
 test('thinking complete event handles null summary', function () {
@@ -36,8 +36,8 @@ test('thinking complete event handles null summary', function () {
 
     $result = PrismStreamEvent::toLaravelStreamEvent('invocation-1', $event, 'openai', 'gpt-4');
 
-    expect($result)->toBeInstanceOf(ReasoningEnd::class);
-    expect($result->summary)->toBeNull();
+    expect($result)->toBeInstanceOf(ReasoningEnd::class)
+        ->and($result->summary)->toBeNull();
 });
 
 test('stream end event handles null usage', function () {
@@ -50,9 +50,9 @@ test('stream end event handles null usage', function () {
 
     $result = PrismStreamEvent::toLaravelStreamEvent('invocation-1', $event, 'openrouter', 'anthropic/claude-sonnet');
 
-    expect($result)->toBeInstanceOf(StreamEnd::class);
-    expect($result->usage->promptTokens)->toEqual(0);
-    expect($result->usage->completionTokens)->toEqual(0);
+    expect($result)->toBeInstanceOf(StreamEnd::class)
+        ->and($result->usage->promptTokens)->toEqual(0)
+        ->and($result->usage->completionTokens)->toEqual(0);
 });
 
 test('stream end event maps usage', function () {
@@ -65,9 +65,9 @@ test('stream end event maps usage', function () {
 
     $result = PrismStreamEvent::toLaravelStreamEvent('invocation-1', $event, 'openrouter', 'anthropic/claude-sonnet');
 
-    expect($result)->toBeInstanceOf(StreamEnd::class);
-    expect($result->usage->promptTokens)->toEqual(100);
-    expect($result->usage->completionTokens)->toEqual(50);
+    expect($result)->toBeInstanceOf(StreamEnd::class)
+        ->and($result->usage->promptTokens)->toEqual(100)
+        ->and($result->usage->completionTokens)->toEqual(50);
 });
 
 test('error event maps correctly', function () {
@@ -86,9 +86,9 @@ test('error event maps correctly', function () {
 
     /** @var Error $result */
     expect($result->id)->toEqual('event-5');
-    expect($result->type)->toEqual('server_error');
-    expect($result->message)->toEqual('Something went wrong');
-    expect($result->recoverable)->toBeFalse();
-    expect($result->timestamp)->toEqual(1234567890);
-    expect($result->metadata)->toEqual(['foo' => 'bar']);
+    expect($result->type)->toEqual('server_error')
+        ->and($result->message)->toEqual('Something went wrong')
+        ->and($result->recoverable)->toBeFalse()
+        ->and($result->timestamp)->toEqual(1234567890)
+        ->and($result->metadata)->toEqual(['foo' => 'bar']);
 });

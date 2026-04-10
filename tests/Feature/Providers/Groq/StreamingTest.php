@@ -33,12 +33,12 @@ test('streaming emits text events', function () {
 
     $events = $this->collectStreamEvents();
 
-    expect($events[0])->toBeInstanceOf(StreamStart::class);
-    expect($events[1])->toBeInstanceOf(TextStart::class);
-    expect($events[2])->toBeInstanceOf(TextDelta::class)->delta->toBe('Hello');
-    expect($events[3])->toBeInstanceOf(TextDelta::class)->delta->toBe(' world');
-    expect($events[count($events) - 2])->toBeInstanceOf(TextEnd::class);
-    expect($events[count($events) - 1])->toBeInstanceOf(StreamEnd::class);
+    expect($events[0])->toBeInstanceOf(StreamStart::class)
+        ->and($events[1])->toBeInstanceOf(TextStart::class)
+        ->and($events[2])->toBeInstanceOf(TextDelta::class)->delta->toBe('Hello')
+        ->and($events[3])->toBeInstanceOf(TextDelta::class)->delta->toBe(' world')
+        ->and($events[count($events) - 2])->toBeInstanceOf(TextEnd::class)
+        ->and($events[count($events) - 1])->toBeInstanceOf(StreamEnd::class);
 });
 
 test('streaming handles tool calls', function () {
@@ -70,9 +70,9 @@ test('streaming handles tool calls', function () {
 
     $toolCallEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolCallEvent));
 
-    expect($toolCallEvents)->not->toBeEmpty();
-    expect($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator');
-    expect($toolCallEvents[0]->toolCall->id)->toBe('call_1');
+    expect($toolCallEvents)->not->toBeEmpty()
+        ->and($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator')
+        ->and($toolCallEvents[0]->toolCall->id)->toBe('call_1');
 });
 
 test('streaming error event stops stream', function () {
@@ -88,10 +88,10 @@ test('streaming error event stops stream', function () {
 
     $events = $this->collectStreamEvents();
 
-    expect($events)->toHaveCount(1);
-    expect($events[0])->toBeInstanceOf(Error::class);
-    expect($events[0]->type)->toBe('rate_limit_exceeded');
-    expect($events[0]->message)->toBe('Rate limit exceeded');
+    expect($events)->toHaveCount(1)
+        ->and($events[0])->toBeInstanceOf(Error::class)
+        ->and($events[0]->type)->toBe('rate_limit_exceeded')
+        ->and($events[0]->message)->toBe('Rate limit exceeded');
 });
 
 test('streaming captures usage from final chunk', function () {
@@ -111,6 +111,6 @@ test('streaming captures usage from final chunk', function () {
 
     $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
 
-    expect($streamEnd->usage->promptTokens)->toBe(42);
-    expect($streamEnd->usage->completionTokens)->toBe(10);
+    expect($streamEnd->usage->promptTokens)->toBe(42)
+        ->and($streamEnd->usage->completionTokens)->toBe(10);
 });

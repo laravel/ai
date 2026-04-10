@@ -37,13 +37,13 @@ test('yields each event before reading next events data', function () {
     $generator = parser()->parse($stream);
 
     $first = $generator->current();
-    expect($first['type'])->toBe('event_1');
-    expect($stream->fullyConsumed())->toBeFalse('Events must be yielded progressively, not after buffering the entire stream.');
+    expect($first['type'])->toBe('event_1')
+        ->and($stream->fullyConsumed())->toBeFalse('Events must be yielded progressively, not after buffering the entire stream.');
 
     $generator->next();
     $second = $generator->current();
-    expect($second['type'])->toBe('event_2');
-    expect($stream->fullyConsumed())->toBeFalse('Stream should not be fully consumed after yielding only two events.');
+    expect($second['type'])->toBe('event_2')
+        ->and($stream->fullyConsumed())->toBeFalse('Stream should not be fully consumed after yielding only two events.');
 
     $generator->next();
     $third = $generator->current();

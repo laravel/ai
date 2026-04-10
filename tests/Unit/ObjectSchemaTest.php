@@ -16,8 +16,8 @@ test('nested objects include additional properties false', function () {
 
     $result = $objectSchema->toSchema();
 
-    expect($result['additionalProperties'])->toBeFalse();
-    expect($result['properties']['address']['additionalProperties'])->toBeFalse();
+    expect($result['additionalProperties'])->toBeFalse()
+        ->and($result['properties']['address']['additionalProperties'])->toBeFalse();
 });
 
 test('objects nested in arrays include additional properties false', function () {
@@ -34,8 +34,8 @@ test('objects nested in arrays include additional properties false', function ()
 
     $result = $objectSchema->toSchema();
 
-    expect($result['additionalProperties'])->toBeFalse();
-    expect($result['properties']['items']['items']['additionalProperties'])->toBeFalse();
+    expect($result['additionalProperties'])->toBeFalse()
+        ->and($result['properties']['items']['items']['additionalProperties'])->toBeFalse();
 });
 
 test('deeply nested objects include additional properties false', function () {
@@ -53,9 +53,9 @@ test('deeply nested objects include additional properties false', function () {
 
     $result = $objectSchema->toSchema();
 
-    expect($result['additionalProperties'])->toBeFalse();
-    expect($result['properties']['user']['additionalProperties'])->toBeFalse();
-    expect($result['properties']['user']['properties']['contact']['additionalProperties'])->toBeFalse();
+    expect($result['additionalProperties'])->toBeFalse()
+        ->and($result['properties']['user']['additionalProperties'])->toBeFalse()
+        ->and($result['properties']['user']['properties']['contact']['additionalProperties'])->toBeFalse();
 });
 
 test('objects in nested arrays include additional properties false', function () {
@@ -89,6 +89,6 @@ test('nullable nested objects include additional properties false', function () 
 
     $result = $objectSchema->toSchema();
 
-    expect($result['additionalProperties'])->toBeFalse();
-    expect($result['properties']['address']['additionalProperties'])->toBeFalse();
+    expect($result['additionalProperties'])->toBeFalse()
+        ->and($result['properties']['address']['additionalProperties'])->toBeFalse();
 });

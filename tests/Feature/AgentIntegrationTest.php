@@ -38,12 +38,12 @@ test('agents can get a simple text response', function () {
         model: $this->model,
     );
 
-    expect(str_contains($response->text, 'Laravel'))->toBeTrue();
-    expect(Str::isUuid($response->invocationId, 7))->toBeTrue();
-    expect($response->messages->count())->toBeGreaterThan(0);
-    expect($response->meta->provider)->toEqual('groq');
-    expect($response->meta->model)->toEqual('openai/gpt-oss-20b');
-    expect($response->steps->count())->toBeGreaterThan(0);
+    expect(str_contains($response->text, 'Laravel'))->toBeTrue()
+        ->and(Str::isUuid($response->invocationId, 7))->toBeTrue()
+        ->and($response->messages->count())->toBeGreaterThan(0)
+        ->and($response->meta->provider)->toEqual('groq')
+        ->and($response->meta->model)->toEqual('openai/gpt-oss-20b')
+        ->and($response->steps->count())->toBeGreaterThan(0);
 
     Event::assertDispatched(PromptingAgent::class);
     Event::assertDispatched(AgentPrompted::class);
@@ -82,11 +82,10 @@ test('agents can stream a response', function () {
 
     expect((new Collection($events))
         ->whereInstanceOf(TextDelta::class)
-        ->isNotEmpty())->toBeTrue();
-
-    expect(str_contains($response->text, 'Laravel'))->toBeTrue();
-    expect($_SERVER['__testing.response']->events)->toHaveSameSize($events);
-    expect($_SERVER['__testing.invoked'])->toBeTrue();
+        ->isNotEmpty())->toBeTrue()
+        ->and(str_contains($response->text, 'Laravel'))->toBeTrue()
+        ->and($_SERVER['__testing.response']->events)->toHaveSameSize($events)
+        ->and($_SERVER['__testing.invoked'])->toBeTrue();
 
     Event::assertDispatched(StreamingAgent::class);
     Event::assertDispatched(AgentStreamed::class);
@@ -170,8 +169,8 @@ test('agents can have structured output', function () {
         model: $this->model,
     );
 
-    expect(strtolower($response['symbol']))->toEqual('ag');
-    expect($response->steps->count())->toBeGreaterThan(0);
+    expect(strtolower($response['symbol']))->toEqual('ag')
+        ->and($response->steps->count())->toBeGreaterThan(0);
 });
 
 test('ad hoc agents can have structured output', function () {
@@ -200,9 +199,9 @@ test('agents can use tools', function () {
         model: $this->toolModel,
     );
 
-    expect($response['number'])->toBeBetween(1, 1000);
-    expect($response->toolCalls)->toHaveCount(1);
-    expect($response->toolResults)->toHaveCount(1);
+    expect($response['number'])->toBeBetween(1, 1000)
+        ->and($response->toolCalls)->toHaveCount(1)
+        ->and($response->toolResults)->toHaveCount(1);
 
     Event::assertDispatched(InvokingTool::class);
 
@@ -240,8 +239,8 @@ test('agent tool exception handling is not magical', function () {
     } catch (Exception $e) {
         $caught = true;
 
-        expect($e)->toBeInstanceOf(Exception::class);
-        expect($e->getMessage())->toEqual('Forced to throw exception.');
+        expect($e)->toBeInstanceOf(Exception::class)
+            ->and($e->getMessage())->toEqual('Forced to throw exception.');
     }
 
     expect($caught)->toBeTrue();

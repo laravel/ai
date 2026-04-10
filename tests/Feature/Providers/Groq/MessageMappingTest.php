@@ -69,15 +69,15 @@ test('tool result follow up maps assistant and tool result messages', function (
         }
     }
 
-    expect($hasAssistantWithToolCalls)->toBeTrue();
-    expect($hasToolResult)->toBeTrue();
+    expect($hasAssistantWithToolCalls)->toBeTrue()
+        ->and($hasToolResult)->toBeTrue();
 
     $assistantMsg = collect($followUpMessages)->last(fn ($m) => $m['role'] === 'assistant' && isset($m['tool_calls']));
     $toolMsg = collect($followUpMessages)->last(fn ($m) => $m['role'] === 'tool');
 
-    expect($assistantMsg['tool_calls'][0]['function']['name'])->toBe('FixedNumberGenerator');
-    expect($toolMsg['tool_call_id'])->toBe($assistantMsg['tool_calls'][0]['id']);
-    expect($toolMsg['content'])->not->toBeEmpty();
+    expect($assistantMsg['tool_calls'][0]['function']['name'])->toBe('FixedNumberGenerator')
+        ->and($toolMsg['tool_call_id'])->toBe($assistantMsg['tool_calls'][0]['id'])
+        ->and($toolMsg['content'])->not->toBeEmpty();
 });
 
 test('image attachment maps to image url content block', function () {

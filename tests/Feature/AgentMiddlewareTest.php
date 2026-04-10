@@ -18,8 +18,8 @@ test('agent middleware is invoked', function () {
         ->withMiddleware([middleware()])
         ->prompt('Test prompt');
 
-    expect($response->text)->toEqual('Fake response');
-    expect($_SERVER['__testing.middleware-prompt'])->toBeInstanceOf(AgentPrompt::class);
+    expect($response->text)->toEqual('Fake response')
+        ->and($_SERVER['__testing.middleware-prompt'])->toBeInstanceOf(AgentPrompt::class);
 
     unset($_SERVER['__testing.middleware-prompt']);
 });
@@ -39,8 +39,8 @@ test('agent middleware is invoked when streaming', function () {
             $_SERVER['__testing.text'] = $response->text;
         });
 
-    expect($_SERVER['__testing.text'])->toEqual('Fake response');
-    expect($_SERVER['__testing.middleware-prompt'])->toBeInstanceOf(AgentPrompt::class);
+    expect($_SERVER['__testing.text'])->toEqual('Fake response')
+        ->and($_SERVER['__testing.middleware-prompt'])->toBeInstanceOf(AgentPrompt::class);
 
     unset($_SERVER['__testing.text']);
     unset($_SERVER['__testing.middleware-prompt']);

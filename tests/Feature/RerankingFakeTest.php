@@ -15,8 +15,8 @@ test('can fake reranking', function () {
         'React is a JavaScript library',
     ])->rerank('What is Laravel?');
 
-    expect($response)->toHaveCount(3);
-    expect($response->first())->toBeInstanceOf(RankedDocument::class);
+    expect($response)->toHaveCount(3)
+        ->and($response->first())->toBeInstanceOf(RankedDocument::class);
 });
 
 test('can fake reranking with limit', function () {
@@ -43,9 +43,9 @@ test('can fake reranking with custom response', function () {
 
     $response = Reranking::of(['First doc', 'Second doc'])->rerank('query');
 
-    expect($response)->toHaveCount(2);
-    expect($response->first()->score)->toEqual(0.95);
-    expect($response->first()->document)->toEqual('First doc');
+    expect($response)->toHaveCount(2)
+        ->and($response->first()->score)->toEqual(0.95)
+        ->and($response->first()->document)->toEqual('First doc');
 });
 
 test('can fake reranking with closure', function () {
@@ -59,9 +59,9 @@ test('can fake reranking with closure', function () {
 
     $response = Reranking::of(['Doc A', 'Doc B', 'Doc C'])->rerank('test query');
 
-    expect($response)->toHaveCount(3);
-    expect($response->first()->score)->toEqual(1.0);
-    expect($response->first()->document)->toEqual('Doc A');
+    expect($response)->toHaveCount(3)
+        ->and($response->first()->score)->toEqual(1.0)
+        ->and($response->first()->document)->toEqual('Doc A');
 });
 
 test('can assert reranked', function () {
@@ -114,8 +114,8 @@ test('fake reranking shuffles documents', function () {
     expect($response)->toHaveCount(5);
 
     foreach ($response as $result) {
-        expect($documents)->toContain($result->document);
-        expect($result->document)->toEqual($documents[$result->index]);
+        expect($documents)->toContain($result->document)
+            ->and($result->document)->toEqual($documents[$result->index]);
     }
 });
 

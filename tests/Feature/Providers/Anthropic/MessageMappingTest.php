@@ -68,16 +68,16 @@ test('tool result follow up maps assistant and tool result messages', function (
         }
     }
 
-    expect($assistantMsg)->not->toBeNull('Follow-up should include assistant message');
-    expect($toolResultMsg)->not->toBeNull('Follow-up should include tool result message');
+    expect($assistantMsg)->not->toBeNull('Follow-up should include assistant message')
+        ->and($toolResultMsg)->not->toBeNull('Follow-up should include tool result message');
 
     $toolUseBlock = collect($assistantMsg['content'])->firstWhere('type', 'tool_use');
-    expect($toolUseBlock['name'])->toBe('FixedNumberGenerator');
-    expect($toolUseBlock)->toHaveKey('input');
+    expect($toolUseBlock['name'])->toBe('FixedNumberGenerator')
+        ->and($toolUseBlock)->toHaveKey('input');
 
     $toolResultBlock = collect($toolResultMsg['content'])->firstWhere('type', 'tool_result');
-    expect($toolResultBlock['tool_use_id'])->toBe($toolUseBlock['id']);
-    expect($toolResultBlock['content'])->not->toBeEmpty();
+    expect($toolResultBlock['tool_use_id'])->toBe($toolUseBlock['id'])
+        ->and($toolResultBlock['content'])->not->toBeEmpty();
 });
 
 test('base64 pdf document maps to document content block', function () {

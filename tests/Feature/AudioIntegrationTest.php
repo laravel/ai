@@ -17,12 +17,12 @@ test('audio can be generated and transcribed', function () {
     Event::assertDispatched(AudioGenerated::class, fn (AudioGenerated $event) => $event->prompt->timeout === 30);
 
     $transcription = Transcription::of($response->audio)->generate();
-    expect(str_contains(strtolower((string) $transcription), 'how are you today'))->toBeTrue();
-    expect($transcription->segments->count())->toEqual(0);
+    expect(str_contains(strtolower((string) $transcription), 'how are you today'))->toBeTrue()
+        ->and($transcription->segments->count())->toEqual(0);
 
     $transcription = Transcription::of($response->audio)->diarize()->generate();
-    expect(str_contains(strtolower((string) $transcription), 'how are you today'))->toBeTrue();
-    expect($transcription->segments->count())->toBeGreaterThan(0);
+    expect(str_contains(strtolower((string) $transcription), 'how are you today'))->toBeTrue()
+        ->and($transcription->segments->count())->toBeGreaterThan(0);
 });
 
 test('transcription can be generated from local path', function () {

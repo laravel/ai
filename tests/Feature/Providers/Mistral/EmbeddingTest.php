@@ -30,10 +30,10 @@ test('embeddings response is correctly parsed', function () {
 
     $response = Embeddings::for(['Hello world'])->generate(provider: 'mistral', model: 'mistral-embed');
 
-    expect($response->embeddings)->toHaveCount(1);
-    expect($response->embeddings[0])->toHaveCount(3);
-    expect($response->tokens)->toBe(10);
-    expect($response->meta->provider)->toBe('mistral');
+    expect($response->embeddings)->toHaveCount(1)
+        ->and($response->embeddings[0])->toHaveCount(3)
+        ->and($response->tokens)->toBe(10)
+        ->and($response->meta->provider)->toBe('mistral');
 });
 
 test('embeddings request sends bearer token', function () {

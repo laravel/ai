@@ -27,6 +27,6 @@ test('may publish custom agent stubs', function () {
         '--force' => true,
     ])->assertExitCode(0)->run();
 
-    expect(base_path('stubs/agent.stub'))->toBeFile();
-    expect(base_path('stubs/structured-agent.stub'))->toBeFile();
+    expect(base_path('stubs/agent.stub'))->toBeFile()
+        ->and(base_path('stubs/structured-agent.stub'))->toBeFile();
 });

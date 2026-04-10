@@ -158,8 +158,8 @@ test('response text is correctly parsed', function () {
 
     $response = agent()->prompt('Tell me about Laravel', provider: 'groq');
 
-    expect($response->text)->toBe('Laravel is great');
-    expect($response->meta->provider)->toBe('groq');
+    expect($response->text)->toBe('Laravel is great')
+        ->and($response->meta->provider)->toBe('groq');
 });
 
 test('response usage is correctly parsed', function () {
@@ -180,8 +180,8 @@ test('response usage is correctly parsed', function () {
 
     $response = agent()->prompt('Hello', provider: 'groq');
 
-    expect($response->usage->promptTokens)->toBe(10);
-    expect($response->usage->completionTokens)->toBe(5);
+    expect($response->usage->promptTokens)->toBe(10)
+        ->and($response->usage->completionTokens)->toBe(5);
 });
 
 test('structured response is correctly parsed', function () {

@@ -28,10 +28,10 @@ test('can create get and delete store', function () {
 
     $retrieved = Stores::get($created->id, provider: $this->provider);
 
-    expect($retrieved->id)->toEqual($created->id);
-    expect($retrieved->name)->toEqual('Test Store');
-    expect($retrieved->fileCounts->completed)->toEqual(0);
-    expect($retrieved->ready)->toBeBool();
+    expect($retrieved->id)->toEqual($created->id)
+        ->and($retrieved->name)->toEqual('Test Store')
+        ->and($retrieved->fileCounts->completed)->toEqual(0)
+        ->and($retrieved->ready)->toBeBool();
 
     $deleted = Stores::delete($created->id, provider: $this->provider);
 
@@ -98,8 +98,8 @@ test('can actually prompt an agent with file search data', function () {
         ],
     )->prompt('Is Valkey mentioned in the sixth month roadmap? Can you quote the section where it is mentioned?', provider: $this->provider);
 
-    expect(str_contains((string) $response, 'Yes'))->toBeTrue();
-    expect(str_contains((string) $response, 'Valkey'))->toBeTrue();
+    expect(str_contains((string) $response, 'Yes'))->toBeTrue()
+        ->and(str_contains((string) $response, 'Valkey'))->toBeTrue();
 });
 
 test('can actually prompt an agent with filtered search data', function () {

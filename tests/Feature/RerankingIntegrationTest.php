@@ -16,11 +16,10 @@ test('documents can be reranked', function () {
         'React is a JavaScript library for building user interfaces.',
     ])->rerank('What is Laravel?');
 
-    expect($response)->toBeInstanceOf(RerankingResponse::class);
-    expect($response)->toHaveCount(3);
-    expect($response->meta->provider)->toEqual('cohere');
-
-    expect($response->first()->document)->toContain('Laravel');
+    expect($response)->toBeInstanceOf(RerankingResponse::class)
+        ->toHaveCount(3)
+        ->and($response->meta->provider)->toEqual('cohere')
+        ->and($response->first()->document)->toContain('Laravel');
 
     Event::assertDispatched(Reranking::class);
     Event::assertDispatched(Reranked::class);
@@ -35,9 +34,9 @@ test('documents can be reranked with limit', function () {
         'Spring is a Java web framework.',
     ])->limit(2)->rerank('PHP frameworks');
 
-    expect($response)->toHaveCount(2);
-    expect($response->first()->score)->toBeGreaterThan($response->results[1]->score);
-    expect($response->first()->document)->toContain('Laravel');
+    expect($response)->toHaveCount(2)
+        ->and($response->first()->score)->toBeGreaterThan($response->results[1]->score)
+        ->and($response->first()->document)->toContain('Laravel');
 });
 
 test('collections can be reranked using string field', function () {
@@ -49,8 +48,8 @@ test('collections can be reranked using string field', function () {
 
     $reranked = $items->rerank(by: 'content', query: 'PHP frameworks', limit: 2);
 
-    expect($reranked)->toHaveCount(2);
-    expect($reranked->first()['id'])->toEqual(2);
+    expect($reranked)->toHaveCount(2)
+        ->and($reranked->first()['id'])->toEqual(2);
 });
 
 test('collections can be reranked using array fields', function () {
@@ -62,8 +61,8 @@ test('collections can be reranked using array fields', function () {
 
     $reranked = $items->rerank(by: ['title', 'body'], query: 'PHP frameworks', limit: 2);
 
-    expect($reranked)->toHaveCount(2);
-    expect($reranked->first()['id'])->toEqual(2);
+    expect($reranked)->toHaveCount(2)
+        ->and($reranked->first()['id'])->toEqual(2);
 });
 
 test('collections can be reranked using closure', function () {
@@ -79,6 +78,6 @@ test('collections can be reranked using closure', function () {
         limit: 2
     );
 
-    expect($reranked)->toHaveCount(2);
-    expect($reranked->first()['id'])->toEqual(2);
+    expect($reranked)->toHaveCount(2)
+        ->and($reranked->first()['id'])->toEqual(2);
 });

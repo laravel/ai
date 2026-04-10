@@ -121,18 +121,18 @@ describe('stream responses', function () {
 
         $response = (new AssistantAgent)->stream('First prompt');
         $response->each(fn () => true);
-        expect($response->text)->toEqual('First response');
-        expect($response->events)->toHaveCount(6);
+        expect($response->text)->toEqual('First response')
+            ->and($response->events)->toHaveCount(6);
 
         $response = (new AssistantAgent)->stream('Second prompt');
         $response->each(fn () => true);
-        expect($response->text)->toEqual('Second response (Second prompt)');
-        expect($response->events)->toHaveCount(8);
+        expect($response->text)->toEqual('Second response (Second prompt)')
+            ->and($response->events)->toHaveCount(8);
 
         $response = (new AssistantAgent)->stream('Third prompt');
         $response->each(fn () => true);
-        expect($response->text)->toEqual('Third response');
-        expect($response->events)->toHaveCount(6);
+        expect($response->text)->toEqual('Third response')
+            ->and($response->events)->toHaveCount(6);
     });
 });
 
@@ -266,7 +266,7 @@ describe('timeout handling', function () {
 
         $revised = $prompt->revise('Revised prompt');
 
-        expect($revised->timeout)->toEqual(150);
-        expect($revised->prompt)->toEqual('Revised prompt');
+        expect($revised->timeout)->toEqual(150)
+            ->and($revised->prompt)->toEqual('Revised prompt');
     });
 });

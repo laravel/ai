@@ -64,6 +64,6 @@ test('provider options are persisted in tool call follow up requests', function 
     expect($firstConfig['thinkingConfig']['thinkingBudget'])->toBe(10000);
 
     $secondConfig = $recorded[1][0]->data()['generationConfig'] ?? [];
-    expect($secondConfig)->toHaveKey('thinkingConfig');
-    expect($secondConfig['thinkingConfig']['thinkingBudget'])->toBe(10000);
+    expect($secondConfig)->toHaveKey('thinkingConfig')
+        ->and($secondConfig['thinkingConfig']['thinkingBudget'])->toBe(10000);
 });

@@ -81,8 +81,8 @@ test('can get files', function () {
 
     $response = Document::fromId($stored->id)->get(provider: $this->provider);
 
-    expect($response->id)->toEqual($stored->id);
-    expect($response->mime)->toEqual('text/plain');
+    expect($response->id)->toEqual($stored->id)
+        ->and($response->mime)->toEqual('text/plain');
 
     Document::fromId($response->id)->delete(provider: $this->provider);
 });
