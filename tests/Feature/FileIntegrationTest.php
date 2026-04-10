@@ -7,7 +7,6 @@ use Laravel\Ai\Events\FileDeleted;
 use Laravel\Ai\Events\FileStored;
 use Laravel\Ai\Events\StoringFile;
 use Laravel\Ai\Files\Document;
-use RuntimeException;
 
 beforeEach(function () {
     $this->provider = 'anthropic';
