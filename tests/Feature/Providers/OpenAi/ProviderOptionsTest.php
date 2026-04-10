@@ -63,9 +63,9 @@ test('provider options are persisted in tool call follow up requests', function 
 
     $followUpBody = json_decode($requests[1][0]->body(), true);
 
-    expect(data_get($followUpBody, 'reasoning.effort'))->toBe('high');
-    expect(data_get($followUpBody, 'frequency_penalty'))->toBe(0.5);
-    expect($followUpBody)->toHaveKey('previous_response_id');
+    expect(data_get($followUpBody, 'reasoning.effort'))->toBe('high')
+        ->and(data_get($followUpBody, 'frequency_penalty'))->toBe(0.5)
+        ->and($followUpBody)->toHaveKey('previous_response_id');
 });
 
 function fakeOpenAiToolCallResponse(): PromiseInterface

@@ -43,8 +43,8 @@ test('tool calls trigger follow up request', function () {
         }
     }
 
-    expect($hasAssistantWithToolCalls)->toBeTrue();
-    expect($hasToolResult)->toBeTrue();
+    expect($hasAssistantWithToolCalls)->toBeTrue()
+        ->and($hasToolResult)->toBeTrue();
 });
 
 test('max steps limits tool call depth', function () {

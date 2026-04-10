@@ -23,8 +23,8 @@ test('agent prompt accepts ai provider enum', function () {
         model: 'openai/gpt-oss-20b',
     );
 
-    expect(str_contains($response->text, 'Laravel'))->toBeTrue();
-    expect($response->meta->provider)->toEqual('groq');
+    expect(str_contains($response->text, 'Laravel'))->toBeTrue()
+        ->and($response->meta->provider)->toEqual('groq');
 
     Event::assertDispatched(AgentPrompted::class);
 });
@@ -44,8 +44,8 @@ test('agent stream accepts ai provider enum', function () {
         $events[] = $event;
     }
 
-    expect(collect($events)->whereInstanceOf(TextDelta::class)->isNotEmpty())->toBeTrue();
-    expect(str_contains($response->text, 'Laravel'))->toBeTrue();
+    expect(collect($events)->whereInstanceOf(TextDelta::class)->isNotEmpty())->toBeTrue()
+        ->and(str_contains($response->text, 'Laravel'))->toBeTrue();
 
     Event::assertDispatched(AgentStreamed::class);
 });
@@ -73,8 +73,8 @@ test('agent prompt accepts array of ai provider enum values for failover', funct
         model: 'openai/gpt-oss-20b',
     );
 
-    expect(str_contains($response->text, 'Laravel'))->toBeTrue();
-    expect($response->meta->provider)->toEqual('groq');
+    expect(str_contains($response->text, 'Laravel'))->toBeTrue()
+        ->and($response->meta->provider)->toEqual('groq');
 });
 
 test('embeddings generate accepts ai provider enum', function () {
@@ -83,9 +83,9 @@ test('embeddings generate accepts ai provider enum', function () {
     $response = Embeddings::for(['I love to watch Star Trek.'])
         ->generate(provider: Lab::OpenAI);
 
-    expect($response)->toBeInstanceOf(EmbeddingsResponse::class);
-    expect($response->embeddings[0])->toHaveCount(1536);
-    expect($response->meta->provider)->toEqual('openai');
+    expect($response)->toBeInstanceOf(EmbeddingsResponse::class)
+        ->and($response->embeddings[0])->toHaveCount(1536)
+        ->and($response->meta->provider)->toEqual('openai');
 
     Event::assertDispatched(GeneratingEmbeddings::class);
     Event::assertDispatched(EmbeddingsGenerated::class);

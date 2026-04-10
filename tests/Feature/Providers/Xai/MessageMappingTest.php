@@ -49,8 +49,8 @@ test('tool call follow up uses previous response id', function () {
 
     $followUpBody = json_decode($recorded[1][0]->body(), true);
 
-    expect($followUpBody)->toHaveKey('previous_response_id');
-    expect($followUpBody['previous_response_id'])->not->toBeEmpty();
+    expect($followUpBody)->toHaveKey('previous_response_id')
+        ->and($followUpBody['previous_response_id'])->not->toBeEmpty();
 
     $hasToolOutput = collect($followUpBody['input'])->contains(
         fn ($item) => ($item['type'] ?? '') === 'function_call_output'

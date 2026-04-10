@@ -29,8 +29,8 @@ test('transcription response text is correctly parsed', function () {
     $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
         ->generate(provider: 'mistral');
 
-    expect($response->text)->toBe('Hello, world!');
-    expect($response->meta->provider)->toBe('mistral');
+    expect($response->text)->toBe('Hello, world!')
+        ->and($response->meta->provider)->toBe('mistral');
 });
 
 test('transcription includes model in request', function () {
@@ -80,8 +80,8 @@ test('transcription usage is correctly parsed', function () {
     $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
         ->generate(provider: 'mistral');
 
-    expect($response->usage->promptTokens)->toBe(100);
-    expect($response->usage->completionTokens)->toBe(50);
+    expect($response->usage->promptTokens)->toBe(100)
+        ->and($response->usage->completionTokens)->toBe(50);
 });
 
 function fakeTranscriptionResponse(string $text = 'Hello, world!')

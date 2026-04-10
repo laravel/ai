@@ -43,8 +43,8 @@ test('tool calls trigger follow up request', function () {
         }
     }
 
-    expect($hasAssistantWithToolUse)->toBeTrue('Follow-up request should include assistant message with tool_use block');
-    expect($hasToolResult)->toBeTrue('Follow-up request should include user message with tool_result block');
+    expect($hasAssistantWithToolUse)->toBeTrue('Follow-up request should include assistant message with tool_use block')
+        ->and($hasToolResult)->toBeTrue('Follow-up request should include user message with tool_result block');
 });
 
 test('max steps limits tool call depth', function () {

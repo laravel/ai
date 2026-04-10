@@ -56,16 +56,16 @@ test('tool result follow up uses previous response id', function () {
 
     $followUpBody = json_decode($recorded[1][0]->body(), true);
 
-    expect($followUpBody)->toHaveKey('previous_response_id');
-    expect($followUpBody['previous_response_id'])->toBe('resp_tool_123');
+    expect($followUpBody)->toHaveKey('previous_response_id')
+        ->and($followUpBody['previous_response_id'])->toBe('resp_tool_123');
 
     $hasFunctionCallOutput = false;
 
     foreach ($followUpBody['input'] as $item) {
         if (($item['type'] ?? '') === 'function_call_output') {
             $hasFunctionCallOutput = true;
-            expect($item['call_id'])->toBe('call_123');
-            expect($item['output'])->not->toBeEmpty();
+            expect($item['call_id'])->toBe('call_123')
+                ->and($item['output'])->not->toBeEmpty();
         }
     }
 

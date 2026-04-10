@@ -29,12 +29,12 @@ describe('text streaming', function () {
 
         $events = $this->collectStreamEvents();
 
-        expect($events[0])->toBeInstanceOf(StreamStart::class);
-        expect($events[1])->toBeInstanceOf(TextStart::class);
-        expect($events[2])->toBeInstanceOf(TextDelta::class)->delta->toBe('Hello');
-        expect($events[3])->toBeInstanceOf(TextDelta::class)->delta->toBe(' world');
-        expect($events[count($events) - 2])->toBeInstanceOf(TextEnd::class);
-        expect($events[count($events) - 1])->toBeInstanceOf(StreamEnd::class);
+        expect($events[0])->toBeInstanceOf(StreamStart::class)
+            ->and($events[1])->toBeInstanceOf(TextStart::class)
+            ->and($events[2])->toBeInstanceOf(TextDelta::class)->delta->toBe('Hello')
+            ->and($events[3])->toBeInstanceOf(TextDelta::class)->delta->toBe(' world')
+            ->and($events[count($events) - 2])->toBeInstanceOf(TextEnd::class)
+            ->and($events[count($events) - 1])->toBeInstanceOf(StreamEnd::class);
     });
 
     test('streaming uses sse endpoint with alt parameter', function () {
@@ -87,8 +87,8 @@ describe('tool calls', function () {
 
         $toolCallEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolCallEvent));
 
-        expect($toolCallEvents)->not->toBeEmpty();
-        expect($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator');
+        expect($toolCallEvents)->not->toBeEmpty()
+            ->and($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator');
     });
 
     test('streaming thinking parts are excluded from tool call continuation', function () {
@@ -173,8 +173,8 @@ describe('error handling', function () {
 
         $events = $this->collectStreamEvents();
 
-        expect($events)->toHaveCount(1);
-        expect($events[0])->toBeInstanceOf(Error::class)->type->toBe('overloaded')->message->toBe('Server overloaded');
+        expect($events)->toHaveCount(1)
+            ->and($events[0])->toBeInstanceOf(Error::class)->type->toBe('overloaded')->message->toBe('Server overloaded');
     });
 });
 

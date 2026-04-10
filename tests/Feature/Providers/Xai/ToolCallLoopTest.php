@@ -82,6 +82,6 @@ test('follow up request preserves tools', function () {
 
     $followUpBody = json_decode($recorded[1][0]->body(), true);
 
-    expect($followUpBody)->toHaveKey('tools');
-    expect($followUpBody['tools'])->not->toBeEmpty();
+    expect($followUpBody)->toHaveKey('tools')
+        ->and($followUpBody['tools'])->not->toBeEmpty();
 });

@@ -13,10 +13,10 @@ test('to laravel tool call from array unwraps schema definition', function () {
         'arguments' => ['schema_definition' => ['query' => 'test']],
     ]);
 
-    expect($result)->toBeInstanceOf(ToolCall::class);
-    expect($result->id)->toBe('call_1');
-    expect($result->name)->toBe('search');
-    expect($result->arguments)->toBe(['query' => 'test']);
+    expect($result)->toBeInstanceOf(ToolCall::class)
+        ->and($result->id)->toBe('call_1')
+        ->and($result->name)->toBe('search')
+        ->and($result->arguments)->toBe(['query' => 'test']);
 });
 
 test('to laravel tool call from array uses raw arguments when schema definition is missing', function () {
@@ -26,8 +26,8 @@ test('to laravel tool call from array uses raw arguments when schema definition 
         'arguments' => ['query' => 'test'],
     ]);
 
-    expect($result)->toBeInstanceOf(ToolCall::class);
-    expect($result->arguments)->toBe(['query' => 'test']);
+    expect($result)->toBeInstanceOf(ToolCall::class)
+        ->and($result->arguments)->toBe(['query' => 'test']);
 });
 
 test('to laravel tool call from object unwraps schema definition', function () {
@@ -42,13 +42,13 @@ test('to laravel tool call from object unwraps schema definition', function () {
 
     $result = PrismTool::toLaravelToolCall($prismToolCall);
 
-    expect($result)->toBeInstanceOf(ToolCall::class);
-    expect($result->id)->toBe('call_3');
-    expect($result->name)->toBe('search');
-    expect($result->arguments)->toBe(['query' => 'test']);
-    expect($result->resultId)->toBe('res_1');
-    expect($result->reasoningId)->toBe('reason_1');
-    expect($result->reasoningSummary)->toBe(['summary']);
+    expect($result)->toBeInstanceOf(ToolCall::class)
+        ->and($result->id)->toBe('call_3')
+        ->and($result->name)->toBe('search')
+        ->and($result->arguments)->toBe(['query' => 'test'])
+        ->and($result->resultId)->toBe('res_1')
+        ->and($result->reasoningId)->toBe('reason_1')
+        ->and($result->reasoningSummary)->toBe(['summary']);
 });
 
 test('to laravel tool call from object uses raw arguments when schema definition is missing', function () {
@@ -60,8 +60,8 @@ test('to laravel tool call from object uses raw arguments when schema definition
 
     $result = PrismTool::toLaravelToolCall($prismToolCall);
 
-    expect($result)->toBeInstanceOf(ToolCall::class);
-    expect($result->arguments)->toBe(['query' => 'test', 'limit' => 10]);
+    expect($result)->toBeInstanceOf(ToolCall::class)
+        ->and($result->arguments)->toBe(['query' => 'test', 'limit' => 10]);
 });
 
 test('to laravel tool result from array unwraps schema definition', function () {
@@ -72,11 +72,11 @@ test('to laravel tool result from array unwraps schema definition', function () 
         'result' => 'found it',
     ]);
 
-    expect($result)->toBeInstanceOf(ToolResult::class);
-    expect($result->id)->toBe('call_1');
-    expect($result->name)->toBe('search');
-    expect($result->arguments)->toBe(['query' => 'test']);
-    expect($result->result)->toBe('found it');
+    expect($result)->toBeInstanceOf(ToolResult::class)
+        ->and($result->id)->toBe('call_1')
+        ->and($result->name)->toBe('search')
+        ->and($result->arguments)->toBe(['query' => 'test'])
+        ->and($result->result)->toBe('found it');
 });
 
 test('to laravel tool result from array uses raw args when schema definition is missing', function () {
@@ -87,8 +87,8 @@ test('to laravel tool result from array uses raw args when schema definition is 
         'result' => 'found it',
     ]);
 
-    expect($result)->toBeInstanceOf(ToolResult::class);
-    expect($result->arguments)->toBe(['query' => 'test']);
+    expect($result)->toBeInstanceOf(ToolResult::class)
+        ->and($result->arguments)->toBe(['query' => 'test']);
 });
 
 test('to laravel tool result from object unwraps schema definition', function () {
@@ -102,12 +102,12 @@ test('to laravel tool result from object unwraps schema definition', function ()
 
     $result = PrismTool::toLaravelToolResult($prismToolResult);
 
-    expect($result)->toBeInstanceOf(ToolResult::class);
-    expect($result->id)->toBe('call_3');
-    expect($result->name)->toBe('search');
-    expect($result->arguments)->toBe(['query' => 'test']);
-    expect($result->result)->toBe('found it');
-    expect($result->resultId)->toBe('res_1');
+    expect($result)->toBeInstanceOf(ToolResult::class)
+        ->and($result->id)->toBe('call_3')
+        ->and($result->name)->toBe('search')
+        ->and($result->arguments)->toBe(['query' => 'test'])
+        ->and($result->result)->toBe('found it')
+        ->and($result->resultId)->toBe('res_1');
 });
 
 test('to laravel tool result from object uses raw args when schema definition is missing', function () {
@@ -120,6 +120,6 @@ test('to laravel tool result from object uses raw args when schema definition is
 
     $result = PrismTool::toLaravelToolResult($prismToolResult);
 
-    expect($result)->toBeInstanceOf(ToolResult::class);
-    expect($result->arguments)->toBe(['query' => 'test', 'limit' => 10]);
+    expect($result)->toBeInstanceOf(ToolResult::class)
+        ->and($result->arguments)->toBe(['query' => 'test', 'limit' => 10]);
 });

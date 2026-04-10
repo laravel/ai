@@ -45,15 +45,13 @@ test('tool parameters are not wrapped in schema definition', function () {
 
     $parameters = $mapped[0]['parameters'];
 
-    expect($parameters['properties'] ?? [])->not->toHaveKey('schema_definition');
-    expect($parameters['required'] ?? [])->not->toContain('schema_definition');
-    expect($parameters['properties'])->toHaveKey('name');
-    expect($parameters['properties'])->toHaveKey('email');
-    expect($parameters['properties'])->toHaveKey('phone_number');
-    expect($parameters['required'])->toContain('name');
-    expect($parameters['required'])->toContain('phone_number');
-    expect($parameters['type'])->toEqual('object');
-    expect($parameters['additionalProperties'])->toBeFalse();
+    expect($parameters['properties'] ?? [])->not->toHaveKey('schema_definition')
+        ->and($parameters['required'] ?? [])->not->toContain('schema_definition')
+        ->and($parameters['properties'])->toHaveKeys(['name', 'email', 'phone_number'])
+        ->and($parameters['required'])->toContain('name')
+        ->toContain('phone_number')
+        ->and($parameters['type'])->toEqual('object')
+        ->and($parameters['additionalProperties'])->toBeFalse();
 });
 
 test('tool with empty schema includes parameters', function () {
@@ -89,8 +87,8 @@ test('tool with empty schema includes parameters', function () {
 
     $mapped = $mapper->map([$tool], $provider);
 
-    expect($mapped[0])->toHaveKey('parameters');
-    expect($mapped[0]['parameters']['type'])->toEqual('object');
-    expect($mapped[0]['parameters']['required'])->toEqual([]);
-    expect($mapped[0]['parameters']['additionalProperties'])->toBeFalse();
+    expect($mapped[0])->toHaveKey('parameters')
+        ->and($mapped[0]['parameters']['type'])->toEqual('object')
+        ->and($mapped[0]['parameters']['required'])->toBeEmpty()
+        ->and($mapped[0]['parameters']['additionalProperties'])->toBeFalse();
 });

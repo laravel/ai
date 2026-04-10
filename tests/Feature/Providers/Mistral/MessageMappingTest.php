@@ -49,11 +49,11 @@ test('assistant message with tool calls maps correctly', function () {
     $assistantMsg = collect($followUpBody['messages'])->firstWhere('role', 'assistant');
     $toolMsg = collect($followUpBody['messages'])->firstWhere('role', 'tool');
 
-    expect($assistantMsg)->not->toBeNull();
-    expect($toolMsg)->not->toBeNull();
-    expect($assistantMsg['tool_calls'])->not->toBeEmpty();
-    expect($assistantMsg['tool_calls'][0]['function']['name'])->toBe('FixedNumberGenerator');
-    expect($toolMsg['tool_call_id'])->toBe($assistantMsg['tool_calls'][0]['id']);
+    expect($assistantMsg)->not->toBeNull()
+        ->and($toolMsg)->not->toBeNull()
+        ->and($assistantMsg['tool_calls'])->not->toBeEmpty()
+        ->and($assistantMsg['tool_calls'][0]['function']['name'])->toBe('FixedNumberGenerator')
+        ->and($toolMsg['tool_call_id'])->toBe($assistantMsg['tool_calls'][0]['id']);
 });
 
 test('image attachment maps to image url', function () {

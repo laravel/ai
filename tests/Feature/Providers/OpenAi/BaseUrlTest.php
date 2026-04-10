@@ -64,8 +64,8 @@ test('openai file requests use the configured base url', function () {
 
     Files::delete($stored->id, provider: 'openai');
 
-    expect($stored->id)->toBe('file_123');
-    expect($retrieved->id)->toBe('file_123');
+    expect($stored->id)->toBe('file_123')
+        ->and($retrieved->id)->toBe('file_123');
 
     Http::assertSentCount(3);
     openAiAssertRequestSent('POST', "{$this->customUrl}/files");
@@ -101,11 +101,11 @@ test('openai store requests use the configured base url', function () {
     $removed = $store->remove($document->id());
     $deleted = $store->delete();
 
-    expect($store->id)->toBe('vs_123');
-    expect($store->name)->toBe('Local Store');
-    expect($document->id())->toBe('vsfile_123');
-    expect($removed)->toBeTrue();
-    expect($deleted)->toBeTrue();
+    expect($store->id)->toBe('vs_123')
+        ->and($store->name)->toBe('Local Store')
+        ->and($document->id())->toBe('vsfile_123')
+        ->and($removed)->toBeTrue()
+        ->and($deleted)->toBeTrue();
 
     Http::assertSentCount(5);
     openAiAssertRequestSent('POST', "{$this->customUrl}/vector_stores");

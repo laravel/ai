@@ -114,8 +114,8 @@ describe('request structure', function () {
 
         $toolCall = $steps->first()->toolCalls[0] ?? null;
 
-        expect($toolCall)->not->toBeNull();
-        expect($toolCall->id)->toBe('call_abc123');
+        expect($toolCall)->not->toBeNull()
+            ->and($toolCall->id)->toBe('call_abc123');
     });
 });
 
@@ -272,8 +272,7 @@ describe('usage parsing', function () {
 
         $response = (new AssistantAgent)->prompt('Question?', provider: 'gemini');
 
-        expect($response->text)->toBe('The answer is 42.');
-        expect($response->text)->not->toContain('Internal reasoning');
+        expect($response->text)->toBe('The answer is 42.')->not->toContain('Internal reasoning');
     });
 
     test('finish reason maps correctly', function (string $geminiReason, FinishReason $expected) {
@@ -321,9 +320,9 @@ describe('citations', function () {
 
         $response = (new AssistantAgent)->prompt('Who won Euro 2024?', provider: 'gemini');
 
-        expect($response->meta->citations)->toHaveCount(2);
-        expect($response->meta->citations[0]->url)->toBe('https://example.com/euro');
-        expect($response->meta->citations[1]->url)->toBe('https://example.com/spain');
+        expect($response->meta->citations)->toHaveCount(2)
+            ->and($response->meta->citations[0]->url)->toBe('https://example.com/euro')
+            ->and($response->meta->citations[1]->url)->toBe('https://example.com/spain');
     });
 
     test('legacy citation metadata is also extracted', function () {
@@ -347,8 +346,8 @@ describe('citations', function () {
 
         $response = (new AssistantAgent)->prompt('Query', provider: 'gemini');
 
-        expect($response->meta->citations)->toHaveCount(1);
-        expect($response->meta->citations[0]->url)->toBe('https://example.com/source1');
+        expect($response->meta->citations)->toHaveCount(1)
+            ->and($response->meta->citations[0]->url)->toBe('https://example.com/source1');
     });
 
     test('duplicate citations are deduplicated by url', function () {

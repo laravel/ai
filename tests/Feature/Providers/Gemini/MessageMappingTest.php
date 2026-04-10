@@ -66,8 +66,8 @@ test('tool result follow up maps model and function response', function () {
         }
     }
 
-    expect($hasModelWithFunctionCall)->toBeTrue('Follow-up should include model message with functionCall');
-    expect($hasFunctionResponse)->toBeTrue('Follow-up should include user message with functionResponse');
+    expect($hasModelWithFunctionCall)->toBeTrue('Follow-up should include model message with functionCall')
+        ->and($hasFunctionResponse)->toBeTrue('Follow-up should include user message with functionResponse');
 });
 
 test('base64 pdf document maps to inline data', function () {

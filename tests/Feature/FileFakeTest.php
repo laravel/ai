@@ -14,40 +14,40 @@ test('files can be faked', function () {
     ]);
 
     $response = Files::get('file_1');
-    expect($response->id)->toEqual('file_1');
-    expect($response->content)->toEqual('first-content');
+    expect($response->id)->toEqual('file_1')
+        ->and($response->content)->toEqual('first-content');
 
     $response = Files::get('file_2');
-    expect($response->id)->toEqual('file_2');
-    expect($response->content)->toEqual('content-for-file_2');
+    expect($response->id)->toEqual('file_2')
+        ->and($response->content)->toEqual('content-for-file_2');
 
     $response = Files::get('file_3');
-    expect($response->id)->toEqual('id');
-    expect($response->content)->toEqual('third-content');
+    expect($response->id)->toEqual('id')
+        ->and($response->content)->toEqual('third-content');
 });
 
 test('files can be faked with no predefined responses', function () {
     Files::fake();
 
     $response = Files::get('file_1');
-    expect($response->id)->toEqual('file_1');
-    expect($response->content)->toEqual('fake-content');
+    expect($response->id)->toEqual('file_1')
+        ->and($response->content)->toEqual('fake-content');
 
     $response = Files::get('file_2');
-    expect($response->id)->toEqual('file_2');
-    expect($response->content)->toEqual('fake-content');
+    expect($response->id)->toEqual('file_2')
+        ->and($response->content)->toEqual('fake-content');
 });
 
 test('files can be faked with a closure', function () {
     Files::fake(fn ($fileId) => "content-for-{$fileId}");
 
     $response = Files::get('file_1');
-    expect($response->id)->toEqual('file_1');
-    expect($response->content)->toEqual('content-for-file_1');
+    expect($response->id)->toEqual('file_1')
+        ->and($response->content)->toEqual('content-for-file_1');
 
     $response = Files::get('file_2');
-    expect($response->id)->toEqual('file_2');
-    expect($response->content)->toEqual('content-for-file_2');
+    expect($response->id)->toEqual('file_2')
+        ->and($response->content)->toEqual('content-for-file_2');
 });
 
 test('files can prevent stray operations', function () {

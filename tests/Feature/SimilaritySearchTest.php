@@ -38,9 +38,9 @@ test('using model creates similarity search', function () {
         'query' => 'search term',
     ]));
 
-    expect($results)->toContain('Relevant results found.');
-    expect($results)->toContain('First document');
-    expect($results)->toContain('Second document');
+    expect($results)->toContain('Relevant results found.')
+        ->toContain('First document')
+        ->toContain('Second document');
 });
 
 test('using model applies custom query closure', function () {
@@ -68,8 +68,8 @@ test('using model excludes embedding column from results', function () {
         'query' => 'search term',
     ]));
 
-    expect($results)->not->toContain('embedding');
-    expect($results)->toContain('First document');
+    expect($results)->not->toContain('embedding')
+        ->toContain('First document');
 });
 
 class FakeVectorModel

@@ -115,8 +115,8 @@ describe('file operations', function () {
 
         $searchable = $store->add(new ProviderDocument('file_123'));
 
-        expect($searchable)->id->toEqual('file_123');
-        expect($searchable->fileId())->toEqual('file_123');
+        expect($searchable)->id->toEqual('file_123')
+            ->and($searchable->fileId())->toEqual('file_123');
     });
 
     test('can remove file from store with provider id', function () {

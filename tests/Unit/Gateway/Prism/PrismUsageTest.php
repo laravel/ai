@@ -15,21 +15,21 @@ test('converts prism usage to laravel usage', function () {
 
     $usage = PrismUsage::toLaravelUsage($prismUsage);
 
-    expect($usage)->toBeInstanceOf(Usage::class);
-    expect($usage->promptTokens)->toEqual(100);
-    expect($usage->completionTokens)->toEqual(50);
-    expect($usage->cacheWriteInputTokens)->toEqual(10);
-    expect($usage->cacheReadInputTokens)->toEqual(5);
-    expect($usage->reasoningTokens)->toEqual(20);
+    expect($usage)->toBeInstanceOf(Usage::class)
+        ->and($usage->promptTokens)->toEqual(100)
+        ->and($usage->completionTokens)->toEqual(50)
+        ->and($usage->cacheWriteInputTokens)->toEqual(10)
+        ->and($usage->cacheReadInputTokens)->toEqual(5)
+        ->and($usage->reasoningTokens)->toEqual(20);
 });
 
 test('handles null usage', function () {
     $usage = PrismUsage::toLaravelUsage(null);
 
-    expect($usage)->toBeInstanceOf(Usage::class);
-    expect($usage->promptTokens)->toEqual(0);
-    expect($usage->completionTokens)->toEqual(0);
-    expect($usage->cacheWriteInputTokens)->toEqual(0);
-    expect($usage->cacheReadInputTokens)->toEqual(0);
-    expect($usage->reasoningTokens)->toEqual(0);
+    expect($usage)->toBeInstanceOf(Usage::class)
+        ->and($usage->promptTokens)->toEqual(0)
+        ->and($usage->completionTokens)->toEqual(0)
+        ->and($usage->cacheWriteInputTokens)->toEqual(0)
+        ->and($usage->cacheReadInputTokens)->toEqual(0)
+        ->and($usage->reasoningTokens)->toEqual(0);
 });

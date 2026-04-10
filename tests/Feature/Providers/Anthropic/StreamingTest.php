@@ -33,12 +33,12 @@ describe('text streaming', function () {
 
         $events = $this->collectStreamEvents();
 
-        expect($events[0])->toBeInstanceOf(StreamStart::class);
-        expect($events[1])->toBeInstanceOf(TextStart::class);
-        expect($events[2])->toBeInstanceOf(TextDelta::class)->delta->toBe('Hello');
-        expect($events[3])->toBeInstanceOf(TextDelta::class)->delta->toBe(' world');
-        expect($events[4])->toBeInstanceOf(TextEnd::class);
-        expect($events[5])->toBeInstanceOf(StreamEnd::class);
+        expect($events[0])->toBeInstanceOf(StreamStart::class)
+            ->and($events[1])->toBeInstanceOf(TextStart::class)
+            ->and($events[2])->toBeInstanceOf(TextDelta::class)->delta->toBe('Hello')
+            ->and($events[3])->toBeInstanceOf(TextDelta::class)->delta->toBe(' world')
+            ->and($events[4])->toBeInstanceOf(TextEnd::class)
+            ->and($events[5])->toBeInstanceOf(StreamEnd::class);
     });
 });
 
@@ -73,8 +73,8 @@ describe('tool calls', function () {
 
         $toolCallEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolCallEvent));
 
-        expect($toolCallEvents)->not->toBeEmpty();
-        expect($toolCallEvents[0]->toolCall)->name->toBe('FixedNumberGenerator')->id->toBe('toolu_1');
+        expect($toolCallEvents)->not->toBeEmpty()
+            ->and($toolCallEvents[0]->toolCall)->name->toBe('FixedNumberGenerator')->id->toBe('toolu_1');
     });
 });
 
@@ -130,9 +130,9 @@ describe('thinking blocks', function () {
 
         $providerEvents = array_values(array_filter($events, fn ($e) => $e instanceof ProviderToolEvent));
 
-        expect($providerEvents)->toHaveCount(2);
-        expect($providerEvents[0])->status->toBe('started')->itemId->toBe('srvtoolu_1');
-        expect($providerEvents[1]->status)->toBe('completed');
+        expect($providerEvents)->toHaveCount(2)
+            ->and($providerEvents[0])->status->toBe('started')->itemId->toBe('srvtoolu_1')
+            ->and($providerEvents[1]->status)->toBe('completed');
     });
 
     test('streaming handles provider tool results', function () {
@@ -156,8 +156,8 @@ describe('thinking blocks', function () {
 
         $providerEvents = array_values(array_filter($events, fn ($e) => $e instanceof ProviderToolEvent));
 
-        expect($providerEvents)->not->toBeEmpty();
-        expect($providerEvents[0])->status->toBe('result_received')->type->toBe('web_search_tool_result');
+        expect($providerEvents)->not->toBeEmpty()
+            ->and($providerEvents[0])->status->toBe('result_received')->type->toBe('web_search_tool_result');
     });
 });
 
@@ -175,8 +175,8 @@ describe('error handling', function () {
 
         $events = $this->collectStreamEvents();
 
-        expect($events)->toHaveCount(1);
-        expect($events[0])->toBeInstanceOf(Error::class)->type->toBe('overloaded_error')->message->toBe('Server overloaded');
+        expect($events)->toHaveCount(1)
+            ->and($events[0])->toBeInstanceOf(Error::class)->type->toBe('overloaded_error')->message->toBe('Server overloaded');
     });
 });
 

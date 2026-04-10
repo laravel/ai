@@ -11,16 +11,11 @@ test('text generation options can extract provider options for openai', function
 
     $providerOptions = $options->providerOptions(Lab::OpenAI);
 
-    expect($providerOptions)->not->toBeNull();
-    expect($providerOptions)->toBeArray();
-
-    expect($providerOptions)->toEqual([
-        'reasoning' => [
+    expect($providerOptions)->not->toBeNull()
+        ->toBeArray()
+        ->toEqual(['reasoning' => [
             'effort' => 'high',
-        ],
-        'frequency_penalty' => 0.5,
-        'presence_penalty' => 0.3,
-    ]);
+        ], 'frequency_penalty' => 0.5, 'presence_penalty' => 0.3]);
 });
 
 test('text generation options can extract provider options for anthropic', function () {
@@ -28,14 +23,11 @@ test('text generation options can extract provider options for anthropic', funct
 
     $providerOptions = $options->providerOptions(Lab::Anthropic);
 
-    expect($providerOptions)->not->toBeNull();
-
-    expect($providerOptions)->toEqual([
-        'thinking' => [
+    expect($providerOptions)->not->toBeNull()
+        ->toEqual(['thinking' => [
             'type' => 'enabled',
             'budget_tokens' => 10000,
-        ],
-    ]);
+        ]]);
 });
 
 test('text generation options accept string provider', function () {
@@ -43,15 +35,10 @@ test('text generation options accept string provider', function () {
 
     $providerOptions = $options->providerOptions('openai');
 
-    expect($providerOptions)->not->toBeNull();
-
-    expect($providerOptions)->toEqual([
-        'reasoning' => [
+    expect($providerOptions)->not->toBeNull()
+        ->toEqual(['reasoning' => [
             'effort' => 'high',
-        ],
-        'frequency_penalty' => 0.5,
-        'presence_penalty' => 0.3,
-    ]);
+        ], 'frequency_penalty' => 0.5, 'presence_penalty' => 0.3]);
 });
 
 test('text generation options return empty array for unknown provider', function () {

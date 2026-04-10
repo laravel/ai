@@ -37,12 +37,12 @@ test('streaming emits text events', function () {
 
     $events = $this->collectStreamEvents();
 
-    expect($events[0])->toBeInstanceOf(StreamStart::class);
-    expect($events[1])->toBeInstanceOf(TextStart::class);
-    expect($events[2])->toBeInstanceOf(TextDelta::class)->delta->toBe('Hello');
-    expect($events[3])->toBeInstanceOf(TextDelta::class)->delta->toBe(' world');
-    expect($events[4])->toBeInstanceOf(TextEnd::class);
-    expect($events[count($events) - 1])->toBeInstanceOf(StreamEnd::class);
+    expect($events[0])->toBeInstanceOf(StreamStart::class)
+        ->and($events[1])->toBeInstanceOf(TextStart::class)
+        ->and($events[2])->toBeInstanceOf(TextDelta::class)->delta->toBe('Hello')
+        ->and($events[3])->toBeInstanceOf(TextDelta::class)->delta->toBe(' world')
+        ->and($events[4])->toBeInstanceOf(TextEnd::class)
+        ->and($events[count($events) - 1])->toBeInstanceOf(StreamEnd::class);
 });
 
 test('streaming handles tool calls', function () {
@@ -79,9 +79,9 @@ test('streaming handles tool calls', function () {
 
     $toolCallEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolCallEvent));
 
-    expect($toolCallEvents)->not->toBeEmpty();
-    expect($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator');
-    expect($toolCallEvents[0]->toolCall->resultId)->toBe('call_1');
+    expect($toolCallEvents)->not->toBeEmpty()
+        ->and($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator')
+        ->and($toolCallEvents[0]->toolCall->resultId)->toBe('call_1');
 });
 
 test('streaming handles reasoning events', function () {
@@ -107,9 +107,9 @@ test('streaming handles reasoning events', function () {
 
     $types = array_map(fn ($e) => $e::class, $events);
 
-    expect($types)->toContain(ReasoningStart::class);
-    expect($types)->toContain(ReasoningDelta::class);
-    expect($types)->toContain(ReasoningEnd::class);
+    expect($types)->toContain(ReasoningStart::class)
+        ->toContain(ReasoningDelta::class)
+        ->toContain(ReasoningEnd::class);
 
     $reasoningDelta = array_values(array_filter($events, fn ($e) => $e instanceof ReasoningDelta))[0];
     expect($reasoningDelta->delta)->toBe('Let me think...');
@@ -128,10 +128,10 @@ test('streaming error event stops stream', function () {
 
     $events = $this->collectStreamEvents();
 
-    expect($events)->toHaveCount(1);
-    expect($events[0])->toBeInstanceOf(Error::class);
-    expect($events[0]->type)->toBe('server_error');
-    expect($events[0]->message)->toBe('Server overloaded');
+    expect($events)->toHaveCount(1)
+        ->and($events[0])->toBeInstanceOf(Error::class)
+        ->and($events[0]->type)->toBe('server_error')
+        ->and($events[0]->message)->toBe('Server overloaded');
 });
 
 test('streaming captures usage from response completed', function () {
@@ -152,7 +152,7 @@ test('streaming captures usage from response completed', function () {
 
     $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
 
-    expect($streamEnd->usage->promptTokens)->toBe(37);
-    expect($streamEnd->usage->completionTokens)->toBe(10);
-    expect($streamEnd->usage->cacheReadInputTokens)->toBe(5);
+    expect($streamEnd->usage->promptTokens)->toBe(37)
+        ->and($streamEnd->usage->completionTokens)->toBe(10)
+        ->and($streamEnd->usage->cacheReadInputTokens)->toBe(5);
 });

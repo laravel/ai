@@ -22,10 +22,10 @@ test('structured data can be faked', function () {
         'active' => $schema->boolean(),
     ]))->withoutAdditionalProperties());
 
-    expect($response['name'])->toBeString();
-    expect($response['age'])->toBeNumeric();
-    expect($response['address'])->toBeArray();
-    expect(['admin', 'editor'])->toContain($response['role']);
-    expect($response['skills'])->toBeList();
-    expect($response['active'])->toBeBool();
+    expect($response['name'])->toBeString()
+        ->and($response['age'])->toBeNumeric()
+        ->and($response['address'])->toBeArray()
+        ->and(['admin', 'editor'])->toContain($response['role'])
+        ->and($response['skills'])->toBeList()
+        ->and($response['active'])->toBeBool();
 });

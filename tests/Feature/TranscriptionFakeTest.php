@@ -97,9 +97,9 @@ test('fake transcriptions include segments', function () {
 
     $response = Transcription::of(base64_encode('audio'))->generate();
 
-    expect($response->segments)->toHaveCount(1);
-    expect($response->segments[0]->text)->toEqual('Hello world');
-    expect($response->segments[0]->speaker)->toEqual('Speaker 1');
+    expect($response->segments)->toHaveCount(1)
+        ->and($response->segments[0]->text)->toEqual('Hello world')
+        ->and($response->segments[0]->speaker)->toEqual('Speaker 1');
 });
 
 test('queued transcriptions can be faked', function () {

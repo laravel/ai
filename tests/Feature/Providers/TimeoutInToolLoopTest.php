@@ -252,9 +252,9 @@ test('openai timeout is preserved in tool call follow up', function () {
 
     (new TimeoutToolAgent)->prompt('Give me a number', provider: 'openai');
 
-    expect($spy->capturedTimeouts)->toHaveCount(2);
-    expect($spy->capturedTimeouts[0])->toBe(300);
-    expect($spy->capturedTimeouts[1])->toBe(300);
+    expect($spy->capturedTimeouts)->toHaveCount(2)
+        ->and($spy->capturedTimeouts[0])->toBe(300)
+        ->and($spy->capturedTimeouts[1])->toBe(300);
 });
 
 test('anthropic timeout is preserved in tool call follow up', function () {
@@ -276,9 +276,9 @@ test('anthropic timeout is preserved in tool call follow up', function () {
 
     (new TimeoutToolAgent)->prompt('Give me a number', provider: 'anthropic');
 
-    expect($spy->capturedTimeouts)->toHaveCount(2);
-    expect($spy->capturedTimeouts[0])->toBe(300);
-    expect($spy->capturedTimeouts[1])->toBe(300);
+    expect($spy->capturedTimeouts)->toHaveCount(2)
+        ->and($spy->capturedTimeouts[0])->toBe(300)
+        ->and($spy->capturedTimeouts[1])->toBe(300);
 });
 
 test('groq timeout is preserved in tool call follow up', function () {
@@ -304,9 +304,9 @@ test('groq timeout is preserved in tool call follow up', function () {
 
     (new TimeoutToolAgent)->prompt('Give me a number', provider: 'groq');
 
-    expect($spy->capturedTimeouts)->toHaveCount(2);
-    expect($spy->capturedTimeouts[0])->toBe(300);
-    expect($spy->capturedTimeouts[1])->toBe(300);
+    expect($spy->capturedTimeouts)->toHaveCount(2)
+        ->and($spy->capturedTimeouts[0])->toBe(300)
+        ->and($spy->capturedTimeouts[1])->toBe(300);
 });
 
 test('gemini timeout is preserved in tool call follow up', function () {
@@ -328,7 +328,7 @@ test('gemini timeout is preserved in tool call follow up', function () {
 
     (new TimeoutToolAgent)->prompt('Give me a number', provider: 'gemini');
 
-    expect($spy->capturedTimeouts)->toHaveCount(2);
-    expect($spy->capturedTimeouts[0])->toBe(300);
-    expect($spy->capturedTimeouts[1])->toBe(300);
+    expect($spy->capturedTimeouts)->toHaveCount(2)
+        ->and($spy->capturedTimeouts[0])->toBe(300)
+        ->and($spy->capturedTimeouts[1])->toBe(300);
 });
