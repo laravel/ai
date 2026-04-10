@@ -6,9 +6,9 @@ use Tests\TestCase;
 
 require __DIR__.'/Expectations.php';
 
-uses(TestCase::class)->in('Feature', 'Unit');
-uses(AnthropicHelpers::class)->in('Feature/Providers/Anthropic');
-uses(GeminiHelpers::class)->in('Feature/Providers/Gemini');
+pest()->extend(TestCase::class)->in('Feature', 'Unit');
+pest()->use(AnthropicHelpers::class)->in('Feature/Providers/Anthropic');
+pest()->use(GeminiHelpers::class)->in('Feature/Providers/Gemini');
 
 uses()->group('provider-anthropic')->in('Feature/Providers/Anthropic');
 uses()->group('provider-gemini')->in('Feature/Providers/Gemini');
