@@ -22,7 +22,6 @@ use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\TextResponse;
@@ -157,16 +156,9 @@ class GeminiGateway implements Gateway
                 $part['inlineData']['mimeType'],
             ));
 
-        $usage = $data['usageMetadata'] ?? [];
-        $promptTokens = $usage['promptTokenCount'] ?? 0;
-        $cachedTokens = $usage['cachedContentTokenCount'] ?? 0;
-        $candidateTokens = $usage['candidatesTokenCount'] ?? 0;
-        $reasoningTokens = $usage['thoughtsTokenCount'] ?? 0;
-        $imageTokens = array_filter($usage['candidatesTokensDetails'], fn ($detail) => $detail['modality'] === 'IMAGE')[0]['tokenCount'] ?? 0;
-
         return new ImageResponse(
             $images,
-            new Usage($promptTokens - $cachedTokens, $candidateTokens - $imageTokens, 0, $cachedTokens, $reasoningTokens, $imageTokens),
+            $this->extractUsage($data),
             new Meta($provider->name(), $model),
         );
     }

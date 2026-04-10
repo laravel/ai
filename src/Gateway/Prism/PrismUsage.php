@@ -13,11 +13,17 @@ class PrismUsage
     public static function toLaravelUsage(?PrismUsageValueObject $usage): Usage
     {
         return new Usage(
-            $usage?->promptTokens ?: 0,
-            $usage?->completionTokens ?: 0,
-            $usage?->cacheWriteInputTokens ?: 0,
-            $usage?->cacheReadInputTokens ?: 0,
-            $usage?->thoughtTokens ?: 0,
+            inputTokens: [
+                'total' => $usage?->promptTokens ?: 0,
+            ],
+            outputTokens: [
+                'completion' => $usage?->completionTokens ?: 0,
+                'thought' => $usage?->thoughtTokens ?: 0,
+            ],
+            cachedTokens: [
+                'write' => $usage?->cacheWriteInputTokens ?: 0,
+                'read' => $usage?->cacheReadInputTokens ?: 0,
+            ],
         );
     }
 }

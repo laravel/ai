@@ -8,12 +8,10 @@ use JsonSerializable;
 class Usage implements Arrayable, JsonSerializable
 {
     public function __construct(
-        public int $promptTokens = 0,
-        public int $completionTokens = 0,
-        public int $cacheWriteInputTokens = 0,
-        public int $cacheReadInputTokens = 0,
-        public int $reasoningTokens = 0,
-        public int $imageTokens = 0,
+        public ?array $inputTokens = [],
+        public ?array $outputTokens = [],
+        public ?array $cachedTokens = [],
+        public ?array $toolsTokens = [],
     ) {}
 
     /**
@@ -22,13 +20,21 @@ class Usage implements Arrayable, JsonSerializable
     public function add(Usage $usage): Usage
     {
         return new Usage(
-            $this->promptTokens + $usage->promptTokens,
-            $this->completionTokens + $usage->completionTokens,
-            $this->cacheWriteInputTokens + $usage->cacheWriteInputTokens,
-            $this->cacheReadInputTokens + $usage->cacheReadInputTokens,
-            $this->reasoningTokens + $usage->reasoningTokens,
-            $this->imageTokens + $usage->imageTokens,
+            $this->accumulate($this->inputTokens, $usage->inputTokens),
+            $this->accumulate($this->outputTokens, $usage->outputTokens),
+            $this->accumulate($this->cachedTokens, $usage->cachedTokens),
+            $this->accumulate($this->toolsTokens, $usage->toolsTokens),
         );
+    }
+
+    /** 
+     * Accumulates elements from two collections.
+     */
+    private function accumulate(array $a1, array $a2): array
+    {
+        $result = [];
+        foreach (array_keys($a1 + $a2) as $key) $result[$key] = ($a1[$key] ?? 0) + ($a2[$key] ?? 0);
+        return $result;
     }
 
     /**
@@ -37,12 +43,10 @@ class Usage implements Arrayable, JsonSerializable
     public function toArray(): array
     {
         return [
-            'prompt_tokens' => $this->promptTokens,
-            'completion_tokens' => $this->completionTokens,
-            'cache_write_input_tokens' => $this->cacheWriteInputTokens,
-            'cache_read_input_tokens' => $this->cacheReadInputTokens,
-            'reasoning_tokens' => $this->reasoningTokens,
-            'image_tokens' => $this->imageTokens,
+            'input_tokens' => $this->inputTokens,
+            'output_tokens' => $this->outputTokens,
+            'cached_tokens' => $this->cachedTokens,
+            'tools_tokens' => $this->toolsTokens,
         ];
     }
 
@@ -53,4 +57,5 @@ class Usage implements Arrayable, JsonSerializable
     {
         return $this->toArray();
     }
+
 }

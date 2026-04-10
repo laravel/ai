@@ -22,11 +22,11 @@ class PrismUsageTest extends TestCase
         $usage = PrismUsage::toLaravelUsage($prismUsage);
 
         $this->assertInstanceOf(Usage::class, $usage);
-        $this->assertEquals(100, $usage->promptTokens);
-        $this->assertEquals(50, $usage->completionTokens);
-        $this->assertEquals(10, $usage->cacheWriteInputTokens);
-        $this->assertEquals(5, $usage->cacheReadInputTokens);
-        $this->assertEquals(20, $usage->reasoningTokens);
+        $this->assertEquals(100, $usage->inputTokens['total']);
+        $this->assertEquals(50, $usage->outputTokens['completion']);
+        $this->assertEquals(10, $usage->cachedTokens['write']);
+        $this->assertEquals(5, $usage->cachedTokens['read']);
+        $this->assertEquals(20, $usage->outputTokens['thought']);
     }
 
     public function test_handles_null_usage(): void
@@ -34,10 +34,10 @@ class PrismUsageTest extends TestCase
         $usage = PrismUsage::toLaravelUsage(null);
 
         $this->assertInstanceOf(Usage::class, $usage);
-        $this->assertEquals(0, $usage->promptTokens);
-        $this->assertEquals(0, $usage->completionTokens);
-        $this->assertEquals(0, $usage->cacheWriteInputTokens);
-        $this->assertEquals(0, $usage->cacheReadInputTokens);
-        $this->assertEquals(0, $usage->reasoningTokens);
+        $this->assertEquals(0, $usage->inputTokens['total']);
+        $this->assertEquals(0, $usage->outputTokens['completion']);
+        $this->assertEquals(0, $usage->cachedTokens['write']);
+        $this->assertEquals(0, $usage->cachedTokens['read']);
+        $this->assertEquals(0, $usage->outputTokens['thought']);
     }
 }
