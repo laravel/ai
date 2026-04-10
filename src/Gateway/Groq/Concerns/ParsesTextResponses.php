@@ -335,7 +335,7 @@ trait ParsesTextResponses
     {
         return $steps->reduce(
             fn (Usage $carry, Step $step) => $carry->add($step->usage),
-            new Usage(0, 0)
+            new Usage()
         );
     }
 }
