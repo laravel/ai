@@ -44,9 +44,7 @@ test('tool parameters are not wrapped in schema definition', function () {
 
     expect($parameters['properties'] ?? [])->not->toHaveKey('schema_definition')
         ->and($parameters['required'] ?? [])->not->toContain('schema_definition')
-        ->and($parameters['properties'])->toHaveKey('name')
-        ->toHaveKey('email')
-        ->toHaveKey('phone_number')
+        ->and($parameters['properties'])->toHaveKeys(['name', 'email', 'phone_number'])
         ->and($parameters['required'])->toContain('name')
         ->toContain('phone_number')
         ->and($parameters['type'])->toEqual('object')

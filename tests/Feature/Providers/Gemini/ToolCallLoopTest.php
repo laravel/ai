@@ -99,10 +99,8 @@ test('function response includes id for gemini 3', function () {
 
     expect($functionResponsePart)->not->toBeNull('Follow-up should include functionResponse')
         ->and($functionResponsePart['name'])->toBe('FixedNumberGenerator')
-        ->and($functionResponsePart)->toHaveKey('id')
-        ->toHaveKey('response')
-        ->and($functionResponsePart['response'])->toHaveKey('name')
-        ->toHaveKey('content');
+        ->and($functionResponsePart)->toHaveKeys(['id', 'response'])
+        ->and($functionResponsePart['response'])->toHaveKeys(['name', 'content']);
 });
 
 test('parallel function calls preserve unique ids', function () {
