@@ -304,10 +304,13 @@ trait ParsesTextResponses
     protected function extractUsage(array $data): Usage
     {
         $usage = $data['usage'] ?? [];
-
         return new Usage(
-            $usage['prompt_tokens'] ?? 0,
-            $usage['completion_tokens'] ?? 0,
+            inputTokens: [
+                'total' => $usage['prompt_tokens'] ?? 0,
+            ],
+            outputTokens: [
+                'total' => $usage['completion_tokens'] ?? 0,
+            ],
         );
     }
 

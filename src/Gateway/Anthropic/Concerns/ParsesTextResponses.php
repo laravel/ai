@@ -318,12 +318,17 @@ trait ParsesTextResponses
     protected function extractUsage(array $data): Usage
     {
         $usage = $data['usage'] ?? [];
-
         return new Usage(
-            $usage['input_tokens'] ?? 0,
-            $usage['output_tokens'] ?? 0,
-            $usage['cache_creation_input_tokens'] ?? 0,
-            $usage['cache_read_input_tokens'] ?? 0,
+            inputTokens: [
+                'total' => $usage['input_tokens'] ?? 0,
+            ],
+            outputTokens: [
+                'total' => $usage['output_tokens'] ?? 0,
+            ],
+            cachedTokens: [
+                'read' => $usage['cache_read_input_tokens'] ?? 0,
+                'creation' => $usage['cache_creation_input_tokens'] ?? 0,
+            ],
         );
     }
 

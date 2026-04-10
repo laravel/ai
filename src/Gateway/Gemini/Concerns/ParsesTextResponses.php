@@ -334,18 +334,46 @@ trait ParsesTextResponses
      */
     protected function extractUsage(array $data): Usage
     {
-        $usage = $data['usageMetadata'] ?? [];
-
-        $promptTokens = $usage['promptTokenCount'] ?? 0;
-        $cachedTokens = $usage['cachedContentTokenCount'] ?? 0;
-
+        $usage = $data['usage'] ?? [];
         return new Usage(
-            $promptTokens - $cachedTokens,
-            $usage['candidatesTokenCount'] ?? 0,
-            0,
-            $cachedTokens,
-            $usage['thoughtsTokenCount'] ?? 0,
+            inputTokens: [
+                'text' => $this->extractModalityCost($usage['promptTokensDetails'] ?? [], 'TEXT') ?? $usage['promptTokenCount'] - $usage['cachedContentTokenCount'] ?? 0,
+                'image' => $this->extractModalityCost($usage['promptTokensDetails'] ?? [], 'IMAGE') ?? 0,
+                'audio' => $this->extractModalityCost($usage['promptTokensDetails'] ?? [], 'AUDIO') ?? 0,
+                'video' => $this->extractModalityCost($usage['promptTokensDetails'] ?? [], 'VIDEO') ?? 0,
+                'document' => $this->extractModalityCost($usage['promptTokensDetails'] ?? [], 'DOCUMENT') ?? 0,
+            ],
+            outputTokens: [
+                'text' => $this->extractModalityCost($usage['candidatesTokensDetails'] ?? [], 'TEXT') ?? $usage['candidatesTokenCount'] ?? 0,
+                'image' => $this->extractModalityCost($usage['candidatesTokensDetails'] ?? [], 'IMAGE') ?? 0,
+                'audio' => $this->extractModalityCost($usage['candidatesTokensDetails'] ?? [], 'AUDIO') ?? 0,
+                'video' => $this->extractModalityCost($usage['candidatesTokensDetails'] ?? [], 'VIDEO') ?? 0,
+                'document' => $this->extractModalityCost($usage['candidatesTokensDetails'] ?? [], 'DOCUMENT') ?? 0,
+                'reasoning' => $usage['thoughtsTokenCount'] ?? 0,
+            ],
+            cachedTokens: [
+                'text' => $this->extractModalityCost($usage['cacheTokensDetails'] ?? [], 'TEXT') ?? $usage['cachedContentTokenCount'] ?? 0,
+                'image' => $this->extractModalityCost($usage['cacheTokensDetails'] ?? [], 'IMAGE') ?? 0,
+                'audio' => $this->extractModalityCost($usage['cacheTokensDetails'] ?? [], 'AUDIO') ?? 0,
+                'video' => $this->extractModalityCost($usage['cacheTokensDetails'] ?? [], 'VIDEO') ?? 0,
+                'document' => $this->extractModalityCost($usage['cacheTokensDetails'] ?? [], 'DOCUMENT') ?? 0,
+            ],
+            toolsTokens: [
+                'text' => $this->extractModalityCost($usage['toolUsePromptTokensDetails'] ?? [], 'TEXT') ?? $usage['toolUsePromptTokenCount'] ?? 0,
+                'image' => $this->extractModalityCost($usage['toolUsePromptTokensDetails'] ?? [], 'IMAGE') ?? 0,
+                'audio' => $this->extractModalityCost($usage['toolUsePromptTokensDetails'] ?? [], 'AUDIO') ?? 0,
+                'video' => $this->extractModalityCost($usage['toolUsePromptTokensDetails'] ?? [], 'VIDEO') ?? 0,
+                'document' => $this->extractModalityCost($usage['toolUsePromptTokensDetails'] ?? [], 'DOCUMENT') ?? 0,
+            ],
         );
+    }
+
+    /**
+     * Retrieves the cost for a certain modality from the usage data, if available.
+     */
+    private function extractModalityCost(array $data, string $modality): ?float
+    {
+        return array_filter($data, fn ($detail) => $detail['modality'] === $modality)[0]['tokenCount'] ?? null;
     }
 
     /**

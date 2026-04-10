@@ -59,8 +59,8 @@ class PrismStreamEventTest extends TestCase
         $result = PrismStreamEvent::toLaravelStreamEvent('invocation-1', $event, 'openrouter', 'anthropic/claude-sonnet');
 
         $this->assertInstanceOf(StreamEnd::class, $result);
-        $this->assertEquals(0, $result->usage->promptTokens);
-        $this->assertEquals(0, $result->usage->completionTokens);
+        $this->assertEquals(0, $result->usage->inputTokens['total']);
+        $this->assertEquals(0, $result->usage->outputTokens['completion']);
     }
 
     public function test_stream_end_event_maps_usage(): void
@@ -75,8 +75,8 @@ class PrismStreamEventTest extends TestCase
         $result = PrismStreamEvent::toLaravelStreamEvent('invocation-1', $event, 'openrouter', 'anthropic/claude-sonnet');
 
         $this->assertInstanceOf(StreamEnd::class, $result);
-        $this->assertEquals(100, $result->usage->promptTokens);
-        $this->assertEquals(50, $result->usage->completionTokens);
+        $this->assertEquals(100, $result->usage->inputTokens['total']);
+        $this->assertEquals(50, $result->usage->outputTokens['completion']);
     }
 
     public function test_error_event_maps_correctly(): void

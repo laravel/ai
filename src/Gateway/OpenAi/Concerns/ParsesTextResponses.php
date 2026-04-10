@@ -347,15 +347,23 @@ trait ParsesTextResponses
     protected function extractUsage(array $data): Usage
     {
         $usage = $data['usage'] ?? [];
-        $inputTokens = $usage['input_tokens'] ?? 0;
-        $cachedTokens = $usage['input_tokens_details']['cached_tokens'] ?? 0;
-
         return new Usage(
-            $inputTokens - $cachedTokens,
-            $usage['output_tokens'] ?? 0,
-            0,
-            $cachedTokens,
-            $usage['output_tokens_details']['reasoning_tokens'] ?? 0,
+            inputTokens: [
+                'text' => $usage['input_tokens_details']['text_tokens'] ?? $usage['input_tokens'] ?? 0,
+                'image' => $usage['input_tokens_details']['image_tokens'] ?? 0,
+                'audio' => $usage['input_tokens_details']['audio_tokens'] ?? 0,
+            ],
+            outputTokens: [
+                'text' => $usage['output_tokens_details']['text_tokens'] ?? $usage['output_tokens'] ?? 0,
+                'image' => $usage['output_tokens_details']['image_tokens'] ?? 0,
+                'audio' => $usage['output_tokens_details']['audio_tokens'] ?? 0,
+                'reasoning' => $usage['output_tokens_details']['reasoning_tokens'] ?? 0,
+            ],
+            cachedTokens: [
+                'text' => $usage['input_tokens_details']['cached_tokens_details']['text_tokens'] ?? $usage['input_tokens_details']['cached_tokens'] ?? 0,
+                'image' => $usage['input_tokens_details']['cached_tokens_details']['image_tokens'] ?? 0,
+                'audio' => $usage['input_tokens_details']['cached_tokens_details']['audio_tokens'] ?? 0,
+            ],
         );
     }
 

@@ -25,7 +25,6 @@ use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
-use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\TextResponse;
@@ -143,7 +142,7 @@ class OpenAiGateway implements Gateway
                 $image['b64_json'] ?? '',
                 'image/png',
             )),
-            new Usage(0, 0),
+            $this->extractUsage($data),
             new Meta($provider->name(), $model),
         );
     }
@@ -276,10 +275,7 @@ class OpenAiGateway implements Gateway
                 $segment['start'] ?? 0,
                 $segment['end'] ?? 0,
             )),
-            new Usage(
-                $data['usage']['input_tokens'] ?? 0,
-                $data['usage']['total_tokens'] ?? 0,
-            ),
+            $this->extractUsage($data),
             new Meta($provider->name(), $model),
         );
     }
