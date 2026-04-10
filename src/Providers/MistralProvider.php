@@ -41,7 +41,7 @@ class MistralProvider extends Provider implements EmbeddingProvider, TextProvide
      */
     public function textGateway(): TextGateway
     {
-        return $this->mistralGateway();
+        return $this->textGateway ??= $this->mistralGateway();
     }
 
     /**
@@ -49,7 +49,7 @@ class MistralProvider extends Provider implements EmbeddingProvider, TextProvide
      */
     public function embeddingGateway(): EmbeddingGateway
     {
-        return $this->mistralGateway();
+        return $this->embeddingGateway ??= $this->mistralGateway();
     }
 
     /**
@@ -57,7 +57,7 @@ class MistralProvider extends Provider implements EmbeddingProvider, TextProvide
      */
     public function transcriptionGateway(): TranscriptionGateway
     {
-        return $this->mistralGateway();
+        return $this->transcriptionGateway ??= $this->mistralGateway();
     }
 
     /**
