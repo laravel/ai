@@ -3,6 +3,8 @@
 use Tests\Feature\Agents\AssistantAgent;
 use Tests\Feature\Agents\SecondaryAssistantAgent;
 
+uses()->group('integration');
+
 beforeEach(function () {
     $this->provider = 'groq';
     $this->model = 'openai/gpt-oss-20b';

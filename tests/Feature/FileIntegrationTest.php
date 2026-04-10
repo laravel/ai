@@ -8,6 +8,8 @@ use Laravel\Ai\Events\FileStored;
 use Laravel\Ai\Events\StoringFile;
 use Laravel\Ai\Files\Document;
 
+uses()->group('integration');
+
 beforeEach(function () {
     $this->provider = 'anthropic';
 });

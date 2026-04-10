@@ -7,6 +7,8 @@ use Laravel\Ai\Events\GeneratingAudio;
 use Laravel\Ai\Files;
 use Laravel\Ai\Transcription;
 
+uses()->group('integration');
+
 test('audio can be generated and transcribed', function () {
     Event::fake();
 

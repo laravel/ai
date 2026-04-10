@@ -12,6 +12,8 @@ use Laravel\Ai\Stores;
 use function Illuminate\Support\days;
 use function Laravel\Ai\agent;
 
+uses()->group('integration');
+
 beforeEach(function () {
     $this->provider = 'openai';
 });

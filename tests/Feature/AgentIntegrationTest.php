@@ -20,6 +20,8 @@ use Tests\Feature\Agents\ToolUsingAgent;
 
 use function Laravel\Ai\agent;
 
+uses()->group('integration');
+
 beforeEach(function () {
     $this->provider = 'groq';
     $this->model = 'openai/gpt-oss-20b';

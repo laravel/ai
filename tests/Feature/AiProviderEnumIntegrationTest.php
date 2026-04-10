@@ -14,6 +14,8 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Transcription;
 use Tests\Feature\Agents\AssistantAgent;
 
+uses()->group('integration');
+
 test('agent prompt accepts ai provider enum', function () {
     Event::fake();
 

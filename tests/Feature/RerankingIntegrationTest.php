@@ -7,6 +7,8 @@ use Laravel\Ai\Events\Reranking;
 use Laravel\Ai\Reranking as RerankingFacade;
 use Laravel\Ai\Responses\RerankingResponse;
 
+uses()->group('integration');
+
 test('documents can be reranked', function () {
     Event::fake();
 
