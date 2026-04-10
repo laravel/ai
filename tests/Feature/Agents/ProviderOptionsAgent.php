@@ -34,7 +34,15 @@ class ProviderOptionsAgent implements Agent, HasProviderOptions
                     'budget_tokens' => 10000,
                 ],
             ],
+            Lab::xAI => [
+                'frequency_penalty' => 0.5,
+                'presence_penalty' => 0.3,
+            ],
             Lab::Groq => [
+                'frequency_penalty' => 0.5,
+                'presence_penalty' => 0.3,
+            ],
+            Lab::Mistral => [
                 'frequency_penalty' => 0.5,
                 'presence_penalty' => 0.3,
             ],

@@ -3,7 +3,7 @@
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Support\Facades\Http;
 
-function fakeGroqResponse(string $text): PromiseInterface
+function fakeGroqResponse(string $text = 'Hello'): PromiseInterface
 {
     return Http::response([
         'id' => 'chatcmpl-123',
@@ -24,7 +24,7 @@ function fakeGroqResponse(string $text): PromiseInterface
     ]);
 }
 
-function fakeOpenAiResponse(string $text): PromiseInterface
+function fakeOpenAiResponse(string $text = 'Hello'): PromiseInterface
 {
     return Http::response([
         'id' => 'resp_123',

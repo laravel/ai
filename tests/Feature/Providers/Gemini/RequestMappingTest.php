@@ -3,6 +3,8 @@
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Tests\Feature\Agents\AssistantAgent;
+use Tests\Feature\Agents\NestedStructuredAgent;
+use Tests\Feature\Agents\NullableStructuredAgent;
 use Tests\Feature\Agents\StructuredAgent;
 use Tests\Feature\Agents\ToolUsingAgent;
 
@@ -118,7 +120,7 @@ describe('request structure', function () {
 });
 
 describe('structured output', function () {
-    test('structured output uses response schema', function () {
+    test('structured output uses response json schema', function () {
         Http::fake([
             'generativelanguage.googleapis.com/*' => $this->fakeStructuredResponse(['symbol' => 'Fe']),
         ]);
@@ -133,7 +135,8 @@ describe('structured output', function () {
             $config = $body['generationConfig'] ?? [];
 
             return ($config['response_mime_type'] ?? '') === 'application/json'
-                && isset($config['response_schema']);
+                && isset($config['response_json_schema'])
+                && ! isset($config['response_schema']);
         });
     });
 
@@ -150,18 +153,44 @@ describe('structured output', function () {
         expect($response->structured['symbol'])->toBe('Fe');
     });
 
-    test('structured response schema excludes additional properties', function () {
+    test('nested structured output uses response json schema', function () {
         Http::fake([
-            'generativelanguage.googleapis.com/*' => $this->fakeStructuredResponse(['symbol' => 'Fe']),
+            'generativelanguage.googleapis.com/*' => $this->fakeStructuredResponse([
+                'elements' => [['atomicNumber' => 1, 'symbol' => 'H']],
+            ]),
         ]);
 
-        (new StructuredAgent)->prompt('Iron symbol?', provider: 'gemini');
+        (new NestedStructuredAgent)->prompt('List noble gases?', provider: 'gemini');
 
         Http::assertSent(function ($request) {
-            $schema = $request->data()['generationConfig']['response_schema'] ?? [];
+            $config = $request->data()['generationConfig'] ?? [];
+            $schema = $config['response_json_schema'] ?? [];
+            $itemSchema = $schema['properties']['elements']['items'] ?? [];
 
-            return ! isset($schema['additionalProperties'])
-                && ! isset($schema['name']);
+            return isset($config['response_json_schema'])
+                && ! isset($config['response_schema'])
+                && isset($itemSchema['additionalProperties'])
+                && $itemSchema['additionalProperties'] === false;
+        });
+    });
+
+    test('nullable schema types are preserved in response json schema', function () {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => $this->fakeStructuredResponse([
+                'symbol' => 'He',
+                'meltingPoint' => null,
+                'boilingPoint' => -268.9,
+            ]),
+        ]);
+
+        (new NullableStructuredAgent)->prompt('Properties of Helium?', provider: 'gemini');
+
+        Http::assertSent(function ($request) {
+            $schema = $request->data()['generationConfig']['response_json_schema'] ?? [];
+            $props = $schema['properties'] ?? [];
+
+            return $props['meltingPoint']['type'] === ['number', 'null']
+                && $props['boilingPoint']['type'] === ['number', 'null'];
         });
     });
 });

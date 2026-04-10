@@ -51,6 +51,7 @@ trait ParsesTextResponses
         ?TextGenerationOptions $options = null,
         array $contents = [],
         ?string $instructions = null,
+        ?int $timeout = null,
     ): TextResponse {
         return $this->processResponse(
             $data,
@@ -65,6 +66,7 @@ trait ParsesTextResponses
             $instructions,
             $options,
             maxSteps: $options?->maxSteps,
+            timeout: $timeout,
         );
     }
 
@@ -85,6 +87,7 @@ trait ParsesTextResponses
         ?TextGenerationOptions $options,
         int $depth = 0,
         ?int $maxSteps = null,
+        ?int $timeout = null,
     ): TextResponse {
         $candidate = $data['candidates'][0] ?? [];
         $parts = $candidate['content']['parts'] ?? [];
@@ -104,7 +107,7 @@ trait ParsesTextResponses
 
         if ($finishReason === FinishReason::ToolCalls &&
             filled($mappedToolCalls) &&
-            $steps->count() < ($maxSteps ?? count($tools) * 2)) {
+            $steps->count() < ($maxSteps ?? round(count($tools) * 1.5))) {
             $toolResults = $this->executeToolCalls($mappedToolCalls, $tools);
         }
 
@@ -117,9 +120,19 @@ trait ParsesTextResponses
             $contents[] = ['role' => 'user', 'parts' => $this->buildFunctionResponseParts($toolResults)];
 
             return $this->continueWithToolResults(
-                $model, $provider, $structured, $tools, $schema,
-                $steps, $messages, $contents, $instructions, $options,
-                $depth + 1, $maxSteps,
+                $model,
+                $provider,
+                $structured,
+                $tools,
+                $schema,
+                $steps,
+                $messages,
+                $contents,
+                $instructions,
+                $options,
+                $depth + 1,
+                $maxSteps,
+                $timeout,
             );
         }
 
@@ -193,12 +206,13 @@ trait ParsesTextResponses
         ?TextGenerationOptions $options,
         int $depth,
         ?int $maxSteps,
+        ?int $timeout = null,
     ): TextResponse {
         $body = $this->rebuildContinuationBody($contents, $instructions, $tools, $schema, $options, $provider);
 
         $response = $this->withRateLimitHandling(
             $provider->name(),
-            fn () => $this->client($provider)->post("models/{$model}:generateContent", $body),
+            fn () => $this->client($provider, $timeout)->post("models/{$model}:generateContent", $body),
         );
 
         $data = $response->json();
@@ -206,9 +220,20 @@ trait ParsesTextResponses
         $this->validateTextResponse($data);
 
         return $this->processResponse(
-            $data, $provider, $model, $structured, $tools, $schema,
-            $steps, $messages, $contents, $instructions, $options,
-            $depth, $maxSteps,
+            $data,
+            $provider,
+            $model,
+            $structured,
+            $tools,
+            $schema,
+            $steps,
+            $messages,
+            $contents,
+            $instructions,
+            $options,
+            $depth,
+            $maxSteps,
+            $timeout,
         );
     }
 

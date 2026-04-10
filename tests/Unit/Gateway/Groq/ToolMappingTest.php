@@ -42,7 +42,6 @@ test('tool parameters are not wrapped in schema definition', function () {
 
     $parameters = $mapped[0]['function']['parameters'];
 
-    // The parameters should have direct properties, not wrapped in schema_definition (fixes #239, #342)
     expect($parameters['properties'] ?? [])->not->toHaveKey('schema_definition');
     expect($parameters['required'] ?? [])->not->toContain('schema_definition');
     expect($parameters['properties'])->toHaveKey('name');

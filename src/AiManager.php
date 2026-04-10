@@ -375,7 +375,6 @@ class AiManager extends MultipleInstanceManager
     public function createMistralDriver(array $config): MistralProvider
     {
         return new MistralProvider(
-            new PrismGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)
         );
@@ -435,9 +434,8 @@ class AiManager extends MultipleInstanceManager
     public function createXaiDriver(array $config): XaiProvider
     {
         return new XaiProvider(
-            new PrismGateway($this->app['events']),
             $config,
-            $this->app->make(Dispatcher::class)
+            $this->app->make(Dispatcher::class),
         );
     }
 
