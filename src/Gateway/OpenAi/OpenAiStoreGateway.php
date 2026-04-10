@@ -7,21 +7,21 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
-use Laravel\Ai\Gateway\Concerns\HandlesRateLimiting;
+use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Responses\Data\StoreFileCounts;
 use Laravel\Ai\Store;
 
 class OpenAiStoreGateway implements StoreGateway
 {
     use Concerns\CreatesOpenAiClient;
-    use HandlesRateLimiting;
+    use HandlesFailoverErrors;
 
     /**
      * Get a vector store by its ID.
      */
     public function getStore(StoreProvider $provider, string $storeId): Store
     {
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider)
                 ->get("vector_stores/{$storeId}")
@@ -52,7 +52,7 @@ class OpenAiStoreGateway implements StoreGateway
     ): Store {
         $fileIds ??= new Collection;
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider)
                 ->post('vector_stores', array_filter([
@@ -74,7 +74,7 @@ class OpenAiStoreGateway implements StoreGateway
      */
     public function addFile(StoreProvider $provider, string $storeId, string $fileId, array $metadata = []): string
     {
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider)
                 ->post("vector_stores/{$storeId}/files", array_filter([
@@ -91,7 +91,7 @@ class OpenAiStoreGateway implements StoreGateway
      */
     public function removeFile(StoreProvider $provider, string $storeId, string $documentId): bool
     {
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider)
                 ->delete("vector_stores/{$storeId}/files/{$documentId}")
@@ -105,7 +105,7 @@ class OpenAiStoreGateway implements StoreGateway
      */
     public function deleteStore(StoreProvider $provider, string $storeId): bool
     {
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider)
                 ->delete("vector_stores/{$storeId}")

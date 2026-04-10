@@ -3,6 +3,7 @@
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Tests\Feature\Agents\AssistantAgent;
 
@@ -39,6 +40,23 @@ test('rate limit response throws rate limited exception', function () {
         provider: 'gemini',
     );
 })->throws(RateLimitedException::class);
+
+test('overloaded response throws provider overloaded exception', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'error' => [
+                'code' => 503,
+                'message' => 'The model is overloaded. Please try again later.',
+                'status' => 'UNAVAILABLE',
+            ],
+        ], 503),
+    ]);
+
+    (new AssistantAgent)->prompt(
+        'Hi',
+        provider: 'gemini',
+    );
+})->throws(ProviderOverloadedException::class);
 
 test('error in 200 response throws ai exception', function () {
     Http::fake([

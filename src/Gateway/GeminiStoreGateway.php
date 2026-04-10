@@ -13,7 +13,7 @@ use Laravel\Ai\Store;
 
 class GeminiStoreGateway implements StoreGateway
 {
-    use Concerns\HandlesRateLimiting;
+    use Concerns\HandlesFailoverErrors;
 
     /**
      * Get a vector store by its ID.
@@ -22,7 +22,7 @@ class GeminiStoreGateway implements StoreGateway
     {
         $storeId = $this->normalizeStoreId($storeId);
 
-        $response = $this->withRateLimitHandling($provider->name(), fn () => Http::withHeaders([
+        $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
         ])->get($this->baseUrl($provider)."/{$storeId}")->throw());
 
@@ -51,7 +51,7 @@ class GeminiStoreGateway implements StoreGateway
     ): Store {
         $fileIds ??= new Collection;
 
-        $response = $this->withRateLimitHandling($provider->name(), fn () => Http::withHeaders([
+        $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
         ])->post($this->baseUrl($provider).'/fileSearchStores', [
             'displayName' => $name,
@@ -76,7 +76,7 @@ class GeminiStoreGateway implements StoreGateway
         $storeId = $this->normalizeStoreId($storeId);
         $fileId = $this->normalizeFileId($fileId);
 
-        $response = $this->withRateLimitHandling($provider->name(), fn () => Http::withHeaders([
+        $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
         ])->post($this->baseUrl($provider)."/{$storeId}:importFile", array_filter([
             'fileName' => $fileId,
@@ -108,7 +108,7 @@ class GeminiStoreGateway implements StoreGateway
         $storeId = $this->normalizeStoreId($storeId);
         $documentId = $this->normalizeDocumentId($storeId, $documentId);
 
-        $this->withRateLimitHandling($provider->name(), fn () => Http::withHeaders([
+        $this->withErrorHandling($provider->name(), fn () => Http::withHeaders([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
         ])->delete($this->baseUrl($provider)."/{$documentId}", [
             'force' => true,
@@ -124,7 +124,7 @@ class GeminiStoreGateway implements StoreGateway
     {
         $storeId = $this->normalizeStoreId($storeId);
 
-        $this->withRateLimitHandling($provider->name(), fn () => Http::withHeaders([
+        $this->withErrorHandling($provider->name(), fn () => Http::withHeaders([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
         ])->delete($this->baseUrl($provider)."/{$storeId}")->throw());
 

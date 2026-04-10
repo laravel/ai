@@ -428,7 +428,7 @@ trait HandlesTextStreaming
 
         $requestBody['stream'] = true;
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)
                 ->withOptions(['stream' => true])

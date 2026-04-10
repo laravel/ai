@@ -6,7 +6,7 @@ use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
-use Laravel\Ai\Gateway\Concerns\HandlesRateLimiting;
+use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -21,7 +21,7 @@ class XaiGateway implements TextGateway
     use Concerns\MapsMessages;
     use Concerns\MapsTools;
     use Concerns\ParsesTextResponses;
-    use HandlesRateLimiting;
+    use HandlesFailoverErrors;
     use InvokesTools;
     use ParsesServerSentEvents;
 
@@ -47,7 +47,7 @@ class XaiGateway implements TextGateway
             $provider, $model, $instructions, $messages, $tools, $schema, $options,
         );
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post('responses', $body),
         );
@@ -79,7 +79,7 @@ class XaiGateway implements TextGateway
 
         $body['stream'] = true;
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)
                 ->withOptions(['stream' => true])

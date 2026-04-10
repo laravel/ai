@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Providers\FileProvider;
-use Laravel\Ai\Gateway\Concerns\HandlesRateLimiting;
+use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\PreparesStorableFiles;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\FileResponse;
@@ -16,7 +16,7 @@ use Laravel\Ai\Responses\StoredFileResponse;
 class AnthropicFileGateway implements FileGateway
 {
     use Concerns\CreatesAnthropicClient;
-    use HandlesRateLimiting;
+    use HandlesFailoverErrors;
     use PreparesStorableFiles;
 
     /**
@@ -24,7 +24,7 @@ class AnthropicFileGateway implements FileGateway
      */
     public function getFile(FileProvider $provider, string $fileId): FileResponse
     {
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider)->get("files/{$fileId}"),
         );
@@ -44,7 +44,7 @@ class AnthropicFileGateway implements FileGateway
     ): StoredFileResponse {
         [$content, $mime, $name] = $this->prepareStorableFile($file);
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider)
                 ->attach('file', $content, $name, ['Content-Type' => $mime])
@@ -59,7 +59,7 @@ class AnthropicFileGateway implements FileGateway
      */
     public function deleteFile(FileProvider $provider, string $fileId): void
     {
-        $this->withRateLimitHandling(
+        $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider)->delete("files/{$fileId}"),
         );
@@ -78,5 +78,13 @@ class AnthropicFileGateway implements FileGateway
             ])
             ->timeout($timeout ?? 60)
             ->throw();
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    protected function overloadedStatusCodes(): array
+    {
+        return [529];
     }
 }

@@ -3,6 +3,7 @@
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Tests\Feature\Agents\AssistantAgent;
 
@@ -44,6 +45,22 @@ test('rate limit response throws rate limited exception', function () {
         provider: 'openai',
     );
 })->throws(RateLimitedException::class);
+
+test('overloaded response throws provider overloaded exception', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::response([
+            'error' => [
+                'type' => 'server_error',
+                'message' => 'The server is currently overloaded. Please try again later.',
+            ],
+        ], 503),
+    ]);
+
+    (new AssistantAgent)->prompt(
+        'Hi',
+        provider: 'openai',
+    );
+})->throws(ProviderOverloadedException::class);
 
 test('error in 200 response throws ai exception', function () {
     Http::fake([

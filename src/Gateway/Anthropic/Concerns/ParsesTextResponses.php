@@ -221,7 +221,7 @@ trait ParsesTextResponses
 
         unset($requestBody['stream']);
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post('messages', $requestBody),
         );

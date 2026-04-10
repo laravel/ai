@@ -12,7 +12,7 @@ use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
-use Laravel\Ai\Gateway\Concerns\HandlesRateLimiting;
+use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -32,7 +32,7 @@ class MistralGateway implements EmbeddingGateway, TextGateway, TranscriptionGate
     use Concerns\MapsMessages;
     use Concerns\MapsTools;
     use Concerns\ParsesTextResponses;
-    use HandlesRateLimiting;
+    use HandlesFailoverErrors;
     use InvokesTools;
     use ParsesServerSentEvents;
 
@@ -64,7 +64,7 @@ class MistralGateway implements EmbeddingGateway, TextGateway, TranscriptionGate
             $options,
         );
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post('chat/completions', $body),
         );
@@ -113,7 +113,7 @@ class MistralGateway implements EmbeddingGateway, TextGateway, TranscriptionGate
         $body['stream'] = true;
         $body['stream_options'] = ['include_usage' => true];
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)
                 ->withOptions(['stream' => true])
@@ -144,7 +144,7 @@ class MistralGateway implements EmbeddingGateway, TextGateway, TranscriptionGate
         int $dimensions,
         int $timeout = 30,
     ): EmbeddingsResponse {
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post('embeddings', [
                 'model' => $model,
@@ -172,7 +172,7 @@ class MistralGateway implements EmbeddingGateway, TextGateway, TranscriptionGate
         bool $diarize = false,
         int $timeout = 30,
     ): TranscriptionResponse {
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)
                 ->attach('file', $audio->content(), $this->audioFilename($audio), ['Content-Type' => $audio->mimeType()])
