@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Gateway\Gemini\Concerns;
 
-use Illuminate\Support\Arr;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
@@ -74,7 +73,7 @@ trait BuildsTextRequests
 
         if (filled($schema)) {
             $generationConfig['response_mime_type'] = 'application/json';
-            $generationConfig['response_schema'] = $this->buildResponseSchema($schema);
+            $generationConfig['response_json_schema'] = $this->buildResponseSchema($schema);
         }
 
         if (! is_null($options?->maxTokens)) {
@@ -127,8 +126,6 @@ trait BuildsTextRequests
      */
     protected function buildResponseSchema(array $schema): array
     {
-        $objectSchema = new ObjectSchema($schema);
-
-        return Arr::except($objectSchema->toSchema(), ['additionalProperties', 'name']);
+        return (new ObjectSchema($schema))->toSchema();
     }
 }

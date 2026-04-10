@@ -2,10 +2,13 @@
 
 namespace Laravel\Ai\Providers;
 
+use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
+use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
-use Laravel\Ai\Gateway\XaiImageGateway;
+use Laravel\Ai\Gateway\Xai\XaiGateway;
+use Laravel\Ai\Gateway\Xai\XaiImageGateway;
 
 class XaiProvider extends Provider implements ImageProvider, TextProvider
 {
@@ -14,6 +17,19 @@ class XaiProvider extends Provider implements ImageProvider, TextProvider
     use Concerns\HasImageGateway;
     use Concerns\HasTextGateway;
     use Concerns\StreamsText;
+
+    public function __construct(
+        protected array $config,
+        protected Dispatcher $events,
+    ) {}
+
+    /**
+     * Get the provider's text gateway.
+     */
+    public function textGateway(): TextGateway
+    {
+        return $this->textGateway ??= new XaiGateway($this->events);
+    }
 
     /**
      * Get the name of the default text model.
@@ -44,7 +60,7 @@ class XaiProvider extends Provider implements ImageProvider, TextProvider
      */
     public function imageGateway(): ImageGateway
     {
-        return $this->imageGateway ?? new XaiImageGateway;
+        return $this->imageGateway ??= new XaiImageGateway;
     }
 
     /**
