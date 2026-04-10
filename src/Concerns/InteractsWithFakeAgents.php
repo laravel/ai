@@ -9,6 +9,8 @@ use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Gateway\FakeTextGateway;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\QueuedAgentPrompt;
+use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Responses\TextResponse;
 use PHPUnit\Framework\Assert as PHPUnit;
 
 trait InteractsWithFakeAgents
@@ -170,5 +172,102 @@ trait InteractsWithFakeAgents
         );
 
         return $this;
+    }
+
+    /**
+     * Assert that the given tool was called by the agent in the given response.
+     *
+     * The third argument may be:
+     * - null to match any invocation of the tool
+     * - an array of arguments that must be a subset of the recorded call's arguments
+     * - a Closure that receives the recorded arguments and returns a boolean
+     */
+    public function assertAgentCalledTool(
+        TextResponse $response,
+        string $tool,
+        Closure|array|null $arguments = null,
+    ): self {
+        $matchingCalls = $response->toolCalls
+            ->whereInstanceOf(ToolCall::class)
+            ->filter(fn (ToolCall $call) => $call->name === $tool);
+
+        PHPUnit::assertTrue(
+            $matchingCalls->isNotEmpty(),
+            "The expected tool [{$tool}] was not called."
+        );
+
+        if (is_null($arguments)) {
+            return $this;
+        }
+
+        $callback = is_array($arguments)
+            ? fn (ToolCall $call) => $this->argumentsContain($call->arguments, $arguments)
+            : fn (ToolCall $call) => $arguments($call->arguments, $call);
+
+        PHPUnit::assertTrue(
+            $matchingCalls->contains($callback),
+            "The tool [{$tool}] was called, but not with the expected arguments."
+        );
+
+        return $this;
+    }
+
+    /**
+     * Assert that the given tool was not called by the agent in the given response.
+     */
+    public function assertAgentDidNotCallTool(TextResponse $response, string $tool): self
+    {
+        PHPUnit::assertFalse(
+            $response->toolCalls
+                ->whereInstanceOf(ToolCall::class)
+                ->contains(fn (ToolCall $call) => $call->name === $tool),
+            "The unexpected tool [{$tool}] was called."
+        );
+
+        return $this;
+    }
+
+    /**
+     * Assert that no tools were called by the agent in the given response.
+     */
+    public function assertAgentCalledNoTools(TextResponse $response): self
+    {
+        PHPUnit::assertTrue(
+            $response->toolCalls->isEmpty(),
+            'Expected no tools to be called, but the agent called ['.
+                $response->toolCalls
+                    ->whereInstanceOf(ToolCall::class)
+                    ->map(fn (ToolCall $call) => $call->name)
+                    ->implode(', ').
+                '].'
+        );
+
+        return $this;
+    }
+
+    /**
+     * Determine if the recorded arguments contain the expected subset.
+     */
+    protected function argumentsContain(array $actual, array $expected): bool
+    {
+        foreach ($expected as $key => $value) {
+            if (! array_key_exists($key, $actual)) {
+                return false;
+            }
+
+            if (is_array($value) && is_array($actual[$key])) {
+                if (! $this->argumentsContain($actual[$key], $value)) {
+                    return false;
+                }
+
+                continue;
+            }
+
+            if ($actual[$key] !== $value) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

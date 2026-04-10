@@ -22,6 +22,7 @@ use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\QueuedAgentResponse;
 use Laravel\Ai\Responses\StreamableAgentResponse;
+use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use ReflectionClass;
 use RuntimeException;
@@ -287,6 +288,35 @@ trait Promptable
     public static function assertNeverQueued(): void
     {
         Ai::assertAgentNeverQueued(static::class);
+    }
+
+    /**
+     * Assert that the given tool was called by the agent in the given response.
+     *
+     * @param  Closure|array<string, mixed>|null  $arguments
+     */
+    public static function assertCalledTool(
+        TextResponse $response,
+        string $tool,
+        Closure|array|null $arguments = null,
+    ): void {
+        Ai::assertAgentCalledTool($response, $tool, $arguments);
+    }
+
+    /**
+     * Assert that the given tool was not called by the agent in the given response.
+     */
+    public static function assertDidNotCallTool(TextResponse $response, string $tool): void
+    {
+        Ai::assertAgentDidNotCallTool($response, $tool);
+    }
+
+    /**
+     * Assert that no tools were called by the agent in the given response.
+     */
+    public static function assertCalledNoTools(TextResponse $response): void
+    {
+        Ai::assertAgentCalledNoTools($response);
     }
 
     /**
