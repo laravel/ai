@@ -202,7 +202,7 @@ trait HandlesTextStreaming
         yield (new StreamEnd(
             $this->generateEventId(),
             'stop',
-            $usage ?? new Usage(0, 0),
+            $usage ?? new Usage(),
             time(),
         ))->withInvocationId($invocationId);
     }
@@ -297,7 +297,7 @@ trait HandlesTextStreaming
             yield (new StreamEnd(
                 $this->generateEventId(),
                 'stop',
-                new Usage(0, 0),
+                new Usage(),
                 time(),
             ))->withInvocationId($invocationId);
         }
