@@ -37,6 +37,7 @@ trait HandlesTextStreaming
         ?string $instructions = null,
         int $depth = 0,
         ?int $maxSteps = null,
+        ?int $timeout = null,
     ): Generator {
         $maxSteps ??= $options?->maxSteps;
 
@@ -180,9 +181,19 @@ trait HandlesTextStreaming
         // Handle pending tool calls...
         if (filled($pendingToolCalls)) {
             yield from $this->handleStreamingToolCalls(
-                $invocationId, $provider, $model, $tools, $schema, $options,
-                $pendingToolCalls, $contents, $instructions,
-                $modelParts, $depth, $maxSteps,
+                $invocationId,
+                $provider,
+                $model,
+                $tools,
+                $schema,
+                $options,
+                $pendingToolCalls,
+                $contents,
+                $instructions,
+                $modelParts,
+                $depth,
+                $maxSteps,
+                $timeout,
             );
 
             return;
@@ -212,6 +223,7 @@ trait HandlesTextStreaming
         array $modelParts,
         int $depth,
         ?int $maxSteps,
+        ?int $timeout = null,
     ): Generator {
         $mappedToolCalls = $this->mapToolCalls($pendingToolCalls);
 
@@ -254,7 +266,7 @@ trait HandlesTextStreaming
             ))->withInvocationId($invocationId);
         }
 
-        if ($depth + 1 < ($maxSteps ?? count($tools) * 2)) {
+        if ($depth + 1 < ($maxSteps ?? round(count($tools) * 1.5))) {
             $contents[] = ['role' => 'model', 'parts' => $this->excludeThinkingParts($modelParts)];
             $contents[] = ['role' => 'user', 'parts' => $this->buildFunctionResponseParts($toolResults)];
 
@@ -262,15 +274,24 @@ trait HandlesTextStreaming
 
             $response = $this->withRateLimitHandling(
                 $provider->name(),
-                fn () => $this->client($provider)
+                fn () => $this->client($provider, $timeout)
                     ->withOptions(['stream' => true])
                     ->post("models/{$model}:streamGenerateContent?alt=sse", $body),
             );
 
             yield from $this->processTextStream(
-                $invocationId, $provider, $model, $tools, $schema, $options,
-                $response->getBody(), $contents, $instructions,
-                $depth + 1, $maxSteps,
+                $invocationId,
+                $provider,
+                $model,
+                $tools,
+                $schema,
+                $options,
+                $response->getBody(),
+                $contents,
+                $instructions,
+                $depth + 1,
+                $maxSteps,
+                $timeout,
             );
         } else {
             yield (new StreamEnd(

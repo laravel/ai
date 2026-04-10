@@ -42,7 +42,13 @@ class ProviderOptionsWithToolsAgent implements Agent, HasProviderOptions, HasToo
                 ],
                 'frequency_penalty' => 0.5,
             ],
+            Lab::xAI => [
+                'frequency_penalty' => 0.5,
+            ],
             Lab::Groq => [
+                'frequency_penalty' => 0.5,
+            ],
+            Lab::Mistral => [
                 'frequency_penalty' => 0.5,
             ],
             Lab::Gemini => [

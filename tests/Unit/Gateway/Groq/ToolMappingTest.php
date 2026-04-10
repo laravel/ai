@@ -2,7 +2,7 @@
 
 namespace Tests\Unit\Gateway\Groq;
 
-use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Gateway\Groq\Concerns\MapsTools;
 use Laravel\Ai\Tools\Request;
@@ -34,7 +34,7 @@ class ToolMappingTest extends TestCase
                 return 'done';
             }
 
-            public function schema(\Illuminate\Contracts\JsonSchema\JsonSchema $schema): array
+            public function schema(JsonSchema $schema): array
             {
                 return [
                     'name' => $schema->string()->required()->description('full customer name'),
@@ -84,7 +84,7 @@ class ToolMappingTest extends TestCase
                 return 'done';
             }
 
-            public function schema(\Illuminate\Contracts\JsonSchema\JsonSchema $schema): array
+            public function schema(JsonSchema $schema): array
             {
                 return [];
             }

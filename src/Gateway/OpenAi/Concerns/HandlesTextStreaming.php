@@ -38,6 +38,7 @@ trait HandlesTextStreaming
         $streamBody,
         int $depth = 0,
         ?int $maxSteps = null,
+        ?int $timeout = null,
     ): Generator {
         $maxSteps ??= $options?->maxSteps;
 
@@ -280,9 +281,19 @@ trait HandlesTextStreaming
 
         if (filled($pendingToolCalls)) {
             yield from $this->handleStreamingToolCalls(
-                $invocationId, $responseId, $provider, $model, $tools, $schema, $options,
-                $pendingToolCalls, $currentText, $reasoningItems,
-                $depth, $maxSteps,
+                $invocationId,
+                $responseId,
+                $provider,
+                $model,
+                $tools,
+                $schema,
+                $options,
+                $pendingToolCalls,
+                $currentText,
+                $reasoningItems,
+                $depth,
+                $maxSteps,
+                $timeout,
             );
 
             return;
@@ -312,6 +323,7 @@ trait HandlesTextStreaming
         array $reasoningItems,
         int $depth,
         ?int $maxSteps,
+        ?int $timeout = null,
     ): Generator {
         $mappedToolCalls = $this->mapStreamToolCalls($pendingToolCalls);
 
@@ -361,6 +373,14 @@ trait HandlesTextStreaming
                 $body['text'] = $this->buildSchemaFormat($schema);
             }
 
+            if (! is_null($options?->temperature)) {
+                $body['temperature'] = $options->temperature;
+            }
+
+            if (! is_null($options?->maxTokens)) {
+                $body['max_output_tokens'] = $options->maxTokens;
+            }
+
             $providerOptions = $options?->providerOptions(
                 Lab::tryFrom($provider->driver()) ?? $provider->driver()
             );
@@ -371,14 +391,22 @@ trait HandlesTextStreaming
 
             $response = $this->withRateLimitHandling(
                 $provider->name(),
-                fn () => $this->client($provider)
+                fn () => $this->client($provider, $timeout)
                     ->withOptions(['stream' => true])
                     ->post('responses', $body),
             );
 
             yield from $this->processTextStream(
-                $invocationId, $provider, $model, $tools, $schema, $options,
-                $response->getBody(), $depth + 1, $maxSteps,
+                $invocationId,
+                $provider,
+                $model,
+                $tools,
+                $schema,
+                $options,
+                $response->getBody(),
+                $depth + 1,
+                $maxSteps,
+                $timeout,
             );
         } else {
             yield (new StreamEnd(
