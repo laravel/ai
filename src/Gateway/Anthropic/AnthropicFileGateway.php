@@ -20,14 +20,6 @@ class AnthropicFileGateway implements FileGateway
     use PreparesStorableFiles;
 
     /**
-     * {@inheritdoc}
-     */
-    protected function overloadedStatusCodes(): array
-    {
-        return [529];
-    }
-
-    /**
      * Get a file by its ID.
      */
     public function getFile(FileProvider $provider, string $fileId): FileResponse
@@ -86,5 +78,13 @@ class AnthropicFileGateway implements FileGateway
             ])
             ->timeout($timeout ?? 60)
             ->throw();
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    protected function overloadedStatusCodes(): array
+    {
+        return [529];
     }
 }

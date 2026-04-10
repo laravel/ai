@@ -11,26 +11,6 @@ use Laravel\Ai\Exceptions\RateLimitedException;
 trait HandlesFailoverErrors
 {
     /**
-     * The status codes that indicate a provider is overloaded.
-     *
-     * @return list<int>
-     */
-    protected function overloadedStatusCodes(): array
-    {
-        return [503];
-    }
-
-    /**
-     * The patterns used to detect insufficient credits or quota errors.
-     *
-     * @return list<string>
-     */
-    protected function insufficientCreditPatterns(): array
-    {
-        return [];
-    }
-
-    /**
      * Execute a callback with failoverable error handling.
      *
      * @template T
@@ -73,5 +53,25 @@ trait HandlesFailoverErrors
 
             throw $e;
         }
+    }
+
+    /**
+     * The status codes that indicate a provider is overloaded.
+     *
+     * @return list<int>
+     */
+    protected function overloadedStatusCodes(): array
+    {
+        return [503];
+    }
+
+    /**
+     * The patterns used to detect insufficient credits or quota errors.
+     *
+     * @return list<string>
+     */
+    protected function insufficientCreditPatterns(): array
+    {
+        return [];
     }
 }
