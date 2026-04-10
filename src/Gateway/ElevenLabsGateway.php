@@ -18,7 +18,7 @@ use Laravel\Ai\Responses\TranscriptionResponse;
 
 class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
 {
-    use Concerns\HandlesRateLimiting;
+    use Concerns\HandlesFailoverErrors;
 
     /**
      * Generate audio from the given text.
@@ -37,7 +37,7 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
             default => $voice,
         };
 
-        $response = $this->withRateLimitHandling($provider->name(), fn () => Http::withHeaders([
+        $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders([
             'xi-api-key' => $provider->providerCredentials()['key'],
         ])->timeout($timeout)->post('https://api.elevenlabs.io/v1/text-to-speech/'.$voice, [
             'model_id' => $model,
@@ -70,7 +70,7 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
             $audio instanceof TranscribableAudio => $audio->mimeType(),
         };
 
-        $response = $this->withRateLimitHandling($provider->name(), fn () => Http::withHeaders([
+        $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders([
             'xi-api-key' => $provider->providerCredentials()['key'],
         ])->timeout($timeout)->attach(
             'file', $audioContent, 'file', ['Content-Type' => $mimeType],

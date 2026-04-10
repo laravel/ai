@@ -269,7 +269,7 @@ trait HandlesTextStreaming
                 'stream_options' => ['include_usage' => true],
             ], $provider, $tools, $schema, $options);
 
-            $response = $this->withRateLimitHandling(
+            $response = $this->withErrorHandling(
                 $provider->name(),
                 fn () => $this->client($provider, $timeout)
                     ->withOptions(['stream' => true])

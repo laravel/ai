@@ -6,7 +6,7 @@ use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Files\Image as ImageFile;
-use Laravel\Ai\Gateway\Concerns\HandlesRateLimiting;
+use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
@@ -15,7 +15,7 @@ use Laravel\Ai\Responses\ImageResponse;
 class XaiImageGateway implements ImageGateway
 {
     use Concerns\CreatesXaiClient;
-    use HandlesRateLimiting;
+    use HandlesFailoverErrors;
 
     /**
      * Generate an image.
@@ -33,7 +33,7 @@ class XaiImageGateway implements ImageGateway
         ?string $quality = null,
         ?int $timeout = null,
     ): ImageResponse {
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout ?? 120)
                 ->post('images/generations', [

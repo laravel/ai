@@ -210,7 +210,7 @@ trait ParsesTextResponses
     ): TextResponse {
         $body = $this->rebuildContinuationBody($contents, $instructions, $tools, $schema, $options, $provider);
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post("models/{$model}:generateContent", $body),
         );

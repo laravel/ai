@@ -12,7 +12,7 @@ use Laravel\Ai\Responses\StoredFileResponse;
 
 class GeminiFileGateway implements FileGateway
 {
-    use Concerns\HandlesRateLimiting;
+    use Concerns\HandlesFailoverErrors;
     use Concerns\PreparesStorableFiles;
 
     /**
@@ -22,7 +22,7 @@ class GeminiFileGateway implements FileGateway
     {
         $fileId = str_starts_with($fileId, 'files/') ? $fileId : "files/{$fileId}";
 
-        $response = $this->withRateLimitHandling($provider->name(), fn () => Http::withHeaders([
+        $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
         ])->get($this->baseUrl($provider)."/{$fileId}")->throw());
 
@@ -43,7 +43,7 @@ class GeminiFileGateway implements FileGateway
 
         $uploadUrl = str_replace('/v1beta', '/upload/v1beta', $this->baseUrl($provider));
 
-        $response = $this->withRateLimitHandling($provider->name(), fn () => Http::withHeaders([
+        $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
         ])->attach(
             'file', $content, $name, ['Content-Type' => $mime]
@@ -61,7 +61,7 @@ class GeminiFileGateway implements FileGateway
     {
         $fileId = str_starts_with($fileId, 'files/') ? $fileId : "files/{$fileId}";
 
-        $this->withRateLimitHandling($provider->name(), fn () => Http::withHeaders([
+        $this->withErrorHandling($provider->name(), fn () => Http::withHeaders([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
         ])->delete($this->baseUrl($provider)."/{$fileId}")->throw());
     }

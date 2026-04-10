@@ -247,7 +247,7 @@ trait ParsesTextResponses
             $body = array_merge($body, $providerOptions);
         }
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post('responses', $body),
         );

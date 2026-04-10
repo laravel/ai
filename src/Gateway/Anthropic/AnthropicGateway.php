@@ -2,10 +2,8 @@
 
 namespace Laravel\Ai\Gateway\Anthropic;
 
-use Closure;
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
-use Illuminate\Http\Client\RequestException;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\Gateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
@@ -13,9 +11,7 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
-use Laravel\Ai\Exceptions\InsufficientCreditsException;
-use Laravel\Ai\Exceptions\ProviderOverloadedException;
-use Laravel\Ai\Exceptions\RateLimitedException;
+use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -35,21 +31,9 @@ class AnthropicGateway implements Gateway
     use Concerns\MapsMessages;
     use Concerns\MapsTools;
     use Concerns\ParsesTextResponses;
+    use HandlesFailoverErrors;
     use InvokesTools;
     use ParsesServerSentEvents;
-
-    /**
-     * Patterns that indicate an insufficient credits or quota error.
-     *
-     * @var list<string>
-     */
-    protected static array $insufficientCreditPatterns = [
-        'credit balance',
-        'insufficient',
-        'quota exceeded',
-        'exceeded your current quota',
-        'billing',
-    ];
 
     public function __construct(protected Dispatcher $events)
     {
@@ -79,7 +63,7 @@ class AnthropicGateway implements Gateway
             $options,
         );
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post('messages', $body),
         );
@@ -126,7 +110,7 @@ class AnthropicGateway implements Gateway
 
         $body['stream'] = true;
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)
                 ->withOptions(['stream' => true])
@@ -213,45 +197,24 @@ class AnthropicGateway implements Gateway
     }
 
     /**
-     * Execute a callback with Anthropic-specific exception handling.
-     *
-     * @template T
-     *
-     * @param  Closure(): T  $callback
-     * @return T
+     * {@inheritdoc}
      */
-    protected function withRateLimitHandling(string $providerName, Closure $callback): mixed
+    protected function overloadedStatusCodes(): array
     {
-        try {
-            return $callback();
-        } catch (RequestException $e) {
-            if ($e->response !== null) {
-                $status = $e->response->status();
+        return [529];
+    }
 
-                if ($status === 429) {
-                    throw RateLimitedException::forProvider(
-                        $providerName, $e->getCode(), $e
-                    );
-                }
-
-                if ($status === 529) {
-                    throw ProviderOverloadedException::forProvider(
-                        $providerName, $e->getCode(), $e
-                    );
-                }
-
-                $message = strtolower($e->response->json('error.message', ''));
-
-                foreach (static::$insufficientCreditPatterns as $pattern) {
-                    if (str_contains($message, $pattern)) {
-                        throw InsufficientCreditsException::forProvider(
-                            $providerName, $e->getCode(), $e
-                        );
-                    }
-                }
-            }
-
-            throw $e;
-        }
+    /**
+     * {@inheritdoc}
+     */
+    protected function insufficientCreditPatterns(): array
+    {
+        return [
+            'credit balance',
+            'insufficient',
+            'quota exceeded',
+            'exceeded your current quota',
+            'billing',
+        ];
     }
 }
