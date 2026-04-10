@@ -5,6 +5,7 @@ namespace Tests\Feature\Providers\Xai;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Tests\Feature\Agents\AssistantAgent;
 
@@ -38,6 +39,22 @@ class ErrorHandlingTest extends XaiTestCase
         ]);
 
         $this->expectException(RateLimitedException::class);
+
+        (new AssistantAgent)->prompt('Hi', provider: 'xai');
+    }
+
+    public function test_overloaded_response_throws_provider_overloaded_exception(): void
+    {
+        Http::fake([
+            '*' => Http::response([
+                'error' => [
+                    'type' => 'server_error',
+                    'message' => 'The server is currently overloaded. Please try again later.',
+                ],
+            ], 503),
+        ]);
+
+        $this->expectException(ProviderOverloadedException::class);
 
         (new AssistantAgent)->prompt('Hi', provider: 'xai');
     }

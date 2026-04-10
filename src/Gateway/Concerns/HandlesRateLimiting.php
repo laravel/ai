@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\Concerns;
 
 use Closure;
 use Illuminate\Http\Client\RequestException;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 
 trait HandlesRateLimiting
@@ -23,6 +24,12 @@ trait HandlesRateLimiting
         } catch (RequestException $e) {
             if ($e->response !== null && $e->response->status() === 429) {
                 throw RateLimitedException::forProvider(
+                    $providerName, $e->getCode(), $e
+                );
+            }
+
+            if ($e->response !== null && $e->response->status() === 503) {
+                throw ProviderOverloadedException::forProvider(
                     $providerName, $e->getCode(), $e
                 );
             }

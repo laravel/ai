@@ -5,6 +5,7 @@ namespace Tests\Feature\Providers\Mistral;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Tests\Feature\Agents\AssistantAgent;
 
@@ -36,6 +37,21 @@ class ErrorHandlingTest extends MistralTestCase
         ]);
 
         $this->expectException(RateLimitedException::class);
+
+        (new AssistantAgent)->prompt('Hi', provider: 'mistral');
+    }
+
+    public function test_overloaded_response_throws_provider_overloaded_exception(): void
+    {
+        Http::fake([
+            '*' => Http::response([
+                'object' => 'error',
+                'message' => 'The server is currently overloaded. Please try again later.',
+                'type' => 'server_error',
+            ], 503),
+        ]);
+
+        $this->expectException(ProviderOverloadedException::class);
 
         (new AssistantAgent)->prompt('Hi', provider: 'mistral');
     }

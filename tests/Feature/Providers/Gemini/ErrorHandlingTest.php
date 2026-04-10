@@ -5,6 +5,7 @@ namespace Tests\Feature\Providers\Gemini;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Tests\Feature\Agents\AssistantAgent;
 
@@ -43,6 +44,26 @@ class ErrorHandlingTest extends GeminiTestCase
         ]);
 
         $this->expectException(RateLimitedException::class);
+
+        (new AssistantAgent)->prompt(
+            'Hi',
+            provider: 'gemini',
+        );
+    }
+
+    public function test_overloaded_response_throws_provider_overloaded_exception(): void
+    {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'error' => [
+                    'code' => 503,
+                    'message' => 'The model is overloaded. Please try again later.',
+                    'status' => 'UNAVAILABLE',
+                ],
+            ], 503),
+        ]);
+
+        $this->expectException(ProviderOverloadedException::class);
 
         (new AssistantAgent)->prompt(
             'Hi',
