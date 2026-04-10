@@ -43,12 +43,24 @@ class Usage implements Arrayable, JsonSerializable
     public function toArray(): array
     {
         return [
-            'input_tokens' => $this->inputTokens,
-            'output_tokens' => $this->outputTokens,
-            'cached_tokens' => $this->cachedTokens,
-            'tools_tokens' => $this->toolsTokens,
+            'input_tokens' => $this->includeTotals($this->inputTokens),
+            'output_tokens' => $this->includeTotals($this->outputTokens),
+            'cached_tokens' => $this->includeTotals($this->cachedTokens),
+            'tools_tokens' => $this->includeTotals($this->toolsTokens),
         ];
     }
+
+    /**
+     * Include totals in each usage array.
+     */
+    private function includeTotals($data): array
+    {
+        return [
+            'total' => collect($data)->values()->sum(),
+            ...$data,
+        ];
+    }
+
 
     /**
      * Get the JSON serializable representation of the instance.
