@@ -1,19 +1,21 @@
 <?php
 
-namespace Laravel\Ai\Gateway;
+namespace Laravel\Ai\Gateway\Gemini;
 
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Providers\FileProvider;
+use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
+use Laravel\Ai\Gateway\Concerns\PreparesStorableFiles;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\FileResponse;
 use Laravel\Ai\Responses\StoredFileResponse;
 
 class GeminiFileGateway implements FileGateway
 {
-    use Concerns\HandlesFailoverErrors;
-    use Concerns\PreparesStorableFiles;
+    use HandlesFailoverErrors;
+    use PreparesStorableFiles;
 
     /**
      * Get a file by its ID.

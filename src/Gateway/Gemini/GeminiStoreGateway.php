@@ -1,19 +1,20 @@
 <?php
 
-namespace Laravel\Ai\Gateway;
+namespace Laravel\Ai\Gateway\Gemini;
 
 use DateInterval;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
+use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\StoreFileCounts;
 use Laravel\Ai\Store;
 
 class GeminiStoreGateway implements StoreGateway
 {
-    use Concerns\HandlesFailoverErrors;
+    use HandlesFailoverErrors;
 
     /**
      * Get a vector store by its ID.
