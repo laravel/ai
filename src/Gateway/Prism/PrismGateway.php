@@ -15,6 +15,7 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Files\Image as ImageFile;
 use Laravel\Ai\Files\LocalImage;
@@ -36,6 +37,7 @@ use Prism\Prism\Exceptions\PrismException as PrismVendorException;
 use Prism\Prism\Facades\Prism;
 use Prism\Prism\ValueObjects\Media\Audio;
 use Prism\Prism\ValueObjects\Media\Image as PrismImage;
+use Prism\Prism\ValueObjects\Messages\SystemMessage;
 
 class PrismGateway implements Gateway
 {
@@ -71,7 +73,9 @@ class PrismGateway implements Gateway
         ];
 
         if (! empty($instructions)) {
-            $request->withSystemPrompt($instructions);
+            $request->withSystemPrompt(
+                $this->toSystemPrompt($instructions, $provider, $options)
+            );
         }
 
         if (count($tools) > 0) {
@@ -132,7 +136,9 @@ class PrismGateway implements Gateway
         ];
 
         if (! empty($instructions)) {
-            $request->withSystemPrompt($instructions);
+            $request->withSystemPrompt(
+                $this->toSystemPrompt($instructions, $provider, $options)
+            );
         }
 
         if (count($tools) > 0) {
@@ -155,6 +161,24 @@ class PrismGateway implements Gateway
         } catch (PrismVendorException $e) {
             throw PrismException::toAiException($e, $provider, $model);
         }
+    }
+
+    /**
+     * Convert the instructions string into a system prompt, applying cache control if configured.
+     */
+    protected function toSystemPrompt(string $instructions, TextProvider $provider, ?TextGenerationOptions $options): string|SystemMessage
+    {
+        $cacheType = $options?->providerOptions(
+            Lab::tryFrom($provider->driver()) ?? $provider->driver()
+        )['system_prompt_cache_type'] ?? null;
+
+        if (is_null($cacheType)) {
+            return $instructions;
+        }
+
+        return (new SystemMessage($instructions))->withProviderOptions([
+            'cacheType' => $cacheType,
+        ]);
     }
 
     /**
