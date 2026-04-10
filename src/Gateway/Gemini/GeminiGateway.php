@@ -130,8 +130,8 @@ class GeminiGateway implements Gateway
      * Generate an image.
      *
      * @param  array<ImageFile>  $attachments
-     * @param  '3:2'|'2:3'|'1:1'  $size
-     * @param  'low'|'medium'|'high'  $quality
+     * @param  '21:9'|'16:9'|'9:16'|'5:4'|'4:5'|'4:3'|'3:4'|'3:2'|'2:3'|'1:1'  $size
+     * @param  'xlow'|'low'|'medium'|'high'  $quality
      */
     public function generateImage(
         ImageProvider $provider,

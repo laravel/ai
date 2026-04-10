@@ -22,7 +22,7 @@ class ImageResponse implements Countable, Htmlable
      */
     public function firstImage(): GeneratedImage
     {
-        return $this->images[0];
+        return $this->images->first();
     }
 
     /**
