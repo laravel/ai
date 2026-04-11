@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Tests\Feature\Agents\NullableToolAgent;
 use Tests\Feature\Tools\FixedNumberGenerator;
 use Tests\Feature\Tools\RandomNumberGenerator;
 
@@ -52,6 +53,42 @@ test('tool with empty schema includes parameters', function () {
             && $function['parameters']['properties'] === []
             && $function['parameters']['required'] === []
             && $function['parameters']['additionalProperties'] === false;
+    });
+});
+
+test('nullable tool parameters preserve JSON Schema array type format', function () {
+    Http::fake([
+        '*' => fakeGroqResponse('ok'),
+    ]);
+
+    (new NullableToolAgent)->prompt('Test nullable params', provider: 'groq');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'function');
+        $props = $tool['function']['parameters']['properties'] ?? [];
+
+        // Non-nullable param should have plain string type
+        if ($props['name']['type'] !== 'string') {
+            return false;
+        }
+
+        // Nullable string param should use JSON Schema array format ["string", "null"]
+        if ($props['email']['type'] !== ['string', 'null']) {
+            return false;
+        }
+
+        // Nullable integer param should use JSON Schema array format ["integer", "null"]
+        if ($props['age']['type'] !== ['integer', 'null']) {
+            return false;
+        }
+
+        // Groq should NOT have OpenAPI-style nullable flag
+        if (isset($props['email']['nullable']) || isset($props['age']['nullable'])) {
+            return false;
+        }
+
+        return true;
     });
 });
 
