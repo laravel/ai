@@ -7,7 +7,7 @@ use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
-use Laravel\Ai\Gateway\AnthropicFileGateway;
+use Laravel\Ai\Gateway\Anthropic\AnthropicFileGateway;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 

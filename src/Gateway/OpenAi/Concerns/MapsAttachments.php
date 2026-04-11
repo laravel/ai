@@ -58,7 +58,6 @@ trait MapsAttachments
                 $attachment instanceof ProviderDocument => array_filter([
                     'type' => 'input_file',
                     'file_id' => $attachment->id,
-                    'filename' => $attachment->name(),
                 ]),
                 $attachment instanceof Base64Document => array_filter([
                     'type' => 'input_file',

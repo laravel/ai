@@ -1,16 +1,9 @@
 <?php
 
-namespace Tests\Feature;
-
 use Laravel\Ai\Image;
-use Tests\TestCase;
 
-class ImageIntegrationTest extends TestCase
-{
-    public function test_images_can_be_generated(): void
-    {
-        $response = Image::of('Donut sitting on a kitchen counter.')->generate(provider: ['xai']);
+test('images can be generated', function () {
+    $response = Image::of('Donut sitting on a kitchen counter.')->generate(provider: ['xai']);
 
-        $this->assertEquals('xai', $response->meta->provider);
-    }
-}
+    expect($response->meta->provider)->toEqual('xai');
+});

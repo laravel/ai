@@ -53,6 +53,7 @@ return [
         'anthropic' => [
             'driver' => 'anthropic',
             'key' => env('ANTHROPIC_API_KEY'),
+            'url' => env('ANTHROPIC_URL', 'https://api.anthropic.com/v1'),
         ],
 
         'azure' => [
@@ -87,6 +88,7 @@ return [
         'groq' => [
             'driver' => 'groq',
             'key' => env('GROQ_API_KEY'),
+            'url' => env('GROQ_URL', 'https://api.groq.com/openai/v1'),
         ],
 
         'jina' => [
@@ -97,6 +99,7 @@ return [
         'mistral' => [
             'driver' => 'mistral',
             'key' => env('MISTRAL_API_KEY'),
+            'url' => env('MISTRAL_URL', 'https://api.mistral.ai/v1'),
         ],
 
         'ollama' => [
@@ -124,6 +127,7 @@ return [
         'xai' => [
             'driver' => 'xai',
             'key' => env('XAI_API_KEY'),
+            'url' => env('XAI_URL', 'https://api.x.ai/v1'),
         ],
     ],
 

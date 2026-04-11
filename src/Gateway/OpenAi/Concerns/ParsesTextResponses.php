@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\HasToolMeta;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -25,7 +26,7 @@ trait ParsesTextResponses
     /**
      * Validate the OpenAI response data.
      *
-     * @throws \Laravel\Ai\Exceptions\AiException
+     * @throws AiException
      */
     protected function validateTextResponse(array $data): void
     {
@@ -58,6 +59,7 @@ trait ParsesTextResponses
         array $tools = [],
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
+        ?int $timeout = null,
     ): TextResponse {
         return $this->processResponse(
             $data,
@@ -68,6 +70,8 @@ trait ParsesTextResponses
             new Collection,
             new Collection,
             maxSteps: $options?->maxSteps,
+            options: $options,
+            timeout: $timeout,
         );
     }
 
@@ -84,6 +88,8 @@ trait ParsesTextResponses
         Collection $messages,
         int $depth = 0,
         ?int $maxSteps = null,
+        ?TextGenerationOptions $options = null,
+        ?int $timeout = null,
     ): TextResponse {
         $responseId = $data['id'] ?? '';
         $output = $data['output'] ?? [];
@@ -138,7 +144,19 @@ trait ParsesTextResponses
             $messages->push($toolResultMessage);
 
             return $this->continueWithToolResults(
-                $responseId, $model, $provider, $structured, $tools, $schema, $steps, $messages, $toolResults, $depth + 1, $maxSteps,
+                $responseId,
+                $model,
+                $provider,
+                $structured,
+                $tools,
+                $schema,
+                $steps,
+                $messages,
+                $toolResults,
+                $depth + 1,
+                $maxSteps,
+                $options,
+                $timeout,
             );
         }
 
@@ -219,6 +237,8 @@ trait ParsesTextResponses
         array $toolResults,
         int $depth,
         ?int $maxSteps,
+        ?TextGenerationOptions $options = null,
+        ?int $timeout = null,
     ): TextResponse {
         $body = [
             'model' => $model,
@@ -234,16 +254,32 @@ trait ParsesTextResponses
             $body['text'] = $this->buildSchemaFormat($schema);
         }
 
-        $response = $this->withRateLimitHandling(
+        if (! is_null($options?->temperature)) {
+            $body['temperature'] = $options->temperature;
+        }
+
+        if (! is_null($options?->maxTokens)) {
+            $body['max_output_tokens'] = $options->maxTokens;
+        }
+
+        $providerOptions = $options?->providerOptions(
+            Lab::tryFrom($provider->driver()) ?? $provider->driver()
+        );
+
+        if (! is_null($providerOptions)) {
+            $body = array_merge($body, $providerOptions);
+        }
+
+        $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider)->post('responses', $body),
+            fn () => $this->client($provider, $timeout)->post('responses', $body),
         );
 
         $data = $response->json();
 
         $this->validateTextResponse($data);
 
-        return $this->processResponse($data, $provider, $structured, $tools, $schema, $steps, $messages, $depth, $maxSteps);
+        return $this->processResponse($data, $provider, $structured, $tools, $schema, $steps, $messages, $depth, $maxSteps, $options, $timeout);
     }
 
     /**
