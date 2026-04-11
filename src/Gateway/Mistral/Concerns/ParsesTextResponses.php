@@ -194,7 +194,7 @@ trait ParsesTextResponses
                 continue;
             }
 
-            $result = $this->executeTool($tool, $toolCall->arguments);
+            [$result, $meta] = $this->executeTool($tool, $toolCall->arguments);
 
             $results[] = new ToolResult(
                 $toolCall->id,
@@ -202,6 +202,7 @@ trait ParsesTextResponses
                 $toolCall->arguments,
                 $result,
                 $toolCall->resultId,
+                $meta,
             );
         }
 

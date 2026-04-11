@@ -6,10 +6,9 @@ use Stringable;
 
 class ToolResponse implements Stringable
 {
-    protected ?array $meta = null;
-
     public function __construct(
-        protected string $result,
+        public readonly string $result,
+        public readonly ?array $meta = null,
     ) {}
 
     /**
@@ -23,27 +22,9 @@ class ToolResponse implements Stringable
     /**
      * Set the UI metadata for the tool response.
      */
-    public function meta(array $meta): static
+    public function withMeta(array $meta): static
     {
-        $this->meta = $meta;
-
-        return $this;
-    }
-
-    /**
-     * Get the model-facing result payload.
-     */
-    public function result(): string
-    {
-        return $this->result;
-    }
-
-    /**
-     * Get the UI metadata.
-     */
-    public function getMeta(): ?array
-    {
-        return $this->meta;
+        return new static($this->result, $meta);
     }
 
     /**

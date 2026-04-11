@@ -326,7 +326,7 @@ trait HandlesTextStreaming
                 continue;
             }
 
-            $result = $this->executeTool($tool, $toolCall->arguments);
+            [$result, $meta] = $this->executeTool($tool, $toolCall->arguments);
 
             $toolResult = new ToolResult(
                 $toolCall->id,
@@ -334,6 +334,7 @@ trait HandlesTextStreaming
                 $toolCall->arguments,
                 $result,
                 $toolCall->resultId,
+                $meta,
             );
 
             $toolResults[] = $toolResult;

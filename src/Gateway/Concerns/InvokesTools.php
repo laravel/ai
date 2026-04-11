@@ -36,7 +36,7 @@ trait InvokesTools
         $response = $tool->handle(new Request($arguments));
 
         $result = (string) $response;
-        $meta = $response instanceof ToolResponse ? $response->getMeta() : null;
+        $meta = $response instanceof ToolResponse ? $response->meta : null;
 
         call_user_func($this->toolInvokedCallback, $tool, $arguments, $result);
 

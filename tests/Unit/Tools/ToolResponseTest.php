@@ -11,23 +11,32 @@ class ToolResponseTest extends TestCase
     {
         $response = ToolResponse::make('hello');
 
-        $this->assertSame('hello', $response->result());
-        $this->assertNull($response->getMeta());
+        $this->assertSame('hello', $response->result);
+        $this->assertNull($response->meta);
     }
 
-    public function test_meta_sets_and_returns_metadata(): void
+    public function test_with_meta_returns_new_instance_with_metadata(): void
     {
         $response = ToolResponse::make('result')
-            ->meta(['thinking' => 'Working on it…']);
+            ->withMeta(['thinking' => 'Working on it…']);
 
-        $this->assertSame('result', $response->result());
-        $this->assertSame(['thinking' => 'Working on it…'], $response->getMeta());
+        $this->assertSame('result', $response->result);
+        $this->assertSame(['thinking' => 'Working on it…'], $response->meta);
+    }
+
+    public function test_with_meta_does_not_mutate_original(): void
+    {
+        $original = ToolResponse::make('result');
+        $withMeta = $original->withMeta(['thinking' => 'Working on it…']);
+
+        $this->assertNull($original->meta);
+        $this->assertSame(['thinking' => 'Working on it…'], $withMeta->meta);
     }
 
     public function test_string_cast_returns_model_payload_only(): void
     {
         $response = ToolResponse::make('payload')
-            ->meta(['label' => 'test']);
+            ->withMeta(['label' => 'test']);
 
         $this->assertSame('payload', (string) $response);
     }
@@ -44,13 +53,13 @@ class ToolResponseTest extends TestCase
 
         $response = ToolResponse::make($stringable);
 
-        $this->assertSame('from stringable', $response->result());
+        $this->assertSame('from stringable', $response->result);
     }
 
     public function test_meta_is_null_by_default(): void
     {
         $response = ToolResponse::make('data');
 
-        $this->assertNull($response->getMeta());
+        $this->assertNull($response->meta);
     }
 }
