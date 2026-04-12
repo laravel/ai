@@ -344,6 +344,29 @@ trait HandlesTextStreaming
             return;
         }
 
+        $lastBlock = $responseContent !== [] ? end($responseContent) : [];
+        $lastBlockType = $lastBlock['type'] ?? '';
+
+        if ($stopReason === 'pause_turn'
+            && $lastBlockType === 'server_tool_use'
+            && $depth + 1 < ($maxSteps ?? max(3, round(count($tools) * 1.5)))) {
+            yield from $this->resumeFromPauseTurn(
+                $invocationId,
+                $provider,
+                $model,
+                $tools,
+                $schema,
+                $options,
+                $responseContent,
+                $requestBody,
+                $depth,
+                $maxSteps,
+                $timeout,
+            );
+
+            return;
+        }
+
         yield (new StreamEnd(
             $this->generateEventId(),
             $this->extractFinishReason(['stop_reason' => $stopReason])->value,
@@ -424,6 +447,52 @@ trait HandlesTextStreaming
                 'tool_use_id' => $result->id,
                 'content' => $this->serializeToolResultOutput($result->result),
             ], $toolResults),
+        ];
+
+        $requestBody['stream'] = true;
+
+        $response = $this->withErrorHandling(
+            $provider->name(),
+            fn () => $this->client($provider, $timeout)
+                ->withOptions(['stream' => true])
+                ->post('messages', $requestBody),
+        );
+
+        yield from $this->processTextStream(
+            $invocationId,
+            $provider,
+            $model,
+            $tools,
+            $schema,
+            $options,
+            $response->getBody(),
+            $requestBody,
+            $depth + 1,
+            $maxSteps,
+            $timeout,
+        );
+    }
+
+    /**
+     * Resume a paused server-side loop by replaying the assistant response
+     * as-is and continuing to stream the follow-up response.
+     */
+    protected function resumeFromPauseTurn(
+        string $invocationId,
+        Provider $provider,
+        string $model,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options,
+        array $responseContent,
+        array $requestBody,
+        int $depth,
+        ?int $maxSteps,
+        ?int $timeout = null,
+    ): Generator {
+        $requestBody['messages'][] = [
+            'role' => 'assistant',
+            'content' => $this->ensureToolInputIsObject(array_values($responseContent)),
         ];
 
         $requestBody['stream'] = true;

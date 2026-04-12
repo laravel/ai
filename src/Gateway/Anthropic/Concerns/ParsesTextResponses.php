@@ -94,9 +94,21 @@ trait ParsesTextResponses
         $hasStructuredToolCall = count($realToolCalls) < count($toolCalls);
         $toolResults = [];
 
+        $stopReason = $data['stop_reason'] ?? '';
+
         $shouldContinue = $finishReason === FinishReason::ToolCalls
             && filled($realToolCalls)
             && $depth + 1 < ($maxSteps ?? round(count($tools) * 1.5));
+
+        // pause_turn is a server-side loop signal: the last content block is
+        // a dangling server_tool_use that the server needs echoed back. Can
+        // happen with no client tools registered, so its cap can't be tied
+        // to the tool count the way tool_use is. Fall back to a small
+        // default when not set.
+        $lastBlockType = $content !== [] ? ($content[array_key_last($content)]['type'] ?? '') : '';
+        $shouldResumePauseTurn = $stopReason === 'pause_turn'
+            && $lastBlockType === 'server_tool_use'
+            && $depth + 1 < ($maxSteps ?? max(3, round(count($tools) * 1.5)));
 
         if ($shouldContinue) {
             $toolResults = $this->executeToolCalls($realToolCalls, $tools);
@@ -105,6 +117,22 @@ trait ParsesTextResponses
         $steps->push(new Step($text, $toolCalls, $toolResults, $finishReason, $usage, $meta));
 
         $messages->push(new AssistantMessage($text, collect($toolCalls), $content));
+
+        if ($shouldResumePauseTurn) {
+            return $this->continueFromPauseTurn(
+                $data,
+                $provider,
+                $structured,
+                $tools,
+                $schema,
+                $steps,
+                $messages,
+                $requestBody,
+                $depth + 1,
+                $maxSteps,
+                $timeout,
+            );
+        }
 
         if ($shouldContinue) {
             $messages->push(new ToolResultMessage(collect($toolResults)));
@@ -217,6 +245,55 @@ trait ParsesTextResponses
         $requestBody['messages'][] = [
             'role' => 'user',
             'content' => $toolResultContent,
+        ];
+
+        unset($requestBody['stream']);
+
+        $response = $this->withErrorHandling(
+            $provider->name(),
+            fn () => $this->client($provider, $timeout)->post('messages', $requestBody),
+        );
+
+        $data = $response->json();
+
+        $this->validateTextResponse($data);
+
+        return $this->processResponse(
+            $data,
+            $provider,
+            $structured,
+            $tools,
+            $schema,
+            $steps,
+            $messages,
+            $requestBody,
+            $depth,
+            $maxSteps,
+            $timeout,
+        );
+    }
+
+    /**
+     * Continue the conversation after a pause_turn stop reason by replaying
+     * the assistant response as-is. No tool results are sent — the
+     * server-side loop resumes from the dangling server_tool_use block.
+     */
+    protected function continueFromPauseTurn(
+        array $previousData,
+        Provider $provider,
+        bool $structured,
+        array $tools,
+        ?array $schema,
+        Collection $steps,
+        Collection $messages,
+        array $requestBody,
+        int $depth,
+        ?int $maxSteps,
+        ?int $timeout = null,
+    ): TextResponse {
+        $requestBody['messages'][] = [
+            'role' => 'assistant',
+            'content' => $this->ensureToolInputIsObject($previousData['content'] ?? []),
         ];
 
         unset($requestBody['stream']);

@@ -162,6 +162,56 @@ describe('thinking blocks', function () {
     });
 });
 
+describe('pause_turn', function () {
+    test('streaming pause_turn triggers follow-up stream with assistant replayed', function () {
+        // A paused server-side loop (e.g. a dangling server_tool_use for
+        // advisor) ends the first stream with stop_reason: pause_turn.
+        // The client must reopen the stream replaying the assistant content
+        // verbatim so the server can resume.
+        Http::fake([
+            'api.anthropic.com/*' => Http::sequence([
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->messageStart(),
+                        $this->contentBlockStart(0, ['type' => 'server_tool_use', 'id' => 'srvtoolu_pause', 'name' => 'advisor']),
+                        $this->contentBlockStop(0),
+                        $this->messageDelta('pause_turn', 5),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->messageStart(),
+                        $this->contentBlockStart(0, ['type' => 'text', 'text' => '']),
+                        $this->contentBlockDelta(0, ['type' => 'text_delta', 'text' => 'Resumed']),
+                        $this->contentBlockStop(0),
+                        $this->messageDelta('end_turn', 5),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+            ]),
+        ]);
+
+        $events = $this->collectStreamEvents();
+
+        $recorded = Http::recorded();
+        expect($recorded)->toHaveCount(2);
+
+        $followUpBody = $recorded[1][0]->data();
+        $lastMessage = end($followUpBody['messages']);
+
+        expect($lastMessage['role'])->toBe('assistant')
+            ->and($lastMessage['content'][0]['type'])->toBe('server_tool_use')
+            ->and($lastMessage['content'][0]['input'])->toBeInstanceOf(stdClass::class);
+
+        $textDeltas = array_values(array_filter($events, fn ($e) => $e instanceof TextDelta));
+        expect($textDeltas)->not->toBeEmpty()
+            ->and($textDeltas[0]->delta)->toBe('Resumed');
+    });
+});
+
 describe('error handling', function () {
     test('streaming error event stops stream', function () {
         Http::fake([
