@@ -54,6 +54,15 @@ trait MapsMessages
      */
     protected function mapAssistantMessage(AssistantMessage|Message $message, array &$mapped): void
     {
+        if ($message instanceof AssistantMessage && filled($message->contentBlocks)) {
+            $mapped[] = [
+                'role' => 'assistant',
+                'content' => $this->ensureToolInputIsObject($message->contentBlocks),
+            ];
+
+            return;
+        }
+
         $content = [];
         $hasToolCalls = $message instanceof AssistantMessage && $message->toolCalls->isNotEmpty();
 
