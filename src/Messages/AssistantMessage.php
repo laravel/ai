@@ -9,13 +9,15 @@ class AssistantMessage extends Message
     public Collection $toolCalls;
 
     /**
-     * Raw provider content blocks in original order. When populated, gateways
-     * replay these verbatim on follow-up requests instead of rebuilding
-     * assistant content from text + tool calls — preserving provider-specific
-     * blocks (server_tool_use, server_tool_result, thinking, ...) that the
-     * rebuild would drop. When populated, this array is the source of truth
-     * for outgoing assistant content; `content` and `toolCalls` are ignored
-     * by the mapper.
+     * Raw provider replay state. Carries provider-native content blocks
+     * (server_tool_use, server_tool_result, thinking, ...) in original
+     * order so gateways can replay them verbatim on follow-up requests —
+     * blocks the default text + tool_calls rebuild would otherwise drop.
+     *
+     * Typically populated by the SDK's own response parser, not by user
+     * code. When populated, this array is the source of truth for outgoing
+     * assistant content; `content` and `toolCalls` are ignored by the
+     * mapper.
      *
      * @var array<int, array<string, mixed>>
      */
