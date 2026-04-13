@@ -9,7 +9,7 @@ use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
-use Laravel\Ai\Gateway\Concerns\HandlesRateLimiting;
+use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -26,7 +26,7 @@ class OpenRouterGateway implements EmbeddingGateway, TextGateway
     use Concerns\MapsMessages;
     use Concerns\MapsTools;
     use Concerns\ParsesTextResponses;
-    use HandlesRateLimiting;
+    use HandlesFailoverErrors;
     use InvokesTools;
     use ParsesServerSentEvents;
 
@@ -58,7 +58,7 @@ class OpenRouterGateway implements EmbeddingGateway, TextGateway
             $options,
         );
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post('chat/completions', $body),
         );
@@ -76,6 +76,7 @@ class OpenRouterGateway implements EmbeddingGateway, TextGateway
             $options,
             $instructions,
             $messages,
+            $timeout,
         );
     }
 
@@ -106,7 +107,7 @@ class OpenRouterGateway implements EmbeddingGateway, TextGateway
         $body['stream'] = true;
         $body['stream_options'] = ['include_usage' => true];
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)
                 ->withOptions(['stream' => true])
@@ -123,6 +124,10 @@ class OpenRouterGateway implements EmbeddingGateway, TextGateway
             $response->getBody(),
             $instructions,
             $messages,
+            0,
+            null,
+            [],
+            $timeout,
         );
     }
 
@@ -142,7 +147,7 @@ class OpenRouterGateway implements EmbeddingGateway, TextGateway
             'dimensions' => $dimensions,
         ];
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post('embeddings', $body),
         );

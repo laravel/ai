@@ -48,6 +48,7 @@ trait ParsesTextResponses
         ?TextGenerationOptions $options = null,
         ?string $instructions = null,
         array $originalMessages = [],
+        ?int $timeout = null,
     ): TextResponse {
         return $this->processResponse(
             $data,
@@ -61,6 +62,7 @@ trait ParsesTextResponses
             originalMessages: $originalMessages,
             maxSteps: $options?->maxSteps,
             options: $options,
+            timeout: $timeout,
         );
     }
 
@@ -80,6 +82,7 @@ trait ParsesTextResponses
         int $depth = 0,
         ?int $maxSteps = null,
         ?TextGenerationOptions $options = null,
+        ?int $timeout = null,
     ): TextResponse {
         $choice = $data['choices'][0] ?? [];
         $message = $choice['message'] ?? [];
@@ -145,6 +148,7 @@ trait ParsesTextResponses
                 $depth + 1,
                 $maxSteps,
                 $options,
+                $timeout,
             );
         }
 
@@ -220,6 +224,7 @@ trait ParsesTextResponses
         int $depth,
         ?int $maxSteps,
         ?TextGenerationOptions $options = null,
+        ?int $timeout = null,
     ): TextResponse {
         $chatMessages = $this->mapMessagesToChat($originalMessages, $instructions);
 
@@ -267,15 +272,23 @@ trait ParsesTextResponses
             $body['response_format'] = $this->buildResponseFormat($schema);
         }
 
+        if (! is_null($options?->maxTokens)) {
+            $body['max_tokens'] = $options->maxTokens;
+        }
+
+        if (! is_null($options?->temperature)) {
+            $body['temperature'] = $options->temperature;
+        }
+
         $providerOptions = $options?->providerOptions($provider->driver());
 
         if (filled($providerOptions)) {
             $body = array_merge($body, $providerOptions);
         }
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider)->post('chat/completions', $body),
+            fn () => $this->client($provider, $timeout)->post('chat/completions', $body),
         );
 
         $data = $response->json();
@@ -295,6 +308,7 @@ trait ParsesTextResponses
             $depth,
             $maxSteps,
             $options,
+            $timeout,
         );
     }
 
@@ -324,7 +338,6 @@ trait ParsesTextResponses
             'tool_calls' => FinishReason::ToolCalls,
             'length' => FinishReason::Length,
             'content_filter' => FinishReason::ContentFilter,
-            'error' => FinishReason::Unknown,
             default => FinishReason::Unknown,
         };
     }

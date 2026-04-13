@@ -9,7 +9,7 @@ use Tests\Feature\Providers\Xai\XaiHelpers;
 use Tests\TestCase;
 
 require __DIR__.'/Expectations.php';
-require __DIR__.'/Helpers.php';
+require_once __DIR__.'/Helpers.php';
 
 Dotenv\Dotenv::createImmutable(dirname(__DIR__), ['.env', '.env.testing'])->safeLoad();
 
