@@ -318,7 +318,6 @@ class AiManager extends MultipleInstanceManager
     public function createDeepseekDriver(array $config): DeepSeekProvider
     {
         return new DeepSeekProvider(
-            new PrismGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)
         );

@@ -383,7 +383,6 @@ class PrismGateway implements Gateway
     {
         return match ($provider->driver()) {
             'azure' => PrismProvider::OpenAI,
-            'deepseek' => PrismProvider::DeepSeek,
             'gemini' => PrismProvider::Gemini,
             'mistral' => PrismProvider::Mistral,
             'ollama' => PrismProvider::Ollama,
