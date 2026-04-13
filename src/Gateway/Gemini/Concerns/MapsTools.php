@@ -87,21 +87,20 @@ trait MapsTools
      */
     protected function convertNullableTypes(array $schema): array
     {
-        if (isset($schema['type']) && is_array($schema['type'])) {
-            $types = array_values(array_filter($schema['type'], fn ($t) => $t !== 'null'));
+        if (is_array($schema['type'] ?? null)) {
+            $types = array_values(array_diff($schema['type'], ['null']));
 
-            if (count($types) === 1 && count($schema['type']) > count($types)) {
+            if (count($types) === 1 && count($types) < count($schema['type'])) {
                 $schema['type'] = $types[0];
                 $schema['nullable'] = true;
             }
         }
 
-        if (isset($schema['properties']) && is_array($schema['properties'])) {
-            foreach ($schema['properties'] as $key => $property) {
-                if (is_array($property)) {
-                    $schema['properties'][$key] = $this->convertNullableTypes($property);
-                }
-            }
+        if (isset($schema['properties'])) {
+            $schema['properties'] = Arr::map(
+                $schema['properties'],
+                fn ($property) => $this->convertNullableTypes($property),
+            );
         }
 
         if (isset($schema['items']) && is_array($schema['items'])) {
