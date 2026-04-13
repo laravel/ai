@@ -86,6 +86,8 @@ test('can add and remove file from store', function () {
 
 describe('file search', function () {
     beforeEach(function () {
+        requiresApiKey('OPENAI_API_KEY');
+
         $this->fileSearchStore = Stores::create(
             'Laravel AI SDK Integration Test Store',
             provider: $this->provider,
