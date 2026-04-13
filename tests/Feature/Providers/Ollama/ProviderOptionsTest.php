@@ -1,6 +1,5 @@
 <?php
 
-use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\Feature\Agents\ProviderOptionsAgent;
@@ -46,7 +45,7 @@ test('request body does not contain provider options when agent does not impleme
 test('provider options are persisted in tool call follow up requests', function () {
     Http::fake([
         '*' => Http::sequence([
-            fakeOllamaToolCallForOptions(),
+            $this->fakeToolCallResponse(),
             $this->fakeTextResponse('The number is 72019'),
         ]),
     ]);
@@ -61,25 +60,3 @@ test('provider options are persisted in tool call follow up requests', function 
 
     expect(array_key_exists('options', $followUpBody))->toBeTrue();
 });
-
-function fakeOllamaToolCallForOptions(): PromiseInterface
-{
-    return Http::response([
-        'model' => 'llama3.1:8b',
-        'message' => [
-            'role' => 'assistant',
-            'content' => '',
-            'tool_calls' => [[
-                'id' => 'call_123',
-                'function' => [
-                    'name' => 'FixedNumberGenerator',
-                    'arguments' => (object) [],
-                ],
-            ]],
-        ],
-        'done_reason' => 'tool_calls',
-        'done' => true,
-        'prompt_eval_count' => 10,
-        'eval_count' => 5,
-    ]);
-}

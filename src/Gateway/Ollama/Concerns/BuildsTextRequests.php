@@ -21,10 +21,32 @@ trait BuildsTextRequests
         ?array $schema,
         ?TextGenerationOptions $options,
     ): array {
+        return $this->buildChatRequestBody(
+            $provider,
+            $model,
+            $this->mapMessagesToChat($messages, $instructions),
+            $tools,
+            $schema,
+            $options,
+        );
+    }
+
+    /**
+     * Build a request body from pre-mapped chat messages.
+     */
+    protected function buildChatRequestBody(
+        Provider $provider,
+        string $model,
+        array $chatMessages,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options,
+        bool $stream = false,
+    ): array {
         $body = [
             'model' => $model,
-            'messages' => $this->mapMessagesToChat($messages, $instructions),
-            'stream' => false,
+            'messages' => $chatMessages,
+            'stream' => $stream,
         ];
 
         if (filled($tools)) {

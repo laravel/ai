@@ -17,8 +17,10 @@ trait CreatesOllamaClient
             ->timeout($timeout ?? 60)
             ->throw();
 
-        if (filled($provider->providerCredentials()['key'] ?? null)) {
-            $client = $client->withToken($provider->providerCredentials()['key']);
+        $key = $provider->providerCredentials()['key'] ?? null;
+
+        if (filled($key)) {
+            $client = $client->withToken($key);
         }
 
         return $client;

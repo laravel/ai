@@ -98,6 +98,10 @@ trait MapsMessages
 
     /**
      * Serialize a tool call DTO to Ollama Chat API array format.
+     *
+     * Ollama's /api/chat message history shape only uses the `function`
+     * object for assistant tool calls — no top-level `type` key. That key
+     * belongs on the /api/chat `tools` definitions, not the message history.
      */
     protected function serializeToolCallToChat(ToolCall $toolCall): array
     {

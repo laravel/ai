@@ -92,12 +92,16 @@ trait ParsesTextResponses
         $usage = $this->extractUsage($data);
         $finishReason = $this->extractFinishReason($data);
 
-        $mappedToolCalls = array_map(fn (array $toolCall) => new ToolCall(
-            id: $toolCall['id'] ?? (string) Str::uuid4(),
-            name: $toolCall['function']['name'] ?? '',
-            arguments: $this->parseToolArguments($toolCall['function']['arguments'] ?? []),
-            resultId: $toolCall['id'] ?? null,
-        ), $rawToolCalls);
+        $mappedToolCalls = array_map(function (array $toolCall) {
+            $id = $toolCall['id'] ?? (string) Str::uuid7();
+
+            return new ToolCall(
+                id: $id,
+                name: $toolCall['function']['name'] ?? '',
+                arguments: $this->parseToolArguments($toolCall['function']['arguments'] ?? []),
+                resultId: $toolCall['id'] ?? null,
+            );
+        }, $rawToolCalls);
 
         $step = new Step(
             $text,
@@ -114,8 +118,7 @@ trait ParsesTextResponses
 
         $messages->push($assistantMessage);
 
-        if ($finishReason === FinishReason::ToolCalls &&
-            filled($mappedToolCalls) &&
+        if (filled($mappedToolCalls) &&
             $steps->count() < ($maxSteps ?? round(count($tools) * 1.5))) {
             $toolResults = $this->executeToolCalls($mappedToolCalls, $tools);
 
@@ -264,36 +267,14 @@ trait ParsesTextResponses
             }
         }
 
-        $body = [
-            'model' => $model,
-            'messages' => $chatMessages,
-            'stream' => false,
-        ];
-
-        if (filled($tools)) {
-            $mappedTools = $this->mapTools($tools);
-
-            if (filled($mappedTools)) {
-                $body['tools'] = $mappedTools;
-            }
-        }
-
-        if (filled($schema)) {
-            $body['format'] = $this->buildResponseFormat($schema);
-        }
-
-        $ollamaOptions = array_filter([
-            'temperature' => $options?->temperature,
-            'num_predict' => $options?->maxTokens,
-        ], fn ($v) => ! is_null($v));
-
-        $providerOptions = $options?->providerOptions($provider->driver()) ?? [];
-
-        $mergedOptions = array_merge($ollamaOptions, $providerOptions);
-
-        if (filled($mergedOptions)) {
-            $body['options'] = $mergedOptions;
-        }
+        $body = $this->buildChatRequestBody(
+            $provider,
+            $model,
+            $chatMessages,
+            $tools,
+            $schema,
+            $options,
+        );
 
         $response = $this->withErrorHandling(
             $provider->name(),

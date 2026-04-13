@@ -90,6 +90,7 @@ test('assistant tool call message uses function format without type', function (
     $toolCall = $assistantMsg['tool_calls'][0];
 
     expect($toolCall)->toHaveKey('function')
+        ->and($toolCall)->not->toHaveKey('type')
         ->and($toolCall['function']['name'])->toBe('FixedNumberGenerator');
 });
 

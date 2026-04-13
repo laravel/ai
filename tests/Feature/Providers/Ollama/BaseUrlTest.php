@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Embeddings;
 
 use function Laravel\Ai\agent;
 
@@ -64,7 +65,7 @@ test('ollama embeddings use the configured base url', function () {
         ]),
     ]);
 
-    \Laravel\Ai\Embeddings::for(['Hello world'])->generate(provider: 'ollama', model: 'nomic-embed-text');
+    Embeddings::for(['Hello world'])->generate(provider: 'ollama', model: 'nomic-embed-text');
 
     ollamaAssertRequestSent('POST', "{$this->customUrl}/api/embed");
 });

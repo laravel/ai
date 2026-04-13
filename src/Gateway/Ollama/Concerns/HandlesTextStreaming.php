@@ -49,10 +49,13 @@ trait HandlesTextStreaming
 
         foreach ($this->parseNdjsonStream($streamBody) as $data) {
             if (isset($data['error'])) {
+                $error = $data['error'];
+                $isStructured = is_array($error);
+
                 yield (new Error(
                     $this->generateEventId(),
-                    $data['error']['code'] ?? 'unknown_error',
-                    $data['error']['message'] ?? (string) $data['error'],
+                    $isStructured ? ($error['code'] ?? 'unknown_error') : 'unknown_error',
+                    $isStructured ? ($error['message'] ?? 'Unknown error') : (string) $error,
                     false,
                     time(),
                 ))->withInvocationId($invocationId);
@@ -94,17 +97,41 @@ trait HandlesTextStreaming
                 ))->withInvocationId($invocationId);
             }
 
-            // Accumulate tool calls (Ollama sends them as complete objects)
+            // Accumulate tool calls across chunks. Ollama's docs tell clients to
+            // accumulate partial fields, so we merge id/name/arguments per-index
+            // rather than only storing the first chunk.
             if (! empty($data['message']['tool_calls'])) {
                 foreach ($data['message']['tool_calls'] as $index => $toolCall) {
                     if (! isset($pendingToolCalls[$index])) {
-                        $arguments = $toolCall['function']['arguments'] ?? [];
-
                         $pendingToolCalls[$index] = [
-                            'id' => $toolCall['id'] ?? (string) Str::uuid4(),
-                            'name' => $toolCall['function']['name'] ?? '',
-                            'arguments' => is_array($arguments) ? $arguments : (json_decode($arguments, true) ?? []),
+                            'id' => null,
+                            'name' => '',
+                            'arguments' => [],
+                            'argumentsBuffer' => '',
                         ];
+                    }
+
+                    if (isset($toolCall['id'])) {
+                        $pendingToolCalls[$index]['id'] = $toolCall['id'];
+                    }
+
+                    $name = $toolCall['function']['name'] ?? '';
+
+                    if ($name !== '') {
+                        $pendingToolCalls[$index]['name'] = $name;
+                    }
+
+                    if (array_key_exists('arguments', $toolCall['function'] ?? [])) {
+                        $arguments = $toolCall['function']['arguments'];
+
+                        if (is_array($arguments)) {
+                            $pendingToolCalls[$index]['arguments'] = array_replace(
+                                $pendingToolCalls[$index]['arguments'],
+                                $arguments
+                            );
+                        } elseif (is_string($arguments)) {
+                            $pendingToolCalls[$index]['argumentsBuffer'] .= $arguments;
+                        }
                     }
                 }
             }
@@ -116,7 +143,7 @@ trait HandlesTextStreaming
                 );
             }
 
-            if ((bool) ($data['done'] ?? false)) {
+            if ($data['done'] ?? false) {
                 break;
             }
         }
@@ -130,12 +157,21 @@ trait HandlesTextStreaming
         }
 
         if (filled($pendingToolCalls)) {
-            $mappedToolCalls = array_map(fn (array $toolCall) => new ToolCall(
-                $toolCall['id'],
-                $toolCall['name'],
-                $toolCall['arguments'],
-                $toolCall['id'],
-            ), array_values($pendingToolCalls));
+            $mappedToolCalls = array_map(function (array $toolCall) {
+                $arguments = $toolCall['arguments'];
+
+                if ($toolCall['argumentsBuffer'] !== '') {
+                    $decoded = json_decode($toolCall['argumentsBuffer'], true);
+
+                    if (is_array($decoded)) {
+                        $arguments = array_replace($arguments, $decoded);
+                    }
+                }
+
+                $id = $toolCall['id'] ?? (string) Str::uuid7();
+
+                return new ToolCall($id, $toolCall['name'], $arguments, $id);
+            }, array_values($pendingToolCalls));
 
             foreach ($mappedToolCalls as $toolCall) {
                 yield (new ToolCallEvent(
@@ -244,36 +280,15 @@ trait HandlesTextStreaming
                 ...$updatedPriorMessages,
             ];
 
-            $body = [
-                'model' => $model,
-                'messages' => $chatMessages,
-                'stream' => true,
-            ];
-
-            if (filled($tools)) {
-                $mappedTools = $this->mapTools($tools);
-
-                if (filled($mappedTools)) {
-                    $body['tools'] = $mappedTools;
-                }
-            }
-
-            if (filled($schema)) {
-                $body['format'] = $this->buildResponseFormat($schema);
-            }
-
-            $ollamaOptions = array_filter([
-                'temperature' => $options?->temperature,
-                'num_predict' => $options?->maxTokens,
-            ], fn ($v) => ! is_null($v));
-
-            $providerOptions = $options?->providerOptions($provider->driver()) ?? [];
-
-            $mergedOptions = array_merge($ollamaOptions, $providerOptions);
-
-            if (filled($mergedOptions)) {
-                $body['options'] = $mergedOptions;
-            }
+            $body = $this->buildChatRequestBody(
+                $provider,
+                $model,
+                $chatMessages,
+                $tools,
+                $schema,
+                $options,
+                stream: true,
+            );
 
             $response = $this->withErrorHandling(
                 $provider->name(),
@@ -323,7 +338,7 @@ trait HandlesTextStreaming
 
                 $line = trim($line);
 
-                if ($line === '' || $line === '0') {
+                if ($line === '') {
                     continue;
                 }
 

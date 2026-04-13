@@ -8,11 +8,11 @@ use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\TextResponse;
 
@@ -152,14 +152,14 @@ class OllamaGateway implements EmbeddingGateway, TextGateway
         $data = $response->json();
 
         if (! $data || isset($data['error'])) {
-            throw new \Laravel\Ai\Exceptions\AiException(sprintf(
+            throw new AiException(sprintf(
                 'Ollama Error: %s',
                 $data['error'] ?? 'Unknown Ollama error.',
             ));
         }
 
         return new EmbeddingsResponse(
-            collect($data['embeddings'] ?? [])->all(),
+            $data['embeddings'] ?? [],
             $data['prompt_eval_count'] ?? 0,
             new Meta($provider->name(), $model),
         );

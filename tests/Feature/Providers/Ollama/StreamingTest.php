@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
@@ -51,11 +52,9 @@ test('streaming request sets stream to true', function () {
         ),
     ]);
 
-    foreach ($this->collectStreamEvents() as $event) {
-        //
-    }
+    $this->collectStreamEvents();
 
-    Http::assertSent(function (\Illuminate\Http\Client\Request $request) {
+    Http::assertSent(function (Request $request) {
         $body = json_decode($request->body(), true);
 
         return $body['stream'] === true;
@@ -92,7 +91,23 @@ test('streaming handles tool calls', function () {
         ->and($toolCallEvents[0]->toolCall->id)->toBe('call_1');
 });
 
-test('streaming error event stops stream', function () {
+test('streaming error event stops stream with string payload', function () {
+    Http::fake([
+        '*' => Http::response(
+            body: json_encode(['error' => 'model not found'])."\n",
+            status: 200,
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents();
+
+    expect($events)->toHaveCount(1)
+        ->and($events[0])->toBeInstanceOf(Error::class)
+        ->and($events[0]->type)->toBe('unknown_error')
+        ->and($events[0]->message)->toBe('model not found');
+});
+
+test('streaming error event also handles structured payload', function () {
     Http::fake([
         '*' => Http::response(
             body: json_encode(['error' => ['code' => 'model_error', 'message' => 'Model not found']])."\n",
@@ -106,6 +121,125 @@ test('streaming error event stops stream', function () {
         ->and($events[0])->toBeInstanceOf(Error::class)
         ->and($events[0]->type)->toBe('model_error')
         ->and($events[0]->message)->toBe('Model not found');
+});
+
+test('streaming accumulates tool call arguments across chunks', function () {
+    Http::fake([
+        '*' => Http::sequence([
+            Http::response(
+                body: $this->ndjsonPayload([
+                    // First chunk: id + name but no arguments yet.
+                    [
+                        'model' => 'llama3.1:8b',
+                        'message' => [
+                            'role' => 'assistant',
+                            'content' => '',
+                            'tool_calls' => [[
+                                'id' => 'call_1',
+                                'function' => [
+                                    'name' => 'FixedNumberGenerator',
+                                ],
+                            ]],
+                        ],
+                        'done' => false,
+                    ],
+                    // Second chunk: argument fragment as partial JSON string.
+                    [
+                        'model' => 'llama3.1:8b',
+                        'message' => [
+                            'role' => 'assistant',
+                            'content' => '',
+                            'tool_calls' => [[
+                                'function' => [
+                                    'arguments' => '{"foo":',
+                                ],
+                            ]],
+                        ],
+                        'done' => false,
+                    ],
+                    // Third chunk: remainder of the arguments payload.
+                    [
+                        'model' => 'llama3.1:8b',
+                        'message' => [
+                            'role' => 'assistant',
+                            'content' => '',
+                            'tool_calls' => [[
+                                'function' => [
+                                    'arguments' => '"bar"}',
+                                ],
+                            ]],
+                        ],
+                        'done_reason' => 'tool_calls',
+                        'done' => true,
+                        'prompt_eval_count' => 1,
+                        'eval_count' => 1,
+                    ],
+                ]),
+                status: 200,
+            ),
+            Http::response(
+                body: $this->ndjsonPayload([
+                    $this->chatChunk('done'),
+                    $this->chatChunk('', true, 'stop'),
+                ]),
+                status: 200,
+            ),
+        ]),
+    ]);
+
+    $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+    $toolCallEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolCallEvent));
+
+    expect($toolCallEvents)->toHaveCount(1)
+        ->and($toolCallEvents[0]->toolCall->id)->toBe('call_1')
+        ->and($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator')
+        ->and($toolCallEvents[0]->toolCall->arguments)->toBe(['foo' => 'bar']);
+});
+
+test('streaming generates fallback id when tool call has no id', function () {
+    Http::fake([
+        '*' => Http::sequence([
+            Http::response(
+                body: $this->ndjsonPayload([
+                    [
+                        'model' => 'llama3.1:8b',
+                        'message' => [
+                            'role' => 'assistant',
+                            'content' => '',
+                            'tool_calls' => [[
+                                // No "id" — Ollama sometimes omits it.
+                                'function' => [
+                                    'name' => 'FixedNumberGenerator',
+                                    'arguments' => (object) [],
+                                ],
+                            ]],
+                        ],
+                        'done_reason' => 'tool_calls',
+                        'done' => true,
+                        'prompt_eval_count' => 1,
+                        'eval_count' => 1,
+                    ],
+                ]),
+                status: 200,
+            ),
+            Http::response(
+                body: $this->ndjsonPayload([
+                    $this->chatChunk('done'),
+                    $this->chatChunk('', true, 'stop'),
+                ]),
+                status: 200,
+            ),
+        ]),
+    ]);
+
+    $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+    $toolCallEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolCallEvent));
+
+    expect($toolCallEvents)->toHaveCount(1)
+        ->and($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator')
+        ->and($toolCallEvents[0]->toolCall->id)->not->toBeEmpty();
 });
 
 test('streaming captures usage from final chunk', function () {

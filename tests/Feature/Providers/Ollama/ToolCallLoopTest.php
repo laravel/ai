@@ -15,7 +15,7 @@ test('tool calls trigger follow up request', function () {
     Http::fake([
         '*' => Http::sequence([
             fakeUniqueOllamaToolCallResponse(),
-            fakeOllamaTextResponse('The number is 72019'),
+            $this->fakeTextResponse('The number is 72019'),
         ]),
     ]);
 
@@ -28,30 +28,17 @@ test('tool calls trigger follow up request', function () {
 
     expect($recorded)->toHaveCount(2);
 
-    $followUpBody = json_decode($recorded[1][0]->body(), true);
+    $followUpMessages = collect(json_decode($recorded[1][0]->body(), true)['messages']);
 
-    $hasAssistantWithToolCalls = false;
-    $hasToolResult = false;
-
-    foreach ($followUpBody['messages'] as $message) {
-        if ($message['role'] === 'assistant' && isset($message['tool_calls'])) {
-            $hasAssistantWithToolCalls = true;
-        }
-
-        if ($message['role'] === 'tool') {
-            $hasToolResult = true;
-        }
-    }
-
-    expect($hasAssistantWithToolCalls)->toBeTrue()
-        ->and($hasToolResult)->toBeTrue();
+    expect($followUpMessages->contains(fn ($m) => $m['role'] === 'assistant' && isset($m['tool_calls'])))->toBeTrue()
+        ->and($followUpMessages->contains(fn ($m) => $m['role'] === 'tool'))->toBeTrue();
 });
 
 test('tool result message uses tool_name field', function () {
     Http::fake([
         '*' => Http::sequence([
             fakeUniqueOllamaToolCallResponse(),
-            fakeOllamaTextResponse('The number is 72019'),
+            $this->fakeTextResponse('The number is 72019'),
         ]),
     ]);
 
@@ -77,7 +64,7 @@ test('max steps limits tool call depth', function () {
             fakeUniqueOllamaToolCallResponse(),
             fakeUniqueOllamaToolCallResponse(),
             fakeUniqueOllamaToolCallResponse(),
-            fakeOllamaTextResponse('Done'),
+            $this->fakeTextResponse('Done'),
         ]),
     ]);
 
@@ -88,25 +75,88 @@ test('max steps limits tool call depth', function () {
 
     $recorded = Http::recorded();
 
-    // ToolUsingAgent has 1 tool + structured output tool = 2 tools
-    // maxSteps = round(2 * 1.5) = 3
     expect(count($recorded))->toBeLessThanOrEqual(3);
 });
 
-function fakeOllamaTextResponse(string $text = 'Hello'): PromiseInterface
-{
-    return Http::response([
-        'model' => 'llama3.1:8b',
-        'message' => [
-            'role' => 'assistant',
-            'content' => $text,
-        ],
-        'done_reason' => 'stop',
-        'done' => true,
-        'prompt_eval_count' => 1,
-        'eval_count' => 1,
+test('tool calls without id are executed with a generated id', function () {
+    Http::fake([
+        '*' => Http::sequence([
+            Http::response([
+                'model' => 'llama3.1:8b',
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => '',
+                    'tool_calls' => [[
+                        // No "id" field — some Ollama models omit it.
+                        'function' => [
+                            'name' => 'FixedNumberGenerator',
+                            'arguments' => (object) [],
+                        ],
+                    ]],
+                ],
+                'done_reason' => 'tool_calls',
+                'done' => true,
+                'prompt_eval_count' => 10,
+                'eval_count' => 5,
+            ]),
+            $this->fakeTextResponse('The number is 72019'),
+        ]),
     ]);
-}
+
+    (new ToolUsingAgent(fixed: true))->prompt(
+        'Generate a number',
+        provider: 'ollama',
+    );
+
+    $recorded = Http::recorded();
+
+    expect($recorded)->toHaveCount(2);
+
+    $followUpBody = json_decode($recorded[1][0]->body(), true);
+
+    $toolMsg = collect($followUpBody['messages'])->first(fn ($m) => $m['role'] === 'tool');
+
+    expect($toolMsg)->not->toBeNull()
+        ->and($toolMsg['tool_name'])->toBe('FixedNumberGenerator');
+});
+
+test('tool calls are executed even when done_reason is stop', function () {
+    Http::fake([
+        '*' => Http::sequence([
+            Http::response([
+                'model' => 'llama3.1:8b',
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => '',
+                    'tool_calls' => [[
+                        'id' => 'call_123',
+                        'function' => [
+                            'name' => 'FixedNumberGenerator',
+                            'arguments' => (object) [],
+                        ],
+                    ]],
+                ],
+                // Real Ollama responses can report "stop" even when tool_calls
+                // are populated.
+                'done_reason' => 'stop',
+                'done' => true,
+                'prompt_eval_count' => 10,
+                'eval_count' => 5,
+            ]),
+            $this->fakeTextResponse('The number is 72019'),
+        ]),
+    ]);
+
+    $response = (new ToolUsingAgent(fixed: true))->prompt(
+        'Generate a number',
+        provider: 'ollama',
+    );
+
+    $recorded = Http::recorded();
+
+    expect($recorded)->toHaveCount(2)
+        ->and($response->text)->toBe('The number is 72019');
+});
 
 function fakeUniqueOllamaToolCallResponse(): PromiseInterface
 {
