@@ -67,7 +67,7 @@ trait MapsTools
             $schemaArray = (new ObjectSchema($schema))->toSchema();
 
             $definition['parameters'] = Arr::except(
-                static::convertNullableTypes([
+                $this->convertNullableTypes([
                     'type' => 'object',
                     'properties' => $schemaArray['properties'] ?? [],
                     'required' => $schemaArray['required'] ?? [],
@@ -85,7 +85,7 @@ trait MapsTools
      * @param  array<string, mixed>  $schema
      * @return array<string, mixed>
      */
-    protected static function convertNullableTypes(array $schema): array
+    protected function convertNullableTypes(array $schema): array
     {
         if (isset($schema['type']) && is_array($schema['type'])) {
             $types = array_values(array_filter($schema['type'], fn ($t) => $t !== 'null'));
@@ -99,13 +99,13 @@ trait MapsTools
         if (isset($schema['properties']) && is_array($schema['properties'])) {
             foreach ($schema['properties'] as $key => $property) {
                 if (is_array($property)) {
-                    $schema['properties'][$key] = static::convertNullableTypes($property);
+                    $schema['properties'][$key] = $this->convertNullableTypes($property);
                 }
             }
         }
 
         if (isset($schema['items']) && is_array($schema['items'])) {
-            $schema['items'] = static::convertNullableTypes($schema['items']);
+            $schema['items'] = $this->convertNullableTypes($schema['items']);
         }
 
         return $schema;
