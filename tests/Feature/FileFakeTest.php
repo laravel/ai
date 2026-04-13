@@ -62,8 +62,8 @@ test('can assert file was stored', function () {
     $id = Document::fromString('Hello, World!', 'text/plain')->as('document.txt')->put()->id;
     expect(Files::fakeId('document.txt'))->toEqual($id);
 
-    Document::fromPath(__DIR__.'/files/document.txt')->put();
-    Document::fromUpload(new UploadedFile(__DIR__.'/files/report.txt', 'report.txt'))->put();
+    Document::fromPath(__DIR__.'/../Fixtures/document.txt')->put();
+    Document::fromUpload(new UploadedFile(__DIR__.'/../Fixtures/report.txt', 'report.txt'))->put();
 
     Files::assertStored(fn (StorableFile $file) => (string) $file === 'Hello, World!');
 

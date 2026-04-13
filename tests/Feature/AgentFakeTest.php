@@ -9,8 +9,8 @@ use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
 use PHPUnit\Framework\AssertionFailedError;
-use Tests\Feature\Agents\AssistantAgent;
-use Tests\Feature\Agents\StructuredAgent;
+use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\StructuredAgent;
 
 describe('prompt responses', function () {
     test('agents can be faked', function () {

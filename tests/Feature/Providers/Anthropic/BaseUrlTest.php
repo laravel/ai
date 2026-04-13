@@ -1,7 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
-use Tests\Feature\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\AssistantAgent;
 
 test('anthropic requests use the configured base url', function () {
     config(['ai.providers.anthropic.url' => 'https://custom-proxy.example.com/v1']);

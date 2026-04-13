@@ -1,6 +1,6 @@
 <?php
 
-use Tests\Feature\Agents\GeminiAgent;
+use Tests\Fixtures\Agents\GeminiAgent;
 
 test('gemini agent can be faked', function () {
     GeminiAgent::fake(['Test response']);

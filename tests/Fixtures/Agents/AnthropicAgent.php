@@ -1,13 +1,13 @@
 <?php
 
-namespace Tests\Feature\Agents;
+namespace Tests\Fixtures\Agents;
 
 use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Promptable;
 
-#[Provider('xai')]
-class XaiAgent implements Agent
+#[Provider('anthropic')]
+class AnthropicAgent implements Agent
 {
     use Promptable;
 

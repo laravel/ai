@@ -1,13 +1,13 @@
 <?php
 
-namespace Tests\Feature\Agents;
+namespace Tests\Fixtures\Agents;
 
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
-use Tests\Feature\Tools\FixedNumberGenerator;
+use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 class ProviderOptionsWithToolsAgent implements Agent, HasProviderOptions, HasTools
 {

@@ -3,8 +3,8 @@
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Prompts\AgentPrompt;
-use Tests\Feature\Agents\AssistantAgent;
-use Tests\Feature\Agents\AttributeAgent;
+use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\AttributeAgent;
 
 test('text generation options can be created from agent attributes', function () {
     $options = TextGenerationOptions::forAgent(new AttributeAgent);

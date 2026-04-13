@@ -1,12 +1,12 @@
 <?php
 
-namespace Tests\Feature\Tools;
+namespace Tests\Fixtures\Tools;
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
 
-class FixedNumberGenerator implements Tool
+class RandomNumberGenerator implements Tool
 {
     public function __construct(public bool $throwsException = false) {}
 
@@ -27,7 +27,7 @@ class FixedNumberGenerator implements Tool
             throw new \Exception('Forced to throw exception.');
         }
 
-        return 72019;
+        return random_int($request['min'], $request['max']);
     }
 
     /**
@@ -35,6 +35,9 @@ class FixedNumberGenerator implements Tool
      */
     public function schema(JsonSchema $schema): array
     {
-        return [];
+        return [
+            'min' => $schema->integer()->description('The minimum value of the random number')->default(1)->required(),
+            'max' => $schema->integer()->description('The maximum value of the random number')->default(100)->required(),
+        ];
     }
 }

@@ -5,8 +5,8 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Files\RemoteImage;
-use Tests\Feature\Agents\AssistantAgent;
-use Tests\Feature\Agents\ToolUsingAgent;
+use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\ToolUsingAgent;
 
 use function Laravel\Ai\agent;
 

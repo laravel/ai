@@ -1,6 +1,6 @@
 <?php
 
-use Tests\Feature\Agents\MistralAgent;
+use Tests\Fixtures\Agents\MistralAgent;
 
 test('mistral agent can be faked', function () {
     MistralAgent::fake(['Test response']);

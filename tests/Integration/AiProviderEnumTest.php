@@ -12,7 +12,7 @@ use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Transcription;
-use Tests\Feature\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\AssistantAgent;
 
 beforeEach(fn () => requiresApiKey('GROQ_API_KEY', 'OPENAI_API_KEY'));
 

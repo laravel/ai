@@ -1,6 +1,6 @@
 <?php
 
-use Tests\Feature\Agents\AnthropicAgent;
+use Tests\Fixtures\Agents\AnthropicAgent;
 
 test('anthropic agent can be faked', function () {
     AnthropicAgent::fake(['Test response']);
