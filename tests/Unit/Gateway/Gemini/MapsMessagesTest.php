@@ -9,9 +9,8 @@ use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 
-function geminiMapper(): object
-{
-    return new class
+beforeEach(function () {
+    $this->mapper = new class
     {
         use BuildsTextRequests;
         use MapsMessages;
@@ -26,16 +25,12 @@ function geminiMapper(): object
             return [];
         }
     };
-}
+});
 
 test('persisted assistant tool call replays its id onto functionCall', function () {
-    // This is the laravel/ai#388 "I saved it in the DB" scenario: the prior
-    // turn has a synthesized id stored on the ToolCall + ToolResult. On
-    // replay, mapAssistantMessage must echo the same id onto functionCall so
-    // the matching functionResponse id is not orphaned.
     $persistedId = 'persisted-uuid-from-db';
 
-    $contents = geminiMapper()->map([
+    $contents = $this->mapper->map([
         new UserMessage('Generate'),
         new AssistantMessage('', collect([
             new ToolCall($persistedId, 'FixedNumberGenerator', []),
@@ -66,8 +61,7 @@ test('persisted assistant tool call replays its id onto functionCall', function 
 });
 
 test('replay omits id on both sides when persisted tool call had no id', function () {
-    // Pre-id-aware data — both sides should be id-less so they still match.
-    $contents = geminiMapper()->map([
+    $contents = $this->mapper->map([
         new UserMessage('Generate'),
         new AssistantMessage('', collect([
             new ToolCall('', 'FixedNumberGenerator', []),

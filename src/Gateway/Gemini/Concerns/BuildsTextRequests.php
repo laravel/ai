@@ -123,38 +123,30 @@ trait BuildsTextRequests
     }
 
     /**
-     * Inject the mapped ToolCall id onto each functionCall part in the model
-     * response, so the continuation request carries the same id on both
-     * functionCall and functionResponse. Gemini matches the two by id, and
-     * rejects the request with HTTP 400 when they do not correspond.
+     * Pair each functionCall part with its mapped ToolCall id so
+     * functionCall.id and functionResponse.id stay in sync.
      *
-     * The pairing is positional: the i-th functionCall part corresponds to the
-     * i-th mapped ToolCall, mirroring how extractRawToolCalls walks the parts.
-     *
-     * @param  array<int, array<string, mixed>>  $parts
+     * @param  array<int, array<string, mixed>>  $modelParts
      * @param  array<int, ToolCall>  $mappedToolCalls
      * @return array<int, array<string, mixed>>
      */
-    protected function withToolCallIds(array $parts, array $mappedToolCalls): array
+    protected function withToolCallIds(array $modelParts, array $mappedToolCalls): array
     {
-        $index = 0;
+        $functionCallIndex = 0;
 
-        return array_map(function (array $part) use ($mappedToolCalls, &$index) {
+        return array_map(function (array $part) use ($mappedToolCalls, &$functionCallIndex) {
             if (! isset($part['functionCall'])) {
                 return $part;
             }
 
-            $toolCall = $mappedToolCalls[$index] ?? null;
-            $index++;
+            $toolCall = $mappedToolCalls[$functionCallIndex++] ?? null;
 
-            if ($toolCall === null || ! filled($toolCall->id)) {
-                return $part;
+            if ($toolCall !== null && filled($toolCall->id)) {
+                $part['functionCall']['id'] = $toolCall->id;
             }
 
-            $part['functionCall']['id'] = $toolCall->id;
-
             return $part;
-        }, $parts);
+        }, $modelParts);
     }
 
     /**

@@ -173,21 +173,9 @@ test('non-streaming continuation produces matching ids when gemini omits id', fu
 
     (new ToolUsingAgent(fixed: true))->prompt('Generate', provider: 'gemini');
 
-    $followUpContents = Http::recorded()[1][0]->data()['contents'];
-
-    $functionCallIds = [];
-    $functionResponseIds = [];
-
-    foreach ($followUpContents as $content) {
-        foreach ($content['parts'] ?? [] as $part) {
-            if (isset($part['functionCall'])) {
-                $functionCallIds[] = $part['functionCall']['id'] ?? null;
-            }
-            if (isset($part['functionResponse'])) {
-                $functionResponseIds[] = $part['functionResponse']['id'] ?? null;
-            }
-        }
-    }
+    [$functionCallIds, $functionResponseIds] = $this->extractToolCallIds(
+        Http::recorded()[1][0]->data()['contents'],
+    );
 
     expect($functionCallIds)->toHaveCount(1)
         ->and($functionResponseIds)->toHaveCount(1)
@@ -207,26 +195,14 @@ test('non-streaming continuation preserves gemini supplied id verbatim', functio
 
     (new ToolUsingAgent(fixed: true))->prompt('Generate', provider: 'gemini');
 
-    $followUpContents = Http::recorded()[1][0]->data()['contents'];
+    [$functionCallIds, $functionResponseIds] = $this->extractToolCallIds(
+        Http::recorded()[1][0]->data()['contents'],
+    );
 
-    $functionCallId = null;
-    $functionResponseId = null;
-
-    foreach ($followUpContents as $content) {
-        foreach ($content['parts'] ?? [] as $part) {
-            if (isset($part['functionCall']['id'])) {
-                $functionCallId = $part['functionCall']['id'];
-            }
-            if (isset($part['functionResponse']['id'])) {
-                $functionResponseId = $part['functionResponse']['id'];
-            }
-        }
-    }
-
-    expect($functionCallId)
-        ->toBe('gemini_call_zzz', 'functionCall id must be preserved verbatim per Gemini docs')
-        ->and($functionResponseId)
-        ->toBe('gemini_call_zzz', 'functionResponse id must echo the functionCall id exactly');
+    expect($functionCallIds)
+        ->toBe(['gemini_call_zzz'], 'functionCall id must be preserved verbatim per Gemini docs')
+        ->and($functionResponseIds)
+        ->toBe(['gemini_call_zzz'], 'functionResponse id must echo the functionCall id exactly');
 });
 
 test('thinking parts are excluded from tool call continuation', function () {

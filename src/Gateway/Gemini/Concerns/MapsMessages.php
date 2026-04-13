@@ -65,9 +65,6 @@ trait MapsMessages
                     'args' => $toolCall->arguments,
                 ];
 
-                // Echo the id on functionCall so it matches the functionResponse
-                // emitted by buildFunctionResponseParts. Gemini rejects continuation
-                // requests where the ids on the two sides do not correspond.
                 if (filled($toolCall->id)) {
                     $functionCall['id'] = $toolCall->id;
                 }

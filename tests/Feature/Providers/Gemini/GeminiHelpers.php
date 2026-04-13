@@ -138,6 +138,28 @@ trait GeminiHelpers
         ];
     }
 
+    /**
+     * @return array{0: array<int, string|null>, 1: array<int, string|null>}
+     */
+    protected function extractToolCallIds(array $contents): array
+    {
+        $functionCallIds = [];
+        $functionResponseIds = [];
+
+        foreach ($contents as $content) {
+            foreach ($content['parts'] ?? [] as $part) {
+                if (isset($part['functionCall'])) {
+                    $functionCallIds[] = $part['functionCall']['id'] ?? null;
+                }
+                if (isset($part['functionResponse'])) {
+                    $functionResponseIds[] = $part['functionResponse']['id'] ?? null;
+                }
+            }
+        }
+
+        return [$functionCallIds, $functionResponseIds];
+    }
+
     protected function geminiChunkWithUsage(array $parts, int $promptTokens, int $candidatesTokens, int $cachedTokens = 0, ?string $modelVersion = null): array
     {
         $chunk = $this->geminiChunk($parts, $modelVersion);
