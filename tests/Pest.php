@@ -9,6 +9,7 @@ use Tests\Feature\Providers\Xai\XaiHelpers;
 use Tests\TestCase;
 
 require __DIR__.'/Expectations.php';
+require __DIR__.'/Helpers.php';
 
 Dotenv\Dotenv::createImmutable(dirname(__DIR__), ['.env', '.env.testing'])->safeLoad();
 
@@ -21,5 +22,6 @@ pest()->use(OpenAiHelpers::class)->group('provider-openai')->in('Feature/Provide
 pest()->use(XaiHelpers::class)->group('provider-xai')->in('Feature/Providers/Xai');
 
 uses()->group('providers')->in('Feature/Providers');
+uses()->group('provider-openrouter')->in('Feature/Providers/OpenRouter');
 
 uses()->group('integration')->in('Integration');
