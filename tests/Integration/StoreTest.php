@@ -120,6 +120,10 @@ describe('file search', function () {
         if (isset($this->fileSearchStore)) {
             $this->fileSearchStore->delete();
         }
+
+        foreach ($this->fileSearchFileIds ?? [] as $fileId) {
+            Files::delete($fileId, provider: $this->provider);
+        }
     });
 
     test('can actually prompt an agent with file search data', function () {
