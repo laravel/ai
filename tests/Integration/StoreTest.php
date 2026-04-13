@@ -93,15 +93,17 @@ describe('file search', function () {
             provider: $this->provider,
         );
 
-        $this->fileSearchStore->add(
+        $this->fileSearchFileIds = [];
+
+        $this->fileSearchFileIds[] = $this->fileSearchStore->add(
             Document::fromPath(__DIR__.'/../Fixtures/laravel-roadmap.txt'),
             metadata: ['company' => 'laravel'],
-        );
+        )->fileId;
 
-        $this->fileSearchStore->add(
+        $this->fileSearchFileIds[] = $this->fileSearchStore->add(
             Document::fromPath(__DIR__.'/../Fixtures/tailwind-roadmap.txt'),
             metadata: ['company' => 'tailwind'],
-        );
+        )->fileId;
 
         $this->fileSearchStore = retry(60, function () {
             $refreshed = $this->fileSearchStore->refresh();
@@ -137,7 +139,6 @@ describe('file search', function () {
             .'Do not use prior knowledge. Respond with exactly one word: "Yes" or "No".';
         $prompt = 'Do any of the documents you have access to mention Valkey?';
 
-        // Tailwind — filter should hide the Laravel roadmap.
         $response = agent(
             instructions: $instructions,
             tools: [
@@ -147,7 +148,6 @@ describe('file search', function () {
 
         expect(trim((string) $response))->toStartWith('No');
 
-        // Laravel — filter should expose the Laravel roadmap.
         $response = agent(
             instructions: $instructions,
             tools: [

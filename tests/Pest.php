@@ -12,7 +12,7 @@ require __DIR__.'/Expectations.php';
 
 Dotenv\Dotenv::createImmutable(dirname(__DIR__), ['.env', '.env.testing'])->safeLoad();
 
-pest()->extend(TestCase::class)->in('Feature', 'Unit', 'Integration');
+pest()->extend(TestCase::class)->in('Feature', 'Integration');
 pest()->use(AnthropicHelpers::class)->group('provider-anthropic')->in('Feature/Providers/Anthropic');
 pest()->use(GeminiHelpers::class)->group('provider-gemini')->in('Feature/Providers/Gemini');
 pest()->use(GroqHelpers::class)->group('provider-groq')->in('Feature/Providers/Groq');
