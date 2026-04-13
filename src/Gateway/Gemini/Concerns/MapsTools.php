@@ -87,14 +87,7 @@ trait MapsTools
      */
     protected function convertNullableTypes(array $schema): array
     {
-        if (is_array($schema['type'] ?? null)) {
-            $types = array_values(array_diff($schema['type'], ['null']));
-
-            if (count($types) === 1 && count($types) < count($schema['type'])) {
-                $schema['type'] = $types[0];
-                $schema['nullable'] = true;
-            }
-        }
+        $schema = $this->convertNullableType($schema);
 
         if (isset($schema['properties'])) {
             $schema['properties'] = Arr::map(
@@ -108,6 +101,30 @@ trait MapsTools
         }
 
         return $schema;
+    }
+
+    /**
+     * Convert a JSON Schema nullable union (e.g. ["string", "null"]) into
+     * OpenAPI-style with a single type and the "nullable" flag.
+     *
+     * @param  array<string, mixed>  $schema
+     * @return array<string, mixed>
+     */
+    protected function convertNullableType(array $schema): array
+    {
+        $type = $schema['type'] ?? null;
+
+        if (! is_array($type) || ! in_array('null', $type, true)) {
+            return $schema;
+        }
+
+        $remaining = array_values(array_diff($type, ['null']));
+
+        if (count($remaining) !== 1) {
+            return $schema;
+        }
+
+        return [...$schema, 'type' => $remaining[0], 'nullable' => true];
     }
 
     /**
