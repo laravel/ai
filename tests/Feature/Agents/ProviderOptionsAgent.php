@@ -46,6 +46,10 @@ class ProviderOptionsAgent implements Agent, HasProviderOptions
                 'frequency_penalty' => 0.5,
                 'presence_penalty' => 0.3,
             ],
+            Lab::Ollama => [
+                'top_k' => 40,
+                'repeat_penalty' => 1.1,
+            ],
             Lab::Gemini => [
                 'thinkingConfig' => [
                     'thinkingBudget' => 10000,

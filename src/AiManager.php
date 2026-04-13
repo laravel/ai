@@ -386,7 +386,6 @@ class AiManager extends MultipleInstanceManager
     public function createOllamaDriver(array $config): OllamaProvider
     {
         return new OllamaProvider(
-            new PrismGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)
         );

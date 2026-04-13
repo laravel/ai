@@ -1,0 +1,128 @@
+<?php
+
+use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Streaming\Events\Error;
+use Laravel\Ai\Streaming\Events\StreamEnd;
+use Laravel\Ai\Streaming\Events\StreamStart;
+use Laravel\Ai\Streaming\Events\TextDelta;
+use Laravel\Ai\Streaming\Events\TextEnd;
+use Laravel\Ai\Streaming\Events\TextStart;
+use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
+use Tests\Feature\Agents\ProviderOptionsWithToolsAgent;
+
+beforeEach(function () {
+    config(['ai.providers.ollama' => [
+        ...config('ai.providers.ollama'),
+        'key' => '',
+    ]]);
+});
+
+test('streaming emits text events', function () {
+    Http::fake([
+        '*' => Http::response(
+            body: $this->ndjsonPayload([
+                $this->chatChunk('Hello'),
+                $this->chatChunk(' world'),
+                $this->chatChunk('', true, 'stop', ['prompt_eval_count' => 10, 'eval_count' => 5]),
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'application/x-ndjson'],
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents();
+
+    expect($events[0])->toBeInstanceOf(StreamStart::class)
+        ->and($events[1])->toBeInstanceOf(TextStart::class)
+        ->and($events[2])->toBeInstanceOf(TextDelta::class)->delta->toBe('Hello')
+        ->and($events[3])->toBeInstanceOf(TextDelta::class)->delta->toBe(' world')
+        ->and($events[count($events) - 2])->toBeInstanceOf(TextEnd::class)
+        ->and($events[count($events) - 1])->toBeInstanceOf(StreamEnd::class);
+});
+
+test('streaming request sets stream to true', function () {
+    Http::fake([
+        '*' => Http::response(
+            body: $this->ndjsonPayload([
+                $this->chatChunk('Hello'),
+                $this->chatChunk('', true, 'stop'),
+            ]),
+            status: 200,
+        ),
+    ]);
+
+    foreach ($this->collectStreamEvents() as $event) {
+        //
+    }
+
+    Http::assertSent(function (\Illuminate\Http\Client\Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return $body['stream'] === true;
+    });
+});
+
+test('streaming handles tool calls', function () {
+    Http::fake([
+        '*' => Http::sequence([
+            Http::response(
+                body: $this->ndjsonPayload([
+                    $this->chatChunkWithToolCalls([
+                        $this->toolCallChunk('call_1', 'FixedNumberGenerator'),
+                    ]),
+                ]),
+                status: 200,
+            ),
+            Http::response(
+                body: $this->ndjsonPayload([
+                    $this->chatChunk('The number is 72019'),
+                    $this->chatChunk('', true, 'stop', ['prompt_eval_count' => 20, 'eval_count' => 10]),
+                ]),
+                status: 200,
+            ),
+        ]),
+    ]);
+
+    $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+    $toolCallEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolCallEvent));
+
+    expect($toolCallEvents)->not->toBeEmpty()
+        ->and($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator')
+        ->and($toolCallEvents[0]->toolCall->id)->toBe('call_1');
+});
+
+test('streaming error event stops stream', function () {
+    Http::fake([
+        '*' => Http::response(
+            body: json_encode(['error' => ['code' => 'model_error', 'message' => 'Model not found']])."\n",
+            status: 200,
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents();
+
+    expect($events)->toHaveCount(1)
+        ->and($events[0])->toBeInstanceOf(Error::class)
+        ->and($events[0]->type)->toBe('model_error')
+        ->and($events[0]->message)->toBe('Model not found');
+});
+
+test('streaming captures usage from final chunk', function () {
+    Http::fake([
+        '*' => Http::response(
+            body: $this->ndjsonPayload([
+                $this->chatChunk('Hello'),
+                $this->chatChunk('', true, 'stop', ['prompt_eval_count' => 42, 'eval_count' => 10]),
+            ]),
+            status: 200,
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents();
+
+    $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+
+    expect($streamEnd->usage->promptTokens)->toBe(42)
+        ->and($streamEnd->usage->completionTokens)->toBe(10);
+});
