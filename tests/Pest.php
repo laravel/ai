@@ -10,7 +10,9 @@ use Tests\TestCase;
 
 require __DIR__.'/Expectations.php';
 
-pest()->extend(TestCase::class)->in('Feature', 'Unit');
+Dotenv\Dotenv::createImmutable(dirname(__DIR__), ['.env', '.env.testing'])->safeLoad();
+
+pest()->extend(TestCase::class)->in('Feature', 'Unit', 'Integration');
 pest()->use(AnthropicHelpers::class)->group('provider-anthropic')->in('Feature/Providers/Anthropic');
 pest()->use(GeminiHelpers::class)->group('provider-gemini')->in('Feature/Providers/Gemini');
 pest()->use(GroqHelpers::class)->group('provider-groq')->in('Feature/Providers/Groq');
@@ -19,3 +21,5 @@ pest()->use(OpenAiHelpers::class)->group('provider-openai')->in('Feature/Provide
 pest()->use(XaiHelpers::class)->group('provider-xai')->in('Feature/Providers/Xai');
 
 uses()->group('providers')->in('Feature/Providers');
+
+uses()->group('integration')->in('Integration');

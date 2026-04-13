@@ -3,6 +3,15 @@
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Support\Facades\Http;
 
+function requiresApiKey(string ...$keys): void
+{
+    foreach ($keys as $key) {
+        if (empty(env($key))) {
+            test()->markTestSkipped("Missing {$key} — skipping external test.");
+        }
+    }
+}
+
 function fakeGroqResponse(string $text = 'Hello'): PromiseInterface
 {
     return Http::response([

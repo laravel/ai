@@ -6,7 +6,7 @@ use Laravel\Ai\Events\EmbeddingsGenerated;
 use Laravel\Ai\Events\GeneratingEmbeddings;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 
-uses()->group('integration');
+beforeEach(fn () => requiresApiKey('OPENAI_API_KEY'));
 
 test('embeddings can be generated', function () {
     Event::fake();

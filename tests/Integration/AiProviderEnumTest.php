@@ -14,7 +14,7 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Transcription;
 use Tests\Feature\Agents\AssistantAgent;
 
-uses()->group('integration');
+beforeEach(fn () => requiresApiKey('GROQ_API_KEY', 'OPENAI_API_KEY'));
 
 test('agent prompt accepts ai provider enum', function () {
     Event::fake();

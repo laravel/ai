@@ -20,9 +20,9 @@ use Tests\Feature\Agents\ToolUsingAgent;
 
 use function Laravel\Ai\agent;
 
-uses()->group('integration');
-
 beforeEach(function () {
+    requiresApiKey('GROQ_API_KEY', 'ANTHROPIC_API_KEY');
+
     $this->provider = 'groq';
     $this->model = 'openai/gpt-oss-20b';
     $this->toolProvider = 'anthropic';

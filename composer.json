@@ -45,6 +45,10 @@
             "Tests\\": "tests/"
         }
     },
+    "scripts": {
+        "test": "pest",
+        "lint": "pint"
+    },
     "config": {
         "sort-packages": true,
         "allow-plugins": {

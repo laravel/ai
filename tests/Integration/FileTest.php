@@ -8,9 +8,9 @@ use Laravel\Ai\Events\FileStored;
 use Laravel\Ai\Events\StoringFile;
 use Laravel\Ai\Files\Document;
 
-uses()->group('integration');
-
 beforeEach(function () {
+    requiresApiKey('ANTHROPIC_API_KEY');
+
     $this->provider = 'anthropic';
 });
 

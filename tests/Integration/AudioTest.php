@@ -7,7 +7,7 @@ use Laravel\Ai\Events\GeneratingAudio;
 use Laravel\Ai\Files;
 use Laravel\Ai\Transcription;
 
-uses()->group('integration');
+beforeEach(fn () => requiresApiKey('OPENAI_API_KEY'));
 
 test('audio can be generated and transcribed', function () {
     Event::fake();
