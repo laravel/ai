@@ -115,7 +115,9 @@ describe('file search', function () {
     });
 
     afterEach(function () {
-        $this->fileSearchStore?->delete();
+        if (isset($this->fileSearchStore)) {
+            $this->fileSearchStore->delete();
+        }
     });
 
     test('can actually prompt an agent with file search data', function () {
