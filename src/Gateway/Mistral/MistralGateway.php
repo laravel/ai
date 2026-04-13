@@ -178,10 +178,9 @@ class MistralGateway implements EmbeddingGateway, TextGateway, TranscriptionGate
                 ->attach('file', $audio->content(), $this->audioFilename($audio), ['Content-Type' => $audio->mimeType()])
                 ->post('audio/transcriptions', array_filter([
                     'model' => $model,
-                    'language' => $language,
+                    'language' => $diarize ? null : $language,
                     'diarize' => $diarize,
                     'timestamp_granularities' => $diarize ? ['segment'] : null,
-                    'response_format' => $diarize ? 'json' : null,
                 ])),
         );
 
