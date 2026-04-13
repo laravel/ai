@@ -84,53 +84,76 @@ test('can add and remove file from store', function () {
     $store->delete();
 });
 
-test('can actually prompt an agent with file search data', function () {
-    // OpenAI: vs_695d788d9afc8191aa87e0ef81bacbda, file-7r66Gzib7ooyhJcxKDyq2q
-    // Gemini: fileSearchStores/laravel-ai-sdk-test-store-ur5230zq9t31, kxv9av2adm6m-wys58b8hnirl
-    $storeId = $this->provider === 'openai'
-        ? 'vs_695d788d9afc8191aa87e0ef81bacbda'
-        : 'fileSearchStores/laravel-ai-sdk-test-store-ur5230zq9t31';
+describe('file search', function () {
+    beforeEach(function () {
+        $this->fileSearchStore = Stores::create(
+            'Laravel AI SDK Integration Test Store',
+            provider: $this->provider,
+        );
 
-    // $store = Stores::get($storeId, provider: $this->provider);
-    // $document = $store->add(Document::fromPath(__DIR__.'/../../tmp/laravel.pdf'), metadata: ['company' => 'laravel']);
-    $response = agent(
-        instructions: 'You will use the file search tool available to you to answer questions about the documents you have access to.',
-        tools: [
-            new FileSearch([$storeId]),
-        ],
-    )->prompt('Is Valkey mentioned in the sixth month roadmap? Can you quote the section where it is mentioned?', provider: $this->provider);
+        $this->fileSearchStore->add(
+            Document::fromPath(__DIR__.'/../Fixtures/laravel-roadmap.txt'),
+            metadata: ['company' => 'laravel'],
+        );
 
-    expect(str_contains((string) $response, 'Yes'))->toBeTrue()
-        ->and(str_contains((string) $response, 'Valkey'))->toBeTrue();
-});
+        $this->fileSearchStore->add(
+            Document::fromPath(__DIR__.'/../Fixtures/tailwind-roadmap.txt'),
+            metadata: ['company' => 'tailwind'],
+        );
 
-test('can actually prompt an agent with filtered search data', function () {
-    // OpenAI: vs_695d788d9afc8191aa87e0ef81bacbda, file-7r66Gzib7ooyhJcxKDyq2q
-    // Gemini: fileSearchStores/laravel-ai-sdk-test-store-ur5230zq9t31, kxv9av2adm6m-wys58b8hnirl
-    $storeId = $this->provider === 'openai'
-        ? 'vs_695d788d9afc8191aa87e0ef81bacbda'
-        : 'fileSearchStores/laravel-ai-sdk-test-store-ur5230zq9t31';
+        $this->fileSearchStore = retry(60, function () {
+            $refreshed = $this->fileSearchStore->refresh();
 
-    // Tailwind...
-    $response = agent(
-        instructions: 'You will use the file search tool available to you to answer questions about the documents you have access to.',
-        tools: [
-            new FileSearch([$storeId], where: ['company' => 'tailwind']),
-        ],
-    )->prompt('Do you see any mention of Valkey in the documents you have access to?', provider: $this->provider);
+            if ($refreshed->fileCounts->completed < 2) {
+                throw new RuntimeException("Store {$refreshed->id} has only {$refreshed->fileCounts->completed} of 2 files indexed.");
+            }
 
-    expect(str_contains(strtolower((string) $response), 'no'))->toBeTrue();
+            return $refreshed;
+        }, 2000);
+    });
 
-    // Laravel...
-    $response = agent(
-        instructions: 'You will use the file search tool available to you to answer questions about the documents you have access to.',
-        tools: [
-            new FileSearch(
-                [$storeId],
-                where: fn ($query) => $query->where('company', 'laravel')
-            ),
-        ],
-    )->prompt('Do you see any mention of Valkey in the documents you have access to?', provider: $this->provider);
+    afterEach(function () {
+        $this->fileSearchStore?->delete();
+    });
 
-    expect(str_contains((string) $response, 'Yes'))->toBeTrue();
+    test('can actually prompt an agent with file search data', function () {
+        $response = agent(
+            instructions: 'You will use the file search tool available to you to answer questions about the documents you have access to.',
+            tools: [
+                new FileSearch([$this->fileSearchStore->id]),
+            ],
+        )->prompt('Is Valkey mentioned in the sixth month roadmap? Can you quote the section where it is mentioned?', provider: $this->provider);
+
+        expect(str_contains((string) $response, 'Yes'))->toBeTrue()
+            ->and(str_contains((string) $response, 'Valkey'))->toBeTrue();
+    });
+
+    test('can actually prompt an agent with filtered search data', function () {
+        $instructions = 'Answer strictly based on the documents returned by the file search tool. '
+            .'Do not use prior knowledge. Respond with exactly one word: "Yes" or "No".';
+        $prompt = 'Do any of the documents you have access to mention Valkey?';
+
+        // Tailwind — filter should hide the Laravel roadmap.
+        $response = agent(
+            instructions: $instructions,
+            tools: [
+                new FileSearch([$this->fileSearchStore->id], where: ['company' => 'tailwind']),
+            ],
+        )->prompt($prompt, provider: $this->provider);
+
+        expect(trim((string) $response))->toStartWith('No');
+
+        // Laravel — filter should expose the Laravel roadmap.
+        $response = agent(
+            instructions: $instructions,
+            tools: [
+                new FileSearch(
+                    [$this->fileSearchStore->id],
+                    where: fn ($query) => $query->where('company', 'laravel')
+                ),
+            ],
+        )->prompt($prompt, provider: $this->provider);
+
+        expect(trim((string) $response))->toStartWith('Yes');
+    });
 });

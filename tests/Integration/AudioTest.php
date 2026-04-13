@@ -28,7 +28,7 @@ test('audio can be generated and transcribed', function () {
 });
 
 test('transcription can be generated from local path', function () {
-    $transcription = Files\Audio::fromPath(__DIR__.'/files/audio.mp3')
+    $transcription = Files\Audio::fromPath(__DIR__.'/../Fixtures/audio.mp3')
         ->transcription()
         ->generate();
 
