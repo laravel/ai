@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Tests\Fixtures\Agents\NullableToolAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
 test('empty schema omits parameters key', function () {
@@ -51,6 +52,22 @@ test('tool parameters exclude additional properties', function () {
         }
 
         return false;
+    });
+});
+
+test('nullable tool parameters use OpenAPI-style nullable format', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    (new NullableToolAgent)->prompt('Test nullable params', provider: 'gemini');
+
+    Http::assertSent(function ($request) {
+        $props = $request->data()['tools'][0]['function_declarations'][0]['parameters']['properties'];
+
+        return $props['name'] === ['type' => 'string']
+            && $props['email'] === ['type' => 'string', 'nullable' => true]
+            && $props['age'] === ['type' => 'integer', 'nullable' => true];
     });
 });
 

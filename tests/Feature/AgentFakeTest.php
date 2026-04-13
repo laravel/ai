@@ -4,12 +4,15 @@ use Laravel\Ai\Ai;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\QueuedAgentPrompt;
+use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
 use PHPUnit\Framework\AssertionFailedError;
 use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\EmptySchemaStructuredAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
 
 describe('prompt responses', function () {
@@ -109,6 +112,18 @@ describe('prompt responses', function () {
 
         $response = (new AssistantAgent)->prompt('Test prompt');
     })->throws(Exception::class);
+
+    test('structured agents with empty schemas fall back to a text response', function () {
+        EmptySchemaStructuredAgent::fake([
+            new TextResponse('Hello', new Usage, new Meta),
+        ]);
+
+        $response = (new EmptySchemaStructuredAgent)->prompt('Anything');
+
+        expect($response)->toBeInstanceOf(AgentResponse::class)
+            ->and($response)->not->toBeInstanceOf(StructuredAgentResponse::class)
+            ->and($response->text)->toEqual('Hello');
+    });
 });
 
 describe('stream responses', function () {
