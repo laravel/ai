@@ -361,10 +361,7 @@ trait ParsesTextResponses
     }
 
     /**
-     * Ensure tool_use and server_tool_use content blocks have their input cast
-     * to object for JSON serialization. Anthropic's API rejects `input: []` on
-     * replay; PHP's json_decode('{}', true) produces [], so an explicit cast
-     * is required before the follow-up request is sent.
+     * Ensure tool_use and server_tool_use content blocks have their input cast to object for JSON serialization.
      */
     protected function ensureToolInputIsObject(array $content): array
     {
