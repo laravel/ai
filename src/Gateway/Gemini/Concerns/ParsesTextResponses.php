@@ -116,7 +116,12 @@ trait ParsesTextResponses
         if (filled($toolResults)) {
             $messages->push(new ToolResultMessage(collect($toolResults)));
 
-            $contents[] = ['role' => 'model', 'parts' => $this->excludeThinkingParts($parts)];
+            $modelPartsWithIds = $this->withToolCallIds(
+                $this->excludeThinkingParts($parts),
+                $mappedToolCalls,
+            );
+
+            $contents[] = ['role' => 'model', 'parts' => $modelPartsWithIds];
             $contents[] = ['role' => 'user', 'parts' => $this->buildFunctionResponseParts($toolResults)];
 
             return $this->continueWithToolResults(

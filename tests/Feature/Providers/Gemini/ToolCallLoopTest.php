@@ -146,6 +146,89 @@ test('parallel function calls preserve unique ids', function () {
         ->toContain('call_2');
 });
 
+test('non-streaming continuation produces matching ids when gemini omits id', function () {
+    // Reproduces laravel/ai#388 on the non-streaming path: when Gemini omits
+    // an id on functionCall, the continuation request must not send an
+    // unmatched fabricated id on functionResponse.
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::sequence([
+            Http::response([
+                'candidates' => [[
+                    'content' => [
+                        'parts' => [[
+                            'functionCall' => [
+                                'name' => 'FixedNumberGenerator',
+                                'args' => (object) [],
+                            ],
+                        ]],
+                        'role' => 'model',
+                    ],
+                    'finishReason' => 'STOP',
+                ]],
+                'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5, 'totalTokenCount' => 15],
+            ]),
+            $this->fakeTextResponse('Done'),
+        ]),
+    ]);
+
+    (new ToolUsingAgent(fixed: true))->prompt('Generate', provider: 'gemini');
+
+    $followUpContents = Http::recorded()[1][0]->data()['contents'];
+
+    $functionCallIds = [];
+    $functionResponseIds = [];
+
+    foreach ($followUpContents as $content) {
+        foreach ($content['parts'] ?? [] as $part) {
+            if (isset($part['functionCall'])) {
+                $functionCallIds[] = $part['functionCall']['id'] ?? null;
+            }
+            if (isset($part['functionResponse'])) {
+                $functionResponseIds[] = $part['functionResponse']['id'] ?? null;
+            }
+        }
+    }
+
+    expect($functionCallIds)->toHaveCount(1)
+        ->and($functionResponseIds)->toHaveCount(1)
+        ->and($functionCallIds[0])->toBe(
+            $functionResponseIds[0],
+            'functionCall.id and functionResponse.id must match — mismatch causes Gemini 400',
+        );
+});
+
+test('non-streaming continuation preserves gemini supplied id verbatim', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::sequence([
+            $this->fakeToolCallResponse('FixedNumberGenerator', 'gemini_call_zzz'),
+            $this->fakeTextResponse('Done'),
+        ]),
+    ]);
+
+    (new ToolUsingAgent(fixed: true))->prompt('Generate', provider: 'gemini');
+
+    $followUpContents = Http::recorded()[1][0]->data()['contents'];
+
+    $functionCallId = null;
+    $functionResponseId = null;
+
+    foreach ($followUpContents as $content) {
+        foreach ($content['parts'] ?? [] as $part) {
+            if (isset($part['functionCall']['id'])) {
+                $functionCallId = $part['functionCall']['id'];
+            }
+            if (isset($part['functionResponse']['id'])) {
+                $functionResponseId = $part['functionResponse']['id'];
+            }
+        }
+    }
+
+    expect($functionCallId)
+        ->toBe('gemini_call_zzz', 'functionCall id must be preserved verbatim per Gemini docs')
+        ->and($functionResponseId)
+        ->toBe('gemini_call_zzz', 'functionResponse id must echo the functionCall id exactly');
+});
+
 test('thinking parts are excluded from tool call continuation', function () {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::sequence([

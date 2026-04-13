@@ -91,6 +91,113 @@ describe('tool calls', function () {
             ->and($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator');
     });
 
+    test('streaming continuation echoes id symmetrically when gemini supplies one', function () {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::sequence([
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->geminiChunkWithUsage([[
+                            'functionCall' => [
+                                'id' => 'gemini_call_xyz',
+                                'name' => 'FixedNumberGenerator',
+                                'args' => (object) [],
+                            ],
+                        ]], 10, 5),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->geminiChunkWithUsage([['text' => 'Done']], 20, 10),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+            ]),
+        ]);
+
+        $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+        $followUpContents = Http::recorded()[1][0]->data()['contents'];
+
+        $functionCallId = null;
+        $functionResponseId = null;
+
+        foreach ($followUpContents as $content) {
+            foreach ($content['parts'] ?? [] as $part) {
+                if (isset($part['functionCall']['id'])) {
+                    $functionCallId = $part['functionCall']['id'];
+                }
+                if (isset($part['functionResponse']['id'])) {
+                    $functionResponseId = $part['functionResponse']['id'];
+                }
+            }
+        }
+
+        expect($functionCallId)
+            ->toBe('gemini_call_xyz', 'functionCall id must be preserved verbatim per Gemini docs')
+            ->and($functionResponseId)
+            ->toBe('gemini_call_xyz', 'functionResponse id must echo the functionCall id exactly');
+    });
+
+    test('streaming continuation produces matching ids when gemini omits id', function () {
+        // Reproduces laravel/ai#388: when Gemini omits an id on functionCall,
+        // the continuation must NOT send an unmatched fabricated id on
+        // functionResponse — Gemini rejects the request with HTTP 400.
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::sequence([
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->geminiChunkWithUsage([[
+                            'functionCall' => [
+                                'name' => 'FixedNumberGenerator',
+                                'args' => (object) [],
+                            ],
+                        ]], 10, 5),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->geminiChunkWithUsage([['text' => 'Done']], 20, 10),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+            ]),
+        ]);
+
+        $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+        $followUpContents = Http::recorded()[1][0]->data()['contents'];
+
+        $functionCallIds = [];
+        $functionResponseIds = [];
+
+        foreach ($followUpContents as $content) {
+            foreach ($content['parts'] ?? [] as $part) {
+                if (isset($part['functionCall'])) {
+                    $functionCallIds[] = $part['functionCall']['id'] ?? null;
+                }
+                if (isset($part['functionResponse'])) {
+                    $functionResponseIds[] = $part['functionResponse']['id'] ?? null;
+                }
+            }
+        }
+
+        expect($functionCallIds)
+            ->toHaveCount(1)
+            ->and($functionResponseIds)
+            ->toHaveCount(1)
+            ->and($functionCallIds[0])
+            ->toBe(
+                $functionResponseIds[0],
+                'functionCall.id and functionResponse.id must match — mismatch causes Gemini 400',
+            );
+    });
+
     test('streaming thinking parts are excluded from tool call continuation', function () {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::sequence([

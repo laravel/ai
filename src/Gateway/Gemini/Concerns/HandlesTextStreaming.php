@@ -267,7 +267,12 @@ trait HandlesTextStreaming
         }
 
         if ($depth + 1 < ($maxSteps ?? round(count($tools) * 1.5))) {
-            $contents[] = ['role' => 'model', 'parts' => $this->excludeThinkingParts($modelParts)];
+            $modelPartsWithIds = $this->withToolCallIds(
+                $this->excludeThinkingParts($modelParts),
+                $mappedToolCalls,
+            );
+
+            $contents[] = ['role' => 'model', 'parts' => $modelPartsWithIds];
             $contents[] = ['role' => 'user', 'parts' => $this->buildFunctionResponseParts($toolResults)];
 
             $body = $this->rebuildContinuationBody($contents, $instructions, $tools, $schema, $options, $provider);
