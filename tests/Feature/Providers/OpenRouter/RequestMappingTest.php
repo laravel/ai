@@ -65,7 +65,7 @@ class RequestMappingTest extends TestCase
             $body = json_decode($request->body(), true);
 
             return data_get($body, 'temperature') === 0.7
-                && data_get($body, 'max_completion_tokens') === 4096;
+                && data_get($body, 'max_tokens') === 4096;
         });
     }
 
@@ -79,7 +79,7 @@ class RequestMappingTest extends TestCase
             $body = json_decode($request->body(), true);
 
             return ! array_key_exists('temperature', $body)
-                && ! array_key_exists('max_completion_tokens', $body);
+                && ! array_key_exists('max_tokens', $body);
         });
     }
 
@@ -172,7 +172,7 @@ class RequestMappingTest extends TestCase
         });
     }
 
-    public function test_request_sends_http_referer_and_x_title_headers_when_configured(): void
+    public function test_request_sends_http_referer_and_x_openrouter_title_headers_when_configured(): void
     {
         config(['ai.providers.openrouter' => [
             ...config('ai.providers.openrouter'),
@@ -187,7 +187,7 @@ class RequestMappingTest extends TestCase
 
         Http::assertSent(function (Request $request) {
             return $request->hasHeader('HTTP-Referer', 'https://example.com')
-                && $request->hasHeader('X-Title', 'My App');
+                && $request->hasHeader('X-OpenRouter-Title', 'My App');
         });
     }
 

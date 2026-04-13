@@ -19,7 +19,7 @@ trait CreatesOpenRouterClient
             ->withToken($provider->providerCredentials()['key'])
             ->withHeaders(array_filter([
                 'HTTP-Referer' => $config['http_referer'] ?? null,
-                'X-Title' => $config['x_title'] ?? null,
+                'X-OpenRouter-Title' => $config['x_title'] ?? null,
             ]))
             ->timeout($timeout ?? 60)
             ->throw();
