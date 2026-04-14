@@ -8,8 +8,8 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
-use Tests\Feature\Agents\ProviderOptionsWithToolsAgent;
 use Tests\Feature\Providers\DeepSeek\DeepSeekHelpers;
+use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 
 uses(DeepSeekHelpers::class);
 

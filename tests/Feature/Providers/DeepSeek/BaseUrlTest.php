@@ -1,6 +1,5 @@
 <?php
 
-use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 
@@ -53,25 +52,4 @@ function deepseekAssertRequestSent(string $method, string $url): void
 {
     Http::assertSent(fn (Request $request) => $request->method() === $method
         && $request->url() === $url);
-}
-
-function fakeDeepSeekResponse(string $text = 'Hello'): PromiseInterface
-{
-    return Http::response([
-        'id' => 'chatcmpl-deepseek-123',
-        'object' => 'chat.completion',
-        'model' => 'deepseek-chat',
-        'choices' => [[
-            'index' => 0,
-            'message' => [
-                'role' => 'assistant',
-                'content' => $text,
-            ],
-            'finish_reason' => 'stop',
-        ]],
-        'usage' => [
-            'prompt_tokens' => 1,
-            'completion_tokens' => 1,
-        ],
-    ]);
 }

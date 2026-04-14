@@ -53,3 +53,24 @@ function fakeOpenAiResponse(string $text = 'Hello'): PromiseInterface
         ],
     ]);
 }
+
+function fakeDeepSeekResponse(string $text = 'Hello'): PromiseInterface
+{
+    return Http::response([
+        'id' => 'chatcmpl-deepseek-123',
+        'object' => 'chat.completion',
+        'model' => 'deepseek-chat',
+        'choices' => [[
+            'index' => 0,
+            'message' => [
+                'role' => 'assistant',
+                'content' => $text,
+            ],
+            'finish_reason' => 'stop',
+        ]],
+        'usage' => [
+            'prompt_tokens' => 1,
+            'completion_tokens' => 1,
+        ],
+    ]);
+}
