@@ -10,7 +10,7 @@ on:
 jobs:
   tests:
     name: PHP ${{ matrix.php }} - Laravel ${{ matrix.laravel }}
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     strategy:
       fail-fast: true
@@ -23,7 +23,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
