@@ -295,7 +295,6 @@ class AiManager extends MultipleInstanceManager
     public function createAzureDriver(array $config): AzureOpenAiProvider
     {
         return new AzureOpenAiProvider(
-            new PrismGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)
         );

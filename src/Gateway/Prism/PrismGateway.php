@@ -381,7 +381,7 @@ class PrismGateway implements Gateway
     protected static function toPrismProvider(Provider $provider): PrismProvider
     {
         return match ($provider->driver()) {
-            'azure' => PrismProvider::OpenAI,
+            'deepseek' => PrismProvider::DeepSeek,
             'gemini' => PrismProvider::Gemini,
             'mistral' => PrismProvider::Mistral,
             'ollama' => PrismProvider::Ollama,
