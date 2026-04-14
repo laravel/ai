@@ -200,7 +200,7 @@ trait HandlesTextStreaming
 
         yield (new StreamEnd(
             $this->generateEventId(),
-            'stop',
+            $this->extractFinishReason(['finish_reason' => $finishReason ?? ''])->value,
             $usage ?? new Usage(0, 0),
             time(),
         ))->withInvocationId($invocationId);

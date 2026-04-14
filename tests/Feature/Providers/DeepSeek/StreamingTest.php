@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
@@ -117,3 +118,27 @@ test('streaming captures usage from final chunk', function () {
     expect($streamEnd->usage->promptTokens)->toBe(42)
         ->and($streamEnd->usage->completionTokens)->toBe(10);
 });
+
+test('streaming finish reason maps correctly', function (string $apiReason, $expected) {
+    Http::fake([
+        'api.deepseek.com/*' => Http::response(
+            body: $this->ssePayload([
+                $this->chatChunk(['role' => 'assistant', 'content' => 'Hello']),
+                $this->chatChunkFinish($apiReason, ['prompt_tokens' => 10, 'completion_tokens' => 5]),
+                '[DONE]',
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents();
+
+    $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+
+    expect($streamEnd->reason)->toBe($expected->value);
+})->with([
+    'stop maps to Stop' => ['stop', FinishReason::Stop],
+    'length maps to Length' => ['length', FinishReason::Length],
+    'content_filter maps to ContentFilter' => ['content_filter', FinishReason::ContentFilter],
+]);

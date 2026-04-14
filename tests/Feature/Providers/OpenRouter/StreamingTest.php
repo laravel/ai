@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
@@ -129,3 +130,25 @@ test('streaming captures usage from final chunk', function () {
         ->and($streamEnd[0]->usage->promptTokens)->toBe(15)
         ->and($streamEnd[0]->usage->completionTokens)->toBe(3);
 });
+
+test('streaming finish reason maps correctly', function (string $apiReason, $expected) {
+    Http::fake([
+        '*' => Http::response($this->ssePayload([
+            ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => ['role' => 'assistant', 'content' => 'Hello'], 'finish_reason' => null]]],
+            ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => [], 'finish_reason' => $apiReason]], 'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5]],
+        ])),
+    ]);
+
+    $events = [];
+    foreach (agent()->stream('Hi', provider: 'openrouter') as $event) {
+        $events[] = $event;
+    }
+
+    $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+
+    expect($streamEnd->reason)->toBe($expected->value);
+})->with([
+    'stop maps to Stop' => ['stop', FinishReason::Stop],
+    'length maps to Length' => ['length', FinishReason::Length],
+    'content_filter maps to ContentFilter' => ['content_filter', FinishReason::ContentFilter],
+]);

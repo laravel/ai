@@ -46,6 +46,7 @@ trait HandlesTextStreaming
         $currentText = '';
         $pendingToolCalls = [];
         $usage = null;
+        $lastData = [];
 
         foreach ($this->parseNdjsonStream($streamBody) as $data) {
             if (isset($data['error'])) {
@@ -144,6 +145,8 @@ trait HandlesTextStreaming
             }
 
             if ($data['done'] ?? false) {
+                $lastData = $data;
+
                 break;
             }
         }
@@ -203,7 +206,7 @@ trait HandlesTextStreaming
 
         yield (new StreamEnd(
             $this->generateEventId(),
-            'stop',
+            $this->extractFinishReason($lastData)->value,
             $usage ?? new Usage(0, 0),
             time(),
         ))->withInvocationId($invocationId);

@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
@@ -260,3 +261,25 @@ test('streaming captures usage from final chunk', function () {
     expect($streamEnd->usage->promptTokens)->toBe(42)
         ->and($streamEnd->usage->completionTokens)->toBe(10);
 });
+
+test('streaming finish reason maps correctly', function (string $doneReason, $expected) {
+    Http::fake([
+        '*' => Http::response(
+            body: $this->ndjsonPayload([
+                $this->chatChunk('Hello'),
+                $this->chatChunk('', true, $doneReason, ['prompt_eval_count' => 10, 'eval_count' => 5]),
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'application/x-ndjson'],
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents();
+
+    $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+
+    expect($streamEnd->reason)->toBe($expected->value);
+})->with([
+    'stop maps to Stop' => ['stop', FinishReason::Stop],
+    'length maps to Length' => ['length', FinishReason::Length],
+]);
