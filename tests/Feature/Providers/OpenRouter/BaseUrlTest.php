@@ -5,10 +5,12 @@ use Illuminate\Support\Facades\Http;
 
 use function Laravel\Ai\agent;
 
-test('openrouter text requests use the configured base url', function () {
-    $customUrl = 'http://localhost:1234/v1';
+beforeEach(function () {
+    $this->customUrl = 'http://localhost:1234/v1';
+});
 
-    configureOpenRouterProvider($customUrl);
+test('openrouter text requests use the configured base url', function () {
+    configureOpenRouterProvider($this->customUrl);
 
     Http::fake(['*' => fakeOpenRouterResponse('Hello from local model')]);
 
@@ -17,7 +19,7 @@ test('openrouter text requests use the configured base url', function () {
     expect($response->text)->toBe('Hello from local model');
 
     Http::assertSentCount(1);
-    openRouterAssertRequestSent('POST', "{$customUrl}/chat/completions");
+    openRouterAssertRequestSent('POST', "{$this->customUrl}/chat/completions");
 });
 
 test('openrouter requests fall back to the default base url', function () {

@@ -1,6 +1,5 @@
 <?php
 
-use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\AssistantAgent;
@@ -45,7 +44,7 @@ test('system instructions are sent as system role message', function () {
 test('tool result follow up maps assistant and tool result messages', function () {
     Http::fake([
         '*' => Http::sequence([
-            fakeOpenRouterMessageToolCallResponse(),
+            fakeOpenRouterToolCallResponse(),
             fakeOpenRouterResponse('The number is 72019'),
         ]),
     ]);
@@ -65,32 +64,3 @@ test('tool result follow up maps assistant and tool result messages', function (
     expect($toolMsg)->not->toBeNull()
         ->and($toolMsg['tool_call_id'])->toBe('call_123');
 });
-
-function fakeOpenRouterMessageToolCallResponse(): PromiseInterface
-{
-    return Http::response([
-        'id' => 'chatcmpl-tool-123',
-        'object' => 'chat.completion',
-        'model' => 'anthropic/claude-sonnet-4.6',
-        'choices' => [[
-            'index' => 0,
-            'message' => [
-                'role' => 'assistant',
-                'content' => null,
-                'tool_calls' => [[
-                    'id' => 'call_123',
-                    'type' => 'function',
-                    'function' => [
-                        'name' => 'FixedNumberGenerator',
-                        'arguments' => '{}',
-                    ],
-                ]],
-            ],
-            'finish_reason' => 'tool_calls',
-        ]],
-        'usage' => [
-            'prompt_tokens' => 10,
-            'completion_tokens' => 5,
-        ],
-    ]);
-}
