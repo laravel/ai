@@ -1,6 +1,6 @@
 <?php
 
-use Tests\Feature\Agents\OllamaAgent;
+use Tests\Fixtures\Agents\OllamaAgent;
 
 test('ollama agent can be faked', function () {
     OllamaAgent::fake(['Test response']);

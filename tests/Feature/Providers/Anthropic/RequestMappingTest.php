@@ -1,10 +1,10 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
-use Tests\Feature\Agents\AssistantAgent;
-use Tests\Feature\Agents\StructuredAgent;
-use Tests\Feature\Agents\StructuredWithThinkingAgent;
-use Tests\Feature\Agents\ToolUsingAgent;
+use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\StructuredAgent;
+use Tests\Fixtures\Agents\StructuredWithThinkingAgent;
+use Tests\Fixtures\Agents\ToolUsingAgent;
 
 describe('request structure', function () {
     test('request includes model and messages', function () {

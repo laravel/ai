@@ -2,7 +2,7 @@
 
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Support\Facades\Http;
-use Tests\Feature\Agents\ToolUsingAgent;
+use Tests\Fixtures\Agents\ToolUsingAgent;
 
 beforeEach(function () {
     config(['ai.providers.ollama' => [

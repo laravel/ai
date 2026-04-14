@@ -2,7 +2,7 @@
 
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Providers\Tools\FileSearch;
-use Tests\Feature\Agents\ToolUsingAgent;
+use Tests\Fixtures\Agents\ToolUsingAgent;
 
 use function Laravel\Ai\agent;
 

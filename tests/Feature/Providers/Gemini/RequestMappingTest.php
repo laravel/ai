@@ -2,11 +2,11 @@
 
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Responses\Data\FinishReason;
-use Tests\Feature\Agents\AssistantAgent;
-use Tests\Feature\Agents\NestedStructuredAgent;
-use Tests\Feature\Agents\NullableStructuredAgent;
-use Tests\Feature\Agents\StructuredAgent;
-use Tests\Feature\Agents\ToolUsingAgent;
+use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\NestedStructuredAgent;
+use Tests\Fixtures\Agents\NullableStructuredAgent;
+use Tests\Fixtures\Agents\StructuredAgent;
+use Tests\Fixtures\Agents\ToolUsingAgent;
 
 describe('request structure', function () {
     test('request includes model in url and contents', function () {

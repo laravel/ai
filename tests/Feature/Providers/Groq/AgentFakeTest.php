@@ -1,6 +1,6 @@
 <?php
 
-use Tests\Feature\Agents\GroqAgent;
+use Tests\Fixtures\Agents\GroqAgent;
 
 test('groq agent can be faked', function () {
     GroqAgent::fake(['Test response']);

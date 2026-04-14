@@ -4,7 +4,7 @@ namespace Tests\Feature\Providers\Gemini;
 
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Support\Facades\Http;
-use Tests\Feature\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\AssistantAgent;
 
 trait GeminiHelpers
 {

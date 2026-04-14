@@ -1,7 +1,7 @@
 <?php
 
-use Tests\Feature\Agents\AssistantAgent;
-use Tests\Feature\Agents\SecondaryAssistantAgent;
+use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\SecondaryAssistantAgent;
 
 beforeEach(function () {
     requiresApiKey('GROQ_API_KEY');

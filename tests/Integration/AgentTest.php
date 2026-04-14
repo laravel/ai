@@ -13,10 +13,10 @@ use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Streaming\Events\TextDelta;
-use Tests\Feature\Agents\AssistantAgent;
-use Tests\Feature\Agents\ConversationalAgent;
-use Tests\Feature\Agents\StructuredAgent;
-use Tests\Feature\Agents\ToolUsingAgent;
+use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\ConversationalAgent;
+use Tests\Fixtures\Agents\StructuredAgent;
+use Tests\Fixtures\Agents\ToolUsingAgent;
 
 use function Laravel\Ai\agent;
 

@@ -18,7 +18,7 @@ use Laravel\Ai\Providers\GeminiProvider;
 use Laravel\Ai\Providers\GroqProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Providers\Provider;
-use Tests\Feature\Tools\FixedNumberGenerator;
+use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 #[Timeout(300)]
 class TimeoutToolAgent implements Agent, HasTools

@@ -1,13 +1,13 @@
 <?php
 
-namespace Tests\Feature\Agents;
+namespace Tests\Fixtures\Agents;
 
 use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Promptable;
 
-#[Provider('gemini')]
-class GeminiAgent implements Agent
+#[Provider('openai')]
+class OpenAiAgent implements Agent
 {
     use Promptable;
 

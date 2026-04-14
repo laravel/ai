@@ -2,8 +2,8 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
-use Tests\Feature\Agents\ProviderOptionsAgent;
-use Tests\Feature\Agents\ProviderOptionsWithToolsAgent;
+use Tests\Fixtures\Agents\ProviderOptionsAgent;
+use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 
 use function Laravel\Ai\agent;
 

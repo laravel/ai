@@ -11,7 +11,7 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
-use Tests\Feature\Agents\ProviderOptionsWithToolsAgent;
+use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 
 beforeEach(function () {
     config(['ai.providers.openai' => [

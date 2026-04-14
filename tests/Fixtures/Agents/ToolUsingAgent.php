@@ -1,14 +1,14 @@
 <?php
 
-namespace Tests\Feature\Agents;
+namespace Tests\Fixtures\Agents;
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Promptable;
-use Tests\Feature\Tools\FixedNumberGenerator;
-use Tests\Feature\Tools\RandomNumberGenerator;
+use Tests\Fixtures\Tools\FixedNumberGenerator;
+use Tests\Fixtures\Tools\RandomNumberGenerator;
 
 class ToolUsingAgent implements Agent, HasStructuredOutput, HasTools
 {
