@@ -7,7 +7,7 @@ use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\RerankingGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\RerankingProvider;
-use Laravel\Ai\Gateway\VoyageAiGateway;
+use Laravel\Ai\Gateway\VoyageAi\VoyageAiGateway;
 
 class VoyageAiProvider extends Provider implements EmbeddingProvider, RerankingProvider
 {

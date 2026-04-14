@@ -122,6 +122,7 @@ return [
         'voyageai' => [
             'driver' => 'voyageai',
             'key' => env('VOYAGEAI_API_KEY'),
+            'url' => env('VOYAGEAI_URL', 'https://api.voyageai.com/v1'),
         ],
 
         'xai' => [

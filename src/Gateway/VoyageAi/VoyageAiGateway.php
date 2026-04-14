@@ -1,10 +1,8 @@
 <?php
 
-namespace Laravel\Ai\Gateway;
+namespace Laravel\Ai\Gateway\VoyageAi;
 
-use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\RerankingGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
@@ -16,6 +14,8 @@ use Laravel\Ai\Responses\RerankingResponse;
 
 class VoyageAiGateway implements EmbeddingGateway, RerankingGateway
 {
+    use Concerns\CreatesVoyageAiClient;
+
     /**
      * Generate embedding vectors representing the given inputs.
      *
@@ -68,19 +68,5 @@ class VoyageAiGateway implements EmbeddingGateway, RerankingGateway
             ))->all(),
             new Meta($provider->name(), $model),
         );
-    }
-
-    /**
-     * Get an HTTP client for the Voyage API.
-     */
-    protected function client(EmbeddingProvider|RerankingProvider $provider, int $timeout = 30): PendingRequest
-    {
-        return Http::baseUrl('https://api.voyageai.com/v1')
-            ->withHeaders([
-                'Authorization' => 'Bearer '.$provider->providerCredentials()['key'],
-                'Content-Type' => 'application/json',
-            ])
-            ->timeout($timeout)
-            ->throw();
     }
 }
