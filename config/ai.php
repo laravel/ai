@@ -127,6 +127,14 @@ return [
             'url' => env('VOYAGEAI_URL', 'https://api.voyageai.com/v1'),
         ],
 
+        'workersai' => [
+            'driver' => 'workersai',
+            'key' => env('CLOUDFLARE_AI_API_KEY'),
+            'account_id' => env('CLOUDFLARE_ACCOUNT_ID'),
+            'gateway' => env('WORKERSAI_GATEWAY'),
+            'url' => env('WORKERSAI_URL'),
+        ],
+
         'xai' => [
             'driver' => 'xai',
             'key' => env('XAI_API_KEY'),

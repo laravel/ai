@@ -32,6 +32,7 @@ use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Providers\OpenRouterProvider;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\VoyageAiProvider;
+use Laravel\Ai\Providers\WorkersAiProvider;
 use Laravel\Ai\Providers\XaiProvider;
 use LogicException;
 
@@ -421,6 +422,17 @@ class AiManager extends MultipleInstanceManager
         return new VoyageAiProvider(
             $config,
             $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create a Workers AI powered instance.
+     */
+    public function createWorkersaiDriver(array $config): WorkersAiProvider
+    {
+        return new WorkersAiProvider(
+            $config,
+            $this->app->make(Dispatcher::class),
         );
     }
 

@@ -48,6 +48,61 @@ function fakeOllamaResponse(string $text = 'Hello'): PromiseInterface
     ]);
 }
 
+function fakeWorkersAiResponse(string $text = 'Hello'): PromiseInterface
+{
+    return Http::response(workersAiTextResponse($text));
+}
+
+function workersAiTextResponse(string $content = 'Hello from Workers AI'): array
+{
+    return [
+        'id' => 'chatcmpl-123',
+        'object' => 'chat.completion',
+        'model' => '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+        'choices' => [[
+            'index' => 0,
+            'message' => [
+                'role' => 'assistant',
+                'content' => $content,
+            ],
+            'finish_reason' => 'stop',
+        ]],
+        'usage' => [
+            'prompt_tokens' => 10,
+            'completion_tokens' => 5,
+        ],
+    ];
+}
+
+function fakeWorkersAiToolCallResponse(): array
+{
+    return [
+        'id' => 'chatcmpl-tool-123',
+        'object' => 'chat.completion',
+        'model' => '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+        'choices' => [[
+            'index' => 0,
+            'message' => [
+                'role' => 'assistant',
+                'content' => null,
+                'tool_calls' => [[
+                    'id' => 'call_123',
+                    'type' => 'function',
+                    'function' => [
+                        'name' => 'FixedNumberGenerator',
+                        'arguments' => '{}',
+                    ],
+                ]],
+            ],
+            'finish_reason' => 'tool_calls',
+        ]],
+        'usage' => [
+            'prompt_tokens' => 20,
+            'completion_tokens' => 10,
+        ],
+    ];
+}
+
 function fakeOpenAiResponse(string $text = 'Hello'): PromiseInterface
 {
     return Http::response([
