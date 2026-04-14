@@ -125,22 +125,28 @@ trait GeminiHelpers
         return implode("\n\n", $lines)."\n\n";
     }
 
-    protected function geminiChunk(array $parts, ?string $modelVersion = null): array
+    protected function geminiChunk(array $parts, ?string $modelVersion = null, ?string $finishReason = null): array
     {
+        $candidate = [
+            'content' => [
+                'parts' => $parts,
+                'role' => 'model',
+            ],
+        ];
+
+        if ($finishReason !== null) {
+            $candidate['finishReason'] = $finishReason;
+        }
+
         return [
-            'candidates' => [[
-                'content' => [
-                    'parts' => $parts,
-                    'role' => 'model',
-                ],
-            ]],
+            'candidates' => [$candidate],
             'modelVersion' => $modelVersion ?? 'gemini-3-flash-preview',
         ];
     }
 
-    protected function geminiChunkWithUsage(array $parts, int $promptTokens, int $candidatesTokens, int $cachedTokens = 0, ?string $modelVersion = null): array
+    protected function geminiChunkWithUsage(array $parts, int $promptTokens, int $candidatesTokens, int $cachedTokens = 0, ?string $modelVersion = null, string $finishReason = 'STOP'): array
     {
-        $chunk = $this->geminiChunk($parts, $modelVersion);
+        $chunk = $this->geminiChunk($parts, $modelVersion, $finishReason);
 
         $chunk['usageMetadata'] = array_filter([
             'promptTokenCount' => $promptTokens,

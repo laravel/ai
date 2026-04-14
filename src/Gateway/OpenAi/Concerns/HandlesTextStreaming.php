@@ -51,6 +51,7 @@ trait HandlesTextStreaming
         $pendingToolCalls = [];
         $reasoningItems = [];
         $usage = null;
+        $responseData = [];
 
         foreach ($this->parseServerSentEvents($streamBody) as $data) {
             $type = $data['type'] ?? '';
@@ -266,6 +267,7 @@ trait HandlesTextStreaming
 
             if ($type === 'response.completed') {
                 $response = $data['response'] ?? [];
+                $responseData = $response;
                 $responseId = $response['id'] ?? $responseId;
                 $responseUsage = $response['usage'] ?? [];
 
@@ -301,7 +303,7 @@ trait HandlesTextStreaming
 
         yield (new StreamEnd(
             $this->generateEventId(),
-            'stop',
+            $this->extractFinishReason($responseData)->value,
             $usage ?? new Usage(0, 0),
             time(),
         ))->withInvocationId($invocationId);
