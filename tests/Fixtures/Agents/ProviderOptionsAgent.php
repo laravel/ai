@@ -49,6 +49,7 @@ class ProviderOptionsAgent implements Agent, HasProviderOptions
             Lab::Ollama => [
                 'top_k' => 40,
                 'repeat_penalty' => 1.1,
+            ],
             Lab::OpenRouter => [
                 'frequency_penalty' => 0.5,
                 'presence_penalty' => 0.3,
