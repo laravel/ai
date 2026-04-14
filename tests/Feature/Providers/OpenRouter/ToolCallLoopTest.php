@@ -1,13 +1,12 @@
 <?php
 
-use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Promptable;
-use Tests\Feature\Tools\FixedNumberGenerator;
+use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 use function Laravel\Ai\agent;
 

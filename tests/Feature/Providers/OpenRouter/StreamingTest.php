@@ -9,7 +9,7 @@ use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
-use Tests\Feature\Tools\FixedNumberGenerator;
+use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 use function Laravel\Ai\agent;
 
@@ -22,7 +22,7 @@ beforeEach(function () {
 
 test('streaming emits text events', function () {
     Http::fake([
-        '*' => Http::response(openRouterSsePayload([
+        '*' => Http::response($this->ssePayload([
             ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => ['role' => 'assistant', 'content' => 'Hello'], 'finish_reason' => null]]],
             ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => ['content' => ' world'], 'finish_reason' => null]]],
             ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => [], 'finish_reason' => 'stop']], 'usage' => ['prompt_tokens' => 5, 'completion_tokens' => 2]],
@@ -50,12 +50,12 @@ test('streaming emits text events', function () {
 test('streaming handles tool calls', function () {
     Http::fake([
         '*' => Http::sequence([
-            Http::response(openRouterSsePayload([
+            Http::response($this->ssePayload([
                 ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => ['role' => 'assistant', 'tool_calls' => [['index' => 0, 'id' => 'call_123', 'type' => 'function', 'function' => ['name' => 'FixedNumberGenerator', 'arguments' => '']]]], 'finish_reason' => null]]],
                 ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => ['tool_calls' => [['index' => 0, 'function' => ['arguments' => '{}']]]], 'finish_reason' => null]]],
                 ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => [], 'finish_reason' => 'tool_calls']], 'usage' => ['prompt_tokens' => 5, 'completion_tokens' => 10]],
             ])),
-            Http::response(openRouterSsePayload([
+            Http::response($this->ssePayload([
                 ['id' => 'chatcmpl-2', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => ['role' => 'assistant', 'content' => 'The number is 72019'], 'finish_reason' => null]]],
                 ['id' => 'chatcmpl-2', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => [], 'finish_reason' => 'stop']], 'usage' => ['prompt_tokens' => 20, 'completion_tokens' => 5]],
             ])),
@@ -77,7 +77,7 @@ test('streaming handles tool calls', function () {
 
 test('streaming error event stops stream', function () {
     Http::fake([
-        '*' => Http::response(openRouterSsePayload([
+        '*' => Http::response($this->ssePayload([
             ['error' => ['code' => 'server_error', 'message' => 'Internal error']],
         ])),
     ]);
@@ -94,7 +94,7 @@ test('streaming error event stops stream', function () {
 
 test('streaming error finish reason emits error event', function () {
     Http::fake([
-        '*' => Http::response(openRouterSsePayload([
+        '*' => Http::response($this->ssePayload([
             ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => ['role' => 'assistant', 'content' => 'Partial'], 'finish_reason' => null]]],
             ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => [], 'finish_reason' => 'error', 'error' => ['code' => 502, 'message' => 'Provider returned error']]]],
         ])),
@@ -112,7 +112,7 @@ test('streaming error finish reason emits error event', function () {
 
 test('streaming captures usage from final chunk', function () {
     Http::fake([
-        '*' => Http::response(openRouterSsePayload([
+        '*' => Http::response($this->ssePayload([
             ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => ['role' => 'assistant', 'content' => 'Hi'], 'finish_reason' => null]]],
             ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => [], 'finish_reason' => 'stop']]],
             ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [], 'usage' => ['prompt_tokens' => 15, 'completion_tokens' => 3]],
@@ -129,16 +129,3 @@ test('streaming captures usage from final chunk', function () {
         ->and($streamEnd[0]->usage->promptTokens)->toBe(15)
         ->and($streamEnd[0]->usage->completionTokens)->toBe(3);
 });
-
-function openRouterSsePayload(array $events): string
-{
-    $lines = [];
-
-    foreach ($events as $event) {
-        $lines[] = 'data: '.json_encode($event);
-    }
-
-    $lines[] = 'data: [DONE]';
-
-    return implode("\n\n", $lines)."\n\n";
-}

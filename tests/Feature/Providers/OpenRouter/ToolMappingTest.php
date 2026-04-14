@@ -3,8 +3,8 @@
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Providers\Tools\WebSearch;
-use Tests\Feature\Tools\FixedNumberGenerator;
-use Tests\Feature\Tools\RandomNumberGenerator;
+use Tests\Fixtures\Tools\FixedNumberGenerator;
+use Tests\Fixtures\Tools\RandomNumberGenerator;
 
 use function Laravel\Ai\agent;
 
@@ -71,5 +71,5 @@ test('provider tools throw runtime exception', function () {
     Http::fake(['*' => fakeOpenRouterResponse('done')]);
 
     expect(fn () => agent(tools: [new WebSearch])->prompt('Search', provider: 'openrouter'))
-        ->toThrow(\RuntimeException::class, 'OpenRouter does not support');
+        ->toThrow(RuntimeException::class, 'OpenRouter does not support');
 });

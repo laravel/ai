@@ -2,10 +2,10 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
-use Tests\Feature\Agents\AssistantAgent;
-use Tests\Feature\Agents\AttributeAgent;
-use Tests\Feature\Agents\StructuredAgent;
-use Tests\Feature\Tools\RandomNumberGenerator;
+use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\AttributeAgent;
+use Tests\Fixtures\Agents\StructuredAgent;
+use Tests\Fixtures\Tools\RandomNumberGenerator;
 
 use function Laravel\Ai\agent;
 

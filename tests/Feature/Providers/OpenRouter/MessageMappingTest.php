@@ -3,8 +3,8 @@
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
-use Tests\Feature\Agents\AssistantAgent;
-use Tests\Feature\Tools\FixedNumberGenerator;
+use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 use function Laravel\Ai\agent;
 
