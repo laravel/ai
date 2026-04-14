@@ -73,6 +73,7 @@ return [
         'deepseek' => [
             'driver' => 'deepseek',
             'key' => env('DEEPSEEK_API_KEY'),
+            'url' => env('DEEPSEEK_URL', 'https://api.deepseek.com'),
         ],
 
         'eleven' => [
