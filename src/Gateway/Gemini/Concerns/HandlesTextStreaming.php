@@ -50,6 +50,7 @@ trait HandlesTextStreaming
         $pendingToolCalls = [];
         $modelParts = [];
         $usage = null;
+        $data = [];
 
         foreach ($this->parseServerSentEvents($streamBody) as $data) {
             if (isset($data['error'])) {
@@ -201,7 +202,7 @@ trait HandlesTextStreaming
 
         yield (new StreamEnd(
             $this->generateEventId(),
-            'stop',
+            $this->extractFinishReason($data, $pendingToolCalls)->value,
             $usage ?? new Usage(0, 0),
             time(),
         ))->withInvocationId($invocationId);
