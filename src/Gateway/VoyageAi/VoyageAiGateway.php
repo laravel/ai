@@ -1,18 +1,46 @@
 <?php
 
-namespace Laravel\Ai\Gateway;
+namespace Laravel\Ai\Gateway\VoyageAi;
 
-use Illuminate\Http\Client\PendingRequest;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Collection;
+use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\RerankingGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\RerankingProvider;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\RankedDocument;
+use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\RerankingResponse;
 
-class VoyageAiGateway implements RerankingGateway
+class VoyageAiGateway implements EmbeddingGateway, RerankingGateway
 {
+    use Concerns\CreatesVoyageAiClient;
+
+    /**
+     * Generate embedding vectors representing the given inputs.
+     *
+     * @param  string[]  $inputs
+     */
+    public function generateEmbeddings(
+        EmbeddingProvider $provider,
+        string $model,
+        array $inputs,
+        int $dimensions,
+        int $timeout = 30,
+    ): EmbeddingsResponse {
+        $data = $this->client($provider, $timeout)->post('/embeddings', [
+            'model' => $model,
+            'input' => $inputs,
+            'output_dimension' => $dimensions,
+        ])->json();
+
+        return new EmbeddingsResponse(
+            (new Collection($data['data']))->pluck('embedding')->all(),
+            $data['usage']['total_tokens'] ?? 0,
+            new Meta($provider->name(), $model),
+        );
+    }
+
     /**
      * Rerank the given documents based on their relevance to the query.
      *
@@ -40,18 +68,5 @@ class VoyageAiGateway implements RerankingGateway
             ))->all(),
             new Meta($provider->name(), $model),
         );
-    }
-
-    /**
-     * Get an HTTP client for the Voyage API.
-     */
-    protected function client(EmbeddingProvider|RerankingProvider $provider): PendingRequest
-    {
-        return Http::baseUrl('https://api.voyageai.com/v1')
-            ->withHeaders([
-                'Authorization' => 'Bearer '.$provider->providerCredentials()['key'],
-                'Content-Type' => 'application/json',
-            ])
-            ->throw();
     }
 }

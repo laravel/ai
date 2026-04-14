@@ -51,6 +51,9 @@ class ProviderOptionsWithToolsAgent implements Agent, HasProviderOptions, HasToo
             Lab::Mistral => [
                 'frequency_penalty' => 0.5,
             ],
+            Lab::OpenRouter => [
+                'frequency_penalty' => 0.5,
+            ],
             Lab::Gemini => [
                 'thinkingConfig' => [
                     'thinkingBudget' => 10000,

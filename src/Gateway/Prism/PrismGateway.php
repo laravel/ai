@@ -357,7 +357,6 @@ class PrismGateway implements Gateway
             'ollama' => ['dimensions' => $dimensions],
             'openai' => ['dimensions' => $dimensions],
             'openrouter' => ['dimensions' => $dimensions],
-            'voyageai' => ['outputDimension' => $dimensions],
             default => [],
         });
 
@@ -388,7 +387,6 @@ class PrismGateway implements Gateway
             'ollama' => PrismProvider::Ollama,
             'openai' => PrismProvider::OpenAI,
             'openrouter' => PrismProvider::OpenRouter,
-            'voyageai' => PrismProvider::VoyageAI,
             default => throw new InvalidArgumentException('Gateway does not support provider ['.$provider.'].'),
         };
     }

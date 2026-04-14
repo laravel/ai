@@ -6,26 +6,28 @@ use Laravel\Ai\Events\EmbeddingsGenerated;
 use Laravel\Ai\Events\GeneratingEmbeddings;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 
-beforeEach(fn () => requiresApiKey('OPENAI_API_KEY'));
+test('embeddings can be generated', function (string $provider, string $apiKey, int $dimensions) {
+    requiresApiKey($apiKey);
 
-test('embeddings can be generated', function () {
     Event::fake();
 
-    $response = Embeddings::for(['I love to watch Star Trek.'])->generate();
+    $response = Embeddings::for(['I love to watch Star Trek.'])->generate(provider: $provider);
 
     expect($response)->toBeInstanceOf(EmbeddingsResponse::class)
-        ->and($response->embeddings[0])->toHaveCount(1536)
-        ->and($response->meta->provider)->toEqual('openai');
+        ->and($response->embeddings[0])->toHaveCount($dimensions)
+        ->and($response->meta->provider)->toEqual($provider);
 
     Event::assertDispatched(GeneratingEmbeddings::class, fn (GeneratingEmbeddings $event) => $event->prompt->timeout === 30);
     Event::assertDispatched(EmbeddingsGenerated::class, fn (EmbeddingsGenerated $event) => $event->prompt->timeout === 30);
-});
+})->with('embedding-providers');
 
-test('embeddings can be generated with custom dimensions', function () {
+test('embeddings can be generated with custom dimensions', function (string $provider, string $apiKey) {
+    requiresApiKey($apiKey);
+
     $response = Embeddings::for(['test text'])
         ->dimensions(256)
-        ->generate();
+        ->generate(provider: $provider);
 
     expect($response)->toBeInstanceOf(EmbeddingsResponse::class)
         ->and($response->embeddings[0])->toHaveCount(256);
-});
+})->with('embedding-providers');
