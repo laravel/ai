@@ -4,6 +4,7 @@ use Tests\Feature\Providers\Anthropic\AnthropicHelpers;
 use Tests\Feature\Providers\Gemini\GeminiHelpers;
 use Tests\Feature\Providers\Groq\GroqHelpers;
 use Tests\Feature\Providers\Mistral\MistralHelpers;
+use Tests\Feature\Providers\Ollama\OllamaHelpers;
 use Tests\Feature\Providers\OpenAi\OpenAiHelpers;
 use Tests\Feature\Providers\OpenRouter\OpenRouterHelpers;
 use Tests\Feature\Providers\Xai\XaiHelpers;
@@ -19,6 +20,7 @@ pest()->use(AnthropicHelpers::class)->group('provider-anthropic')->in('Feature/P
 pest()->use(GeminiHelpers::class)->group('provider-gemini')->in('Feature/Providers/Gemini');
 pest()->use(GroqHelpers::class)->group('provider-groq')->in('Feature/Providers/Groq');
 pest()->use(MistralHelpers::class)->group('provider-mistral')->in('Feature/Providers/Mistral');
+pest()->use(OllamaHelpers::class)->group('provider-ollama')->in('Feature/Providers/Ollama');
 pest()->use(OpenAiHelpers::class)->group('provider-openai')->in('Feature/Providers/OpenAi');
 pest()->use(XaiHelpers::class)->group('provider-xai')->in('Feature/Providers/Xai');
 

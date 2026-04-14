@@ -51,6 +51,9 @@ class ProviderOptionsWithToolsAgent implements Agent, HasProviderOptions, HasToo
             Lab::Mistral => [
                 'frequency_penalty' => 0.5,
             ],
+            Lab::Ollama => [
+                'top_k' => 40,
+            ],
             Lab::OpenRouter => [
                 'frequency_penalty' => 0.5,
             ],

@@ -73,7 +73,7 @@ return [
         'deepseek' => [
             'driver' => 'deepseek',
             'key' => env('DEEPSEEK_API_KEY'),
-            'url' => env('DEEPSEEK_URL', 'https://api.deepseek.com/v1'),
+            'url' => env('DEEPSEEK_URL', 'https://api.deepseek.com'),
         ],
 
         'eleven' => [
@@ -106,7 +106,7 @@ return [
         'ollama' => [
             'driver' => 'ollama',
             'key' => env('OLLAMA_API_KEY', ''),
-            'url' => env('OLLAMA_BASE_URL', 'http://localhost:11434'),
+            'url' => env('OLLAMA_URL', 'http://localhost:11434'),
         ],
 
         'openai' => [

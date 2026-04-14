@@ -59,9 +59,6 @@ test('max steps limits tool call depth', function () {
 
     $recorded = Http::recorded();
 
-    // ToolUsingAgent has 1 tool + structured output tool = 2 tools
-    // maxSteps = round(2 * 1.5) = 3
-    // So max 3 requests before stopping (initial + 2 follow-ups)
     expect(count($recorded))->toBeLessThanOrEqual(3);
 });
 
