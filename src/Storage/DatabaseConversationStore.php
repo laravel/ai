@@ -120,30 +120,52 @@ class DatabaseConversationStore implements ConversationStore
                 }
 
                 if ($toolCalls->isNotEmpty()) {
+                    $reconstructedToolCalls = $toolCalls->map(fn ($toolCall) => new ToolCall(
+                        id: $toolCall['id'],
+                        name: $toolCall['name'],
+                        arguments: $toolCall['arguments'],
+                        resultId: $toolCall['result_id'] ?? null,
+                        reasoningId: $toolCall['reasoning_id'] ?? null,
+                        reasoningSummary: $toolCall['reasoning_summary'] ?? null,
+                    ));
+
+                    $reconstructedToolResults = $toolResults->map(fn ($toolResult) => new ToolResult(
+                        id: $toolResult['id'],
+                        name: $toolResult['name'],
+                        arguments: $toolResult['arguments'],
+                        result: $toolResult['result'],
+                        resultId: $toolResult['result_id'] ?? null,
+                    ));
+
+                    // Index tool results by call_id for fast matching.
+                    $resultsByCallId = $reconstructedToolResults->keyBy(fn (ToolResult $r) => $r->resultId);
+
+                    // Group tool calls by reasoning_id, preserving insertion order.
+                    // OpenAI requires each reasoning block to appear immediately before
+                    // its associated function_calls, with tool results interleaved between
+                    // rounds. Flattening all calls into one AssistantMessage breaks this.
+                    $groups = [];
+                    foreach ($reconstructedToolCalls as $tc) {
+                        $groups[$tc->reasoningId ?? '__no_reasoning__'][] = $tc;
+                    }
+
                     $messages = [];
 
-                    $messages[] = new AssistantMessage(
-                        '',
-                        $toolCalls->map(fn ($toolCall) => new ToolCall(
-                            id: $toolCall['id'],
-                            name: $toolCall['name'],
-                            arguments: $toolCall['arguments'],
-                            resultId: $toolCall['result_id'] ?? null,
-                            reasoningId: $toolCall['reasoning_id'] ?? null,
-                            reasoningSummary: $toolCall['reasoning_summary'] ?? null,
-                        ))
-                    );
+                    foreach ($groups as $groupTcs) {
+                        $groupCollection = collect($groupTcs);
 
-                    if ($toolResults->isNotEmpty()) {
-                        $messages[] = new ToolResultMessage(
-                            $toolResults->map(fn ($toolResult) => new ToolResult(
-                                id: $toolResult['id'],
-                                name: $toolResult['name'],
-                                arguments: $toolResult['arguments'],
-                                result: $toolResult['result'],
-                                resultId: $toolResult['result_id'] ?? null,
-                            ))
-                        );
+                        $messages[] = new AssistantMessage('', $groupCollection);
+
+                        $groupResults = $groupCollection
+                            ->pluck('resultId')
+                            ->filter()
+                            ->map(fn ($callId) => $resultsByCallId->get($callId))
+                            ->filter()
+                            ->values();
+
+                        if ($groupResults->isNotEmpty()) {
+                            $messages[] = new ToolResultMessage($groupResults);
+                        }
                     }
 
                     if (filled($record->content)) {
