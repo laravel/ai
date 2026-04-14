@@ -6,10 +6,12 @@ use Tests\Feature\Providers\Groq\GroqHelpers;
 use Tests\Feature\Providers\Mistral\MistralHelpers;
 use Tests\Feature\Providers\Ollama\OllamaHelpers;
 use Tests\Feature\Providers\OpenAi\OpenAiHelpers;
+use Tests\Feature\Providers\OpenRouter\OpenRouterHelpers;
 use Tests\Feature\Providers\Xai\XaiHelpers;
 use Tests\TestCase;
 
 require __DIR__.'/Expectations.php';
+require_once __DIR__.'/Helpers.php';
 
 Dotenv\Dotenv::createImmutable(dirname(__DIR__), ['.env', '.env.testing'])->safeLoad();
 
@@ -22,6 +24,7 @@ pest()->use(OllamaHelpers::class)->group('provider-ollama')->in('Feature/Provide
 pest()->use(OpenAiHelpers::class)->group('provider-openai')->in('Feature/Providers/OpenAi');
 pest()->use(XaiHelpers::class)->group('provider-xai')->in('Feature/Providers/Xai');
 
+pest()->use(OpenRouterHelpers::class)->group('provider-openrouter')->in('Feature/Providers/OpenRouter');
 uses()->group('providers')->in('Feature/Providers');
 
 uses()->group('integration')->in('Integration');

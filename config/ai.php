@@ -117,11 +117,13 @@ return [
         'openrouter' => [
             'driver' => 'openrouter',
             'key' => env('OPENROUTER_API_KEY'),
+            'url' => env('OPENROUTER_URL', 'https://openrouter.ai/api/v1'),
         ],
 
         'voyageai' => [
             'driver' => 'voyageai',
             'key' => env('VOYAGEAI_API_KEY'),
+            'url' => env('VOYAGEAI_URL', 'https://api.voyageai.com/v1'),
         ],
 
         'xai' => [
