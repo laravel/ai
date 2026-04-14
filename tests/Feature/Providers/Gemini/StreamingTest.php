@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
@@ -200,4 +201,29 @@ describe('usage tracking', function () {
             ->completionTokens->toBe(10)
             ->cacheReadInputTokens->toBe(5);
     });
+
+    test('streaming finish reason maps correctly', function (string $geminiReason, $expected) {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response(
+                body: $this->ssePayload([
+                    $this->geminiChunk([['text' => 'Hello']]),
+                    $this->geminiChunkWithUsage([['text' => '']], 10, 5, finishReason: $geminiReason),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $events = $this->collectStreamEvents();
+
+        $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+
+        expect($streamEnd->reason)->toBe($expected->value);
+    })->with([
+        'STOP maps to Stop' => ['STOP', FinishReason::Stop],
+        'MAX_TOKENS maps to Length' => ['MAX_TOKENS', FinishReason::Length],
+        'SAFETY maps to ContentFilter' => ['SAFETY', FinishReason::ContentFilter],
+        'MALFORMED_FUNCTION_CALL maps to ContentFilter' => ['MALFORMED_FUNCTION_CALL', FinishReason::ContentFilter],
+        'RECITATION maps to ContentFilter' => ['RECITATION', FinishReason::ContentFilter],
+    ]);
 });

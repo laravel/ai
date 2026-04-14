@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
@@ -122,3 +123,28 @@ test('streaming error event stops stream', function () {
         ->and($events[0]->type)->toBe('server_error')
         ->and($events[0]->message)->toBe('Internal server error');
 });
+
+test('streaming finish reason maps correctly', function (string $status, string $type, $expected) {
+    Http::fake([
+        '*' => Http::response(
+            body: $this->ssePayload([
+                ['type' => 'response.created', 'response' => ['id' => 'resp_123', 'model' => 'grok-4-1-fast-reasoning']],
+                ['type' => 'response.output_text.delta', 'delta' => 'Hello'],
+                ['type' => 'response.output_text.done'],
+                ['type' => 'response.completed', 'response' => ['id' => 'resp_123', 'status' => $status, 'output' => [['type' => $type, 'status' => $status, 'role' => 'assistant', 'content' => [['type' => 'output_text', 'text' => '']]]], 'usage' => ['input_tokens' => 10, 'output_tokens' => 5, 'input_tokens_details' => ['cached_tokens' => 0], 'output_tokens_details' => ['reasoning_tokens' => 0]]]],
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents();
+
+    $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+
+    expect($streamEnd->reason)->toBe($expected->value);
+})->with([
+    'completed message maps to Stop' => ['completed', 'message', FinishReason::Stop],
+    'incomplete maps to Length' => ['incomplete', 'message', FinishReason::Length],
+    'failed maps to Error' => ['failed', 'message', FinishReason::Error],
+]);

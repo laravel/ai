@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ProviderToolEvent;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
@@ -220,4 +221,35 @@ describe('usage tracking', function () {
             ->cacheWriteInputTokens->toBe(100)
             ->cacheReadInputTokens->toBe(50);
     });
+
+    test('streaming finish reason maps correctly', function (string $apiReason, $expected) {
+        if ($expected === FinishReason::ToolCalls) {
+            $this->markTestSkipped('Tool use finish reason triggers tool call handling, not StreamEnd');
+        }
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::response(
+                body: $this->ssePayload([
+                    $this->messageStart(),
+                    $this->contentBlockStart(0, ['type' => 'text', 'text' => '']),
+                    $this->contentBlockDelta(0, ['type' => 'text_delta', 'text' => 'Hello']),
+                    $this->contentBlockStop(0),
+                    $this->messageDelta($apiReason, 10),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $events = $this->collectStreamEvents();
+
+        $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+
+        expect($streamEnd->reason)->toBe($expected->value);
+    })->with([
+        'end_turn maps to Stop' => ['end_turn', FinishReason::Stop],
+        'stop_sequence maps to Stop' => ['stop_sequence', FinishReason::Stop],
+        'max_tokens maps to Length' => ['max_tokens', FinishReason::Length],
+        'tool_use maps to ToolCalls' => ['tool_use', FinishReason::ToolCalls],
+    ]);
 });
