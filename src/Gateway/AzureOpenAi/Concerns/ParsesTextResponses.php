@@ -49,6 +49,7 @@ trait ParsesTextResponses
         ?string $instructions = null,
         array $originalMessages = [],
         ?int $timeout = null,
+        ?string $requestModel = null,
     ): TextResponse {
         return $this->processResponse(
             $data,
@@ -63,6 +64,7 @@ trait ParsesTextResponses
             maxSteps: $options?->maxSteps,
             options: $options,
             timeout: $timeout,
+            requestModel: $requestModel,
         );
     }
 
@@ -83,10 +85,12 @@ trait ParsesTextResponses
         ?int $maxSteps = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
+        ?string $requestModel = null,
     ): TextResponse {
         $choice = $data['choices'][0] ?? [];
         $message = $choice['message'] ?? [];
-        $model = $data['model'] ?? '';
+        $responseModel = $data['model'] ?? '';
+        $model = $requestModel ?? $responseModel;
 
         $text = $message['content'] ?? '';
         $rawToolCalls = $message['tool_calls'] ?? [];
@@ -309,6 +313,7 @@ trait ParsesTextResponses
             $maxSteps,
             $options,
             $timeout,
+            $model,
         );
     }
 

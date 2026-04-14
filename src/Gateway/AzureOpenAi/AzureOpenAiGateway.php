@@ -76,6 +76,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, TextGateway
             $instructions,
             $messages,
             $timeout,
+            $model,
         );
     }
 

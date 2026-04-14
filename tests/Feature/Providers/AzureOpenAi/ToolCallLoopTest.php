@@ -73,6 +73,53 @@ test('max steps limits tool call depth', function () {
     expect(count($recorded))->toBeLessThanOrEqual(3);
 });
 
+test('tool call follow up preserves deployment name when response model differs', function () {
+    config(['ai.providers.azure' => [
+        ...config('ai.providers.azure'),
+        'deployment' => 'my-custom-gpt4o-deployment',
+    ]]);
+
+    Http::fake([
+        'my-resource.openai.azure.com/*' => Http::sequence([
+            // First response: Azure returns underlying model name, not deployment name
+            Http::response([
+                'id' => 'chatcmpl-tool-123',
+                'object' => 'chat.completion',
+                'model' => 'gpt-4o-2024-08-06',
+                'choices' => [[
+                    'index' => 0,
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => null,
+                        'tool_calls' => [[
+                            'id' => 'call_abc',
+                            'type' => 'function',
+                            'function' => [
+                                'name' => 'FixedNumberGenerator',
+                                'arguments' => '{}',
+                            ],
+                        ]],
+                    ],
+                    'finish_reason' => 'tool_calls',
+                ]],
+                'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
+            ]),
+            fakeAzureResponse('The number is 72019'),
+        ]),
+    ]);
+
+    (new ToolUsingAgent(fixed: true))->prompt(
+        'Generate a number',
+        provider: 'azure',
+    );
+
+    $recorded = Http::recorded();
+    $followUpBody = json_decode($recorded[1][0]->body(), true);
+
+    // The follow-up request must use the deployment name, not the response model
+    expect($followUpBody['model'])->toBe('my-custom-gpt4o-deployment');
+});
+
 function fakeUniqueAzureToolCallResponse(): PromiseInterface
 {
     return Http::response([
