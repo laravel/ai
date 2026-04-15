@@ -6,10 +6,6 @@ use Laravel\Ai\ObjectSchema;
 
 trait ComposesSchemaInstructions
 {
-    /**
-     * Compose the system instructions, appending JSON schema guidance when a
-     * structured output schema is configured.
-     */
     protected function composeInstructions(?string $instructions, ?array $schema): ?string
     {
         if (blank($schema)) {

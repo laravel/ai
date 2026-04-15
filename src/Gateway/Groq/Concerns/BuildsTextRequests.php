@@ -38,7 +38,7 @@ trait BuildsTextRequests
             }
         }
 
-        $inlineSchema = $this->shouldInlineSchemaInInstructions($hasTools, $schema);
+        $inlineSchema = $hasTools && filled($schema);
 
         $body['messages'] = $this->mapMessagesToChat(
             $messages,
@@ -64,11 +64,6 @@ trait BuildsTextRequests
         }
 
         return $body;
-    }
-
-    protected function shouldInlineSchemaInInstructions(bool $hasTools, ?array $schema): bool
-    {
-        return $hasTools && filled($schema);
     }
 
     /**

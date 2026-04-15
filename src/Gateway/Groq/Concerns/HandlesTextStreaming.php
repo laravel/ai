@@ -259,7 +259,7 @@ trait HandlesTextStreaming
 
             $mappedTools = filled($tools) ? $this->mapTools($tools) : [];
             $hasTools = filled($mappedTools);
-            $inlineSchema = $this->shouldInlineSchemaInInstructions($hasTools, $schema);
+            $inlineSchema = $hasTools && filled($schema);
 
             $chatMessages = [
                 ...$this->mapMessagesToChat(
