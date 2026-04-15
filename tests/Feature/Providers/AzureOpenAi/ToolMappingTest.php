@@ -11,13 +11,13 @@ beforeEach(function () {
     config(['ai.providers.azure' => [
         ...config('ai.providers.azure'),
         'key' => 'test-key',
-        'url' => 'https://my-resource.openai.azure.com',
-        'api_version' => '2024-10-21',
+        'url' => 'https://my-resource.cognitiveservices.azure.com',
+        'api_version' => '2025-04-01-preview',
         'deployment' => 'gpt-4o',
     ]]);
 });
 
-test('tool with parameters includes correct schema', function () {
+test('tool with parameters includes strict compliant schema', function () {
     Http::fake([
         '*' => fakeAzureResponse('42'),
     ]);
@@ -27,18 +27,18 @@ test('tool with parameters includes correct schema', function () {
     Http::assertSent(function (Request $request) {
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'function');
-        $function = $tool['function'] ?? [];
 
-        return $function['parameters']['type'] === 'object'
-            && array_key_exists('min', $function['parameters']['properties'])
-            && array_key_exists('max', $function['parameters']['properties'])
-            && in_array('min', $function['parameters']['required'])
-            && in_array('max', $function['parameters']['required'])
-            && $function['parameters']['additionalProperties'] === false;
+        return $tool['strict'] === true
+            && $tool['parameters']['type'] === 'object'
+            && array_key_exists('min', $tool['parameters']['properties'])
+            && array_key_exists('max', $tool['parameters']['properties'])
+            && in_array('min', $tool['parameters']['required'])
+            && in_array('max', $tool['parameters']['required'])
+            && $tool['parameters']['additionalProperties'] === false;
     });
 });
 
-test('tool with empty schema includes parameters', function () {
+test('tool with empty schema includes strict compliant parameters', function () {
     Http::fake([
         '*' => fakeAzureResponse('72019'),
     ]);
@@ -48,29 +48,12 @@ test('tool with empty schema includes parameters', function () {
     Http::assertSent(function (Request $request) {
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'function');
-        $function = $tool['function'] ?? [];
 
-        return array_key_exists('parameters', $function)
-            && $function['parameters']['type'] === 'object'
-            && $function['parameters']['properties'] === []
-            && $function['parameters']['required'] === []
-            && $function['parameters']['additionalProperties'] === false;
-    });
-});
-
-test('tool parameters are not wrapped in schema definition', function () {
-    Http::fake([
-        '*' => fakeAzureResponse('done'),
-    ]);
-
-    agent(tools: [new RandomNumberGenerator])->prompt('Give me a random number', provider: 'azure');
-
-    Http::assertSent(function (Request $request) {
-        $body = json_decode($request->body(), true);
-        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'function');
-        $function = $tool['function'] ?? [];
-
-        return ! array_key_exists('schema_definition', $function['parameters']['properties'] ?? [])
-            && ! in_array('schema_definition', $function['parameters']['required'] ?? []);
+        return $tool['strict'] === true
+            && array_key_exists('parameters', $tool)
+            && $tool['parameters']['type'] === 'object'
+            && $tool['parameters']['properties'] === []
+            && $tool['parameters']['required'] === []
+            && $tool['parameters']['additionalProperties'] === false;
     });
 });

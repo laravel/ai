@@ -51,20 +51,20 @@ function fakeOllamaResponse(string $text = 'Hello'): PromiseInterface
 function fakeAzureResponse(string $text = 'Hello'): PromiseInterface
 {
     return Http::response([
-        'id' => 'chatcmpl-123',
-        'object' => 'chat.completion',
+        'id' => 'resp_azure_123',
+        'status' => 'completed',
         'model' => 'gpt-4o',
-        'choices' => [[
-            'index' => 0,
-            'message' => [
-                'role' => 'assistant',
-                'content' => $text,
-            ],
-            'finish_reason' => 'stop',
+        'output' => [[
+            'type' => 'message',
+            'status' => 'completed',
+            'content' => [[
+                'type' => 'output_text',
+                'text' => $text,
+            ]],
         ]],
         'usage' => [
-            'prompt_tokens' => 1,
-            'completion_tokens' => 1,
+            'input_tokens' => 1,
+            'output_tokens' => 1,
         ],
     ]);
 }

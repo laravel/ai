@@ -8,8 +8,8 @@ beforeEach(function () {
     config(['ai.providers.azure' => [
         ...config('ai.providers.azure'),
         'key' => 'test-key',
-        'url' => 'https://my-resource.openai.azure.com',
-        'api_version' => '2024-10-21',
+        'url' => 'https://my-resource.cognitiveservices.azure.com',
+        'api_version' => '2025-04-01-preview',
         'deployment' => 'gpt-4o',
         'embedding_deployment' => 'text-embedding-3-small',
     ]]);
@@ -66,7 +66,7 @@ test('embeddings request includes api-version query parameter', function () {
     Embeddings::for(['Hello'])->generate(provider: 'azure', model: 'text-embedding-3-small');
 
     Http::assertSent(function (Request $request) {
-        return str_contains($request->url(), 'api-version=2024-10-21');
+        return str_contains($request->url(), 'api-version=2025-04-01-preview');
     });
 });
 

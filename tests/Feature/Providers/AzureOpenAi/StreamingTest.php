@@ -15,20 +15,21 @@ beforeEach(function () {
     config(['ai.providers.azure' => [
         ...config('ai.providers.azure'),
         'key' => 'test-key',
-        'url' => 'https://my-resource.openai.azure.com',
-        'api_version' => '2024-10-21',
+        'url' => 'https://my-resource.cognitiveservices.azure.com',
+        'api_version' => '2025-04-01-preview',
         'deployment' => 'gpt-4o',
     ]]);
 });
 
 test('streaming emits text events', function () {
     Http::fake([
-        'my-resource.openai.azure.com/*' => Http::response(
+        'my-resource.cognitiveservices.azure.com/*' => Http::response(
             body: $this->ssePayload([
-                $this->chatChunk(['role' => 'assistant', 'content' => 'Hello']),
-                $this->chatChunk(['content' => ' world']),
-                $this->chatChunkFinish('stop', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
-                '[DONE]',
+                $this->responseCreated(),
+                $this->outputTextDelta('Hello'),
+                $this->outputTextDelta(' world'),
+                $this->outputTextDone('Hello world'),
+                $this->responseCompleted(10, 5),
             ]),
             status: 200,
             headers: ['Content-Type' => 'text/event-stream'],
@@ -41,28 +42,30 @@ test('streaming emits text events', function () {
         ->and($events[1])->toBeInstanceOf(TextStart::class)
         ->and($events[2])->toBeInstanceOf(TextDelta::class)->delta->toBe('Hello')
         ->and($events[3])->toBeInstanceOf(TextDelta::class)->delta->toBe(' world')
-        ->and($events[count($events) - 2])->toBeInstanceOf(TextEnd::class)
+        ->and($events[4])->toBeInstanceOf(TextEnd::class)
         ->and($events[count($events) - 1])->toBeInstanceOf(StreamEnd::class);
 });
 
 test('streaming handles tool calls', function () {
     Http::fake([
-        'my-resource.openai.azure.com/*' => Http::sequence([
+        'my-resource.cognitiveservices.azure.com/*' => Http::sequence([
             Http::response(
                 body: $this->ssePayload([
-                    $this->chatChunkToolCallStart(0, 'call_1', 'FixedNumberGenerator'),
-                    $this->chatChunkToolCallDelta(0, '{}'),
-                    $this->chatChunkFinish('tool_calls', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
-                    '[DONE]',
+                    $this->responseCreated(),
+                    $this->outputItemAdded('fc_1', 'call_1', 'FixedNumberGenerator'),
+                    $this->functionCallArgumentsDelta('fc_1', '{}'),
+                    $this->functionCallArgumentsDone('fc_1', '{}'),
+                    $this->responseCompleted(10, 5),
                 ]),
                 status: 200,
                 headers: ['Content-Type' => 'text/event-stream'],
             ),
             Http::response(
                 body: $this->ssePayload([
-                    $this->chatChunk(['role' => 'assistant', 'content' => 'The number is 72019']),
-                    $this->chatChunkFinish('stop', ['prompt_tokens' => 20, 'completion_tokens' => 10]),
-                    '[DONE]',
+                    $this->responseCreated(),
+                    $this->outputTextDelta('The number is 72019'),
+                    $this->outputTextDone('The number is 72019'),
+                    $this->responseCompleted(20, 10),
                 ]),
                 status: 200,
                 headers: ['Content-Type' => 'text/event-stream'],
@@ -76,14 +79,14 @@ test('streaming handles tool calls', function () {
 
     expect($toolCallEvents)->not->toBeEmpty()
         ->and($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator')
-        ->and($toolCallEvents[0]->toolCall->id)->toBe('call_1');
+        ->and($toolCallEvents[0]->toolCall->resultId)->toBe('call_1');
 });
 
 test('streaming error event stops stream', function () {
     Http::fake([
-        'my-resource.openai.azure.com/*' => Http::response(
+        'my-resource.cognitiveservices.azure.com/*' => Http::response(
             body: $this->ssePayload([
-                ['error' => ['code' => 'rate_limit_exceeded', 'message' => 'Rate limit exceeded']],
+                ['type' => 'error', 'error' => ['code' => 'rate_limit_exceeded', 'message' => 'Rate limit exceeded']],
             ]),
             status: 200,
             headers: ['Content-Type' => 'text/event-stream'],
@@ -98,13 +101,14 @@ test('streaming error event stops stream', function () {
         ->and($events[0]->message)->toBe('Rate limit exceeded');
 });
 
-test('streaming captures usage from final chunk', function () {
+test('streaming captures usage from completed event', function () {
     Http::fake([
-        'my-resource.openai.azure.com/*' => Http::response(
+        'my-resource.cognitiveservices.azure.com/*' => Http::response(
             body: $this->ssePayload([
-                $this->chatChunk(['role' => 'assistant', 'content' => 'Hello']),
-                $this->chatChunkFinish('stop', ['prompt_tokens' => 42, 'completion_tokens' => 10]),
-                '[DONE]',
+                $this->responseCreated(),
+                $this->outputTextDelta('Hello'),
+                $this->outputTextDone('Hello'),
+                $this->responseCompleted(42, 10),
             ]),
             status: 200,
             headers: ['Content-Type' => 'text/event-stream'],
@@ -119,13 +123,12 @@ test('streaming captures usage from final chunk', function () {
         ->and($streamEnd->usage->completionTokens)->toBe(10);
 });
 
-test('streaming finish reason maps correctly', function (string $apiReason, $expected) {
+test('streaming finish reason maps correctly', function (array $output, $expected) {
     Http::fake([
-        'my-resource.openai.azure.com/*' => Http::response(
+        'my-resource.cognitiveservices.azure.com/*' => Http::response(
             body: $this->ssePayload([
-                $this->chatChunk(['role' => 'assistant', 'content' => 'Hello']),
-                $this->chatChunkFinish($apiReason, ['prompt_tokens' => 10, 'completion_tokens' => 5]),
-                '[DONE]',
+                $this->responseCreated(),
+                $this->responseCompleted(10, 5, output: $output),
             ]),
             status: 200,
             headers: ['Content-Type' => 'text/event-stream'],
@@ -138,7 +141,12 @@ test('streaming finish reason maps correctly', function (string $apiReason, $exp
 
     expect($streamEnd->reason)->toBe($expected->value);
 })->with([
-    'stop maps to Stop' => ['stop', FinishReason::Stop],
-    'length maps to Length' => ['length', FinishReason::Length],
-    'content_filter maps to ContentFilter' => ['content_filter', FinishReason::ContentFilter],
+    'completed message maps to Stop' => [
+        [['type' => 'message', 'status' => 'completed', 'role' => 'assistant', 'content' => [['type' => 'output_text', 'text' => '']]]],
+        FinishReason::Stop,
+    ],
+    'incomplete maps to Length' => [
+        [['type' => 'message', 'status' => 'incomplete', 'role' => 'assistant', 'content' => [['type' => 'output_text', 'text' => '']]]],
+        FinishReason::Length,
+    ],
 ]);

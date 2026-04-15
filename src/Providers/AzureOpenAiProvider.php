@@ -107,7 +107,7 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, TextPro
     {
         return array_filter([
             'url' => rtrim($this->config['url'] ?? '', '/'),
-            'api_version' => $this->config['api_version'] ?? '2024-10-21',
+            'api_version' => $this->config['api_version'] ?? '2025-04-01-preview',
         ]);
     }
 }

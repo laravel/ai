@@ -11,15 +11,15 @@ beforeEach(function () {
     config(['ai.providers.azure' => [
         ...config('ai.providers.azure'),
         'key' => 'test-key',
-        'url' => 'https://my-resource.openai.azure.com',
-        'api_version' => '2024-10-21',
+        'url' => 'https://my-resource.cognitiveservices.azure.com',
+        'api_version' => '2025-04-01-preview',
         'deployment' => 'gpt-4o',
     ]]);
 });
 
 test('http error response throws request exception', function () {
     Http::fake([
-        'my-resource.openai.azure.com/*' => Http::response([
+        'my-resource.cognitiveservices.azure.com/*' => Http::response([
             'error' => [
                 'type' => 'invalid_request_error',
                 'message' => 'max_tokens: must be at least 1',
@@ -35,7 +35,7 @@ test('http error response throws request exception', function () {
 
 test('rate limit response throws rate limited exception', function () {
     Http::fake([
-        'my-resource.openai.azure.com/*' => Http::response([
+        'my-resource.cognitiveservices.azure.com/*' => Http::response([
             'error' => [
                 'type' => 'rate_limit_error',
                 'message' => 'Rate limit exceeded',
@@ -51,7 +51,7 @@ test('rate limit response throws rate limited exception', function () {
 
 test('overloaded response throws provider overloaded exception', function () {
     Http::fake([
-        'my-resource.openai.azure.com/*' => Http::response([
+        'my-resource.cognitiveservices.azure.com/*' => Http::response([
             'error' => [
                 'type' => 'server_error',
                 'message' => 'The server is currently overloaded. Please try again later.',
@@ -67,7 +67,7 @@ test('overloaded response throws provider overloaded exception', function () {
 
 test('error in 200 response throws ai exception', function () {
     Http::fake([
-        'my-resource.openai.azure.com/*' => Http::response([
+        'my-resource.cognitiveservices.azure.com/*' => Http::response([
             'error' => [
                 'type' => 'api_error',
                 'message' => 'Internal server error',
@@ -79,4 +79,4 @@ test('error in 200 response throws ai exception', function () {
         'Hi',
         provider: 'azure',
     );
-})->throws(AiException::class, 'Azure OpenAI Error');
+})->throws(AiException::class, 'OpenAI Error');

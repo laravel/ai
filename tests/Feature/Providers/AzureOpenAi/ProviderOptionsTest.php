@@ -12,8 +12,8 @@ beforeEach(function () {
     config(['ai.providers.azure' => [
         ...config('ai.providers.azure'),
         'key' => 'test-key',
-        'url' => 'https://my-resource.openai.azure.com',
-        'api_version' => '2024-10-21',
+        'url' => 'https://my-resource.cognitiveservices.azure.com',
+        'api_version' => '2025-04-01-preview',
         'deployment' => 'gpt-4o',
     ]]);
 });
@@ -71,28 +71,20 @@ test('provider options are persisted in tool call follow up requests', function 
 function fakeAzureProviderOptionsToolCallResponse(): PromiseInterface
 {
     return Http::response([
-        'id' => 'chatcmpl-tool-123',
-        'object' => 'chat.completion',
+        'id' => 'resp_azure_tool_123',
+        'status' => 'completed',
         'model' => 'gpt-4o',
-        'choices' => [[
-            'index' => 0,
-            'message' => [
-                'role' => 'assistant',
-                'content' => null,
-                'tool_calls' => [[
-                    'id' => 'call_123',
-                    'type' => 'function',
-                    'function' => [
-                        'name' => 'FixedNumberGenerator',
-                        'arguments' => '{}',
-                    ],
-                ]],
-            ],
-            'finish_reason' => 'tool_calls',
+        'output' => [[
+            'type' => 'function_call',
+            'id' => 'fc_123',
+            'call_id' => 'call_123',
+            'name' => 'FixedNumberGenerator',
+            'arguments' => '{}',
+            'status' => 'completed',
         ]],
         'usage' => [
-            'prompt_tokens' => 10,
-            'completion_tokens' => 5,
+            'input_tokens' => 10,
+            'output_tokens' => 5,
         ],
     ]);
 }

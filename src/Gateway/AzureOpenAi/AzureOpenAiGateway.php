@@ -8,9 +8,16 @@ use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Gateway\AzureOpenAi\Concerns\CreatesAzureOpenAiClient;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
+use Laravel\Ai\Gateway\OpenAi\Concerns\BuildsTextRequests;
+use Laravel\Ai\Gateway\OpenAi\Concerns\HandlesTextStreaming;
+use Laravel\Ai\Gateway\OpenAi\Concerns\MapsAttachments;
+use Laravel\Ai\Gateway\OpenAi\Concerns\MapsMessages;
+use Laravel\Ai\Gateway\OpenAi\Concerns\MapsTools;
+use Laravel\Ai\Gateway\OpenAi\Concerns\ParsesTextResponses;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\EmbeddingsResponse;
@@ -18,16 +25,16 @@ use Laravel\Ai\Responses\TextResponse;
 
 class AzureOpenAiGateway implements EmbeddingGateway, TextGateway
 {
-    use Concerns\BuildsTextRequests;
-    use Concerns\CreatesAzureOpenAiClient;
-    use Concerns\HandlesTextStreaming;
-    use Concerns\MapsAttachments;
-    use Concerns\MapsMessages;
-    use Concerns\MapsTools;
-    use Concerns\ParsesTextResponses;
+    use BuildsTextRequests;
+    use CreatesAzureOpenAiClient;
     use HandlesFailoverErrors;
+    use HandlesTextStreaming;
     use InvokesTools;
+    use MapsAttachments;
+    use MapsMessages;
+    use MapsTools;
     use ParsesServerSentEvents;
+    use ParsesTextResponses;
 
     public function __construct(protected Dispatcher $events)
     {
@@ -59,25 +66,14 @@ class AzureOpenAiGateway implements EmbeddingGateway, TextGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $model, $timeout)->post('chat/completions', $body),
+            fn () => $this->client($provider, $timeout)->post('responses', $body),
         );
 
         $data = $response->json();
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse(
-            $data,
-            $provider,
-            filled($schema),
-            $tools,
-            $schema,
-            $options,
-            $instructions,
-            $messages,
-            $timeout,
-            $model,
-        );
+        return $this->parseTextResponse($data, $provider, filled($schema), $tools, $schema, $options, $timeout);
     }
 
     /**
@@ -105,13 +101,12 @@ class AzureOpenAiGateway implements EmbeddingGateway, TextGateway
         );
 
         $body['stream'] = true;
-        $body['stream_options'] = ['include_usage' => true];
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $model, $timeout)
+            fn () => $this->client($provider, $timeout)
                 ->withOptions(['stream' => true])
-                ->post('chat/completions', $body),
+                ->post('responses', $body),
         );
 
         yield from $this->processTextStream(
@@ -122,11 +117,8 @@ class AzureOpenAiGateway implements EmbeddingGateway, TextGateway
             $schema,
             $options,
             $response->getBody(),
-            $instructions,
-            $messages,
             0,
             null,
-            [],
             $timeout,
         );
     }
@@ -143,7 +135,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, TextGateway
     ): EmbeddingsResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $model, $timeout)->post('embeddings', [
+            fn () => $this->embeddingsClient($provider, $model, $timeout)->post('embeddings', [
                 'model' => $model,
                 'input' => $inputs,
                 'dimensions' => $dimensions,

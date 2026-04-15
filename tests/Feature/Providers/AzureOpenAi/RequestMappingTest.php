@@ -13,13 +13,13 @@ beforeEach(function () {
     config(['ai.providers.azure' => [
         ...config('ai.providers.azure'),
         'key' => 'test-key',
-        'url' => 'https://my-resource.openai.azure.com',
-        'api_version' => '2024-10-21',
+        'url' => 'https://my-resource.cognitiveservices.azure.com',
+        'api_version' => '2025-04-01-preview',
         'deployment' => 'gpt-4o',
     ]]);
 });
 
-test('request includes model and messages', function () {
+test('request includes model and input', function () {
     Http::fake(['*' => fakeAzureResponse('Hello')]);
 
     agent()->prompt('Hi there', provider: 'azure', model: 'gpt-4o');
@@ -28,19 +28,20 @@ test('request includes model and messages', function () {
         $body = json_decode($request->body(), true);
 
         return $body['model'] === 'gpt-4o'
-            && count($body['messages']) >= 1
-            && collect($body['messages'])->contains(fn ($m) => $m['role'] === 'user' && $m['content'] === 'Hi there');
+            && is_array($body['input'])
+            && collect($body['input'])->contains(fn ($m) => $m['role'] === 'user'
+                && collect($m['content'])->contains(fn ($c) => ($c['text'] ?? '') === 'Hi there'));
     });
 });
 
-test('system instructions are sent as system message', function () {
+test('system instructions are sent as system message in input', function () {
     Http::fake(['*' => fakeAzureResponse('Hello')]);
 
     (new AssistantAgent)->prompt('Hello', provider: 'azure');
 
     Http::assertSent(function (Request $request) {
         $body = json_decode($request->body(), true);
-        $systemMsg = collect($body['messages'])->firstWhere('role', 'system');
+        $systemMsg = collect($body['input'])->firstWhere('role', 'system');
 
         return $systemMsg !== null
             && str_contains($systemMsg['content'], 'helpful assistant');
@@ -56,7 +57,7 @@ test('temperature and max tokens are included when set via attributes', function
         $body = json_decode($request->body(), true);
 
         return data_get($body, 'temperature') === 0.7
-            && data_get($body, 'max_completion_tokens') === 4096;
+            && data_get($body, 'max_output_tokens') === 4096;
     });
 });
 
@@ -69,7 +70,7 @@ test('temperature and max tokens are excluded when not set', function () {
         $body = json_decode($request->body(), true);
 
         return ! array_key_exists('temperature', $body)
-            && ! array_key_exists('max_completion_tokens', $body);
+            && ! array_key_exists('max_output_tokens', $body);
     });
 });
 
@@ -100,23 +101,23 @@ test('request without tools excludes tool fields', function () {
     });
 });
 
-test('structured output includes json schema response format', function () {
+test('structured output includes json schema text format', function () {
     Http::fake(['*' => fakeAzureResponse('{"symbol": "Au"}')]);
 
     (new StructuredAgent)->prompt('What is the symbol for Gold?', provider: 'azure');
 
     Http::assertSent(function (Request $request) {
         $body = json_decode($request->body(), true);
-        $format = data_get($body, 'response_format');
+        $format = data_get($body, 'text.format');
 
-        return $format['type'] === 'json_schema'
-            && isset($format['json_schema']['name'])
-            && isset($format['json_schema']['schema'])
-            && $format['json_schema']['strict'] === true;
+        return ($format['type'] ?? '') === 'json_schema'
+            && isset($format['name'])
+            && isset($format['schema'])
+            && $format['strict'] === true;
     });
 });
 
-test('request without schema excludes response format', function () {
+test('request without schema excludes text format', function () {
     Http::fake(['*' => fakeAzureResponse('Hello')]);
 
     agent()->prompt('Hello', provider: 'azure');
@@ -124,16 +125,17 @@ test('request without schema excludes response format', function () {
     Http::assertSent(function (Request $request) {
         $body = json_decode($request->body(), true);
 
-        return ! array_key_exists('response_format', $body);
+        return ! array_key_exists('text', $body);
     });
 });
 
-test('streaming request includes stream options', function () {
-    Http::fake(['*' => Http::response("data: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"Hi\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1}}\n\ndata: [DONE]\n\n")]);
+test('streaming request includes stream flag', function () {
+    Http::fake(['*' => Http::response(
+        body: "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\",\"model\":\"gpt-4o\",\"status\":\"in_progress\",\"output\":[]}}\n\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"Hi\",\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0}\n\ndata: {\"type\":\"response.output_text.done\",\"text\":\"Hi\",\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"model\":\"gpt-4o\",\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"status\":\"completed\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"Hi\"}]}],\"usage\":{\"input_tokens\":1,\"output_tokens\":1,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens_details\":{\"reasoning_tokens\":0}}}}\n\n",
+    )]);
 
     $stream = agent()->stream('Hello', provider: 'azure');
 
-    // Consume the stream
     foreach ($stream as $event) {
         //
     }
@@ -141,8 +143,7 @@ test('streaming request includes stream options', function () {
     Http::assertSent(function (Request $request) {
         $body = json_decode($request->body(), true);
 
-        return $body['stream'] === true
-            && data_get($body, 'stream_options.include_usage') === true;
+        return $body['stream'] === true;
     });
 });
 
@@ -162,7 +163,7 @@ test('request includes api-version query parameter', function () {
     agent()->prompt('Hello', provider: 'azure');
 
     Http::assertSent(function (Request $request) {
-        return str_contains($request->url(), 'api-version=2024-10-21');
+        return str_contains($request->url(), 'api-version=2025-04-01-preview');
     });
 });
 
@@ -177,17 +178,17 @@ test('response text is correctly parsed', function () {
 
 test('response usage is correctly parsed', function () {
     Http::fake(['*' => Http::response([
-        'id' => 'chatcmpl-123',
-        'object' => 'chat.completion',
+        'id' => 'resp_azure_123',
+        'status' => 'completed',
         'model' => 'gpt-4o',
-        'choices' => [[
-            'index' => 0,
-            'message' => ['role' => 'assistant', 'content' => 'Hello'],
-            'finish_reason' => 'stop',
+        'output' => [[
+            'type' => 'message',
+            'status' => 'completed',
+            'content' => [['type' => 'output_text', 'text' => 'Hello']],
         ]],
         'usage' => [
-            'prompt_tokens' => 10,
-            'completion_tokens' => 5,
+            'input_tokens' => 10,
+            'output_tokens' => 5,
         ],
     ])]);
 
