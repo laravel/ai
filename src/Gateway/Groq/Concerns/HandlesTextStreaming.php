@@ -52,7 +52,7 @@ trait HandlesTextStreaming
             if (isset($data['error'])) {
                 yield (new Error(
                     $this->generateEventId(),
-                    $data['error']['code'] ?? 'unknown_error',
+                    (string) ($data['error']['code'] ?? 'unknown_error'),
                     $data['error']['message'] ?? 'Unknown error',
                     false,
                     time(),

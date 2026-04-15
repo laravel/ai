@@ -114,6 +114,24 @@ test('streaming error event stops stream', function () {
         ->and($events[0]->message)->toBe('Internal server error');
 });
 
+test('streaming error event casts numeric code to string', function () {
+    Http::fake([
+        '*' => Http::response(
+            body: $this->ssePayload([
+                ['error' => ['code' => 429, 'message' => 'Too many requests']],
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents();
+
+    expect($events)->toHaveCount(1)
+        ->and($events[0])->toBeInstanceOf(Error::class)
+        ->and($events[0]->type)->toBe('429');
+});
+
 test('streaming finish reason maps correctly', function (string $apiReason, $expected) {
     Http::fake([
         '*' => Http::response(

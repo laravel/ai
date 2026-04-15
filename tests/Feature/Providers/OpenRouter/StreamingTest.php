@@ -93,6 +93,23 @@ test('streaming error event stops stream', function () {
         ->and($errorEvents[0]->type)->toBe('server_error');
 });
 
+test('streaming error event casts numeric code to string', function () {
+    Http::fake([
+        '*' => Http::response($this->ssePayload([
+            ['error' => ['code' => 429, 'message' => 'Too many requests']],
+        ])),
+    ]);
+
+    $events = [];
+    foreach (agent()->stream('Hi', provider: 'openrouter') as $event) {
+        $events[] = $event;
+    }
+
+    $errorEvents = array_values(array_filter($events, fn ($e) => $e instanceof Error));
+    expect($errorEvents)->toHaveCount(1)
+        ->and($errorEvents[0]->type)->toBe('429');
+});
+
 test('streaming error finish reason emits error event', function () {
     Http::fake([
         '*' => Http::response($this->ssePayload([
