@@ -4,10 +4,12 @@ namespace Laravel\Ai\Gateway\AzureOpenAi;
 
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Gateway\AzureOpenAi\Concerns\CreatesAzureOpenAiClient;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
@@ -19,6 +21,7 @@ use Laravel\Ai\Gateway\OpenAi\Concerns\MapsMessages;
 use Laravel\Ai\Gateway\OpenAi\Concerns\MapsTools;
 use Laravel\Ai\Gateway\OpenAi\Concerns\ParsesTextResponses;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\TextResponse;
@@ -39,6 +42,32 @@ class AzureOpenAiGateway implements EmbeddingGateway, TextGateway
     public function __construct(protected Dispatcher $events)
     {
         $this->initializeToolCallbacks();
+    }
+
+    /**
+     * Map a tool to the Azure OpenAI function definition format.
+     *
+     * Azure does not support strict mode unless ALL parameters are required,
+     * so we omit strict and additionalProperties to match Prism's behaviour.
+     */
+    protected function mapTool(Tool $tool): array
+    {
+        $schema = $tool->schema(new JsonSchemaTypeFactory);
+
+        $schemaArray = filled($schema)
+            ? (new ObjectSchema($schema))->toSchema()
+            : [];
+
+        return array_filter([
+            'type' => 'function',
+            'name' => class_basename($tool),
+            'description' => (string) $tool->description(),
+            'parameters' => filled($schemaArray) ? [
+                'type' => 'object',
+                'properties' => $schemaArray['properties'] ?? (object) [],
+                'required' => $schemaArray['required'] ?? [],
+            ] : null,
+        ]);
     }
 
     /**

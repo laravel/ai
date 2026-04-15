@@ -16,7 +16,7 @@ beforeEach(function () {
     ]]);
 });
 
-test('tool with parameters includes strict compliant schema', function () {
+test('tool with parameters includes schema without strict mode', function () {
     Http::fake([
         '*' => fakeAzureResponse('42'),
     ]);
@@ -27,17 +27,17 @@ test('tool with parameters includes strict compliant schema', function () {
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'function');
 
-        return $tool['strict'] === true
+        return ! array_key_exists('strict', $tool)
             && $tool['parameters']['type'] === 'object'
             && array_key_exists('min', $tool['parameters']['properties'])
             && array_key_exists('max', $tool['parameters']['properties'])
             && in_array('min', $tool['parameters']['required'])
             && in_array('max', $tool['parameters']['required'])
-            && $tool['parameters']['additionalProperties'] === false;
+            && ! array_key_exists('additionalProperties', $tool['parameters']);
     });
 });
 
-test('tool with empty schema includes strict compliant parameters', function () {
+test('tool with empty schema omits parameters key', function () {
     Http::fake([
         '*' => fakeAzureResponse('72019'),
     ]);
@@ -48,11 +48,7 @@ test('tool with empty schema includes strict compliant parameters', function () 
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'function');
 
-        return $tool['strict'] === true
-            && array_key_exists('parameters', $tool)
-            && $tool['parameters']['type'] === 'object'
-            && $tool['parameters']['properties'] === []
-            && $tool['parameters']['required'] === []
-            && $tool['parameters']['additionalProperties'] === false;
+        return ! array_key_exists('strict', $tool)
+            && ! array_key_exists('parameters', $tool);
     });
 });
