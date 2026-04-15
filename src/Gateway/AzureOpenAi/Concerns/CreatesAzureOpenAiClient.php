@@ -14,6 +14,7 @@ trait CreatesAzureOpenAiClient
     protected function client(Provider $provider, ?int $timeout = null): PendingRequest
     {
         $config = $provider->additionalConfiguration();
+
         $base = rtrim($config['url'] ?? '', '/');
 
         return Http::baseUrl("{$base}/openai/v1")
