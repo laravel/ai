@@ -66,11 +66,6 @@ trait BuildsTextRequests
         return $body;
     }
 
-    /**
-     * Whether the schema must be embedded in the system instructions instead
-     * of being sent as `response_format`. Groq's API rejects requests that
-     * combine `response_format` with tool use.
-     */
     protected function shouldInlineSchemaInInstructions(bool $hasTools, ?array $schema): bool
     {
         return $hasTools && filled($schema);

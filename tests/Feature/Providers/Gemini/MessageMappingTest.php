@@ -75,9 +75,6 @@ test('tool result follow up maps model and function response', function () {
         }
     }
 
-    // Regression: laravel/ai#388 — an empty `args: []` or response-only `id`
-    // field on a request `functionCall` causes Gemini to reject the call with
-    // a 400. The continuation must omit both for argument-less tool calls.
     expect($modelFunctionCall)->not->toBeNull('Follow-up should include model message with functionCall')
         ->and($modelFunctionCall)->not->toHaveKey('args')
         ->and($modelFunctionCall)->not->toHaveKey('id')
@@ -117,8 +114,6 @@ test('prior assistant tool call with empty arguments omits args in conversation 
             ->flatMap(fn ($content) => $content['parts'] ?? [])
             ->firstWhere(fn ($part) => isset($part['functionCall']))['functionCall'] ?? null;
 
-        // Regression: laravel/ai#388 — when args is empty, the JSON must not
-        // include "args": [] (empty PHP array re-encoded as a list).
         return $modelFunctionCall !== null
             && ! array_key_exists('args', $modelFunctionCall);
     });
