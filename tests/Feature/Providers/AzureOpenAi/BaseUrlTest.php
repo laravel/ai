@@ -5,7 +5,7 @@ use Illuminate\Support\Facades\Http;
 
 use function Laravel\Ai\agent;
 
-test('azure text requests use the responses endpoint', function () {
+test('azure text requests use the v1 responses endpoint', function () {
     configureAzureProvider('https://my-resource.cognitiveservices.azure.com', deployment: 'gpt-4o');
 
     Http::fake(['*' => fakeAzureResponse('Hello from Azure')]);
@@ -14,18 +14,18 @@ test('azure text requests use the responses endpoint', function () {
 
     expect($response->text)->toBe('Hello from Azure');
 
-    azureAssertRequestSent('POST', 'https://my-resource.cognitiveservices.azure.com/openai/responses');
+    azureAssertRequestSent('POST', 'https://my-resource.cognitiveservices.azure.com/openai/v1/responses');
 });
 
-test('azure requests include api-version query parameter', function () {
-    configureAzureProvider('https://my-resource.cognitiveservices.azure.com', '2025-04-01-preview');
+test('azure requests do not include api-version query parameter', function () {
+    configureAzureProvider('https://my-resource.cognitiveservices.azure.com');
 
     Http::fake(['*' => fakeAzureResponse()]);
 
     agent()->prompt('Hello', provider: 'azure');
 
     Http::assertSent(function (Request $request) {
-        return str_contains($request->url(), 'api-version=2025-04-01-preview');
+        return ! str_contains($request->url(), 'api-version');
     });
 });
 
@@ -48,7 +48,6 @@ function configureAzureProvider(?string $url = null, ?string $apiVersion = null,
         ...config('ai.providers.azure'),
         'key' => 'test-key',
         'url' => $url,
-        'api_version' => $apiVersion ?? '2025-04-01-preview',
         'deployment' => $deployment,
     ])]);
 }

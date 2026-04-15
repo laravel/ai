@@ -9,7 +9,6 @@ beforeEach(function () {
         ...config('ai.providers.azure'),
         'key' => 'test-key',
         'url' => 'https://my-resource.cognitiveservices.azure.com',
-        'api_version' => '2025-04-01-preview',
         'deployment' => 'gpt-4o',
         'embedding_deployment' => 'text-embedding-3-small',
     ]]);
@@ -29,13 +28,13 @@ test('embeddings request includes model input and dimensions', function () {
     });
 });
 
-test('embeddings request uses deployment-specific url path', function () {
+test('embeddings request uses the v1 embeddings endpoint', function () {
     Http::fake(['*' => fakeAzureEmbeddingsResponse()]);
 
     Embeddings::for(['Hello'])->generate(provider: 'azure', model: 'text-embedding-3-small');
 
     Http::assertSent(function (Request $request) {
-        return str_contains($request->url(), '/openai/deployments/text-embedding-3-small/embeddings');
+        return str_contains($request->url(), '/openai/v1/embeddings');
     });
 });
 
@@ -60,13 +59,13 @@ test('embeddings request sends api-key header', function () {
     });
 });
 
-test('embeddings request includes api-version query parameter', function () {
+test('embeddings request does not include api-version query parameter', function () {
     Http::fake(['*' => fakeAzureEmbeddingsResponse()]);
 
     Embeddings::for(['Hello'])->generate(provider: 'azure', model: 'text-embedding-3-small');
 
     Http::assertSent(function (Request $request) {
-        return str_contains($request->url(), 'api-version=2025-04-01-preview');
+        return ! str_contains($request->url(), 'api-version');
     });
 });
 

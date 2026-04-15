@@ -12,7 +12,6 @@ beforeEach(function () {
         ...config('ai.providers.azure'),
         'key' => 'test-key',
         'url' => 'https://my-resource.cognitiveservices.azure.com',
-        'api_version' => '2025-04-01-preview',
         'deployment' => 'gpt-4o',
     ]]);
 });

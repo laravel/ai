@@ -14,7 +14,6 @@ beforeEach(function () {
         ...config('ai.providers.azure'),
         'key' => 'test-key',
         'url' => 'https://my-resource.cognitiveservices.azure.com',
-        'api_version' => '2025-04-01-preview',
         'deployment' => 'gpt-4o',
     ]]);
 });
@@ -157,13 +156,13 @@ test('request sends api-key header authentication', function () {
     });
 });
 
-test('request includes api-version query parameter', function () {
+test('request does not include api-version query parameter', function () {
     Http::fake(['*' => fakeAzureResponse('Hello')]);
 
     agent()->prompt('Hello', provider: 'azure');
 
     Http::assertSent(function (Request $request) {
-        return str_contains($request->url(), 'api-version=2025-04-01-preview');
+        return ! str_contains($request->url(), 'api-version');
     });
 });
 
