@@ -35,6 +35,18 @@ trait BuildsTextRequests
 
         $providerOptions = $options?->providerOptions(Lab::Anthropic) ?? [];
 
+        if (isset($providerOptions['system_prompt_cache_type']) && isset($body['system']) && is_string($body['system'])) {
+            $body['system'] = [
+                [
+                    'type' => 'text',
+                    'text' => $body['system'],
+                    'cache_control' => ['type' => $providerOptions['system_prompt_cache_type']],
+                ],
+            ];
+
+            unset($providerOptions['system_prompt_cache_type']);
+        }
+
         if (filled($schema) && $this->supportsNativeStructuredOutput($provider)) {
             $body['output_config'] = [
                 'format' => [
