@@ -144,6 +144,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, TextGateway
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $model, $timeout)->post('embeddings', [
+                'model' => $model,
                 'input' => $inputs,
                 'dimensions' => $dimensions,
             ]),

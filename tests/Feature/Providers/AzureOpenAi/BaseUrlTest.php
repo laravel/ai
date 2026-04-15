@@ -5,38 +5,35 @@ use Illuminate\Support\Facades\Http;
 
 use function Laravel\Ai\agent;
 
-test('azure text requests use deployment-specific path', function () {
+test('classic endpoint uses deployment-specific path with api-version', function () {
     configureAzureProvider('https://my-resource.openai.azure.com', deployment: 'gpt-4o');
 
-    Http::fake([
-        '*' => Http::response([
-            'id' => 'chatcmpl-123',
-            'object' => 'chat.completion',
-            'model' => 'gpt-4o',
-            'choices' => [[
-                'index' => 0,
-                'message' => [
-                    'role' => 'assistant',
-                    'content' => 'Hello from Azure',
-                ],
-                'finish_reason' => 'stop',
-            ]],
-            'usage' => [
-                'prompt_tokens' => 1,
-                'completion_tokens' => 1,
-            ],
-        ]),
-    ]);
+    Http::fake(['*' => fakeAzureResponse('Hello from Azure')]);
 
     $response = agent()->prompt('Hello', provider: 'azure');
 
     expect($response->text)->toBe('Hello from Azure');
 
-    Http::assertSentCount(1);
     azureAssertRequestSent('POST', 'https://my-resource.openai.azure.com/openai/deployments/gpt-4o/chat/completions');
+
+    Http::assertSent(fn (Request $r) => str_contains($r->url(), 'api-version='));
 });
 
-test('azure requests include api-version query parameter', function () {
+test('v1 endpoint uses url directly without deployment path or api-version', function () {
+    configureAzureProvider('https://my-resource.openai.azure.com/openai/v1', deployment: 'gpt-4o');
+
+    Http::fake(['*' => fakeAzureResponse('Hello from Azure v1')]);
+
+    $response = agent()->prompt('Hello', provider: 'azure');
+
+    expect($response->text)->toBe('Hello from Azure v1');
+
+    azureAssertRequestSent('POST', 'https://my-resource.openai.azure.com/openai/v1/chat/completions');
+
+    Http::assertSent(fn (Request $r) => ! str_contains($r->url(), 'api-version'));
+});
+
+test('azure requests include api-version query parameter for classic endpoint', function () {
     configureAzureProvider('https://my-resource.openai.azure.com', '2024-10-21');
 
     Http::fake(['*' => fakeAzureResponse()]);
