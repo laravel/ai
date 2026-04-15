@@ -9,22 +9,17 @@ use Laravel\Ai\Providers\Provider;
 trait CreatesAzureOpenAiClient
 {
     /**
-     * Get an HTTP client for the Azure OpenAI API.
+     * Get an HTTP client scoped to a specific Azure OpenAI deployment.
      */
-    protected function client(Provider $provider, ?int $timeout = null): PendingRequest
+    protected function client(Provider $provider, string $deployment, ?int $timeout = null): PendingRequest
     {
-        return Http::baseUrl($this->baseUrl($provider))
+        $base = rtrim($provider->additionalConfiguration()['url'] ?? '', '/');
+        $apiVersion = $provider->additionalConfiguration()['api_version'] ?? '2024-10-21';
+
+        return Http::baseUrl("{$base}/openai/deployments/{$deployment}")
             ->withHeaders(['api-key' => $provider->providerCredentials()['key']])
-            ->withQueryParameters(['api-version' => $provider->additionalConfiguration()['api_version'] ?? '2024-10-21'])
+            ->withQueryParameters(['api-version' => $apiVersion])
             ->timeout($timeout ?? 60)
             ->throw();
-    }
-
-    /**
-     * Get the base URL for the Azure OpenAI API.
-     */
-    protected function baseUrl(Provider $provider): string
-    {
-        return rtrim($provider->additionalConfiguration()['url'] ?? '', '/');
     }
 }

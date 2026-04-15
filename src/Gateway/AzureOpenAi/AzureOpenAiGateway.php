@@ -59,7 +59,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, TextGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('chat/completions', $body),
+            fn () => $this->client($provider, $model, $timeout)->post('chat/completions', $body),
         );
 
         $data = $response->json();
@@ -109,7 +109,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, TextGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)
+            fn () => $this->client($provider, $model, $timeout)
                 ->withOptions(['stream' => true])
                 ->post('chat/completions', $body),
         );
@@ -143,8 +143,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, TextGateway
     ): EmbeddingsResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('embeddings', [
-                'model' => $model,
+            fn () => $this->client($provider, $model, $timeout)->post('embeddings', [
                 'input' => $inputs,
                 'dimensions' => $dimensions,
             ]),

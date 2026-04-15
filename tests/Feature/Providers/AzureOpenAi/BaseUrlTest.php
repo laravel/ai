@@ -5,8 +5,8 @@ use Illuminate\Support\Facades\Http;
 
 use function Laravel\Ai\agent;
 
-test('azure text requests use the configured base url with openai v1 suffix', function () {
-    configureAzureProvider('https://my-resource.openai.azure.com');
+test('azure text requests use deployment-specific path', function () {
+    configureAzureProvider('https://my-resource.openai.azure.com', deployment: 'gpt-4o');
 
     Http::fake([
         '*' => Http::response([
@@ -33,18 +33,7 @@ test('azure text requests use the configured base url with openai v1 suffix', fu
     expect($response->text)->toBe('Hello from Azure');
 
     Http::assertSentCount(1);
-    azureAssertRequestSent('POST', 'https://my-resource.openai.azure.com/openai/v1/chat/completions');
-});
-
-test('azure url does not double append openai v1 when already present', function () {
-    configureAzureProvider('https://my-resource.openai.azure.com/openai/v1');
-
-    Http::fake(['*' => fakeAzureResponse()]);
-
-    agent()->prompt('Hello', provider: 'azure');
-
-    Http::assertSentCount(1);
-    azureAssertRequestSent('POST', 'https://my-resource.openai.azure.com/openai/v1/chat/completions');
+    azureAssertRequestSent('POST', 'https://my-resource.openai.azure.com/openai/deployments/gpt-4o/chat/completions');
 });
 
 test('azure requests include api-version query parameter', function () {
@@ -72,14 +61,14 @@ test('azure requests use api-key header not bearer token', function () {
     });
 });
 
-function configureAzureProvider(?string $url = null, ?string $apiVersion = null): void
+function configureAzureProvider(?string $url = null, ?string $apiVersion = null, string $deployment = 'gpt-4o'): void
 {
     config(['ai.providers.azure' => array_filter([
         ...config('ai.providers.azure'),
         'key' => 'test-key',
         'url' => $url,
         'api_version' => $apiVersion ?? '2024-10-21',
-        'deployment' => 'gpt-4o',
+        'deployment' => $deployment,
     ])]);
 }
 

@@ -292,7 +292,7 @@ trait ParsesTextResponses
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('chat/completions', $body),
+            fn () => $this->client($provider, $model, $timeout)->post('chat/completions', $body),
         );
 
         $data = $response->json();

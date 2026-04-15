@@ -15,7 +15,7 @@ beforeEach(function () {
     ]]);
 });
 
-test('embeddings request includes model input and dimensions', function () {
+test('embeddings request includes input and dimensions', function () {
     Http::fake(['*' => fakeAzureEmbeddingsResponse()]);
 
     Embeddings::for(['Hello world'])->dimensions(1536)->generate(provider: 'azure', model: 'text-embedding-3-small');
@@ -23,9 +23,19 @@ test('embeddings request includes model input and dimensions', function () {
     Http::assertSent(function (Request $request) {
         $body = json_decode($request->body(), true);
 
-        return $body['model'] === 'text-embedding-3-small'
-            && $body['input'] === ['Hello world']
-            && $body['dimensions'] === 1536;
+        return $body['input'] === ['Hello world']
+            && $body['dimensions'] === 1536
+            && ! isset($body['model']);
+    });
+});
+
+test('embeddings request uses deployment-specific url path', function () {
+    Http::fake(['*' => fakeAzureEmbeddingsResponse()]);
+
+    Embeddings::for(['Hello'])->generate(provider: 'azure', model: 'text-embedding-3-small');
+
+    Http::assertSent(function (Request $request) {
+        return str_contains($request->url(), '/openai/deployments/text-embedding-3-small/embeddings');
     });
 });
 

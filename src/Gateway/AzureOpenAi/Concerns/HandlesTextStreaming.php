@@ -298,7 +298,7 @@ trait HandlesTextStreaming
 
             $response = $this->withErrorHandling(
                 $provider->name(),
-                fn () => $this->client($provider, $timeout)
+                fn () => $this->client($provider, $model, $timeout)
                     ->withOptions(['stream' => true])
                     ->post('chat/completions', $body),
             );

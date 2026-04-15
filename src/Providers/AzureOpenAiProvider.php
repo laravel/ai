@@ -106,22 +106,8 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, TextPro
     public function additionalConfiguration(): array
     {
         return array_filter([
-            'url' => $this->buildAzureBaseUrl(),
+            'url' => rtrim($this->config['url'] ?? '', '/'),
             'api_version' => $this->config['api_version'] ?? '2024-10-21',
         ]);
-    }
-
-    /**
-     * Build the Azure OpenAI base URL.
-     */
-    protected function buildAzureBaseUrl(): string
-    {
-        $url = rtrim($this->config['url'] ?? '', '/');
-
-        if (str_contains($url, '/openai/v1')) {
-            return $url;
-        }
-
-        return "{$url}/openai/v1";
     }
 }
