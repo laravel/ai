@@ -45,32 +45,6 @@ class AzureOpenAiGateway implements EmbeddingGateway, TextGateway
     }
 
     /**
-     * Map a tool to the Azure OpenAI function definition format.
-     *
-     * Azure does not support strict mode unless ALL parameters are required,
-     * so we omit strict and additionalProperties to match Prism's behaviour.
-     */
-    protected function mapTool(Tool $tool): array
-    {
-        $schema = $tool->schema(new JsonSchemaTypeFactory);
-
-        $schemaArray = filled($schema)
-            ? (new ObjectSchema($schema))->toSchema()
-            : [];
-
-        return array_filter([
-            'type' => 'function',
-            'name' => class_basename($tool),
-            'description' => (string) $tool->description(),
-            'parameters' => filled($schemaArray) ? [
-                'type' => 'object',
-                'properties' => $schemaArray['properties'] ?? (object) [],
-                'required' => $schemaArray['required'] ?? [],
-            ] : null,
-        ]);
-    }
-
-    /**
      * {@inheritdoc}
      */
     public function generateText(
@@ -178,5 +152,28 @@ class AzureOpenAiGateway implements EmbeddingGateway, TextGateway
             $data['usage']['prompt_tokens'] ?? 0,
             new Meta($provider->name(), $model),
         );
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    protected function mapTool(Tool $tool): array
+    {
+        $schema = $tool->schema(new JsonSchemaTypeFactory);
+
+        $schemaArray = filled($schema)
+            ? (new ObjectSchema($schema))->toSchema()
+            : [];
+
+        return array_filter([
+            'type' => 'function',
+            'name' => class_basename($tool),
+            'description' => (string) $tool->description(),
+            'parameters' => filled($schemaArray) ? [
+                'type' => 'object',
+                'properties' => $schemaArray['properties'] ?? (object) [],
+                'required' => $schemaArray['required'] ?? [],
+            ] : null,
+        ]);
     }
 }
