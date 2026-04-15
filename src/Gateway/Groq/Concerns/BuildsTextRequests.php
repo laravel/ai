@@ -3,12 +3,15 @@
 namespace Laravel\Ai\Gateway\Groq\Concerns;
 
 use Illuminate\Support\Arr;
+use Laravel\Ai\Gateway\Concerns\ComposesSchemaInstructions;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 
 trait BuildsTextRequests
 {
+    use ComposesSchemaInstructions;
+
     /**
      * Build the request body for the Chat Completions API.
      */
@@ -21,10 +24,9 @@ trait BuildsTextRequests
         ?array $schema,
         ?TextGenerationOptions $options,
     ): array {
-        $body = [
-            'model' => $model,
-            'messages' => $this->mapMessagesToChat($messages, $instructions),
-        ];
+        $hasTools = false;
+
+        $body = ['model' => $model];
 
         if (filled($tools)) {
             $mappedTools = $this->mapTools($tools);
@@ -32,10 +34,18 @@ trait BuildsTextRequests
             if (filled($mappedTools)) {
                 $body['tool_choice'] = 'auto';
                 $body['tools'] = $mappedTools;
+                $hasTools = true;
             }
         }
 
-        if (filled($schema)) {
+        $inlineSchema = $this->shouldInlineSchemaInInstructions($hasTools, $schema);
+
+        $body['messages'] = $this->mapMessagesToChat(
+            $messages,
+            $inlineSchema ? $this->composeInstructions($instructions, $schema) : $instructions,
+        );
+
+        if (filled($schema) && ! $inlineSchema) {
             $body['response_format'] = $this->buildResponseFormat($schema);
         }
 
@@ -54,6 +64,16 @@ trait BuildsTextRequests
         }
 
         return $body;
+    }
+
+    /**
+     * Whether the schema must be embedded in the system instructions instead
+     * of being sent as `response_format`. Groq's API rejects requests that
+     * combine `response_format` with tool use.
+     */
+    protected function shouldInlineSchemaInInstructions(bool $hasTools, ?array $schema): bool
+    {
+        return $hasTools && filled($schema);
     }
 
     /**

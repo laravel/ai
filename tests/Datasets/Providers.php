@@ -27,7 +27,7 @@ dataset('agent-providers', [
     'deepseek' => ['deepseek', 'DEEPSEEK_API_KEY', 'deepseek-chat'],
     'mistral' => ['mistral', 'MISTRAL_API_KEY', 'mistral-small-latest'],
     'xai' => ['xai', 'XAI_API_KEY', 'grok-4-1-fast-reasoning'],
-    'openrouter' => ['openrouter', 'OPENROUTER_API_KEY', 'anthropic/claude-haiku-4.5'],
+    'openrouter' => ['openrouter', 'OPENROUTER_API_KEY', 'openai/gpt-oss-20b:nitro'],
 ]);
 
 dataset('agent-document-providers', [

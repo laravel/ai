@@ -97,19 +97,30 @@ test('request without tools excludes tool fields', function () {
     });
 });
 
-test('structured output includes json schema response format', function () {
+test('structured output uses json object response format', function () {
     Http::fake(['*' => fakeDeepSeekResponse('{"symbol": "Au"}')]);
 
     (new StructuredAgent)->prompt('What is the symbol for Gold?', provider: 'deepseek');
 
     Http::assertSent(function (Request $request) {
         $body = json_decode($request->body(), true);
-        $format = data_get($body, 'response_format');
 
-        return $format['type'] === 'json_schema'
-            && isset($format['json_schema']['name'])
-            && isset($format['json_schema']['schema'])
-            && $format['json_schema']['strict'] === true;
+        return data_get($body, 'response_format') === ['type' => 'json_object'];
+    });
+});
+
+test('structured output appends schema instructions to system message', function () {
+    Http::fake(['*' => fakeDeepSeekResponse('{"symbol": "Au"}')]);
+
+    (new StructuredAgent)->prompt('What is the symbol for Gold?', provider: 'deepseek');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $systemMsg = collect($body['messages'])->firstWhere('role', 'system');
+
+        return $systemMsg !== null
+            && str_contains($systemMsg['content'], 'JSON object that strictly adheres')
+            && str_contains($systemMsg['content'], '"symbol"');
     });
 });
 

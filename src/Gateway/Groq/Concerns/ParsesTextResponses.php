@@ -226,7 +226,14 @@ trait ParsesTextResponses
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): TextResponse {
-        $chatMessages = $this->mapMessagesToChat($originalMessages, $instructions);
+        $mappedTools = filled($tools) ? $this->mapTools($tools) : [];
+        $hasTools = filled($mappedTools);
+        $inlineSchema = $this->shouldInlineSchemaInInstructions($hasTools, $schema);
+
+        $chatMessages = $this->mapMessagesToChat(
+            $originalMessages,
+            $inlineSchema ? $this->composeInstructions($instructions, $schema) : $instructions,
+        );
 
         foreach ($messages as $msg) {
             if ($msg instanceof AssistantMessage) {
@@ -259,16 +266,12 @@ trait ParsesTextResponses
             'messages' => $chatMessages,
         ];
 
-        if (filled($tools)) {
-            $mappedTools = $this->mapTools($tools);
-
-            if (filled($mappedTools)) {
-                $body['tool_choice'] = 'auto';
-                $body['tools'] = $mappedTools;
-            }
+        if ($hasTools) {
+            $body['tool_choice'] = 'auto';
+            $body['tools'] = $mappedTools;
         }
 
-        if (filled($schema)) {
+        if (filled($schema) && ! $inlineSchema) {
             $body['response_format'] = $this->buildResponseFormat($schema);
         }
 

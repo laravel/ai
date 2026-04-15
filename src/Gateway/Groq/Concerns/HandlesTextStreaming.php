@@ -257,8 +257,15 @@ trait HandlesTextStreaming
 
             $updatedPriorMessages = [...$priorChatMessages, $assistantMsg, ...$toolResultMessages];
 
+            $mappedTools = filled($tools) ? $this->mapTools($tools) : [];
+            $hasTools = filled($mappedTools);
+            $inlineSchema = $this->shouldInlineSchemaInInstructions($hasTools, $schema);
+
             $chatMessages = [
-                ...$this->mapMessagesToChat($originalMessages, $instructions),
+                ...$this->mapMessagesToChat(
+                    $originalMessages,
+                    $inlineSchema ? $this->composeInstructions($instructions, $schema) : $instructions,
+                ),
                 ...$updatedPriorMessages,
             ];
 
@@ -269,16 +276,12 @@ trait HandlesTextStreaming
                 'stream_options' => ['include_usage' => true],
             ];
 
-            if (filled($tools)) {
-                $mappedTools = $this->mapTools($tools);
-
-                if (filled($mappedTools)) {
-                    $body['tool_choice'] = 'auto';
-                    $body['tools'] = $mappedTools;
-                }
+            if ($hasTools) {
+                $body['tool_choice'] = 'auto';
+                $body['tools'] = $mappedTools;
             }
 
-            if (filled($schema)) {
+            if (filled($schema) && ! $inlineSchema) {
                 $body['response_format'] = $this->buildResponseFormat($schema);
             }
 
