@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
+use Laravel\Ai\Files;
 use Laravel\Ai\Files\Base64Document;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
@@ -90,6 +92,34 @@ test('base64 pdf document maps to inline data', function () {
             if (isset($part['inlineData'])) {
                 return $part['inlineData']['mimeType'] === 'application/pdf'
                     && $part['inlineData']['data'] === base64_encode('fake-pdf-content');
+            }
+        }
+
+        return false;
+    });
+});
+
+test('stored text document sends real mime type', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
+    ]);
+
+    Storage::fake('docs');
+    Storage::disk('docs')->put('notes.txt', 'stored text contents');
+
+    agent('You are helpful.')->prompt(
+        'Read this.',
+        attachments: [Files\Document::fromStorage('notes.txt', 'docs')],
+        provider: 'gemini',
+    );
+
+    Http::assertSent(function ($request) {
+        $parts = $request->data()['contents'][0]['parts'];
+
+        foreach ($parts as $part) {
+            if (isset($part['inlineData'])) {
+                return $part['inlineData']['mimeType'] === 'text/plain'
+                    && $part['inlineData']['data'] === base64_encode('stored text contents');
             }
         }
 

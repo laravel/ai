@@ -2,6 +2,8 @@
 
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
+use Laravel\Ai\Files;
 use Laravel\Ai\Files\Base64Document;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
@@ -101,6 +103,103 @@ test('base64 pdf document maps to document content block', function () {
             && $docBlock['source']['type'] === 'base64'
             && $docBlock['source']['media_type'] === 'application/pdf'
             && $docBlock['source']['data'] === base64_encode('fake-pdf-content');
+    });
+});
+
+test('base64 text document maps to text source block', function () {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse(),
+    ]);
+
+    $document = Files\Document::fromString('hello world', 'text/plain');
+
+    agent('You are helpful.')->prompt(
+        'Read this.',
+        attachments: [$document],
+        provider: 'anthropic',
+    );
+
+    Http::assertSent(function ($request) {
+        $docBlock = $request->data()['messages'][0]['content'][0];
+
+        return $docBlock['type'] === 'document'
+            && $docBlock['source']['type'] === 'text'
+            && $docBlock['source']['media_type'] === 'text/plain'
+            && $docBlock['source']['data'] === 'hello world';
+    });
+});
+
+test('stored text document maps to text source block', function () {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse(),
+    ]);
+
+    Storage::fake('docs');
+    Storage::disk('docs')->put('notes.txt', 'stored text contents');
+
+    agent('You are helpful.')->prompt(
+        'Analyze the attached record.',
+        attachments: [Files\Document::fromStorage('notes.txt', 'docs')],
+        provider: 'anthropic',
+    );
+
+    Http::assertSent(function ($request) {
+        $docBlock = $request->data()['messages'][0]['content'][0];
+
+        return $docBlock['type'] === 'document'
+            && $docBlock['source']['type'] === 'text'
+            && $docBlock['source']['media_type'] === 'text/plain'
+            && $docBlock['source']['data'] === 'stored text contents';
+    });
+});
+
+test('local text document maps to text source block', function () {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse(),
+    ]);
+
+    $path = tempnam(sys_get_temp_dir(), 'ai-').'.txt';
+    file_put_contents($path, 'local text contents');
+
+    try {
+        agent('You are helpful.')->prompt(
+            'Read this.',
+            attachments: [Files\Document::fromPath($path)],
+            provider: 'anthropic',
+        );
+
+        Http::assertSent(function ($request) {
+            $docBlock = $request->data()['messages'][0]['content'][0];
+
+            return $docBlock['type'] === 'document'
+                && $docBlock['source']['type'] === 'text'
+                && str_starts_with($docBlock['source']['media_type'], 'text/')
+                && $docBlock['source']['data'] === 'local text contents';
+        });
+    } finally {
+        @unlink($path);
+    }
+});
+
+test('uploaded text file maps to text source block', function () {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse(),
+    ]);
+
+    $upload = UploadedFile::fake()->createWithContent('notes.txt', 'uploaded text contents');
+
+    agent('You are helpful.')->prompt(
+        'Read this.',
+        attachments: [$upload],
+        provider: 'anthropic',
+    );
+
+    Http::assertSent(function ($request) {
+        $docBlock = $request->data()['messages'][0]['content'][0];
+
+        return $docBlock['type'] === 'document'
+            && $docBlock['source']['type'] === 'text'
+            && $docBlock['source']['data'] === 'uploaded text contents';
     });
 });
 

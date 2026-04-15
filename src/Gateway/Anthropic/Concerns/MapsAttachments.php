@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Base64Image;
@@ -76,19 +77,19 @@ trait MapsAttachments
                 ],
                 $attachment instanceof Base64Document => [
                     'type' => 'document',
-                    'source' => [
-                        'type' => 'base64',
-                        'media_type' => $attachment->mime,
-                        'data' => $attachment->base64,
-                    ],
+                    'source' => $this->documentSource(
+                        $attachment->mime,
+                        fn () => base64_decode($attachment->base64),
+                        fn () => $attachment->base64,
+                    ),
                 ],
                 $attachment instanceof LocalDocument => [
                     'type' => 'document',
-                    'source' => [
-                        'type' => 'base64',
-                        'media_type' => $attachment->mimeType(),
-                        'data' => base64_encode(file_get_contents($attachment->path)),
-                    ],
+                    'source' => $this->documentSource(
+                        $attachment->mimeType(),
+                        fn () => file_get_contents($attachment->path),
+                        fn () => base64_encode(file_get_contents($attachment->path)),
+                    ),
                 ],
                 $attachment instanceof RemoteDocument => [
                     'type' => 'document',
@@ -99,13 +100,11 @@ trait MapsAttachments
                 ],
                 $attachment instanceof StoredDocument => [
                     'type' => 'document',
-                    'source' => [
-                        'type' => 'base64',
-                        'media_type' => $attachment->mimeType(),
-                        'data' => base64_encode(
-                            Storage::disk($attachment->disk)->get($attachment->path)
-                        ),
-                    ],
+                    'source' => $this->documentSource(
+                        $attachment->mimeType(),
+                        fn () => Storage::disk($attachment->disk)->get($attachment->path),
+                        fn () => base64_encode(Storage::disk($attachment->disk)->get($attachment->path)),
+                    ),
                 ],
                 $attachment instanceof UploadedFile && $this->isImage($attachment) => [
                     'type' => 'image',
@@ -117,11 +116,11 @@ trait MapsAttachments
                 ],
                 $attachment instanceof UploadedFile => [
                     'type' => 'document',
-                    'source' => [
-                        'type' => 'base64',
-                        'media_type' => $attachment->getClientMimeType(),
-                        'data' => base64_encode($attachment->get()),
-                    ],
+                    'source' => $this->documentSource(
+                        $attachment->getClientMimeType(),
+                        fn () => $attachment->get(),
+                        fn () => base64_encode($attachment->get()),
+                    ),
                 ],
                 default => throw new InvalidArgumentException('Unsupported attachment type ['.get_class($attachment).']'),
             };
@@ -132,6 +131,30 @@ trait MapsAttachments
 
             return $mapped;
         })->all();
+    }
+
+    /**
+     * Build the Anthropic document `source` block for the given mime type.
+     *
+     * @param  callable():string  $rawResolver
+     * @param  callable():string  $base64Resolver
+     * @return array<string, string>
+     */
+    protected function documentSource(?string $mimeType, callable $rawResolver, callable $base64Resolver): array
+    {
+        if ($mimeType !== null && Str::startsWith($mimeType, 'text/')) {
+            return [
+                'type' => 'text',
+                'media_type' => $mimeType,
+                'data' => $rawResolver(),
+            ];
+        }
+
+        return [
+            'type' => 'base64',
+            'media_type' => $mimeType,
+            'data' => $base64Resolver(),
+        ];
     }
 
     /**

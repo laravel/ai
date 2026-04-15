@@ -3,6 +3,7 @@
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Files;
 use Laravel\Ai\Files\Base64Document;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
@@ -95,6 +96,27 @@ test('base64 pdf document maps to input file', function () {
         return $fileBlock !== null
             && str_contains($fileBlock['file_data'], 'application/pdf')
             && str_contains($fileBlock['file_data'], base64_encode('fake-pdf-content'));
+    });
+});
+
+test('nameless text document falls back to derived filename', function () {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiResponse(),
+    ]);
+
+    agent('You are helpful.')->prompt(
+        'Read this.',
+        attachments: [Files\Document::fromString('hello world', 'text/plain')],
+        provider: 'openai',
+    );
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $userMessage = collect($body['input'])->firstWhere('role', 'user');
+        $fileBlock = collect($userMessage['content'])->firstWhere('type', 'input_file');
+
+        return $fileBlock !== null
+            && ($fileBlock['filename'] ?? null) === 'document.txt';
     });
 });
 

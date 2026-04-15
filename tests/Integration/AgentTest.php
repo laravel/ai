@@ -3,6 +3,7 @@
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\AgentStreamed;
@@ -10,6 +11,7 @@ use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\StreamingAgent;
 use Laravel\Ai\Events\ToolInvoked;
+use Laravel\Ai\Files;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Streaming\Events\TextDelta;
@@ -20,56 +22,53 @@ use Tests\Fixtures\Agents\ToolUsingAgent;
 
 use function Laravel\Ai\agent;
 
-beforeEach(function () {
-    requiresApiKey('GROQ_API_KEY', 'ANTHROPIC_API_KEY');
+test('agents can get a simple text response', function (string $provider, string $apiKey, string $model) {
+    requiresApiKey($apiKey);
 
-    $this->provider = 'groq';
-    $this->model = 'openai/gpt-oss-20b';
-    $this->toolProvider = 'anthropic';
-    $this->toolModel = 'claude-haiku-4-5-20251001';
-});
-
-test('agents can get a simple text response', function () {
     Event::fake();
 
     $agent = new AssistantAgent;
 
     $response = $agent->prompt(
         'What is the name of the PHP framework created by Taylor Otwell?',
-        provider: $this->provider,
-        model: $this->model,
+        provider: $provider,
+        model: $model,
     );
 
     expect(str_contains($response->text, 'Laravel'))->toBeTrue()
         ->and(Str::isUuid($response->invocationId, 7))->toBeTrue()
         ->and($response->messages->count())->toBeGreaterThan(0)
-        ->and($response->meta->provider)->toEqual('groq')
-        ->and($response->meta->model)->toEqual('openai/gpt-oss-20b')
+        ->and($response->meta->provider)->toEqual($provider)
+        ->and($response->meta->model)->toBeString()->not->toBeEmpty()
         ->and($response->steps->count())->toBeGreaterThan(0);
 
     Event::assertDispatched(PromptingAgent::class);
     Event::assertDispatched(AgentPrompted::class);
-});
+})->with('agent-providers');
 
-test('ad hoc agents can be prompted', function () {
+test('ad hoc agents can be prompted', function (string $provider, string $apiKey, string $model) {
+    requiresApiKey($apiKey);
+
     $response = agent()->prompt(
         'What is the name of the PHP framework created by Taylor Otwell?',
-        provider: $this->provider,
-        model: $this->model,
+        provider: $provider,
+        model: $model,
     );
 
     expect(str_contains($response->text, 'Laravel'))->toBeTrue();
-});
+})->with('agent-providers');
 
-test('agents can stream a response', function () {
+test('agents can stream a response', function (string $provider, string $apiKey, string $model) {
+    requiresApiKey($apiKey);
+
     Event::fake();
 
     $agent = new AssistantAgent;
 
     $response = $agent->stream(
         'What is the name of the PHP framework created by Taylor Otwell?',
-        provider: $this->provider,
-        model: $this->model,
+        provider: $provider,
+        model: $model,
     )->then(function (StreamedAgentResponse $response) {
         $_SERVER['__testing.response'] = $response;
     })->then(function () {
@@ -94,15 +93,17 @@ test('agents can stream a response', function () {
 
     unset($_SERVER['__testing.response']);
     unset($_SERVER['__testing.invoked']);
-});
+})->with('agent-providers');
 
-test('agents can queue a response', function () {
+test('agents can queue a response', function (string $provider, string $apiKey, string $model) {
+    requiresApiKey($apiKey);
+
     $agent = new AssistantAgent;
 
     $agent->queue(
         'What is the name of the PHP framework created by Taylor Otwell?',
-        provider: $this->provider,
-        model: $this->model,
+        provider: $provider,
+        model: $model,
     )->then(function (AgentResponse $response) {
         $_ENV['__testing.response'] = $response;
     });
@@ -112,13 +113,15 @@ test('agents can queue a response', function () {
     expect(str_contains($response->text, 'Laravel'))->toBeTrue();
 
     unset($_SERVER['__testing.response']);
-});
+})->with('agent-providers');
 
-test('ad hoc agents can queue a response', function () {
+test('ad hoc agents can queue a response', function (string $provider, string $apiKey, string $model) {
+    requiresApiKey($apiKey);
+
     agent()->queue(
         'What is the name of the PHP framework created by Taylor Otwell?',
-        provider: $this->provider,
-        model: $this->model,
+        provider: $provider,
+        model: $model,
     )->then(function (AgentResponse $response) {
         $_ENV['__testing.response'] = $response;
     });
@@ -128,17 +131,19 @@ test('ad hoc agents can queue a response', function () {
     expect(str_contains($response->text, 'Laravel'))->toBeTrue();
 
     unset($_SERVER['__testing.response']);
-});
+})->with('agent-providers');
 
-test('ad hoc structured agents can queue a response', function () {
+test('ad hoc structured agents can queue a response', function (string $provider, string $apiKey, string $model) {
+    requiresApiKey($apiKey);
+
     agent(
         schema: fn ($schema) => [
             'symbol' => $schema->string()->required(),
         ]
     )->queue(
         'What is the chemical symbol for silver?',
-        provider: $this->provider,
-        model: $this->model,
+        provider: $provider,
+        model: $model,
     )->then(function (AgentResponse $response) {
         $_ENV['__testing.response'] = $response;
     });
@@ -148,48 +153,56 @@ test('ad hoc structured agents can queue a response', function () {
     expect(strtolower($response['symbol']))->toEqual('ag');
 
     unset($_SERVER['__testing.response']);
-});
+})->with('agent-providers');
 
-test('agents can have conversation state', function () {
+test('agents can have conversation state', function (string $provider, string $apiKey, string $model) {
+    requiresApiKey($apiKey);
+
     $agent = new ConversationalAgent;
 
     $response = $agent->prompt(
         'What did I say my name was?',
-        provider: $this->provider,
-        model: $this->model,
+        provider: $provider,
+        model: $model,
     );
 
     expect(str_contains($response->text, 'Taylor'))->toBeTrue();
-});
+})->with('agent-providers');
 
-test('agents can have structured output', function () {
+test('agents can have structured output', function (string $provider, string $apiKey, string $model) {
+    requiresApiKey($apiKey);
+
     $agent = new StructuredAgent;
 
     $response = $agent->prompt(
         'What is the chemical symbol for silver?',
-        provider: $this->provider,
-        model: $this->model,
+        provider: $provider,
+        model: $model,
     );
 
     expect(strtolower($response['symbol']))->toEqual('ag')
         ->and($response->steps->count())->toBeGreaterThan(0);
-});
+})->with('agent-providers');
 
-test('ad hoc agents can have structured output', function () {
+test('ad hoc agents can have structured output', function (string $provider, string $apiKey, string $model) {
+    requiresApiKey($apiKey);
+
     $response = agent(
         schema: fn (JsonSchema $schema) => [
             'symbol' => $schema->string()->required(),
         ],
     )->prompt(
         'What is the chemical symbol for silver?',
-        provider: $this->provider,
-        model: $this->model,
+        provider: $provider,
+        model: $model,
     );
 
     expect(strtolower($response['symbol']))->toEqual('ag');
-});
+})->with('agent-providers');
 
-test('agents can use tools', function () {
+test('agents can use tools', function (string $provider, string $apiKey, string $model) {
+    requiresApiKey($apiKey);
+
     Event::fake();
 
     // Verify with a random number...
@@ -197,8 +210,8 @@ test('agents can use tools', function () {
 
     $response = $agent->prompt(
         'Can I have a random number between 1 and 1000?',
-        provider: $this->toolProvider,
-        model: $this->toolModel,
+        provider: $provider,
+        model: $model,
     );
 
     expect($response['number'])->toBeBetween(1, 1000)
@@ -216,14 +229,45 @@ test('agents can use tools', function () {
 
     $response = $agent->prompt(
         'Can I have a random number?',
-        provider: $this->toolProvider,
-        model: $this->toolModel,
+        provider: $provider,
+        model: $model,
     );
 
     expect($response['number'])->toBe(72019);
-});
+})->with('agent-providers');
 
-test('agent tool exception handling is not magical', function () {
+test('agents can analyze text document attachments', function (string $provider, string $apiKey, string $model) {
+    requiresApiKey($apiKey);
+
+    Storage::fake('docs');
+
+    Storage::disk('docs')->put('document-one.txt', 'The capital of France is Paris.');
+    Storage::disk('docs')->put('document-two.txt', 'The capital of Japan is Tokyo.');
+    Storage::disk('docs')->put('document-three.txt', 'The capital of Australia is Canberra.');
+
+    $record = ['name' => 'Taylor', 'role' => 'creator of Laravel'];
+
+    $response = agent('Answer using only the attached documents.')->prompt(
+        'List the three capital cities mentioned across the attached documents and name the person in the JSON record.',
+        [
+            Files\Document::fromStorage('document-one.txt', 'docs'),
+            Files\Document::fromStorage('document-two.txt', 'docs'),
+            Files\Document::fromStorage('document-three.txt', 'docs'),
+            Files\Document::fromString(json_encode($record), 'text/plain'),
+        ],
+        provider: $provider,
+        model: $model,
+    );
+
+    expect($response->text)->toContain('Paris')
+        ->and($response->text)->toContain('Tokyo')
+        ->and($response->text)->toContain('Canberra')
+        ->and($response->text)->toContain('Taylor');
+})->with('agent-document-providers');
+
+test('agent tool exception handling is not magical', function (string $provider, string $apiKey, string $model) {
+    requiresApiKey($apiKey);
+
     Event::fake();
 
     $agent = new ToolUsingAgent(toolThrowsException: true);
@@ -233,8 +277,8 @@ test('agent tool exception handling is not magical', function () {
     try {
         $response = $agent->prompt(
             'Can I have a random number between 1 and 1000?',
-            provider: $this->toolProvider,
-            model: $this->toolModel,
+            provider: $provider,
+            model: $model,
         );
 
         $text = $response->text;
@@ -246,4 +290,4 @@ test('agent tool exception handling is not magical', function () {
     }
 
     expect($caught)->toBeTrue();
-});
+})->with('agent-providers');

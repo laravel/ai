@@ -18,3 +18,20 @@ dataset('reranking-providers', [
     'cohere' => ['cohere', 'COHERE_API_KEY'],
     'voyageai' => ['voyageai', 'VOYAGEAI_API_KEY'],
 ]);
+
+dataset('agent-providers', [
+    'anthropic' => ['anthropic', 'ANTHROPIC_API_KEY', 'claude-haiku-4-5-20251001'],
+    'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4-nano'],
+    'gemini' => ['gemini', 'GEMINI_API_KEY', 'gemini-3.1-flash-lite-preview'],
+    'groq' => ['groq', 'GROQ_API_KEY', 'openai/gpt-oss-20b'],
+    'deepseek' => ['deepseek', 'DEEPSEEK_API_KEY', 'deepseek-chat'],
+    'mistral' => ['mistral', 'MISTRAL_API_KEY', 'mistral-small-latest'],
+    'xai' => ['xai', 'XAI_API_KEY', 'grok-4-1-fast-reasoning'],
+    'openrouter' => ['openrouter', 'OPENROUTER_API_KEY', 'anthropic/claude-haiku-4.5'],
+]);
+
+dataset('agent-document-providers', [
+    'anthropic' => ['anthropic', 'ANTHROPIC_API_KEY', 'claude-haiku-4-5-20251001'],
+    'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4-nano'],
+    'gemini' => ['gemini', 'GEMINI_API_KEY', 'gemini-3.1-flash-lite-preview'],
+]);
