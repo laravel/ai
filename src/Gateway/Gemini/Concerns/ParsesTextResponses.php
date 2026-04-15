@@ -246,23 +246,7 @@ trait ParsesTextResponses
     }
 
     /**
-     * Filter out thinking parts from the response, keeping only text and functionCall parts.
-     *
-     * Gemini may reject thought content in the conversation history, so these
-     * must be excluded from continuation requests.
-     */
-    protected function excludeThinkingParts(array $parts): array
-    {
-        return array_values(array_filter(
-            $parts,
-            fn (array $part) => ! $this->isThinkingPart($part),
-        ));
-    }
-
-    /**
-     * Sanitize functionCall parts so they can be sent back to Gemini as
-     * conversation history. Gemini rejects request payloads containing
-     * the response-only `id` field or an empty `args` value.
+     * Sanitize functionCall parts so they can be sent back to Gemini as conversation history.
      */
     protected function sanitizeRequestParts(array $parts): array
     {
@@ -283,6 +267,17 @@ trait ParsesTextResponses
 
             return $part;
         }, $parts);
+    }
+
+    /**
+     * Filter out thinking parts from the response, keeping only text and functionCall parts.
+     */
+    protected function excludeThinkingParts(array $parts): array
+    {
+        return array_values(array_filter(
+            $parts,
+            fn (array $part) => ! $this->isThinkingPart($part),
+        ));
     }
 
     /**
