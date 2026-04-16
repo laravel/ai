@@ -23,7 +23,7 @@ function fakeOpenAiImageResponse(): PromiseInterface
 
 test('image request does not include quality when not specified', function () {
     Http::fake([
-        'api.openai.com/v1/images/generations' => fakeOpenAiImageResponse(),
+        '*' => fakeOpenAiImageResponse(),
     ]);
 
     Image::of('A red apple')->generate(provider: 'openai', model: 'dall-e-2');
@@ -38,7 +38,7 @@ test('image request does not include quality when not specified', function () {
 
 test('image request does not include moderation', function () {
     Http::fake([
-        'api.openai.com/v1/images/generations' => fakeOpenAiImageResponse(),
+        '*' => fakeOpenAiImageResponse(),
     ]);
 
     Image::of('A red apple')->generate(provider: 'openai', model: 'dall-e-3');
@@ -53,7 +53,7 @@ test('image request does not include moderation', function () {
 
 test('image request includes quality when explicitly specified', function () {
     Http::fake([
-        'api.openai.com/v1/images/generations' => fakeOpenAiImageResponse(),
+        '*' => fakeOpenAiImageResponse(),
     ]);
 
     Image::of('A red apple')->quality('high')->generate(provider: 'openai', model: 'dall-e-3');
@@ -68,7 +68,7 @@ test('image request includes quality when explicitly specified', function () {
 
 test('image request includes size when specified', function () {
     Http::fake([
-        'api.openai.com/v1/images/generations' => fakeOpenAiImageResponse(),
+        '*' => fakeOpenAiImageResponse(),
     ]);
 
     Image::of('A red apple')->square()->generate(provider: 'openai', model: 'gpt-image-1');
@@ -82,7 +82,7 @@ test('image request includes size when specified', function () {
 
 test('image request does not include size when not specified', function () {
     Http::fake([
-        'api.openai.com/v1/images/generations' => fakeOpenAiImageResponse(),
+        '*' => fakeOpenAiImageResponse(),
     ]);
 
     Image::of('A red apple')->generate(provider: 'openai', model: 'gpt-image-1');
