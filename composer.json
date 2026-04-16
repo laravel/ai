@@ -20,8 +20,7 @@
         "illuminate/json-schema": "^12.0|^13.0",
         "illuminate/support": "^12.0|^13.0",
         "laravel/prompts": "^0.3.6",
-        "laravel/serializable-closure": "^2.0",
-        "prism-php/prism": "^0.100.0"
+        "laravel/serializable-closure": "^2.0"
     },
     "require-dev": {
         "laravel/pint": "^1.26",

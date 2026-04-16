@@ -71,7 +71,7 @@ trait ParsesTextResponses
      *
      * Note: deepseek-reasoner responses include a `reasoning_content` field on
      * each choice's message; it's intentionally ignored here — we only expose
-     * the final `content` text, matching Prism's prior behavior.
+     * the final `content` text.
      */
     protected function processResponse(
         array $data,
