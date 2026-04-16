@@ -60,12 +60,13 @@ trait MapsMessages
 
         if ($message instanceof AssistantMessage && $message->toolCalls->isNotEmpty()) {
             foreach ($message->toolCalls as $toolCall) {
-                $parts[] = [
-                    'functionCall' => [
-                        'name' => $toolCall->name,
-                        'args' => $toolCall->arguments,
-                    ],
-                ];
+                $functionCall = ['name' => $toolCall->name];
+
+                if (filled($toolCall->arguments)) {
+                    $functionCall['args'] = $toolCall->arguments;
+                }
+
+                $parts[] = ['functionCall' => $functionCall];
             }
         }
 

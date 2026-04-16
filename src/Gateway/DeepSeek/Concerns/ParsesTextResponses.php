@@ -230,7 +230,10 @@ trait ParsesTextResponses
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): TextResponse {
-        $chatMessages = $this->mapMessagesToChat($originalMessages, $instructions);
+        $chatMessages = $this->mapMessagesToChat(
+            $originalMessages,
+            $this->composeInstructions($instructions, $schema),
+        );
 
         foreach ($messages as $msg) {
             if ($msg instanceof AssistantMessage) {
@@ -273,7 +276,7 @@ trait ParsesTextResponses
         }
 
         if (filled($schema)) {
-            $body['response_format'] = $this->buildResponseFormat($schema);
+            $body['response_format'] = $this->buildResponseFormat();
         }
 
         if (! is_null($options?->maxTokens)) {

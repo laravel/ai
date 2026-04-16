@@ -1,9 +1,16 @@
 <?php
 
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Base64Document;
+use Laravel\Ai\Messages\AssistantMessage;
+use Laravel\Ai\Messages\Message;
+use Laravel\Ai\Promptable;
+use Laravel\Ai\Responses\Data\ToolCall;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
@@ -47,14 +54,14 @@ test('tool result follow up maps model and function response', function () {
 
     $followUpContents = $recorded[1][0]->data()['contents'];
 
-    $hasModelWithFunctionCall = false;
+    $modelFunctionCall = null;
     $hasFunctionResponse = false;
 
     foreach ($followUpContents as $content) {
         if ($content['role'] === 'model') {
             foreach ($content['parts'] ?? [] as $part) {
                 if (isset($part['functionCall'])) {
-                    $hasModelWithFunctionCall = true;
+                    $modelFunctionCall = $part['functionCall'];
                 }
             }
         }
@@ -68,8 +75,48 @@ test('tool result follow up maps model and function response', function () {
         }
     }
 
-    expect($hasModelWithFunctionCall)->toBeTrue('Follow-up should include model message with functionCall')
+    expect($modelFunctionCall)->not->toBeNull('Follow-up should include model message with functionCall')
+        ->and($modelFunctionCall)->not->toHaveKey('args')
+        ->and($modelFunctionCall)->not->toHaveKey('id')
         ->and($hasFunctionResponse)->toBeTrue('Follow-up should include user message with functionResponse');
+});
+
+test('prior assistant tool call with empty arguments omits args in conversation history', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('OK'),
+    ]);
+
+    $agent = new class implements Agent, Conversational
+    {
+        use Promptable;
+
+        public function instructions(): string
+        {
+            return 'You are a helpful assistant.';
+        }
+
+        public function messages(): iterable
+        {
+            return [
+                new Message(role: 'user', content: 'Generate a number'),
+                new AssistantMessage('', new Collection([
+                    new ToolCall('call_123', 'FixedNumberGenerator', [], 'call_123'),
+                ])),
+            ];
+        }
+    };
+
+    $agent->prompt('And again', provider: 'gemini');
+
+    Http::assertSent(function ($request) {
+        $modelFunctionCall = collect($request->data()['contents'])
+            ->where('role', 'model')
+            ->flatMap(fn ($content) => $content['parts'] ?? [])
+            ->firstWhere(fn ($part) => isset($part['functionCall']))['functionCall'] ?? null;
+
+        return $modelFunctionCall !== null
+            && ! array_key_exists('args', $modelFunctionCall);
+    });
 });
 
 test('base64 pdf document maps to inline data', function () {

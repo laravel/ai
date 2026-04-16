@@ -258,7 +258,10 @@ trait HandlesTextStreaming
             $updatedPriorMessages = [...$priorChatMessages, $assistantMsg, ...$toolResultMessages];
 
             $chatMessages = [
-                ...$this->mapMessagesToChat($originalMessages, $instructions),
+                ...$this->mapMessagesToChat(
+                    $originalMessages,
+                    $this->composeInstructions($instructions, $schema),
+                ),
                 ...$updatedPriorMessages,
             ];
 
@@ -279,7 +282,7 @@ trait HandlesTextStreaming
             }
 
             if (filled($schema)) {
-                $body['response_format'] = $this->buildResponseFormat($schema);
+                $body['response_format'] = $this->buildResponseFormat();
             }
 
             if (! is_null($options?->maxTokens)) {
