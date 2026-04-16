@@ -7,10 +7,10 @@ use Illuminate\Filesystem\Filesystem;
 use JsonSerializable;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
+use Laravel\Ai\Exceptions\FileNotFoundException;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
 use Laravel\Ai\PendingResponses\PendingTranscriptionGeneration;
 use Laravel\Ai\Transcription;
-use RuntimeException;
 
 class LocalAudio extends Audio implements Arrayable, JsonSerializable, StorableFile, TranscribableAudio
 {
@@ -31,7 +31,7 @@ class LocalAudio extends Audio implements Arrayable, JsonSerializable, StorableF
         $content = file_get_contents($this->path);
 
         if ($content === false) {
-            throw new RuntimeException("File does not exist at path [{$this->path}]");
+            throw FileNotFoundException::withPath($this->path);
         }
 
         return $content;
