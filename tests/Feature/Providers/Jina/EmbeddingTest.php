@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
 
@@ -14,14 +15,14 @@ beforeEach(function () {
 test('embeddings request includes model, input, and dimensions', function () {
     Http::fake(['*' => fakeJinaEmbeddingsResponse()]);
 
-    Embeddings::for(['Hello world'])->dimensions(2048)->generate(provider: 'jina', model: 'jina-embeddings-v4');
+    Embeddings::for(['Hello world'])->dimensions(1024)->generate(provider: 'jina', model: 'jina-embeddings-v4');
 
     Http::assertSent(function (Request $request) {
         $body = json_decode($request->body(), true);
 
         return $body['model'] === 'jina-embeddings-v4'
             && $body['input'][0]['text'] === 'Hello world'
-            && $body['dimensions'] === 2048
+            && $body['dimensions'] === 1024
             && $body['task'] === 'retrieval.passage'
             && $request->url() === 'https://api.jina.ai/v1/embeddings';
     });
@@ -44,10 +45,22 @@ test('embeddings request sends bearer token', function () {
 
     Embeddings::for(['Hello'])->generate(provider: 'jina', model: 'jina-embeddings-v4');
 
-    Http::assertSent(function (Request $request) {
-        return $request->hasHeader('Authorization', 'Bearer test-key');
-    });
+    Http::assertSent(fn (Request $request) => $request->hasHeader('Authorization', 'Bearer test-key'));
 });
+
+test('embeddings use default model when none specified', function () {
+    Http::fake(['*' => fakeJinaEmbeddingsResponse()]);
+
+    Embeddings::for(['Hello'])->generate(provider: 'jina');
+
+    Http::assertSent(fn (Request $request) => json_decode($request->body(), true)['model'] === 'jina-embeddings-v4');
+});
+
+test('embeddings throw when the API returns an error', function () {
+    Http::fake(['*' => Http::response(['detail' => 'unauthorized'], 401)]);
+
+    Embeddings::for(['Hello'])->generate(provider: 'jina', model: 'jina-embeddings-v4');
+})->throws(RequestException::class);
 
 test('multiple inputs return multiple embeddings', function () {
     Http::fake(['*' => Http::response([
