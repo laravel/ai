@@ -83,6 +83,27 @@ test('can assert no files were stored', function () {
     Files::assertNothingStored();
 });
 
+test('put(name:) overrides the filename sent to the provider', function () {
+    Files::fake();
+
+    Document::fromString('Hello, World!', 'text/plain')->put(name: 'custom-name.txt');
+    Document::fromPath(__DIR__.'/../Fixtures/document.txt')->put(name: 'renamed-document.txt');
+    Document::fromUpload(new UploadedFile(__DIR__.'/../Fixtures/report.txt', 'report.txt'))
+        ->put(name: 'renamed-report.txt');
+
+    Files::assertStored(fn (StorableFile $file) => $file->name() === 'custom-name.txt');
+    Files::assertStored(fn (StorableFile $file) => $file->name() === 'renamed-document.txt');
+    Files::assertStored(fn (StorableFile $file) => $file->name() === 'renamed-report.txt');
+});
+
+test('Files::put(name:) overrides the filename on an existing StorableFile', function () {
+    Files::fake();
+
+    Files::put(Document::fromPath(__DIR__.'/../Fixtures/document.txt'), name: 'override.txt');
+
+    Files::assertStored(fn (StorableFile $file) => $file->name() === 'override.txt');
+});
+
 test('can assert file was deleted', function () {
     Files::fake();
 

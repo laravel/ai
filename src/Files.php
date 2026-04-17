@@ -39,6 +39,10 @@ class Files
                 ->as($name ?? $file->getClientOriginalName());
         }
 
+        if ($name !== null && $file instanceof StorableFile) {
+            $file = $file->as($name);
+        }
+
         return Ai::fakeableFileProvider($provider)->putFile($file, $mimeType, $name);
     }
 
