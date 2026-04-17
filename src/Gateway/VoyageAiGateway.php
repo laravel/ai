@@ -52,6 +52,7 @@ class VoyageAiGateway implements RerankingGateway
                 'Authorization' => 'Bearer '.$provider->providerCredentials()['key'],
                 'Content-Type' => 'application/json',
             ])
+            ->timeout(30)
             ->throw();
     }
 }
