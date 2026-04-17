@@ -271,6 +271,7 @@ class OpenAiGateway implements Gateway
                     'model' => $model,
                     'language' => $language,
                     'response_format' => $diarize ? 'diarized_json' : 'json',
+                    'chunking_strategy' => $diarize ? 'auto' : null,
                 ])),
         );
 
