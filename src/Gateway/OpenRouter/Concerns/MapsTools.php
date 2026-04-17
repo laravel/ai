@@ -4,12 +4,15 @@ namespace Laravel\Ai\Gateway\OpenRouter\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Gateway\Concerns\ResolvesToolName;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Tools\ProviderTool;
 use RuntimeException;
 
 trait MapsTools
 {
+    use ResolvesToolName;
+
     /**
      * Map the given tools to Chat Completions function definitions.
      */
@@ -44,7 +47,7 @@ trait MapsTools
         return [
             'type' => 'function',
             'function' => [
-                'name' => class_basename($tool),
+                'name' => $this->resolveToolName($tool),
                 'description' => (string) $tool->description(),
                 'parameters' => [
                     'type' => 'object',

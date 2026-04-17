@@ -4,6 +4,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
+use Tests\Fixtures\Tools\NamedTool;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
 
 use function Laravel\Ai\agent;
@@ -72,4 +73,17 @@ test('provider tools throw runtime exception', function () {
 
     expect(fn () => agent(tools: [new WebSearch])->prompt('Search', provider: 'openrouter'))
         ->toThrow(RuntimeException::class, 'OpenRouter does not support');
+});
+
+test('tool with a name() method emits the declared name', function () {
+    Http::fake(['*' => fakeOpenRouterResponse('ok')]);
+
+    agent(tools: [new NamedTool('my_custom_tool')])->prompt('Hi', provider: 'openrouter');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $names = collect(data_get($body, 'tools'))->pluck('function.name')->all();
+
+        return in_array('my_custom_tool', $names, true);
+    });
 });
