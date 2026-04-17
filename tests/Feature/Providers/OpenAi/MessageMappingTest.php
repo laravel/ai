@@ -6,6 +6,11 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\LocalImage;
+use Laravel\Ai\Messages\AssistantMessage;
+use Laravel\Ai\Messages\ToolResultMessage;
+use Laravel\Ai\Messages\UserMessage;
+use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Responses\Data\ToolResult;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
@@ -165,6 +170,86 @@ test('local image attachment without explicit mime type detects mime from file',
         return $imageBlock !== null
             && str_starts_with($imageBlock['image_url'], 'data:image/png;base64,')
             && ! str_contains($imageBlock['image_url'], 'data:;base64,');
+    });
+});
+
+test('empty tool arguments serialize as object string on assistant replay', function () {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiResponse('hi'),
+    ]);
+
+    agent(
+        instructions: 'Hi.',
+        tools: [(new ToolUsingAgent(fixed: true))->tools()[0]],
+        messages: [
+            new UserMessage('list'),
+            new AssistantMessage('Listing.', collect([
+                new ToolCall(
+                    id: 'call_empty',
+                    name: 'FixedNumberGenerator',
+                    arguments: [],
+                    resultId: 'call_empty',
+                ),
+            ])),
+            new ToolResultMessage(collect([
+                new ToolResult(
+                    id: 'call_empty',
+                    name: 'FixedNumberGenerator',
+                    arguments: [],
+                    result: '42',
+                    resultId: 'call_empty',
+                ),
+            ])),
+            new UserMessage('thanks'),
+        ],
+    )->prompt('', provider: 'openai');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $fnCall = collect($body['input'] ?? [])
+            ->firstWhere('type', 'function_call');
+
+        return $fnCall && $fnCall['arguments'] === '{}';
+    });
+});
+
+test('non-empty tool arguments preserve shape on assistant replay', function () {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiResponse('hi'),
+    ]);
+
+    agent(
+        instructions: 'Hi.',
+        tools: [(new ToolUsingAgent(fixed: true))->tools()[0]],
+        messages: [
+            new UserMessage('search'),
+            new AssistantMessage('Searching.', collect([
+                new ToolCall(
+                    id: 'call_args',
+                    name: 'FixedNumberGenerator',
+                    arguments: ['query' => 'test'],
+                    resultId: 'call_args',
+                ),
+            ])),
+            new ToolResultMessage(collect([
+                new ToolResult(
+                    id: 'call_args',
+                    name: 'FixedNumberGenerator',
+                    arguments: ['query' => 'test'],
+                    result: '42',
+                    resultId: 'call_args',
+                ),
+            ])),
+            new UserMessage('thanks'),
+        ],
+    )->prompt('', provider: 'openai');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $fnCall = collect($body['input'] ?? [])
+            ->firstWhere('type', 'function_call');
+
+        return $fnCall && json_decode($fnCall['arguments'], true) === ['query' => 'test'];
     });
 });
 

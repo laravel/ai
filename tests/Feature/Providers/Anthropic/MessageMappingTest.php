@@ -6,6 +6,9 @@ use Illuminate\Support\Facades\Storage;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\LocalImage;
+use Laravel\Ai\Gateway\Anthropic\AnthropicGateway;
+use Laravel\Ai\Messages\AssistantMessage;
+use Laravel\Ai\Responses\Data\ToolCall;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
@@ -246,6 +249,45 @@ test('uploaded pdf file maps to document content block', function () {
             && $docBlock['source']['type'] === 'base64'
             && $docBlock['source']['media_type'] === 'application/pdf';
     });
+});
+
+test('empty tool arguments serialize as object on assistant replay', function () {
+    $assistant = new AssistantMessage('Listing.', collect([
+        new ToolCall(
+            id: 'toolu_empty',
+            name: 'ListTool',
+            arguments: [],
+        ),
+    ]));
+
+    $gateway = app(AnthropicGateway::class);
+    $method = (new ReflectionClass($gateway))->getMethod('mapMessages');
+    $method->setAccessible(true);
+
+    $mapped = $method->invoke($gateway, [$assistant]);
+    $toolUse = collect($mapped[0]['content'])->firstWhere('type', 'tool_use');
+
+    expect($toolUse['input'])->toBeInstanceOf(stdClass::class)
+        ->and(get_object_vars($toolUse['input']))->toBeEmpty();
+});
+
+test('non-empty tool arguments preserve shape on assistant replay', function () {
+    $assistant = new AssistantMessage('Searching.', collect([
+        new ToolCall(
+            id: 'toolu_args',
+            name: 'SearchTool',
+            arguments: ['query' => 'test'],
+        ),
+    ]));
+
+    $gateway = app(AnthropicGateway::class);
+    $method = (new ReflectionClass($gateway))->getMethod('mapMessages');
+    $method->setAccessible(true);
+
+    $mapped = $method->invoke($gateway, [$assistant]);
+    $toolUse = collect($mapped[0]['content'])->firstWhere('type', 'tool_use');
+
+    expect($toolUse['input'])->toBe(['query' => 'test']);
 });
 
 test('system instructions are not in messages array', function () {
