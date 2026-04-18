@@ -136,6 +136,35 @@ describe('thinking blocks', function () {
             ->and($providerEvents[1]->status)->toBe('completed');
     });
 
+    test('streaming assembles server_tool_use input from deltas', function () {
+        Http::fake([
+            'api.anthropic.com/*' => Http::response(
+                body: $this->ssePayload([
+                    $this->messageStart(),
+                    $this->contentBlockStart(0, ['type' => 'server_tool_use', 'id' => 'srvtoolu_1', 'name' => 'web_search', 'input' => '']),
+                    $this->contentBlockDelta(0, ['type' => 'input_json_delta', 'partial_json' => '{"qu']),
+                    $this->contentBlockDelta(0, ['type' => 'input_json_delta', 'partial_json' => 'ery": "laravel ai"}']),
+                    $this->contentBlockStop(0),
+                    $this->contentBlockStart(1, ['type' => 'text', 'text' => '']),
+                    $this->contentBlockDelta(1, ['type' => 'text_delta', 'text' => 'Found it']),
+                    $this->contentBlockStop(1),
+                    $this->messageDelta('end_turn', 10),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $events = $this->collectStreamEvents();
+
+        $completed = collect($events)
+            ->filter(fn ($e) => $e instanceof ProviderToolEvent && $e->status === 'completed')
+            ->first();
+
+        expect($completed)->not->toBeNull()
+            ->and($completed->data['input'])->toBe(['query' => 'laravel ai']);
+    });
+
     test('streaming handles provider tool results', function () {
         Http::fake([
             'api.anthropic.com/*' => Http::response(
