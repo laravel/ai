@@ -47,7 +47,7 @@ trait MapsAttachments
                 ],
                 $attachment instanceof LocalImage => [
                     'type' => 'input_image',
-                    'image_url' => 'data:'.$attachment->mime.';base64,'.base64_encode(file_get_contents($attachment->path)),
+                    'image_url' => 'data:'.($attachment->mimeType() ?? 'image/png').';base64,'.base64_encode(file_get_contents($attachment->path)),
                 ],
                 $attachment instanceof StoredImage => [
                     'type' => 'input_image',
