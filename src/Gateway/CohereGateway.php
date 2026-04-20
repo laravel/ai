@@ -11,6 +11,7 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\RerankingProvider;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\RankedDocument;
+use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\RerankingResponse;
 
@@ -39,7 +40,7 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway
 
         return new EmbeddingsResponse(
             $data['embeddings']['float'],
-            $data['meta']['billed_units']['input_tokens'] ?? 0,
+            new Usage(['text' => $data['meta']['billed_units']['input_tokens'] ?? 0]),
             new Meta($provider->name(), $model),
         );
     }

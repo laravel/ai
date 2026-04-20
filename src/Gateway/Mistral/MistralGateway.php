@@ -156,7 +156,7 @@ class MistralGateway implements EmbeddingGateway, TextGateway, TranscriptionGate
 
         return new EmbeddingsResponse(
             collect($data['data'] ?? [])->pluck('embedding')->all(),
-            $data['usage']['total_tokens'] ?? 0,
+            new Usage(['text' => $data['usage']['total_tokens'] ?? 0]),
             new Meta($provider->name(), $model),
         );
     }

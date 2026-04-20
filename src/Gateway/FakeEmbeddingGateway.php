@@ -8,6 +8,7 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Prompts\EmbeddingsPrompt;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use RuntimeException;
 
@@ -82,7 +83,7 @@ class FakeEmbeddingGateway implements EmbeddingGateway
         if (is_array($response) && isset($response[0]) && is_array($response[0])) {
             return new EmbeddingsResponse(
                 $response,
-                0,
+                new Usage(),
                 new Meta($provider->name(), $model),
             );
         }

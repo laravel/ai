@@ -22,6 +22,7 @@ use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\TextResponse;
@@ -209,7 +210,7 @@ class GeminiGateway implements Gateway
 
         return new EmbeddingsResponse(
             (new Collection($data['embeddings'] ?? []))->pluck('values')->all(),
-            $data['usageMetadata']['promptTokenCount'] ?? 0,
+            new Usage(['text' => $data['usageMetadata']['promptTokenCount'] ?? 0]),
             new Meta($provider->name(), $model),
         );
     }
