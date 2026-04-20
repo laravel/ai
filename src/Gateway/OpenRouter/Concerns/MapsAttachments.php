@@ -41,11 +41,11 @@ trait MapsAttachments
                 ],
                 $attachment instanceof LocalImage => [
                     'type' => 'image_url',
-                    'image_url' => ['url' => 'data:'.($attachment->mimeType() ?? 'image/png').';base64,'.base64_encode(file_get_contents($attachment->path))],
+                    'image_url' => ['url' => 'data:'.$attachment->dataUriMimeType().';base64,'.base64_encode(file_get_contents($attachment->path))],
                 ],
                 $attachment instanceof StoredImage => [
                     'type' => 'image_url',
-                    'image_url' => ['url' => 'data:'.($attachment->mimeType() ?? 'image/png').';base64,'.base64_encode(
+                    'image_url' => ['url' => 'data:'.$attachment->dataUriMimeType().';base64,'.base64_encode(
                         Storage::disk($attachment->disk)->get($attachment->path)
                     )],
                 ],

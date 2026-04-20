@@ -52,13 +52,13 @@ trait MapsAttachments
                 ],
                 $attachment instanceof LocalImage => [
                     'inlineData' => [
-                        'mimeType' => $attachment->mimeType() ?? 'image/png',
+                        'mimeType' => $attachment->dataUriMimeType(),
                         'data' => base64_encode(file_get_contents($attachment->path)),
                     ],
                 ],
                 $attachment instanceof StoredImage => [
                     'inlineData' => [
-                        'mimeType' => $attachment->mimeType() ?? 'image/png',
+                        'mimeType' => $attachment->dataUriMimeType(),
                         'data' => base64_encode(
                             Storage::disk($attachment->disk)->get($attachment->path)
                         ),
