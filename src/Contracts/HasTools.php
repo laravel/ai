@@ -2,12 +2,14 @@
 
 namespace Laravel\Ai\Contracts;
 
+use Laravel\Ai\Providers\Tools\ProviderTool;
+
 interface HasTools
 {
     /**
      * Get the tools available to the agent.
      *
-     * @return Tool[]
+     * @return array<Tool|ProviderTool>
      */
     public function tools(): iterable;
 }

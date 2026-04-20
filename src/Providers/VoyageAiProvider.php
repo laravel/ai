@@ -2,10 +2,12 @@
 
 namespace Laravel\Ai\Providers;
 
+use Illuminate\Contracts\Events\Dispatcher;
+use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\RerankingGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\RerankingProvider;
-use Laravel\Ai\Gateway\VoyageAiGateway;
+use Laravel\Ai\Gateway\VoyageAi\VoyageAiGateway;
 
 class VoyageAiProvider extends Provider implements EmbeddingProvider, RerankingProvider
 {
@@ -13,6 +15,11 @@ class VoyageAiProvider extends Provider implements EmbeddingProvider, RerankingP
     use Concerns\HasEmbeddingGateway;
     use Concerns\HasRerankingGateway;
     use Concerns\Reranks;
+
+    public function __construct(
+        protected array $config,
+        protected Dispatcher $events,
+    ) {}
 
     /**
      * Get the name of the default embeddings model.
@@ -28,6 +35,14 @@ class VoyageAiProvider extends Provider implements EmbeddingProvider, RerankingP
     public function defaultEmbeddingsDimensions(): int
     {
         return $this->config['models']['embeddings']['dimensions'] ?? 1024;
+    }
+
+    /**
+     * Get the provider's embedding gateway.
+     */
+    public function embeddingGateway(): EmbeddingGateway
+    {
+        return $this->embeddingGateway ??= new VoyageAiGateway;
     }
 
     /**

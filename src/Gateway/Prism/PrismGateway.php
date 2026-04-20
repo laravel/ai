@@ -357,7 +357,6 @@ class PrismGateway implements Gateway
             'ollama' => ['dimensions' => $dimensions],
             'openai' => ['dimensions' => $dimensions],
             'openrouter' => ['dimensions' => $dimensions],
-            'voyageai' => ['outputDimension' => $dimensions],
             default => [],
         });
 
@@ -382,17 +381,12 @@ class PrismGateway implements Gateway
     protected static function toPrismProvider(Provider $provider): PrismProvider
     {
         return match ($provider->driver()) {
-            'anthropic' => PrismProvider::Anthropic,
-            'azure' => PrismProvider::OpenAI,
             'deepseek' => PrismProvider::DeepSeek,
             'gemini' => PrismProvider::Gemini,
-            'groq' => PrismProvider::Groq,
             'mistral' => PrismProvider::Mistral,
             'ollama' => PrismProvider::Ollama,
             'openai' => PrismProvider::OpenAI,
             'openrouter' => PrismProvider::OpenRouter,
-            'voyageai' => PrismProvider::VoyageAI,
-            'xai' => PrismProvider::XAI,
             default => throw new InvalidArgumentException('Gateway does not support provider ['.$provider.'].'),
         };
     }

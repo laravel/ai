@@ -200,7 +200,7 @@ class GeminiAudioTest extends TestCase
         $this->expectExceptionMessage('Invalid JSON format for multi-speaker configuration');
 
         // Create a real gateway instance to test validation
-        $gateway = new \Laravel\Ai\Gateway\GeminiAudioGateway;
+        $gateway = new \Laravel\Ai\Gateway\Gemini\GeminiAudioGateway;
 
         // Use reflection to call protected method
         $reflection = new \ReflectionClass($gateway);
@@ -213,7 +213,7 @@ class GeminiAudioTest extends TestCase
 
     public function test_gemini_voice_alias_resolves_correctly(): void
     {
-        $gateway = new \Laravel\Ai\Gateway\GeminiAudioGateway;
+        $gateway = new \Laravel\Ai\Gateway\Gemini\GeminiAudioGateway;
 
         $reflection = new \ReflectionClass($gateway);
         $method = $reflection->getMethod('resolveVoiceName');
