@@ -21,6 +21,7 @@ dataset('reranking-providers', [
 
 dataset('agent-providers', [
     'anthropic' => ['anthropic', 'ANTHROPIC_API_KEY', 'claude-haiku-4-5-20251001'],
+    'bedrock' => ['bedrock', 'AWS_ACCESS_KEY_ID', 'anthropic.claude-3-5-sonnet-20241022-v2:0'],
     'azure' => ['azure', 'AZURE_OPENAI_API_KEY', 'gpt-5.4-mini'],
     'deepseek' => ['deepseek', 'DEEPSEEK_API_KEY', 'deepseek-chat'],
     'gemini' => ['gemini', 'GEMINI_API_KEY', 'gemini-3.1-flash-lite-preview'],

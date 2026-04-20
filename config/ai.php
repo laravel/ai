@@ -65,6 +65,16 @@ return [
             'embedding_deployment' => env('AZURE_OPENAI_EMBEDDING_DEPLOYMENT', 'text-embedding-3-small'),
         ],
 
+        'bedrock' => [
+            'driver' => 'bedrock',
+            'region' => env('AWS_REGION', 'us-east-1'),
+            'url' => env('AWS_BEDROCK_URL'),
+            'key' => env('AWS_ACCESS_KEY_ID'),
+            'secret' => env('AWS_SECRET_ACCESS_KEY'),
+            'session_token' => env('AWS_SESSION_TOKEN'),
+            'use_default_credential_provider' => env('AWS_USE_DEFAULT_CREDENTIAL_PROVIDER', true),
+        ],
+
         'cohere' => [
             'driver' => 'cohere',
             'key' => env('COHERE_API_KEY'),

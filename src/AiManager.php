@@ -15,10 +15,12 @@ use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Anthropic\AnthropicGateway;
+use Laravel\Ai\Gateway\Bedrock\BedrockGateway;
 use Laravel\Ai\Gateway\Gemini\GeminiGateway;
 use Laravel\Ai\Gateway\OpenAi\OpenAiGateway;
 use Laravel\Ai\Gateway\Prism\PrismGateway;
 use Laravel\Ai\Providers\AnthropicProvider;
+use Laravel\Ai\Providers\BedrockProvider;
 use Laravel\Ai\Providers\AzureOpenAiProvider;
 use Laravel\Ai\Providers\CohereProvider;
 use Laravel\Ai\Providers\DeepSeekProvider;
@@ -295,6 +297,18 @@ class AiManager extends MultipleInstanceManager
     public function createAzureDriver(array $config): AzureOpenAiProvider
     {
         return new AzureOpenAiProvider(
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create an AWS Bedrock powered instance.
+     */
+    public function createBedrockDriver(array $config): BedrockProvider
+    {
+        return new BedrockProvider(
+            new BedrockGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)
         );

@@ -10,6 +10,21 @@
 
 The Laravel AI SDK provides a unified, expressive API for interacting with AI providers such as OpenAI, Anthropic, Gemini, and more. With the AI SDK, you can build intelligent agents with tools and structured output, generate images, synthesize and transcribe audio, create vector embeddings, and much more — all using a consistent, Laravel-friendly interface.
 
+## AWS Bedrock
+
+The SDK includes first-class `bedrock` provider support for text generation (including streaming), embeddings, and image generation.
+
+Configure the provider in `config/ai.php` using the built-in `bedrock` block:
+
+- `region` sets your Bedrock runtime region.
+- `key` / `secret` / `session_token` enable explicit AWS credentials.
+- `use_default_credential_provider` allows IAM role / profile / environment based auth.
+
+Authentication precedence is:
+
+1. explicit credentials (`key` + `secret`, with optional `session_token`)
+2. AWS default credential chain when explicit credentials are not provided
+
 ## Documentation
 
 Documentation for the Laravel AI SDK can be found on the [Laravel website](https://laravel.com/docs/ai-sdk).
