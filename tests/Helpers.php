@@ -3,6 +3,19 @@
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Support\Facades\Http;
 
+function fakePngFile(): string
+{
+    $path = tempnam(sys_get_temp_dir(), 'laravel-ai-').'.png';
+
+    file_put_contents($path, base64_decode(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+    ));
+
+    register_shutdown_function(fn () => @unlink($path));
+
+    return $path;
+}
+
 function requiresApiKey(string ...$keys): void
 {
     foreach ($keys as $key) {

@@ -151,30 +151,21 @@ test('local image attachment without explicit mime type detects mime from file',
         'api.openai.com/*' => fakeOpenAiResponse('I see an image'),
     ]);
 
-    $path = tempnam(sys_get_temp_dir(), 'laravel-ai-').'.png';
-    file_put_contents($path, base64_decode(
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
-    ));
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [new LocalImage(fakePngFile())],
+        provider: 'openai',
+    );
 
-    try {
-        agent('You are helpful.')->prompt(
-            'What is in this image?',
-            attachments: [new LocalImage($path)],
-            provider: 'openai',
-        );
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $userMessage = collect($body['input'])->firstWhere('role', 'user');
+        $imageBlock = collect($userMessage['content'])->firstWhere('type', 'input_image');
 
-        Http::assertSent(function (Request $request) {
-            $body = json_decode($request->body(), true);
-            $userMessage = collect($body['input'])->firstWhere('role', 'user');
-            $imageBlock = collect($userMessage['content'])->firstWhere('type', 'input_image');
-
-            return $imageBlock !== null
-                && str_starts_with($imageBlock['image_url'], 'data:image/png;base64,')
-                && ! str_contains($imageBlock['image_url'], 'data:;base64,');
-        });
-    } finally {
-        @unlink($path);
-    }
+        return $imageBlock !== null
+            && str_starts_with($imageBlock['image_url'], 'data:image/png;base64,')
+            && ! str_contains($imageBlock['image_url'], 'data:;base64,');
+    });
 });
 
 test('system instructions are in input array as system role', function () {
