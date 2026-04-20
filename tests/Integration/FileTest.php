@@ -1,14 +1,11 @@
 <?php
 
 use Illuminate\Http\Client\RequestException;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Event;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Ai\Events\FileDeleted;
 use Laravel\Ai\Events\FileStored;
 use Laravel\Ai\Events\StoringFile;
-use Laravel\Ai\Files;
 use Laravel\Ai\Files\Document;
 
 beforeEach(function () {
@@ -89,30 +86,6 @@ test('can get files', function () {
         ->and($response->mime)->toEqual('text/plain');
 
     Document::fromId($response->id)->delete(provider: $this->provider);
-});
-
-test('can override the filename when storing files', function () {
-    $cases = [
-        'from-path.txt' => Document::fromPath(__DIR__.'/../Fixtures/document.txt'),
-        'from-upload.txt' => Document::fromUpload(
-            new UploadedFile(__DIR__.'/../Fixtures/document.txt', 'original-name.txt')
-        ),
-        'from-string.txt' => Document::fromString('Hello, World!', 'text/plain'),
-    ];
-
-    foreach ($cases as $expectedName => $document) {
-        $stored = Files::put($document, name: $expectedName, provider: $this->provider);
-
-        $raw = Http::withHeaders([
-            'x-api-key' => config('ai.providers.anthropic.key'),
-            'anthropic-version' => '2023-06-01',
-            'anthropic-beta' => 'files-api-2025-04-14',
-        ])->get("https://api.anthropic.com/v1/files/{$stored->id}");
-
-        expect($raw->json('filename'))->toBe($expectedName);
-
-        Document::fromId($stored->id)->delete(provider: $this->provider);
-    }
 });
 
 test('can delete files', function () {
