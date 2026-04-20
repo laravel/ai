@@ -31,15 +31,12 @@ class Files
         ?string $provider = null): StoredFileResponse
     {
         if (is_string($file)) {
-            $file = (new Base64Document(base64_encode($file), $mimeType))->as($name);
+            $file = new Base64Document(base64_encode($file), $mimeType);
+        } elseif ($file instanceof UploadedFile) {
+            $file = Base64Document::fromUpload($file)->as($file->getClientOriginalName());
         }
 
-        if ($file instanceof UploadedFile) {
-            $file = Base64Document::fromUpload($file)
-                ->as($name ?? $file->getClientOriginalName());
-        }
-
-        if ($name !== null && $file instanceof StorableFile) {
+        if ($name !== null) {
             $file = $file->as($name);
         }
 
