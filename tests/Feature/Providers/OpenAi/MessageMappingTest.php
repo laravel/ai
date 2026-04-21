@@ -3,6 +3,7 @@
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Base64Document;
 use Tests\Fixtures\Agents\AssistantAgent;
@@ -142,6 +143,62 @@ test('uploaded pdf file maps to input file', function () {
 
         return $fileBlock !== null
             && str_contains($fileBlock['file_data'], 'application/pdf');
+    });
+});
+
+test('local jpg image maps to a jpeg data url', function () {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiResponse(),
+    ]);
+
+    $path = tempnam(sys_get_temp_dir(), 'laravel-ai-').'.jpg';
+    rename(substr($path, 0, -4), $path);
+    file_put_contents($path, base64_decode('/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBxAQEBAQEBAPEA8PEA8PDw8QDw8PEA8QFREWFhURFRUYHSggGBolGxUVITEhJSkrLi4uFx8zODMsNygtLisBCgoKDg0OGhAQGi0fHR0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLf/AABEIAAEAAQMBIgACEQEDEQH/xAAbAAADAQEBAQEAAAAAAAAAAAAABQYDBEcCAf/EADQQAAIBAwMCBAMHAAAAAAAAAAECAwAEEQUSITEGEyJBUWFxgZGh8BRCUsHR4f/EABkBAQEBAQEBAAAAAAAAAAAAAAABAgMEBf/EACURAQEBAAICAgIDAQAAAAAAAAABAhEDIRIxBEEiUWEUMv/aAAwDAQACEQMRAD8A9WiiigAooooAKKKKACiiigAooooAKKKKACiiigD/2Q=='));
+
+    try {
+        agent('You are helpful.')->prompt(
+            'Describe this image.',
+            attachments: [Files\Image::fromPath($path)],
+            provider: 'openai',
+        );
+
+        Http::assertSent(function (Request $request) {
+            $body = json_decode($request->body(), true);
+            $userMessage = collect($body['input'])->firstWhere('role', 'user');
+            $imageBlock = collect($userMessage['content'])->firstWhere('type', 'input_image');
+
+            return $imageBlock !== null
+                && str_starts_with($imageBlock['image_url'], 'data:image/jpeg;base64,');
+        });
+    } finally {
+        @unlink($path);
+    }
+});
+
+test('stored jpg image maps to a jpeg data url', function () {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiResponse(),
+    ]);
+
+    Storage::fake('images');
+    Storage::disk('images')->put(
+        'photo.jpg',
+        base64_decode('/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBxAQEBAQEBAPEA8PEA8PDw8QDw8PEA8QFREWFhURFRUYHSggGBolGxUVITEhJSkrLi4uFx8zODMsNygtLisBCgoKDg0OGhAQGi0fHR0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLf/AABEIAAEAAQMBIgACEQEDEQH/xAAbAAADAQEBAQEAAAAAAAAAAAAABQYDBEcCAf/EADQQAAIBAwMCBAMHAAAAAAAAAAECAwAEEQUSITEGEyJBUWFxgZGh8BRCUsHR4f/EABkBAQEBAQEBAAAAAAAAAAAAAAABAgMEBf/EACURAQEBAAICAgIDAQAAAAAAAAABAhEDIRIxBEEiUWEUMv/aAAwDAQACEQMRAD8A9WiiigAooooAKKKKACiiigAooooAKKKKACiiigD/2Q==')
+    );
+
+    agent('You are helpful.')->prompt(
+        'Describe this image.',
+        attachments: [Files\Image::fromStorage('photo.jpg', 'images')],
+        provider: 'openai',
+    );
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $userMessage = collect($body['input'])->firstWhere('role', 'user');
+        $imageBlock = collect($userMessage['content'])->firstWhere('type', 'input_image');
+
+        return $imageBlock !== null
+            && str_starts_with($imageBlock['image_url'], 'data:image/jpeg;base64,');
     });
 });
 
