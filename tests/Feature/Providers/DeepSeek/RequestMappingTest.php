@@ -194,6 +194,37 @@ test('response usage is correctly parsed', function () {
         ->and($response->usage->completionTokens)->toBe(5);
 });
 
+test('response usage includes cache hit and reasoning tokens', function () {
+    Http::fake(['*' => Http::response([
+        'id' => 'chatcmpl-reasoner-1',
+        'object' => 'chat.completion',
+        'model' => 'deepseek-reasoner',
+        'choices' => [[
+            'index' => 0,
+            'message' => ['role' => 'assistant', 'content' => 'The answer is 4.'],
+            'finish_reason' => 'stop',
+        ]],
+        'usage' => [
+            'prompt_tokens' => 100,
+            'completion_tokens' => 50,
+            'prompt_cache_hit_tokens' => 20,
+            'prompt_cache_miss_tokens' => 80,
+            'total_tokens' => 150,
+            'completion_tokens_details' => [
+                'reasoning_tokens' => 15,
+            ],
+        ],
+    ])]);
+
+    $response = agent()->prompt('What is 2+2?', provider: 'deepseek', model: 'deepseek-reasoner');
+
+    expect($response->usage->promptTokens)->toBe(100)
+        ->and($response->usage->completionTokens)->toBe(50)
+        ->and($response->usage->cacheReadInputTokens)->toBe(20)
+        ->and($response->usage->cacheWriteInputTokens)->toBe(0)
+        ->and($response->usage->reasoningTokens)->toBe(15);
+});
+
 test('reasoning content from deepseek-reasoner is ignored, only content surfaces', function () {
     Http::fake(['*' => Http::response([
         'id' => 'chatcmpl-reasoner-1',

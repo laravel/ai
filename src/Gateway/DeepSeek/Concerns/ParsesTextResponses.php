@@ -330,8 +330,7 @@ trait ParsesTextResponses
         return new Usage(
             promptTokens: $usage['prompt_tokens'] ?? 0,
             completionTokens: $usage['completion_tokens'] ?? 0,
-            cacheWriteInputTokens: $usage['cache_write_input_tokens'] ?? 0,
-            cacheReadInputTokens: $usage['cache_read_input_tokens'] ?? 0,
+            cacheReadInputTokens: $usage['prompt_cache_hit_tokens'] ?? 0,
             reasoningTokens: $details['reasoning_tokens'] ?? 0,
         );
     }
