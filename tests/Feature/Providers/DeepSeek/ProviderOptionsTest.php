@@ -1,6 +1,5 @@
 <?php
 
-use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\DeepSeekProviderOptionsAgent;
@@ -48,7 +47,7 @@ test('request body does not contain provider options when agent does not impleme
 test('provider options are persisted in tool call follow up requests', function () {
     Http::fake([
         '*' => Http::sequence([
-            fakeDeepSeekProviderOptionsToolCallResponse(),
+            fakeDeepSeekToolCallResponse(),
             fakeDeepSeekResponse('The number is 72019'),
         ]),
     ]);
@@ -63,32 +62,3 @@ test('provider options are persisted in tool call follow up requests', function 
 
     expect(data_get($followUpBody, 'frequency_penalty'))->toBe(0.5);
 });
-
-function fakeDeepSeekProviderOptionsToolCallResponse(): PromiseInterface
-{
-    return Http::response([
-        'id' => 'chatcmpl-deepseek-tool-123',
-        'object' => 'chat.completion',
-        'model' => 'deepseek-chat',
-        'choices' => [[
-            'index' => 0,
-            'message' => [
-                'role' => 'assistant',
-                'content' => null,
-                'tool_calls' => [[
-                    'id' => 'call_123',
-                    'type' => 'function',
-                    'function' => [
-                        'name' => 'FixedNumberGenerator',
-                        'arguments' => '{}',
-                    ],
-                ]],
-            ],
-            'finish_reason' => 'tool_calls',
-        ]],
-        'usage' => [
-            'prompt_tokens' => 10,
-            'completion_tokens' => 5,
-        ],
-    ]);
-}
