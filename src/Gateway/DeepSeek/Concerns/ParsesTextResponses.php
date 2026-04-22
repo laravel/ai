@@ -325,10 +325,14 @@ trait ParsesTextResponses
     protected function extractUsage(array $data): Usage
     {
         $usage = $data['usage'] ?? [];
+        $details = $usage['completion_tokens_details'] ?? [];
 
         return new Usage(
-            $usage['prompt_tokens'] ?? 0,
-            $usage['completion_tokens'] ?? 0,
+            promptTokens: $usage['prompt_tokens'] ?? 0,
+            completionTokens: $usage['completion_tokens'] ?? 0,
+            cacheWriteInputTokens: $usage['cache_write_input_tokens'] ?? 0,
+            cacheReadInputTokens: $usage['cache_read_input_tokens'] ?? 0,
+            reasoningTokens: $details['reasoning_tokens'] ?? 0,
         );
     }
 
