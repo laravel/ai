@@ -7,9 +7,13 @@ use Laravel\Ai\Providers\Provider;
 
 trait CreatesBedrockClient
 {
+    /**
+     * Create a new Bedrock client instance.
+     */
     protected function createBedrockClient(Provider $provider, ?int $timeout = null): BedrockRuntimeClient
     {
         $credentials = $provider->providerCredentials();
+
         $config = $provider->additionalConfiguration();
 
         $clientConfig = [

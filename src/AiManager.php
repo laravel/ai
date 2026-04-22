@@ -301,6 +301,17 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
+     * Create an AWS Bedrock powered instance.
+     */
+    public function createBedrockDriver(array $config): BedrockProvider
+    {
+        return new BedrockProvider(
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
      * Create a Cohere powered instance.
      */
     public function createCohereDriver(array $config): CohereProvider
@@ -431,17 +442,6 @@ class AiManager extends MultipleInstanceManager
         return new XaiProvider(
             $config,
             $this->app->make(Dispatcher::class),
-        );
-    }
-
-    /**
-     * Create an AWS Bedrock powered instance.
-     */
-    public function createBedrockDriver(array $config): BedrockProvider
-    {
-        return new BedrockProvider(
-            $config,
-            $this->app->make(Dispatcher::class)
         );
     }
 
