@@ -36,7 +36,7 @@ class BedrockProvider extends Provider implements EmbeddingProvider, ImageProvid
             'access_key_id' => $this->config['access_key_id'] ?? null,
             'secret_access_key' => $this->config['secret_access_key'] ?? null,
             'session_token' => $this->config['session_token'] ?? null,
-            'bearer_token' => $this->config['bearer_token'] ?? null,
+            'key' => $this->config['key'] ?? null,
         ]);
     }
 

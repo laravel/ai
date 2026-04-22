@@ -108,14 +108,14 @@ class BedrockProviderTest extends TestCase
     public function test_returns_bearer_token_credential_when_provided(): void
     {
         $config = [
-            'bearer_token' => 'bedrock-bearer-token',
+            'key' => 'bedrock-bearer-token',
         ];
 
         $provider = new BedrockProvider($config, $this->dispatcher);
         $credentials = $provider->providerCredentials();
 
-        $this->assertArrayHasKey('bearer_token', $credentials);
-        $this->assertEquals('bedrock-bearer-token', $credentials['bearer_token']);
+        $this->assertArrayHasKey('key', $credentials);
+        $this->assertEquals('bedrock-bearer-token', $credentials['key']);
     }
 
     public function test_defaults_to_us_east_1_region_when_not_specified(): void

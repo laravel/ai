@@ -7,9 +7,6 @@ use Laravel\Ai\Providers\Provider;
 
 trait CreatesBedrockClient
 {
-    /**
-     * Create a Bedrock Runtime client for the given provider.
-     */
     protected function createBedrockClient(Provider $provider, ?int $timeout = null): BedrockRuntimeClient
     {
         $credentials = $provider->providerCredentials();
@@ -18,27 +15,47 @@ trait CreatesBedrockClient
         $clientConfig = [
             'region' => $config['region'] ?? 'us-east-1',
             'version' => '2023-09-30',
+            ...$this->resolveAuthConfig($credentials, $config),
         ];
 
         if ($timeout) {
             $clientConfig['http'] = ['timeout' => $timeout];
         }
 
-        if (! empty($credentials['bearer_token'])) {
-            $clientConfig['credentials'] = [
-                'token' => $credentials['bearer_token'],
+        return new BedrockRuntimeClient($clientConfig);
+    }
+
+    /**
+     * @param  array<string, mixed>  $credentials
+     * @param  array<string, mixed>  $config
+     * @return array<string, mixed>
+     */
+    protected function resolveAuthConfig(array $credentials, array $config): array
+    {
+        if (! empty($credentials['key'])) {
+            return [
+                'token' => ['token' => $credentials['key']],
+                'auth_scheme_preference' => ['smithy.api#httpBearerAuth'],
             ];
-        } elseif (! empty($credentials['access_key_id']) && ! empty($credentials['secret_access_key'])) {
-            $clientConfig['credentials'] = [
+        }
+
+        if (! empty($credentials['access_key_id']) && ! empty($credentials['secret_access_key'])) {
+            $awsCredentials = [
                 'key' => $credentials['access_key_id'],
                 'secret' => $credentials['secret_access_key'],
             ];
 
             if (! empty($credentials['session_token'])) {
-                $clientConfig['credentials']['token'] = $credentials['session_token'];
+                $awsCredentials['token'] = $credentials['session_token'];
             }
+
+            return ['credentials' => $awsCredentials];
         }
 
-        return new BedrockRuntimeClient($clientConfig);
+        if (! ($config['use_default_credential_provider'] ?? true)) {
+            return ['credentials' => false];
+        }
+
+        return [];
     }
 }
