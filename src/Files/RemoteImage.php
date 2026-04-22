@@ -26,9 +26,9 @@ class RemoteImage extends Image implements Arrayable, JsonSerializable, Storable
     {
         return [
             'type' => 'remote-image',
-            'name' => $this->name,
+            'name' => $this->name(),
             'url' => $this->url,
-            'mime' => $this->mime,
+            'mime' => $this->mimeType(),
         ];
     }
 

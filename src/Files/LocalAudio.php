@@ -78,9 +78,9 @@ class LocalAudio extends Audio implements Arrayable, JsonSerializable, StorableF
     {
         return [
             'type' => 'local-audio',
-            'name' => $this->name,
+            'name' => $this->name(),
             'path' => $this->path,
-            'mime' => $this->mime,
+            'mime' => $this->mimeType(),
         ];
     }
 

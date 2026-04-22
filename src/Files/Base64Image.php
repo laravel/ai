@@ -51,9 +51,9 @@ class Base64Image extends Image implements Arrayable, JsonSerializable, Storable
     {
         return [
             'type' => 'base64-image',
-            'name' => $this->name,
+            'name' => $this->name(),
             'base64' => $this->base64,
-            'mime' => $this->mime,
+            'mime' => $this->mimeType(),
         ];
     }
 
