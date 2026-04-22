@@ -2,20 +2,22 @@
 
 namespace Laravel\Ai\Gateway\Bedrock;
 
-use Aws\BedrockRuntime\BedrockRuntimeClient;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Files\Image as ImageFile;
-use Laravel\Ai\Gateway\Concerns\HandlesRateLimiting;
+use Laravel\Ai\Gateway\Bedrock\Concerns\CreatesBedrockClient;
+use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\ImageResponse;
+use Throwable;
 
 class BedrockImageGateway implements ImageGateway
 {
-    use HandlesRateLimiting;
+    use CreatesBedrockClient;
+    use HandlesFailoverErrors;
 
     /**
      * Generate an image using AWS Bedrock.
@@ -35,41 +37,38 @@ class BedrockImageGateway implements ImageGateway
     ): ImageResponse {
         $client = $this->createBedrockClient($provider, $timeout);
 
-        // Prepare request body based on model
-        $requestBody = $this->prepareImageRequestBody($model, $prompt, $size, $quality);
-
-        $response = $this->withRateLimitHandling(
-            $provider->name(),
-            fn () => $client->invokeModel([
-                'modelId' => $model,
-                'contentType' => 'application/json',
-                'accept' => 'application/json',
-                'body' => json_encode($requestBody),
-            ])
-        );
+        try {
+            $response = $this->withErrorHandling(
+                $provider->name(),
+                fn () => $client->invokeModel([
+                    'modelId' => $model,
+                    'contentType' => 'application/json',
+                    'accept' => 'application/json',
+                    'body' => json_encode($this->prepareImageRequestBody($model, $prompt, $size, $quality)),
+                ]),
+            );
+        } catch (Throwable $e) {
+            throw BedrockException::toAiException($e, $provider->name(), $model);
+        }
 
         $result = json_decode($response->get('body')->getContents(), true);
 
-        // Parse response based on model
-        $images = $this->parseImageResponse($model, $result);
-
         return new ImageResponse(
-            $images,
+            $this->parseImageResponse($model, $result),
             new Usage,
-            new Meta($provider->name(), $model)
+            new Meta($provider->name(), $model),
         );
     }
 
     /**
-     * Prepare the request body based on the model.
+     * Prepare the request body for the given model family.
      */
     protected function prepareImageRequestBody(string $model, string $prompt, ?string $size, ?string $quality): array
     {
-        // Stability AI models (Stable Diffusion, Stable Image)
-        if (str_starts_with($model, 'stability.')) {
-            [$width, $height] = $this->parseSizeForStability($size);
+        [$width, $height] = $this->parseSize($size);
 
-            return [
+        return match (true) {
+            str_starts_with($model, 'stability.') => [
                 'text_prompts' => [
                     ['text' => $prompt, 'weight' => 1.0],
                 ],
@@ -77,18 +76,10 @@ class BedrockImageGateway implements ImageGateway
                 'steps' => $quality === 'high' ? 50 : 30,
                 'width' => $width,
                 'height' => $height,
-            ];
-        }
-
-        // Amazon Titan Image Generator
-        if (str_starts_with($model, 'amazon.titan-image')) {
-            [$width, $height] = $this->parseSizeForTitan($size);
-
-            return [
-                'textToImageParams' => [
-                    'text' => $prompt,
-                ],
+            ],
+            str_starts_with($model, 'amazon.titan-image') => [
                 'taskType' => 'TEXT_IMAGE',
+                'textToImageParams' => ['text' => $prompt],
                 'imageGenerationConfig' => [
                     'numberOfImages' => 1,
                     'quality' => $quality ?? 'standard',
@@ -96,153 +87,50 @@ class BedrockImageGateway implements ImageGateway
                     'width' => $width,
                     'cfgScale' => 7.0,
                 ],
-            ];
-        }
-
-        // Amazon Nova Canvas
-        if (str_starts_with($model, 'amazon.nova-canvas')) {
-            [$width, $height] = $this->parseSizeForNova($size);
-
-            return [
+            ],
+            str_starts_with($model, 'amazon.nova-canvas') => [
                 'taskType' => 'TEXT_IMAGE',
-                'textToImageParams' => [
-                    'text' => $prompt,
-                ],
+                'textToImageParams' => ['text' => $prompt],
                 'imageGenerationConfig' => [
                     'numberOfImages' => 1,
                     'quality' => $quality ?? 'standard',
                     'width' => $width,
                     'height' => $height,
                 ],
-            ];
-        }
-
-        // Default format
-        return [
-            'prompt' => $prompt,
-        ];
+            ],
+            default => ['prompt' => $prompt],
+        };
     }
 
     /**
-     * Parse the image response based on the model.
+     * Parse the image response payload into GeneratedImage instances.
      */
     protected function parseImageResponse(string $model, array $result): Collection
     {
-        $images = [];
-
-        // Stability AI models
         if (str_starts_with($model, 'stability.')) {
-            if (isset($result['artifacts']) && is_array($result['artifacts'])) {
-                foreach ($result['artifacts'] as $artifact) {
-                    $images[] = new GeneratedImage(
-                        $artifact['base64'] ?? '',
-                        'image/png'
-                    );
-                }
-            }
+            return (new Collection($result['artifacts'] ?? []))
+                ->map(fn ($artifact) => new GeneratedImage($artifact['base64'] ?? '', 'image/png'));
         }
 
-        // Amazon Titan Image Generator
-        if (str_starts_with($model, 'amazon.titan-image')) {
-            if (isset($result['images']) && is_array($result['images'])) {
-                foreach ($result['images'] as $image) {
-                    $images[] = new GeneratedImage(
-                        $image ?? '',
-                        'image/png'
-                    );
-                }
-            }
+        if (str_starts_with($model, 'amazon.titan-image') || str_starts_with($model, 'amazon.nova-canvas')) {
+            return (new Collection($result['images'] ?? []))
+                ->map(fn ($image) => new GeneratedImage($image ?? '', 'image/png'));
         }
 
-        // Amazon Nova Canvas
-        if (str_starts_with($model, 'amazon.nova-canvas')) {
-            if (isset($result['images']) && is_array($result['images'])) {
-                foreach ($result['images'] as $image) {
-                    $images[] = new GeneratedImage(
-                        $image ?? '',
-                        'image/png'
-                    );
-                }
-            }
-        }
-
-        return new Collection($images);
+        return new Collection;
     }
 
     /**
-     * Parse size parameter for Stability AI models.
+     * Parse an aspect-ratio size into explicit [width, height] dimensions.
+     *
+     * @return array{0: int, 1: int}
      */
-    protected function parseSizeForStability(?string $size): array
+    protected function parseSize(?string $size): array
     {
         return match ($size) {
-            '1:1' => [1024, 1024],
             '2:3' => [768, 1152],
             '3:2' => [1152, 768],
             default => [1024, 1024],
         };
-    }
-
-    /**
-     * Parse size parameter for Titan models.
-     */
-    protected function parseSizeForTitan(?string $size): array
-    {
-        return match ($size) {
-            '1:1' => [1024, 1024],
-            '2:3' => [768, 1152],
-            '3:2' => [1152, 768],
-            default => [1024, 1024],
-        };
-    }
-
-    /**
-     * Parse size parameter for Nova models.
-     */
-    protected function parseSizeForNova(?string $size): array
-    {
-        return match ($size) {
-            '1:1' => [1024, 1024],
-            '2:3' => [768, 1152],
-            '3:2' => [1152, 768],
-            default => [1024, 1024],
-        };
-    }
-
-    /**
-     * Create a Bedrock Runtime client.
-     */
-    protected function createBedrockClient(ImageProvider $provider, ?int $timeout = null): BedrockRuntimeClient
-    {
-        $credentials = $provider->providerCredentials();
-        $config = $provider->additionalConfiguration();
-
-        $clientConfig = [
-            'region' => $config['region'] ?? 'us-east-1',
-            'version' => '2023-09-30',
-        ];
-
-        if ($timeout) {
-            $clientConfig['http'] = ['timeout' => $timeout];
-        }
-
-        // Handle different authentication methods
-        if (! empty($credentials['bearer_token'])) {
-            $clientConfig['credentials'] = [
-                'token' => $credentials['bearer_token'],
-            ];
-        } elseif (! empty($credentials['access_key_id']) && ! empty($credentials['secret_access_key'])) {
-            $clientConfig['credentials'] = [
-                'key' => $credentials['access_key_id'],
-                'secret' => $credentials['secret_access_key'],
-            ];
-
-            if (! empty($credentials['session_token'])) {
-                $clientConfig['credentials']['token'] = $credentials['session_token'];
-            }
-        } elseif ($config['use_default_credential_provider'] ?? true) {
-            // Use AWS default credential chain
-        }
-
-        return new BedrockRuntimeClient($clientConfig);
     }
 }

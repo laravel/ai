@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Gateway\Bedrock;
 
-use Aws\BedrockRuntime\BedrockRuntimeClient;
 use Generator;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Collection;
@@ -13,10 +12,13 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Files\Document;
-use Laravel\Ai\Gateway\Concerns\HandlesRateLimiting;
+use Laravel\Ai\Gateway\Bedrock\Concerns\CreatesBedrockClient;
+use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
+use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
+use Laravel\Ai\Messages\MessageRole;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\ObjectSchema;
@@ -29,36 +31,26 @@ use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\TextDelta;
-use Laravel\Ai\Tools\Request as ToolRequest;
+use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
+use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
+use stdClass;
 use Throwable;
 
 class BedrockTextGateway implements EmbeddingGateway, TextGateway
 {
-    use HandlesRateLimiting;
+    use CreatesBedrockClient;
+    use HandlesFailoverErrors;
+    use InvokesTools;
 
-    protected $invokingToolCallback;
-
-    protected $toolInvokedCallback;
+    protected const STRUCTURED_OUTPUT_TOOL = 'structured_output';
 
     public function __construct()
     {
-        $this->invokingToolCallback = fn () => true;
-        $this->toolInvokedCallback = fn () => true;
+        $this->initializeToolCallbacks();
     }
 
     /**
-     * Specify callbacks that should be invoked when tools are invoking / invoked.
-     */
-    public function onToolInvocation(\Closure $invoking, \Closure $invoked): self
-    {
-        $this->invokingToolCallback = $invoking;
-        $this->toolInvokedCallback = $invoked;
-
-        return $this;
-    }
-
-    /**
-     * Generate text using AWS Bedrock's Converse API.
+     * {@inheritdoc}
      */
     public function generateText(
         TextProvider $provider,
@@ -72,194 +64,111 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
     ): TextResponse {
         $client = $this->createBedrockClient($provider, $timeout);
         $conversationMessages = $this->formatMessages($messages);
-        $maxSteps = ! empty($tools) ? ($options?->maxSteps ?? round(count($tools) * 1.5)) : 1;
-        $step = 0;
+        $maxSteps = $this->resolveMaxSteps($tools, $options);
+        $schemaTools = $schema ? $this->buildSchemaTools($schema, $tools) : null;
+        $formattedTools = $schemaTools === null && ! empty($tools) ? $this->formatTools($tools) : null;
 
         $allToolCalls = [];
         $allToolResults = [];
         $finalOutput = '';
         $totalInputTokens = 0;
         $totalOutputTokens = 0;
-
-        // When a schema is provided, inject a synthetic tool that forces the model
-        // to return structured output via Bedrock's tool-use mechanism.
-        $structuredOutputToolName = null;
-        if ($schema) {
-            $structuredOutputToolName = 'structured_output';
-            $schemaTools = [
-                [
-                    'toolSpec' => [
-                        'name'        => $structuredOutputToolName,
-                        'description' => 'Return the response as a structured JSON object matching the provided schema.',
-                        'inputSchema' => [
-                            'json' => (new ObjectSchema($schema))->toArray(),
-                        ],
-                    ],
-                ],
-            ];
-            // Real agent tools (if any) come after the structured output tool
-            $schemaTools = array_merge($schemaTools, $this->formatTools($tools));
-        }
+        $step = 0;
 
         while ($step < $maxSteps) {
-            $parameters = [
-                'modelId' => $model,
-                'messages' => $conversationMessages,
-            ];
-
-            if ($instructions) {
-                $parameters['system'] = [
-                    ['text' => $instructions],
-                ];
-            }
-
-            if ($structuredOutputToolName) {
-                // Force structured output via tool use
-                $parameters['toolConfig'] = [
-                    'tools'      => $schemaTools,
-                    'toolChoice' => ['tool' => ['name' => $structuredOutputToolName]],
-                ];
-            } elseif (! empty($tools)) {
-                $parameters['toolConfig'] = [
-                    'tools' => $this->formatTools($tools),
-                ];
-            }
-
-            if ($options) {
-                $inferenceConfig = [];
-
-                if ($options->maxTokens) {
-                    $inferenceConfig['maxTokens'] = $options->maxTokens;
-                }
-
-                if ($options->temperature !== null) {
-                    $inferenceConfig['temperature'] = $options->temperature;
-                }
-
-                if (! empty($inferenceConfig)) {
-                    $parameters['inferenceConfig'] = $inferenceConfig;
-                }
-            }
+            $parameters = $this->buildConverseParameters(
+                $model,
+                $instructions,
+                $conversationMessages,
+                $schemaTools,
+                $formattedTools,
+                empty($tools),
+                $options,
+                isFinalStep: ($step + 1) >= $maxSteps,
+            );
 
             try {
-                $response = $this->withRateLimitHandling(
+                $response = $this->withErrorHandling(
                     $provider->name(),
-                    fn () => $client->converse($parameters)
+                    fn () => $client->converse($parameters),
                 );
 
                 $result = $response->toArray();
             } catch (Throwable $e) {
                 throw BedrockException::toAiException($e, $provider->name(), $model);
             }
-            $content = $result['output']['message']['content'] ?? [];
 
             $totalInputTokens += $result['usage']['inputTokens'] ?? 0;
             $totalOutputTokens += $result['usage']['outputTokens'] ?? 0;
 
-            // Extract text and tool calls
             $output = '';
             $toolCalls = [];
 
-            foreach ($content as $block) {
+            foreach ($result['output']['message']['content'] ?? [] as $block) {
                 if (isset($block['text'])) {
                     $output .= $block['text'];
-                } elseif (isset($block['toolUse'])) {
-                    // Intercept the structured_output tool call — capture its input as JSON
-                    if ($structuredOutputToolName && $block['toolUse']['name'] === $structuredOutputToolName) {
-                        $finalOutput = json_encode($block['toolUse']['input'] ?? []);
-                        continue;
-                    }
 
-                    $toolCalls[] = new ToolCall(
-                        $block['toolUse']['toolUseId'],
-                        $block['toolUse']['name'],
-                        $block['toolUse']['input'] ?? []
-                    );
+                    continue;
                 }
+
+                if (! isset($block['toolUse'])) {
+                    continue;
+                }
+
+                if ($schemaTools && $block['toolUse']['name'] === self::STRUCTURED_OUTPUT_TOOL) {
+                    $finalOutput = json_encode($block['toolUse']['input'] ?? []);
+
+                    continue;
+                }
+
+                $toolCalls[] = new ToolCall(
+                    $block['toolUse']['toolUseId'],
+                    $block['toolUse']['name'],
+                    $block['toolUse']['input'] ?? [],
+                );
             }
 
-            if (! $structuredOutputToolName) {
+            if (! $schemaTools) {
                 $finalOutput = $output;
             }
+
             $step++;
 
-            // If no tool calls, we're done
             if (empty($toolCalls)) {
                 break;
             }
 
             $allToolCalls = array_merge($allToolCalls, $toolCalls);
+            $conversationMessages[] = $this->buildAssistantConversationMessage($output, $toolCalls);
 
-            // Add assistant message with tool calls to conversation
-            $conversationMessages[] = [
-                'role' => 'assistant',
-                'content' => array_merge(
-                    ! empty($output) ? [['text' => $output]] : [],
-                    array_map(fn ($toolCall) => [
-                        'toolUse' => [
-                            'toolUseId' => $toolCall->id,
-                            'name' => $toolCall->name,
-                            'input' => $toolCall->arguments,
-                        ],
-                    ], $toolCalls)
-                ),
-            ];
-
-            // Execute tools and add results to conversation
-            $toolResults = $this->executeTools($tools, $toolCalls);
+            $toolResults = $this->executeToolCalls($tools, $toolCalls);
             $allToolResults = array_merge($allToolResults, $toolResults);
 
             if (! empty($toolResults)) {
-                $conversationMessages[] = [
-                    'role' => 'user',
-                    'content' => array_map(fn ($toolResult) => [
-                        'toolResult' => [
-                            'toolUseId' => $toolResult->id,
-                            'content' => [
-                                ['text' => is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result)],
-                            ],
-                        ],
-                    ], $toolResults),
-                ];
+                $conversationMessages[] = $this->buildToolResultConversationMessage($toolResults);
             }
         }
 
-        $usage = new Usage(
-            $totalInputTokens,
-            $totalOutputTokens,
-            $totalInputTokens + $totalOutputTokens
-        );
-
-        $meta = new Meta(
-            $provider->name(),
-            $model
-        );
+        $usage = new Usage($totalInputTokens, $totalOutputTokens);
+        $meta = new Meta($provider->name(), $model);
 
         if ($schema) {
-            // Parse structured output from text response
             $structured = json_decode($finalOutput, true);
 
             if (json_last_error() !== JSON_ERROR_NONE) {
                 $structured = [];
             }
 
-            return (new StructuredTextResponse(
-                $structured,
-                $finalOutput,
-                $usage,
-                $meta
-            ))->withToolCallsAndResults(new Collection($allToolCalls), new Collection($allToolResults));
+            return (new StructuredTextResponse($structured, $finalOutput, $usage, $meta))
+                ->withToolCallsAndResults(new Collection($allToolCalls), new Collection($allToolResults));
         }
 
-        return (new TextResponse(
-            $finalOutput,
-            $usage,
-            $meta
-        ))->withToolCallsAndResults(new Collection($allToolCalls), new Collection($allToolResults));
+        return (new TextResponse($finalOutput, $usage, $meta))
+            ->withToolCallsAndResults(new Collection($allToolCalls), new Collection($allToolResults));
     }
 
     /**
-     * Stream text generation using AWS Bedrock's ConverseStream API.
+     * {@inheritdoc}
      */
     public function streamText(
         string $invocationId,
@@ -273,108 +182,189 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
         ?int $timeout = null,
     ): Generator {
         $client = $this->createBedrockClient($provider, $timeout);
-
-        $parameters = [
-            'modelId' => $model,
-            'messages' => $this->formatMessages($messages),
-        ];
-
-        if ($instructions) {
-            $parameters['system'] = [
-                ['text' => $instructions],
-            ];
-        }
-
-        if (! empty($tools)) {
-            $parameters['toolConfig'] = [
-                'tools' => $this->formatTools($tools),
-            ];
-        }
-
-        if ($options) {
-            $inferenceConfig = [];
-
-            if ($options->maxTokens) {
-                $inferenceConfig['maxTokens'] = $options->maxTokens;
-            }
-
-            if ($options->temperature !== null) {
-                $inferenceConfig['temperature'] = $options->temperature;
-            }
-
-            if (! empty($inferenceConfig)) {
-                $parameters['inferenceConfig'] = $inferenceConfig;
-            }
-        }
-
-        try {
-            $response = $this->withRateLimitHandling(
-                $provider->name(),
-                fn () => $client->converseStream($parameters)
-            );
-        } catch (Throwable $e) {
-            throw BedrockException::toAiException($e, $provider->name(), $model);
-        }
+        $conversationMessages = $this->formatMessages($messages);
+        $maxSteps = $this->resolveMaxSteps($tools, $options);
+        $schemaTools = $schema ? $this->buildSchemaTools($schema, $tools) : null;
+        $formattedTools = $schemaTools === null && ! empty($tools) ? $this->formatTools($tools) : null;
 
         $messageId = (string) Str::uuid();
-        $inputTokens = 0;
-        $outputTokens = 0;
         $timestamp = time();
+        $totalInputTokens = 0;
+        $totalOutputTokens = 0;
+        $step = 0;
 
-        foreach ($response['stream'] as $event) {
-            if (isset($event['contentBlockDelta']['delta']['text'])) {
-                $delta = $event['contentBlockDelta']['delta']['text'];
+        while ($step < $maxSteps) {
+            $parameters = $this->buildConverseParameters(
+                $model,
+                $instructions,
+                $conversationMessages,
+                $schemaTools,
+                $formattedTools,
+                empty($tools),
+                $options,
+                isFinalStep: ($step + 1) >= $maxSteps,
+            );
 
+            try {
+                $response = $this->withErrorHandling(
+                    $provider->name(),
+                    fn () => $client->converseStream($parameters),
+                );
+            } catch (Throwable $e) {
+                throw BedrockException::toAiException($e, $provider->name(), $model);
+            }
+
+            $assistantText = '';
+            $pendingToolCalls = [];
+            $currentBlockIndex = null;
+            $stopReason = 'stop';
+
+            foreach ($response['stream'] as $event) {
+                if (isset($event['contentBlockStart'])) {
+                    $currentBlockIndex = $event['contentBlockStart']['contentBlockIndex'] ?? 0;
+                    $start = $event['contentBlockStart']['start'] ?? [];
+
+                    if (isset($start['toolUse'])) {
+                        $pendingToolCalls[$currentBlockIndex] = [
+                            'id' => $start['toolUse']['toolUseId'] ?? '',
+                            'name' => $start['toolUse']['name'] ?? '',
+                            'input' => '',
+                        ];
+                    }
+
+                    continue;
+                }
+
+                if (isset($event['contentBlockDelta'])) {
+                    $index = $event['contentBlockDelta']['contentBlockIndex'] ?? $currentBlockIndex;
+                    $delta = $event['contentBlockDelta']['delta'] ?? [];
+
+                    if (isset($delta['text'])) {
+                        $assistantText .= $delta['text'];
+
+                        yield (new TextDelta(
+                            (string) Str::uuid(),
+                            $messageId,
+                            $delta['text'],
+                            $timestamp,
+                        ))->withInvocationId($invocationId);
+                    } elseif (isset($delta['toolUse']['input'], $pendingToolCalls[$index])) {
+                        $pendingToolCalls[$index]['input'] .= $delta['toolUse']['input'];
+                    }
+
+                    continue;
+                }
+
+                if (isset($event['messageStop'])) {
+                    $stopReason = $event['messageStop']['stopReason'] ?? 'stop';
+
+                    continue;
+                }
+
+                if (isset($event['metadata']['usage'])) {
+                    $totalInputTokens += $event['metadata']['usage']['inputTokens'] ?? 0;
+                    $totalOutputTokens += $event['metadata']['usage']['outputTokens'] ?? 0;
+                }
+            }
+
+            $toolCalls = [];
+            $structuredOutput = null;
+
+            foreach ($pendingToolCalls as $pending) {
+                $arguments = json_decode($pending['input'] !== '' ? $pending['input'] : '{}', true) ?? [];
+
+                if ($schemaTools && $pending['name'] === self::STRUCTURED_OUTPUT_TOOL) {
+                    $structuredOutput = json_encode($arguments);
+
+                    continue;
+                }
+
+                $toolCalls[] = new ToolCall($pending['id'], $pending['name'], $arguments);
+            }
+
+            $step++;
+
+            if ($structuredOutput !== null) {
                 yield (new TextDelta(
                     (string) Str::uuid(),
                     $messageId,
-                    $delta,
-                    $timestamp
+                    $structuredOutput,
+                    $timestamp,
                 ))->withInvocationId($invocationId);
             }
 
-            if (isset($event['metadata']['usage'])) {
-                $inputTokens = $event['metadata']['usage']['inputTokens'] ?? 0;
-                $outputTokens = $event['metadata']['usage']['outputTokens'] ?? 0;
+            if (empty($toolCalls)) {
+                break;
+            }
+
+            $conversationMessages[] = $this->buildAssistantConversationMessage($assistantText, $toolCalls);
+
+            foreach ($toolCalls as $toolCall) {
+                yield (new ToolCallEvent(
+                    (string) Str::uuid(),
+                    $toolCall,
+                    $timestamp,
+                ))->withInvocationId($invocationId);
+            }
+
+            $toolResults = $this->executeToolCalls($tools, $toolCalls);
+
+            foreach ($toolResults as $toolResult) {
+                yield (new ToolResultEvent(
+                    (string) Str::uuid(),
+                    $toolResult,
+                    true,
+                    null,
+                    $timestamp,
+                ))->withInvocationId($invocationId);
+            }
+
+            if (! empty($toolResults)) {
+                $conversationMessages[] = $this->buildToolResultConversationMessage($toolResults);
+            }
+
+            if ($stopReason !== 'tool_use') {
+                break;
             }
         }
 
         yield (new StreamEnd(
             $messageId,
             'stop',
-            new Usage($inputTokens, $outputTokens),
-            $timestamp
+            new Usage($totalInputTokens, $totalOutputTokens),
+            $timestamp,
         ))->withInvocationId($invocationId);
     }
 
     /**
-     * Generate embeddings using AWS Bedrock.
+     * {@inheritdoc}
      */
     public function generateEmbeddings(
         EmbeddingProvider $provider,
         string $model,
         array $inputs,
         int $dimensions,
-        int $timeout = 30
+        int $timeout = 30,
     ): EmbeddingsResponse {
-        $client = $this->createBedrockClient($provider);
+        $client = $this->createBedrockClient($provider, $timeout);
+
+        if (str_starts_with($model, 'cohere.')) {
+            return $this->generateCohereEmbeddings($provider, $model, $client, $inputs);
+        }
 
         $embeddings = [];
         $totalTokens = 0;
 
         foreach ($inputs as $input) {
             try {
-                $response = $this->withRateLimitHandling(
+                $response = $this->withErrorHandling(
                     $provider->name(),
                     fn () => $client->invokeModel([
                         'modelId' => $model,
                         'contentType' => 'application/json',
                         'accept' => 'application/json',
-                        'body' => json_encode([
-                            'inputText' => $input,
-                            'dimensions' => $dimensions,
-                        ]),
-                    ])
+                        'body' => json_encode(['inputText' => $input, 'dimensions' => $dimensions]),
+                    ]),
                 );
 
                 $result = json_decode($response->get('body')->getContents(), true);
@@ -382,13 +372,8 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                 throw BedrockException::toAiException($e, $provider->name(), $model);
             }
 
-            // Handle different response formats for different models
             if (isset($result['embedding'])) {
-                // Titan format
                 $embeddings[] = $result['embedding'];
-            } elseif (isset($result['embeddings']) && is_array($result['embeddings'])) {
-                // Cohere format
-                $embeddings[] = $result['embeddings'][0];
             }
 
             $totalTokens += $result['inputTextTokenCount'] ?? 0;
@@ -397,250 +382,392 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
         return new EmbeddingsResponse(
             $embeddings,
             $totalTokens,
-            new Meta($provider->name(), $model)
+            new Meta($provider->name(), $model),
         );
     }
 
     /**
-     * Create a Bedrock Runtime client.
+     * Generate embeddings using a Cohere Bedrock model in a single batched call.
+     *
+     * @param  array<string>  $inputs
      */
-    protected function createBedrockClient(TextProvider|EmbeddingProvider $provider, ?int $timeout = null): BedrockRuntimeClient
-    {
-        $credentials = $provider->providerCredentials();
-        $config = $provider->additionalConfiguration();
+    protected function generateCohereEmbeddings(
+        EmbeddingProvider $provider,
+        string $model,
+        $client,
+        array $inputs,
+    ): EmbeddingsResponse {
+        try {
+            $response = $this->withErrorHandling(
+                $provider->name(),
+                fn () => $client->invokeModel([
+                    'modelId' => $model,
+                    'contentType' => 'application/json',
+                    'accept' => 'application/json',
+                    'body' => json_encode([
+                        'texts' => array_values($inputs),
+                        'input_type' => 'search_document',
+                    ]),
+                ]),
+            );
 
-        $clientConfig = [
-            'region' => $config['region'] ?? 'us-east-1',
-            'version' => '2023-09-30',
-        ];
-
-        if ($timeout) {
-            $clientConfig['http'] = ['timeout' => $timeout];
+            $result = json_decode($response->get('body')->getContents(), true);
+        } catch (Throwable $e) {
+            throw BedrockException::toAiException($e, $provider->name(), $model);
         }
 
-        // Handle different authentication methods
-        if (! empty($credentials['access_key_id']) && ! empty($credentials['secret_access_key'])) {
-            // IAM credentials (explicit)
-            $clientConfig['credentials'] = [
-                'key' => $credentials['access_key_id'],
-                'secret' => $credentials['secret_access_key'],
-            ];
+        $embeddings = array_values(array_filter(
+            $result['embeddings'] ?? [],
+            fn ($vector) => is_array($vector),
+        ));
 
-            if (! empty($credentials['session_token'])) {
-                $clientConfig['credentials']['token'] = $credentials['session_token'];
-            }
-        } elseif ($config['use_default_credential_provider'] ?? true) {
-            // Use AWS default credential chain
-            // No explicit credentials needed - AWS SDK will auto-discover from:
-            // - Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN)
-            // - ~/.aws/credentials file
-            // - IAM roles for EC2/ECS/Lambda
-        }
-
-        return new BedrockRuntimeClient($clientConfig);
+        return new EmbeddingsResponse(
+            $embeddings,
+            0,
+            new Meta($provider->name(), $model),
+        );
     }
 
     /**
-     * Format Laravel AI messages for Bedrock Converse API.
+     * Resolve the maximum number of steps for the given tools and options.
+     *
+     * @param  array<Tool>  $tools
+     */
+    protected function resolveMaxSteps(array $tools, ?TextGenerationOptions $options): int
+    {
+        if (empty($tools)) {
+            return 1;
+        }
+
+        return (int) ($options?->maxSteps ?? round(count($tools) * 1.5));
+    }
+
+    /**
+     * Build the request parameters for the Bedrock Converse API.
+     *
+     * @param  array<string, mixed>|null  $schemaTools
+     * @param  array<string, mixed>|null  $formattedTools  Pre-formatted real tools (used when no schema is active).
+     * @param  bool  $toolsEmpty  Whether the caller passed any real tools at all.
+     */
+    protected function buildConverseParameters(
+        string $model,
+        ?string $instructions,
+        array $conversationMessages,
+        ?array $schemaTools,
+        ?array $formattedTools,
+        bool $toolsEmpty,
+        ?TextGenerationOptions $options,
+        bool $isFinalStep,
+    ): array {
+        $parameters = [
+            'modelId' => $model,
+            'messages' => $conversationMessages,
+        ];
+
+        if ($instructions) {
+            $parameters['system'] = [['text' => $instructions]];
+        }
+
+        $toolConfig = $this->buildToolConfig($schemaTools, $formattedTools, $toolsEmpty, $isFinalStep);
+
+        if ($toolConfig !== null) {
+            $parameters['toolConfig'] = $toolConfig;
+        }
+
+        $inferenceConfig = $this->buildInferenceConfig($options);
+
+        if (! empty($inferenceConfig)) {
+            $parameters['inferenceConfig'] = $inferenceConfig;
+        }
+
+        return $parameters;
+    }
+
+    /**
+     * Build the inferenceConfig block for Bedrock's Converse API.
+     */
+    protected function buildInferenceConfig(?TextGenerationOptions $options): array
+    {
+        if ($options === null) {
+            return [];
+        }
+
+        $config = [];
+
+        if ($options->maxTokens) {
+            $config['maxTokens'] = $options->maxTokens;
+        }
+
+        if ($options->temperature !== null) {
+            $config['temperature'] = $options->temperature;
+        }
+
+        return $config;
+    }
+
+    /**
+     * Build the assistant conversation message block combining text and tool calls.
+     *
+     * @param  array<ToolCall>  $toolCalls
+     */
+    protected function buildAssistantConversationMessage(string $text, array $toolCalls): array
+    {
+        return [
+            'role' => 'assistant',
+            'content' => array_merge(
+                $text !== '' ? [['text' => $text]] : [],
+                array_map(fn (ToolCall $toolCall) => [
+                    'toolUse' => [
+                        'toolUseId' => $toolCall->id,
+                        'name' => $toolCall->name,
+                        'input' => $toolCall->arguments,
+                    ],
+                ], $toolCalls),
+            ),
+        ];
+    }
+
+    /**
+     * Build the user conversation message block carrying tool results.
+     *
+     * @param  array<ToolResult>  $toolResults
+     */
+    protected function buildToolResultConversationMessage(array $toolResults): array
+    {
+        return [
+            'role' => 'user',
+            'content' => array_map(fn (ToolResult $toolResult) => [
+                'toolResult' => [
+                    'toolUseId' => $toolResult->id,
+                    'content' => [
+                        ['text' => is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result)],
+                    ],
+                ],
+            ], $toolResults),
+        ];
+    }
+
+    /**
+     * Build the synthetic structured-output tool plus any real tools.
+     */
+    protected function buildSchemaTools(array $schema, array $tools): array
+    {
+        $schemaTools = [
+            [
+                'toolSpec' => [
+                    'name' => self::STRUCTURED_OUTPUT_TOOL,
+                    'description' => 'Return the response as a structured JSON object matching the provided schema.',
+                    'inputSchema' => [
+                        'json' => (new ObjectSchema($schema))->toArray(),
+                    ],
+                ],
+            ],
+        ];
+
+        return array_merge($schemaTools, $this->formatTools($tools));
+    }
+
+    /**
+     * Build Bedrock's toolConfig for the current step.
+     *
+     * When a schema is present, toolChoice is only forced to the synthetic tool on the
+     * final step so real tools can be invoked on earlier iterations.
+     */
+    protected function buildToolConfig(?array $schemaTools, ?array $formattedTools, bool $toolsEmpty, bool $isFinalStep): ?array
+    {
+        if ($schemaTools !== null) {
+            return [
+                'tools' => $schemaTools,
+                'toolChoice' => ($isFinalStep || $toolsEmpty)
+                    ? ['tool' => ['name' => self::STRUCTURED_OUTPUT_TOOL]]
+                    : ['auto' => new stdClass],
+            ];
+        }
+
+        if ($formattedTools !== null) {
+            return ['tools' => $formattedTools];
+        }
+
+        return null;
+    }
+
+    /**
+     * Format Laravel AI messages for Bedrock's Converse API.
      */
     protected function formatMessages(array $messages): array
     {
-        return (new Collection($messages))->map(function ($message) {
-            if ($message instanceof AssistantMessage) {
-                $content = [];
-
-                // Add text content if present
-                if (! empty($message->content)) {
-                    $content[] = ['text' => $message->content];
-                }
-
-                // Add tool use blocks
-                foreach ($message->toolCalls as $toolCall) {
-                    $content[] = [
-                        'toolUse' => [
-                            'toolUseId' => $toolCall->id,
-                            'name' => $toolCall->name,
-                            'input' => $toolCall->arguments,
-                        ],
-                    ];
-                }
-
-                return [
-                    'role' => 'assistant',
-                    'content' => $content,
-                ];
-            }
-
-            if ($message instanceof ToolResultMessage) {
-                $content = [];
-
-                foreach ($message->toolResults as $toolResult) {
-                    $content[] = [
-                        'toolResult' => [
-                            'toolUseId' => $toolResult->id,
-                            'content' => [
-                                ['text' => is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result)],
-                            ],
-                        ],
-                    ];
-                }
-
-                return [
-                    'role' => 'user',
-                    'content' => $content,
-                ];
-            }
-
-            if ($message instanceof UserMessage) {
-                $content = [
-                    ['text' => $message->content],
-                ];
-
-                // Add document attachments
-                foreach ($message->attachments as $attachment) {
-                    if ($attachment instanceof Document) {
-                        $content[] = [
-                            'document' => [
-                                'format' => $this->getDocumentFormat($attachment),
-                                'name' => $attachment->name ?? 'document',
-                                'source' => [
-                                    'bytes' => $this->getDocumentBytes($attachment),
-                                ],
-                            ],
-                        ];
-                    }
-                }
-
-                return [
-                    'role' => 'user',
-                    'content' => $content,
-                ];
-            }
-
-            if ($message instanceof Message) {
-                $role = $message->role->value === 'assistant' ? 'assistant' : 'user';
-
-                return [
-                    'role' => $role,
-                    'content' => [
-                        ['text' => $message->content],
-                    ],
-                ];
-            }
-
-            return [
-                'role' => $message['role'] === 'assistant' ? 'assistant' : 'user',
-                'content' => [
-                    ['text' => $message['content']],
-                ],
-            ];
+        return (new Collection($messages))->map(fn ($message) => match (true) {
+            $message instanceof AssistantMessage => $this->formatAssistantMessage($message),
+            $message instanceof ToolResultMessage => $this->formatToolResultMessage($message),
+            $message instanceof UserMessage => $this->formatUserMessage($message),
+            $message instanceof Message => $this->formatGenericMessage($message),
+            default => $this->formatArrayMessage($message),
         })->all();
     }
 
     /**
-     * Get the document format for Bedrock.
+     * Format an AssistantMessage for the Converse API.
+     */
+    protected function formatAssistantMessage(AssistantMessage $message): array
+    {
+        $content = [];
+
+        if (! empty($message->content)) {
+            $content[] = ['text' => $message->content];
+        }
+
+        foreach ($message->toolCalls as $toolCall) {
+            $content[] = [
+                'toolUse' => [
+                    'toolUseId' => $toolCall->id,
+                    'name' => $toolCall->name,
+                    'input' => $toolCall->arguments,
+                ],
+            ];
+        }
+
+        return ['role' => 'assistant', 'content' => $content];
+    }
+
+    /**
+     * Format a ToolResultMessage for the Converse API.
+     */
+    protected function formatToolResultMessage(ToolResultMessage $message): array
+    {
+        $content = [];
+
+        foreach ($message->toolResults as $toolResult) {
+            $content[] = [
+                'toolResult' => [
+                    'toolUseId' => $toolResult->id,
+                    'content' => [
+                        ['text' => is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result)],
+                    ],
+                ],
+            ];
+        }
+
+        return ['role' => 'user', 'content' => $content];
+    }
+
+    /**
+     * Format a UserMessage and its attachments for the Converse API.
+     */
+    protected function formatUserMessage(UserMessage $message): array
+    {
+        $content = [['text' => $message->content]];
+
+        foreach ($message->attachments as $attachment) {
+            if ($attachment instanceof Document) {
+                $content[] = [
+                    'document' => [
+                        'format' => $this->getDocumentFormat($attachment),
+                        'name' => $attachment->name ?? 'document',
+                        'source' => [
+                            'bytes' => $attachment->content(),
+                        ],
+                    ],
+                ];
+            }
+        }
+
+        return ['role' => 'user', 'content' => $content];
+    }
+
+    /**
+     * Format a generic Message (system/user/assistant) for the Converse API.
+     */
+    protected function formatGenericMessage(Message $message): array
+    {
+        return [
+            'role' => $message->role === MessageRole::Assistant ? 'assistant' : 'user',
+            'content' => [['text' => $message->content]],
+        ];
+    }
+
+    /**
+     * Format a raw array-shaped message for the Converse API.
+     *
+     * @param  array{role: string, content: string}  $message
+     */
+    protected function formatArrayMessage(array $message): array
+    {
+        return [
+            'role' => $message['role'] === MessageRole::Assistant->value ? 'assistant' : 'user',
+            'content' => [['text' => $message['content']]],
+        ];
+    }
+
+    /**
+     * Map a Document's MIME type to a Bedrock document format.
      */
     protected function getDocumentFormat(Document $document): string
     {
-        $mime = $document->mime ?? 'text/plain';
+        $mime = strtolower(trim(strtok($document->mimeType() ?? 'text/plain', ';')));
 
-        return match (true) {
-            str_contains($mime, 'pdf') => 'pdf',
-            str_contains($mime, 'csv') => 'csv',
-            str_contains($mime, 'doc') => 'doc',
-            str_contains($mime, 'docx') => 'docx',
-            str_contains($mime, 'xls') => 'xls',
-            str_contains($mime, 'xlsx') => 'xlsx',
-            str_contains($mime, 'html') => 'html',
-            str_contains($mime, 'markdown') => 'md',
+        return match ($mime) {
+            'application/pdf' => 'pdf',
+            'text/csv' => 'csv',
+            'application/msword' => 'doc',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+            'application/vnd.ms-excel' => 'xls',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
+            'text/html' => 'html',
+            'text/markdown', 'text/x-markdown' => 'md',
             default => 'txt',
         };
     }
 
     /**
-     * Get the document bytes for Bedrock.
-     */
-    protected function getDocumentBytes(Document $document): string
-    {
-        if ($document->path) {
-            return file_get_contents($document->path);
-        }
-
-        if ($document->content) {
-            return $document->content;
-        }
-
-        throw new \RuntimeException('Document has no content or path.');
-    }
-
-    /**
-     * Format tools for Bedrock Converse API.
+     * Format tools for the Converse API.
      *
-     * @param  Tool[]  $tools
+     * @param  array<Tool>  $tools
      */
     protected function formatTools(array $tools): array
     {
-        return (new Collection($tools))->map(function ($tool) {
-            if (! $tool instanceof Tool) {
-                return null;
-            }
-
-            $toolName = method_exists($tool, 'name')
-                ? $tool->name()
-                : class_basename($tool);
-
-            $schema = $tool->schema(new JsonSchemaTypeFactory);
-
-            return [
+        return (new Collection($tools))
+            ->filter(fn ($tool) => $tool instanceof Tool)
+            ->map(fn (Tool $tool) => [
                 'toolSpec' => [
-                    'name' => $toolName,
+                    'name' => class_basename($tool),
                     'description' => (string) $tool->description(),
                     'inputSchema' => [
-                        'json' => (new ObjectSchema($schema))->toArray(),
+                        'json' => (new ObjectSchema($tool->schema(new JsonSchemaTypeFactory)))->toArray(),
                     ],
                 ],
-            ];
-        })->filter()->values()->all();
+            ])
+            ->values()
+            ->all();
     }
 
     /**
-     * Execute tools and return results.
+     * Execute the tool calls against the provided tools and collect results.
      *
-     * @param  Tool[]  $tools
-     * @param  ToolCall[]  $toolCalls
-     * @return ToolResult[]
+     * @param  array<Tool>  $tools
+     * @param  array<ToolCall>  $toolCalls
+     * @return array<ToolResult>
      */
-    protected function executeTools(array $tools, array $toolCalls): array
+    protected function executeToolCalls(array $tools, array $toolCalls): array
     {
-        $toolsByName = (new Collection($tools))->keyBy(function ($tool) {
-            return method_exists($tool, 'name') ? $tool->name() : class_basename($tool);
-        });
-
         $results = [];
 
         foreach ($toolCalls as $toolCall) {
-            $tool = $toolsByName->get($toolCall->name);
+            $tool = $this->findTool($toolCall->name, $tools);
 
-            if (! $tool) {
+            if ($tool === null) {
                 $results[] = new ToolResult(
                     $toolCall->id,
                     $toolCall->name,
                     $toolCall->arguments,
-                    'Error: Tool "'.$toolCall->name.'" not found.'
+                    'Error: Tool "'.$toolCall->name.'" not found.',
                 );
 
                 continue;
             }
 
-            // Invoke callbacks
-            call_user_func($this->invokingToolCallback, $tool, $toolCall->arguments);
-
             try {
-                $result = (string) $tool->handle(new ToolRequest($toolCall->arguments));
-
-                call_user_func($this->toolInvokedCallback, $tool, $toolCall->arguments, $result);
+                $result = $this->executeTool($tool, $toolCall->arguments);
             } catch (Throwable $e) {
-                // Return error as tool result instead of crashing the entire request
                 $result = 'Error executing tool: '.$e->getMessage();
             }
 
@@ -648,7 +775,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                 $toolCall->id,
                 $toolCall->name,
                 $toolCall->arguments,
-                $result
+                $result,
             );
         }
 

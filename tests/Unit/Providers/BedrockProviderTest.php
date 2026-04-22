@@ -5,7 +5,6 @@ namespace Tests\Unit\Providers;
 use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Gateway\Bedrock\BedrockImageGateway;
 use Laravel\Ai\Gateway\Bedrock\BedrockTextGateway;
-use Laravel\Ai\Gateway\Bedrock\BedrockTranscriptionGateway;
 use Laravel\Ai\Providers\BedrockProvider;
 use Mockery;
 use PHPUnit\Framework\TestCase;
@@ -90,6 +89,33 @@ class BedrockProviderTest extends TestCase
         $this->assertArrayHasKey('use_default_credential_provider', $additionalConfig);
         $this->assertEquals('us-west-2', $additionalConfig['region']);
         $this->assertTrue($additionalConfig['use_default_credential_provider']);
+    }
+
+    public function test_preserves_false_value_for_use_default_credential_provider(): void
+    {
+        $config = [
+            'region' => 'us-east-1',
+            'use_default_credential_provider' => false,
+        ];
+
+        $provider = new BedrockProvider($config, $this->dispatcher);
+        $additionalConfig = $provider->additionalConfiguration();
+
+        $this->assertArrayHasKey('use_default_credential_provider', $additionalConfig);
+        $this->assertFalse($additionalConfig['use_default_credential_provider']);
+    }
+
+    public function test_returns_bearer_token_credential_when_provided(): void
+    {
+        $config = [
+            'bearer_token' => 'bedrock-bearer-token',
+        ];
+
+        $provider = new BedrockProvider($config, $this->dispatcher);
+        $credentials = $provider->providerCredentials();
+
+        $this->assertArrayHasKey('bearer_token', $credentials);
+        $this->assertEquals('bedrock-bearer-token', $credentials['bearer_token']);
     }
 
     public function test_defaults_to_us_east_1_region_when_not_specified(): void
@@ -201,13 +227,6 @@ class BedrockProviderTest extends TestCase
         $this->assertEquals('1152x768', $provider->defaultImageOptions('3:2')['size']);
     }
 
-    public function test_returns_default_transcription_model(): void
-    {
-        $provider = new BedrockProvider([], $this->dispatcher);
-
-        $this->assertEquals('amazon.nova-sonic-v1:0', $provider->defaultTranscriptionModel());
-    }
-
     public function test_creates_text_gateway(): void
     {
         $provider = new BedrockProvider([], $this->dispatcher);
@@ -230,14 +249,6 @@ class BedrockProviderTest extends TestCase
         $gateway = $provider->imageGateway();
 
         $this->assertInstanceOf(BedrockImageGateway::class, $gateway);
-    }
-
-    public function test_creates_transcription_gateway(): void
-    {
-        $provider = new BedrockProvider([], $this->dispatcher);
-        $gateway = $provider->transcriptionGateway();
-
-        $this->assertInstanceOf(BedrockTranscriptionGateway::class, $gateway);
     }
 
     public function test_reuses_gateway_instances(): void
