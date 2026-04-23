@@ -36,7 +36,7 @@ test('image request does not include quality when not specified', function () {
     });
 });
 
-test('image request does not include moderation', function () {
+test('image request does not include moderation for non gpt-image models', function () {
     Http::fake([
         '*' => fakeOpenAiImageResponse(),
     ]);
@@ -48,6 +48,21 @@ test('image request does not include moderation', function () {
 
         return $body['model'] === 'dall-e-3'
             && ! array_key_exists('moderation', $body);
+    });
+});
+
+test('image request includes moderation low for gpt-image models', function () {
+    Http::fake([
+        '*' => fakeOpenAiImageResponse(),
+    ]);
+
+    Image::of('A red apple')->generate(provider: 'openai', model: 'gpt-image-1');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return $body['model'] === 'gpt-image-1'
+            && $body['moderation'] === 'low';
     });
 });
 
