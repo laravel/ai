@@ -57,15 +57,11 @@ class TextGenerationOptions
      */
     private static function resolve(Agent $agent, ReflectionClass $reflection, string $method, string $attribute): int|float|null
     {
-        if ($reflection->hasMethod($method)) {
-            $reflectionMethod = $reflection->getMethod($method);
+        if (method_exists($agent, $method)) {
+            $value = $agent->{$method}();
 
-            if ($reflectionMethod->isPublic() && ! $reflectionMethod->isStatic() && $reflectionMethod->getNumberOfRequiredParameters() === 0) {
-                $value = $agent->{$method}();
-
-                if (! is_null($value)) {
-                    return $value;
-                }
+            if (! is_null($value)) {
+                return $value;
             }
         }
 
