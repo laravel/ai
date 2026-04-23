@@ -16,7 +16,7 @@ dataset('embedding-providers', [
 
 dataset('image-providers', [
     'openai-dall-e-3' => ['openai', 'OPENAI_API_KEY', 'dall-e-3'],
-    'openai-gpt-image-3' => ['openai', 'OPENAI_API_KEY', 'gpt-image-3'],
+    'openai-gpt-image-2' => ['openai', 'OPENAI_API_KEY', 'gpt-image-2'],
     'xai' => ['xai', 'XAI_API_KEY', 'grok-imagine-image'],
 ]);
 
