@@ -152,5 +152,11 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
         foreach ($this->thenCallbacks as $callback) {
             call_user_func($callback, $this->streamedResponse);
         }
+
+        // Sync conversation state from the streamed response back to the
+        // streamable wrapper so callers can access the conversation ID
+        // after iterating through the stream events.
+        $this->conversationId ??= $this->streamedResponse->conversationId;
+        $this->conversationUser ??= $this->streamedResponse->conversationUser;
     }
 }
