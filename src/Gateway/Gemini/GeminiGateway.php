@@ -22,6 +22,7 @@ use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\TextResponse;
@@ -130,7 +131,7 @@ class GeminiGateway implements Gateway
      * Generate an image.
      *
      * @param  array<ImageFile>  $attachments
-     * @param  '21:9'|'16:9'|'9:16'|'5:4'|'4:5'|'4:3'|'3:4'|'3:2'|'2:3'|'1:1'  $size
+     * @param  '21:9'|'16:9'|'9:16'|'8:1'|'5:4'|'4:5'|'4:3'|'4:1'|'3:4'|'3:2'|'2:3'|'1:8'|'1:4'|'1:1'  $size
      * @param  'xlow'|'low'|'medium'|'high'  $quality
      */
     public function generateImage(
@@ -209,7 +210,7 @@ class GeminiGateway implements Gateway
 
         return new EmbeddingsResponse(
             (new Collection($data['embeddings'] ?? []))->pluck('values')->all(),
-            $data['usageMetadata']['promptTokenCount'] ?? 0,
+            new Usage(['text' => $data['usageMetadata']['promptTokenCount'] ?? 0]),
             new Meta($provider->name(), $model),
         );
     }
