@@ -1,6 +1,6 @@
 ---
 name: ai-sdk-development
-description: TRIGGER when working with ai-sdk which is Laravel official first-party AI SDK. Activate when building, editing AI agents, chatbots, text generation, image generation, audio/TTS, transcription/STT, embeddings, RAG, vector stores, reranking, structured output, streaming, conversation memory, tools, queueing, broadcasting, and provider failover across OpenAI, Anthropic, Gemini, Azure, Groq, xAI, DeepSeek, Mistral, Ollama, ElevenLabs, Cohere, Jina, and VoyageAI. Invoke when the user references ai-sdk, the `Laravel\Ai\` namespace, or this project's AI features — not for other AI packages used directly.
+description: TRIGGER when working with ai-sdk which is Laravel official first-party AI SDK. Activate when building, editing AI agents, chatbots, text generation, image generation, audio/TTS, transcription/STT, embeddings, RAG, vector stores, reranking, structured output, streaming, conversation memory, tools, queueing, broadcasting, and provider failover across OpenAI, Anthropic, Gemini, Azure, Groq, xAI, DeepSeek, Mistral, Ollama, LiteLLM, ElevenLabs, Cohere, Jina, and VoyageAI. Invoke when the user references ai-sdk, the `Laravel\Ai\` namespace, or this project's AI features — not for other AI packages used directly.
 license: MIT
 metadata:
   author: laravel
@@ -416,11 +416,11 @@ Calling a capability not supported by a provider throws a `LogicException`. Refe
 
 | Feature    | Providers                                                       |
 | ---------- | --------------------------------------------------------------- |
-| Text       | OpenAI, Anthropic, Gemini, Azure, Groq, xAI, DeepSeek, Mistral, Ollama |
+| Text       | OpenAI, Anthropic, Gemini, Azure, Groq, xAI, DeepSeek, Mistral, Ollama, LiteLLM |
 | Images     | OpenAI, Gemini, xAI                                            |
 | TTS        | OpenAI, ElevenLabs                                              |
 | STT        | OpenAI, ElevenLabs, Mistral                                     |
-| Embeddings | OpenAI, Gemini, Azure, Cohere, Mistral, Jina, VoyageAI         |
+| Embeddings | OpenAI, Gemini, Azure, Cohere, Mistral, Jina, VoyageAI, LiteLLM |
 | Reranking  | Cohere, Jina                                                    |
 | Files      | OpenAI, Anthropic, Gemini                                       |
 
@@ -432,5 +432,6 @@ use Laravel\Ai\Enums\Lab;
 Lab::Anthropic;
 Lab::OpenAI;
 Lab::Gemini;
+Lab::LiteLLM;
 // ...
 ```
