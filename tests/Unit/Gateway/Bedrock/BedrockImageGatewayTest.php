@@ -39,25 +39,7 @@ test('parse size defaults to square dimensions', function () {
     expect(imageGateway()->callParseSize('1:1'))->toEqual([1024, 1024]);
 });
 
-test('legacy stability sdxl body uses text prompts and steps', function () {
-    $body = imageGateway()->callPrepareBody('stability.stable-diffusion-xl-v1', 'a cat', '1:1', 'premium');
-
-    expect($body)->toEqual([
-        'text_prompts' => [['text' => 'a cat', 'weight' => 1.0]],
-        'cfg_scale' => 7.0,
-        'steps' => 50,
-        'width' => 1024,
-        'height' => 1024,
-    ]);
-});
-
-test('legacy stability sdxl body uses 30 steps for standard quality', function () {
-    $body = imageGateway()->callPrepareBody('stability.stable-diffusion-xl-v1', 'a cat', '1:1', 'standard');
-
-    expect($body['steps'])->toBe(30);
-});
-
-test('modern stability body uses prompt and aspect ratio', function () {
+test('stability body uses prompt and aspect ratio', function () {
     $body = imageGateway()->callPrepareBody('stability.sd3-5-large-v1:0', 'a cat', '2:3', 'standard');
 
     expect($body)->toEqual([
@@ -67,7 +49,7 @@ test('modern stability body uses prompt and aspect ratio', function () {
     ]);
 });
 
-test('modern stability body omits aspect ratio when size is null', function () {
+test('stability body omits aspect ratio when size is null', function () {
     $body = imageGateway()->callPrepareBody('stability.stable-image-ultra-v1:0', 'a cat', null, 'standard');
 
     expect($body)->toEqual([
@@ -119,28 +101,15 @@ test('unknown model family falls back to plain prompt body', function () {
     expect($body)->toEqual(['prompt' => 'something']);
 });
 
-test('legacy stability sdxl response is parsed from artifacts', function () {
-    $images = imageGateway()->callParseResponse('stability.stable-diffusion-xl-v1', [
-        'artifacts' => [
-            ['base64' => 'imgdata-1'],
-            ['base64' => 'imgdata-2'],
-        ],
+test('stability response is parsed from images array', function () {
+    $images = imageGateway()->callParseResponse('stability.sd3-5-large-v1:0', [
+        'images' => ['sd-image-1', 'sd-image-2'],
     ]);
 
     expect($images)->toHaveCount(2)
-        ->and($images[0]->image)->toBe('imgdata-1')
-        ->and($images[0]->mime)->toBe('image/png')
-        ->and($images[1]->image)->toBe('imgdata-2');
-});
-
-test('modern stability response is parsed from images array', function () {
-    $images = imageGateway()->callParseResponse('stability.sd3-5-large-v1:0', [
-        'images' => ['sd-image-1'],
-    ]);
-
-    expect($images)->toHaveCount(1)
         ->and($images[0]->image)->toBe('sd-image-1')
-        ->and($images[0]->mime)->toBe('image/png');
+        ->and($images[0]->mime)->toBe('image/png')
+        ->and($images[1]->image)->toBe('sd-image-2');
 });
 
 test('titan response is parsed from images array', function () {
@@ -171,8 +140,7 @@ test('unknown model family returns empty collection', function () {
     expect($images)->toHaveCount(0);
 });
 
-test('missing artifacts or images key yields empty collection', function () {
-    expect(imageGateway()->callParseResponse('stability.stable-diffusion-xl-v1', [])->count())->toBe(0);
+test('missing images key yields empty collection', function () {
     expect(imageGateway()->callParseResponse('stability.sd3-5-large-v1:0', [])->count())->toBe(0);
     expect(imageGateway()->callParseResponse('amazon.titan-image-v1', [])->count())->toBe(0);
     expect(imageGateway()->callParseResponse('amazon.nova-canvas-v1', [])->count())->toBe(0);

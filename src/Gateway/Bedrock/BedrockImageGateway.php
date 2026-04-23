@@ -72,18 +72,9 @@ class BedrockImageGateway implements ImageGateway
         $quality = $options['quality'];
 
         return match (true) {
-            $this->isLegacyStabilityModel($model) => [
-                'text_prompts' => [
-                    ['text' => $prompt, 'weight' => 1.0],
-                ],
-                'cfg_scale' => 7.0,
-                'steps' => $quality === 'premium' ? 50 : 30,
-                'width' => $width,
-                'height' => $height,
-            ],
             str_starts_with($model, 'stability.') => array_filter([
                 'prompt' => $prompt,
-                'aspect_ratio' => $this->stabilityAspectRatio($size),
+                'aspect_ratio' => in_array($size, ['1:1', '2:3', '3:2'], true) ? $size : null,
                 'output_format' => 'png',
             ]),
             str_starts_with($model, 'amazon.titan-image') => [
@@ -112,34 +103,10 @@ class BedrockImageGateway implements ImageGateway
     }
 
     /**
-     * Stability SDXL 1.0 uses a different request shape than the newer Stable Image / SD 3.5 models.
-     */
-    protected function isLegacyStabilityModel(string $model): bool
-    {
-        return str_starts_with($model, 'stability.stable-diffusion-xl');
-    }
-
-    /**
-     * Map our canonical aspect ratios to Stability's accepted aspect_ratio values.
-     */
-    protected function stabilityAspectRatio(?string $size): ?string
-    {
-        return match ($size) {
-            '1:1', '2:3', '3:2' => $size,
-            default => null,
-        };
-    }
-
-    /**
      * Parse the image response payload into GeneratedImage instances.
      */
     protected function parseImageResponse(string $model, array $result): Collection
     {
-        if ($this->isLegacyStabilityModel($model)) {
-            return (new Collection($result['artifacts'] ?? []))
-                ->map(fn ($artifact) => new GeneratedImage($artifact['base64'] ?? '', 'image/png'));
-        }
-
         if (str_starts_with($model, 'stability.')
             || str_starts_with($model, 'amazon.titan-image')
             || str_starts_with($model, 'amazon.nova-canvas')) {
