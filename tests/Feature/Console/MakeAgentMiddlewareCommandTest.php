@@ -1,29 +1,20 @@
 <?php
 
-namespace Tests\Feature\Console;
+test('can create an agent middleware class', function () {
+    $response = $this->artisan('make:agent-middleware', [
+        'name' => 'TestMiddleware',
+    ]);
 
-use Tests\TestCase;
+    $response->assertExitCode(0)->run();
 
-class MakeAgentMiddlewareCommandTest extends TestCase
-{
-    public function test_can_create_an_agent_middleware_class(): void
-    {
-        $response = $this->artisan('make:agent-middleware', [
-            'name' => 'TestMiddleware',
-        ]);
+    expect(app_path('Ai/Middleware/TestMiddleware.php'))->toBeFile();
+});
 
-        $response->assertExitCode(0)->run();
+test('may publish custom middleware stub', function () {
+    $this->artisan('vendor:publish', [
+        '--tag' => 'ai-stubs',
+        '--force' => true,
+    ])->assertExitCode(0)->run();
 
-        $this->assertFileExists(app_path('Ai/Middleware/TestMiddleware.php'));
-    }
-
-    public function test_may_publish_custom_middleware_stub(): void
-    {
-        $this->artisan('vendor:publish', [
-            '--tag' => 'ai-stubs',
-            '--force' => true,
-        ])->assertExitCode(0)->run();
-
-        $this->assertFileExists(base_path('stubs/agent-middleware.stub'));
-    }
-}
+    expect(base_path('stubs/agent-middleware.stub'))->toBeFile();
+});
