@@ -25,6 +25,7 @@ dataset('agent-providers', [
     'deepseek' => ['deepseek', 'DEEPSEEK_API_KEY', 'deepseek-chat'],
     'gemini' => ['gemini', 'GEMINI_API_KEY', 'gemini-3.1-flash-lite-preview'],
     'groq' => ['groq', 'GROQ_API_KEY', 'openai/gpt-oss-20b'],
+    'litellm' => ['litellm', 'LITELLM_API_KEY', 'openai/gpt-4o'],
     'mistral' => ['mistral', 'MISTRAL_API_KEY', 'mistral-small-latest'],
     'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4-nano'],
     'openrouter' => ['openrouter', 'OPENROUTER_API_KEY', 'anthropic/claude-haiku-4.5'],

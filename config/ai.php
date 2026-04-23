@@ -142,6 +142,12 @@ return [
             'key' => env('XAI_API_KEY'),
             'url' => env('XAI_URL', 'https://api.x.ai/v1'),
         ],
+
+        'litellm' => [
+            'driver' => 'litellm',
+            'key' => env('LITELLM_API_KEY', ''),
+            'url' => env('LITELLM_URL', 'http://localhost:4000'),
+        ],
     ],
 
 ];

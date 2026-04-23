@@ -160,3 +160,24 @@ function fakeOpenRouterToolCallResponse(): PromiseInterface
         ],
     ]);
 }
+
+function fakeLiteLLMResponse(string $text = 'Hello'): PromiseInterface
+{
+    return Http::response([
+        'id' => 'chatcmpl-123',
+        'object' => 'chat.completion',
+        'model' => 'openai/gpt-4o',
+        'choices' => [[
+            'index' => 0,
+            'message' => [
+                'role' => 'assistant',
+                'content' => $text,
+            ],
+            'finish_reason' => 'stop',
+        ]],
+        'usage' => [
+            'prompt_tokens' => 1,
+            'completion_tokens' => 1,
+        ],
+    ]);
+}

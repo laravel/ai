@@ -26,6 +26,7 @@ use Laravel\Ai\Providers\ElevenLabsProvider;
 use Laravel\Ai\Providers\GeminiProvider;
 use Laravel\Ai\Providers\GroqProvider;
 use Laravel\Ai\Providers\JinaProvider;
+use Laravel\Ai\Providers\LiteLLMProvider;
 use Laravel\Ai\Providers\MistralProvider;
 use Laravel\Ai\Providers\OllamaProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
@@ -442,6 +443,17 @@ class AiManager extends MultipleInstanceManager
         return new XaiProvider(
             $config,
             $this->app->make(Dispatcher::class),
+        );
+    }
+
+    /**
+     * Create a LiteLLM powered instance.
+     */
+    public function createLitellmDriver(array $config): LiteLLMProvider
+    {
+        return new LiteLLMProvider(
+            $config,
+            $this->app->make(Dispatcher::class)
         );
     }
 
