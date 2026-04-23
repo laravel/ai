@@ -3,9 +3,8 @@
 namespace Laravel\Ai;
 
 use Illuminate\JsonSchema\Types\ObjectType;
-use Prism\Prism\Contracts\HasSchemaType;
 
-class ObjectSchema extends Schema implements HasSchemaType
+class ObjectSchema extends Schema
 {
     /**
      * Create a new output schema.
@@ -60,7 +59,7 @@ class ObjectSchema extends Schema implements HasSchemaType
     }
 
     /**
-     * Get the Prism-compatible schema type.
+     * Get the schema type.
      */
     public function schemaType(): string
     {

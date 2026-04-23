@@ -1,20 +1,15 @@
 <?php
 
-namespace Tests\Feature\Providers\Gemini;
-
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Responses\Data\FinishReason;
-use PHPUnit\Framework\Attributes\DataProvider;
-use Tests\Feature\Agents\AssistantAgent;
-use Tests\Feature\Agents\NestedStructuredAgent;
-use Tests\Feature\Agents\NullableStructuredAgent;
-use Tests\Feature\Agents\StructuredAgent;
-use Tests\Feature\Agents\ToolUsingAgent;
+use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\NestedStructuredAgent;
+use Tests\Fixtures\Agents\NullableStructuredAgent;
+use Tests\Fixtures\Agents\StructuredAgent;
+use Tests\Fixtures\Agents\ToolUsingAgent;
 
-class RequestMappingTest extends GeminiTestCase
-{
-    public function test_request_includes_model_in_url_and_contents(): void
-    {
+describe('request structure', function () {
+    test('request includes model in url and contents', function () {
         Http::fake([
             'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('Laravel is great'),
         ]);
@@ -30,10 +25,9 @@ class RequestMappingTest extends GeminiTestCase
                 && $request->data()['contents'][0]['role'] === 'user'
                 && $request->data()['contents'][0]['parts'][0]['text'] === 'What is Laravel?';
         });
-    }
+    });
 
-    public function test_system_instructions_are_sent_as_system_instruction_field(): void
-    {
+    test('system instructions are sent as system instruction field', function () {
         Http::fake([
             'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
         ]);
@@ -50,10 +44,9 @@ class RequestMappingTest extends GeminiTestCase
                 && isset($body['system_instruction']['parts'][0]['text'])
                 && str_contains($body['system_instruction']['parts'][0]['text'], 'helpful');
         });
-    }
+    });
 
-    public function test_request_without_tools_excludes_tool_fields(): void
-    {
+    test('request without tools excludes tool fields', function () {
         Http::fake([
             'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
         ]);
@@ -69,10 +62,9 @@ class RequestMappingTest extends GeminiTestCase
             return ! isset($body['tools'])
                 && ! isset($body['tool_config']);
         });
-    }
+    });
 
-    public function test_request_sends_api_key_header(): void
-    {
+    test('request sends api key header', function () {
         Http::fake([
             'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
         ]);
@@ -85,10 +77,126 @@ class RequestMappingTest extends GeminiTestCase
         Http::assertSent(function ($request) {
             return $request->hasHeader('x-goog-api-key');
         });
-    }
+    });
 
-    public function test_response_usage_is_correctly_parsed(): void
-    {
+    test('tools include tool config', function () {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('The number is 42'),
+        ]);
+
+        (new ToolUsingAgent(fixed: true))->prompt(
+            'Generate a number',
+            provider: 'gemini',
+        );
+
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+
+            return isset($body['tools'])
+                && isset($body['tool_config'])
+                && $body['tool_config']['function_calling_config']['mode'] === 'AUTO';
+        });
+    });
+
+    test('function call id is extracted from response', function () {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::sequence([
+                $this->fakeToolCallResponse('FixedNumberGenerator', 'call_abc123'),
+                $this->fakeTextResponse('Done'),
+            ]),
+        ]);
+
+        $response = (new ToolUsingAgent(fixed: true))->prompt('Generate', provider: 'gemini');
+
+        $steps = $response->steps;
+
+        expect($steps)->not->toBeEmpty();
+
+        $toolCall = $steps->first()->toolCalls[0] ?? null;
+
+        expect($toolCall)->not->toBeNull()
+            ->and($toolCall->id)->toBe('call_abc123');
+    });
+});
+
+describe('structured output', function () {
+    test('structured output uses response json schema', function () {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => $this->fakeStructuredResponse(['symbol' => 'Fe']),
+        ]);
+
+        (new StructuredAgent)->prompt(
+            'What is the symbol for Iron?',
+            provider: 'gemini',
+        );
+
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+            $config = $body['generationConfig'] ?? [];
+
+            return ($config['response_mime_type'] ?? '') === 'application/json'
+                && isset($config['response_json_schema'])
+                && ! isset($config['response_schema']);
+        });
+    });
+
+    test('structured response is correctly parsed', function () {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => $this->fakeStructuredResponse(['symbol' => 'Fe']),
+        ]);
+
+        $response = (new StructuredAgent)->prompt(
+            'What is the symbol for Iron?',
+            provider: 'gemini',
+        );
+
+        expect($response->structured['symbol'])->toBe('Fe');
+    });
+
+    test('nested structured output uses response json schema', function () {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => $this->fakeStructuredResponse([
+                'elements' => [['atomicNumber' => 1, 'symbol' => 'H']],
+            ]),
+        ]);
+
+        (new NestedStructuredAgent)->prompt('List noble gases?', provider: 'gemini');
+
+        Http::assertSent(function ($request) {
+            $config = $request->data()['generationConfig'] ?? [];
+            $schema = $config['response_json_schema'] ?? [];
+            $itemSchema = $schema['properties']['elements']['items'] ?? [];
+
+            return isset($config['response_json_schema'])
+                && ! isset($config['response_schema'])
+                && isset($itemSchema['additionalProperties'])
+                && $itemSchema['additionalProperties'] === false;
+        });
+    });
+
+    test('nullable schema types are preserved in response json schema', function () {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => $this->fakeStructuredResponse([
+                'symbol' => 'He',
+                'meltingPoint' => null,
+                'boilingPoint' => -268.9,
+            ]),
+        ]);
+
+        (new NullableStructuredAgent)->prompt('Properties of Helium?', provider: 'gemini');
+
+        Http::assertSent(function ($request) {
+            $schema = $request->data()['generationConfig']['response_json_schema'] ?? [];
+            $props = $schema['properties'] ?? [];
+
+            return $props['meltingPoint']['type'] === ['number', 'null']
+                && $props['boilingPoint']['type'] === ['number', 'null'];
+        });
+    });
+});
+
+describe('usage parsing', function () {
+    test('response usage is correctly parsed', function () {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::response([
                 'candidates' => [[
@@ -113,14 +221,14 @@ class RequestMappingTest extends GeminiTestCase
             provider: 'gemini',
         );
 
-        $this->assertSame(20, $response->usage->promptTokens);
-        $this->assertSame(15, $response->usage->completionTokens);
-        $this->assertSame(5, $response->usage->cacheReadInputTokens);
-        $this->assertSame(10, $response->usage->reasoningTokens);
-    }
+        expect($response->usage)
+            ->promptTokens->toBe(20)
+            ->completionTokens->toBe(15)
+            ->cacheReadInputTokens->toBe(5)
+            ->reasoningTokens->toBe(10);
+    });
 
-    public function test_usage_without_cached_tokens_uses_full_prompt_count(): void
-    {
+    test('usage without cached tokens uses full prompt count', function () {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::response([
                 'candidates' => [[
@@ -136,131 +244,12 @@ class RequestMappingTest extends GeminiTestCase
 
         $response = (new AssistantAgent)->prompt('Hi', provider: 'gemini');
 
-        $this->assertSame(100, $response->usage->promptTokens);
-        $this->assertSame(50, $response->usage->completionTokens);
-    }
+        expect($response->usage)
+            ->promptTokens->toBe(100)
+            ->completionTokens->toBe(50);
+    });
 
-    public function test_structured_output_uses_response_json_schema(): void
-    {
-        Http::fake([
-            'generativelanguage.googleapis.com/*' => $this->fakeStructuredResponse(['symbol' => 'Fe']),
-        ]);
-
-        (new StructuredAgent)->prompt(
-            'What is the symbol for Iron?',
-            provider: 'gemini',
-        );
-
-        Http::assertSent(function ($request) {
-            $body = $request->data();
-            $config = $body['generationConfig'] ?? [];
-
-            return ($config['response_mime_type'] ?? '') === 'application/json'
-                && isset($config['response_json_schema'])
-                && ! isset($config['response_schema']);
-        });
-    }
-
-    public function test_structured_response_is_correctly_parsed(): void
-    {
-        Http::fake([
-            'generativelanguage.googleapis.com/*' => $this->fakeStructuredResponse(['symbol' => 'Fe']),
-        ]);
-
-        $response = (new StructuredAgent)->prompt(
-            'What is the symbol for Iron?',
-            provider: 'gemini',
-        );
-
-        $this->assertSame('Fe', $response->structured['symbol']);
-    }
-
-    public function test_tools_include_tool_config(): void
-    {
-        Http::fake([
-            'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('The number is 42'),
-        ]);
-
-        (new ToolUsingAgent(fixed: true))->prompt(
-            'Generate a number',
-            provider: 'gemini',
-        );
-
-        Http::assertSent(function ($request) {
-            $body = $request->data();
-
-            return isset($body['tools'])
-                && isset($body['tool_config'])
-                && $body['tool_config']['function_calling_config']['mode'] === 'AUTO';
-        });
-    }
-
-    public function test_function_call_id_is_extracted_from_response(): void
-    {
-        Http::fake([
-            'generativelanguage.googleapis.com/*' => Http::sequence([
-                $this->fakeToolCallResponse('FixedNumberGenerator', 'call_abc123'),
-                $this->fakeTextResponse('Done'),
-            ]),
-        ]);
-
-        $response = (new ToolUsingAgent(fixed: true))->prompt('Generate', provider: 'gemini');
-
-        $steps = $response->steps;
-
-        $this->assertNotEmpty($steps);
-
-        $toolCall = $steps->first()->toolCalls[0] ?? null;
-
-        $this->assertNotNull($toolCall);
-        $this->assertSame('call_abc123', $toolCall->id);
-    }
-
-    public function test_nested_structured_output_uses_response_json_schema(): void
-    {
-        Http::fake([
-            'generativelanguage.googleapis.com/*' => $this->fakeStructuredResponse([
-                'elements' => [['atomicNumber' => 1, 'symbol' => 'H']],
-            ]),
-        ]);
-
-        (new NestedStructuredAgent)->prompt('List noble gases?', provider: 'gemini');
-
-        Http::assertSent(function ($request) {
-            $config = $request->data()['generationConfig'] ?? [];
-            $schema = $config['response_json_schema'] ?? [];
-            $itemSchema = $schema['properties']['elements']['items'] ?? [];
-
-            return isset($config['response_json_schema'])
-                && ! isset($config['response_schema'])
-                && isset($itemSchema['additionalProperties'])
-                && $itemSchema['additionalProperties'] === false;
-        });
-    }
-
-    public function test_nullable_schema_types_are_preserved_in_response_json_schema(): void
-    {
-        Http::fake([
-            'generativelanguage.googleapis.com/*' => $this->fakeStructuredResponse([
-                'symbol' => 'He',
-                'meltingPoint' => null,
-                'boilingPoint' => -268.9,
-            ]),
-        ]);
-
-        (new NullableStructuredAgent)->prompt('Properties of Helium?', provider: 'gemini');
-
-        Http::assertSent(function ($request) {
-            $schema = $request->data()['generationConfig']['response_json_schema'] ?? [];
-            $props = $schema['properties'] ?? [];
-
-            return $props['meltingPoint']['type'] === ['number', 'null']
-                && $props['boilingPoint']['type'] === ['number', 'null'];
-        });
-    }
-
-    public function test_thinking_response_parts_are_separated_from_text(): void
-    {
+    test('thinking response parts are separated from text', function () {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::response([
                 'candidates' => [[
@@ -283,12 +272,34 @@ class RequestMappingTest extends GeminiTestCase
 
         $response = (new AssistantAgent)->prompt('Question?', provider: 'gemini');
 
-        $this->assertSame('The answer is 42.', $response->text);
-        $this->assertStringNotContainsString('Internal reasoning', $response->text);
-    }
+        expect($response->text)->toBe('The answer is 42.')->not->toContain('Internal reasoning');
+    });
 
-    public function test_grounding_metadata_citations_are_filtered_through_supports(): void
-    {
+    test('finish reason maps correctly', function (string $geminiReason, FinishReason $expected) {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [[
+                    'content' => ['parts' => [['text' => 'Response']], 'role' => 'model'],
+                    'finishReason' => $geminiReason,
+                ]],
+                'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5],
+            ]),
+        ]);
+
+        $response = (new AssistantAgent)->prompt('Hi', provider: 'gemini');
+
+        expect($response->steps->last()->finishReason)->toBe($expected);
+    })->with([
+        'STOP maps to Stop' => ['STOP', FinishReason::Stop],
+        'MAX_TOKENS maps to Length' => ['MAX_TOKENS', FinishReason::Length],
+        'SAFETY maps to ContentFilter' => ['SAFETY', FinishReason::ContentFilter],
+        'MALFORMED_FUNCTION_CALL maps to ContentFilter' => ['MALFORMED_FUNCTION_CALL', FinishReason::ContentFilter],
+        'RECITATION maps to ContentFilter' => ['RECITATION', FinishReason::ContentFilter],
+    ]);
+});
+
+describe('citations', function () {
+    test('grounding metadata citations are filtered through supports', function () {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::response([
                 'candidates' => [[
@@ -315,13 +326,12 @@ class RequestMappingTest extends GeminiTestCase
 
         $response = (new AssistantAgent)->prompt('Who won Euro 2024?', provider: 'gemini');
 
-        $this->assertCount(2, $response->meta->citations);
-        $this->assertSame('https://example.com/euro', $response->meta->citations[0]->url);
-        $this->assertSame('https://example.com/spain', $response->meta->citations[1]->url);
-    }
+        expect($response->meta->citations)->toHaveCount(2)
+            ->and($response->meta->citations[0]->url)->toBe('https://example.com/euro')
+            ->and($response->meta->citations[1]->url)->toBe('https://example.com/spain');
+    });
 
-    public function test_legacy_citation_metadata_is_also_extracted(): void
-    {
+    test('legacy citation metadata is also extracted', function () {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::response([
                 'candidates' => [[
@@ -342,12 +352,11 @@ class RequestMappingTest extends GeminiTestCase
 
         $response = (new AssistantAgent)->prompt('Query', provider: 'gemini');
 
-        $this->assertCount(1, $response->meta->citations);
-        $this->assertSame('https://example.com/source1', $response->meta->citations[0]->url);
-    }
+        expect($response->meta->citations)->toHaveCount(1)
+            ->and($response->meta->citations[0]->url)->toBe('https://example.com/source1');
+    });
 
-    public function test_duplicate_citations_are_deduplicated_by_url(): void
-    {
+    test('duplicate citations are deduplicated by url', function () {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::response([
                 'candidates' => [[
@@ -372,35 +381,6 @@ class RequestMappingTest extends GeminiTestCase
 
         $response = (new AssistantAgent)->prompt('Query', provider: 'gemini');
 
-        $this->assertCount(1, $response->meta->citations);
-    }
-
-    public static function finishReasonProvider(): array
-    {
-        return [
-            'STOP maps to Stop' => ['STOP', FinishReason::Stop],
-            'MAX_TOKENS maps to Length' => ['MAX_TOKENS', FinishReason::Length],
-            'SAFETY maps to ContentFilter' => ['SAFETY', FinishReason::ContentFilter],
-            'MALFORMED_FUNCTION_CALL maps to ContentFilter' => ['MALFORMED_FUNCTION_CALL', FinishReason::ContentFilter],
-            'RECITATION maps to ContentFilter' => ['RECITATION', FinishReason::ContentFilter],
-        ];
-    }
-
-    #[DataProvider('finishReasonProvider')]
-    public function test_finish_reason_maps_correctly(string $geminiReason, FinishReason $expected): void
-    {
-        Http::fake([
-            'generativelanguage.googleapis.com/*' => Http::response([
-                'candidates' => [[
-                    'content' => ['parts' => [['text' => 'Response']], 'role' => 'model'],
-                    'finishReason' => $geminiReason,
-                ]],
-                'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5],
-            ]),
-        ]);
-
-        $response = (new AssistantAgent)->prompt('Hi', provider: 'gemini');
-
-        $this->assertSame($expected, $response->steps->last()->finishReason);
-    }
-}
+        expect($response->meta->citations)->toHaveCount(1);
+    });
+});

@@ -1,88 +1,84 @@
 <?php
 
-namespace Tests\Feature\Providers\Xai;
-
 use Illuminate\Support\Facades\Http;
-use Tests\Feature\Agents\ToolUsingAgent;
+use Tests\Fixtures\Agents\ToolUsingAgent;
 
-class ToolCallLoopTest extends XaiTestCase
-{
-    public function test_tool_calls_trigger_follow_up_request(): void
-    {
-        Http::fake([
-            '*' => Http::sequence([
-                $this->fakeToolCallResponse(),
-                $this->fakeTextResponse('The number is 72019'),
-            ]),
-        ]);
+beforeEach(function () {
+    config(['ai.providers.xai' => [
+        ...config('ai.providers.xai'),
+        'key' => 'test-key',
+    ]]);
+});
 
-        $response = (new ToolUsingAgent(fixed: true))->prompt(
-            'Generate a random number',
-            provider: 'xai',
-        );
+test('tool calls trigger follow up request', function () {
+    Http::fake([
+        '*' => Http::sequence([
+            $this->fakeToolCallResponse(),
+            $this->fakeTextResponse('The number is 72019'),
+        ]),
+    ]);
 
-        $recorded = Http::recorded();
+    $response = (new ToolUsingAgent(fixed: true))->prompt(
+        'Generate a random number',
+        provider: 'xai',
+    );
 
-        $this->assertCount(2, $recorded);
+    $recorded = Http::recorded();
 
-        $followUpBody = json_decode($recorded[1][0]->body(), true);
+    expect($recorded)->toHaveCount(2);
 
-        $this->assertArrayHasKey('previous_response_id', $followUpBody);
+    $followUpBody = json_decode($recorded[1][0]->body(), true);
 
-        $hasToolOutput = false;
+    expect($followUpBody)->toHaveKey('previous_response_id');
 
-        foreach ($followUpBody['input'] as $item) {
-            if (($item['type'] ?? '') === 'function_call_output') {
-                $hasToolOutput = true;
-            }
+    $hasToolOutput = false;
+
+    foreach ($followUpBody['input'] as $item) {
+        if (($item['type'] ?? '') === 'function_call_output') {
+            $hasToolOutput = true;
         }
-
-        $this->assertTrue($hasToolOutput, 'Follow-up request should include function_call_output');
     }
 
-    public function test_max_steps_limits_tool_call_depth(): void
-    {
-        Http::fake([
-            '*' => Http::sequence([
-                $this->fakeToolCallResponse('FixedNumberGenerator', 'call_'.uniqid()),
-                $this->fakeToolCallResponse('FixedNumberGenerator', 'call_'.uniqid()),
-                $this->fakeToolCallResponse('FixedNumberGenerator', 'call_'.uniqid()),
-                $this->fakeTextResponse('Done'),
-            ]),
-        ]);
+    expect($hasToolOutput)->toBeTrue('Follow-up request should include function_call_output');
+});
 
-        $response = (new ToolUsingAgent(fixed: true))->prompt(
-            'Generate numbers',
-            provider: 'xai',
-        );
+test('max steps limits tool call depth', function () {
+    Http::fake([
+        '*' => Http::sequence([
+            $this->fakeToolCallResponse('FixedNumberGenerator', 'call_'.uniqid()),
+            $this->fakeToolCallResponse('FixedNumberGenerator', 'call_'.uniqid()),
+            $this->fakeToolCallResponse('FixedNumberGenerator', 'call_'.uniqid()),
+            $this->fakeTextResponse('Done'),
+        ]),
+    ]);
 
-        $recorded = Http::recorded();
+    $response = (new ToolUsingAgent(fixed: true))->prompt(
+        'Generate numbers',
+        provider: 'xai',
+    );
 
-        // ToolUsingAgent has 1 tool + structured output tool = 2 tools
-        // maxSteps = round(2 * 1.5) = 3
-        // So max 3 requests before stopping (initial + 2 follow-ups)
-        $this->assertLessThanOrEqual(3, count($recorded));
-    }
+    $recorded = Http::recorded();
 
-    public function test_follow_up_request_preserves_tools(): void
-    {
-        Http::fake([
-            '*' => Http::sequence([
-                $this->fakeToolCallResponse(),
-                $this->fakeTextResponse('The number is 72019'),
-            ]),
-        ]);
+    expect(count($recorded))->toBeLessThanOrEqual(3);
+});
 
-        (new ToolUsingAgent(fixed: true))->prompt(
-            'Generate a number',
-            provider: 'xai',
-        );
+test('follow up request preserves tools', function () {
+    Http::fake([
+        '*' => Http::sequence([
+            $this->fakeToolCallResponse(),
+            $this->fakeTextResponse('The number is 72019'),
+        ]),
+    ]);
 
-        $recorded = Http::recorded();
+    (new ToolUsingAgent(fixed: true))->prompt(
+        'Generate a number',
+        provider: 'xai',
+    );
 
-        $followUpBody = json_decode($recorded[1][0]->body(), true);
+    $recorded = Http::recorded();
 
-        $this->assertArrayHasKey('tools', $followUpBody);
-        $this->assertNotEmpty($followUpBody['tools']);
-    }
-}
+    $followUpBody = json_decode($recorded[1][0]->body(), true);
+
+    expect($followUpBody)->toHaveKey('tools')
+        ->and($followUpBody['tools'])->not->toBeEmpty();
+});

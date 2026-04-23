@@ -37,7 +37,7 @@ class StoredImage extends Image implements Arrayable, JsonSerializable, Storable
      */
     public function mimeType(): ?string
     {
-        return Storage::disk($this->disk)->mimeType($this->path);
+        return Storage::disk($this->disk)->mimeType($this->path) ?: null;
     }
 
     /**
@@ -47,7 +47,7 @@ class StoredImage extends Image implements Arrayable, JsonSerializable, Storable
     {
         return [
             'type' => 'stored-image',
-            'name' => $this->name,
+            'name' => $this->name(),
             'path' => $this->path,
             'disk' => $this->disk ?? config('filesystems.default'),
         ];

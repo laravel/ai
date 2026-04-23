@@ -1,200 +1,188 @@
 <?php
 
-namespace Tests\Feature\Providers\OpenAi;
-
-use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Files;
 use Laravel\Ai\Files\Base64Document;
-use Tests\Feature\Agents\AssistantAgent;
-use Tests\Feature\Agents\ToolUsingAgent;
-use Tests\TestCase;
+use Laravel\Ai\Files\LocalImage;
+use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\ToolUsingAgent;
 
 use function Laravel\Ai\agent;
 
-class MessageMappingTest extends TestCase
-{
-    protected function setUp(): void
-    {
-        parent::setUp();
+beforeEach(function () {
+    config(['ai.providers.openai' => [
+        ...config('ai.providers.openai'),
+        'key' => 'test-key',
+    ]]);
+});
 
-        config(['ai.providers.openai' => [
-            ...config('ai.providers.openai'),
-            'key' => 'test-key',
-        ]]);
-    }
+test('user message maps to openai format', function () {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiResponse(),
+    ]);
 
-    public function test_user_message_maps_to_openai_format(): void
-    {
-        Http::fake([
-            'api.openai.com/*' => $this->fakeOpenAiResponse(),
-        ]);
+    (new AssistantAgent)->prompt(
+        'What is Laravel?',
+        provider: 'openai',
+    );
 
-        (new AssistantAgent)->prompt(
-            'What is Laravel?',
-            provider: 'openai',
-        );
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $input = $body['input'];
+        $userMessage = collect($input)->firstWhere('role', 'user');
 
-        Http::assertSent(function (Request $request) {
-            $body = json_decode($request->body(), true);
-            $input = $body['input'];
-            $userMessage = collect($input)->firstWhere('role', 'user');
+        return $userMessage !== null
+            && $userMessage['content'][0]['type'] === 'input_text'
+            && $userMessage['content'][0]['text'] === 'What is Laravel?';
+    });
+});
 
-            return $userMessage !== null
-                && $userMessage['content'][0]['type'] === 'input_text'
-                && $userMessage['content'][0]['text'] === 'What is Laravel?';
-        });
-    }
+test('tool result follow up uses previous response id', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::sequence([
+            fakeOpenAiToolCallResponse(),
+            fakeOpenAiResponse('The number is 72019'),
+        ]),
+    ]);
 
-    public function test_tool_result_follow_up_uses_previous_response_id(): void
-    {
-        Http::fake([
-            'api.openai.com/*' => Http::sequence([
-                $this->fakeOpenAiToolCallResponse(),
-                $this->fakeOpenAiResponse('The number is 72019'),
-            ]),
-        ]);
+    (new ToolUsingAgent(fixed: true))->prompt(
+        'Generate a number',
+        provider: 'openai',
+    );
 
-        (new ToolUsingAgent(fixed: true))->prompt(
-            'Generate a number',
-            provider: 'openai',
-        );
+    $recorded = Http::recorded();
 
-        $recorded = Http::recorded();
+    expect($recorded)->toHaveCount(2);
 
-        $this->assertCount(2, $recorded);
+    $followUpBody = json_decode($recorded[1][0]->body(), true);
 
-        $followUpBody = json_decode($recorded[1][0]->body(), true);
+    expect($followUpBody)->toHaveKey('previous_response_id')
+        ->and($followUpBody['previous_response_id'])->toBe('resp_tool_123');
 
-        $this->assertArrayHasKey('previous_response_id', $followUpBody);
-        $this->assertSame('resp_tool_123', $followUpBody['previous_response_id']);
+    $hasFunctionCallOutput = false;
 
-        $hasFunctionCallOutput = false;
-
-        foreach ($followUpBody['input'] as $item) {
-            if (($item['type'] ?? '') === 'function_call_output') {
-                $hasFunctionCallOutput = true;
-                $this->assertSame('call_123', $item['call_id']);
-                $this->assertNotEmpty($item['output']);
-            }
+    foreach ($followUpBody['input'] as $item) {
+        if (($item['type'] ?? '') === 'function_call_output') {
+            $hasFunctionCallOutput = true;
+            expect($item['call_id'])->toBe('call_123')
+                ->and($item['output'])->not->toBeEmpty();
         }
-
-        $this->assertTrue($hasFunctionCallOutput, 'Follow-up should include function_call_output');
     }
 
-    public function test_base64_pdf_document_maps_to_input_file(): void
-    {
-        Http::fake([
-            'api.openai.com/*' => $this->fakeOpenAiResponse('I see a PDF'),
-        ]);
+    expect($hasFunctionCallOutput)->toBeTrue();
+});
 
-        $pdf = new Base64Document(base64_encode('fake-pdf-content'), 'application/pdf');
+test('base64 pdf document maps to input file', function () {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiResponse('I see a PDF'),
+    ]);
 
-        agent('You are helpful.')->prompt(
-            'What is in this PDF?',
-            attachments: [$pdf],
-            provider: 'openai',
-        );
+    $pdf = new Base64Document(base64_encode('fake-pdf-content'), 'application/pdf');
 
-        Http::assertSent(function (Request $request) {
-            $body = json_decode($request->body(), true);
-            $userMessage = collect($body['input'])->firstWhere('role', 'user');
-            $content = $userMessage['content'];
+    agent('You are helpful.')->prompt(
+        'What is in this PDF?',
+        attachments: [$pdf],
+        provider: 'openai',
+    );
 
-            $fileBlock = collect($content)->firstWhere('type', 'input_file');
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $userMessage = collect($body['input'])->firstWhere('role', 'user');
+        $content = $userMessage['content'];
 
-            return $fileBlock !== null
-                && str_contains($fileBlock['file_data'], 'application/pdf')
-                && str_contains($fileBlock['file_data'], base64_encode('fake-pdf-content'));
-        });
-    }
+        $fileBlock = collect($content)->firstWhere('type', 'input_file');
 
-    public function test_uploaded_pdf_file_maps_to_input_file(): void
-    {
-        Http::fake([
-            'api.openai.com/*' => $this->fakeOpenAiResponse('I see a PDF'),
-        ]);
+        return $fileBlock !== null
+            && str_contains($fileBlock['file_data'], 'application/pdf')
+            && str_contains($fileBlock['file_data'], base64_encode('fake-pdf-content'));
+    });
+});
 
-        $file = UploadedFile::fake()->create('report.pdf', 100, 'application/pdf');
+test('nameless text document falls back to derived filename', function () {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiResponse(),
+    ]);
 
-        agent('You are helpful.')->prompt(
-            'What is in this file?',
-            attachments: [$file],
-            provider: 'openai',
-        );
+    agent('You are helpful.')->prompt(
+        'Read this.',
+        attachments: [Files\Document::fromString('hello world', 'text/plain')],
+        provider: 'openai',
+    );
 
-        Http::assertSent(function (Request $request) {
-            $body = json_decode($request->body(), true);
-            $userMessage = collect($body['input'])->firstWhere('role', 'user');
-            $content = $userMessage['content'];
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $userMessage = collect($body['input'])->firstWhere('role', 'user');
+        $fileBlock = collect($userMessage['content'])->firstWhere('type', 'input_file');
 
-            $fileBlock = collect($content)->firstWhere('type', 'input_file');
+        return $fileBlock !== null
+            && ($fileBlock['filename'] ?? null) === 'document.txt';
+    });
+});
 
-            return $fileBlock !== null
-                && str_contains($fileBlock['file_data'], 'application/pdf');
-        });
-    }
+test('uploaded pdf file maps to input file', function () {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiResponse('I see a PDF'),
+    ]);
 
-    public function test_system_instructions_are_in_input_array_as_system_role(): void
-    {
-        Http::fake([
-            'api.openai.com/*' => $this->fakeOpenAiResponse(),
-        ]);
+    $file = UploadedFile::fake()->create('report.pdf', 100, 'application/pdf');
 
-        (new AssistantAgent)->prompt(
-            'Hi',
-            provider: 'openai',
-        );
+    agent('You are helpful.')->prompt(
+        'What is in this file?',
+        attachments: [$file],
+        provider: 'openai',
+    );
 
-        Http::assertSent(function (Request $request) {
-            $body = json_decode($request->body(), true);
-            $systemMsg = collect($body['input'])->firstWhere('role', 'system');
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $userMessage = collect($body['input'])->firstWhere('role', 'user');
+        $content = $userMessage['content'];
 
-            return $systemMsg !== null
-                && str_contains($systemMsg['content'], 'helpful assistant');
-        });
-    }
+        $fileBlock = collect($content)->firstWhere('type', 'input_file');
 
-    protected function fakeOpenAiResponse(string $text = 'Hello'): PromiseInterface
-    {
-        return Http::response([
-            'id' => 'resp_123',
-            'status' => 'completed',
-            'model' => 'gpt-5.4',
-            'output' => [[
-                'type' => 'message',
-                'status' => 'completed',
-                'content' => [[
-                    'type' => 'output_text',
-                    'text' => $text,
-                ]],
-            ]],
-            'usage' => [
-                'input_tokens' => 1,
-                'output_tokens' => 1,
-            ],
-        ]);
-    }
+        return $fileBlock !== null
+            && str_contains($fileBlock['file_data'], 'application/pdf');
+    });
+});
 
-    protected function fakeOpenAiToolCallResponse(): PromiseInterface
-    {
-        return Http::response([
-            'id' => 'resp_tool_123',
-            'status' => 'completed',
-            'model' => 'gpt-5.4',
-            'output' => [[
-                'type' => 'function_call',
-                'id' => 'fc_123',
-                'call_id' => 'call_123',
-                'name' => 'FixedNumberGenerator',
-                'arguments' => '{}',
-                'status' => 'completed',
-            ]],
-            'usage' => [
-                'input_tokens' => 10,
-                'output_tokens' => 5,
-            ],
-        ]);
-    }
-}
+test('local image attachment without explicit mime type detects mime from file', function () {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiResponse('I see an image'),
+    ]);
+
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')],
+        provider: 'openai',
+    );
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $userMessage = collect($body['input'])->firstWhere('role', 'user');
+        $imageBlock = collect($userMessage['content'])->firstWhere('type', 'input_image');
+
+        return $imageBlock !== null
+            && str_starts_with($imageBlock['image_url'], 'data:image/png;base64,')
+            && ! str_contains($imageBlock['image_url'], 'data:;base64,');
+    });
+});
+
+test('system instructions are in input array as system role', function () {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiResponse(),
+    ]);
+
+    (new AssistantAgent)->prompt(
+        'Hi',
+        provider: 'openai',
+    );
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $systemMsg = collect($body['input'])->firstWhere('role', 'system');
+
+        return $systemMsg !== null
+            && str_contains($systemMsg['content'], 'helpful assistant');
+    });
+});

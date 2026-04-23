@@ -1,93 +1,89 @@
 <?php
 
-namespace Tests\Feature\Providers\Mistral;
-
 use Illuminate\Support\Facades\Http;
-use Tests\Feature\Agents\ToolUsingAgent;
+use Tests\Fixtures\Agents\ToolUsingAgent;
 
-class ToolCallLoopTest extends MistralTestCase
-{
-    public function test_tool_calls_trigger_follow_up_request(): void
-    {
-        Http::fake([
-            '*' => Http::sequence([
-                $this->fakeToolCallResponse('FixedNumberGenerator', 'call_'.uniqid()),
-                $this->fakeTextResponse('The number is 72019'),
-            ]),
-        ]);
+beforeEach(function () {
+    config(['ai.providers.mistral' => [
+        ...config('ai.providers.mistral'),
+        'key' => 'test-key',
+    ]]);
+});
 
-        $response = (new ToolUsingAgent(fixed: true))->prompt(
-            'Generate a random number',
-            provider: 'mistral',
-        );
+test('tool calls trigger follow up request', function () {
+    Http::fake([
+        '*' => Http::sequence([
+            $this->fakeToolCallResponse('FixedNumberGenerator', 'call_'.uniqid()),
+            $this->fakeTextResponse('The number is 72019'),
+        ]),
+    ]);
 
-        $recorded = Http::recorded();
+    $response = (new ToolUsingAgent(fixed: true))->prompt(
+        'Generate a random number',
+        provider: 'mistral',
+    );
 
-        $this->assertCount(2, $recorded);
+    $recorded = Http::recorded();
 
-        $followUpBody = json_decode($recorded[1][0]->body(), true);
+    expect($recorded)->toHaveCount(2);
 
-        $hasAssistantWithToolCalls = false;
-        $hasToolResult = false;
+    $followUpBody = json_decode($recorded[1][0]->body(), true);
 
-        foreach ($followUpBody['messages'] as $message) {
-            if ($message['role'] === 'assistant' && ! empty($message['tool_calls'])) {
-                $hasAssistantWithToolCalls = true;
-            }
+    $hasAssistantWithToolCalls = false;
+    $hasToolResult = false;
 
-            if ($message['role'] === 'tool') {
-                $hasToolResult = true;
-            }
+    foreach ($followUpBody['messages'] as $message) {
+        if ($message['role'] === 'assistant' && ! empty($message['tool_calls'])) {
+            $hasAssistantWithToolCalls = true;
         }
 
-        $this->assertTrue($hasAssistantWithToolCalls, 'Follow-up request should include assistant message with tool_calls');
-        $this->assertTrue($hasToolResult, 'Follow-up request should include tool result message');
+        if ($message['role'] === 'tool') {
+            $hasToolResult = true;
+        }
     }
 
-    public function test_max_steps_limits_tool_call_depth(): void
-    {
-        Http::fake([
-            '*' => Http::sequence([
-                $this->fakeToolCallResponse('FixedNumberGenerator', 'call_'.uniqid()),
-                $this->fakeToolCallResponse('FixedNumberGenerator', 'call_'.uniqid()),
-                $this->fakeToolCallResponse('FixedNumberGenerator', 'call_'.uniqid()),
-                $this->fakeTextResponse('Done'),
-            ]),
-        ]);
+    expect($hasAssistantWithToolCalls)->toBeTrue()
+        ->and($hasToolResult)->toBeTrue();
+});
 
-        $response = (new ToolUsingAgent(fixed: true))->prompt(
-            'Generate numbers',
-            provider: 'mistral',
-        );
+test('max steps limits tool call depth', function () {
+    Http::fake([
+        '*' => Http::sequence([
+            $this->fakeToolCallResponse('FixedNumberGenerator', 'call_'.uniqid()),
+            $this->fakeToolCallResponse('FixedNumberGenerator', 'call_'.uniqid()),
+            $this->fakeToolCallResponse('FixedNumberGenerator', 'call_'.uniqid()),
+            $this->fakeTextResponse('Done'),
+        ]),
+    ]);
 
-        $recorded = Http::recorded();
+    $response = (new ToolUsingAgent(fixed: true))->prompt(
+        'Generate numbers',
+        provider: 'mistral',
+    );
 
-        // ToolUsingAgent has 1 tool + structured output tool = 2 tools
-        // maxSteps = round(2 * 1.5) = 3
-        // So max 3 requests before stopping (initial + 2 follow-ups)
-        $this->assertLessThanOrEqual(3, count($recorded));
-    }
+    $recorded = Http::recorded();
 
-    public function test_follow_up_request_includes_original_messages(): void
-    {
-        Http::fake([
-            '*' => Http::sequence([
-                $this->fakeToolCallResponse('FixedNumberGenerator', 'call_'.uniqid()),
-                $this->fakeTextResponse('The number is 72019'),
-            ]),
-        ]);
+    expect(count($recorded))->toBeLessThanOrEqual(3);
+});
 
-        (new ToolUsingAgent(fixed: true))->prompt(
-            'Generate a number',
-            provider: 'mistral',
-        );
+test('follow up request includes original messages', function () {
+    Http::fake([
+        '*' => Http::sequence([
+            $this->fakeToolCallResponse('FixedNumberGenerator', 'call_'.uniqid()),
+            $this->fakeTextResponse('The number is 72019'),
+        ]),
+    ]);
 
-        $recorded = Http::recorded();
+    (new ToolUsingAgent(fixed: true))->prompt(
+        'Generate a number',
+        provider: 'mistral',
+    );
 
-        $followUpBody = json_decode($recorded[1][0]->body(), true);
+    $recorded = Http::recorded();
 
-        $userMsg = collect($followUpBody['messages'])->firstWhere('role', 'user');
+    $followUpBody = json_decode($recorded[1][0]->body(), true);
 
-        $this->assertNotNull($userMsg, 'Follow-up should include original user message');
-    }
-}
+    $userMsg = collect($followUpBody['messages'])->firstWhere('role', 'user');
+
+    expect($userMsg)->not->toBeNull();
+});

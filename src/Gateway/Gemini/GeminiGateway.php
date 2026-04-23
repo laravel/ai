@@ -14,7 +14,7 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
-use Laravel\Ai\Gateway\Concerns\HandlesRateLimiting;
+use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -36,7 +36,7 @@ class GeminiGateway implements Gateway
     use Concerns\MapsMessages;
     use Concerns\MapsTools;
     use Concerns\ParsesTextResponses;
-    use HandlesRateLimiting;
+    use HandlesFailoverErrors;
     use InvokesTools;
     use ParsesServerSentEvents;
 
@@ -62,7 +62,7 @@ class GeminiGateway implements Gateway
             $provider, $instructions, $messages, $tools, $schema, $options,
         );
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post("models/{$model}:generateContent", $body),
         );
@@ -103,7 +103,7 @@ class GeminiGateway implements Gateway
             $provider, $instructions, $messages, $tools, $schema, $options,
         );
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)
                 ->withOptions(['stream' => true])
@@ -161,7 +161,7 @@ class GeminiGateway implements Gateway
             ]),
         ];
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout ?? 120)->post("models/{$model}:generateContent", $body),
         );
@@ -198,7 +198,7 @@ class GeminiGateway implements Gateway
             'output_dimensionality' => $dimensions,
         ], $inputs);
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post("models/{$model}:batchEmbedContents", [
                 'requests' => $requests,

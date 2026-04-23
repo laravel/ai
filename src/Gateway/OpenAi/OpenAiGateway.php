@@ -18,7 +18,7 @@ use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\StoredImage;
-use Laravel\Ai\Gateway\Concerns\HandlesRateLimiting;
+use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -40,7 +40,7 @@ class OpenAiGateway implements Gateway
     use Concerns\MapsMessages;
     use Concerns\MapsTools;
     use Concerns\ParsesTextResponses;
-    use HandlesRateLimiting;
+    use HandlesFailoverErrors;
     use InvokesTools;
     use ParsesServerSentEvents;
 
@@ -66,7 +66,7 @@ class OpenAiGateway implements Gateway
             $provider, $model, $instructions, $messages, $tools, $schema, $options,
         );
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post('responses', $body),
         );
@@ -98,7 +98,7 @@ class OpenAiGateway implements Gateway
 
         $body['stream'] = true;
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)
                 ->withOptions(['stream' => true])
@@ -137,7 +137,7 @@ class OpenAiGateway implements Gateway
     ): ImageResponse {
         $hasAttachments = filled($attachments);
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $hasAttachments
                 ? $this->sendImageEditRequest($provider, $model, $prompt, $attachments, $size, $quality, $timeout)
@@ -171,6 +171,7 @@ class OpenAiGateway implements Gateway
             'model' => $model,
             'prompt' => $prompt,
             ...$provider->defaultImageOptions($size, $quality),
+            ...(str_starts_with($model, 'gpt-image') ? ['moderation' => 'low'] : []),
         ]);
     }
 
@@ -209,6 +210,7 @@ class OpenAiGateway implements Gateway
             'model' => $model,
             'prompt' => $prompt,
             ...$provider->defaultImageOptions($size, $quality),
+            ...(str_starts_with($model, 'gpt-image') ? ['moderation' => 'low'] : []),
         ]));
     }
 
@@ -229,7 +231,7 @@ class OpenAiGateway implements Gateway
             default => $voice,
         };
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post('audio/speech', array_filter([
                 'model' => $model,
@@ -263,7 +265,7 @@ class OpenAiGateway implements Gateway
             $model = str_replace('-diarize', '', $model);
         }
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)
                 ->attach('file', $audio->content(), $this->audioFilename($audio), ['Content-Type' => $audio->mimeType()])
@@ -322,7 +324,7 @@ class OpenAiGateway implements Gateway
         int $dimensions,
         int $timeout = 30,
     ): EmbeddingsResponse {
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post('embeddings', [
                 'model' => $model,

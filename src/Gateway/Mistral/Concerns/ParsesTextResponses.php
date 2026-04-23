@@ -259,7 +259,7 @@ trait ParsesTextResponses
             'messages' => $chatMessages,
         ], $provider, $tools, $schema, $options);
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post('chat/completions', $body),
         );

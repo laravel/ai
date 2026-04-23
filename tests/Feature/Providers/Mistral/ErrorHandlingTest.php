@@ -1,60 +1,65 @@
 <?php
 
-namespace Tests\Feature\Providers\Mistral;
-
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
-use Tests\Feature\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\AssistantAgent;
 
-class ErrorHandlingTest extends MistralTestCase
-{
-    public function test_http_error_response_throws_request_exception(): void
-    {
-        Http::fake([
-            '*' => Http::response([
-                'object' => 'error',
-                'message' => 'Invalid API key',
-                'type' => 'authentication_error',
-            ], 401),
-        ]);
+beforeEach(function () {
+    config(['ai.providers.mistral' => [
+        ...config('ai.providers.mistral'),
+        'key' => 'test-key',
+    ]]);
+});
 
-        $this->expectException(RequestException::class);
+test('http error response throws request exception', function () {
+    Http::fake([
+        '*' => Http::response([
+            'object' => 'error',
+            'message' => 'Invalid API key',
+            'type' => 'authentication_error',
+        ], 401),
+    ]);
 
-        (new AssistantAgent)->prompt('Hi', provider: 'mistral');
-    }
+    (new AssistantAgent)->prompt('Hi', provider: 'mistral');
+})->throws(RequestException::class);
 
-    public function test_rate_limit_response_throws_rate_limited_exception(): void
-    {
-        Http::fake([
-            '*' => Http::response([
-                'object' => 'error',
-                'message' => 'Rate limit exceeded',
-                'type' => 'rate_limit_error',
-            ], 429),
-        ]);
+test('rate limit response throws rate limited exception', function () {
+    Http::fake([
+        '*' => Http::response([
+            'object' => 'error',
+            'message' => 'Rate limit exceeded',
+            'type' => 'rate_limit_error',
+        ], 429),
+    ]);
 
-        $this->expectException(RateLimitedException::class);
+    (new AssistantAgent)->prompt('Hi', provider: 'mistral');
+})->throws(RateLimitedException::class);
 
-        (new AssistantAgent)->prompt('Hi', provider: 'mistral');
-    }
+test('overloaded response throws provider overloaded exception', function () {
+    Http::fake([
+        '*' => Http::response([
+            'object' => 'error',
+            'message' => 'The server is currently overloaded. Please try again later.',
+            'type' => 'server_error',
+        ], 503),
+    ]);
 
-    public function test_error_in_200_response_throws_ai_exception(): void
-    {
-        Http::fake([
-            '*' => Http::response([
-                'object' => 'error',
-                'error' => [
-                    'type' => 'server_error',
-                    'message' => 'Internal server error',
-                ],
-            ], 200),
-        ]);
+    (new AssistantAgent)->prompt('Hi', provider: 'mistral');
+})->throws(ProviderOverloadedException::class);
 
-        $this->expectException(AiException::class);
-        $this->expectExceptionMessage('Mistral Error');
+test('error in 200 response throws ai exception', function () {
+    Http::fake([
+        '*' => Http::response([
+            'object' => 'error',
+            'error' => [
+                'type' => 'server_error',
+                'message' => 'Internal server error',
+            ],
+        ], 200),
+    ]);
 
-        (new AssistantAgent)->prompt('Hi', provider: 'mistral');
-    }
-}
+    (new AssistantAgent)->prompt('Hi', provider: 'mistral');
+})->throws(AiException::class, 'Mistral Error');

@@ -1,154 +1,176 @@
 <?php
 
-namespace Tests\Feature\Providers\Mistral;
-
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Files\Base64Image;
+use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Files\RemoteImage;
-use Tests\Feature\Agents\AssistantAgent;
-use Tests\Feature\Agents\ToolUsingAgent;
+use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\ToolUsingAgent;
 
 use function Laravel\Ai\agent;
 
-class MessageMappingTest extends MistralTestCase
-{
-    public function test_user_message_maps_to_chat_format(): void
-    {
-        Http::fake(['*' => $this->fakeTextResponse()]);
+beforeEach(function () {
+    config(['ai.providers.mistral' => [
+        ...config('ai.providers.mistral'),
+        'key' => 'test-key',
+    ]]);
+});
 
-        (new AssistantAgent)->prompt('What is Laravel?', provider: 'mistral');
+test('user message maps to chat format', function () {
+    Http::fake(['*' => $this->fakeTextResponse()]);
 
-        Http::assertSent(function (Request $request) {
-            $body = json_decode($request->body(), true);
-            $userMsg = collect($body['messages'])->firstWhere('role', 'user');
+    (new AssistantAgent)->prompt('What is Laravel?', provider: 'mistral');
 
-            return $userMsg['content'] === 'What is Laravel?';
-        });
-    }
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $userMsg = collect($body['messages'])->firstWhere('role', 'user');
 
-    public function test_assistant_message_with_tool_calls_maps_correctly(): void
-    {
-        Http::fake([
-            '*' => Http::sequence([
-                $this->fakeToolCallResponse(),
-                $this->fakeTextResponse('The number is 72019'),
-            ]),
-        ]);
+        return $userMsg['content'] === 'What is Laravel?';
+    });
+});
 
-        (new ToolUsingAgent(fixed: true))->prompt('Generate a number', provider: 'mistral');
+test('assistant message with tool calls maps correctly', function () {
+    Http::fake([
+        '*' => Http::sequence([
+            $this->fakeToolCallResponse(),
+            $this->fakeTextResponse('The number is 72019'),
+        ]),
+    ]);
 
-        $recorded = Http::recorded();
+    (new ToolUsingAgent(fixed: true))->prompt('Generate a number', provider: 'mistral');
 
-        $this->assertCount(2, $recorded);
+    $recorded = Http::recorded();
 
-        $followUpBody = json_decode($recorded[1][0]->body(), true);
+    expect($recorded)->toHaveCount(2);
 
-        $assistantMsg = collect($followUpBody['messages'])->firstWhere('role', 'assistant');
-        $toolMsg = collect($followUpBody['messages'])->firstWhere('role', 'tool');
+    $followUpBody = json_decode($recorded[1][0]->body(), true);
 
-        $this->assertNotNull($assistantMsg, 'Follow-up should include assistant message');
-        $this->assertNotNull($toolMsg, 'Follow-up should include tool result message');
-        $this->assertNotEmpty($assistantMsg['tool_calls']);
-        $this->assertSame('FixedNumberGenerator', $assistantMsg['tool_calls'][0]['function']['name']);
-        $this->assertSame($assistantMsg['tool_calls'][0]['id'], $toolMsg['tool_call_id']);
-    }
+    $assistantMsg = collect($followUpBody['messages'])->firstWhere('role', 'assistant');
+    $toolMsg = collect($followUpBody['messages'])->firstWhere('role', 'tool');
 
-    public function test_image_attachment_maps_to_image_url(): void
-    {
-        Http::fake(['*' => $this->fakeTextResponse('I see an image')]);
+    expect($assistantMsg)->not->toBeNull()
+        ->and($toolMsg)->not->toBeNull()
+        ->and($assistantMsg['tool_calls'])->not->toBeEmpty()
+        ->and($assistantMsg['tool_calls'][0]['function']['name'])->toBe('FixedNumberGenerator')
+        ->and($toolMsg['tool_call_id'])->toBe($assistantMsg['tool_calls'][0]['id']);
+});
 
-        $image = new RemoteImage('https://example.com/image.png');
+test('image attachment maps to image url', function () {
+    Http::fake(['*' => $this->fakeTextResponse('I see an image')]);
 
-        agent('You are helpful.')->prompt(
-            'What is in this image?',
-            attachments: [$image],
-            provider: 'mistral',
-        );
+    $image = new RemoteImage('https://example.com/image.png');
 
-        Http::assertSent(function (Request $request) {
-            $body = json_decode($request->body(), true);
-            $content = $body['messages'][1]['content'] ?? $body['messages'][0]['content'];
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [$image],
+        provider: 'mistral',
+    );
 
-            if (! is_array($content)) {
-                return false;
-            }
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $content = $body['messages'][1]['content'] ?? $body['messages'][0]['content'];
 
-            $imageBlock = collect($content)->firstWhere('type', 'image_url');
+        if (! is_array($content)) {
+            return false;
+        }
 
-            return $imageBlock !== null
-                && $imageBlock['image_url']['url'] === 'https://example.com/image.png';
-        });
-    }
+        $imageBlock = collect($content)->firstWhere('type', 'image_url');
 
-    public function test_base64_image_attachment_maps_to_data_uri(): void
-    {
-        Http::fake(['*' => $this->fakeTextResponse('I see an image')]);
+        return $imageBlock !== null
+            && $imageBlock['image_url']['url'] === 'https://example.com/image.png';
+    });
+});
 
-        $image = new Base64Image(base64_encode('fake-image-data'), 'image/png');
+test('base64 image attachment maps to data uri', function () {
+    Http::fake(['*' => $this->fakeTextResponse('I see an image')]);
 
-        agent('You are helpful.')->prompt(
-            'What is in this image?',
-            attachments: [$image],
-            provider: 'mistral',
-        );
+    $image = new Base64Image(base64_encode('fake-image-data'), 'image/png');
 
-        Http::assertSent(function (Request $request) {
-            $body = json_decode($request->body(), true);
-            $content = $body['messages'][1]['content'] ?? $body['messages'][0]['content'];
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [$image],
+        provider: 'mistral',
+    );
 
-            if (! is_array($content)) {
-                return false;
-            }
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $content = $body['messages'][1]['content'] ?? $body['messages'][0]['content'];
 
-            $imageBlock = collect($content)->firstWhere('type', 'image_url');
+        if (! is_array($content)) {
+            return false;
+        }
 
-            return $imageBlock !== null
-                && str_starts_with($imageBlock['image_url']['url'], 'data:image/png;base64,');
-        });
-    }
+        $imageBlock = collect($content)->firstWhere('type', 'image_url');
 
-    public function test_remote_document_maps_to_document_url(): void
-    {
-        Http::fake(['*' => $this->fakeTextResponse('I see a document')]);
+        return $imageBlock !== null
+            && str_starts_with($imageBlock['image_url']['url'], 'data:image/png;base64,');
+    });
+});
 
-        $document = new RemoteDocument('https://example.com/report.pdf');
+test('local image attachment without explicit mime type detects mime from file', function () {
+    Http::fake(['*' => $this->fakeTextResponse('I see an image')]);
 
-        agent('You are helpful.')->prompt(
-            'What is in this document?',
-            attachments: [$document],
-            provider: 'mistral',
-        );
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')],
+        provider: 'mistral',
+    );
 
-        Http::assertSent(function (Request $request) {
-            $body = json_decode($request->body(), true);
-            $content = $body['messages'][1]['content'] ?? $body['messages'][0]['content'];
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $content = $body['messages'][1]['content'] ?? $body['messages'][0]['content'];
 
-            if (! is_array($content)) {
-                return false;
-            }
+        if (! is_array($content)) {
+            return false;
+        }
 
-            $docBlock = collect($content)->firstWhere('type', 'document_url');
+        $imageBlock = collect($content)->firstWhere('type', 'image_url');
 
-            return $docBlock !== null
-                && $docBlock['document_url'] === 'https://example.com/report.pdf';
-        });
-    }
+        return $imageBlock !== null
+            && str_starts_with($imageBlock['image_url']['url'], 'data:image/png;base64,')
+            && ! str_contains($imageBlock['image_url']['url'], 'data:;base64,');
+    });
+});
 
-    public function test_system_instructions_are_in_messages_array(): void
-    {
-        Http::fake(['*' => $this->fakeTextResponse()]);
+test('remote document maps to document url', function () {
+    Http::fake(['*' => $this->fakeTextResponse('I see a document')]);
 
-        (new AssistantAgent)->prompt('Hi', provider: 'mistral');
+    $document = new RemoteDocument('https://example.com/report.pdf');
 
-        Http::assertSent(function (Request $request) {
-            $body = json_decode($request->body(), true);
+    agent('You are helpful.')->prompt(
+        'What is in this document?',
+        attachments: [$document],
+        provider: 'mistral',
+    );
 
-            $systemMsg = collect($body['messages'])->firstWhere('role', 'system');
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $content = $body['messages'][1]['content'] ?? $body['messages'][0]['content'];
 
-            return $systemMsg !== null
-                && str_contains($systemMsg['content'], 'helpful assistant');
-        });
-    }
-}
+        if (! is_array($content)) {
+            return false;
+        }
+
+        $docBlock = collect($content)->firstWhere('type', 'document_url');
+
+        return $docBlock !== null
+            && $docBlock['document_url'] === 'https://example.com/report.pdf';
+    });
+});
+
+test('system instructions are in messages array', function () {
+    Http::fake(['*' => $this->fakeTextResponse()]);
+
+    (new AssistantAgent)->prompt('Hi', provider: 'mistral');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        $systemMsg = collect($body['messages'])->firstWhere('role', 'system');
+
+        return $systemMsg !== null
+            && str_contains($systemMsg['content'], 'helpful assistant');
+    });
+});

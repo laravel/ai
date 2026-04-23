@@ -47,7 +47,7 @@ class LocalImage extends Image implements Arrayable, JsonSerializable, StorableF
      */
     public function mimeType(): ?string
     {
-        return $this->mime ?? (new Filesystem)->mimeType($this->path);
+        return $this->mime ?? ((new Filesystem)->mimeType($this->path) ?: null);
     }
 
     /**
@@ -69,7 +69,7 @@ class LocalImage extends Image implements Arrayable, JsonSerializable, StorableF
     {
         return [
             'type' => 'local-image',
-            'name' => $this->name,
+            'name' => $this->name(),
             'path' => $this->path,
             'mime' => $this->mime,
         ];

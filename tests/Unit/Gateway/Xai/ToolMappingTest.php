@@ -1,104 +1,94 @@
 <?php
 
-namespace Tests\Unit\Gateway\Xai;
-
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Gateway\Xai\Concerns\MapsTools;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Tools\Request;
-use PHPUnit\Framework\TestCase;
 
-class ToolMappingTest extends TestCase
-{
-    public function test_tool_parameters_are_not_wrapped_in_schema_definition(): void
+test('tool parameters are not wrapped in schema definition', function () {
+    $mapper = new class
     {
-        $mapper = new class
+        use MapsTools;
+
+        public function map(array $tools, Provider $provider): array
         {
-            use MapsTools;
+            return $this->mapTools($tools, $provider);
+        }
+    };
 
-            public function map(array $tools, Provider $provider): array
-            {
-                return $this->mapTools($tools, $provider);
-            }
-        };
-
-        $tool = new class implements Tool
-        {
-            public function description(): string
-            {
-                return 'Creates a new lead';
-            }
-
-            public function handle(Request $request): string
-            {
-                return 'done';
-            }
-
-            public function schema(JsonSchema $schema): array
-            {
-                return [
-                    'name' => $schema->string()->required()->description('full customer name'),
-                    'email' => $schema->string()->nullable(),
-                    'phone_number' => $schema->string()->required()->description("customer's phone number"),
-                ];
-            }
-        };
-
-        $provider = $this->createMock(Provider::class);
-
-        $mapped = $mapper->map([$tool], $provider);
-
-        $parameters = $mapped[0]['parameters'];
-
-        $this->assertArrayNotHasKey('schema_definition', $parameters['properties'] ?? []);
-        $this->assertNotContains('schema_definition', $parameters['required'] ?? []);
-        $this->assertArrayHasKey('name', $parameters['properties']);
-        $this->assertArrayHasKey('email', $parameters['properties']);
-        $this->assertArrayHasKey('phone_number', $parameters['properties']);
-        $this->assertContains('name', $parameters['required']);
-        $this->assertContains('phone_number', $parameters['required']);
-        $this->assertEquals('object', $parameters['type']);
-        $this->assertFalse($parameters['additionalProperties']);
-    }
-
-    public function test_tool_with_empty_schema_includes_parameters(): void
+    $tool = new class implements Tool
     {
-        $mapper = new class
+        public function description(): string
         {
-            use MapsTools;
+            return 'Creates a new lead';
+        }
 
-            public function map(array $tools, Provider $provider): array
-            {
-                return $this->mapTools($tools, $provider);
-            }
-        };
-
-        $tool = new class implements Tool
+        public function handle(Request $request): string
         {
-            public function description(): string
-            {
-                return 'A tool with no parameters';
-            }
+            return 'done';
+        }
 
-            public function handle(Request $request): string
-            {
-                return 'done';
-            }
+        public function schema(JsonSchema $schema): array
+        {
+            return [
+                'name' => $schema->string()->required()->description('full customer name'),
+                'email' => $schema->string()->nullable(),
+                'phone_number' => $schema->string()->required()->description("customer's phone number"),
+            ];
+        }
+    };
 
-            public function schema(JsonSchema $schema): array
-            {
-                return [];
-            }
-        };
+    $provider = $this->createMock(Provider::class);
 
-        $provider = $this->createMock(Provider::class);
+    $mapped = $mapper->map([$tool], $provider);
 
-        $mapped = $mapper->map([$tool], $provider);
+    $parameters = $mapped[0]['parameters'];
 
-        $this->assertArrayHasKey('parameters', $mapped[0]);
-        $this->assertEquals('object', $mapped[0]['parameters']['type']);
-        $this->assertEquals([], $mapped[0]['parameters']['required']);
-        $this->assertFalse($mapped[0]['parameters']['additionalProperties']);
-    }
-}
+    expect($parameters['properties'] ?? [])->not->toHaveKey('schema_definition')
+        ->and($parameters['required'] ?? [])->not->toContain('schema_definition')
+        ->and($parameters['properties'])->toHaveKeys(['name', 'email', 'phone_number'])
+        ->and($parameters['required'])->toContain('name')
+        ->toContain('phone_number')
+        ->and($parameters['type'])->toEqual('object')
+        ->and($parameters['additionalProperties'])->toBeFalse();
+});
+
+test('tool with empty schema includes parameters', function () {
+    $mapper = new class
+    {
+        use MapsTools;
+
+        public function map(array $tools, Provider $provider): array
+        {
+            return $this->mapTools($tools, $provider);
+        }
+    };
+
+    $tool = new class implements Tool
+    {
+        public function description(): string
+        {
+            return 'A tool with no parameters';
+        }
+
+        public function handle(Request $request): string
+        {
+            return 'done';
+        }
+
+        public function schema(JsonSchema $schema): array
+        {
+            return [];
+        }
+    };
+
+    $provider = $this->createMock(Provider::class);
+
+    $mapped = $mapper->map([$tool], $provider);
+
+    expect($mapped[0])->toHaveKey('parameters')
+        ->and($mapped[0]['parameters']['type'])->toEqual('object')
+        ->and($mapped[0]['parameters']['required'])->toBeEmpty()
+        ->and($mapped[0]['parameters']['additionalProperties'])->toBeFalse();
+});

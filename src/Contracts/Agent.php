@@ -23,7 +23,8 @@ interface Agent
         string $prompt,
         array $attachments = [],
         Lab|array|string|null $provider = null,
-        ?string $model = null
+        ?string $model = null,
+        ?int $timeout = null,
     ): AgentResponse;
 
     /**
@@ -33,7 +34,8 @@ interface Agent
         string $prompt,
         array $attachments = [],
         Lab|array|string|null $provider = null,
-        ?string $model = null
+        ?string $model = null,
+        ?int $timeout = null,
     ): StreamableAgentResponse;
 
     /**

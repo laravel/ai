@@ -346,7 +346,7 @@ trait HandlesTextStreaming
 
         yield (new StreamEnd(
             $this->generateEventId(),
-            'stop',
+            $this->extractFinishReason(['stop_reason' => $stopReason])->value,
             $usage ?? new Usage(),
             time(),
         ))->withInvocationId($invocationId);
@@ -428,7 +428,7 @@ trait HandlesTextStreaming
 
         $requestBody['stream'] = true;
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)
                 ->withOptions(['stream' => true])

@@ -1,61 +1,60 @@
 <?php
 
-namespace Tests\Feature\Providers\Mistral;
-
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
-use Tests\Feature\Agents\ProviderOptionsAgent;
-use Tests\Feature\Agents\ProviderOptionsWithToolsAgent;
+use Tests\Fixtures\Agents\ProviderOptionsAgent;
+use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 
 use function Laravel\Ai\agent;
 
-class ProviderOptionsTest extends MistralTestCase
-{
-    public function test_provider_options_are_included_in_mistral_request_body(): void
-    {
-        Http::fake(['*' => $this->fakeTextResponse('Hello')]);
+beforeEach(function () {
+    config(['ai.providers.mistral' => [
+        ...config('ai.providers.mistral'),
+        'key' => 'test-key',
+    ]]);
+});
 
-        (new ProviderOptionsAgent)->prompt('Hello', provider: 'mistral');
+test('provider options are included in mistral request body', function () {
+    Http::fake(['*' => $this->fakeTextResponse('Hello')]);
 
-        Http::assertSent(function (Request $request) {
-            $body = json_decode($request->body(), true);
+    (new ProviderOptionsAgent)->prompt('Hello', provider: 'mistral');
 
-            return data_get($body, 'frequency_penalty') === 0.5
-                && data_get($body, 'presence_penalty') === 0.3;
-        });
-    }
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
 
-    public function test_request_body_does_not_contain_provider_options_when_agent_does_not_implement_interface(): void
-    {
-        Http::fake(['*' => $this->fakeTextResponse('Hello')]);
+        return data_get($body, 'frequency_penalty') === 0.5
+            && data_get($body, 'presence_penalty') === 0.3;
+    });
+});
 
-        agent()->prompt('Hello', provider: 'mistral');
+test('request body does not contain provider options when agent does not implement interface', function () {
+    Http::fake(['*' => $this->fakeTextResponse('Hello')]);
 
-        Http::assertSent(function (Request $request) {
-            $body = json_decode($request->body(), true);
+    agent()->prompt('Hello', provider: 'mistral');
 
-            return ! array_key_exists('frequency_penalty', $body)
-                && ! array_key_exists('presence_penalty', $body);
-        });
-    }
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
 
-    public function test_provider_options_are_persisted_in_tool_call_follow_up_requests(): void
-    {
-        Http::fake([
-            '*' => Http::sequence([
-                $this->fakeToolCallResponse(),
-                $this->fakeTextResponse('The number is 72019'),
-            ]),
-        ]);
+        return ! array_key_exists('frequency_penalty', $body)
+            && ! array_key_exists('presence_penalty', $body);
+    });
+});
 
-        (new ProviderOptionsWithToolsAgent)->prompt('Give me a number', provider: 'mistral');
+test('provider options are persisted in tool call follow up requests', function () {
+    Http::fake([
+        '*' => Http::sequence([
+            $this->fakeToolCallResponse(),
+            $this->fakeTextResponse('The number is 72019'),
+        ]),
+    ]);
 
-        $requests = Http::recorded(fn (Request $r) => true);
+    (new ProviderOptionsWithToolsAgent)->prompt('Give me a number', provider: 'mistral');
 
-        $this->assertGreaterThanOrEqual(2, count($requests));
+    $requests = Http::recorded(fn (Request $r) => true);
 
-        $followUpBody = json_decode($requests[1][0]->body(), true);
+    expect(count($requests))->toBeGreaterThanOrEqual(2);
 
-        $this->assertSame(0.5, data_get($followUpBody, 'frequency_penalty'));
-    }
-}
+    $followUpBody = json_decode($requests[1][0]->body(), true);
+
+    expect(data_get($followUpBody, 'frequency_penalty'))->toBe(0.5);
+});

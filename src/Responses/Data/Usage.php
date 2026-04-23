@@ -8,11 +8,73 @@ use JsonSerializable;
 class Usage implements Arrayable, JsonSerializable
 {
     public function __construct(
-        public ?array $inputTokens = [],
-        public ?array $outputTokens = [],
-        public ?array $cachedTokens = [],
-        public ?array $toolsTokens = [],
-    ) {}
+        int|array|null $inputTokens = [],
+        int|array|null $outputTokens = [],
+        int|array|null $cachedTokens = [],
+        int|array|null $toolsTokens = [],
+        ?int $reasoningTokens = null,
+        ?int $cacheWriteInputTokens = null,
+        ?int $cacheReadInputTokens = null,
+        ?int $promptTokens = null,
+        ?int $completionTokens = null,
+    ) {
+        $this->inputTokens = $this->normalizeTokenCollection($inputTokens);
+        $this->outputTokens = $this->normalizeTokenCollection($outputTokens);
+        $this->cachedTokens = $this->normalizeTokenCollection($cachedTokens);
+        $this->toolsTokens = $this->normalizeTokenCollection($toolsTokens);
+
+        // Backward compatibility with legacy scalar constructor arguments.
+        if ($promptTokens !== null) {
+            $this->inputTokens['text'] = $promptTokens;
+        }
+
+        if ($completionTokens !== null) {
+            $this->outputTokens['text'] = $completionTokens;
+        }
+
+        if ($reasoningTokens !== null) {
+            $this->outputTokens['reasoning'] = $reasoningTokens;
+        }
+
+        if ($cacheWriteInputTokens !== null) {
+            $this->cachedTokens['write'] = $cacheWriteInputTokens;
+        }
+
+        if ($cacheReadInputTokens !== null) {
+            $this->cachedTokens['read'] = $cacheReadInputTokens;
+        }
+
+        // Backward compatibility for positional old constructor:
+        // Usage(prompt, completion, cacheWrite, cacheRead, reasoning)
+        if (is_int($cachedTokens) && $cachedTokens !== 0 && ! array_key_exists('write', $this->cachedTokens)) {
+            $this->cachedTokens['write'] = $cachedTokens;
+        }
+
+        if (is_int($toolsTokens) && $toolsTokens !== 0 && ! array_key_exists('read', $this->cachedTokens)) {
+            $this->cachedTokens['read'] = $toolsTokens;
+            $this->toolsTokens = [];
+        }
+    }
+
+    public array $inputTokens;
+
+    public array $outputTokens;
+
+    public array $cachedTokens;
+
+    public array $toolsTokens;
+
+    public function __get(string $name): mixed
+    {
+        return match ($name) {
+            'promptTokens' => array_sum($this->inputTokens),
+            'completionTokens' => array_sum(array_diff_key($this->outputTokens, ['reasoning' => true])),
+            'reasoningTokens' => $this->outputTokens['reasoning'] ?? 0,
+            'cacheWriteInputTokens' => $this->cachedTokens['write'] ?? 0,
+            'cacheReadInputTokens' => $this->cachedTokens['read'] ?? array_sum($this->cachedTokens),
+            default => null,
+        };
+    }
 
     /**
      * Add the given usage to the current usage and return a new usage instance.
@@ -35,6 +97,22 @@ class Usage implements Arrayable, JsonSerializable
         $result = [];
         foreach (array_keys($a1 + $a2) as $key) $result[$key] = ($a1[$key] ?? 0) + ($a2[$key] ?? 0);
         return $result;
+    }
+
+    /**
+     * Normalize scalar or null usage values to modality-indexed arrays.
+     */
+    private function normalizeTokenCollection(int|array|null $value): array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+
+        if ($value === null) {
+            return [];
+        }
+
+        return ['text' => $value];
     }
 
     /**

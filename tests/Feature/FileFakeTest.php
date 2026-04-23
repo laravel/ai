@@ -1,118 +1,142 @@
 <?php
 
-namespace Tests\Feature;
-
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Document;
 use Laravel\Ai\Responses\FileResponse;
-use RuntimeException;
-use Tests\TestCase;
 
-class FileFakeTest extends TestCase
-{
-    public function test_files_can_be_faked(): void
-    {
-        Files::fake([
-            'first-content',
-            fn ($fileId) => "content-for-{$fileId}",
-            new FileResponse('id', mimeType: 'application/json', content: 'third-content'),
-        ]);
+test('files can be faked', function () {
+    Files::fake([
+        'first-content',
+        fn ($fileId) => "content-for-{$fileId}",
+        new FileResponse('id', mimeType: 'application/json', content: 'third-content'),
+    ]);
 
-        $response = Files::get('file_1');
-        $this->assertEquals('file_1', $response->id);
-        $this->assertEquals('first-content', $response->content);
+    $response = Files::get('file_1');
+    expect($response->id)->toEqual('file_1')
+        ->and($response->content)->toEqual('first-content');
 
-        $response = Files::get('file_2');
-        $this->assertEquals('file_2', $response->id);
-        $this->assertEquals('content-for-file_2', $response->content);
+    $response = Files::get('file_2');
+    expect($response->id)->toEqual('file_2')
+        ->and($response->content)->toEqual('content-for-file_2');
 
-        $response = Files::get('file_3');
-        $this->assertEquals('id', $response->id);
-        $this->assertEquals('third-content', $response->content);
-    }
+    $response = Files::get('file_3');
+    expect($response->id)->toEqual('id')
+        ->and($response->content)->toEqual('third-content');
+});
 
-    public function test_files_can_be_faked_with_no_predefined_responses(): void
-    {
-        Files::fake();
+test('files can be faked with no predefined responses', function () {
+    Files::fake();
 
-        $response = Files::get('file_1');
-        $this->assertEquals('file_1', $response->id);
-        $this->assertEquals('fake-content', $response->content);
+    $response = Files::get('file_1');
+    expect($response->id)->toEqual('file_1')
+        ->and($response->content)->toEqual('fake-content');
 
-        $response = Files::get('file_2');
-        $this->assertEquals('file_2', $response->id);
-        $this->assertEquals('fake-content', $response->content);
-    }
+    $response = Files::get('file_2');
+    expect($response->id)->toEqual('file_2')
+        ->and($response->content)->toEqual('fake-content');
+});
 
-    public function test_files_can_be_faked_with_a_closure(): void
-    {
-        Files::fake(fn ($fileId) => "content-for-{$fileId}");
+test('files can be faked with a closure', function () {
+    Files::fake(fn ($fileId) => "content-for-{$fileId}");
 
-        $response = Files::get('file_1');
-        $this->assertEquals('file_1', $response->id);
-        $this->assertEquals('content-for-file_1', $response->content);
+    $response = Files::get('file_1');
+    expect($response->id)->toEqual('file_1')
+        ->and($response->content)->toEqual('content-for-file_1');
 
-        $response = Files::get('file_2');
-        $this->assertEquals('file_2', $response->id);
-        $this->assertEquals('content-for-file_2', $response->content);
-    }
+    $response = Files::get('file_2');
+    expect($response->id)->toEqual('file_2')
+        ->and($response->content)->toEqual('content-for-file_2');
+});
 
-    public function test_files_can_prevent_stray_operations(): void
-    {
-        $this->expectException(RuntimeException::class);
+test('files can prevent stray operations', function () {
+    Files::fake()->preventStrayOperations();
 
-        Files::fake()->preventStrayOperations();
+    Files::get('file_1');
+})->throws(RuntimeException::class);
 
-        Files::get('file_1');
-    }
+test('can assert file was stored', function () {
+    Files::fake();
 
-    public function test_can_assert_file_was_stored(): void
-    {
-        Files::fake();
+    $id = Document::fromString('Hello, World!', 'text/plain')->as('document.txt')->put()->id;
+    expect(Files::fakeId('document.txt'))->toEqual($id);
 
-        $id = Document::fromString('Hello, World!', 'text/plain')->as('document.txt')->put()->id;
-        $this->assertEquals($id, Files::fakeId('document.txt'));
+    Document::fromPath(__DIR__.'/../Fixtures/document.txt')->put();
+    Document::fromUpload(new UploadedFile(__DIR__.'/../Fixtures/report.txt', 'report.txt'))->put();
 
-        Document::fromPath(__DIR__.'/files/document.txt')->put();
-        Document::fromUpload(new UploadedFile(__DIR__.'/files/report.txt', 'report.txt'))->put();
+    Files::assertStored(fn (StorableFile $file) => (string) $file === 'Hello, World!');
 
-        Files::assertStored(fn (StorableFile $file) => (string) $file === 'Hello, World!');
+    Files::assertStored(fn (StorableFile $file) => trim((string) $file) === 'I am a local document.');
+    Files::assertStored(fn (StorableFile $file) => $file->name() === 'document.txt');
 
-        Files::assertStored(fn (StorableFile $file) => trim((string) $file) === 'I am a local document.');
-        Files::assertStored(fn (StorableFile $file) => $file->name() === 'document.txt');
+    Files::assertStored(fn (StorableFile $file) => trim((string) $file) === 'I am an expense report.');
+    Files::assertStored(fn (StorableFile $file) => $file->name() === 'report.txt');
 
-        Files::assertStored(fn (StorableFile $file) => trim((string) $file) === 'I am an expense report.');
-        Files::assertStored(fn (StorableFile $file) => $file->name() === 'report.txt');
+    Files::assertStored(fn (StorableFile $file) => $file->mimeType() === 'text/plain');
+    Files::assertNotStored(fn (StorableFile $file) => $file->mimeType() === 'application/json');
+});
 
-        Files::assertStored(fn (StorableFile $file) => $file->mimeType() === 'text/plain');
-        Files::assertNotStored(fn (StorableFile $file) => $file->mimeType() === 'application/json');
-    }
+test('can assert no files were stored', function () {
+    Files::fake();
 
-    public function test_can_assert_no_files_were_stored(): void
-    {
-        Files::fake();
+    Files::assertNothingStored();
+});
 
-        Files::assertNothingStored();
-    }
+test('can override the filename when storing files from each document constructor', function () {
+    Files::fake();
 
-    public function test_can_assert_file_was_deleted(): void
-    {
-        Files::fake();
+    Document::fromString('Hello, World!', 'text/plain')->put(name: 'custom-name.txt');
+    Document::fromPath(__DIR__.'/../Fixtures/document.txt')->put(name: 'renamed-document.txt');
+    Document::fromUpload(new UploadedFile(__DIR__.'/../Fixtures/report.txt', 'report.txt'))
+        ->put(name: 'renamed-report.txt');
 
-        Files::delete('file_123');
+    Files::assertStored(fn (StorableFile $file) => $file->name() === 'custom-name.txt');
+    Files::assertStored(fn (StorableFile $file) => $file->name() === 'renamed-document.txt');
+    Files::assertStored(fn (StorableFile $file) => $file->name() === 'renamed-report.txt');
+});
 
-        Files::assertDeleted('file_123');
-        Files::assertDeleted(fn ($id) => $id === 'file_123');
-        Files::assertNotDeleted('file_456');
-        Files::assertNotDeleted(fn ($id) => $id === 'file_456');
-    }
+test('can override the filename when storing an existing storable file', function () {
+    Files::fake();
 
-    public function test_can_assert_no_files_were_deleted(): void
-    {
-        Files::fake();
+    Files::put(Document::fromPath(__DIR__.'/../Fixtures/document.txt'), name: 'override.txt');
 
-        Files::assertNothingDeleted();
-    }
-}
+    Files::assertStored(fn (StorableFile $file) => $file->name() === 'override.txt');
+});
+
+test('can override the filename when storing files from a local path', function () {
+    Files::fake();
+
+    Files::putFromPath(__DIR__.'/../Fixtures/document.txt', name: 'from-path.txt');
+
+    Files::assertStored(fn (StorableFile $file) => $file->name() === 'from-path.txt');
+});
+
+test('can override the filename when storing files from a storage disk', function () {
+    Files::fake();
+
+    Storage::fake('docs');
+    Storage::disk('docs')->put('original.txt', 'contents');
+
+    Files::putFromStorage('original.txt', disk: 'docs', name: 'from-storage.txt');
+
+    Files::assertStored(fn (StorableFile $file) => $file->name() === 'from-storage.txt');
+});
+
+test('can assert file was deleted', function () {
+    Files::fake();
+
+    Files::delete('file_123');
+
+    Files::assertDeleted('file_123');
+    Files::assertDeleted(fn ($id) => $id === 'file_123');
+    Files::assertNotDeleted('file_456');
+    Files::assertNotDeleted(fn ($id) => $id === 'file_456');
+});
+
+test('can assert no files were deleted', function () {
+    Files::fake();
+
+    Files::assertNothingDeleted();
+});

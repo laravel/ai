@@ -26,7 +26,7 @@ class RemoteDocument extends Document implements Arrayable, JsonSerializable, St
     {
         return [
             'type' => 'remote-document',
-            'name' => $this->name,
+            'name' => $this->name(),
             'url' => $this->url,
             'mime' => $this->mime,
         ];

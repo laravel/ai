@@ -23,7 +23,9 @@ trait HasRemoteContent
      */
     public function name(): ?string
     {
-        return $this->name ?? basename(parse_url($this->url, PHP_URL_PATH));
+        $path = parse_url($this->url, PHP_URL_PATH);
+
+        return $this->name ?? basename(is_string($path) ? $path : '');
     }
 
     /**

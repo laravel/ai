@@ -66,14 +66,48 @@ trait MapsTools
         if (filled($schema)) {
             $schemaArray = (new ObjectSchema($schema))->toSchema();
 
-            $definition['parameters'] = Arr::except([
-                'type' => 'object',
-                'properties' => $schemaArray['properties'] ?? [],
-                'required' => $schemaArray['required'] ?? [],
-            ], ['additionalProperties']);
+            $definition['parameters'] = Arr::except(
+                $this->convertNullableTypes([
+                    'type' => 'object',
+                    'properties' => $schemaArray['properties'] ?? [],
+                    'required' => $schemaArray['required'] ?? [],
+                ]),
+                ['additionalProperties'],
+            );
         }
 
         return $definition;
+    }
+
+    /**
+     * Recursively convert JSON Schema nullable types to OpenAPI-style for Gemini.
+     *
+     * @param  array<string, mixed>  $schema
+     * @return array<string, mixed>
+     */
+    protected function convertNullableTypes(array $schema): array
+    {
+        if (is_array($schema['type'] ?? null) && in_array('null', $schema['type'], true)) {
+            $remaining = array_values(array_diff($schema['type'], ['null']));
+
+            if (count($remaining) === 1) {
+                $schema['type'] = $remaining[0];
+                $schema['nullable'] = true;
+            }
+        }
+
+        if (isset($schema['properties'])) {
+            $schema['properties'] = Arr::map(
+                $schema['properties'],
+                fn ($property) => $this->convertNullableTypes($property),
+            );
+        }
+
+        if (isset($schema['items']) && is_array($schema['items'])) {
+            $schema['items'] = $this->convertNullableTypes($schema['items']);
+        }
+
+        return $schema;
     }
 
     /**

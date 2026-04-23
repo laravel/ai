@@ -1,72 +1,75 @@
 <?php
 
-namespace Tests\Feature\Providers\Gemini;
-
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
-use Tests\Feature\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\AssistantAgent;
 
-class ErrorHandlingTest extends GeminiTestCase
-{
-    public function test_http_error_response_throws_request_exception(): void
-    {
-        Http::fake([
-            'generativelanguage.googleapis.com/*' => Http::response([
-                'error' => [
-                    'code' => 400,
-                    'message' => 'Invalid value at contents',
-                    'status' => 'INVALID_ARGUMENT',
-                ],
-            ], 400),
-        ]);
+test('http error response throws request exception', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'error' => [
+                'code' => 400,
+                'message' => 'Invalid value at contents',
+                'status' => 'INVALID_ARGUMENT',
+            ],
+        ], 400),
+    ]);
 
-        $this->expectException(RequestException::class);
+    (new AssistantAgent)->prompt(
+        'Hi',
+        provider: 'gemini',
+    );
+})->throws(RequestException::class);
 
-        (new AssistantAgent)->prompt(
-            'Hi',
-            provider: 'gemini',
-        );
-    }
+test('rate limit response throws rate limited exception', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'error' => [
+                'code' => 429,
+                'message' => 'Resource has been exhausted',
+                'status' => 'RESOURCE_EXHAUSTED',
+            ],
+        ], 429),
+    ]);
 
-    public function test_rate_limit_response_throws_rate_limited_exception(): void
-    {
-        Http::fake([
-            'generativelanguage.googleapis.com/*' => Http::response([
-                'error' => [
-                    'code' => 429,
-                    'message' => 'Resource has been exhausted',
-                    'status' => 'RESOURCE_EXHAUSTED',
-                ],
-            ], 429),
-        ]);
+    (new AssistantAgent)->prompt(
+        'Hi',
+        provider: 'gemini',
+    );
+})->throws(RateLimitedException::class);
 
-        $this->expectException(RateLimitedException::class);
+test('overloaded response throws provider overloaded exception', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'error' => [
+                'code' => 503,
+                'message' => 'The model is overloaded. Please try again later.',
+                'status' => 'UNAVAILABLE',
+            ],
+        ], 503),
+    ]);
 
-        (new AssistantAgent)->prompt(
-            'Hi',
-            provider: 'gemini',
-        );
-    }
+    (new AssistantAgent)->prompt(
+        'Hi',
+        provider: 'gemini',
+    );
+})->throws(ProviderOverloadedException::class);
 
-    public function test_error_in_200_response_throws_ai_exception(): void
-    {
-        Http::fake([
-            'generativelanguage.googleapis.com/*' => Http::response([
-                'error' => [
-                    'code' => 'internal',
-                    'message' => 'Internal server error',
-                ],
-            ], 200),
-        ]);
+test('error in 200 response throws ai exception', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'error' => [
+                'code' => 'internal',
+                'message' => 'Internal server error',
+            ],
+        ], 200),
+    ]);
 
-        $this->expectException(AiException::class);
-        $this->expectExceptionMessage('Gemini Error');
-
-        (new AssistantAgent)->prompt(
-            'Hi',
-            provider: 'gemini',
-        );
-    }
-}
+    (new AssistantAgent)->prompt(
+        'Hi',
+        provider: 'gemini',
+    );
+})->throws(AiException::class, 'Gemini Error');

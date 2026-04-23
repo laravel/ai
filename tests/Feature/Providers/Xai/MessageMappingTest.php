@@ -1,145 +1,162 @@
 <?php
 
-namespace Tests\Feature\Providers\Xai;
-
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Files\Base64Image;
+use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Files\RemoteImage;
-use Tests\Feature\Agents\AssistantAgent;
-use Tests\Feature\Agents\ToolUsingAgent;
+use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\ToolUsingAgent;
 
 use function Laravel\Ai\agent;
 
-class MessageMappingTest extends XaiTestCase
-{
-    public function test_user_message_maps_to_responses_api_format(): void
-    {
-        Http::fake(['*' => $this->fakeTextResponse()]);
+beforeEach(function () {
+    config(['ai.providers.xai' => [
+        ...config('ai.providers.xai'),
+        'key' => 'test-key',
+    ]]);
+});
 
-        (new AssistantAgent)->prompt('What is Laravel?', provider: 'xai');
+test('user message maps to responses api format', function () {
+    Http::fake(['*' => $this->fakeTextResponse()]);
 
-        Http::assertSent(function (Request $request) {
-            $body = json_decode($request->body(), true);
-            $userMsg = collect($body['input'])->firstWhere('role', 'user');
+    (new AssistantAgent)->prompt('What is Laravel?', provider: 'xai');
 
-            return $userMsg !== null
-                && collect($userMsg['content'])->contains(
-                    fn ($c) => ($c['type'] ?? '') === 'input_text' && $c['text'] === 'What is Laravel?'
-                );
-        });
-    }
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $userMsg = collect($body['input'])->firstWhere('role', 'user');
 
-    public function test_tool_call_follow_up_uses_previous_response_id(): void
-    {
-        Http::fake([
-            '*' => Http::sequence([
-                $this->fakeToolCallResponse(),
-                $this->fakeTextResponse('The number is 72019'),
-            ]),
-        ]);
+        return $userMsg !== null
+            && collect($userMsg['content'])->contains(
+                fn ($c) => ($c['type'] ?? '') === 'input_text' && $c['text'] === 'What is Laravel?'
+            );
+    });
+});
 
-        (new ToolUsingAgent(fixed: true))->prompt('Generate a number', provider: 'xai');
+test('tool call follow up uses previous response id', function () {
+    Http::fake([
+        '*' => Http::sequence([
+            $this->fakeToolCallResponse(),
+            $this->fakeTextResponse('The number is 72019'),
+        ]),
+    ]);
 
-        $recorded = Http::recorded();
+    (new ToolUsingAgent(fixed: true))->prompt('Generate a number', provider: 'xai');
 
-        $this->assertCount(2, $recorded);
+    $recorded = Http::recorded();
 
-        $followUpBody = json_decode($recorded[1][0]->body(), true);
+    expect($recorded)->toHaveCount(2);
 
-        $this->assertArrayHasKey('previous_response_id', $followUpBody);
-        $this->assertNotEmpty($followUpBody['previous_response_id']);
+    $followUpBody = json_decode($recorded[1][0]->body(), true);
 
-        $hasToolOutput = collect($followUpBody['input'])->contains(
-            fn ($item) => ($item['type'] ?? '') === 'function_call_output'
-        );
+    expect($followUpBody)->toHaveKey('previous_response_id')
+        ->and($followUpBody['previous_response_id'])->not->toBeEmpty();
 
-        $this->assertTrue($hasToolOutput, 'Follow-up should include function_call_output');
-    }
+    $hasToolOutput = collect($followUpBody['input'])->contains(
+        fn ($item) => ($item['type'] ?? '') === 'function_call_output'
+    );
 
-    public function test_remote_image_attachment_maps_to_input_image(): void
-    {
-        Http::fake(['*' => $this->fakeTextResponse('I see an image')]);
+    expect($hasToolOutput)->toBeTrue('Follow-up should include function_call_output');
+});
 
-        $image = new RemoteImage('https://example.com/image.png');
+test('remote image attachment maps to input image', function () {
+    Http::fake(['*' => $this->fakeTextResponse('I see an image')]);
 
-        agent('You are helpful.')->prompt(
-            'What is in this image?',
-            attachments: [$image],
-            provider: 'xai',
-        );
+    $image = new RemoteImage('https://example.com/image.png');
 
-        Http::assertSent(function (Request $request) {
-            $body = json_decode($request->body(), true);
-            $userMsg = collect($body['input'])->firstWhere('role', 'user');
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [$image],
+        provider: 'xai',
+    );
 
-            $imageBlock = collect($userMsg['content'])->firstWhere('type', 'input_image');
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $userMsg = collect($body['input'])->firstWhere('role', 'user');
 
-            return $imageBlock !== null
-                && $imageBlock['image_url'] === 'https://example.com/image.png';
-        });
-    }
+        $imageBlock = collect($userMsg['content'])->firstWhere('type', 'input_image');
 
-    public function test_base64_image_attachment_maps_to_data_uri(): void
-    {
-        Http::fake(['*' => $this->fakeTextResponse('I see an image')]);
+        return $imageBlock !== null
+            && $imageBlock['image_url'] === 'https://example.com/image.png';
+    });
+});
 
-        $image = new Base64Image(base64_encode('fake-image-data'), 'image/png');
+test('base64 image attachment maps to data uri', function () {
+    Http::fake(['*' => $this->fakeTextResponse('I see an image')]);
 
-        agent('You are helpful.')->prompt(
-            'What is in this image?',
-            attachments: [$image],
-            provider: 'xai',
-        );
+    $image = new Base64Image(base64_encode('fake-image-data'), 'image/png');
 
-        Http::assertSent(function (Request $request) {
-            $body = json_decode($request->body(), true);
-            $userMsg = collect($body['input'])->firstWhere('role', 'user');
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [$image],
+        provider: 'xai',
+    );
 
-            $imageBlock = collect($userMsg['content'])->firstWhere('type', 'input_image');
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $userMsg = collect($body['input'])->firstWhere('role', 'user');
 
-            return $imageBlock !== null
-                && str_starts_with($imageBlock['image_url'], 'data:image/png;base64,');
-        });
-    }
+        $imageBlock = collect($userMsg['content'])->firstWhere('type', 'input_image');
 
-    public function test_remote_document_maps_to_input_file(): void
-    {
-        Http::fake(['*' => $this->fakeTextResponse('I see a document')]);
+        return $imageBlock !== null
+            && str_starts_with($imageBlock['image_url'], 'data:image/png;base64,');
+    });
+});
 
-        $document = new RemoteDocument('https://example.com/report.pdf');
+test('local image attachment without explicit mime type detects mime from file', function () {
+    Http::fake(['*' => $this->fakeTextResponse('I see an image')]);
 
-        agent('You are helpful.')->prompt(
-            'What is in this document?',
-            attachments: [$document],
-            provider: 'xai',
-        );
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')],
+        provider: 'xai',
+    );
 
-        Http::assertSent(function (Request $request) {
-            $body = json_decode($request->body(), true);
-            $userMsg = collect($body['input'])->firstWhere('role', 'user');
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $userMsg = collect($body['input'])->firstWhere('role', 'user');
+        $imageBlock = collect($userMsg['content'])->firstWhere('type', 'input_image');
 
-            $fileBlock = collect($userMsg['content'])->firstWhere('type', 'input_file');
+        return $imageBlock !== null
+            && str_starts_with($imageBlock['image_url'], 'data:image/png;base64,')
+            && ! str_contains($imageBlock['image_url'], 'data:;base64,');
+    });
+});
 
-            return $fileBlock !== null
-                && $fileBlock['file_url'] === 'https://example.com/report.pdf';
-        });
-    }
+test('remote document maps to input file', function () {
+    Http::fake(['*' => $this->fakeTextResponse('I see a document')]);
 
-    public function test_system_instructions_are_in_input_array(): void
-    {
-        Http::fake(['*' => $this->fakeTextResponse()]);
+    $document = new RemoteDocument('https://example.com/report.pdf');
 
-        (new AssistantAgent)->prompt('Hi', provider: 'xai');
+    agent('You are helpful.')->prompt(
+        'What is in this document?',
+        attachments: [$document],
+        provider: 'xai',
+    );
 
-        Http::assertSent(function (Request $request) {
-            $body = json_decode($request->body(), true);
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $userMsg = collect($body['input'])->firstWhere('role', 'user');
 
-            $systemMsg = collect($body['input'])->firstWhere('role', 'system');
+        $fileBlock = collect($userMsg['content'])->firstWhere('type', 'input_file');
 
-            return $systemMsg !== null
-                && str_contains($systemMsg['content'], 'helpful assistant');
-        });
-    }
-}
+        return $fileBlock !== null
+            && $fileBlock['file_url'] === 'https://example.com/report.pdf';
+    });
+});
+
+test('system instructions are in input array', function () {
+    Http::fake(['*' => $this->fakeTextResponse()]);
+
+    (new AssistantAgent)->prompt('Hi', provider: 'xai');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        $systemMsg = collect($body['input'])->firstWhere('role', 'system');
+
+        return $systemMsg !== null
+            && str_contains($systemMsg['content'], 'helpful assistant');
+    });
+});

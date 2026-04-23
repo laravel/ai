@@ -1,187 +1,144 @@
 <?php
 
-namespace Tests\Feature\Providers\Groq;
-
-use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Base64Image;
-use Tests\Feature\Agents\AssistantAgent;
-use Tests\Feature\Agents\ToolUsingAgent;
-use Tests\TestCase;
+use Laravel\Ai\Files\LocalImage;
+use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\ToolUsingAgent;
 
 use function Laravel\Ai\agent;
 
-class MessageMappingTest extends TestCase
-{
-    protected function setUp(): void
-    {
-        parent::setUp();
+beforeEach(function () {
+    config(['ai.providers.groq' => [
+        ...config('ai.providers.groq'),
+        'key' => 'test-key',
+    ]]);
+});
 
-        config(['ai.providers.groq' => [
-            ...config('ai.providers.groq'),
-            'key' => 'test-key',
-        ]]);
-    }
+test('user message maps to groq format', function () {
+    Http::fake([
+        'api.groq.com/*' => fakeGroqResponse(),
+    ]);
 
-    public function test_user_message_maps_to_groq_format(): void
-    {
-        Http::fake([
-            'api.groq.com/*' => $this->fakeGroqResponse(),
-        ]);
+    (new AssistantAgent)->prompt(
+        'What is Laravel?',
+        provider: 'groq',
+    );
 
-        (new AssistantAgent)->prompt(
-            'What is Laravel?',
-            provider: 'groq',
-        );
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $messages = $body['messages'];
+        $userMessage = collect($messages)->firstWhere('role', 'user');
 
-        Http::assertSent(function (Request $request) {
-            $body = json_decode($request->body(), true);
-            $messages = $body['messages'];
-            $userMessage = collect($messages)->firstWhere('role', 'user');
+        return $userMessage !== null
+            && $userMessage['content'] === 'What is Laravel?';
+    });
+});
 
-            return $userMessage !== null
-                && $userMessage['content'] === 'What is Laravel?';
-        });
-    }
+test('tool result follow up maps assistant and tool result messages', function () {
+    Http::fake([
+        'api.groq.com/*' => Http::sequence([
+            fakeGroqToolCallResponse(),
+            fakeGroqResponse('The number is 72019'),
+        ]),
+    ]);
 
-    public function test_tool_result_follow_up_maps_assistant_and_tool_result_messages(): void
-    {
-        Http::fake([
-            'api.groq.com/*' => Http::sequence([
-                $this->fakeGroqToolCallResponse(),
-                $this->fakeGroqResponse('The number is 72019'),
-            ]),
-        ]);
+    (new ToolUsingAgent(fixed: true))->prompt(
+        'Generate a number',
+        provider: 'groq',
+    );
 
-        (new ToolUsingAgent(fixed: true))->prompt(
-            'Generate a number',
-            provider: 'groq',
-        );
+    $recorded = Http::recorded();
 
-        $recorded = Http::recorded();
+    expect($recorded)->toHaveCount(2);
 
-        $this->assertCount(2, $recorded);
+    $followUpBody = json_decode($recorded[1][0]->body(), true);
+    $followUpMessages = $followUpBody['messages'];
 
-        $followUpBody = json_decode($recorded[1][0]->body(), true);
-        $followUpMessages = $followUpBody['messages'];
+    $hasAssistantWithToolCalls = false;
+    $hasToolResult = false;
 
-        $hasAssistantWithToolCalls = false;
-        $hasToolResult = false;
-
-        foreach ($followUpMessages as $msg) {
-            if ($msg['role'] === 'assistant' && isset($msg['tool_calls'])) {
-                $hasAssistantWithToolCalls = true;
-            }
-
-            if ($msg['role'] === 'tool') {
-                $hasToolResult = true;
-            }
+    foreach ($followUpMessages as $msg) {
+        if ($msg['role'] === 'assistant' && isset($msg['tool_calls'])) {
+            $hasAssistantWithToolCalls = true;
         }
 
-        $this->assertTrue($hasAssistantWithToolCalls, 'Follow-up should include assistant message with tool_calls');
-        $this->assertTrue($hasToolResult, 'Follow-up should include tool result message');
-
-        $assistantMsg = collect($followUpMessages)->last(fn ($m) => $m['role'] === 'assistant' && isset($m['tool_calls']));
-        $toolMsg = collect($followUpMessages)->last(fn ($m) => $m['role'] === 'tool');
-
-        $this->assertSame('FixedNumberGenerator', $assistantMsg['tool_calls'][0]['function']['name']);
-        $this->assertSame($assistantMsg['tool_calls'][0]['id'], $toolMsg['tool_call_id']);
-        $this->assertNotEmpty($toolMsg['content']);
+        if ($msg['role'] === 'tool') {
+            $hasToolResult = true;
+        }
     }
 
-    public function test_image_attachment_maps_to_image_url_content_block(): void
-    {
-        Http::fake([
-            'api.groq.com/*' => $this->fakeGroqResponse('I see an image'),
-        ]);
+    expect($hasAssistantWithToolCalls)->toBeTrue()
+        ->and($hasToolResult)->toBeTrue();
 
-        $image = new Base64Image(base64_encode('fake-image-data'), 'image/png');
+    $assistantMsg = collect($followUpMessages)->last(fn ($m) => $m['role'] === 'assistant' && isset($m['tool_calls']));
+    $toolMsg = collect($followUpMessages)->last(fn ($m) => $m['role'] === 'tool');
 
-        agent('You are helpful.')->prompt(
-            'What is in this image?',
-            attachments: [$image],
-            provider: 'groq',
-        );
+    expect($assistantMsg['tool_calls'][0]['function']['name'])->toBe('FixedNumberGenerator')
+        ->and($toolMsg['tool_call_id'])->toBe($assistantMsg['tool_calls'][0]['id'])
+        ->and($toolMsg['content'])->not->toBeEmpty();
+});
 
-        Http::assertSent(function (Request $request) {
-            $body = json_decode($request->body(), true);
-            $userMessage = collect($body['messages'])->firstWhere('role', 'user');
-            $content = $userMessage['content'];
+test('image attachment maps to image url content block', function () {
+    Http::fake([
+        'api.groq.com/*' => fakeGroqResponse('I see an image'),
+    ]);
 
-            $imageBlock = collect($content)->firstWhere('type', 'image_url');
+    $image = new Base64Image(base64_encode('fake-image-data'), 'image/png');
 
-            return $imageBlock !== null
-                && str_contains($imageBlock['image_url']['url'], 'image/png')
-                && str_contains($imageBlock['image_url']['url'], base64_encode('fake-image-data'));
-        });
-    }
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [$image],
+        provider: 'groq',
+    );
 
-    public function test_document_attachments_throw_exception(): void
-    {
-        Http::fake([
-            'api.groq.com/*' => $this->fakeGroqResponse(),
-        ]);
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $userMessage = collect($body['messages'])->firstWhere('role', 'user');
+        $content = $userMessage['content'];
 
-        $this->expectException(\InvalidArgumentException::class);
+        $imageBlock = collect($content)->firstWhere('type', 'image_url');
 
-        $pdf = new Base64Document(base64_encode('fake-pdf'), 'application/pdf');
+        return $imageBlock !== null
+            && str_contains($imageBlock['image_url']['url'], 'image/png')
+            && str_contains($imageBlock['image_url']['url'], base64_encode('fake-image-data'));
+    });
+});
 
-        agent('You are helpful.')->prompt(
-            'What is in this PDF?',
-            attachments: [$pdf],
-            provider: 'groq',
-        );
-    }
+test('local image attachment without explicit mime type detects mime from file', function () {
+    Http::fake([
+        'api.groq.com/*' => fakeGroqResponse('I see an image'),
+    ]);
 
-    protected function fakeGroqResponse(string $text = 'Hello'): PromiseInterface
-    {
-        return Http::response([
-            'id' => 'chatcmpl-123',
-            'object' => 'chat.completion',
-            'model' => 'openai/gpt-oss-20b',
-            'choices' => [[
-                'index' => 0,
-                'message' => [
-                    'role' => 'assistant',
-                    'content' => $text,
-                ],
-                'finish_reason' => 'stop',
-            ]],
-            'usage' => [
-                'prompt_tokens' => 1,
-                'completion_tokens' => 1,
-            ],
-        ]);
-    }
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')],
+        provider: 'groq',
+    );
 
-    protected function fakeGroqToolCallResponse(): PromiseInterface
-    {
-        return Http::response([
-            'id' => 'chatcmpl-tool-123',
-            'object' => 'chat.completion',
-            'model' => 'openai/gpt-oss-20b',
-            'choices' => [[
-                'index' => 0,
-                'message' => [
-                    'role' => 'assistant',
-                    'content' => null,
-                    'tool_calls' => [[
-                        'id' => 'call_123',
-                        'type' => 'function',
-                        'function' => [
-                            'name' => 'FixedNumberGenerator',
-                            'arguments' => '{}',
-                        ],
-                    ]],
-                ],
-                'finish_reason' => 'tool_calls',
-            ]],
-            'usage' => [
-                'prompt_tokens' => 10,
-                'completion_tokens' => 5,
-            ],
-        ]);
-    }
-}
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $userMessage = collect($body['messages'])->firstWhere('role', 'user');
+        $imageBlock = collect($userMessage['content'])->firstWhere('type', 'image_url');
+
+        return $imageBlock !== null
+            && str_starts_with($imageBlock['image_url']['url'], 'data:image/png;base64,')
+            && ! str_contains($imageBlock['image_url']['url'], 'data:;base64,');
+    });
+});
+
+test('document attachments throw exception', function () {
+    Http::fake([
+        'api.groq.com/*' => fakeGroqResponse(),
+    ]);
+
+    $pdf = new Base64Document(base64_encode('fake-pdf'), 'application/pdf');
+
+    agent('You are helpful.')->prompt(
+        'What is in this PDF?',
+        attachments: [$pdf],
+        provider: 'groq',
+    );
+})->throws(InvalidArgumentException::class);
