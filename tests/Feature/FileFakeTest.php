@@ -6,6 +6,7 @@ use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Document;
 use Laravel\Ai\Responses\FileResponse;
+use Tests\Fixtures\Files\CustomStorableFile;
 
 test('files can be faked', function () {
     Files::fake([
@@ -122,6 +123,37 @@ test('can override the filename when storing files from a storage disk', functio
     Files::putFromStorage('original.txt', disk: 'docs', name: 'from-storage.txt');
 
     Files::assertStored(fn (StorableFile $file) => $file->name() === 'from-storage.txt');
+});
+
+test('can override the mime type when storing files from each source', function () {
+    Files::fake();
+
+    Storage::fake('docs');
+    Storage::disk('docs')->put('original.txt', 'contents');
+
+    Files::put(Document::fromPath(__DIR__.'/../Fixtures/document.txt'), mimeType: 'application/x-local');
+    Files::putFromPath(__DIR__.'/../Fixtures/document.txt', mimeType: 'application/x-path');
+    Files::put(Document::fromStorage('original.txt', 'docs'), mimeType: 'application/x-storage');
+
+    Files::assertStored(fn (StorableFile $file) => $file->mimeType() === 'application/x-local');
+    Files::assertStored(fn (StorableFile $file) => $file->mimeType() === 'application/x-path');
+    Files::assertStored(fn (StorableFile $file) => $file->mimeType() === 'application/x-storage');
+    Files::assertNotStored(fn (StorableFile $file) => $file->mimeType() === 'text/plain');
+});
+
+test('name and mime overrides do not mutate the original storable file', function () {
+    Files::fake();
+
+    $file = new CustomStorableFile('custom.txt');
+
+    Files::put($file, mimeType: 'application/json', name: 'renamed.txt');
+
+    Files::assertStored(fn (StorableFile $file) => $file->name() === 'renamed.txt');
+    Files::assertStored(fn (StorableFile $file) => $file->mimeType() === 'application/json');
+    Files::assertNotStored(fn (StorableFile $file) => $file->mimeType() === 'text/plain');
+
+    expect($file->name())->toBe('custom.txt');
+    expect($file->mimeType())->toBe('text/plain');
 });
 
 test('can assert file was deleted', function () {

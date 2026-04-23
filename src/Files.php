@@ -7,6 +7,7 @@ use Illuminate\Http\UploadedFile;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\WithMimeType;
 use Laravel\Ai\Gateway\FakeFileGateway;
 use Laravel\Ai\Responses\FileResponse;
 use Laravel\Ai\Responses\StoredFileResponse;
@@ -37,10 +38,14 @@ class Files
         };
 
         if ($name !== null) {
-            $file->as($name);
+            $file = $file->as($name);
         }
 
-        return Ai::fakeableFileProvider($provider)->putFile($file, $mimeType, $name);
+        if ($mimeType !== null) {
+            $file = new WithMimeType($file, $mimeType);
+        }
+
+        return Ai::fakeableFileProvider($provider)->putFile($file);
     }
 
     /**
