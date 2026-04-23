@@ -36,3 +36,9 @@ dataset('agent-document-providers', [
     'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4-nano'],
     'gemini' => ['gemini', 'GEMINI_API_KEY', 'gemini-3.1-flash-lite-preview'],
 ]);
+
+dataset('agent-image-providers', [
+    'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4-nano'],
+    'gemini' => ['gemini', 'GEMINI_API_KEY', 'gemini-3.1-flash-lite-preview'],
+    'xai' => ['xai', 'XAI_API_KEY', 'grok-4-1-fast-reasoning'],
+]);

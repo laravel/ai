@@ -6,17 +6,6 @@ use Illuminate\Http\UploadedFile;
 
 abstract class Image extends File
 {
-    public const DEFAULT_MIME_TYPE = 'image/png';
-
-    /**
-     * Get the image's MIME type for use in a data URI, falling back to the default when unknown.
-     */
-    public function dataUriMimeType(): string
-    {
-        return (method_exists($this, 'mimeType') ? $this->mimeType() : null)
-            ?? self::DEFAULT_MIME_TYPE;
-    }
-
     /**
      * Create a new image from Base64 data.
      */
