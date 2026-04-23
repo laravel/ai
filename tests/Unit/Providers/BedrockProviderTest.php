@@ -227,6 +227,17 @@ class BedrockProviderTest extends TestCase
         $this->assertEquals('1152x768', $provider->defaultImageOptions('3:2')['size']);
     }
 
+    public function test_normalizes_canonical_quality_values_to_bedrock_values(): void
+    {
+        $provider = new BedrockProvider([], $this->dispatcher);
+
+        $this->assertEquals('standard', $provider->defaultImageOptions(quality: 'low')['quality']);
+        $this->assertEquals('standard', $provider->defaultImageOptions(quality: 'medium')['quality']);
+        $this->assertEquals('premium', $provider->defaultImageOptions(quality: 'high')['quality']);
+        $this->assertEquals('standard', $provider->defaultImageOptions(quality: 'standard')['quality']);
+        $this->assertEquals('premium', $provider->defaultImageOptions(quality: 'premium')['quality']);
+    }
+
     public function test_creates_text_gateway(): void
     {
         $provider = new BedrockProvider([], $this->dispatcher);

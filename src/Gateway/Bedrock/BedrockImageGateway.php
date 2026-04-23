@@ -36,6 +36,7 @@ class BedrockImageGateway implements ImageGateway
         ?int $timeout = null,
     ): ImageResponse {
         $client = $this->createBedrockClient($provider, $timeout);
+        $options = $provider->defaultImageOptions($size, $quality);
 
         try {
             $response = $this->withErrorHandling(
@@ -44,7 +45,7 @@ class BedrockImageGateway implements ImageGateway
                     'modelId' => $model,
                     'contentType' => 'application/json',
                     'accept' => 'application/json',
-                    'body' => json_encode($this->prepareImageRequestBody($model, $prompt, $size, $quality)),
+                    'body' => json_encode($this->prepareImageRequestBody($model, $prompt, $size, $options)),
                 ]),
             );
         } catch (Throwable $e) {
@@ -62,27 +63,35 @@ class BedrockImageGateway implements ImageGateway
 
     /**
      * Prepare the request body for the given model family.
+     *
+     * @param  array{quality: string, size: string}  $options
      */
-    protected function prepareImageRequestBody(string $model, string $prompt, ?string $size, ?string $quality): array
+    protected function prepareImageRequestBody(string $model, string $prompt, ?string $size, array $options): array
     {
         [$width, $height] = $this->parseSize($size);
+        $quality = $options['quality'];
 
         return match (true) {
-            str_starts_with($model, 'stability.') => [
+            $this->isLegacyStabilityModel($model) => [
                 'text_prompts' => [
                     ['text' => $prompt, 'weight' => 1.0],
                 ],
                 'cfg_scale' => 7.0,
-                'steps' => $quality === 'high' ? 50 : 30,
+                'steps' => $quality === 'premium' ? 50 : 30,
                 'width' => $width,
                 'height' => $height,
             ],
+            str_starts_with($model, 'stability.') => array_filter([
+                'prompt' => $prompt,
+                'aspect_ratio' => $this->stabilityAspectRatio($size),
+                'output_format' => 'png',
+            ]),
             str_starts_with($model, 'amazon.titan-image') => [
                 'taskType' => 'TEXT_IMAGE',
                 'textToImageParams' => ['text' => $prompt],
                 'imageGenerationConfig' => [
                     'numberOfImages' => 1,
-                    'quality' => $quality ?? 'standard',
+                    'quality' => $quality,
                     'height' => $height,
                     'width' => $width,
                     'cfgScale' => 7.0,
@@ -93,7 +102,7 @@ class BedrockImageGateway implements ImageGateway
                 'textToImageParams' => ['text' => $prompt],
                 'imageGenerationConfig' => [
                     'numberOfImages' => 1,
-                    'quality' => $quality ?? 'standard',
+                    'quality' => $quality,
                     'width' => $width,
                     'height' => $height,
                 ],
@@ -103,16 +112,37 @@ class BedrockImageGateway implements ImageGateway
     }
 
     /**
+     * Stability SDXL 1.0 uses a different request shape than the newer Stable Image / SD 3.5 models.
+     */
+    protected function isLegacyStabilityModel(string $model): bool
+    {
+        return str_starts_with($model, 'stability.stable-diffusion-xl');
+    }
+
+    /**
+     * Map our canonical aspect ratios to Stability's accepted aspect_ratio values.
+     */
+    protected function stabilityAspectRatio(?string $size): ?string
+    {
+        return match ($size) {
+            '1:1', '2:3', '3:2' => $size,
+            default => null,
+        };
+    }
+
+    /**
      * Parse the image response payload into GeneratedImage instances.
      */
     protected function parseImageResponse(string $model, array $result): Collection
     {
-        if (str_starts_with($model, 'stability.')) {
+        if ($this->isLegacyStabilityModel($model)) {
             return (new Collection($result['artifacts'] ?? []))
                 ->map(fn ($artifact) => new GeneratedImage($artifact['base64'] ?? '', 'image/png'));
         }
 
-        if (str_starts_with($model, 'amazon.titan-image') || str_starts_with($model, 'amazon.nova-canvas')) {
+        if (str_starts_with($model, 'stability.')
+            || str_starts_with($model, 'amazon.titan-image')
+            || str_starts_with($model, 'amazon.nova-canvas')) {
             return (new Collection($result['images'] ?? []))
                 ->map(fn ($image) => new GeneratedImage($image ?? '', 'image/png'));
         }

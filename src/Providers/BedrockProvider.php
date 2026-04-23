@@ -105,7 +105,11 @@ class BedrockProvider extends Provider implements EmbeddingProvider, ImageProvid
     public function defaultImageOptions(?string $size = null, $quality = null): array
     {
         return [
-            'quality' => $quality ?? 'standard',
+            'quality' => match ($quality) {
+                'high', 'premium' => 'premium',
+                'low', 'medium', 'standard', null => 'standard',
+                default => $quality,
+            },
             'size' => match ($size) {
                 '2:3' => '768x1152',
                 '3:2' => '1152x768',

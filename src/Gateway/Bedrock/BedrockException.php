@@ -34,7 +34,11 @@ class BedrockException
         if ($e instanceof BedrockRuntimeException) {
             return match ($e->getAwsErrorCode()) {
                 'ThrottlingException' => RateLimitedException::forProvider($provider, $e->getStatusCode(), $e),
-                'ServiceUnavailableException', 'ModelNotReadyException' => new ProviderOverloadedException(
+                'ServiceUnavailableException',
+                'ModelNotReadyException',
+                'ModelTimeoutException',
+                'ModelStreamErrorException',
+                'InternalServerException' => new ProviderOverloadedException(
                     'AI provider ['.$provider.'] is overloaded or unavailable.',
                     code: $e->getStatusCode(),
                     previous: $e,
