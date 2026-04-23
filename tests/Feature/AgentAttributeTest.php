@@ -5,8 +5,10 @@ use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeAgent;
+use Tests\Fixtures\Agents\IncompatibleMethodsAgent;
 use Tests\Fixtures\Agents\MethodOptionsAgent;
 use Tests\Fixtures\Agents\MethodOverridesAttributeAgent;
+use Tests\Fixtures\Agents\NullableMethodOptionsAgent;
 
 test('text generation options can be created from agent attributes', function () {
     $options = TextGenerationOptions::forAgent(new AttributeAgent);
@@ -38,6 +40,22 @@ test('agent methods take priority over attributes', function () {
     expect($options->maxSteps)->toBe(1)
         ->and($options->maxTokens)->toBe(512)
         ->and($options->temperature)->toBe(0.2);
+});
+
+test('null return from agent method falls back to attributes', function () {
+    $options = TextGenerationOptions::forAgent(new NullableMethodOptionsAgent);
+
+    expect($options->maxSteps)->toBe(10)
+        ->and($options->maxTokens)->toBe(4096)
+        ->and($options->temperature)->toBe(0.7);
+});
+
+test('non-public or parameterized option methods are ignored', function () {
+    $options = TextGenerationOptions::forAgent(new IncompatibleMethodsAgent);
+
+    expect($options->maxSteps)->toBe(8)
+        ->and($options->maxTokens)->toBe(1024)
+        ->and($options->temperature)->toBe(0.9);
 });
 
 test('provider attribute is used when prompting', function () {
