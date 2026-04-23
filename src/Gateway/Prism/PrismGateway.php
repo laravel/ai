@@ -26,6 +26,7 @@ use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
+use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\StructuredTextResponse;
@@ -371,7 +372,7 @@ class PrismGateway implements Gateway
 
         return new EmbeddingsResponse(
             (new Collection($response->embeddings))->map->embedding->all(),
-            $response->usage->tokens,
+            new Usage(['text' => $response->usage->tokens]),
             new Meta($provider->name(), $model),
         );
     }

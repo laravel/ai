@@ -7,6 +7,7 @@ use Illuminate\Contracts\Support\Arrayable;
 use IteratorAggregate;
 use JsonSerializable;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Usage;
 use Traversable;
 
 class EmbeddingsResponse implements Arrayable, Countable, IteratorAggregate, JsonSerializable
@@ -16,7 +17,7 @@ class EmbeddingsResponse implements Arrayable, Countable, IteratorAggregate, Jso
      *
      * @param  array<int, array<float>>
      */
-    public function __construct(public array $embeddings, public int $tokens, public Meta $meta) {}
+    public function __construct(public array $embeddings, public Usage $usage, public Meta $meta) {}
 
     /**
      * Get the first set of embeddings in the response.
@@ -33,7 +34,7 @@ class EmbeddingsResponse implements Arrayable, Countable, IteratorAggregate, Jso
     {
         return [
             'embeddings' => $this->embeddings,
-            'tokens' => $this->tokens,
+            'usage' => $this->usage,
             'meta' => $this->meta,
         ];
     }

@@ -26,6 +26,7 @@ use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
+use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\TextResponse;
@@ -336,7 +337,7 @@ class OpenAiGateway implements Gateway
 
         return new EmbeddingsResponse(
             collect($data['data'] ?? [])->pluck('embedding')->all(),
-            $data['usage']['prompt_tokens'] ?? 0,
+            new Usage(['text' => $data['usage']['prompt_tokens'] ?? 0]),
             new Meta($provider->name(), $model),
         );
     }

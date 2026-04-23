@@ -14,6 +14,7 @@ use Laravel\Ai\Jobs\GenerateEmbeddings;
 use Laravel\Ai\Prompts\QueuedEmbeddingsPrompt;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\QueuedEmbeddingsResponse;
 
@@ -114,7 +115,7 @@ class PendingEmbeddingsGeneration
         if (! is_null($response)) {
             $response = json_decode($response, true);
 
-            return new EmbeddingsResponse($response['embeddings'], 0, new Meta(
+            return new EmbeddingsResponse($response['embeddings'], new Usage(), new Meta(
                 provider: $response['meta']['provider'],
                 model: $response['meta']['model'],
             ));
