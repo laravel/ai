@@ -109,7 +109,7 @@ test('local image attachment without explicit mime type detects mime from file',
 
     agent('You are helpful.')->prompt(
         'What is in this image?',
-        attachments: [new LocalImage(fakePngFile())],
+        attachments: [new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')],
         provider: 'xai',
     );
 

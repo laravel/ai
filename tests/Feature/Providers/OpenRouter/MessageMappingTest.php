@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Files\LocalImage;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
@@ -63,4 +64,24 @@ test('tool result follow up maps assistant and tool result messages', function (
     $toolMsg = collect($messages)->firstWhere('role', 'tool');
     expect($toolMsg)->not->toBeNull()
         ->and($toolMsg['tool_call_id'])->toBe('call_123');
+});
+
+test('local image attachment without explicit mime type detects mime from file', function () {
+    Http::fake(['*' => fakeOpenRouterResponse('I see an image')]);
+
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')],
+        provider: 'openrouter',
+    );
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $userMsg = collect($body['messages'])->firstWhere('role', 'user');
+        $imageBlock = collect($userMsg['content'])->firstWhere('type', 'image_url');
+
+        return $imageBlock !== null
+            && str_starts_with($imageBlock['image_url']['url'], 'data:image/png;base64,')
+            && ! str_contains($imageBlock['image_url']['url'], 'data:;base64,');
+    });
 });

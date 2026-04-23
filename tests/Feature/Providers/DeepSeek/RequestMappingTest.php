@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Files\LocalImage;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
@@ -217,4 +218,24 @@ test('reasoning content from deepseek-reasoner is ignored, only content surfaces
     $response = agent()->prompt('What is 2+2?', provider: 'deepseek', model: 'deepseek-reasoner');
 
     expect($response->text)->toBe('The answer is 4.');
+});
+
+test('local image attachment without explicit mime type detects mime from file', function () {
+    Http::fake(['*' => fakeDeepSeekResponse('I see an image')]);
+
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')],
+        provider: 'deepseek',
+    );
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $userMsg = collect($body['messages'])->firstWhere('role', 'user');
+        $imageBlock = collect($userMsg['content'])->firstWhere('type', 'image_url');
+
+        return $imageBlock !== null
+            && str_starts_with($imageBlock['image_url']['url'], 'data:image/png;base64,')
+            && ! str_contains($imageBlock['image_url']['url'], 'data:;base64,');
+    });
 });
