@@ -71,7 +71,7 @@ class LocalImage extends Image implements Arrayable, JsonSerializable, StorableF
             'type' => 'local-image',
             'name' => $this->name(),
             'path' => $this->path,
-            'mime' => $this->mimeType(),
+            'mime' => $this->mime,
         ];
     }
 

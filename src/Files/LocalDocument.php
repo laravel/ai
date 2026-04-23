@@ -69,7 +69,7 @@ class LocalDocument extends Document implements Arrayable, JsonSerializable, Sto
             'type' => 'local-document',
             'name' => $this->name(),
             'path' => $this->path,
-            'mime' => $this->mimeType(),
+            'mime' => $this->mime,
         ];
     }
 

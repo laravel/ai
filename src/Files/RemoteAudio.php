@@ -39,7 +39,7 @@ class RemoteAudio extends Audio implements Arrayable, JsonSerializable, Storable
             'type' => 'remote-audio',
             'name' => $this->name(),
             'url' => $this->url,
-            'mime' => $this->mimeType(),
+            'mime' => $this->mime,
         ];
     }
 
