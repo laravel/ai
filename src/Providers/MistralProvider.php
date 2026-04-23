@@ -2,9 +2,14 @@
 
 namespace Laravel\Ai\Providers;
 
+use Illuminate\Contracts\Events\Dispatcher;
+use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
+use Laravel\Ai\Contracts\Gateway\TextGateway;
+use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Gateway\Mistral\MistralGateway;
 
 class MistralProvider extends Provider implements EmbeddingProvider, TextProvider, TranscriptionProvider
 {
@@ -15,6 +20,45 @@ class MistralProvider extends Provider implements EmbeddingProvider, TextProvide
     use Concerns\HasTextGateway;
     use Concerns\HasTranscriptionGateway;
     use Concerns\StreamsText;
+
+    protected ?MistralGateway $mistralGateway = null;
+
+    public function __construct(protected array $config, protected Dispatcher $events)
+    {
+        //
+    }
+
+    /**
+     * Get the shared Mistral gateway instance.
+     */
+    protected function mistralGateway(): MistralGateway
+    {
+        return $this->mistralGateway ??= new MistralGateway($this->events);
+    }
+
+    /**
+     * Get the provider's text gateway.
+     */
+    public function textGateway(): TextGateway
+    {
+        return $this->textGateway ??= $this->mistralGateway();
+    }
+
+    /**
+     * Get the provider's embedding gateway.
+     */
+    public function embeddingGateway(): EmbeddingGateway
+    {
+        return $this->embeddingGateway ??= $this->mistralGateway();
+    }
+
+    /**
+     * Get the provider's transcription gateway.
+     */
+    public function transcriptionGateway(): TranscriptionGateway
+    {
+        return $this->transcriptionGateway ??= $this->mistralGateway();
+    }
 
     /**
      * Get the name of the default text model.
@@ -45,7 +89,7 @@ class MistralProvider extends Provider implements EmbeddingProvider, TextProvide
      */
     public function defaultTranscriptionModel(): string
     {
-        return $this->config['models']['transcription']['default'] ?? 'voxtral-small-latest';
+        return $this->config['models']['transcription']['default'] ?? 'voxtral-mini-latest';
     }
 
     /**
