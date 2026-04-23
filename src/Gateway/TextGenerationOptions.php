@@ -58,7 +58,11 @@ class TextGenerationOptions
     private static function resolve(Agent $agent, ReflectionClass $reflection, string $method, string $attribute): int|float|null
     {
         if (method_exists($agent, $method)) {
-            $value = $agent->{$method}();
+            try {
+                $value = $agent->{$method}();
+            } catch (\ArgumentCountError|\Error) {
+                $value = null;
+            }
 
             if (! is_null($value)) {
                 return $value;
