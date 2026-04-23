@@ -2,8 +2,8 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
-use Tests\Fixtures\Agents\DeepSeekProviderOptionsAgent;
-use Tests\Fixtures\Agents\DeepSeekProviderOptionsWithToolsAgent;
+use Tests\Fixtures\Agents\ProviderOptionsAgent;
+use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 
 use function Laravel\Ai\agent;
 
@@ -19,7 +19,7 @@ test('provider options are included in deepseek request body', function () {
         '*' => fakeDeepSeekResponse('Hello'),
     ]);
 
-    (new DeepSeekProviderOptionsAgent)->prompt('Hello', provider: 'deepseek');
+    (new ProviderOptionsAgent)->prompt('Hello', provider: 'deepseek');
 
     Http::assertSent(function (Request $request) {
         $body = json_decode($request->body(), true);
@@ -52,11 +52,11 @@ test('provider options are persisted in tool call follow up requests', function 
         ]),
     ]);
 
-    (new DeepSeekProviderOptionsWithToolsAgent)->prompt('Give me a number', provider: 'deepseek');
+    (new ProviderOptionsWithToolsAgent)->prompt('Give me a number', provider: 'deepseek');
 
     $requests = Http::recorded(fn (Request $r) => true);
 
-    expect(count($requests))->toBeGreaterThanOrEqual(2);
+    expect($requests)->toHaveCount(2);
 
     $followUpBody = json_decode($requests[1][0]->body(), true);
 
