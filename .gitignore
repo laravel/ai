@@ -7,8 +7,6 @@
 /tmp
 /vendor
 CLAUDE.md
-GEMINI_TTS.md
 .env
-.DS_Store
 .claude
 AGENTS.md
