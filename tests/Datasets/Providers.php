@@ -14,6 +14,12 @@ dataset('embedding-providers', [
     'voyageai' => ['voyageai', 'VOYAGEAI_API_KEY', 1024],
 ]);
 
+dataset('image-providers', [
+    'openai-dall-e-3' => ['openai', 'OPENAI_API_KEY', 'dall-e-3'],
+    'openai-gpt-image-3' => ['openai', 'OPENAI_API_KEY', 'gpt-image-3'],
+    'xai' => ['xai', 'XAI_API_KEY', 'grok-imagine-image'],
+]);
+
 dataset('reranking-providers', [
     'cohere' => ['cohere', 'COHERE_API_KEY'],
     'voyageai' => ['voyageai', 'VOYAGEAI_API_KEY'],
