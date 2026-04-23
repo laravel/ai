@@ -65,7 +65,7 @@ class Base64Document extends Document implements Arrayable, JsonSerializable, St
             'type' => 'base64-document',
             'name' => $this->name(),
             'base64' => $this->base64,
-            'mime' => $this->mimeType(),
+            'mime' => $this->mime,
         ];
     }
 

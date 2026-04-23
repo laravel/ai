@@ -105,3 +105,28 @@ test('remote image toArray returns the explicitly set mime type without HTTP cal
 
     Http::assertNothingSent();
 });
+
+test('remote document toArray handles urls without a path component', function () {
+    Http::preventStrayRequests();
+    Http::fake();
+
+    $array = Document::fromUrl('https://example.com')->toArray();
+
+    expect($array['name'])->toBe('');
+    expect($array['mime'])->toBeNull();
+
+    Http::assertNothingSent();
+});
+
+test('local image toArray does not touch the filesystem', function () {
+    $path = '/tmp/this-file-definitely-does-not-exist-'.uniqid().'.png';
+
+    $array = Image::fromPath($path)->toArray();
+
+    expect($array)->toBe([
+        'type' => 'local-image',
+        'name' => basename($path),
+        'path' => $path,
+        'mime' => null,
+    ]);
+});

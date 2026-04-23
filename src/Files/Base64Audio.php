@@ -76,7 +76,7 @@ class Base64Audio extends Audio implements Arrayable, JsonSerializable, Storable
             'type' => 'base64-audio',
             'name' => $this->name(),
             'base64' => $this->base64,
-            'mime' => $this->mimeType(),
+            'mime' => $this->mime,
         ];
     }
 
