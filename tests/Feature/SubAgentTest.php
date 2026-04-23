@@ -4,9 +4,9 @@ namespace Tests\Feature;
 
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Tools\AgentTool;
-use Tests\Feature\Agents\DelegatingAgent;
-use Tests\Feature\Agents\SubAgent;
-use Tests\Feature\Tools\RandomNumberGenerator;
+use Tests\Fixtures\Agents\DelegatingAgent;
+use Tests\Fixtures\Agents\SubAgent;
+use Tests\Fixtures\Tools\RandomNumberGenerator;
 use Tests\TestCase;
 
 use function Laravel\Ai\agent;
