@@ -40,7 +40,7 @@ test('stored image toArray falls back to basename', function () {
 });
 
 test('local image toArray uses basename and the raw mime property', function () {
-    $path = tempnam(sys_get_temp_dir(), 'local-image').'.png';
+    $path = tempnam(sys_get_temp_dir(), 'local-image');
     file_put_contents($path, 'data');
 
     try {
@@ -56,7 +56,7 @@ test('local image toArray uses basename and the raw mime property', function () 
 });
 
 test('local image toArray returns the explicitly set mime type', function () {
-    $path = tempnam(sys_get_temp_dir(), 'local-image').'.png';
+    $path = tempnam(sys_get_temp_dir(), 'local-image');
     file_put_contents($path, 'data');
 
     try {
@@ -110,7 +110,15 @@ test('remote document toArray handles urls without a path component', function (
     Http::preventStrayRequests();
     Http::fake();
 
-    $array = Document::fromUrl('https://example.com')->toArray();
+    set_error_handler(static function (int $severity, string $message, string $file, int $line): never {
+        throw new \ErrorException($message, 0, $severity, $file, $line);
+    });
+
+    try {
+        $array = Document::fromUrl('https://example.com')->toArray();
+    } finally {
+        restore_error_handler();
+    }
 
     expect($array['name'])->toBe('');
     expect($array['mime'])->toBeNull();
