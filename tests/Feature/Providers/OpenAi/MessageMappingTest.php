@@ -5,6 +5,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Base64Document;
+use Laravel\Ai\Files\LocalImage;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
@@ -142,6 +143,28 @@ test('uploaded pdf file maps to input file', function () {
 
         return $fileBlock !== null
             && str_contains($fileBlock['file_data'], 'application/pdf');
+    });
+});
+
+test('local image attachment without explicit mime type detects mime from file', function () {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiResponse('I see an image'),
+    ]);
+
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')],
+        provider: 'openai',
+    );
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $userMessage = collect($body['input'])->firstWhere('role', 'user');
+        $imageBlock = collect($userMessage['content'])->firstWhere('type', 'input_image');
+
+        return $imageBlock !== null
+            && str_starts_with($imageBlock['image_url'], 'data:image/png;base64,')
+            && ! str_contains($imageBlock['image_url'], 'data:;base64,');
     });
 });
 

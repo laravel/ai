@@ -47,7 +47,7 @@ class StoredDocument extends Document implements Arrayable, JsonSerializable, St
     {
         return [
             'type' => 'stored-document',
-            'name' => $this->name,
+            'name' => $this->name(),
             'path' => $this->path,
             'disk' => $this->disk ?? config('filesystems.default'),
         ];

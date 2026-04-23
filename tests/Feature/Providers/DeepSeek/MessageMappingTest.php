@@ -4,33 +4,31 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Base64Image;
-use Laravel\Ai\Files\LocalImage;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
 use function Laravel\Ai\agent;
 
 beforeEach(function () {
-    config(['ai.providers.groq' => [
-        ...config('ai.providers.groq'),
+    config(['ai.providers.deepseek' => [
+        ...config('ai.providers.deepseek'),
         'key' => 'test-key',
     ]]);
 });
 
-test('user message maps to groq format', function () {
+test('user message maps to deepseek format', function () {
     Http::fake([
-        'api.groq.com/*' => fakeGroqResponse(),
+        'api.deepseek.com/*' => fakeDeepSeekResponse(),
     ]);
 
     (new AssistantAgent)->prompt(
         'What is Laravel?',
-        provider: 'groq',
+        provider: 'deepseek',
     );
 
     Http::assertSent(function (Request $request) {
         $body = json_decode($request->body(), true);
-        $messages = $body['messages'];
-        $userMessage = collect($messages)->firstWhere('role', 'user');
+        $userMessage = collect($body['messages'])->firstWhere('role', 'user');
 
         return $userMessage !== null
             && $userMessage['content'] === 'What is Laravel?';
@@ -39,15 +37,15 @@ test('user message maps to groq format', function () {
 
 test('tool result follow up maps assistant and tool result messages', function () {
     Http::fake([
-        'api.groq.com/*' => Http::sequence([
-            fakeGroqToolCallResponse(),
-            fakeGroqResponse('The number is 72019'),
+        'api.deepseek.com/*' => Http::sequence([
+            fakeDeepSeekToolCallResponse(),
+            fakeDeepSeekResponse('The number is 72019'),
         ]),
     ]);
 
     (new ToolUsingAgent(fixed: true))->prompt(
         'Generate a number',
-        provider: 'groq',
+        provider: 'deepseek',
     );
 
     $recorded = Http::recorded();
@@ -83,7 +81,7 @@ test('tool result follow up maps assistant and tool result messages', function (
 
 test('image attachment maps to image url content block', function () {
     Http::fake([
-        'api.groq.com/*' => fakeGroqResponse('I see an image'),
+        'api.deepseek.com/*' => fakeDeepSeekResponse('I see an image'),
     ]);
 
     $image = new Base64Image(base64_encode('fake-image-data'), 'image/png');
@@ -91,7 +89,7 @@ test('image attachment maps to image url content block', function () {
     agent('You are helpful.')->prompt(
         'What is in this image?',
         attachments: [$image],
-        provider: 'groq',
+        provider: 'deepseek',
     );
 
     Http::assertSent(function (Request $request) {
@@ -107,31 +105,9 @@ test('image attachment maps to image url content block', function () {
     });
 });
 
-test('local image attachment without explicit mime type detects mime from file', function () {
-    Http::fake([
-        'api.groq.com/*' => fakeGroqResponse('I see an image'),
-    ]);
-
-    agent('You are helpful.')->prompt(
-        'What is in this image?',
-        attachments: [new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')],
-        provider: 'groq',
-    );
-
-    Http::assertSent(function (Request $request) {
-        $body = json_decode($request->body(), true);
-        $userMessage = collect($body['messages'])->firstWhere('role', 'user');
-        $imageBlock = collect($userMessage['content'])->firstWhere('type', 'image_url');
-
-        return $imageBlock !== null
-            && str_starts_with($imageBlock['image_url']['url'], 'data:image/png;base64,')
-            && ! str_contains($imageBlock['image_url']['url'], 'data:;base64,');
-    });
-});
-
 test('document attachments throw exception', function () {
     Http::fake([
-        'api.groq.com/*' => fakeGroqResponse(),
+        'api.deepseek.com/*' => fakeDeepSeekResponse(),
     ]);
 
     $pdf = new Base64Document(base64_encode('fake-pdf'), 'application/pdf');
@@ -139,6 +115,6 @@ test('document attachments throw exception', function () {
     agent('You are helpful.')->prompt(
         'What is in this PDF?',
         attachments: [$pdf],
-        provider: 'groq',
+        provider: 'deepseek',
     );
 })->throws(InvalidArgumentException::class);

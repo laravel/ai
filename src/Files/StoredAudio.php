@@ -58,7 +58,7 @@ class StoredAudio extends Audio implements Arrayable, JsonSerializable, Storable
     {
         return [
             'type' => 'stored-audio',
-            'name' => $this->name,
+            'name' => $this->name(),
             'path' => $this->path,
             'disk' => $this->disk ?? config('filesystems.default'),
         ];

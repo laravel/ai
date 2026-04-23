@@ -12,6 +12,7 @@ use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\StreamingAgent;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Files;
+use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Streaming\Events\TextDelta;
@@ -264,6 +265,22 @@ test('agents can analyze text document attachments', function (string $provider,
         ->and($response->text)->toContain('Canberra')
         ->and($response->text)->toContain('Taylor');
 })->with('agent-document-providers');
+
+test('agents can analyze local image attachments with a detected mime type', function (string $provider, string $apiKey, string $model, string $file, string $color) {
+    requiresApiKey($apiKey);
+
+    $response = agent('Answer briefly.')->prompt(
+        'What color is the background of this image? Answer with just one word.',
+        [new LocalImage(__DIR__.'/../Fixtures/Images/'.$file)],
+        provider: $provider,
+        model: $model,
+    );
+
+    expect(strtolower($response->text))->toContain($color);
+})->with('agent-image-providers')->with([
+    'png' => ['red.png', 'red'],
+    'jpeg' => ['blue.jpg', 'blue'],
+]);
 
 test('agent tool exception handling is not magical', function (string $provider, string $apiKey, string $model) {
     requiresApiKey($apiKey);
