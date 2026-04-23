@@ -61,6 +61,6 @@ class LiteLLMProvider extends Provider implements EmbeddingProvider, TextProvide
 
     public function defaultEmbeddingsDimensions(): int
     {
-        return $this->config['models']['embeddings']['dimensions'] ?? 1536;
+        return $this->config['models']['embeddings']['dimensions'] ?? 768;
     }
 }
