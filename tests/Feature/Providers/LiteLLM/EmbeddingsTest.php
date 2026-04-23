@@ -27,7 +27,7 @@ test('embeddings request is correctly formatted', function () {
 
         return $body['model'] === 'openai/text-embedding-3-small'
             && $body['input'] === ['Hello world']
-            && $body['dimensions'] === 1536
+            && $body['dimensions'] === 768
             && str_contains($request->url(), 'embeddings');
     });
 });
