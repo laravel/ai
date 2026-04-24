@@ -78,6 +78,7 @@ return [
         'cohere' => [
             'driver' => 'cohere',
             'key' => env('COHERE_API_KEY'),
+            'url' => env('COHERE_URL', 'https://api.cohere.com/v2'),
         ],
 
         'deepseek' => [
