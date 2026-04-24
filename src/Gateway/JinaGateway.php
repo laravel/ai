@@ -48,7 +48,7 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
 
         return new EmbeddingsResponse(
             $embeddings,
-            new Usage(['text' => $data['usage']['input_tokens'] ?? 0]),
+            new Usage(['text' => $data['usage']['total_tokens'] ?? ($data['usage']['input_tokens'] ?? 0)]),
             new Meta($provider->name(), $model),
         );
     }

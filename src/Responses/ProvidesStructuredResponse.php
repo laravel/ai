@@ -11,7 +11,17 @@ trait ProvidesStructuredResponse
      */
     public function offsetExists(mixed $offset): bool
     {
-        return isset($this->structured[$offset]);
+        if (isset($this->structured[$offset])) {
+            return true;
+        }
+
+        foreach (['response', 'result', 'data', 'output'] as $wrapper) {
+            if (isset($this->structured[$wrapper]) && is_array($this->structured[$wrapper]) && array_key_exists($offset, $this->structured[$wrapper])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -19,7 +29,17 @@ trait ProvidesStructuredResponse
      */
     public function offsetGet(mixed $offset): mixed
     {
-        return $this->structured[$offset];
+        if (array_key_exists($offset, $this->structured)) {
+            return $this->structured[$offset];
+        }
+
+        foreach (['response', 'result', 'data', 'output'] as $wrapper) {
+            if (isset($this->structured[$wrapper]) && is_array($this->structured[$wrapper]) && array_key_exists($offset, $this->structured[$wrapper])) {
+                return $this->structured[$wrapper][$offset];
+            }
+        }
+
+        return null;
     }
 
     /**

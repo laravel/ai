@@ -13,6 +13,7 @@ use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\TextResponse;
 
@@ -160,7 +161,7 @@ class OllamaGateway implements EmbeddingGateway, TextGateway
 
         return new EmbeddingsResponse(
             $data['embeddings'] ?? [],
-            $data['prompt_eval_count'] ?? 0,
+            new Usage($data['prompt_eval_count'] ?? 0, 0),
             new Meta($provider->name(), $model),
         );
     }

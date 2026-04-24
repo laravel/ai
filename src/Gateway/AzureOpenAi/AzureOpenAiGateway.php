@@ -23,6 +23,7 @@ use Laravel\Ai\Gateway\OpenAi\Concerns\ParsesTextResponses;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\TextResponse;
 
@@ -149,7 +150,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, TextGateway
 
         return new EmbeddingsResponse(
             collect($data['data'] ?? [])->pluck('embedding')->all(),
-            $data['usage']['prompt_tokens'] ?? 0,
+            new Usage($data['usage']['prompt_tokens'] ?? 0, 0),
             new Meta($provider->name(), $model),
         );
     }

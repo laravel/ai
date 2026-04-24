@@ -14,6 +14,7 @@ use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\TextResponse;
 
@@ -156,7 +157,7 @@ class OpenRouterGateway implements EmbeddingGateway, TextGateway
 
         return new EmbeddingsResponse(
             (new Collection($data['data'] ?? []))->pluck('embedding')->all(),
-            $data['usage']['prompt_tokens'] ?? 0,
+                new Usage($data['usage']['prompt_tokens'] ?? 0, 0),
             new Meta($provider->name(), $model),
         );
     }

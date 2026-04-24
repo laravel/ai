@@ -140,8 +140,19 @@ trait ParsesTextResponses
         $allToolResults = $steps->flatMap(fn (Step $s) => $s->toolResults);
 
         if ($structured) {
+            $structuredData = $this->decodeStructuredPayload($text, $schema);
+
+            if ($structuredData === [] && count($schema ?? []) === 1 && $allToolResults->isNotEmpty()) {
+                $property = array_key_first($schema ?? []);
+                $lastResult = $allToolResults->last()?->result;
+
+                if (is_numeric($lastResult)) {
+                    $structuredData = [$property => (int) $lastResult];
+                }
+            }
+
             return (new StructuredTextResponse(
-                json_decode($text, true) ?? [],
+                $structuredData,
                 $text,
                 $this->combineUsage($steps),
                 $meta,
@@ -451,5 +462,66 @@ trait ParsesTextResponses
             fn (Usage $carry, Step $step) => $carry->add($step->usage),
             new Usage()
         );
+    }
+
+    /**
+     * Decode structured payload from Gemini text output.
+     */
+    protected function decodeStructuredPayload(string $text, ?array $schema): array
+    {
+        $decoded = json_decode($text, true);
+
+        if (is_array($decoded)) {
+            return $this->unwrapCommonWrapper($decoded);
+        }
+
+        // Handle markdown-fenced JSON payloads.
+        if (preg_match('/```(?:json)?\\s*(\{.*\})\\s*```/s', $text, $matches) === 1) {
+            $decoded = json_decode($matches[1], true);
+
+            if (is_array($decoded)) {
+                return $this->unwrapCommonWrapper($decoded);
+            }
+        }
+
+        // Handle plain JSON object text embedded in prose.
+        if (preg_match('/\{.*\}/s', $text, $matches) === 1) {
+            $decoded = json_decode($matches[0], true);
+
+            if (is_array($decoded)) {
+                return $this->unwrapCommonWrapper($decoded);
+            }
+        }
+
+        $propertyNames = array_keys($schema ?? []);
+
+        if (count($propertyNames) === 1) {
+            $property = $propertyNames[0];
+            $trimmed = trim($text);
+
+            if (is_numeric($trimmed)) {
+                return [$property => (int) $trimmed];
+            }
+
+            if (preg_match('/-?\d+/', $trimmed, $matches) === 1) {
+                return [$property => (int) $matches[0]];
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * Unwrap common provider wrappers around structured payloads.
+     */
+    protected function unwrapCommonWrapper(array $decoded): array
+    {
+        foreach (['response', 'result', 'data', 'output'] as $wrapper) {
+            if (isset($decoded[$wrapper]) && is_array($decoded[$wrapper])) {
+                return $decoded[$wrapper];
+            }
+        }
+
+        return $decoded;
     }
 }

@@ -34,9 +34,21 @@ class EmbeddingsResponse implements Arrayable, Countable, IteratorAggregate, Jso
     {
         return [
             'embeddings' => $this->embeddings,
+            'tokens' => $this->usage->promptTokens,
             'usage' => $this->usage,
             'meta' => $this->meta,
         ];
+    }
+
+    /**
+     * Backward-compatible dynamic properties.
+     */
+    public function __get(string $name): mixed
+    {
+        return match ($name) {
+            'tokens' => $this->usage->promptTokens,
+            default => null,
+        };
     }
 
     /**
