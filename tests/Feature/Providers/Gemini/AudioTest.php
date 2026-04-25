@@ -3,7 +3,6 @@
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Audio;
-use Laravel\Ai\Gateway\Enums\GeminiVoice;
 
 beforeEach(function () {
     config(['ai.providers.gemini' => [
@@ -18,7 +17,7 @@ test('audio request includes model, prompt text, and voice name', function () {
     ]);
 
     Audio::of('Hello world')
-        ->voice(GeminiVoice::KORE)
+        ->voice('Kore')
         ->generate(provider: 'gemini', model: 'gemini-2.5-flash-preview-tts');
 
     Http::assertSent(function (Request $request) {
@@ -49,7 +48,7 @@ test('audio instructions are prepended to the prompt instead of sent in speech c
     ]);
 
     Audio::of('Have a wonderful day!')
-        ->voice(GeminiVoice::KORE)
+        ->voice('Kore')
         ->instructions('Say cheerfully:')
         ->generate(provider: 'gemini', model: 'gemini-2.5-flash-preview-tts');
 
@@ -71,7 +70,7 @@ test('audio response is wrapped as wav with correct meta', function () {
     ]);
 
     $response = Audio::of('Hello world')
-        ->voice(GeminiVoice::KORE)
+        ->voice('Kore')
         ->generate(provider: 'gemini', model: 'gemini-2.5-flash-preview-tts');
 
     expect($response->mimeType())->toBe('audio/wav')
@@ -99,7 +98,7 @@ test('audio uses default model when none specified', function () {
         'generativelanguage.googleapis.com/*' => fakeGeminiAudioResponse(),
     ]);
 
-    Audio::of('Hello world')->voice(GeminiVoice::KORE)->generate(provider: 'gemini');
+    Audio::of('Hello world')->voice('Kore')->generate(provider: 'gemini');
 
     Http::assertSent(fn (Request $request) => str_contains($request->url(), 'models/gemini-2.5-flash-preview-tts:generateContent'));
 });

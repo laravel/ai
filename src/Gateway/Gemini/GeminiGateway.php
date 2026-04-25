@@ -21,12 +21,12 @@ use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\TranscriptionSegment;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
-use LogicException;
 
 class GeminiGateway implements Gateway
 {
@@ -221,11 +221,6 @@ class GeminiGateway implements Gateway
         );
     }
 
-    /**
-     * Generate audio from the given text.
-     *
-     * @throws LogicException
-     */
     public function generateAudio(
         AudioProvider $provider,
         string $model,
@@ -282,11 +277,6 @@ class GeminiGateway implements Gateway
         );
     }
 
-    /**
-     * Generate text from the given audio.
-     *
-     * @throws LogicException
-     */
     public function generateTranscription(
         TranscriptionProvider $provider,
         string $model,
@@ -295,7 +285,89 @@ class GeminiGateway implements Gateway
         bool $diarize = false,
         int $timeout = 30,
     ): TranscriptionResponse {
-        throw new LogicException('The Gemini provider does not support transcription.');
+        $inlineData = ['inlineData' => [
+            'mimeType' => $audio->mimeType() ?? 'audio/mp3',
+            'data' => base64_encode($audio->content()),
+        ]];
+
+        if ($diarize) {
+            $prompt = $language !== null
+                ? "Transcribe this audio with timestamps in {$language}. Return the full transcript and a list of segments."
+                : 'Transcribe this audio with timestamps. Return the full transcript and a list of segments.';
+
+            $response = $this->withErrorHandling(
+                $provider->name(),
+                fn () => $this->client($provider, $timeout)->post("models/{$model}:generateContent", [
+                    'contents' => [[
+                        'parts' => [['text' => $prompt], $inlineData],
+                    ]],
+                    'generationConfig' => [
+                        'responseMimeType' => 'application/json',
+                        'responseSchema' => [
+                            'type' => 'OBJECT',
+                            'properties' => [
+                                'transcript' => ['type' => 'STRING'],
+                                'segments' => [
+                                    'type' => 'ARRAY',
+                                    'items' => [
+                                        'type' => 'OBJECT',
+                                        'properties' => [
+                                            'text' => ['type' => 'STRING'],
+                                            'start_time' => ['type' => 'STRING'],
+                                            'end_time' => ['type' => 'STRING'],
+                                        ],
+                                        'required' => ['text', 'start_time', 'end_time'],
+                                    ],
+                                ],
+                            ],
+                            'required' => ['transcript', 'segments'],
+                        ],
+                    ],
+                ]),
+            );
+
+            $data = json_decode($response->json('candidates.0.content.parts.0.text') ?? '{}', true);
+            $text = $data['transcript'] ?? '';
+
+            $segments = (new Collection($data['segments'] ?? []))->map(fn ($seg) => new TranscriptionSegment(
+                $seg['text'],
+                '',
+                $this->timestampToSeconds($seg['start_time'] ?? '0:00'),
+                $this->timestampToSeconds($seg['end_time'] ?? '0:00'),
+            ));
+        } else {
+            $prompt = $language !== null
+                ? "Transcribe this audio. Output only the transcription in {$language}."
+                : 'Transcribe this audio. Output only the transcription text.';
+
+            $response = $this->withErrorHandling(
+                $provider->name(),
+                fn () => $this->client($provider, $timeout)->post("models/{$model}:generateContent", [
+                    'contents' => [[
+                        'parts' => [['text' => $prompt], $inlineData],
+                    ]],
+                ]),
+            );
+
+            $text = $response->json('candidates.0.content.parts.0.text') ?? '';
+            $segments = new Collection;
+        }
+
+        return new TranscriptionResponse(
+            trim($text),
+            $segments,
+            new Usage(0, 0),
+            new Meta($provider->name(), $model),
+        );
+    }
+
+    protected function timestampToSeconds(string $timestamp): float
+    {
+        $parts = array_reverse(explode(':', $timestamp));
+
+        return (float) ($parts[0] ?? 0)
+            + ((float) ($parts[1] ?? 0)) * 60
+            + ((float) ($parts[2] ?? 0)) * 3600;
     }
 
     protected function pcmToWav(string $pcm): string
