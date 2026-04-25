@@ -54,10 +54,10 @@ test('voyageai reranking requests use the configured base url', function () {
 });
 
 test('voyageai requests fall back to the default base url', function () {
-    config(['ai.providers.voyageai' => [
-        ...config('ai.providers.voyageai'),
-        'key' => 'test-key',
-    ]]);
+    config(['ai.providers.voyageai' => array_diff_key(
+        [...config('ai.providers.voyageai'), 'key' => 'test-key'],
+        ['url' => null],
+    )]);
 
     Http::fake(['*' => fakeVoyageBaseUrlEmbeddingsResponse()]);
 
