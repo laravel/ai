@@ -21,7 +21,7 @@ function fakeXaiImageResponse(): PromiseInterface
     ]);
 }
 
-test('image request includes model and prompt', function () {
+test('image request includes model, prompt, and b64_json response format', function () {
     Http::fake([
         '*' => fakeXaiImageResponse(),
     ]);
@@ -32,30 +32,19 @@ test('image request includes model and prompt', function () {
         $body = json_decode($request->body(), true);
 
         return $body['model'] === 'grok-imagine-image'
-            && $body['prompt'] === 'A red apple';
+            && $body['prompt'] === 'A red apple'
+            && $body['response_format'] === 'b64_json'
+            && ! array_key_exists('size', $body)
+            && ! array_key_exists('quality', $body);
     });
 });
 
-test('image request always uses b64_json response format', function () {
+test('omits size when provided because xAI does not support it', function () {
     Http::fake([
         '*' => fakeXaiImageResponse(),
     ]);
 
-    Image::of('A red apple')->generate(provider: 'xai', model: 'grok-imagine-image');
-
-    Http::assertSent(function (Request $request) {
-        $body = json_decode($request->body(), true);
-
-        return $body['response_format'] === 'b64_json';
-    });
-});
-
-test('image request does not include size', function () {
-    Http::fake([
-        '*' => fakeXaiImageResponse(),
-    ]);
-
-    Image::of('A red apple')->generate(provider: 'xai', model: 'grok-imagine-image');
+    Image::of('A red apple')->square()->generate(provider: 'xai', model: 'grok-imagine-image');
 
     Http::assertSent(function (Request $request) {
         $body = json_decode($request->body(), true);
@@ -64,12 +53,12 @@ test('image request does not include size', function () {
     });
 });
 
-test('image request does not include quality', function () {
+test('omits quality when provided because xAI does not support it', function () {
     Http::fake([
         '*' => fakeXaiImageResponse(),
     ]);
 
-    Image::of('A red apple')->generate(provider: 'xai', model: 'grok-imagine-image');
+    Image::of('A red apple')->quality('high')->generate(provider: 'xai', model: 'grok-imagine-image');
 
     Http::assertSent(function (Request $request) {
         $body = json_decode($request->body(), true);
@@ -87,6 +76,7 @@ test('image response is correctly parsed', function () {
 
     expect($response->images)->toHaveCount(1)
         ->and($response->images->first()->image)->toBe(base64_encode('fake-image'))
+        ->and($response->images->first()->mime)->toBe('image/jpeg')
         ->and($response->meta->provider)->toBe('xai');
 });
 
