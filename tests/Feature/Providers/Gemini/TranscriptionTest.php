@@ -1,5 +1,6 @@
 <?php
 
+use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Transcription;
@@ -82,7 +83,8 @@ test('diarized transcription request sends json schema in generation config', fu
 
         return isset($body['generationConfig']['responseMimeType'])
             && $body['generationConfig']['responseMimeType'] === 'application/json'
-            && isset($body['generationConfig']['responseSchema']['properties']['segments']);
+            && isset($body['generationConfig']['responseSchema']['properties']['segments'])
+            && str_contains($body['contents'][0]['parts'][0]['text'], 'MM:SS or HH:MM:SS');
     });
 });
 
@@ -105,7 +107,25 @@ test('diarized transcription response returns text and segments', function () {
         ->and($response->segments[1]->endSeconds)->toBe(4.0);
 });
 
-function fakeGeminiTranscriptionResponse(): \GuzzleHttp\Promise\PromiseInterface
+test('diarized transcription parses srt and hour timestamp formats', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => fakeGeminiDiarizedTranscriptionResponse([
+            ['text' => 'Hello', 'start_time' => '00:00:01,500', 'end_time' => '00:01:02,250'],
+            ['text' => 'world', 'start_time' => '01:02:03.750', 'end_time' => '3724.25'],
+        ]),
+    ]);
+
+    $response = Transcription::of(base64_encode('fake-audio'), 'audio/mp3')
+        ->diarize()
+        ->generate(provider: 'gemini', model: 'gemini-3-flash-preview');
+
+    expect($response->segments[0]->startSeconds)->toBe(1.5)
+        ->and($response->segments[0]->endSeconds)->toBe(62.25)
+        ->and($response->segments[1]->startSeconds)->toBe(3723.75)
+        ->and($response->segments[1]->endSeconds)->toBe(3724.25);
+});
+
+function fakeGeminiTranscriptionResponse(): PromiseInterface
 {
     return Http::response([
         'candidates' => [[
@@ -118,17 +138,19 @@ function fakeGeminiTranscriptionResponse(): \GuzzleHttp\Promise\PromiseInterface
     ]);
 }
 
-function fakeGeminiDiarizedTranscriptionResponse(): \GuzzleHttp\Promise\PromiseInterface
+function fakeGeminiDiarizedTranscriptionResponse(?array $segments = null): PromiseInterface
 {
+    $segments ??= [
+        ['text' => 'Hello', 'start_time' => '0:00', 'end_time' => '0:02'],
+        ['text' => 'world', 'start_time' => '0:02', 'end_time' => '0:04'],
+    ];
+
     return Http::response([
         'candidates' => [[
             'content' => [
                 'parts' => [['text' => json_encode([
                     'transcript' => 'Hello world',
-                    'segments' => [
-                        ['text' => 'Hello', 'start_time' => '0:00', 'end_time' => '0:02'],
-                        ['text' => 'world', 'start_time' => '0:02', 'end_time' => '0:04'],
-                    ],
+                    'segments' => $segments,
                 ])]],
                 'role' => 'model',
             ],

@@ -5,7 +5,6 @@ namespace Laravel\Ai\Gateway\Gemini;
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\Gateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
@@ -17,7 +16,6 @@ use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\TextGenerationOptions;
-use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
@@ -292,8 +290,8 @@ class GeminiGateway implements Gateway
 
         if ($diarize) {
             $prompt = $language !== null
-                ? "Transcribe this audio with timestamps in {$language}. Return the full transcript and a list of segments."
-                : 'Transcribe this audio with timestamps. Return the full transcript and a list of segments.';
+                ? "Transcribe this audio with timestamps in {$language}. Return the full transcript and a list of segments. Use MM:SS or HH:MM:SS timestamps, with optional fractional seconds, for start_time and end_time."
+                : 'Transcribe this audio with timestamps. Return the full transcript and a list of segments. Use MM:SS or HH:MM:SS timestamps, with optional fractional seconds, for start_time and end_time.';
 
             $response = $this->withErrorHandling(
                 $provider->name(),
@@ -363,9 +361,19 @@ class GeminiGateway implements Gateway
 
     protected function timestampToSeconds(string $timestamp): float
     {
+        $timestamp = str_replace(',', '.', trim($timestamp));
+
+        if (preg_match('/^\d+(?:\.\d+)?$/', $timestamp) === 1) {
+            return (float) $timestamp;
+        }
+
+        if (preg_match('/^\d+(?::\d+){1,2}(?:\.\d+)?$/', $timestamp) !== 1) {
+            return 0.0;
+        }
+
         $parts = array_reverse(explode(':', $timestamp));
 
-        return (float) ($parts[0] ?? 0)
+        return (float) $parts[0]
             + ((float) ($parts[1] ?? 0)) * 60
             + ((float) ($parts[2] ?? 0)) * 3600;
     }
