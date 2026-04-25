@@ -4,7 +4,6 @@ namespace Laravel\Ai\Gateway\Gemini\Concerns;
 
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Base64Image;
@@ -40,28 +39,26 @@ trait MapsAttachments
                 ],
                 $attachment instanceof Base64Image => [
                     'inlineData' => [
-                        'mimeType' => $attachment->mime,
-                        'data' => $attachment->base64,
+                        'mimeType' => $attachment->resolvedMimeType(),
+                        'data' => $attachment->base64(),
                     ],
                 ],
                 $attachment instanceof RemoteImage => [
                     'fileData' => array_filter([
-                        'mimeType' => $attachment->mime,
+                        'mimeType' => $attachment->resolvedMimeType(),
                         'fileUri' => $attachment->url,
                     ]),
                 ],
                 $attachment instanceof LocalImage => [
                     'inlineData' => [
-                        'mimeType' => $attachment->mimeType() ?? 'image/png',
-                        'data' => base64_encode(file_get_contents($attachment->path)),
+                        'mimeType' => $attachment->resolvedMimeType(),
+                        'data' => $attachment->base64(),
                     ],
                 ],
                 $attachment instanceof StoredImage => [
                     'inlineData' => [
-                        'mimeType' => $attachment->mimeType() ?? 'image/png',
-                        'data' => base64_encode(
-                            Storage::disk($attachment->disk)->get($attachment->path)
-                        ),
+                        'mimeType' => $attachment->resolvedMimeType(),
+                        'data' => $attachment->base64(),
                     ],
                 ],
                 $attachment instanceof ProviderDocument => [
@@ -71,28 +68,26 @@ trait MapsAttachments
                 ],
                 $attachment instanceof Base64Document => [
                     'inlineData' => [
-                        'mimeType' => $attachment->mime,
-                        'data' => $attachment->base64,
+                        'mimeType' => $attachment->resolvedMimeType(),
+                        'data' => $attachment->base64(),
                     ],
                 ],
                 $attachment instanceof LocalDocument => [
                     'inlineData' => [
-                        'mimeType' => $attachment->mimeType() ?? 'application/octet-stream',
-                        'data' => base64_encode(file_get_contents($attachment->path)),
+                        'mimeType' => $attachment->resolvedMimeType(),
+                        'data' => $attachment->base64(),
                     ],
                 ],
                 $attachment instanceof RemoteDocument => [
                     'fileData' => array_filter([
-                        'mimeType' => $attachment->mime,
+                        'mimeType' => $attachment->resolvedMimeType(),
                         'fileUri' => $attachment->url,
                     ]),
                 ],
                 $attachment instanceof StoredDocument => [
                     'inlineData' => [
-                        'mimeType' => $attachment->mimeType() ?? 'application/octet-stream',
-                        'data' => base64_encode(
-                            Storage::disk($attachment->disk)->get($attachment->path)
-                        ),
+                        'mimeType' => $attachment->resolvedMimeType(),
+                        'data' => $attachment->base64(),
                     ],
                 ],
                 $attachment instanceof UploadedFile => [

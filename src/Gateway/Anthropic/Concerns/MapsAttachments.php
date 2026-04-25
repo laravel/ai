@@ -4,7 +4,6 @@ namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Files\Base64Document;
@@ -39,8 +38,8 @@ trait MapsAttachments
                     'type' => 'image',
                     'source' => [
                         'type' => 'base64',
-                        'media_type' => $attachment->mime,
-                        'data' => $attachment->base64,
+                        'media_type' => $attachment->resolvedMimeType(),
+                        'data' => $attachment->base64(),
                     ],
                 ],
                 $attachment instanceof RemoteImage => [
@@ -54,18 +53,16 @@ trait MapsAttachments
                     'type' => 'image',
                     'source' => [
                         'type' => 'base64',
-                        'media_type' => $attachment->mimeType(),
-                        'data' => base64_encode(file_get_contents($attachment->path)),
+                        'media_type' => $attachment->resolvedMimeType(),
+                        'data' => $attachment->base64(),
                     ],
                 ],
                 $attachment instanceof StoredImage => [
                     'type' => 'image',
                     'source' => [
                         'type' => 'base64',
-                        'media_type' => $attachment->mimeType(),
-                        'data' => base64_encode(
-                            Storage::disk($attachment->disk)->get($attachment->path)
-                        ),
+                        'media_type' => $attachment->resolvedMimeType(),
+                        'data' => $attachment->base64(),
                     ],
                 ],
                 $attachment instanceof ProviderDocument => [
@@ -79,8 +76,8 @@ trait MapsAttachments
                     'type' => 'document',
                     'source' => $this->documentSource(
                         $attachment->mime,
-                        fn () => base64_decode($attachment->base64),
-                        fn () => $attachment->base64,
+                        fn () => $attachment->content(),
+                        fn () => $attachment->base64(),
                     ),
                 ],
                 $attachment instanceof LocalDocument => [
@@ -102,8 +99,8 @@ trait MapsAttachments
                     'type' => 'document',
                     'source' => $this->documentSource(
                         $attachment->mimeType(),
-                        fn () => Storage::disk($attachment->disk)->get($attachment->path),
-                        fn () => base64_encode(Storage::disk($attachment->disk)->get($attachment->path)),
+                        fn () => $attachment->content(),
+                        fn () => $attachment->base64(),
                     ),
                 ],
                 $attachment instanceof UploadedFile && $this->isImage($attachment) => [

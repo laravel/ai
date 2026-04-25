@@ -65,4 +65,5 @@ class StoredImage extends Image implements Arrayable, JsonSerializable, Storable
     {
         return $this->content();
     }
+
 }

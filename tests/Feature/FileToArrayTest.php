@@ -111,7 +111,7 @@ test('remote document toArray handles urls without a path component', function (
     Http::fake();
 
     set_error_handler(static function (int $severity, string $message, string $file, int $line): never {
-        throw new \ErrorException($message, 0, $severity, $file, $line);
+        throw new ErrorException($message, 0, $severity, $file, $line);
     });
 
     try {
@@ -137,4 +137,98 @@ test('local image toArray does not touch the filesystem', function () {
         'path' => $path,
         'mime' => null,
     ]);
+});
+
+test('base64 image asDataUri uses correct mime and format', function () {
+    $image = Image::fromBase64('abc123', 'image/png');
+
+    expect($image->asDataUri())->toBe('data:image/png;base64,abc123');
+});
+
+test('base64 image asDataUri falls back to image/png', function () {
+    $image = Image::fromBase64('abc123');
+
+    expect($image->asDataUri())->toBe('data:image/png;base64,abc123');
+});
+
+test('base64 document asDataUri uses correct mime', function () {
+    $doc = Document::fromString('hello world', 'text/plain')->as('greeting.txt');
+
+    expect($doc->asDataUri())->toBe('data:text/plain;base64,'.base64_encode('hello world'));
+});
+
+test('base64 document asDataUri falls back to application/octet-stream', function () {
+    $doc = Document::fromString('hello world');
+
+    expect($doc->asDataUri())->toBe('data:application/octet-stream;base64,'.base64_encode('hello world'));
+});
+
+test('base64 audio asDataUri uses correct mime', function () {
+    $audio = Audio::fromBase64('abc123', 'audio/mpeg');
+
+    expect($audio->asDataUri())->toBe('data:audio/mpeg;base64,abc123');
+});
+
+test('base64 audio asDataUri falls back to audio/mpeg', function () {
+    $audio = Audio::fromBase64('abc123');
+
+    expect($audio->asDataUri())->toBe('data:audio/mpeg;base64,abc123');
+});
+
+test('local image asDataUri returns correct format', function () {
+    $file = fakePngFile('local-image');
+    $path = $file['path'];
+
+    try {
+        $image = Image::fromPath($path);
+        $dataUri = $image->asDataUri();
+
+        expect($dataUri)->toStartWith('data:image/png;base64,');
+        expect($dataUri)->toContain('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+    } finally {
+        @unlink($path);
+    }
+});
+
+test('local image asDataUri uses explicitly set mime type', function () {
+    $file = fakePngFile('local-image');
+    $path = $file['path'];
+
+    try {
+        $image = Image::fromPath($path)->withMimeType('image/webp');
+        $dataUri = $image->asDataUri();
+
+        expect($dataUri)->toStartWith('data:image/webp;base64,');
+        expect($dataUri)->toContain('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+    } finally {
+        @unlink($path);
+    }
+});
+
+test('stored image asDataUri returns correct format', function () {
+    Storage::fake('images');
+    Storage::disk('images')->put('photos/avatar.png', 'fake-image-content');
+
+    $uri = Image::fromStorage('photos/avatar.png', 'images')->asDataUri();
+
+    expect($uri)->toStartWith('data:image/png;base64,');
+});
+
+test('base64 image base64 method returns raw base64', function () {
+    $image = Image::fromBase64('abc123', 'image/png');
+
+    expect($image->base64())->toBe('abc123');
+});
+
+test('local image base64 method returns encoded content', function () {
+    $path = tempnam(sys_get_temp_dir(), 'local-image');
+    file_put_contents($path, 'test-content');
+
+    try {
+        $image = Image::fromPath($path);
+
+        expect($image->base64())->toBe(base64_encode('test-content'));
+    } finally {
+        @unlink($path);
+    }
 });

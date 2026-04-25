@@ -6,10 +6,11 @@ use Illuminate\Contracts\Support\Arrayable;
 use JsonSerializable;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
+use Laravel\Ai\Files\Concerns\HasStoredBase64;
 
 class Base64Image extends Image implements Arrayable, JsonSerializable, StorableFile
 {
-    use CanBeUploadedToProvider;
+    use CanBeUploadedToProvider, HasStoredBase64;
 
     public function __construct(public string $base64, ?string $mimeType = null)
     {
@@ -57,4 +58,5 @@ class Base64Image extends Image implements Arrayable, JsonSerializable, Storable
     {
         return $this->content();
     }
+
 }

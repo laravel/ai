@@ -4,16 +4,17 @@ namespace Laravel\Ai\Gateway\Groq\Concerns;
 
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\StoredImage;
+use Laravel\Ai\Gateway\Concerns\MapsUploadedFiles;
 
 trait MapsAttachments
 {
+    use MapsUploadedFiles;
     /**
      * Map the given Laravel attachments to Chat Completions content parts.
      */
@@ -29,7 +30,7 @@ trait MapsAttachments
             return match (true) {
                 $attachment instanceof Base64Image => [
                     'type' => 'image_url',
-                    'image_url' => ['url' => 'data:'.$attachment->mime.';base64,'.$attachment->base64],
+                    'image_url' => ['url' => $attachment->asDataUri()],
                 ],
                 $attachment instanceof RemoteImage => [
                     'type' => 'image_url',
@@ -37,17 +38,15 @@ trait MapsAttachments
                 ],
                 $attachment instanceof LocalImage => [
                     'type' => 'image_url',
-                    'image_url' => ['url' => 'data:'.($attachment->mimeType() ?? 'image/png').';base64,'.base64_encode(file_get_contents($attachment->path))],
+                    'image_url' => ['url' => $attachment->asDataUri()],
                 ],
                 $attachment instanceof StoredImage => [
                     'type' => 'image_url',
-                    'image_url' => ['url' => 'data:'.($attachment->mimeType() ?? 'image/png').';base64,'.base64_encode(
-                        Storage::disk($attachment->disk)->get($attachment->path)
-                    )],
+                    'image_url' => ['url' => $attachment->asDataUri()],
                 ],
                 $attachment instanceof UploadedFile && $this->isImage($attachment) => [
                     'type' => 'image_url',
-                    'image_url' => ['url' => 'data:'.$attachment->getClientMimeType().';base64,'.base64_encode($attachment->get())],
+                    'image_url' => ['url' => $this->uploadedFileAsDataUri($attachment)],
                 ],
                 default => throw new InvalidArgumentException('Groq does not support document attachments. Only image attachments are supported.'),
             };
@@ -66,4 +65,5 @@ trait MapsAttachments
             'image/webp',
         ]);
     }
+
 }

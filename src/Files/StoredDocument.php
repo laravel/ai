@@ -65,4 +65,5 @@ class StoredDocument extends Document implements Arrayable, JsonSerializable, St
     {
         return $this->content();
     }
+
 }

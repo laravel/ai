@@ -73,4 +73,5 @@ class LocalImage extends Image implements Arrayable, JsonSerializable, StorableF
     {
         return $this->content();
     }
+
 }

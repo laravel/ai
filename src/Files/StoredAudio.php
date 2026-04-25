@@ -76,4 +76,5 @@ class StoredAudio extends Audio implements Arrayable, JsonSerializable, Storable
     {
         return $this->content();
     }
+
 }

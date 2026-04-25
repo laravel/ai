@@ -189,3 +189,11 @@ function fakeDeepSeekToolCallResponse(): PromiseInterface
         ],
     ]);
 }
+
+function fakePngFile(string $prefix = 'fake'): array
+{
+    $path = sys_get_temp_dir().'/'.$prefix.'-'.uniqid().'.png';
+    file_put_contents($path, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='));
+
+    return ['path' => $path];
+}

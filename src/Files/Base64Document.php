@@ -7,10 +7,11 @@ use Illuminate\Http\UploadedFile;
 use JsonSerializable;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
+use Laravel\Ai\Files\Concerns\HasStoredBase64;
 
 class Base64Document extends Document implements Arrayable, JsonSerializable, StorableFile
 {
-    use CanBeUploadedToProvider;
+    use CanBeUploadedToProvider, HasStoredBase64;
 
     public function __construct(public string $base64, ?string $mimeType = null)
     {
@@ -69,4 +70,5 @@ class Base64Document extends Document implements Arrayable, JsonSerializable, St
     {
         return $this->content();
     }
+
 }

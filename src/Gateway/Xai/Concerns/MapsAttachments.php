@@ -4,7 +4,6 @@ namespace Laravel\Ai\Gateway\Xai\Concerns;
 
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Base64Image;
@@ -16,9 +15,11 @@ use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\StoredDocument;
 use Laravel\Ai\Files\StoredImage;
+use Laravel\Ai\Gateway\Concerns\MapsUploadedFiles;
 
 trait MapsAttachments
 {
+    use MapsUploadedFiles;
     /**
      * Map the given Laravel attachments to xAI content parts.
      */
@@ -34,7 +35,7 @@ trait MapsAttachments
             return match (true) {
                 $attachment instanceof Base64Image => [
                     'type' => 'input_image',
-                    'image_url' => 'data:'.$attachment->mime.';base64,'.$attachment->base64,
+                    'image_url' => $attachment->asDataUri(),
                 ],
                 $attachment instanceof RemoteImage => [
                     'type' => 'input_image',
@@ -42,13 +43,11 @@ trait MapsAttachments
                 ],
                 $attachment instanceof LocalImage => [
                     'type' => 'input_image',
-                    'image_url' => 'data:'.($attachment->mimeType() ?? 'image/png').';base64,'.base64_encode(file_get_contents($attachment->path)),
+                    'image_url' => $attachment->asDataUri(),
                 ],
                 $attachment instanceof StoredImage => [
                     'type' => 'input_image',
-                    'image_url' => 'data:'.($attachment->mimeType() ?? 'image/png').';base64,'.base64_encode(
-                        Storage::disk($attachment->disk)->get($attachment->path)
-                    ),
+                    'image_url' => $attachment->asDataUri(),
                 ],
                 $attachment instanceof ProviderDocument => array_filter([
                     'type' => 'input_file',
@@ -57,12 +56,12 @@ trait MapsAttachments
                 ]),
                 $attachment instanceof Base64Document => array_filter([
                     'type' => 'input_file',
-                    'file_data' => 'data:'.$attachment->mime.';base64,'.$attachment->base64,
+                    'file_data' => $attachment->asDataUri(),
                     'filename' => $attachment->name(),
                 ]),
                 $attachment instanceof LocalDocument => array_filter([
                     'type' => 'input_file',
-                    'file_data' => 'data:'.($attachment->mimeType() ?? 'application/octet-stream').';base64,'.base64_encode(file_get_contents($attachment->path)),
+                    'file_data' => $attachment->asDataUri(),
                     'filename' => $attachment->name(),
                 ]),
                 $attachment instanceof RemoteDocument => array_filter([
@@ -72,18 +71,16 @@ trait MapsAttachments
                 ]),
                 $attachment instanceof StoredDocument => array_filter([
                     'type' => 'input_file',
-                    'file_data' => 'data:'.($attachment->mimeType() ?? 'application/octet-stream').';base64,'.base64_encode(
-                        Storage::disk($attachment->disk)->get($attachment->path)
-                    ),
+                    'file_data' => $attachment->asDataUri(),
                     'filename' => $attachment->name(),
                 ]),
                 $attachment instanceof UploadedFile && $this->isImage($attachment) => [
                     'type' => 'input_image',
-                    'image_url' => 'data:'.$attachment->getClientMimeType().';base64,'.base64_encode($attachment->get()),
+                    'image_url' => $this->uploadedFileAsDataUri($attachment),
                 ],
                 $attachment instanceof UploadedFile => [
                     'type' => 'input_file',
-                    'file_data' => 'data:'.$attachment->getClientMimeType().';base64,'.base64_encode($attachment->get()),
+                    'file_data' => $this->uploadedFileAsDataUri($attachment),
                     'filename' => $attachment->getClientOriginalName(),
                 ],
                 default => throw new InvalidArgumentException('Unsupported attachment type ['.get_class($attachment).']'),
@@ -103,4 +100,5 @@ trait MapsAttachments
             'image/webp',
         ]);
     }
+
 }

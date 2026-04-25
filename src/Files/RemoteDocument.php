@@ -37,4 +37,5 @@ class RemoteDocument extends Document implements Arrayable, JsonSerializable, St
     {
         return $this->toArray();
     }
+
 }
