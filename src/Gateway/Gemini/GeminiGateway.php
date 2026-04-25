@@ -4,7 +4,6 @@ namespace Laravel\Ai\Gateway\Gemini;
 
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
-use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
@@ -38,6 +37,7 @@ class GeminiGateway implements Gateway
     protected const GEMINI_TTS_SAMPLE_RATE = 24000;
 
     use Concerns\BuildsTextRequests;
+    use Concerns\CreatesGeminiClient;
     use Concerns\HandlesTextStreaming;
     use Concerns\MapsAttachments;
     use Concerns\MapsMessages;
@@ -240,12 +240,24 @@ class GeminiGateway implements Gateway
                 'contents' => [[
                     'role' => 'user',
                     'parts' => [[
-                        'text' => $this->audioText($text, $instructions),
+                        'text' => $instructions !== null && trim($instructions) !== ''
+                            ? trim($instructions)."\n\n".$text
+                            : $text,
                     ]],
                 ]],
                 'generationConfig' => [
                     'responseModalities' => ['AUDIO'],
-                    'speechConfig' => $this->speechConfig($voice),
+                    'speechConfig' => [
+                        'voiceConfig' => [
+                            'prebuiltVoiceConfig' => [
+                                'voiceName' => match ($voice) {
+                                    'default-female' => 'Kore',
+                                    'default-male' => 'Puck',
+                                    default => $voice,
+                                },
+                            ],
+                        ],
+                    ],
                 ],
             ]),
         );
@@ -284,48 +296,6 @@ class GeminiGateway implements Gateway
         int $timeout = 30,
     ): TranscriptionResponse {
         throw new LogicException('The Gemini provider does not support transcription.');
-    }
-
-    /**
-     * Get an HTTP client for the Gemini API.
-     */
-    protected function client(Provider $provider, ?int $timeout = null): PendingRequest
-    {
-        $config = $provider->additionalConfiguration();
-
-        return Http::baseUrl(rtrim($config['url'] ?? 'https://generativelanguage.googleapis.com/v1beta/', '/'))
-            ->withHeaders(['x-goog-api-key' => $provider->providerCredentials()['key']])
-            ->timeout($timeout ?? 60)
-            ->throw();
-    }
-
-    protected function audioText(string $text, ?string $instructions): string
-    {
-        if ($instructions === null || trim($instructions) === '') {
-            return $text;
-        }
-
-        return trim($instructions)."\n\n".$text;
-    }
-
-    protected function speechConfig(string $voice): array
-    {
-        return [
-            'voiceConfig' => [
-                'prebuiltVoiceConfig' => [
-                    'voiceName' => $this->resolveVoiceName($voice),
-                ],
-            ],
-        ];
-    }
-
-    protected function resolveVoiceName(string $voice): string
-    {
-        return match ($voice) {
-            'default-female' => 'Kore',
-            'default-male' => 'Puck',
-            default => $voice,
-        };
     }
 
     protected function pcmToWav(string $pcm): string
