@@ -2,8 +2,10 @@
 
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
+use Laravel\Ai\Exceptions\RateLimitedException;
 
 beforeEach(function () {
     config(['ai.providers.gemini' => [
@@ -90,6 +92,60 @@ test('multiple inputs are sent as separate requests in the batch', function () {
 
     expect($response->embeddings)->toHaveCount(2);
 });
+
+test('explicit dimensions are sent as output_dimensionality', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => fakeGeminiEmbeddingsResponse(),
+    ]);
+
+    Embeddings::for(['Hello world'])->dimensions(768)->generate(provider: 'gemini', model: 'gemini-embedding-001');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return data_get($body, 'requests.0.output_dimensionality') === 768;
+    });
+});
+
+test('missing embeddings key in response returns empty array', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'usageMetadata' => ['promptTokenCount' => 5],
+        ]),
+    ]);
+
+    $response = Embeddings::for(['Hello'])->generate(provider: 'gemini', model: 'gemini-embedding-001');
+
+    expect($response->embeddings)->toBe([]);
+});
+
+test('missing usageMetadata in response returns zero tokens', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'embeddings' => [['values' => [0.1, 0.2, 0.3]]],
+        ]),
+    ]);
+
+    $response = Embeddings::for(['Hello'])->generate(provider: 'gemini', model: 'gemini-embedding-001');
+
+    expect($response->tokens)->toBe(0);
+});
+
+test('rate limit response throws rate limited exception', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response(['error' => ['message' => 'Rate limit exceeded']], 429),
+    ]);
+
+    Embeddings::for(['Hello'])->generate(provider: 'gemini', model: 'gemini-embedding-001');
+})->throws(RateLimitedException::class);
+
+test('http error response throws request exception', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response(['error' => ['message' => 'Unauthorized']], 401),
+    ]);
+
+    Embeddings::for(['Hello'])->generate(provider: 'gemini', model: 'gemini-embedding-001');
+})->throws(RequestException::class);
 
 test('request sends x-goog-api-key header', function () {
     Http::fake([
