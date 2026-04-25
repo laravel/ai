@@ -3,6 +3,7 @@
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Image;
 
 beforeEach(function () {
@@ -71,47 +72,23 @@ test('image request includes default image size when quality not specified', fun
     });
 });
 
-test('image request maps low quality to 1K image size', function () {
+test('image request maps quality to image size', function (string $quality, string $expectedSize) {
     Http::fake([
         'generativelanguage.googleapis.com/*' => fakeGeminiImageResponse(),
     ]);
 
-    Image::of('A red apple')->quality('low')->generate(provider: 'gemini', model: 'gemini-3.1-flash-image-preview');
+    Image::of('A red apple')->quality($quality)->generate(provider: 'gemini', model: 'gemini-3.1-flash-image-preview');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request) use ($expectedSize) {
         $body = json_decode($request->body(), true);
 
-        return data_get($body, 'generationConfig.imageConfig.imageSize') === '1K';
+        return data_get($body, 'generationConfig.imageConfig.imageSize') === $expectedSize;
     });
-});
-
-test('image request maps medium quality to 2K image size', function () {
-    Http::fake([
-        'generativelanguage.googleapis.com/*' => fakeGeminiImageResponse(),
-    ]);
-
-    Image::of('A red apple')->quality('medium')->generate(provider: 'gemini', model: 'gemini-3.1-flash-image-preview');
-
-    Http::assertSent(function (Request $request) {
-        $body = json_decode($request->body(), true);
-
-        return data_get($body, 'generationConfig.imageConfig.imageSize') === '2K';
-    });
-});
-
-test('image request maps high quality to 4K image size', function () {
-    Http::fake([
-        'generativelanguage.googleapis.com/*' => fakeGeminiImageResponse(),
-    ]);
-
-    Image::of('A red apple')->quality('high')->generate(provider: 'gemini', model: 'gemini-3.1-flash-image-preview');
-
-    Http::assertSent(function (Request $request) {
-        $body = json_decode($request->body(), true);
-
-        return data_get($body, 'generationConfig.imageConfig.imageSize') === '4K';
-    });
-});
+})->with([
+    'low maps to 1K' => ['low', '1K'],
+    'medium maps to 2K' => ['medium', '2K'],
+    'high maps to 4K' => ['high', '4K'],
+]);
 
 test('image request maps size to aspect ratio', function () {
     Http::fake([
@@ -139,6 +116,50 @@ test('image request does not include aspect ratio when size not specified', func
 
         return ! array_key_exists('aspectRatio', data_get($body, 'generationConfig.imageConfig', []));
     });
+});
+
+test('image attachment is appended to contents parts', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => fakeGeminiImageResponse(),
+    ]);
+
+    $attachment = new Base64Image(base64_encode('ref-image'), 'image/jpeg');
+
+    Image::of('A red apple')->attachments([$attachment])->generate(provider: 'gemini', model: 'gemini-3.1-flash-image-preview');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $parts = data_get($body, 'contents.0.parts');
+
+        return count($parts) === 2
+            && $parts[0]['text'] === 'A red apple'
+            && data_get($parts[1], 'inlineData.mimeType') === 'image/jpeg';
+    });
+});
+
+test('only inlineData parts are returned when response contains mixed text and image parts', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'candidates' => [[
+                'content' => [
+                    'parts' => [
+                        ['text' => 'Here is your image:'],
+                        [
+                            'inlineData' => [
+                                'mimeType' => 'image/png',
+                                'data' => base64_encode('fake-image'),
+                            ],
+                        ],
+                    ],
+                ],
+            ]],
+        ]),
+    ]);
+
+    $response = Image::of('A red apple')->generate(provider: 'gemini', model: 'gemini-3.1-flash-image-preview');
+
+    expect($response->images)->toHaveCount(1)
+        ->and($response->images->first()->mime)->toBe('image/png');
 });
 
 test('image response is correctly parsed', function () {
