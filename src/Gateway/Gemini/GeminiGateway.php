@@ -31,6 +31,12 @@ use LogicException;
 
 class GeminiGateway implements Gateway
 {
+    protected const GEMINI_TTS_BITS_PER_SAMPLE = 16;
+
+    protected const GEMINI_TTS_CHANNELS = 1;
+
+    protected const GEMINI_TTS_SAMPLE_RATE = 24000;
+
     use Concerns\BuildsTextRequests;
     use Concerns\HandlesTextStreaming;
     use Concerns\MapsAttachments;
@@ -228,7 +234,40 @@ class GeminiGateway implements Gateway
         ?string $instructions = null,
         int $timeout = 30,
     ): AudioResponse {
-        throw new LogicException('The Gemini provider does not support audio generation.');
+        $response = $this->withErrorHandling(
+            $provider->name(),
+            fn () => $this->client($provider, $timeout)->post("models/{$model}:generateContent", [
+                'contents' => [[
+                    'role' => 'user',
+                    'parts' => [[
+                        'text' => $this->audioText($text, $instructions),
+                    ]],
+                ]],
+                'generationConfig' => [
+                    'responseModalities' => ['AUDIO'],
+                    'speechConfig' => $this->speechConfig($voice),
+                ],
+            ]),
+        );
+
+        $data = $response->json();
+        $encodedAudio = $data['candidates'][0]['content']['parts'][0]['inlineData']['data'] ?? null;
+
+        if (! is_string($encodedAudio) || $encodedAudio === '') {
+            throw new \RuntimeException('No audio data received from Gemini API.');
+        }
+
+        $pcm = base64_decode($encodedAudio, true);
+
+        if ($pcm === false) {
+            throw new \RuntimeException('Gemini returned invalid audio data.');
+        }
+
+        return new AudioResponse(
+            base64_encode($this->pcmToWav($pcm)),
+            new Meta($provider->name(), $model),
+            'audio/wav',
+        );
     }
 
     /**
@@ -258,5 +297,50 @@ class GeminiGateway implements Gateway
             ->withHeaders(['x-goog-api-key' => $provider->providerCredentials()['key']])
             ->timeout($timeout ?? 60)
             ->throw();
+    }
+
+    protected function audioText(string $text, ?string $instructions): string
+    {
+        if ($instructions === null || trim($instructions) === '') {
+            return $text;
+        }
+
+        return trim($instructions)."\n\n".$text;
+    }
+
+    protected function speechConfig(string $voice): array
+    {
+        return [
+            'voiceConfig' => [
+                'prebuiltVoiceConfig' => [
+                    'voiceName' => $this->resolveVoiceName($voice),
+                ],
+            ],
+        ];
+    }
+
+    protected function resolveVoiceName(string $voice): string
+    {
+        return match ($voice) {
+            'default-female' => 'Kore',
+            'default-male' => 'Puck',
+            default => $voice,
+        };
+    }
+
+    protected function pcmToWav(string $pcm): string
+    {
+        $dataSize = strlen($pcm);
+        $byteRate = intdiv(self::GEMINI_TTS_SAMPLE_RATE * self::GEMINI_TTS_CHANNELS * self::GEMINI_TTS_BITS_PER_SAMPLE, 8);
+        $blockAlign = intdiv(self::GEMINI_TTS_CHANNELS * self::GEMINI_TTS_BITS_PER_SAMPLE, 8);
+
+        return 'RIFF'
+            .pack('V', 36 + $dataSize)
+            .'WAVE'
+            .'fmt '
+            .pack('VvvVVvv', 16, 1, self::GEMINI_TTS_CHANNELS, self::GEMINI_TTS_SAMPLE_RATE, $byteRate, $blockAlign, self::GEMINI_TTS_BITS_PER_SAMPLE)
+            .'data'
+            .pack('V', $dataSize)
+            .$pcm;
     }
 }

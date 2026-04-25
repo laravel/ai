@@ -3,7 +3,6 @@
 namespace Laravel\Ai\Providers;
 
 use Illuminate\Support\Collection;
-use Laravel\Ai\Contracts\Gateway\AudioGateway;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
@@ -15,7 +14,6 @@ use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
-use Laravel\Ai\Gateway\Gemini\GeminiAudioGateway;
 use Laravel\Ai\Gateway\Gemini\GeminiFileGateway;
 use Laravel\Ai\Gateway\Gemini\GeminiStoreGateway;
 use Laravel\Ai\Providers\Tools\FileSearch;
@@ -172,20 +170,10 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
     }
 
     /**
-     * Get the provider's audio gateway.
-     */
-    public function audioGateway(): AudioGateway
-    {
-        return $this->audioGateway ??= new GeminiAudioGateway(
-            timeout: $this->config['audio']['timeout'] ?? 120,
-        );
-    }
-
-    /**
      * Get the name of the default audio (TTS) model.
      */
     public function defaultAudioModel(): string
     {
-        return 'gemini-2.5-flash-preview-tts';
+        return $this->config['models']['audio']['default'] ?? 'gemini-2.5-flash-preview-tts';
     }
 }
