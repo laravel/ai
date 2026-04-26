@@ -176,6 +176,7 @@ class AnthropicGateway implements Gateway
         TranscribableAudio $audio,
         ?string $language = null,
         bool $diarize = false,
+        ?string $context = null,
         int $timeout = 30,
     ): TranscriptionResponse {
         throw new LogicException('Anthropic does not support transcription.');

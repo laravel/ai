@@ -59,6 +59,11 @@ class PendingTranscriptionGeneration
     public function context(string $context): self
     {
         $this->context = $context;
+
+        return $this;
+    }
+
+    /**
      * Specify the timeout (in seconds) for the transcription generation.
      */
     public function timeout(int $seconds = 30): self

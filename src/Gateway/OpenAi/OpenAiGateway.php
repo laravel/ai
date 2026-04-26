@@ -260,6 +260,7 @@ class OpenAiGateway implements Gateway
         TranscribableAudio $audio,
         ?string $language = null,
         bool $diarize = false,
+        ?string $context = null,
         int $timeout = 30,
     ): TranscriptionResponse {
         if ($provider->driver() === 'openai' && ! $diarize) {
@@ -273,6 +274,7 @@ class OpenAiGateway implements Gateway
                 ->post('audio/transcriptions', array_filter([
                     'model' => $model,
                     'language' => $language,
+                    'prompt' => $context,
                     'response_format' => $diarize ? 'diarized_json' : 'json',
                 ])),
         );
