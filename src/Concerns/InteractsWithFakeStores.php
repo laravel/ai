@@ -301,7 +301,8 @@ trait InteractsWithFakeStores
         }
 
         $expectedStoreId = str_starts_with($storeId, 'fake_store_') ? $storeId : Stores::fakeId($storeId);
-        $expectedFileId = str_starts_with($fileId, 'fake_file_') ? $fileId : Files::fakeId($fileId);
+        $expectedFileId = $fileId !== null ? (str_starts_with($fileId, 'fake_file_') ? $fileId : Files::fakeId($fileId))
+            : null;
 
         return fn ($s, $f) => $s === $expectedStoreId && $this->fileIdMatches($f, $expectedFileId);
     }
@@ -309,8 +310,12 @@ trait InteractsWithFakeStores
     /**
      * Determine if the given file matches the expected file ID.
      */
-    protected function fileIdMatches(StorableFile|UploadedFile|HasProviderId|string $file, string $expectedFileId): bool
+    protected function fileIdMatches(StorableFile|UploadedFile|HasProviderId|string $file, ?string $expectedFileId): bool
     {
+        if ($expectedFileId === null) {
+            return true;
+        }
+
         return match (true) {
             $file instanceof HasProviderId => $file->id() === $expectedFileId,
             is_string($file) => $file === $expectedFileId,

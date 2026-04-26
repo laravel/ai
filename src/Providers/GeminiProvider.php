@@ -13,8 +13,8 @@ use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
-use Laravel\Ai\Gateway\GeminiFileGateway;
-use Laravel\Ai\Gateway\GeminiStoreGateway;
+use Laravel\Ai\Gateway\Gemini\GeminiFileGateway;
+use Laravel\Ai\Gateway\Gemini\GeminiStoreGateway;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
@@ -94,7 +94,7 @@ class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider
      */
     public function cheapestTextModel(): string
     {
-        return $this->config['models']['text']['cheapest'] ?? 'gemini-2.5-flash-lite';
+        return $this->config['models']['text']['cheapest'] ?? 'gemini-3.1-flash-lite-preview';
     }
 
     /**
@@ -102,7 +102,7 @@ class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider
      */
     public function smartestTextModel(): string
     {
-        return $this->config['models']['text']['smartest'] ?? 'gemini-3-pro-preview';
+        return $this->config['models']['text']['smartest'] ?? 'gemini-3.1-pro-preview';
     }
 
     /**
@@ -110,7 +110,7 @@ class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider
      */
     public function defaultImageModel(): string
     {
-        return $this->config['models']['image']['default'] ?? 'gemini-3-pro-image-preview';
+        return $this->config['models']['image']['default'] ?? 'gemini-3.1-flash-image-preview';
     }
 
     /**
@@ -119,7 +119,7 @@ class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider
     public function defaultImageOptions(?string $size = null, $quality = null): array
     {
         return array_filter([
-            'size' => match ($quality) {
+            'image_size' => match ($quality) {
                 'low', '1K' => '1K',
                 'medium', '2K' => '2K',
                 'high', '4K' => '4K',

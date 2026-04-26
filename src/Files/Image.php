@@ -51,9 +51,9 @@ abstract class Image extends File
      */
     public static function fromUpload(UploadedFile $file, ?string $mimeType = null): Base64Image
     {
-        return new Base64Image(
+        return (new Base64Image(
             base64_encode($file->getContent()),
             $mimeType ?? $file->getClientMimeType(),
-        )->as($file->getClientOriginalName());
+        ))->as($file->getClientOriginalName());
     }
 }

@@ -9,6 +9,7 @@ use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\RerankingGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\RerankingProvider;
+use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\RankedDocument;
 use Laravel\Ai\Responses\EmbeddingsResponse;
@@ -16,6 +17,8 @@ use Laravel\Ai\Responses\RerankingResponse;
 
 class CohereGateway implements EmbeddingGateway, RerankingGateway
 {
+    use HandlesFailoverErrors;
+
     /**
      * Generate embedding vectors representing the given inputs.
      *
@@ -25,14 +28,18 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway
         EmbeddingProvider $provider,
         string $model,
         array $inputs,
-        int $dimensions
+        int $dimensions,
+        int $timeout = 30,
     ): EmbeddingsResponse {
-        $response = $this->client($provider)->post('/embed', [
-            'model' => $model,
-            'texts' => $inputs,
-            'input_type' => 'search_document',
-            'embedding_types' => ['float'],
-        ]);
+        $response = $this->withErrorHandling(
+            $provider->name(),
+            fn () => $this->client($provider, $timeout)->post('/embed', [
+                'model' => $model,
+                'texts' => $inputs,
+                'input_type' => 'search_document',
+                'embedding_types' => ['float'],
+            ]),
+        );
 
         $data = $response->json();
 
@@ -55,12 +62,15 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway
         string $query,
         ?int $limit = null
     ): RerankingResponse {
-        $response = $this->client($provider)->post('/rerank', array_filter([
-            'model' => $model,
-            'query' => $query,
-            'documents' => $documents,
-            'top_n' => $limit,
-        ]));
+        $response = $this->withErrorHandling(
+            $provider->name(),
+            fn () => $this->client($provider)->post('/rerank', array_filter([
+                'model' => $model,
+                'query' => $query,
+                'documents' => $documents,
+                'top_n' => $limit,
+            ])),
+        );
 
         $data = $response->json();
 
@@ -79,7 +89,7 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway
     /**
      * Get an HTTP client for the Cohere API.
      */
-    protected function client(EmbeddingProvider|RerankingProvider $provider): PendingRequest
+    protected function client(EmbeddingProvider|RerankingProvider $provider, int $timeout = 30): PendingRequest
     {
         $config = $provider->additionalConfiguration();
 
@@ -88,6 +98,7 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway
                 'Authorization' => 'Bearer '.$provider->providerCredentials()['key'],
                 'Content-Type' => 'application/json',
             ])
+            ->timeout($timeout)
             ->throw();
     }
 }

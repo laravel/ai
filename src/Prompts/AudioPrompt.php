@@ -13,6 +13,7 @@ class AudioPrompt
         public readonly ?string $instructions,
         public readonly AudioProvider $provider,
         public readonly string $model,
+        public readonly int $timeout = 30,
     ) {}
 
     /**

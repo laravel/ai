@@ -7,12 +7,11 @@ use Illuminate\Filesystem\Filesystem;
 use JsonSerializable;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
+use RuntimeException;
 
 class LocalDocument extends Document implements Arrayable, JsonSerializable, StorableFile
 {
     use CanBeUploadedToProvider;
-
-    public ?string $mime = null;
 
     public function __construct(public string $path, ?string $mimeType = null)
     {
@@ -24,7 +23,13 @@ class LocalDocument extends Document implements Arrayable, JsonSerializable, Sto
      */
     public function content(): string
     {
-        return file_get_contents($this->path);
+        $content = file_get_contents($this->path);
+
+        if ($content === false) {
+            throw new RuntimeException("File does not exist at path [{$this->path}]");
+        }
+
+        return $content;
     }
 
     /**
@@ -44,23 +49,13 @@ class LocalDocument extends Document implements Arrayable, JsonSerializable, Sto
     }
 
     /**
-     * Set the document's MIME type.
-     */
-    public function withMimeType(string $mimeType): static
-    {
-        $this->mime = $mimeType;
-
-        return $this;
-    }
-
-    /**
      * Get the instance as an array.
      */
     public function toArray(): array
     {
         return [
             'type' => 'local-document',
-            'name' => $this->name,
+            'name' => $this->name(),
             'path' => $this->path,
             'mime' => $this->mime,
         ];

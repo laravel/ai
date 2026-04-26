@@ -4,9 +4,8 @@ namespace Laravel\Ai;
 
 use Illuminate\JsonSchema\Types\Type;
 use Laravel\Ai\Contracts\Schemable;
-use Prism\Prism\Contracts\Schema as PrismSchema;
 
-class Schema implements PrismSchema, Schemable
+class Schema implements Schemable
 {
     /**
      * Create a new output schema.
@@ -54,9 +53,6 @@ class Schema implements PrismSchema, Schemable
      */
     public function toSchema(): array
     {
-        return [
-            'name' => $this->name,
-            ...$this->schema->toArray(),
-        ];
+        return $this->schema->toArray();
     }
 }

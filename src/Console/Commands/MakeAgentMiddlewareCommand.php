@@ -48,7 +48,7 @@ class MakeAgentMiddlewareCommand extends GeneratorCommand
      */
     protected function getStub()
     {
-        return $this->resolveStubPath('/stubs/middleware.stub');
+        return $this->resolveStubPath('/stubs/agent-middleware.stub');
     }
 
     /**

@@ -10,12 +10,11 @@ use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
 use Laravel\Ai\PendingResponses\PendingTranscriptionGeneration;
 use Laravel\Ai\Transcription;
+use RuntimeException;
 
 class LocalAudio extends Audio implements Arrayable, JsonSerializable, StorableFile, TranscribableAudio
 {
     use CanBeUploadedToProvider;
-
-    public ?string $mime = null;
 
     public function __construct(public string $path, ?string $mimeType = null)
     {
@@ -27,7 +26,13 @@ class LocalAudio extends Audio implements Arrayable, JsonSerializable, StorableF
      */
     public function content(): string
     {
-        return file_get_contents($this->path);
+        $content = file_get_contents($this->path);
+
+        if ($content === false) {
+            throw new RuntimeException("File does not exist at path [{$this->path}]");
+        }
+
+        return $content;
     }
 
     /**
@@ -55,23 +60,13 @@ class LocalAudio extends Audio implements Arrayable, JsonSerializable, StorableF
     }
 
     /**
-     * Set the audio's MIME type.
-     */
-    public function withMimeType(string $mimeType): static
-    {
-        $this->mime = $mimeType;
-
-        return $this;
-    }
-
-    /**
      * Get the instance as an array.
      */
     public function toArray(): array
     {
         return [
             'type' => 'local-audio',
-            'name' => $this->name,
+            'name' => $this->name(),
             'path' => $this->path,
             'mime' => $this->mime,
         ];

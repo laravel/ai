@@ -18,7 +18,7 @@ use Laravel\Ai\Responses\TranscriptionResponse;
 
 class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
 {
-    use Concerns\HandlesRateLimiting;
+    use Concerns\HandlesFailoverErrors;
 
     /**
      * Generate audio from the given text.
@@ -28,17 +28,18 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
         string $model,
         string $text,
         string $voice,
-        ?string $instructions = null): AudioResponse
-    {
+        ?string $instructions = null,
+        int $timeout = 30,
+    ): AudioResponse {
         $voice = match ($voice) {
             'default-male' => 'onwK4e9ZLuTAKqWW03F9',
             'default-female' => 'XrExE9yKIg1WjnnlVkGX',
             default => $voice,
         };
 
-        $response = $this->withRateLimitHandling($provider->name(), fn () => Http::withHeaders([
+        $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders([
             'xi-api-key' => $provider->providerCredentials()['key'],
-        ])->post('https://api.elevenlabs.io/v1/text-to-speech/'.$voice, [
+        ])->timeout($timeout)->post('https://api.elevenlabs.io/v1/text-to-speech/'.$voice, [
             'model_id' => $model,
             'text' => $text,
         ])->throw());
@@ -62,18 +63,10 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
         ?string $context = null,
         int $timeout = 30
     ): TranscriptionResponse {
-        $audioContent = match (true) {
-            $audio instanceof TranscribableAudio => $audio->content(),
-        };
-
-        $mimeType = match (true) {
-            $audio instanceof TranscribableAudio => $audio->mimeType(),
-        };
-
-        $response = $this->withRateLimitHandling($provider->name(), fn () => Http::withHeaders([
+        $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders([
             'xi-api-key' => $provider->providerCredentials()['key'],
         ])->timeout($timeout)->attach(
-            'file', $audioContent, 'file', ['Content-Type' => $mimeType],
+            'file', $audio->content(), 'file', ['Content-Type' => $audio->mimeType()],
         )->post('https://api.elevenlabs.io/v1/speech-to-text', [
             'model_id' => $model,
             'language' => $language,
