@@ -22,12 +22,12 @@ use Laravel\Ai\Messages\MessageRole;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\ObjectSchema;
+use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Step;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\Data\Usage;
-use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
@@ -146,6 +146,10 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             $responseMessages->push(new AssistantMessage($output, new Collection($toolCalls)));
 
             if (empty($toolCalls)) {
+                if ($schemaTools && $finishReason === FinishReason::ToolCalls) {
+                    $finishReason = FinishReason::Stop;
+                }
+
                 $steps->push(new Step($output, $toolCalls, [], $finishReason, $stepUsage, $meta));
 
                 break;
