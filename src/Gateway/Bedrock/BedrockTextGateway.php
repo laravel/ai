@@ -23,9 +23,11 @@ use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Step;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
@@ -74,6 +76,9 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
         $totalInputTokens = 0;
         $totalOutputTokens = 0;
         $step = 0;
+        $responseMessages = new Collection;
+        $steps = new Collection;
+        $meta = new Meta($provider->name(), $model);
 
         while ($step < $maxSteps) {
             $parameters = $this->buildConverseParameters(
@@ -98,8 +103,10 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                 throw BedrockException::toAiException($e, $provider->name(), $model);
             }
 
-            $totalInputTokens += $result['usage']['inputTokens'] ?? 0;
-            $totalOutputTokens += $result['usage']['outputTokens'] ?? 0;
+            $stepInputTokens = $result['usage']['inputTokens'] ?? 0;
+            $stepOutputTokens = $result['usage']['outputTokens'] ?? 0;
+            $totalInputTokens += $stepInputTokens;
+            $totalOutputTokens += $stepOutputTokens;
 
             $output = '';
             $toolCalls = [];
@@ -133,8 +140,14 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             }
 
             $step++;
+            $stepUsage = new Usage($stepInputTokens, $stepOutputTokens);
+            $finishReason = $this->extractFinishReason($result);
+
+            $responseMessages->push(new AssistantMessage($output, new Collection($toolCalls)));
 
             if (empty($toolCalls)) {
+                $steps->push(new Step($output, $toolCalls, [], $finishReason, $stepUsage, $meta));
+
                 break;
             }
 
@@ -144,13 +157,15 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             $toolResults = $this->executeToolCalls($tools, $toolCalls);
             $allToolResults = array_merge($allToolResults, $toolResults);
 
+            $steps->push(new Step($output, $toolCalls, $toolResults, $finishReason, $stepUsage, $meta));
+
             if (! empty($toolResults)) {
                 $conversationMessages[] = $this->buildToolResultConversationMessage($toolResults);
+                $responseMessages->push(new ToolResultMessage(new Collection($toolResults)));
             }
         }
 
         $usage = new Usage($totalInputTokens, $totalOutputTokens);
-        $meta = new Meta($provider->name(), $model);
 
         if ($schema) {
             $structured = json_decode($finalOutput, true);
@@ -160,11 +175,13 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             }
 
             return (new StructuredTextResponse($structured, $finalOutput, $usage, $meta))
-                ->withToolCallsAndResults(new Collection($allToolCalls), new Collection($allToolResults));
+                ->withToolCallsAndResults(new Collection($allToolCalls), new Collection($allToolResults))
+                ->withSteps($steps);
         }
 
         return (new TextResponse($finalOutput, $usage, $meta))
-            ->withToolCallsAndResults(new Collection($allToolCalls), new Collection($allToolResults));
+            ->withMessages($responseMessages)
+            ->withSteps($steps);
     }
 
     /**
@@ -440,6 +457,20 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
         }
 
         return (int) ($options?->maxSteps ?? round(count($tools) * 1.5));
+    }
+
+    /**
+     * Extract and map the finish reason from the Bedrock Converse response.
+     */
+    protected function extractFinishReason(array $data): FinishReason
+    {
+        return match ($data['stopReason'] ?? '') {
+            'end_turn', 'stop_sequence' => FinishReason::Stop,
+            'tool_use' => FinishReason::ToolCalls,
+            'max_tokens' => FinishReason::Length,
+            'content_filtered', 'guardrail_intervened' => FinishReason::ContentFilter,
+            default => FinishReason::Unknown,
+        };
     }
 
     /**
