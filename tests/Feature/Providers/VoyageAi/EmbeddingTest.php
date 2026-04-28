@@ -4,6 +4,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Files\Image;
+use Laravel\Ai\Files\Video;
 
 beforeEach(function () {
     config(['ai.providers.voyageai' => [
@@ -91,6 +92,77 @@ test('image embeddings use the multimodal endpoint', function () {
     });
 
     expect($response->embeddings)->toHaveCount(1);
+});
+
+test('image embeddings require a multimodal model', function () {
+    Embeddings::for([
+        Image::fromBase64(base64_encode('image-bytes'), 'image/png'),
+    ])->generate(provider: 'voyageai');
+})->throws(InvalidArgumentException::class, 'voyage-multimodal-3.5');
+
+test('video embeddings require the latest multimodal model', function () {
+    Embeddings::for([
+        Video::fromBase64(base64_encode('video-bytes'), 'video/mp4'),
+    ])->generate(provider: 'voyageai', model: 'voyage-multimodal-3');
+})->throws(InvalidArgumentException::class, 'voyage-multimodal-3.5');
+
+test('base64 video embeddings use the multimodal endpoint', function () {
+    Http::fake(['*' => fakeVoyageEmbeddingsResponse()]);
+
+    $response = Embeddings::for([
+        Video::fromBase64(base64_encode('video-bytes'), 'video/mp4'),
+    ])->dimensions(1024)->generate(provider: 'voyageai', model: 'voyage-multimodal-3.5');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return $request->url() === 'https://api.voyageai.com/v1/multimodalembeddings'
+            && data_get($body, 'model') === 'voyage-multimodal-3.5'
+            && data_get($body, 'inputs.0.content.0.type') === 'video_base64'
+            && data_get($body, 'inputs.0.content.0.video_base64') === 'data:video/mp4;base64,'.base64_encode('video-bytes');
+    });
+
+    expect($response->embeddings)->toHaveCount(1);
+});
+
+test('remote video embeddings preserve video urls', function () {
+    Http::fake(['*' => fakeVoyageEmbeddingsResponse()]);
+
+    Embeddings::for([
+        Video::fromUrl('https://example.com/demo.mp4'),
+    ])->dimensions(1024)->generate(provider: 'voyageai', model: 'voyage-multimodal-3.5');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return data_get($body, 'inputs.0.content.0.type') === 'video_url'
+            && data_get($body, 'inputs.0.content.0.video_url') === 'https://example.com/demo.mp4';
+    });
+});
+
+test('multimodal embeddings reject mixed url and base64 media sources', function () {
+    Http::preventStrayRequests();
+
+    Embeddings::for([
+        Image::fromUrl('https://example.com/avatar.png'),
+        Video::fromBase64(base64_encode('video-bytes'), 'video/mp4'),
+    ])->dimensions(1024)->generate(provider: 'voyageai', model: 'voyage-multimodal-3.5');
+})->throws(InvalidArgumentException::class, 'either URL media or base64 media exclusively');
+
+test('multimodal embeddings allow mixed media types with the same source type', function () {
+    Http::fake(['*' => fakeVoyageEmbeddingsResponse()]);
+
+    Embeddings::for([
+        Image::fromUrl('https://example.com/avatar.png'),
+        Video::fromUrl('https://example.com/demo.mp4'),
+    ])->dimensions(1024)->generate(provider: 'voyageai', model: 'voyage-multimodal-3.5');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return data_get($body, 'inputs.0.content.0.type') === 'image_url'
+            && data_get($body, 'inputs.1.content.0.type') === 'video_url';
+    });
 });
 
 function fakeVoyageEmbeddingsResponse()
