@@ -697,7 +697,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                 $content[] = [
                     'document' => [
                         'format' => $this->getDocumentFormat($attachment),
-                        'name' => $attachment->name ?? 'document',
+                        'name' => $this->getDocumentName($attachment),
                         'source' => [
                             'bytes' => $attachment->content(),
                         ],
@@ -751,6 +751,21 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             'text/markdown', 'text/x-markdown' => 'md',
             default => 'txt',
         };
+    }
+
+    /**
+     * Build a unique, Bedrock-compliant document name.
+     *
+     * Bedrock requires document names to be unique within a message and limits
+     * them to alphanumerics, whitespace, hyphens, parentheses, and square brackets.
+     */
+    protected function getDocumentName(Document $document): string
+    {
+        $name = $document->name() ?? 'document';
+        $name = pathinfo($name, PATHINFO_FILENAME) ?: $name;
+        $name = preg_replace('/[^A-Za-z0-9\-\(\)\[\] ]+/', '-', $name);
+
+        return trim(preg_replace('/\s+/', ' ', $name)) ?: 'document';
     }
 
     /**
