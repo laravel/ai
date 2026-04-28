@@ -1,7 +1,5 @@
 <?php
 
-namespace Tests\Feature;
-
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
@@ -19,241 +17,221 @@ use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
 use Tests\Fixtures\ConversationStores\InMemoryConversationStore;
 use Tests\Fixtures\Providers\FakeStreamingProvider;
-use Tests\TestCase;
 
-class AgentStreamFailoverTest extends TestCase
+test('stream fails over to next provider when primary is rate limited', function () {
+    Event::fake();
+
+    config([
+        'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
+        'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
+    ]);
+
+    Http::preventStrayRequests();
+
+    Http::fakeSequence()
+        ->push(status: 429)
+        ->push(fakeGroqStreamBodyForStreamFailover(), 200);
+
+    $response = (new AssistantAgent)->stream(
+        'Hello',
+        provider: ['primary', 'backup'],
+    );
+
+    $events = [];
+
+    foreach ($response as $event) {
+        $events[] = $event;
+    }
+
+    expect(collect($events)->whereInstanceOf(TextDelta::class)->isNotEmpty())->toBeTrue()
+        ->and($response->text)->toBe('Hello');
+
+    Event::assertDispatched(AgentFailedOver::class);
+
+    Event::assertDispatched(AgentStreamed::class, fn (AgentStreamed $event) => $event->invocationId === $response->invocationId);
+});
+
+test('stream throws last exception when all providers fail', function () {
+    Event::fake();
+
+    config([
+        'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
+        'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
+    ]);
+
+    Http::preventStrayRequests();
+
+    Http::fakeSequence()
+        ->push(status: 429)
+        ->push(status: 429);
+
+    $response = (new AssistantAgent)->stream(
+        'Hello',
+        provider: ['primary', 'backup'],
+    );
+
+    expect(function () use ($response) {
+        foreach ($response as $_) {
+        }
+    })->toThrow(RateLimitedException::class);
+});
+
+test('stream then callback is invoked after failover', function () {
+    Event::fake();
+
+    config([
+        'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
+        'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
+    ]);
+
+    Http::preventStrayRequests();
+
+    Http::fakeSequence()
+        ->push(status: 429)
+        ->push(fakeGroqStreamBodyForStreamFailover(), 200);
+
+    $response = (new AssistantAgent)->stream(
+        'Hello',
+        provider: ['primary', 'backup'],
+    );
+
+    $thenResponse = null;
+
+    $response->then(function (StreamedAgentResponse $r) use (&$thenResponse) {
+        $thenResponse = $r;
+    });
+
+    foreach ($response as $_) {
+    }
+
+    expect($thenResponse)->toBeInstanceOf(StreamedAgentResponse::class)
+        ->and($thenResponse->text)->toBe('Hello')
+        ->and($thenResponse->meta->provider)->toBe('backup');
+});
+
+test('stream does not fail over when primary succeeds', function () {
+    Event::fake();
+
+    config([
+        'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
+        'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
+    ]);
+
+    Http::preventStrayRequests();
+
+    Http::fakeSequence()
+        ->push(fakeGroqStreamBodyForStreamFailover(), 200);
+
+    $response = (new AssistantAgent)->stream(
+        'Hello',
+        provider: ['primary', 'backup'],
+    );
+
+    foreach ($response as $_) {
+    }
+
+    expect($response->text)->toBe('Hello');
+
+    Event::assertNotDispatched(AgentFailedOver::class);
+});
+
+test('stream does not fail over when primary emits event then throws', function () {
+    Event::fake();
+
+    $manager = app(AiManager::class);
+
+    $manager->extend('mid_stream_failing', fn ($app, $config) => new FakeStreamingProvider(
+        $config,
+        $app->make(Dispatcher::class),
+        fn ($provider, $prompt) => new StreamableAgentResponse(
+            (string) Str::uuid7(),
+            function () {
+                yield (new TextDelta('m1', 'm1', 'partial', 0))->withInvocationId('inner-fail');
+
+                throw RateLimitedException::forProvider('mid_stream_failing');
+            },
+            new Meta($provider->name(), $prompt->model),
+        ),
+    ));
+
+    $manager->extend('working_backup', fn ($app, $config) => new FakeStreamingProvider(
+        $config,
+        $app->make(Dispatcher::class),
+        fn ($provider, $prompt) => new StreamableAgentResponse(
+            (string) Str::uuid7(),
+            function () {
+                yield (new TextDelta('m2', 'm2', 'World', 0))->withInvocationId('inner-success');
+            },
+            new Meta($provider->name(), $prompt->model),
+        ),
+    ));
+
+    config([
+        'ai.providers.primary' => ['driver' => 'mid_stream_failing'],
+        'ai.providers.backup' => ['driver' => 'working_backup'],
+    ]);
+
+    $response = (new AssistantAgent)->stream(
+        'Hello',
+        provider: ['primary', 'backup'],
+    );
+
+    expect(function () use ($response) {
+        foreach ($response as $_) {
+        }
+    })->toThrow(RateLimitedException::class);
+
+    Event::assertNotDispatched(AgentFailedOver::class);
+});
+
+test('stream conversation state survives failover', function () {
+    $store = new InMemoryConversationStore;
+    $this->app->instance(ConversationStore::class, $store);
+
+    config([
+        'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
+        'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
+    ]);
+
+    Http::preventStrayRequests();
+
+    Http::fakeSequence()
+        ->push(status: 429)
+        ->push(fakeGroqStreamBodyForStreamFailover(), 200);
+
+    $user = (object) ['id' => 'user-1'];
+    $existingConversationId = 'existing-conv-1';
+
+    $response = (new RememberingAssistantAgent)
+        ->continue($existingConversationId, $user)
+        ->stream('Hello', provider: ['primary', 'backup']);
+
+    $thenResponse = null;
+
+    $response->then(function (StreamedAgentResponse $r) use (&$thenResponse) {
+        $thenResponse = $r;
+    });
+
+    foreach ($response as $_) {
+    }
+
+    expect($thenResponse->conversationId)->toBe($existingConversationId)
+        ->and($thenResponse->conversationUser)->toBe($user);
+});
+
+function fakeGroqStreamBodyForStreamFailover(): string
 {
-    public function test_stream_fails_over_to_next_provider_when_primary_is_rate_limited(): void
-    {
-        Event::fake();
+    $chunks = [
+        '{"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"test","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}',
+        '{"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"test","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}',
+        '{"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"test","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":1,"total_tokens":6}}',
+    ];
 
-        config([
-            'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
-            'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
-        ]);
+    $body = '';
 
-        Http::preventStrayRequests();
-
-        Http::fakeSequence()
-            ->push(status: 429)
-            ->push($this->fakeGroqStreamBody(), 200);
-
-        $response = (new AssistantAgent)->stream(
-            'Hello',
-            provider: ['primary', 'backup'],
-        );
-
-        $events = [];
-
-        foreach ($response as $event) {
-            $events[] = $event;
-        }
-
-        $this->assertTrue(
-            collect($events)->whereInstanceOf(TextDelta::class)->isNotEmpty()
-        );
-
-        $this->assertSame('Hello', $response->text);
-
-        Event::assertDispatched(AgentFailedOver::class);
-
-        Event::assertDispatched(AgentStreamed::class, fn (AgentStreamed $event) => $event->invocationId === $response->invocationId);
+    foreach ($chunks as $chunk) {
+        $body .= "data: {$chunk}\n\n";
     }
 
-    public function test_stream_throws_last_exception_when_all_providers_fail(): void
-    {
-        Event::fake();
-
-        config([
-            'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
-            'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
-        ]);
-
-        Http::preventStrayRequests();
-
-        Http::fakeSequence()
-            ->push(status: 429)
-            ->push(status: 429);
-
-        $this->expectException(RateLimitedException::class);
-
-        $response = (new AssistantAgent)->stream(
-            'Hello',
-            provider: ['primary', 'backup'],
-        );
-
-        foreach ($response as $event) {
-            //
-        }
-    }
-
-    public function test_stream_then_callback_is_invoked_after_failover(): void
-    {
-        Event::fake();
-
-        config([
-            'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
-            'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
-        ]);
-
-        Http::preventStrayRequests();
-
-        Http::fakeSequence()
-            ->push(status: 429)
-            ->push($this->fakeGroqStreamBody(), 200);
-
-        $response = (new AssistantAgent)->stream(
-            'Hello',
-            provider: ['primary', 'backup'],
-        );
-
-        $thenResponse = null;
-
-        $response->then(function (StreamedAgentResponse $r) use (&$thenResponse) {
-            $thenResponse = $r;
-        });
-
-        foreach ($response as $_) {
-        }
-
-        $this->assertInstanceOf(StreamedAgentResponse::class, $thenResponse);
-        $this->assertSame('Hello', $thenResponse->text);
-        $this->assertSame('backup', $thenResponse->meta->provider);
-    }
-
-    public function test_stream_does_not_fail_over_when_primary_succeeds(): void
-    {
-        Event::fake();
-
-        config([
-            'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
-            'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
-        ]);
-
-        Http::preventStrayRequests();
-
-        Http::fakeSequence()
-            ->push($this->fakeGroqStreamBody(), 200);
-
-        $response = (new AssistantAgent)->stream(
-            'Hello',
-            provider: ['primary', 'backup'],
-        );
-
-        foreach ($response as $_) {
-        }
-
-        $this->assertSame('Hello', $response->text);
-
-        Event::assertNotDispatched(AgentFailedOver::class);
-    }
-
-    public function test_stream_does_not_fail_over_when_primary_emits_event_then_throws(): void
-    {
-        Event::fake();
-
-        $manager = app(AiManager::class);
-
-        $manager->extend('mid_stream_failing', fn ($app, $config) => new FakeStreamingProvider(
-            $config,
-            $app->make(Dispatcher::class),
-            fn ($provider, $prompt) => new StreamableAgentResponse(
-                (string) Str::uuid7(),
-                function () {
-                    yield (new TextDelta('m1', 'm1', 'partial', 0))->withInvocationId('inner-fail');
-
-                    throw RateLimitedException::forProvider('mid_stream_failing');
-                },
-                new Meta($provider->name(), $prompt->model),
-            ),
-        ));
-
-        $manager->extend('working_backup', fn ($app, $config) => new FakeStreamingProvider(
-            $config,
-            $app->make(Dispatcher::class),
-            fn ($provider, $prompt) => new StreamableAgentResponse(
-                (string) Str::uuid7(),
-                function () {
-                    yield (new TextDelta('m2', 'm2', 'World', 0))->withInvocationId('inner-success');
-                },
-                new Meta($provider->name(), $prompt->model),
-            ),
-        ));
-
-        config([
-            'ai.providers.primary' => ['driver' => 'mid_stream_failing'],
-            'ai.providers.backup' => ['driver' => 'working_backup'],
-        ]);
-
-        $response = (new AssistantAgent)->stream(
-            'Hello',
-            provider: ['primary', 'backup'],
-        );
-
-        $thrown = null;
-
-        try {
-            foreach ($response as $_) {
-            }
-        } catch (RateLimitedException $e) {
-            $thrown = $e;
-        }
-
-        $this->assertInstanceOf(RateLimitedException::class, $thrown);
-
-        Event::assertNotDispatched(AgentFailedOver::class);
-    }
-
-    public function test_stream_conversation_state_survives_failover(): void
-    {
-        $store = new InMemoryConversationStore;
-        $this->app->instance(ConversationStore::class, $store);
-
-        config([
-            'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
-            'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
-        ]);
-
-        Http::preventStrayRequests();
-
-        Http::fakeSequence()
-            ->push(status: 429)
-            ->push($this->fakeGroqStreamBody(), 200);
-
-        $user = (object) ['id' => 'user-1'];
-        $existingConversationId = 'existing-conv-1';
-
-        $response = (new RememberingAssistantAgent)
-            ->continue($existingConversationId, $user)
-            ->stream('Hello', provider: ['primary', 'backup']);
-
-        $thenResponse = null;
-
-        $response->then(function (StreamedAgentResponse $r) use (&$thenResponse) {
-            $thenResponse = $r;
-        });
-
-        foreach ($response as $_) {
-        }
-
-        $this->assertSame($existingConversationId, $thenResponse->conversationId);
-        $this->assertSame($user, $thenResponse->conversationUser);
-    }
-
-    private function fakeGroqStreamBody(): string
-    {
-        $chunks = [
-            '{"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"test","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}',
-            '{"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"test","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}',
-            '{"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"test","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":1,"total_tokens":6}}',
-        ];
-
-        $body = '';
-
-        foreach ($chunks as $chunk) {
-            $body .= "data: {$chunk}\n\n";
-        }
-
-        return $body."data: [DONE]\n\n";
-    }
+    return $body."data: [DONE]\n\n";
 }
