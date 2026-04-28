@@ -71,7 +71,7 @@ trait ParsesTextResponses
      *
      * Note: deepseek-reasoner responses include a `reasoning_content` field on
      * each choice's message; it's intentionally ignored here — we only expose
-     * the final `content` text, matching Prism's prior behavior.
+     * the final `content` text.
      */
     protected function processResponse(
         array $data,
@@ -325,10 +325,13 @@ trait ParsesTextResponses
     protected function extractUsage(array $data): Usage
     {
         $usage = $data['usage'] ?? [];
+        $details = $usage['completion_tokens_details'] ?? [];
 
         return new Usage(
-            $usage['prompt_tokens'] ?? 0,
-            $usage['completion_tokens'] ?? 0,
+            promptTokens: $usage['prompt_tokens'] ?? 0,
+            completionTokens: $usage['completion_tokens'] ?? 0,
+            cacheReadInputTokens: $usage['prompt_cache_hit_tokens'] ?? 0,
+            reasoningTokens: $details['reasoning_tokens'] ?? 0,
         );
     }
 

@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Base64Document;
+use Laravel\Ai\Files\LocalImage;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
@@ -80,6 +81,27 @@ test('tool result follow up maps assistant and tool result messages', function (
     $toolResultBlock = collect($toolResultMsg['content'])->firstWhere('type', 'tool_result');
     expect($toolResultBlock['tool_use_id'])->toBe($toolUseBlock['id'])
         ->and($toolResultBlock['content'])->not->toBeEmpty();
+});
+
+test('local image attachment without explicit mime type detects mime from file', function () {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('I see an image'),
+    ]);
+
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')],
+        provider: 'anthropic',
+    );
+
+    Http::assertSent(function ($request) {
+        $content = $request->data()['messages'][0]['content'];
+        $imageBlock = collect($content)->firstWhere('type', 'image');
+
+        return $imageBlock !== null
+            && $imageBlock['source']['type'] === 'base64'
+            && $imageBlock['source']['media_type'] === 'image/png';
+    });
 });
 
 test('base64 pdf document maps to document content block', function () {

@@ -63,6 +63,10 @@ class ProviderOptionsAgent implements Agent, HasProviderOptions
                     'thinkingBudget' => 10000,
                 ],
             ],
+            Lab::DeepSeek => [
+                'frequency_penalty' => 0.5,
+                'presence_penalty' => 0.3,
+            ],
             default => [],
         };
     }

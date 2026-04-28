@@ -119,6 +119,39 @@ test('streaming captures usage from final chunk', function () {
         ->and($streamEnd->usage->completionTokens)->toBe(10);
 });
 
+test('streaming captures cache hit and reasoning tokens', function () {
+    Http::fake([
+        'api.deepseek.com/*' => Http::response(
+            body: $this->ssePayload([
+                $this->chatChunk(['role' => 'assistant', 'content' => 'Hello']),
+                $this->chatChunkFinish('stop', [
+                    'prompt_tokens' => 100,
+                    'completion_tokens' => 50,
+                    'prompt_cache_hit_tokens' => 30,
+                    'prompt_cache_miss_tokens' => 70,
+                    'total_tokens' => 150,
+                    'completion_tokens_details' => [
+                        'reasoning_tokens' => 12,
+                    ],
+                ]),
+                '[DONE]',
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents();
+
+    $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+
+    expect($streamEnd->usage->promptTokens)->toBe(100)
+        ->and($streamEnd->usage->completionTokens)->toBe(50)
+        ->and($streamEnd->usage->cacheReadInputTokens)->toBe(30)
+        ->and($streamEnd->usage->cacheWriteInputTokens)->toBe(0)
+        ->and($streamEnd->usage->reasoningTokens)->toBe(12);
+});
+
 test('streaming finish reason maps correctly', function (string $apiReason, $expected) {
     Http::fake([
         'api.deepseek.com/*' => Http::response(

@@ -56,7 +56,7 @@ trait MapsAttachments
                 ],
                 $attachment instanceof LocalImage => [
                     'inlineData' => [
-                        'mimeType' => $attachment->mime,
+                        'mimeType' => $attachment->mimeType() ?? 'image/png',
                         'data' => base64_encode(file_get_contents($attachment->path)),
                     ],
                 ],
