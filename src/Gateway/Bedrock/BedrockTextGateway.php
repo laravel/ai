@@ -800,11 +800,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                 continue;
             }
 
-            try {
-                $result = $this->executeTool($tool, $toolCall->arguments);
-            } catch (Throwable $e) {
-                $result = 'Error executing tool: '.$e->getMessage();
-            }
+            $result = $this->executeTool($tool, $toolCall->arguments);
 
             $results[] = new ToolResult(
                 $toolCall->id,
