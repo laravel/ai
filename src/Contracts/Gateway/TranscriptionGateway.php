@@ -17,7 +17,7 @@ interface TranscriptionGateway
         TranscribableAudio $audio,
         ?string $language = null,
         bool $diarize = false,
-        ?string $context = null,
-        int $timeout = 30
+        int $timeout = 30,
+        ?string $context = null
     ): TranscriptionResponse;
 }

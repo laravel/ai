@@ -60,8 +60,8 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
         TranscribableAudio $audio,
         ?string $language = null,
         bool $diarize = false,
-        ?string $context = null,
-        int $timeout = 30
+        int $timeout = 30,
+        ?string $context = null
     ): TranscriptionResponse {
         $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders([
             'xi-api-key' => $provider->providerCredentials()['key'],

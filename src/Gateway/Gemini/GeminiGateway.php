@@ -242,8 +242,8 @@ class GeminiGateway implements Gateway
         TranscribableAudio $audio,
         ?string $language = null,
         bool $diarize = false,
-        ?string $context = null,
         int $timeout = 30,
+        ?string $context = null,
     ): TranscriptionResponse {
         throw new LogicException('The Gemini provider does not support transcription.');
     }

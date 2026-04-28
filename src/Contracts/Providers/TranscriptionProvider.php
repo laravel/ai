@@ -16,6 +16,7 @@ interface TranscriptionProvider
         ?string $language = null,
         bool $diarize = false,
         ?string $model = null,
+        ?int $timeout = null,
         ?string $context = null,
     ): TranscriptionResponse;
 

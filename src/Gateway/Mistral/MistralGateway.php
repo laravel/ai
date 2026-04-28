@@ -170,8 +170,8 @@ class MistralGateway implements EmbeddingGateway, TextGateway, TranscriptionGate
         TranscribableAudio $audio,
         ?string $language = null,
         bool $diarize = false,
-        ?string $context = null,
         int $timeout = 30,
+        ?string $context = null,
     ): TranscriptionResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
@@ -182,7 +182,7 @@ class MistralGateway implements EmbeddingGateway, TextGateway, TranscriptionGate
                     'language' => $diarize ? null : $language,
                     'diarize' => $diarize,
                     'timestamp_granularities' => $diarize ? ['segment'] : null,
-                    'prompt' => $context,
+                    'context_bias' => is_null($context) ? null : [$context],
                 ])),
         );
 

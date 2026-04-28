@@ -31,6 +31,7 @@ use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
+use LogicException;
 
 class OpenAiGateway implements Gateway
 {
@@ -260,9 +261,13 @@ class OpenAiGateway implements Gateway
         TranscribableAudio $audio,
         ?string $language = null,
         bool $diarize = false,
-        ?string $context = null,
         int $timeout = 30,
+        ?string $context = null,
     ): TranscriptionResponse {
+        if ($diarize && filled($context)) {
+            throw new LogicException('OpenAI does not support transcription context for diarized transcriptions.');
+        }
+
         if ($provider->driver() === 'openai' && ! $diarize) {
             $model = str_replace('-diarize', '', $model);
         }
