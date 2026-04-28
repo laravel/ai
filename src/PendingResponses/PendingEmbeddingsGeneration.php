@@ -180,7 +180,7 @@ class PendingEmbeddingsGeneration
             $input instanceof Audio => 'audio',
             $input instanceof Document => 'document',
             $input instanceof Video => 'video',
-            default => throw new InvalidArgumentException('Unsupported embeddings input type ['.$input::class.']'),
+            default => throw new InvalidArgumentException('Unsupported embeddings input type ['.get_debug_type($input).']'),
         };
 
         return match (true) {
@@ -207,7 +207,7 @@ class PendingEmbeddingsGeneration
                 'mime' => $input->mimeType(),
                 'name' => $input->name(),
             ],
-            default => throw new InvalidArgumentException('Unsupported embeddings input type ['.$input::class.']'),
+            default => throw new InvalidArgumentException('Unsupported embeddings input type ['.get_debug_type($input).']'),
         };
     }
 

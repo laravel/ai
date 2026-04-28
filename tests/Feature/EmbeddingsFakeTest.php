@@ -305,6 +305,17 @@ describe('queued embeddings', function () {
         expect($calls)->toBe(1);
         Http::assertNothingSent();
     });
+
+    test('cached embeddings reject unsupported input types with an invalid argument exception', function () {
+        config([
+            'cache.default' => 'array',
+            'ai.caching.embeddings.store' => 'array',
+        ]);
+
+        Embeddings::fake();
+
+        Embeddings::for([123])->cache(60)->generate();
+    })->throws(InvalidArgumentException::class, 'Unsupported embeddings input type [int]');
 });
 
 describe('provider enum support', function () {
