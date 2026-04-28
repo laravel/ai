@@ -24,6 +24,7 @@ use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\QueuedAgentResponse;
 use Laravel\Ai\Responses\StreamableAgentResponse;
+use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use ReflectionClass;
 use RuntimeException;
@@ -76,55 +77,77 @@ trait Promptable
         $providers = $this->getProvidersAndModels($provider, $model);
         $resolvedTimeout = $this->getTimeout($timeout);
 
-        $resolvedProviders = [];
-
-        foreach ($providers as $p => $m) {
-            $resolved = Ai::textProviderFor($this, $p);
-            $resolvedProviders[] = [$resolved, $m ?? $this->getDefaultModelFor($resolved)];
-        }
-
-        if (empty($resolvedProviders)) {
+        if (empty($providers)) {
             throw new RuntimeException('No AI providers were configured.');
         }
 
-        // Single provider: direct path (no failover needed)
-        if (count($resolvedProviders) === 1) {
-            [$singleProvider, $singleModel] = $resolvedProviders[0];
+        $invocationId = (string) Str::uuid7();
 
-            return $singleProvider->stream(
-                new AgentPrompt($this, $prompt, $attachments, $singleProvider, $singleModel, $resolvedTimeout)
+        if (count($providers) === 1) {
+            $p = array_key_first($providers);
+            $resolved = Ai::textProviderFor($this, $p);
+
+            return $resolved->stream(
+                new AgentPrompt($this, $prompt, $attachments, $resolved, $providers[$p] ?? $this->getDefaultModelFor($resolved), $resolvedTimeout, $invocationId)
             );
         }
 
-        // Multiple providers: failover-aware streaming
-        $agent = $this;
-        [$firstProvider, $firstModel] = $resolvedProviders[0];
+        $meta = new Meta;
+        $capturedInnerResponse = null;
 
-        return new StreamableAgentResponse(
-            (string) Str::uuid7(),
-            function () use ($resolvedProviders, $agent, $prompt, $attachments, $resolvedTimeout) {
+        $outer = new StreamableAgentResponse(
+            $invocationId,
+            function () use ($providers, $prompt, $attachments, $resolvedTimeout, $invocationId, $meta, &$capturedInnerResponse) {
                 $lastException = null;
 
-                foreach ($resolvedProviders as [$provider, $model]) {
+                foreach ($providers as $p => $m) {
+                    $provider = Ai::textProviderFor($this, $p);
+                    $model = $m ?? $this->getDefaultModelFor($provider);
+                    $started = false;
+
                     try {
-                        yield from $provider->stream(
-                            new AgentPrompt($agent, $prompt, $attachments, $provider, $model, $resolvedTimeout)
+                        $innerResponse = $provider->stream(
+                            new AgentPrompt($this, $prompt, $attachments, $provider, $model, $resolvedTimeout, $invocationId)
                         );
+
+                        $innerResponse->then(function (StreamedAgentResponse $sr) use (&$capturedInnerResponse) {
+                            $capturedInnerResponse = $sr;
+                        });
+
+                        foreach ($innerResponse as $event) {
+                            $started = true;
+
+                            yield $event;
+                        }
+
+                        $meta->provider = $provider->name();
+                        $meta->model = $model;
 
                         return;
                     } catch (FailoverableException $e) {
+                        if ($started) {
+                            throw $e;
+                        }
+
                         $lastException = $e;
 
-                        event(new AgentFailedOver($agent, $provider, $model, $e));
-
-                        continue;
+                        event(new AgentFailedOver($this, $provider, $model, $e));
                     }
                 }
 
-                throw $lastException;
+                throw $lastException ?? new RuntimeException('No AI providers were configured.');
             },
-            new Meta($firstProvider->name(), $firstModel),
+            $meta,
         );
+
+        $outer->then(function (StreamedAgentResponse $sr) use (&$capturedInnerResponse) {
+            if ($capturedInnerResponse !== null) {
+                $sr->conversationId = $capturedInnerResponse->conversationId;
+                $sr->conversationUser = $capturedInnerResponse->conversationUser;
+            }
+        });
+
+        return $outer;
     }
 
     /**
