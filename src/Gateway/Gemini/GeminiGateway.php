@@ -180,9 +180,15 @@ class GeminiGateway implements Gateway
                 $part['inlineData']['mimeType'],
             ));
 
+        $usageMeta = $data['usageMetadata'] ?? [];
+
         return new ImageResponse(
             $images,
-            new Usage(0, 0),
+            new Usage(
+                promptTokens: $usageMeta['promptTokenCount'] ?? 0,
+                completionTokens: $usageMeta['candidatesTokenCount'] ?? 0,
+                reasoningTokens: $usageMeta['thoughtsTokenCount'] ?? 0,
+            ),
             new Meta($provider->name(), $model),
         );
     }
@@ -351,10 +357,16 @@ class GeminiGateway implements Gateway
             $segments = new Collection;
         }
 
+        $usageMeta = $response->json('usageMetadata') ?? [];
+
         return new TranscriptionResponse(
             trim($text),
             $segments,
-            new Usage(0, 0),
+            new Usage(
+                promptTokens: $usageMeta['promptTokenCount'] ?? 0,
+                completionTokens: $usageMeta['candidatesTokenCount'] ?? 0,
+                reasoningTokens: $usageMeta['thoughtsTokenCount'] ?? 0,
+            ),
             new Meta($provider->name(), $model),
         );
     }
