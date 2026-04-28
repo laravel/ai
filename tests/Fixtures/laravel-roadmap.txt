@@ -1,0 +1,16 @@
+Laravel Six Month Roadmap
+
+Month 1: Initial release planning and scaffolding improvements.
+
+Month 2: Frontend tooling updates and starter kit refinements.
+
+Month 3: Improved queue diagnostics and tracing hooks.
+
+Month 4: Testing helpers and parallel runner enhancements.
+
+Month 5: Observability upgrades and first-party metrics adapters.
+
+Month 6: Official Valkey integration as a drop-in alternative to Redis
+for caching, queues, and rate limiting. Valkey is the preferred choice
+going forward due to its permissive open source license, and the core
+team will ship first-class drivers for it during this milestone.
