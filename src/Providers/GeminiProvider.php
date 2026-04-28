@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Providers;
 
 use Illuminate\Support\Collection;
+use InvalidArgumentException;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
@@ -148,6 +149,28 @@ class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider
     public function defaultEmbeddingsDimensions(): int
     {
         return $this->config['models']['embeddings']['dimensions'] ?? 3072;
+    }
+
+    /**
+     * Validate embeddings inputs against Gemini's supported media types.
+     */
+    protected function validateEmbeddingInputs(array $inputs, string $model): void
+    {
+        foreach ($inputs as $input) {
+            if (is_string($input)) {
+                continue;
+            }
+
+            $model = str_starts_with($model, 'models/') ? substr($model, 7) : $model;
+
+            if ($model !== 'gemini-embedding-2-preview') {
+                throw new InvalidArgumentException(
+                    "Model [{$model}] does not support Gemini multimodal embeddings. Use [gemini-embedding-2-preview]."
+                );
+            }
+
+            return;
+        }
     }
 
     /**

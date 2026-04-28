@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Storage;
 use Laravel\Ai\Files\Audio;
 use Laravel\Ai\Files\Document;
 use Laravel\Ai\Files\Image;
+use Laravel\Ai\Files\Video;
 
 test('stored document toArray falls back to basename without touching the disk', function () {
     Storage::fake('docs');
@@ -39,6 +40,16 @@ test('stored image toArray falls back to basename', function () {
     expect($array)->not->toHaveKey('mime');
 });
 
+test('stored video toArray falls back to basename', function () {
+    Storage::fake('docs');
+
+    $array = Video::fromStorage('clips/demo.mp4', 'docs')->toArray();
+
+    expect($array['type'])->toBe('stored-video');
+    expect($array['name'])->toBe('demo.mp4');
+    expect($array)->not->toHaveKey('mime');
+});
+
 test('local image toArray uses basename and the raw mime property', function () {
     $path = tempnam(sys_get_temp_dir(), 'local-image');
     file_put_contents($path, 'data');
@@ -68,6 +79,35 @@ test('local image toArray returns the explicitly set mime type', function () {
     }
 });
 
+test('local video toArray uses basename and the raw mime property', function () {
+    $path = tempnam(sys_get_temp_dir(), 'local-video');
+    file_put_contents($path, 'data');
+
+    try {
+        $array = Video::fromPath($path)->toArray();
+
+        expect($array['type'])->toBe('local-video');
+        expect($array['name'])->toBe(basename($path));
+        expect($array['path'])->toBe($path);
+        expect($array['mime'])->toBeNull();
+    } finally {
+        @unlink($path);
+    }
+});
+
+test('local video toArray returns the explicitly set mime type', function () {
+    $path = tempnam(sys_get_temp_dir(), 'local-video');
+    file_put_contents($path, 'data');
+
+    try {
+        $array = Video::fromPath($path)->withMimeType('video/custom')->toArray();
+
+        expect($array['mime'])->toBe('video/custom');
+    } finally {
+        @unlink($path);
+    }
+});
+
 test('base64 document toArray reflects name and mime', function () {
     $doc = Document::fromString('hello world', 'text/plain')->as('greeting.txt');
 
@@ -75,6 +115,16 @@ test('base64 document toArray reflects name and mime', function () {
         'type' => 'base64-document',
         'name' => 'greeting.txt',
         'mime' => 'text/plain',
+    ]);
+});
+
+test('base64 video toArray reflects name and mime', function () {
+    $video = Video::fromBase64(base64_encode('video'), 'video/mp4')->as('demo.mp4');
+
+    expect($video->toArray())->toMatchArray([
+        'type' => 'base64-video',
+        'name' => 'demo.mp4',
+        'mime' => 'video/mp4',
     ]);
 });
 
@@ -102,6 +152,18 @@ test('remote image toArray returns the explicitly set mime type without HTTP cal
 
     expect($array['mime'])->toBe('image/png');
     expect($array['name'])->toBe('avatar.png');
+
+    Http::assertNothingSent();
+});
+
+test('remote video toArray returns the explicitly set mime type without HTTP calls', function () {
+    Http::preventStrayRequests();
+    Http::fake();
+
+    $array = Video::fromUrl('https://example.com/demo.mp4')->withMimeType('video/mp4')->toArray();
+
+    expect($array['mime'])->toBe('video/mp4');
+    expect($array['name'])->toBe('demo.mp4');
 
     Http::assertNothingSent();
 });

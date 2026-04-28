@@ -3,10 +3,13 @@
 namespace Laravel\Ai\Providers;
 
 use Illuminate\Contracts\Events\Dispatcher;
+use InvalidArgumentException;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\RerankingGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\RerankingProvider;
+use Laravel\Ai\Files\Image;
+use Laravel\Ai\Files\ProviderImage;
 use Laravel\Ai\Gateway\VoyageAi\VoyageAiGateway;
 
 class VoyageAiProvider extends Provider implements EmbeddingProvider, RerankingProvider
@@ -35,6 +38,22 @@ class VoyageAiProvider extends Provider implements EmbeddingProvider, RerankingP
     public function defaultEmbeddingsDimensions(): int
     {
         return $this->config['models']['embeddings']['dimensions'] ?? 1024;
+    }
+
+    /**
+     * Validate embeddings inputs against Voyage AI's supported media types.
+     */
+    protected function validateEmbeddingInputs(array $inputs, string $model): void
+    {
+        foreach ($inputs as $input) {
+            if (is_string($input) || ($input instanceof Image && ! $input instanceof ProviderImage)) {
+                continue;
+            }
+
+            throw new InvalidArgumentException(
+                'Provider [voyageai] only supports text and image embeddings inputs.'
+            );
+        }
     }
 
     /**

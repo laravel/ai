@@ -10,7 +10,6 @@ use Laravel\Ai\Events\GeneratingEmbeddings;
 use Laravel\Ai\Files\Audio;
 use Laravel\Ai\Files\Document;
 use Laravel\Ai\Files\Image;
-use Laravel\Ai\Files\ProviderImage;
 use Laravel\Ai\Files\Video;
 use Laravel\Ai\Prompts\EmbeddingsPrompt;
 use Laravel\Ai\Responses\EmbeddingsResponse;
@@ -63,49 +62,13 @@ trait GeneratesEmbeddings
      */
     protected function validateEmbeddingInputs(array $inputs, string $model): void
     {
-        $nonTextInputs = array_filter($inputs, fn ($input) => ! is_string($input));
-
-        if ($nonTextInputs === []) {
-            return;
-        }
-
-        match ($this->driver()) {
-            'gemini' => $this->validateGeminiEmbeddingInputs($model),
-            'voyageai' => $this->validateVoyageAiEmbeddingInputs($nonTextInputs),
-            default => throw new InvalidArgumentException(
-                'Provider ['.$this->driver().'] only supports text embeddings inputs.'
-            ),
-        };
-    }
-
-    /**
-     * Validate Gemini multimodal embedding inputs.
-     */
-    protected function validateGeminiEmbeddingInputs(string $model): void
-    {
-        $model = str_starts_with($model, 'models/') ? substr($model, 7) : $model;
-
-        if ($model !== 'gemini-embedding-2-preview') {
-            throw new InvalidArgumentException(
-                "Model [{$model}] does not support Gemini multimodal embeddings. Use [gemini-embedding-2-preview]."
-            );
-        }
-    }
-
-    /**
-     * Validate Voyage AI multimodal embedding inputs.
-     *
-     * @param  array<int, Audio|Document|Image|Video>  $inputs
-     */
-    protected function validateVoyageAiEmbeddingInputs(array $inputs): void
-    {
         foreach ($inputs as $input) {
-            if ($input instanceof Image && ! $input instanceof ProviderImage) {
+            if (is_string($input)) {
                 continue;
             }
 
             throw new InvalidArgumentException(
-                'Provider [voyageai] only supports text and image embeddings inputs.'
+                'Provider ['.$this->driver().'] only supports text embeddings inputs.'
             );
         }
     }

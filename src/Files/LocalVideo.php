@@ -13,8 +13,6 @@ class LocalVideo extends Video implements Arrayable, JsonSerializable, StorableF
 {
     use CanBeUploadedToProvider;
 
-    public ?string $mime = null;
-
     public function __construct(public string $path, ?string $mimeType = null)
     {
         $this->mime = $mimeType;
@@ -47,17 +45,7 @@ class LocalVideo extends Video implements Arrayable, JsonSerializable, StorableF
      */
     public function mimeType(): ?string
     {
-        return $this->mime ?? (new Filesystem)->mimeType($this->path);
-    }
-
-    /**
-     * Set the video's MIME type.
-     */
-    public function withMimeType(string $mimeType): static
-    {
-        $this->mime = $mimeType;
-
-        return $this;
+        return $this->mime ?? ((new Filesystem)->mimeType($this->path) ?: null);
     }
 
     /**
@@ -67,7 +55,7 @@ class LocalVideo extends Video implements Arrayable, JsonSerializable, StorableF
     {
         return [
             'type' => 'local-video',
-            'name' => $this->name,
+            'name' => $this->name(),
             'path' => $this->path,
             'mime' => $this->mime,
         ];
