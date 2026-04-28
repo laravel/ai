@@ -555,7 +555,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                     'toolUse' => [
                         'toolUseId' => $toolCall->id,
                         'name' => $toolCall->name,
-                        'input' => $toolCall->arguments,
+                        'input' => (object) $toolCall->arguments,
                     ],
                 ], $toolCalls),
             ),
@@ -656,7 +656,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                 'toolUse' => [
                     'toolUseId' => $toolCall->id,
                     'name' => $toolCall->name,
-                    'input' => $toolCall->arguments,
+                    'input' => (object) $toolCall->arguments,
                 ],
             ];
         }
