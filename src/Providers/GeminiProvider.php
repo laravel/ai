@@ -163,14 +163,22 @@ class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider
 
             $model = str_starts_with($model, 'models/') ? substr($model, 7) : $model;
 
-            if ($model !== 'gemini-embedding-2-preview') {
+            if (! $this->isGeminiMultimodalEmbeddingModel($model)) {
                 throw new InvalidArgumentException(
-                    "Model [{$model}] does not support Gemini multimodal embeddings. Use [gemini-embedding-2-preview]."
+                    "Model [{$model}] does not support Gemini multimodal embeddings. Use [gemini-embedding-2] or [gemini-embedding-2-preview]."
                 );
             }
 
             return;
         }
+    }
+
+    /**
+     * Determine if the given model supports Gemini multimodal embeddings.
+     */
+    protected function isGeminiMultimodalEmbeddingModel(string $model): bool
+    {
+        return in_array($model, ['gemini-embedding-2', 'gemini-embedding-2-preview'], true);
     }
 
     /**

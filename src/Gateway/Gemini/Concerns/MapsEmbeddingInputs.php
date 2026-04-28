@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway\Gemini\Concerns;
 
+use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
@@ -25,6 +26,22 @@ trait MapsEmbeddingInputs
     protected function normalizeEmbeddingModel(string $model): string
     {
         return str_starts_with($model, 'models/') ? substr($model, 7) : $model;
+    }
+
+    /**
+     * Determine if the model uses Gemini's Embedding 2 API shape.
+     */
+    protected function isGeminiEmbedding2Model(string $model): bool
+    {
+        return in_array($this->normalizeEmbeddingModel($model), ['gemini-embedding-2', 'gemini-embedding-2-preview'], true);
+    }
+
+    /**
+     * Determine if any embeddings input requires Gemini's multimodal endpoint.
+     */
+    protected function hasMultimodalEmbeddingInputs(array $inputs): bool
+    {
+        return (new Collection($inputs))->contains(fn ($input) => ! is_string($input));
     }
 
     /**
