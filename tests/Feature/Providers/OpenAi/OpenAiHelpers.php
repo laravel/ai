@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Providers\OpenAi;
 
+use GuzzleHttp\Promise\PromiseInterface;
+use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\AssistantAgent;
 
 trait OpenAiHelpers
@@ -134,5 +136,28 @@ trait OpenAiHelpers
                 ],
             ],
         ];
+    }
+
+    protected function fakeOpenAiToolCallResponseWithSnapshot(string $requestedAlias, string $resolvedSnapshot): PromiseInterface
+    {
+        $id = uniqid();
+
+        return Http::response([
+            'id' => 'resp_tool_'.$id,
+            'status' => 'completed',
+            'model' => $resolvedSnapshot,
+            'output' => [[
+                'type' => 'function_call',
+                'id' => 'fc_'.$id,
+                'call_id' => 'call_'.$id,
+                'name' => 'FixedNumberGenerator',
+                'arguments' => '{}',
+                'status' => 'completed',
+            ]],
+            'usage' => [
+                'input_tokens' => 10,
+                'output_tokens' => 5,
+            ],
+        ]);
     }
 }

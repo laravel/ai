@@ -14,7 +14,12 @@ class ToolUsingAgent implements Agent, HasStructuredOutput, HasTools
 {
     use Promptable;
 
-    public function __construct(public bool $fixed = false, public bool $toolThrowsException = false) {}
+    public function __construct(public bool $fixed = false, public bool $toolThrowsException = false, public ?int $maxStepsOverride = null) {}
+
+    public function maxSteps(): ?int
+    {
+        return $this->maxStepsOverride;
+    }
 
     /**
      * Get the instructions that the agent should follow.

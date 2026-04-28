@@ -59,6 +59,7 @@ trait ParsesTextResponses
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
+        ?string $requestedModel = null,
     ): TextResponse {
         return $this->processResponse(
             $data,
@@ -71,6 +72,7 @@ trait ParsesTextResponses
             maxSteps: $options?->maxSteps,
             options: $options,
             timeout: $timeout,
+            requestedModel: $requestedModel,
         );
     }
 
@@ -89,10 +91,12 @@ trait ParsesTextResponses
         ?int $maxSteps = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
+        ?string $requestedModel = null,
     ): TextResponse {
         $responseId = $data['id'] ?? '';
         $output = $data['output'] ?? [];
-        $model = $data['model'] ?? '';
+        $responseModel = $data['model'] ?? '';
+        $model = $requestedModel ?? $responseModel;
 
         $text = $this->extractText($output);
         $toolCalls = $this->extractToolCalls($output);
@@ -110,7 +114,7 @@ trait ParsesTextResponses
             [],
             $finishReason,
             $usage,
-            new Meta($provider->name(), $model, $citations),
+            new Meta($provider->name(), $responseModel, $citations),
         );
 
         $steps->push($step);
@@ -135,7 +139,7 @@ trait ParsesTextResponses
                 $toolResults,
                 $finishReason,
                 $usage,
-                new Meta($provider->name(), $model, $citations),
+                new Meta($provider->name(), $responseModel, $citations),
             ));
 
             $toolResultMessage = new ToolResultMessage(collect($toolResults));
@@ -156,6 +160,7 @@ trait ParsesTextResponses
                 $maxSteps,
                 $options,
                 $timeout,
+                $requestedModel,
             );
         }
 
@@ -170,7 +175,7 @@ trait ParsesTextResponses
                 $structuredData,
                 $text,
                 $this->combineUsage($steps),
-                new Meta($provider->name(), $model, $citations),
+                new Meta($provider->name(), $responseModel, $citations),
             ))->withToolCallsAndResults(
                 toolCalls: $allToolCalls,
                 toolResults: $allToolResults,
@@ -180,7 +185,7 @@ trait ParsesTextResponses
         return (new TextResponse(
             $text,
             $this->combineUsage($steps),
-            new Meta($provider->name(), $model, $citations),
+            new Meta($provider->name(), $responseModel, $citations),
         ))->withMessages($messages)->withSteps($steps);
     }
 
@@ -233,6 +238,7 @@ trait ParsesTextResponses
         ?int $maxSteps,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
+        ?string $requestedModel = null,
     ): TextResponse {
         $body = [
             'model' => $model,
@@ -273,7 +279,7 @@ trait ParsesTextResponses
 
         $this->validateTextResponse($data);
 
-        return $this->processResponse($data, $provider, $structured, $tools, $schema, $steps, $messages, $depth, $maxSteps, $options, $timeout);
+        return $this->processResponse($data, $provider, $structured, $tools, $schema, $steps, $messages, $depth, $maxSteps, $options, $timeout, $requestedModel);
     }
 
     /**
