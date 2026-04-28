@@ -15,10 +15,11 @@ use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Anthropic\AnthropicGateway;
+use Laravel\Ai\Gateway\Gemini\GeminiGateway;
 use Laravel\Ai\Gateway\OpenAi\OpenAiGateway;
-use Laravel\Ai\Gateway\Prism\PrismGateway;
 use Laravel\Ai\Providers\AnthropicProvider;
 use Laravel\Ai\Providers\AzureOpenAiProvider;
+use Laravel\Ai\Providers\BedrockProvider;
 use Laravel\Ai\Providers\CohereProvider;
 use Laravel\Ai\Providers\DeepSeekProvider;
 use Laravel\Ai\Providers\ElevenLabsProvider;
@@ -294,7 +295,17 @@ class AiManager extends MultipleInstanceManager
     public function createAzureDriver(array $config): AzureOpenAiProvider
     {
         return new AzureOpenAiProvider(
-            new PrismGateway($this->app['events']),
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create an AWS Bedrock powered instance.
+     */
+    public function createBedrockDriver(array $config): BedrockProvider
+    {
+        return new BedrockProvider(
             $config,
             $this->app->make(Dispatcher::class)
         );
@@ -317,7 +328,6 @@ class AiManager extends MultipleInstanceManager
     public function createDeepseekDriver(array $config): DeepSeekProvider
     {
         return new DeepSeekProvider(
-            new PrismGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)
         );
@@ -340,7 +350,7 @@ class AiManager extends MultipleInstanceManager
     public function createGeminiDriver(array $config): GeminiProvider
     {
         return new GeminiProvider(
-            new PrismGateway($this->app['events']),
+            new GeminiGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)
         );
@@ -374,7 +384,6 @@ class AiManager extends MultipleInstanceManager
     public function createMistralDriver(array $config): MistralProvider
     {
         return new MistralProvider(
-            new PrismGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)
         );
@@ -386,7 +395,6 @@ class AiManager extends MultipleInstanceManager
     public function createOllamaDriver(array $config): OllamaProvider
     {
         return new OllamaProvider(
-            new PrismGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)
         );
@@ -410,7 +418,6 @@ class AiManager extends MultipleInstanceManager
     public function createOpenrouterDriver(array $config): OpenRouterProvider
     {
         return new OpenRouterProvider(
-            new PrismGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)
         );
@@ -422,7 +429,6 @@ class AiManager extends MultipleInstanceManager
     public function createVoyageaiDriver(array $config): VoyageAiProvider
     {
         return new VoyageAiProvider(
-            new PrismGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)
         );
@@ -434,9 +440,8 @@ class AiManager extends MultipleInstanceManager
     public function createXaiDriver(array $config): XaiProvider
     {
         return new XaiProvider(
-            new PrismGateway($this->app['events']),
             $config,
-            $this->app->make(Dispatcher::class)
+            $this->app->make(Dispatcher::class),
         );
     }
 

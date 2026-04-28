@@ -25,7 +25,7 @@ class ElevenLabsProvider extends Provider implements AudioProvider, Transcriptio
      */
     public function audioGateway(): AudioGateway
     {
-        return $this->audioGateway ?? new ElevenLabsGateway;
+        return $this->audioGateway ??= new ElevenLabsGateway;
     }
 
     /**
@@ -33,7 +33,7 @@ class ElevenLabsProvider extends Provider implements AudioProvider, Transcriptio
      */
     public function transcriptionGateway(): TranscriptionGateway
     {
-        return $this->transcriptionGateway ?? new ElevenLabsGateway;
+        return $this->transcriptionGateway ??= new ElevenLabsGateway;
     }
 
     /**

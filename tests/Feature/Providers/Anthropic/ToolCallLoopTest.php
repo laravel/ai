@@ -1,100 +1,96 @@
 <?php
 
-namespace Tests\Feature\Providers\Anthropic;
-
-use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Support\Facades\Http;
-use Tests\Feature\Agents\ToolUsingAgent;
+use Tests\Fixtures\Agents\ToolUsingAgent;
 
-class ToolCallLoopTest extends AnthropicTestCase
-{
-    public function test_tool_calls_trigger_follow_up_request(): void
-    {
-        Http::fake([
-            'api.anthropic.com/*' => Http::sequence([
-                $this->fakeUniqueToolCallResponse(),
-                $this->fakeTextResponse('The number is 72019'),
-            ]),
-        ]);
+test('tool calls trigger follow up request', function () {
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            $this->fakeUniqueToolCallResponse(),
+            $this->fakeTextResponse('The number is 72019'),
+        ]),
+    ]);
 
-        $response = (new ToolUsingAgent(fixed: true))->prompt(
-            'Generate a random number',
-            provider: 'anthropic',
-        );
+    $response = (new ToolUsingAgent(fixed: true))->prompt(
+        'Generate a random number',
+        provider: 'anthropic',
+    );
 
-        $recorded = Http::recorded();
+    $recorded = Http::recorded();
 
-        $this->assertCount(2, $recorded);
+    expect($recorded)->toHaveCount(2);
 
-        $followUpBody = $recorded[1][0]->data();
+    $followUpBody = $recorded[1][0]->data();
 
-        $hasAssistantWithToolUse = false;
-        $hasToolResult = false;
+    $hasAssistantWithToolUse = false;
+    $hasToolResult = false;
 
-        foreach ($followUpBody['messages'] as $message) {
-            if ($message['role'] === 'assistant') {
-                foreach ($message['content'] as $block) {
-                    if (($block['type'] ?? '') === 'tool_use') {
-                        $hasAssistantWithToolUse = true;
-                    }
-                }
-            }
-
-            if ($message['role'] === 'user') {
-                foreach ($message['content'] ?? [] as $block) {
-                    if (($block['type'] ?? '') === 'tool_result') {
-                        $hasToolResult = true;
-                    }
+    foreach ($followUpBody['messages'] as $message) {
+        if ($message['role'] === 'assistant') {
+            foreach ($message['content'] as $block) {
+                if (($block['type'] ?? '') === 'tool_use') {
+                    $hasAssistantWithToolUse = true;
                 }
             }
         }
 
-        $this->assertTrue($hasAssistantWithToolUse, 'Follow-up request should include assistant message with tool_use block');
-        $this->assertTrue($hasToolResult, 'Follow-up request should include user message with tool_result block');
+        if ($message['role'] === 'user') {
+            foreach ($message['content'] ?? [] as $block) {
+                if (($block['type'] ?? '') === 'tool_result') {
+                    $hasToolResult = true;
+                }
+            }
+        }
     }
 
-    public function test_max_steps_limits_tool_call_depth(): void
-    {
-        Http::fake([
-            'api.anthropic.com/*' => Http::sequence([
-                $this->fakeUniqueToolCallResponse(),
-                $this->fakeUniqueToolCallResponse(),
-                $this->fakeUniqueToolCallResponse(),
-                $this->fakeTextResponse('Done'),
+    expect($hasAssistantWithToolUse)->toBeTrue('Follow-up request should include assistant message with tool_use block')
+        ->and($hasToolResult)->toBeTrue('Follow-up request should include user message with tool_result block');
+});
+
+test('server_tool_use input is serialized as object on follow-up replay', function () {
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            Http::response([
+                'id' => 'msg_tool_123',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [
+                    ['type' => 'server_tool_use', 'id' => 'srvtoolu_123', 'name' => 'advisor', 'input' => (object) []],
+                    ['type' => 'tool_use', 'id' => 'toolu_123', 'name' => 'FixedNumberGenerator', 'input' => (object) []],
+                ],
+                'stop_reason' => 'tool_use',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
             ]),
-        ]);
+            $this->fakeTextResponse('done'),
+        ]),
+    ]);
 
-        $response = (new ToolUsingAgent(fixed: true))->prompt(
-            'Generate numbers',
-            provider: 'anthropic',
-        );
+    (new ToolUsingAgent(fixed: true))->prompt('Generate a random number', provider: 'anthropic');
 
-        $recorded = Http::recorded();
+    $followUpBody = Http::recorded()[1][0]->body();
 
-        // ToolUsingAgent has 1 tool + structured output tool = 2 tools
-        // maxSteps = round(2 * 1.5) = 3
-        // So max 3 requests before stopping (initial + 2 follow-ups)
-        $this->assertLessThanOrEqual(3, count($recorded));
-    }
+    expect($followUpBody)
+        ->toContain('"type":"server_tool_use"')
+        ->not->toContain('"input":[]');
+});
 
-    /**
-     * Create a tool call response with unique IDs for use in sequences.
-     */
-    protected function fakeUniqueToolCallResponse(): PromiseInterface
-    {
-        return Http::response([
-            'id' => 'msg_tool_'.uniqid(),
-            'type' => 'message',
-            'role' => 'assistant',
-            'model' => 'claude-sonnet-4-6',
-            'content' => [[
-                'type' => 'tool_use',
-                'id' => 'toolu_'.uniqid(),
-                'name' => 'FixedNumberGenerator',
-                'input' => (object) [],
-            ]],
-            'stop_reason' => 'tool_use',
-            'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
-        ]);
-    }
-}
+test('max steps limits tool call depth', function () {
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            $this->fakeUniqueToolCallResponse(),
+            $this->fakeUniqueToolCallResponse(),
+            $this->fakeUniqueToolCallResponse(),
+            $this->fakeTextResponse('Done'),
+        ]),
+    ]);
+
+    $response = (new ToolUsingAgent(fixed: true))->prompt(
+        'Generate numbers',
+        provider: 'anthropic',
+    );
+
+    $recorded = Http::recorded();
+
+    expect(count($recorded))->toBeLessThanOrEqual(3);
+});

@@ -36,6 +36,7 @@ trait HandlesTextStreaming
         int $depth = 0,
         ?int $maxSteps = null,
         array $priorChatMessages = [],
+        ?int $timeout = null,
     ): Generator {
         $maxSteps ??= $options?->maxSteps;
 
@@ -170,6 +171,7 @@ trait HandlesTextStreaming
                 $depth,
                 $maxSteps,
                 $priorChatMessages,
+                $timeout,
             );
 
             return;
@@ -177,7 +179,7 @@ trait HandlesTextStreaming
 
         yield (new StreamEnd(
             $this->generateEventId(),
-            'stop',
+            $this->extractFinishReason(['finish_reason' => $finishReason ?? ''])->value,
             $usage ?? new Usage(0, 0),
             time(),
         ))->withInvocationId($invocationId);
@@ -200,6 +202,7 @@ trait HandlesTextStreaming
         int $depth,
         ?int $maxSteps,
         array $priorChatMessages,
+        ?int $timeout = null,
     ): Generator {
         $toolResults = [];
 
@@ -254,8 +257,15 @@ trait HandlesTextStreaming
 
             $updatedPriorMessages = [...$priorChatMessages, $assistantMsg, ...$toolResultMessages];
 
+            $mappedTools = filled($tools) ? $this->mapTools($tools) : [];
+            $hasTools = filled($mappedTools);
+            $inlineSchema = $hasTools && filled($schema);
+
             $chatMessages = [
-                ...$this->mapMessagesToChat($originalMessages, $instructions),
+                ...$this->mapMessagesToChat(
+                    $originalMessages,
+                    $inlineSchema ? $this->composeInstructions($instructions, $schema) : $instructions,
+                ),
                 ...$updatedPriorMessages,
             ];
 
@@ -266,17 +276,21 @@ trait HandlesTextStreaming
                 'stream_options' => ['include_usage' => true],
             ];
 
-            if (filled($tools)) {
-                $mappedTools = $this->mapTools($tools);
-
-                if (filled($mappedTools)) {
-                    $body['tool_choice'] = 'auto';
-                    $body['tools'] = $mappedTools;
-                }
+            if ($hasTools) {
+                $body['tool_choice'] = 'auto';
+                $body['tools'] = $mappedTools;
             }
 
-            if (filled($schema)) {
+            if (filled($schema) && ! $inlineSchema) {
                 $body['response_format'] = $this->buildResponseFormat($schema);
+            }
+
+            if (! is_null($options?->maxTokens)) {
+                $body['max_completion_tokens'] = $options->maxTokens;
+            }
+
+            if (! is_null($options?->temperature)) {
+                $body['temperature'] = $options->temperature;
             }
 
             $providerOptions = $options?->providerOptions($provider->driver());
@@ -285,9 +299,9 @@ trait HandlesTextStreaming
                 $body = array_merge($body, $providerOptions);
             }
 
-            $response = $this->withRateLimitHandling(
+            $response = $this->withErrorHandling(
                 $provider->name(),
-                fn () => $this->client($provider)
+                fn () => $this->client($provider, $timeout)
                     ->withOptions(['stream' => true])
                     ->post('chat/completions', $body),
             );
@@ -305,6 +319,7 @@ trait HandlesTextStreaming
                 $depth + 1,
                 $maxSteps,
                 $updatedPriorMessages,
+                $timeout,
             );
         } else {
             yield (new StreamEnd(
