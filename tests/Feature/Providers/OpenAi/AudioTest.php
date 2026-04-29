@@ -2,8 +2,10 @@
 
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Audio;
+use Laravel\Ai\Exceptions\RateLimitedException;
 
 beforeEach(function () {
     config(['ai.providers.openai' => [
@@ -17,7 +19,7 @@ function fakeOpenAiAudioResponse(): PromiseInterface
     return Http::response('fake-audio-bytes');
 }
 
-test('audio request includes model, input, voice, and response format', function () {
+test('audio request includes model, input, voice, response format, and speed', function () {
     Http::fake(['*' => fakeOpenAiAudioResponse()]);
 
     Audio::of('Hello world')->generate(provider: 'openai', model: 'gpt-4o-mini-tts');
@@ -27,7 +29,9 @@ test('audio request includes model, input, voice, and response format', function
 
         return $body['model'] === 'gpt-4o-mini-tts'
             && $body['input'] === 'Hello world'
+            && $body['voice'] === 'alloy'
             && $body['response_format'] === 'mp3'
+            && $body['speed'] == 1.0
             && $request->url() === 'https://api.openai.com/v1/audio/speech';
     });
 });
@@ -82,6 +86,40 @@ test('audio response is base64-encoded with audio/mpeg mime type', function () {
         ->and($response->meta->provider)->toBe('openai')
         ->and($response->meta->model)->toBe('gpt-4o-mini-tts');
 });
+
+test('audio uses default model when none specified', function () {
+    Http::fake(['*' => fakeOpenAiAudioResponse()]);
+
+    Audio::of('Hello')->generate(provider: 'openai');
+
+    Http::assertSent(fn (Request $request) => json_decode($request->body(), true)['model'] === 'gpt-4o-mini-tts');
+});
+
+test('audio rate limit response throws rate limited exception', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::response([
+            'error' => [
+                'type' => 'rate_limit_error',
+                'message' => 'Rate limit exceeded',
+            ],
+        ], 429),
+    ]);
+
+    Audio::of('Hello')->generate(provider: 'openai', model: 'gpt-4o-mini-tts');
+})->throws(RateLimitedException::class);
+
+test('audio http error response throws request exception', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::response([
+            'error' => [
+                'type' => 'invalid_request_error',
+                'message' => 'Bad request',
+            ],
+        ], 400),
+    ]);
+
+    Audio::of('Hello')->generate(provider: 'openai', model: 'gpt-4o-mini-tts');
+})->throws(RequestException::class);
 
 test('audio request sends bearer token', function () {
     Http::fake(['*' => fakeOpenAiAudioResponse()]);
