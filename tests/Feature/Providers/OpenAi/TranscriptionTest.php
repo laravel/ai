@@ -11,7 +11,7 @@ beforeEach(function () {
     ]]);
 });
 
-function fakeTranscriptionResponse(string $text = 'Hello, world!')
+function fakeOpenAiTranscriptionResponse(string $text = 'Hello, world!')
 {
     return Http::response([
         'text' => $text,
@@ -23,7 +23,7 @@ function fakeTranscriptionResponse(string $text = 'Hello, world!')
 }
 
 test('transcription request posts to correct endpoint', function () {
-    Http::fake(['*' => fakeTranscriptionResponse()]);
+    Http::fake(['*' => fakeOpenAiTranscriptionResponse()]);
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
         ->generate(provider: 'openai');
@@ -35,7 +35,7 @@ test('transcription request posts to correct endpoint', function () {
 });
 
 test('transcription includes model in request', function () {
-    Http::fake(['*' => fakeTranscriptionResponse()]);
+    Http::fake(['*' => fakeOpenAiTranscriptionResponse()]);
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
         ->generate(provider: 'openai');
@@ -46,7 +46,7 @@ test('transcription includes model in request', function () {
 });
 
 test('transcription strips diarize suffix from model when diarize is off', function () {
-    Http::fake(['*' => fakeTranscriptionResponse()]);
+    Http::fake(['*' => fakeOpenAiTranscriptionResponse()]);
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
         ->generate(provider: 'openai', model: 'gpt-4o-transcribe-diarize');
@@ -58,7 +58,7 @@ test('transcription strips diarize suffix from model when diarize is off', funct
 });
 
 test('transcription response text is correctly parsed', function () {
-    Http::fake(['*' => fakeTranscriptionResponse('Hello, world!')]);
+    Http::fake(['*' => fakeOpenAiTranscriptionResponse('Hello, world!')]);
 
     $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
         ->generate(provider: 'openai');
@@ -84,7 +84,7 @@ test('transcription usage is correctly parsed', function () {
 });
 
 test('transcription sends language when provided', function () {
-    Http::fake(['*' => fakeTranscriptionResponse()]);
+    Http::fake(['*' => fakeOpenAiTranscriptionResponse()]);
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
         ->language('en')
@@ -97,7 +97,7 @@ test('transcription sends language when provided', function () {
 });
 
 test('transcription request sends bearer token', function () {
-    Http::fake(['*' => fakeTranscriptionResponse()]);
+    Http::fake(['*' => fakeOpenAiTranscriptionResponse()]);
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
         ->generate(provider: 'openai');
