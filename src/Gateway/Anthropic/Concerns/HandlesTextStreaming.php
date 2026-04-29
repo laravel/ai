@@ -4,7 +4,7 @@ namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Generator;
 use Illuminate\Support\Str;
-use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Gateway\TextRequestContext;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
@@ -32,17 +32,12 @@ trait HandlesTextStreaming
     protected function processTextStream(
         string $invocationId,
         Provider $provider,
-        string $model,
-        array $tools,
-        ?array $schema,
-        ?TextGenerationOptions $options,
+        TextRequestContext $context,
         $streamBody,
-        array $requestBody = [],
         int $depth = 0,
         ?int $maxSteps = null,
-        ?int $timeout = null,
     ): Generator {
-        $maxSteps ??= $options?->maxSteps;
+        $maxSteps ??= $context->options?->maxSteps;
 
         $messageId = $this->generateEventId();
         $reasoningId = '';
@@ -121,7 +116,7 @@ trait HandlesTextStreaming
                 yield (new StreamStart(
                     $this->generateEventId(),
                     $provider->name(),
-                    $data['message']['model'] ?? $model,
+                    $data['message']['model'] ?? $context->model,
                     time(),
                 ))->withInvocationId($invocationId);
 
@@ -329,16 +324,11 @@ trait HandlesTextStreaming
             yield from $this->handleStreamingToolCalls(
                 $invocationId,
                 $provider,
-                $model,
-                $tools,
-                $schema,
-                $options,
+                $context,
                 $pendingToolCalls,
                 $responseContent,
-                $requestBody,
                 $depth,
                 $maxSteps,
-                $timeout,
             );
 
             return;
@@ -358,23 +348,18 @@ trait HandlesTextStreaming
     protected function handleStreamingToolCalls(
         string $invocationId,
         Provider $provider,
-        string $model,
-        array $tools,
-        ?array $schema,
-        ?TextGenerationOptions $options,
+        TextRequestContext $context,
         array $pendingToolCalls,
         array $responseContent,
-        array $requestBody,
         int $depth,
         ?int $maxSteps,
-        ?int $timeout = null,
     ): Generator {
         $mappedToolCalls = $this->mapStreamToolCalls($pendingToolCalls);
 
         $toolResults = [];
 
         foreach ($mappedToolCalls as $toolCall) {
-            $tool = $this->findTool($toolCall->name, $tools);
+            $tool = $this->findTool($toolCall->name, $context->tools);
 
             if ($tool === null) {
                 continue;
@@ -401,7 +386,7 @@ trait HandlesTextStreaming
             ))->withInvocationId($invocationId);
         }
 
-        if ($depth + 1 >= ($maxSteps ?? round(count($tools) * 1.5))) {
+        if ($depth + 1 >= ($maxSteps ?? round(count($context->tools) * 1.5))) {
             yield (new StreamEnd(
                 $this->generateEventId(),
                 'stop',
@@ -412,12 +397,12 @@ trait HandlesTextStreaming
             return;
         }
 
-        $requestBody['messages'][] = [
+        $context->providerMessages[] = [
             'role' => 'assistant',
             'content' => $this->ensureToolInputIsObject(array_values($responseContent)),
         ];
 
-        $requestBody['messages'][] = [
+        $context->providerMessages[] = [
             'role' => 'user',
             'content' => array_map(fn (ToolResult $result) => [
                 'type' => 'tool_result',
@@ -426,11 +411,13 @@ trait HandlesTextStreaming
             ], $toolResults),
         ];
 
+        $requestBody = $context->requestBody;
+        $requestBody['messages'] = $context->providerMessages;
         $requestBody['stream'] = true;
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)
+            fn () => $this->client($provider, $context->timeout)
                 ->withOptions(['stream' => true])
                 ->post('messages', $requestBody),
         );
@@ -438,15 +425,10 @@ trait HandlesTextStreaming
         yield from $this->processTextStream(
             $invocationId,
             $provider,
-            $model,
-            $tools,
-            $schema,
-            $options,
+            $context,
             $response->getBody(),
-            $requestBody,
             $depth + 1,
             $maxSteps,
-            $timeout,
         );
     }
 

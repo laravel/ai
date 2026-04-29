@@ -4,7 +4,7 @@ namespace Laravel\Ai\Gateway\OpenRouter\Concerns;
 
 use Generator;
 use Illuminate\Support\Str;
-use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Gateway\TextRequestContext;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
@@ -26,19 +26,13 @@ trait HandlesTextStreaming
     protected function processTextStream(
         string $invocationId,
         Provider $provider,
-        string $model,
-        array $tools,
-        ?array $schema,
-        ?TextGenerationOptions $options,
+        TextRequestContext $context,
         $streamBody,
-        ?string $instructions = null,
-        array $originalMessages = [],
         int $depth = 0,
         ?int $maxSteps = null,
         array $priorChatMessages = [],
-        ?int $timeout = null,
     ): Generator {
-        $maxSteps ??= $options?->maxSteps;
+        $maxSteps ??= $context->options?->maxSteps;
 
         $messageId = $this->generateEventId();
         $streamStartEmitted = false;
@@ -100,7 +94,7 @@ trait HandlesTextStreaming
                 yield (new StreamStart(
                     $this->generateEventId(),
                     $provider->name(),
-                    $data['model'] ?? $model,
+                    $data['model'] ?? $context->model,
                     time(),
                 ))->withInvocationId($invocationId);
             }
@@ -181,18 +175,12 @@ trait HandlesTextStreaming
             yield from $this->handleStreamingToolCalls(
                 $invocationId,
                 $provider,
-                $model,
-                $tools,
-                $schema,
-                $options,
+                $context,
                 $mappedToolCalls,
                 $currentText,
-                $instructions,
-                $originalMessages,
                 $depth,
                 $maxSteps,
                 $priorChatMessages,
-                $timeout,
             );
 
             return;
@@ -212,23 +200,17 @@ trait HandlesTextStreaming
     protected function handleStreamingToolCalls(
         string $invocationId,
         Provider $provider,
-        string $model,
-        array $tools,
-        ?array $schema,
-        ?TextGenerationOptions $options,
+        TextRequestContext $context,
         array $mappedToolCalls,
         string $currentText,
-        ?string $instructions,
-        array $originalMessages,
         int $depth,
         ?int $maxSteps,
         array $priorChatMessages,
-        ?int $timeout = null,
     ): Generator {
         $toolResults = [];
 
         foreach ($mappedToolCalls as $toolCall) {
-            $tool = $this->findTool($toolCall->name, $tools);
+            $tool = $this->findTool($toolCall->name, $context->tools);
 
             if ($tool === null) {
                 continue;
@@ -255,7 +237,7 @@ trait HandlesTextStreaming
             ))->withInvocationId($invocationId);
         }
 
-        if ($depth + 1 < ($maxSteps ?? round(count($tools) * 1.5))) {
+        if ($depth + 1 < ($maxSteps ?? round(count($context->tools) * 1.5))) {
             $assistantMsg = ['role' => 'assistant'];
 
             if (filled($currentText)) {
@@ -279,47 +261,16 @@ trait HandlesTextStreaming
             $updatedPriorMessages = [...$priorChatMessages, $assistantMsg, ...$toolResultMessages];
 
             $chatMessages = [
-                ...$this->mapMessagesToChat($originalMessages, $instructions),
+                ...$context->providerMessages,
                 ...$updatedPriorMessages,
             ];
 
-            $body = [
-                'model' => $model,
-                'messages' => $chatMessages,
-                'stream' => true,
-                'stream_options' => ['include_usage' => true],
-            ];
-
-            if (filled($tools)) {
-                $mappedTools = $this->mapTools($tools);
-
-                if (filled($mappedTools)) {
-                    $body['tool_choice'] = 'auto';
-                    $body['tools'] = $mappedTools;
-                }
-            }
-
-            if (filled($schema)) {
-                $body['response_format'] = $this->buildResponseFormat($schema);
-            }
-
-            if (! is_null($options?->maxTokens)) {
-                $body['max_tokens'] = $options->maxTokens;
-            }
-
-            if (! is_null($options?->temperature)) {
-                $body['temperature'] = $options->temperature;
-            }
-
-            $providerOptions = $options?->providerOptions($provider->driver());
-
-            if (filled($providerOptions)) {
-                $body = array_merge($body, $providerOptions);
-            }
+            $body = $context->requestBody;
+            $body['messages'] = $chatMessages;
 
             $response = $this->withErrorHandling(
                 $provider->name(),
-                fn () => $this->client($provider, $timeout)
+                fn () => $this->client($provider, $context->timeout)
                     ->withOptions(['stream' => true])
                     ->post('chat/completions', $body),
             );
@@ -327,17 +278,11 @@ trait HandlesTextStreaming
             yield from $this->processTextStream(
                 $invocationId,
                 $provider,
-                $model,
-                $tools,
-                $schema,
-                $options,
+                $context,
                 $response->getBody(),
-                $instructions,
-                $originalMessages,
                 $depth + 1,
                 $maxSteps,
                 $updatedPriorMessages,
-                $timeout,
             );
         } else {
             yield (new StreamEnd(

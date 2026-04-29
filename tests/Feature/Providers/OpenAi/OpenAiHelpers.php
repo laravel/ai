@@ -138,7 +138,7 @@ trait OpenAiHelpers
         ];
     }
 
-    protected function fakeOpenAiToolCallResponseWithSnapshot(string $requestedAlias, string $resolvedSnapshot): PromiseInterface
+    protected function fakeOpenAiToolCallResponseWithSnapshot(string $resolvedSnapshot): PromiseInterface
     {
         $id = uniqid();
 

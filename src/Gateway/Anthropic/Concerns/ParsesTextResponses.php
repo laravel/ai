@@ -5,7 +5,7 @@ namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\AiException;
-use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Gateway\TextRequestContext;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Providers\Provider;
@@ -44,23 +44,16 @@ trait ParsesTextResponses
         array $data,
         Provider $provider,
         bool $structured,
-        array $tools = [],
-        ?array $schema = null,
-        ?TextGenerationOptions $options = null,
-        array $requestBody = [],
-        ?int $timeout = null,
+        TextRequestContext $context,
     ): TextResponse {
         return $this->processResponse(
             $data,
             $provider,
             $structured,
-            $tools,
-            $schema,
+            $context,
             new Collection,
             new Collection,
-            $requestBody,
-            maxSteps: $options?->maxSteps,
-            timeout: $timeout,
+            maxSteps: $context->options?->maxSteps,
         );
     }
 
@@ -71,14 +64,11 @@ trait ParsesTextResponses
         array $data,
         Provider $provider,
         bool $structured,
-        array $tools,
-        ?array $schema,
+        TextRequestContext $context,
         Collection $steps,
         Collection $messages,
-        array $requestBody,
         int $depth = 0,
         ?int $maxSteps = null,
-        ?int $timeout = null,
     ): TextResponse {
         $model = $data['model'] ?? '';
         $content = $data['content'] ?? [];
@@ -96,10 +86,10 @@ trait ParsesTextResponses
 
         $shouldContinue = $finishReason === FinishReason::ToolCalls
             && filled($realToolCalls)
-            && $depth + 1 < ($maxSteps ?? round(count($tools) * 1.5));
+            && $depth + 1 < ($maxSteps ?? round(count($context->tools) * 1.5));
 
         if ($shouldContinue) {
-            $toolResults = $this->executeToolCalls($realToolCalls, $tools);
+            $toolResults = $this->executeToolCalls($realToolCalls, $context->tools);
         }
 
         $steps->push(new Step($text, $toolCalls, $toolResults, $finishReason, $usage, $meta));
@@ -113,15 +103,12 @@ trait ParsesTextResponses
                 $data,
                 $provider,
                 $structured,
-                $tools,
-                $schema,
+                $context,
                 $steps,
                 $messages,
-                $requestBody,
                 $toolResults,
                 $depth + 1,
                 $maxSteps,
-                $timeout,
             );
         }
 
@@ -189,17 +176,14 @@ trait ParsesTextResponses
         array $previousData,
         Provider $provider,
         bool $structured,
-        array $tools,
-        ?array $schema,
+        TextRequestContext $context,
         Collection $steps,
         Collection $messages,
-        array $requestBody,
         array $toolResults,
         int $depth,
         ?int $maxSteps,
-        ?int $timeout = null,
     ): TextResponse {
-        $requestBody['messages'][] = [
+        $context->providerMessages[] = [
             'role' => 'assistant',
             'content' => $this->ensureToolInputIsObject($previousData['content'] ?? []),
         ];
@@ -214,16 +198,18 @@ trait ParsesTextResponses
             ];
         }
 
-        $requestBody['messages'][] = [
+        $context->providerMessages[] = [
             'role' => 'user',
             'content' => $toolResultContent,
         ];
 
+        $requestBody = $context->requestBody;
+        $requestBody['messages'] = $context->providerMessages;
         unset($requestBody['stream']);
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('messages', $requestBody),
+            fn () => $this->client($provider, $context->timeout)->post('messages', $requestBody),
         );
 
         $data = $response->json();
@@ -234,14 +220,11 @@ trait ParsesTextResponses
             $data,
             $provider,
             $structured,
-            $tools,
-            $schema,
+            $context,
             $steps,
             $messages,
-            $requestBody,
             $depth,
             $maxSteps,
-            $timeout,
         );
     }
 

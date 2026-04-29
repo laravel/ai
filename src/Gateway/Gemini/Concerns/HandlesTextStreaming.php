@@ -4,7 +4,7 @@ namespace Laravel\Ai\Gateway\Gemini\Concerns;
 
 use Generator;
 use Illuminate\Support\Str;
-use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Gateway\TextRequestContext;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\Data\Usage;
@@ -28,18 +28,12 @@ trait HandlesTextStreaming
     protected function processTextStream(
         string $invocationId,
         Provider $provider,
-        string $model,
-        array $tools,
-        ?array $schema,
-        ?TextGenerationOptions $options,
+        TextRequestContext $context,
         $streamBody,
-        array $contents = [],
-        ?string $instructions = null,
         int $depth = 0,
         ?int $maxSteps = null,
-        ?int $timeout = null,
     ): Generator {
-        $maxSteps ??= $options?->maxSteps;
+        $maxSteps ??= $context->options?->maxSteps;
 
         $messageId = $this->generateEventId();
         $reasoningId = '';
@@ -71,7 +65,7 @@ trait HandlesTextStreaming
                 yield (new StreamStart(
                     $this->generateEventId(),
                     $provider->name(),
-                    $data['modelVersion'] ?? $model,
+                    $data['modelVersion'] ?? $context->model,
                     time(),
                 ))->withInvocationId($invocationId);
             }
@@ -184,17 +178,11 @@ trait HandlesTextStreaming
             yield from $this->handleStreamingToolCalls(
                 $invocationId,
                 $provider,
-                $model,
-                $tools,
-                $schema,
-                $options,
+                $context,
                 $pendingToolCalls,
-                $contents,
-                $instructions,
                 $modelParts,
                 $depth,
                 $maxSteps,
-                $timeout,
             );
 
             return;
@@ -214,17 +202,11 @@ trait HandlesTextStreaming
     protected function handleStreamingToolCalls(
         string $invocationId,
         Provider $provider,
-        string $model,
-        array $tools,
-        ?array $schema,
-        ?TextGenerationOptions $options,
+        TextRequestContext $context,
         array $pendingToolCalls,
-        array $contents,
-        ?string $instructions,
         array $modelParts,
         int $depth,
         ?int $maxSteps,
-        ?int $timeout = null,
     ): Generator {
         $mappedToolCalls = $this->mapToolCalls($pendingToolCalls);
 
@@ -240,7 +222,7 @@ trait HandlesTextStreaming
         $toolResults = [];
 
         foreach ($mappedToolCalls as $toolCall) {
-            $tool = $this->findTool($toolCall->name, $tools);
+            $tool = $this->findTool($toolCall->name, $context->tools);
 
             if ($tool === null) {
                 continue;
@@ -267,32 +249,33 @@ trait HandlesTextStreaming
             ))->withInvocationId($invocationId);
         }
 
-        if ($depth + 1 < ($maxSteps ?? round(count($tools) * 1.5))) {
-            $contents[] = ['role' => 'model', 'parts' => $this->sanitizeRequestParts($this->excludeThinkingParts($modelParts))];
-            $contents[] = ['role' => 'user', 'parts' => $this->buildFunctionResponseParts($toolResults)];
+        if ($depth + 1 < ($maxSteps ?? round(count($context->tools) * 1.5))) {
+            $context->contents[] = ['role' => 'model', 'parts' => $this->sanitizeRequestParts($this->excludeThinkingParts($modelParts))];
+            $context->contents[] = ['role' => 'user', 'parts' => $this->buildFunctionResponseParts($toolResults)];
 
-            $body = $this->rebuildContinuationBody($contents, $instructions, $tools, $schema, $options, $provider);
+            $body = $this->rebuildContinuationBody(
+                $context->contents,
+                $context->instructions,
+                $context->tools,
+                $context->schema,
+                $context->options,
+                $provider,
+            );
 
             $response = $this->withErrorHandling(
                 $provider->name(),
-                fn () => $this->client($provider, $timeout)
+                fn () => $this->client($provider, $context->timeout)
                     ->withOptions(['stream' => true])
-                    ->post("models/{$model}:streamGenerateContent?alt=sse", $body),
+                    ->post("models/{$context->model}:streamGenerateContent?alt=sse", $body),
             );
 
             yield from $this->processTextStream(
                 $invocationId,
                 $provider,
-                $model,
-                $tools,
-                $schema,
-                $options,
+                $context,
                 $response->getBody(),
-                $contents,
-                $instructions,
                 $depth + 1,
                 $maxSteps,
-                $timeout,
             );
         } else {
             yield (new StreamEnd(

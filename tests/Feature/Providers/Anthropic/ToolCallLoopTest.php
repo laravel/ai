@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Files;
+use Tests\Fixtures\Agents\FileAttachmentToolAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
 test('tool calls trigger follow up request', function () {
@@ -73,6 +75,40 @@ test('server_tool_use input is serialized as object on follow-up replay', functi
     expect($followUpBody)
         ->toContain('"type":"server_tool_use"')
         ->not->toContain('"input":[]');
+});
+
+test('tool call follow up request reuses mapped attachment contents', function () {
+    $path = tempnam(sys_get_temp_dir(), 'anthropic-attachment-').'.txt';
+
+    file_put_contents($path, 'original attachment contents');
+
+    try {
+        Http::fake([
+            'api.anthropic.com/*' => Http::sequence([
+                $this->fakeToolCallResponse('FileMutatingTool'),
+                $this->fakeTextResponse('done'),
+            ]),
+        ]);
+
+        (new FileAttachmentToolAgent($path))->prompt(
+            'Read this file, then use the tool.',
+            attachments: [Files\Document::fromPath($path)],
+            provider: 'anthropic',
+        );
+
+        $recorded = Http::recorded();
+
+        expect($recorded)->toHaveCount(2)
+            ->and(file_get_contents($path))->toBe('mutated attachment contents');
+
+        $initialDocument = $recorded[0][0]->data()['messages'][0]['content'][0];
+        $followUpDocument = $recorded[1][0]->data()['messages'][0]['content'][0];
+
+        expect($initialDocument['source']['data'])->toBe('original attachment contents')
+            ->and($followUpDocument['source']['data'])->toBe('original attachment contents');
+    } finally {
+        @unlink($path);
+    }
 });
 
 test('max steps limits tool call depth', function () {

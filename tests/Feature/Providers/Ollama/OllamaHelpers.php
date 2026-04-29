@@ -45,6 +45,28 @@ trait OllamaHelpers
         ]);
     }
 
+    protected function fakeToolCallResponseWithModel(string $model): PromiseInterface
+    {
+        return Http::response([
+            'model' => $model,
+            'message' => [
+                'role' => 'assistant',
+                'content' => '',
+                'tool_calls' => [[
+                    'id' => 'call_123',
+                    'function' => [
+                        'name' => 'FixedNumberGenerator',
+                        'arguments' => (object) [],
+                    ],
+                ]],
+            ],
+            'done_reason' => 'tool_calls',
+            'done' => true,
+            'prompt_eval_count' => 10,
+            'eval_count' => 5,
+        ]);
+    }
+
     protected function fakeStructuredResponse(string $json = '{"symbol": "Au"}'): PromiseInterface
     {
         return Http::response([

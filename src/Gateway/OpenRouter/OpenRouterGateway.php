@@ -13,6 +13,7 @@ use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Gateway\TextRequestContext;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\TextResponse;
@@ -48,15 +49,22 @@ class OpenRouterGateway implements EmbeddingGateway, TextGateway
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): TextResponse {
+        $context = TextRequestContext::fromGenerateTextArgs(
+            $model, $instructions, $messages, $tools, $schema, $options, $timeout,
+        );
+
         $body = $this->buildTextRequestBody(
             $provider,
-            $model,
-            $instructions,
-            $messages,
-            $tools,
-            $schema,
-            $options,
+            $context->model,
+            $context->instructions,
+            $context->messages,
+            $context->tools,
+            $context->schema,
+            $context->options,
         );
+
+        $context->requestBody = $body;
+        $context->providerMessages = $body['messages'];
 
         $response = $this->withErrorHandling(
             $provider->name(),
@@ -70,13 +78,8 @@ class OpenRouterGateway implements EmbeddingGateway, TextGateway
         return $this->parseTextResponse(
             $data,
             $provider,
-            filled($schema),
-            $tools,
-            $schema,
-            $options,
-            $instructions,
-            $messages,
-            $timeout,
+            filled($context->schema),
+            $context,
         );
     }
 
@@ -94,18 +97,25 @@ class OpenRouterGateway implements EmbeddingGateway, TextGateway
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): Generator {
+        $context = TextRequestContext::fromGenerateTextArgs(
+            $model, $instructions, $messages, $tools, $schema, $options, $timeout,
+        );
+
         $body = $this->buildTextRequestBody(
             $provider,
-            $model,
-            $instructions,
-            $messages,
-            $tools,
-            $schema,
-            $options,
+            $context->model,
+            $context->instructions,
+            $context->messages,
+            $context->tools,
+            $context->schema,
+            $context->options,
         );
 
         $body['stream'] = true;
         $body['stream_options'] = ['include_usage' => true];
+
+        $context->requestBody = $body;
+        $context->providerMessages = $body['messages'];
 
         $response = $this->withErrorHandling(
             $provider->name(),
@@ -117,17 +127,8 @@ class OpenRouterGateway implements EmbeddingGateway, TextGateway
         yield from $this->processTextStream(
             $invocationId,
             $provider,
-            $model,
-            $tools,
-            $schema,
-            $options,
+            $context,
             $response->getBody(),
-            $instructions,
-            $messages,
-            0,
-            null,
-            [],
-            $timeout,
         );
     }
 

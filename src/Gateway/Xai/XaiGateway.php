@@ -10,6 +10,7 @@ use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Gateway\TextRequestContext;
 use Laravel\Ai\Responses\TextResponse;
 
 class XaiGateway implements TextGateway
@@ -43,8 +44,12 @@ class XaiGateway implements TextGateway
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): TextResponse {
+        $context = TextRequestContext::fromGenerateTextArgs(
+            $model, $instructions, $messages, $tools, $schema, $options, $timeout,
+        );
+
         $body = $this->buildTextRequestBody(
-            $provider, $model, $instructions, $messages, $tools, $schema, $options,
+            $provider, $context->model, $context->instructions, $context->messages, $context->tools, $context->schema, $context->options,
         );
 
         $response = $this->withErrorHandling(
@@ -56,7 +61,7 @@ class XaiGateway implements TextGateway
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, filled($schema), $tools, $schema, $options, $timeout);
+        return $this->parseTextResponse($data, $provider, filled($context->schema), $context);
     }
 
     /**
@@ -73,8 +78,12 @@ class XaiGateway implements TextGateway
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): Generator {
+        $context = TextRequestContext::fromGenerateTextArgs(
+            $model, $instructions, $messages, $tools, $schema, $options, $timeout,
+        );
+
         $body = $this->buildTextRequestBody(
-            $provider, $model, $instructions, $messages, $tools, $schema, $options,
+            $provider, $context->model, $context->instructions, $context->messages, $context->tools, $context->schema, $context->options,
         );
 
         $body['stream'] = true;
@@ -87,9 +96,8 @@ class XaiGateway implements TextGateway
         );
 
         yield from $this->processTextStream(
-            $invocationId, $provider, $model, $tools, $schema, $options,
+            $invocationId, $provider, $context,
             $response->getBody(),
-            timeout: $timeout,
         );
     }
 }

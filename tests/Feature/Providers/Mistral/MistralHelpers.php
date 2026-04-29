@@ -58,6 +58,35 @@ trait MistralHelpers
         ]);
     }
 
+    protected function fakeToolCallResponseWithModel(string $model): PromiseInterface
+    {
+        return Http::response([
+            'id' => 'chatcmpl-tool-123',
+            'object' => 'chat.completion',
+            'model' => $model,
+            'choices' => [[
+                'index' => 0,
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => null,
+                    'tool_calls' => [[
+                        'id' => 'call_123',
+                        'type' => 'function',
+                        'function' => [
+                            'name' => 'FixedNumberGenerator',
+                            'arguments' => '{}',
+                        ],
+                    ]],
+                ],
+                'finish_reason' => 'tool_calls',
+            ]],
+            'usage' => [
+                'prompt_tokens' => 10,
+                'completion_tokens' => 5,
+            ],
+        ]);
+    }
+
     protected function fakeStructuredResponse(string $json = '{"symbol": "Au"}'): PromiseInterface
     {
         return Http::response([

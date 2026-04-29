@@ -15,6 +15,7 @@ use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Gateway\TextRequestContext;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
@@ -53,15 +54,22 @@ class AnthropicGateway implements Gateway
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): TextResponse {
+        $context = TextRequestContext::fromGenerateTextArgs(
+            $model, $instructions, $messages, $tools, $schema, $options, $timeout,
+        );
+
         $body = $this->buildTextRequestBody(
             $provider,
-            $model,
-            $instructions,
-            $messages,
-            $tools,
-            $schema,
-            $options,
+            $context->model,
+            $context->instructions,
+            $context->messages,
+            $context->tools,
+            $context->schema,
+            $context->options,
         );
+
+        $context->requestBody = $body;
+        $context->providerMessages = $body['messages'];
 
         $response = $this->withErrorHandling(
             $provider->name(),
@@ -75,12 +83,8 @@ class AnthropicGateway implements Gateway
         return $this->parseTextResponse(
             $data,
             $provider,
-            filled($schema),
-            $tools,
-            $schema,
-            $options,
-            $body,
-            $timeout,
+            filled($context->schema),
+            $context,
         );
     }
 
@@ -98,15 +102,22 @@ class AnthropicGateway implements Gateway
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): Generator {
+        $context = TextRequestContext::fromGenerateTextArgs(
+            $model, $instructions, $messages, $tools, $schema, $options, $timeout,
+        );
+
         $body = $this->buildTextRequestBody(
             $provider,
-            $model,
-            $instructions,
-            $messages,
-            $tools,
-            $schema,
-            $options,
+            $context->model,
+            $context->instructions,
+            $context->messages,
+            $context->tools,
+            $context->schema,
+            $context->options,
         );
+
+        $context->requestBody = $body;
+        $context->providerMessages = $body['messages'];
 
         $body['stream'] = true;
 
@@ -120,15 +131,8 @@ class AnthropicGateway implements Gateway
         yield from $this->processTextStream(
             $invocationId,
             $provider,
-            $model,
-            $tools,
-            $schema,
-            $options,
+            $context,
             $response->getBody(),
-            $body,
-            0,
-            null,
-            $timeout,
         );
     }
 

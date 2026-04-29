@@ -22,6 +22,7 @@ use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Gateway\TextRequestContext;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
@@ -63,8 +64,12 @@ class OpenAiGateway implements Gateway
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): TextResponse {
+        $context = TextRequestContext::fromGenerateTextArgs(
+            $model, $instructions, $messages, $tools, $schema, $options, $timeout,
+        );
+
         $body = $this->buildTextRequestBody(
-            $provider, $model, $instructions, $messages, $tools, $schema, $options,
+            $provider, $context->model, $context->instructions, $context->messages, $context->tools, $context->schema, $context->options,
         );
 
         $response = $this->withErrorHandling(
@@ -76,7 +81,7 @@ class OpenAiGateway implements Gateway
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, filled($schema), $tools, $schema, $options, $timeout, $model);
+        return $this->parseTextResponse($data, $provider, filled($context->schema), $context);
     }
 
     /**
@@ -93,8 +98,12 @@ class OpenAiGateway implements Gateway
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): Generator {
+        $context = TextRequestContext::fromGenerateTextArgs(
+            $model, $instructions, $messages, $tools, $schema, $options, $timeout,
+        );
+
         $body = $this->buildTextRequestBody(
-            $provider, $model, $instructions, $messages, $tools, $schema, $options,
+            $provider, $context->model, $context->instructions, $context->messages, $context->tools, $context->schema, $context->options,
         );
 
         $body['stream'] = true;
@@ -109,14 +118,8 @@ class OpenAiGateway implements Gateway
         yield from $this->processTextStream(
             $invocationId,
             $provider,
-            $model,
-            $tools,
-            $schema,
-            $options,
+            $context,
             $response->getBody(),
-            0,
-            null,
-            $timeout,
         );
     }
 

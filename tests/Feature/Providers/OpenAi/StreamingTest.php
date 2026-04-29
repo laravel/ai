@@ -85,6 +85,56 @@ test('streaming handles tool calls', function () {
         ->and($toolCallEvents[0]->toolCall->resultId)->toBe('call_1');
 });
 
+test('streaming tool call follow up requests preserve the originally requested model alias', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::sequence([
+            Http::response(
+                body: $this->ssePayload([
+                    [
+                        'type' => 'response.created',
+                        'response' => ['id' => 'resp_1', 'model' => 'gpt-4.1-mini-2025-04-14', 'status' => 'in_progress', 'output' => []],
+                    ],
+                    $this->outputItemAdded('fc_1', 'call_1', 'FixedNumberGenerator'),
+                    $this->functionCallArgumentsDelta('fc_1', '{}'),
+                    $this->functionCallArgumentsDone('fc_1', '{}'),
+                    $this->responseCompleted(10, 5),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+            Http::response(
+                body: $this->ssePayload([
+                    [
+                        'type' => 'response.created',
+                        'response' => ['id' => 'resp_2', 'model' => 'gpt-4.1-mini-2025-04-14', 'status' => 'in_progress', 'output' => []],
+                    ],
+                    $this->outputTextDelta('The number is 72019'),
+                    $this->outputTextDone('The number is 72019'),
+                    $this->responseCompleted(20, 10),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]),
+    ]);
+
+    $events = iterator_to_array(
+        (new ProviderOptionsWithToolsAgent)->stream('Generate a random number', provider: 'openai', model: 'gpt-4.1-mini'),
+        false,
+    );
+
+    $recorded = Http::recorded();
+
+    expect($events)->not->toBeEmpty()
+        ->and($recorded)->toHaveCount(2);
+
+    $firstRequestBody = json_decode($recorded[0][0]->body(), true);
+    $followUpBody = json_decode($recorded[1][0]->body(), true);
+
+    expect($firstRequestBody['model'])->toBe('gpt-4.1-mini')
+        ->and($followUpBody['model'])->toBe('gpt-4.1-mini');
+});
+
 test('streaming handles reasoning events', function () {
     Http::fake([
         'api.openai.com/*' => Http::response(

@@ -6,7 +6,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\AiException;
-use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Gateway\TextRequestContext;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Providers\Provider;
@@ -44,29 +44,17 @@ trait ParsesTextResponses
     protected function parseTextResponse(
         array $data,
         Provider $provider,
-        string $model,
         bool $structured,
-        array $tools = [],
-        ?array $schema = null,
-        ?TextGenerationOptions $options = null,
-        array $contents = [],
-        ?string $instructions = null,
-        ?int $timeout = null,
+        TextRequestContext $context,
     ): TextResponse {
         return $this->processResponse(
             $data,
             $provider,
-            $model,
             $structured,
-            $tools,
-            $schema,
+            $context,
             new Collection,
             new Collection,
-            $contents,
-            $instructions,
-            $options,
-            maxSteps: $options?->maxSteps,
-            timeout: $timeout,
+            maxSteps: $context->options?->maxSteps,
         );
     }
 
@@ -76,21 +64,16 @@ trait ParsesTextResponses
     protected function processResponse(
         array $data,
         Provider $provider,
-        string $model,
         bool $structured,
-        array $tools,
-        ?array $schema,
+        TextRequestContext $context,
         Collection $steps,
         Collection $messages,
-        array $contents,
-        ?string $instructions,
-        ?TextGenerationOptions $options,
         int $depth = 0,
         ?int $maxSteps = null,
-        ?int $timeout = null,
     ): TextResponse {
         $candidate = $data['candidates'][0] ?? [];
         $parts = $candidate['content']['parts'] ?? [];
+        $responseModel = $data['modelVersion'] ?? '';
 
         $text = $this->extractText($parts);
         $rawToolCalls = $this->extractRawToolCalls($parts);
@@ -99,7 +82,7 @@ trait ParsesTextResponses
         $finishReason = $this->extractFinishReason($data, $rawToolCalls);
 
         $mappedToolCalls = $this->mapToolCalls($rawToolCalls);
-        $meta = new Meta($provider->name(), $model, $citations);
+        $meta = new Meta($provider->name(), $responseModel, $citations);
         $toolResults = [];
 
         $assistantMessage = new AssistantMessage($text, collect($mappedToolCalls));
@@ -107,8 +90,8 @@ trait ParsesTextResponses
 
         if ($finishReason === FinishReason::ToolCalls &&
             filled($mappedToolCalls) &&
-            $steps->count() < ($maxSteps ?? round(count($tools) * 1.5))) {
-            $toolResults = $this->executeToolCalls($mappedToolCalls, $tools);
+            $steps->count() < ($maxSteps ?? round(count($context->tools) * 1.5))) {
+            $toolResults = $this->executeToolCalls($mappedToolCalls, $context->tools);
         }
 
         $steps->push(new Step($text, $mappedToolCalls, $toolResults, $finishReason, $usage, $meta));
@@ -116,23 +99,17 @@ trait ParsesTextResponses
         if (filled($toolResults)) {
             $messages->push(new ToolResultMessage(collect($toolResults)));
 
-            $contents[] = ['role' => 'model', 'parts' => $this->sanitizeRequestParts($this->excludeThinkingParts($parts))];
-            $contents[] = ['role' => 'user', 'parts' => $this->buildFunctionResponseParts($toolResults)];
+            $context->contents[] = ['role' => 'model', 'parts' => $this->sanitizeRequestParts($this->excludeThinkingParts($parts))];
+            $context->contents[] = ['role' => 'user', 'parts' => $this->buildFunctionResponseParts($toolResults)];
 
             return $this->continueWithToolResults(
-                $model,
                 $provider,
                 $structured,
-                $tools,
-                $schema,
+                $context,
                 $steps,
                 $messages,
-                $contents,
-                $instructions,
-                $options,
                 $depth + 1,
                 $maxSteps,
-                $timeout,
             );
         }
 
@@ -194,25 +171,26 @@ trait ParsesTextResponses
      * Continue the conversation with tool results by resending the full history.
      */
     protected function continueWithToolResults(
-        string $model,
         Provider $provider,
         bool $structured,
-        array $tools,
-        ?array $schema,
+        TextRequestContext $context,
         Collection $steps,
         Collection $messages,
-        array $contents,
-        ?string $instructions,
-        ?TextGenerationOptions $options,
         int $depth,
         ?int $maxSteps,
-        ?int $timeout = null,
     ): TextResponse {
-        $body = $this->rebuildContinuationBody($contents, $instructions, $tools, $schema, $options, $provider);
+        $body = $this->rebuildContinuationBody(
+            $context->contents,
+            $context->instructions,
+            $context->tools,
+            $context->schema,
+            $context->options,
+            $provider,
+        );
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post("models/{$model}:generateContent", $body),
+            fn () => $this->client($provider, $context->timeout)->post("models/{$context->model}:generateContent", $body),
         );
 
         $data = $response->json();
@@ -222,18 +200,12 @@ trait ParsesTextResponses
         return $this->processResponse(
             $data,
             $provider,
-            $model,
             $structured,
-            $tools,
-            $schema,
+            $context,
             $steps,
             $messages,
-            $contents,
-            $instructions,
-            $options,
             $depth,
             $maxSteps,
-            $timeout,
         );
     }
 

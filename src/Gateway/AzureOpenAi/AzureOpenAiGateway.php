@@ -21,6 +21,7 @@ use Laravel\Ai\Gateway\OpenAi\Concerns\MapsMessages;
 use Laravel\Ai\Gateway\OpenAi\Concerns\MapsTools;
 use Laravel\Ai\Gateway\OpenAi\Concerns\ParsesTextResponses;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Gateway\TextRequestContext;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\EmbeddingsResponse;
@@ -57,14 +58,18 @@ class AzureOpenAiGateway implements EmbeddingGateway, TextGateway
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): TextResponse {
+        $context = TextRequestContext::fromGenerateTextArgs(
+            $model, $instructions, $messages, $tools, $schema, $options, $timeout,
+        );
+
         $body = $this->buildTextRequestBody(
             $provider,
-            $model,
-            $instructions,
-            $messages,
-            $tools,
-            $schema,
-            $options,
+            $context->model,
+            $context->instructions,
+            $context->messages,
+            $context->tools,
+            $context->schema,
+            $context->options,
         );
 
         $response = $this->withErrorHandling(
@@ -76,7 +81,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, TextGateway
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, filled($schema), $tools, $schema, $options, $timeout);
+        return $this->parseTextResponse($data, $provider, filled($context->schema), $context);
     }
 
     /**
@@ -93,14 +98,18 @@ class AzureOpenAiGateway implements EmbeddingGateway, TextGateway
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): Generator {
+        $context = TextRequestContext::fromGenerateTextArgs(
+            $model, $instructions, $messages, $tools, $schema, $options, $timeout,
+        );
+
         $body = $this->buildTextRequestBody(
             $provider,
-            $model,
-            $instructions,
-            $messages,
-            $tools,
-            $schema,
-            $options,
+            $context->model,
+            $context->instructions,
+            $context->messages,
+            $context->tools,
+            $context->schema,
+            $context->options,
         );
 
         $body['stream'] = true;
@@ -115,14 +124,8 @@ class AzureOpenAiGateway implements EmbeddingGateway, TextGateway
         yield from $this->processTextStream(
             $invocationId,
             $provider,
-            $model,
-            $tools,
-            $schema,
-            $options,
+            $context,
             $response->getBody(),
-            0,
-            null,
-            $timeout,
         );
     }
 

@@ -5,7 +5,7 @@ namespace Laravel\Ai\Gateway\Xai\Concerns;
 use Generator;
 use Illuminate\Support\Str;
 use Laravel\Ai\Enums\Lab;
-use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Gateway\TextRequestContext;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
@@ -31,16 +31,12 @@ trait HandlesTextStreaming
     protected function processTextStream(
         string $invocationId,
         Provider $provider,
-        string $model,
-        array $tools,
-        ?array $schema,
-        ?TextGenerationOptions $options,
+        TextRequestContext $context,
         $streamBody,
         int $depth = 0,
         ?int $maxSteps = null,
-        ?int $timeout = null,
     ): Generator {
-        $maxSteps ??= $options?->maxSteps;
+        $maxSteps ??= $context->options?->maxSteps;
 
         $messageId = $this->generateEventId();
         $responseId = '';
@@ -75,7 +71,7 @@ trait HandlesTextStreaming
                 yield (new StreamStart(
                     $this->generateEventId(),
                     $provider->name(),
-                    $data['response']['model'] ?? $model,
+                    $data['response']['model'] ?? $context->model,
                     time(),
                 ))->withInvocationId($invocationId);
 
@@ -283,9 +279,9 @@ trait HandlesTextStreaming
 
         if (filled($pendingToolCalls)) {
             yield from $this->handleStreamingToolCalls(
-                $invocationId, $responseId, $provider, $model, $tools, $schema, $options,
+                $invocationId, $responseId, $provider, $context,
                 $pendingToolCalls, $currentText, $reasoningItems,
-                $depth, $maxSteps, $timeout,
+                $depth, $maxSteps,
             );
 
             return;
@@ -306,23 +302,19 @@ trait HandlesTextStreaming
         string $invocationId,
         string $responseId,
         Provider $provider,
-        string $model,
-        array $tools,
-        ?array $schema,
-        ?TextGenerationOptions $options,
+        TextRequestContext $context,
         array $pendingToolCalls,
         string $currentText,
         array $reasoningItems,
         int $depth,
         ?int $maxSteps,
-        ?int $timeout = null,
     ): Generator {
         $mappedToolCalls = $this->mapStreamToolCalls($pendingToolCalls);
 
         $toolResults = [];
 
         foreach ($mappedToolCalls as $toolCall) {
-            $tool = $this->findTool($toolCall->name, $tools);
+            $tool = $this->findTool($toolCall->name, $context->tools);
 
             if ($tool === null) {
                 continue;
@@ -349,31 +341,31 @@ trait HandlesTextStreaming
             ))->withInvocationId($invocationId);
         }
 
-        if ($depth + 1 < ($maxSteps ?? round(count($tools) * 1.5))) {
+        if ($depth + 1 < ($maxSteps ?? round(count($context->tools) * 1.5))) {
             $body = [
-                'model' => $model,
+                'model' => $context->model,
                 'previous_response_id' => $responseId,
                 'input' => $this->buildToolResultsInput($toolResults),
                 'stream' => true,
             ];
 
-            if (filled($tools)) {
-                $body['tools'] = $this->mapTools($tools, $provider);
+            if (filled($context->tools)) {
+                $body['tools'] = $this->mapTools($context->tools, $provider);
             }
 
-            if (filled($schema)) {
-                $body['text'] = $this->buildSchemaFormat($schema);
+            if (filled($context->schema)) {
+                $body['text'] = $this->buildSchemaFormat($context->schema);
             }
 
-            if (! is_null($options?->temperature)) {
-                $body['temperature'] = $options->temperature;
+            if (! is_null($context->options?->temperature)) {
+                $body['temperature'] = $context->options->temperature;
             }
 
-            if (! is_null($options?->maxTokens)) {
-                $body['max_output_tokens'] = $options->maxTokens;
+            if (! is_null($context->options?->maxTokens)) {
+                $body['max_output_tokens'] = $context->options->maxTokens;
             }
 
-            $providerOptions = $options?->providerOptions(
+            $providerOptions = $context->options?->providerOptions(
                 Lab::tryFrom($provider->driver()) ?? $provider->driver()
             );
 
@@ -383,14 +375,14 @@ trait HandlesTextStreaming
 
             $response = $this->withErrorHandling(
                 $provider->name(),
-                fn () => $this->client($provider, $timeout)
+                fn () => $this->client($provider, $context->timeout)
                     ->withOptions(['stream' => true])
                     ->post('responses', $body),
             );
 
             yield from $this->processTextStream(
-                $invocationId, $provider, $model, $tools, $schema, $options,
-                $response->getBody(), $depth + 1, $maxSteps, $timeout,
+                $invocationId, $provider, $context,
+                $response->getBody(), $depth + 1, $maxSteps,
             );
         } else {
             yield (new StreamEnd(

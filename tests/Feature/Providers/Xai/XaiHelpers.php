@@ -62,6 +62,32 @@ trait XaiHelpers
         ]);
     }
 
+    protected function fakeToolCallResponseWithSnapshot(string $resolvedSnapshot): PromiseInterface
+    {
+        return Http::response([
+            'id' => 'resp_tool_'.uniqid(),
+            'object' => 'response',
+            'status' => 'completed',
+            'model' => $resolvedSnapshot,
+            'output' => [
+                [
+                    'type' => 'function_call',
+                    'id' => 'fc_'.uniqid(),
+                    'call_id' => 'call_'.uniqid(),
+                    'name' => 'FixedNumberGenerator',
+                    'arguments' => '{}',
+                    'status' => 'completed',
+                ],
+            ],
+            'usage' => [
+                'input_tokens' => 10,
+                'output_tokens' => 5,
+                'input_tokens_details' => ['cached_tokens' => 0],
+                'output_tokens_details' => ['reasoning_tokens' => 0],
+            ],
+        ]);
+    }
+
     protected function fakeStructuredResponse(string $json = '{"symbol": "Au"}'): PromiseInterface
     {
         return $this->fakeTextResponse($json);

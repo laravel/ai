@@ -18,6 +18,7 @@ use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Gateway\TextRequestContext;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
@@ -59,13 +60,18 @@ class GeminiGateway implements Gateway
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): TextResponse {
-        [$body, $contents] = $this->buildTextRequestBody(
-            $provider, $instructions, $messages, $tools, $schema, $options,
+        $context = TextRequestContext::fromGenerateTextArgs(
+            $model, $instructions, $messages, $tools, $schema, $options, $timeout,
         );
+
+        [$body, $contents] = $this->buildTextRequestBody(
+            $provider, $context->instructions, $context->messages, $context->tools, $context->schema, $context->options,
+        );
+        $context->contents = $contents;
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post("models/{$model}:generateContent", $body),
+            fn () => $this->client($provider, $context->timeout)->post("models/{$context->model}:generateContent", $body),
         );
 
         $data = $response->json();
@@ -75,14 +81,8 @@ class GeminiGateway implements Gateway
         return $this->parseTextResponse(
             $data,
             $provider,
-            $model,
-            filled($schema),
-            $tools,
-            $schema,
-            $options,
-            $contents,
-            $instructions,
-            $timeout,
+            filled($context->schema),
+            $context,
         );
     }
 
@@ -100,30 +100,27 @@ class GeminiGateway implements Gateway
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): Generator {
-        [$body, $contents] = $this->buildTextRequestBody(
-            $provider, $instructions, $messages, $tools, $schema, $options,
+        $context = TextRequestContext::fromGenerateTextArgs(
+            $model, $instructions, $messages, $tools, $schema, $options, $timeout,
         );
+
+        [$body, $contents] = $this->buildTextRequestBody(
+            $provider, $context->instructions, $context->messages, $context->tools, $context->schema, $context->options,
+        );
+        $context->contents = $contents;
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)
+            fn () => $this->client($provider, $context->timeout)
                 ->withOptions(['stream' => true])
-                ->post("models/{$model}:streamGenerateContent?alt=sse", $body),
+                ->post("models/{$context->model}:streamGenerateContent?alt=sse", $body),
         );
 
         yield from $this->processTextStream(
             $invocationId,
             $provider,
-            $model,
-            $tools,
-            $schema,
-            $options,
+            $context,
             $response->getBody(),
-            $contents,
-            $instructions,
-            0,
-            null,
-            $timeout,
         );
     }
 

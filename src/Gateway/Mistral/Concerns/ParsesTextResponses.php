@@ -5,7 +5,7 @@ namespace Laravel\Ai\Gateway\Mistral\Concerns;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\AiException;
-use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Gateway\TextRequestContext;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Providers\Provider;
@@ -43,26 +43,16 @@ trait ParsesTextResponses
         array $data,
         Provider $provider,
         bool $structured,
-        array $tools = [],
-        ?array $schema = null,
-        ?TextGenerationOptions $options = null,
-        ?string $instructions = null,
-        array $originalMessages = [],
-        ?int $timeout = null,
+        TextRequestContext $context,
     ): TextResponse {
         return $this->processResponse(
             $data,
             $provider,
             $structured,
-            $tools,
-            $schema,
+            $context,
             new Collection,
             new Collection,
-            instructions: $instructions,
-            originalMessages: $originalMessages,
-            maxSteps: $options?->maxSteps,
-            options: $options,
-            timeout: $timeout,
+            maxSteps: $context->options?->maxSteps,
         );
     }
 
@@ -73,16 +63,11 @@ trait ParsesTextResponses
         array $data,
         Provider $provider,
         bool $structured,
-        array $tools,
-        ?array $schema,
+        TextRequestContext $context,
         Collection $steps,
         Collection $messages,
-        ?string $instructions = null,
-        array $originalMessages = [],
         int $depth = 0,
         ?int $maxSteps = null,
-        ?TextGenerationOptions $options = null,
-        ?int $timeout = null,
     ): TextResponse {
         $choice = $data['choices'][0] ?? [];
         $message = $choice['message'] ?? [];
@@ -117,8 +102,8 @@ trait ParsesTextResponses
 
         if ($finishReason === FinishReason::ToolCalls &&
             filled($mappedToolCalls) &&
-            $steps->count() < ($maxSteps ?? round(count($tools) * 1.5))) {
-            $toolResults = $this->executeToolCalls($mappedToolCalls, $tools);
+            $steps->count() < ($maxSteps ?? round(count($context->tools) * 1.5))) {
+            $toolResults = $this->executeToolCalls($mappedToolCalls, $context->tools);
 
             $steps->pop();
 
@@ -136,19 +121,13 @@ trait ParsesTextResponses
             $messages->push($toolResultMessage);
 
             return $this->continueWithToolResults(
-                $model,
                 $provider,
                 $structured,
-                $tools,
-                $schema,
+                $context,
                 $steps,
                 $messages,
-                $instructions,
-                $originalMessages,
                 $depth + 1,
                 $maxSteps,
-                $options,
-                $timeout,
             );
         }
 
@@ -212,21 +191,15 @@ trait ParsesTextResponses
      * Continue the conversation with tool results by making a follow-up request.
      */
     protected function continueWithToolResults(
-        string $model,
         Provider $provider,
         bool $structured,
-        array $tools,
-        ?array $schema,
+        TextRequestContext $context,
         Collection $steps,
         Collection $messages,
-        ?string $instructions,
-        array $originalMessages,
         int $depth,
         ?int $maxSteps,
-        ?TextGenerationOptions $options = null,
-        ?int $timeout = null,
     ): TextResponse {
-        $chatMessages = $this->mapMessagesToChat($originalMessages, $instructions);
+        $chatMessages = $context->providerMessages;
 
         foreach ($messages as $msg) {
             if ($msg instanceof AssistantMessage) {
@@ -254,14 +227,12 @@ trait ParsesTextResponses
             }
         }
 
-        $body = $this->applyTextOptions([
-            'model' => $model,
-            'messages' => $chatMessages,
-        ], $provider, $tools, $schema, $options);
+        $body = $context->requestBody;
+        $body['messages'] = $chatMessages;
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('chat/completions', $body),
+            fn () => $this->client($provider, $context->timeout)->post('chat/completions', $body),
         );
 
         $data = $response->json();
@@ -272,16 +243,11 @@ trait ParsesTextResponses
             $data,
             $provider,
             $structured,
-            $tools,
-            $schema,
+            $context,
             $steps,
             $messages,
-            $instructions,
-            $originalMessages,
             $depth,
             $maxSteps,
-            $options,
-            $timeout,
         );
     }
 

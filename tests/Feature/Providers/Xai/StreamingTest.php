@@ -81,6 +81,50 @@ test('streaming handles tool calls', function () {
         ->and($toolResultEvents)->not->toBeEmpty();
 });
 
+test('streaming tool call follow up requests preserve the originally requested model alias', function () {
+    Http::fake([
+        '*' => Http::sequence([
+            Http::response(
+                body: $this->ssePayload([
+                    ['type' => 'response.created', 'response' => ['id' => 'resp_123', 'model' => 'grok-4-1-fast-reasoning-2026-04-28']],
+                    ['type' => 'response.output_item.added', 'output_index' => 0, 'item' => ['type' => 'function_call', 'id' => 'fc_1', 'call_id' => 'call_1', 'name' => 'FixedNumberGenerator']],
+                    ['type' => 'response.function_call_arguments.delta', 'item_id' => 'fc_1', 'delta' => '{}'],
+                    ['type' => 'response.function_call_arguments.done', 'item_id' => 'fc_1', 'arguments' => '{}'],
+                    ['type' => 'response.completed', 'response' => ['id' => 'resp_123', 'status' => 'completed', 'model' => 'grok-4-1-fast-reasoning-2026-04-28', 'output' => [['type' => 'function_call', 'status' => 'completed', 'id' => 'fc_1', 'call_id' => 'call_1', 'name' => 'FixedNumberGenerator', 'arguments' => '{}']], 'usage' => ['input_tokens' => 10, 'output_tokens' => 5, 'input_tokens_details' => ['cached_tokens' => 0], 'output_tokens_details' => ['reasoning_tokens' => 0]]]],
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+            Http::response(
+                body: $this->ssePayload([
+                    ['type' => 'response.created', 'response' => ['id' => 'resp_456', 'model' => 'grok-4-1-fast-reasoning-2026-04-28']],
+                    ['type' => 'response.output_text.delta', 'delta' => 'The number is 72019'],
+                    ['type' => 'response.output_text.done'],
+                    ['type' => 'response.completed', 'response' => ['id' => 'resp_456', 'status' => 'completed', 'model' => 'grok-4-1-fast-reasoning-2026-04-28', 'output' => [['type' => 'message', 'status' => 'completed', 'role' => 'assistant', 'content' => [['type' => 'output_text', 'text' => '']]]], 'usage' => ['input_tokens' => 20, 'output_tokens' => 10, 'input_tokens_details' => ['cached_tokens' => 0], 'output_tokens_details' => ['reasoning_tokens' => 0]]]],
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]),
+    ]);
+
+    $events = iterator_to_array(
+        (new ProviderOptionsWithToolsAgent)->stream('Generate a random number', provider: 'xai', model: 'grok-4-1-fast-reasoning'),
+        false,
+    );
+
+    $recorded = Http::recorded();
+
+    expect($events)->not->toBeEmpty()
+        ->and($recorded)->toHaveCount(2);
+
+    $firstRequestBody = json_decode($recorded[0][0]->body(), true);
+    $followUpBody = json_decode($recorded[1][0]->body(), true);
+
+    expect($firstRequestBody['model'])->toBe('grok-4-1-fast-reasoning')
+        ->and($followUpBody['model'])->toBe('grok-4-1-fast-reasoning');
+});
+
 test('streaming captures usage', function () {
     Http::fake([
         '*' => Http::response(

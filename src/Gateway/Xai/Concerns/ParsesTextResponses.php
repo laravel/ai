@@ -6,7 +6,7 @@ use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Exceptions\AiException;
-use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Gateway\TextRequestContext;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Providers\Provider;
@@ -55,22 +55,16 @@ trait ParsesTextResponses
         array $data,
         Provider $provider,
         bool $structured,
-        array $tools = [],
-        ?array $schema = null,
-        ?TextGenerationOptions $options = null,
-        ?int $timeout = null,
+        TextRequestContext $context,
     ): TextResponse {
         return $this->processResponse(
             $data,
             $provider,
             $structured,
-            $tools,
-            $schema,
+            $context,
             new Collection,
             new Collection,
-            maxSteps: $options?->maxSteps,
-            options: $options,
-            timeout: $timeout,
+            maxSteps: $context->options?->maxSteps,
         );
     }
 
@@ -81,18 +75,15 @@ trait ParsesTextResponses
         array $data,
         Provider $provider,
         bool $structured,
-        array $tools,
-        ?array $schema,
+        TextRequestContext $context,
         Collection $steps,
         Collection $messages,
         int $depth = 0,
         ?int $maxSteps = null,
-        ?TextGenerationOptions $options = null,
-        ?int $timeout = null,
     ): TextResponse {
         $responseId = $data['id'] ?? '';
         $output = $data['output'] ?? [];
-        $model = $data['model'] ?? '';
+        $responseModel = $data['model'] ?? '';
 
         $text = $this->extractText($output);
         $toolCalls = $this->extractToolCalls($output);
@@ -109,7 +100,7 @@ trait ParsesTextResponses
             [],
             $finishReason,
             $usage,
-            new Meta($provider->name(), $model, $citations),
+            new Meta($provider->name(), $responseModel, $citations),
         );
 
         $steps->push($step);
@@ -120,8 +111,8 @@ trait ParsesTextResponses
 
         if ($finishReason === FinishReason::ToolCalls &&
             filled($mappedToolCalls) &&
-            $steps->count() < ($maxSteps ?? round(count($tools) * 1.5))) {
-            $toolResults = $this->executeToolCalls($mappedToolCalls, $tools);
+            $steps->count() < ($maxSteps ?? round(count($context->tools) * 1.5))) {
+            $toolResults = $this->executeToolCalls($mappedToolCalls, $context->tools);
 
             $steps->pop();
 
@@ -131,7 +122,7 @@ trait ParsesTextResponses
                 $toolResults,
                 $finishReason,
                 $usage,
-                new Meta($provider->name(), $model, $citations),
+                new Meta($provider->name(), $responseModel, $citations),
             ));
 
             $toolResultMessage = new ToolResultMessage(collect($toolResults));
@@ -139,7 +130,7 @@ trait ParsesTextResponses
             $messages->push($toolResultMessage);
 
             return $this->continueWithToolResults(
-                $responseId, $model, $provider, $structured, $tools, $schema, $steps, $messages, $toolResults, $depth + 1, $maxSteps, $options, $timeout,
+                $responseId, $provider, $structured, $context, $steps, $messages, $toolResults, $depth + 1, $maxSteps,
             );
         }
 
@@ -153,7 +144,7 @@ trait ParsesTextResponses
                 $structuredData,
                 $text,
                 $this->combineUsage($steps),
-                new Meta($provider->name(), $model, $citations),
+                new Meta($provider->name(), $responseModel, $citations),
             ))->withToolCallsAndResults(
                 toolCalls: $allToolCalls,
                 toolResults: $allToolResults,
@@ -163,7 +154,7 @@ trait ParsesTextResponses
         return (new TextResponse(
             $text,
             $this->combineUsage($steps),
-            new Meta($provider->name(), $model, $citations),
+            new Meta($provider->name(), $responseModel, $citations),
         ))->withMessages($messages)->withSteps($steps);
     }
 
@@ -204,42 +195,38 @@ trait ParsesTextResponses
      */
     protected function continueWithToolResults(
         string $responseId,
-        string $model,
         Provider $provider,
         bool $structured,
-        array $tools,
-        ?array $schema,
+        TextRequestContext $context,
         Collection $steps,
         Collection $messages,
         array $toolResults,
         int $depth,
         ?int $maxSteps,
-        ?TextGenerationOptions $options = null,
-        ?int $timeout = null,
     ): TextResponse {
         $body = [
-            'model' => $model,
+            'model' => $context->model,
             'previous_response_id' => $responseId,
             'input' => $this->buildToolResultsInput($toolResults),
         ];
 
-        if (filled($tools)) {
-            $body['tools'] = $this->mapTools($tools, $provider);
+        if (filled($context->tools)) {
+            $body['tools'] = $this->mapTools($context->tools, $provider);
         }
 
-        if (filled($schema)) {
-            $body['text'] = $this->buildSchemaFormat($schema);
+        if (filled($context->schema)) {
+            $body['text'] = $this->buildSchemaFormat($context->schema);
         }
 
-        if (! is_null($options?->temperature)) {
-            $body['temperature'] = $options->temperature;
+        if (! is_null($context->options?->temperature)) {
+            $body['temperature'] = $context->options->temperature;
         }
 
-        if (! is_null($options?->maxTokens)) {
-            $body['max_output_tokens'] = $options->maxTokens;
+        if (! is_null($context->options?->maxTokens)) {
+            $body['max_output_tokens'] = $context->options->maxTokens;
         }
 
-        $providerOptions = $options?->providerOptions(
+        $providerOptions = $context->options?->providerOptions(
             Lab::tryFrom($provider->driver()) ?? $provider->driver()
         );
 
@@ -249,14 +236,14 @@ trait ParsesTextResponses
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('responses', $body),
+            fn () => $this->client($provider, $context->timeout)->post('responses', $body),
         );
 
         $data = $response->json();
 
         $this->validateTextResponse($data);
 
-        return $this->processResponse($data, $provider, $structured, $tools, $schema, $steps, $messages, $depth, $maxSteps, $options, $timeout);
+        return $this->processResponse($data, $provider, $structured, $context, $steps, $messages, $depth, $maxSteps);
     }
 
     /**
