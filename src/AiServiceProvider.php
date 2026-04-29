@@ -12,6 +12,7 @@ use Laravel\Ai\Console\Commands\MakeAgentMiddlewareCommand;
 use Laravel\Ai\Console\Commands\MakeToolCommand;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Mcp\McpManager;
 use Laravel\Ai\Storage\DatabaseConversationStore;
 
 class AiServiceProvider extends ServiceProvider
@@ -22,6 +23,7 @@ class AiServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->scoped(AiManager::class, fn ($app): AiManager => new AiManager($app));
+        $this->app->scoped(McpManager::class, fn ($app): McpManager => new McpManager($app));
         $this->app->singleton(ConversationStore::class, DatabaseConversationStore::class);
 
         $this->mergeConfigFrom(__DIR__.'/../config/ai.php', 'ai');
@@ -36,6 +38,12 @@ class AiServiceProvider extends ServiceProvider
             $this->registerCommands();
             $this->registerPublishing();
         }
+
+        $this->app->terminating(function () {
+            if ($this->app->resolved(McpManager::class)) {
+                $this->app->make(McpManager::class)->disconnectAll();
+            }
+        });
 
         // Embeddings macro...
         Stringable::macro('toEmbeddings', function (
