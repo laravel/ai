@@ -1,5 +1,6 @@
 <?php
 
+use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
@@ -11,7 +12,7 @@ beforeEach(function () {
     ]]);
 });
 
-function fakeOpenAiEmbeddingResponse(): \GuzzleHttp\Promise\PromiseInterface
+function fakeOpenAiEmbeddingResponse(): PromiseInterface
 {
     return Http::response([
         'object' => 'list',
