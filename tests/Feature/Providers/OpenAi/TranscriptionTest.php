@@ -1,6 +1,5 @@
 <?php
 
-use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Transcription;
@@ -12,7 +11,7 @@ beforeEach(function () {
     ]]);
 });
 
-function fakeOpenAiTranscriptionResponse(string $text = 'Hello, world!'): PromiseInterface
+function fakeTranscriptionResponse(string $text = 'Hello, world!')
 {
     return Http::response([
         'text' => $text,
@@ -24,10 +23,10 @@ function fakeOpenAiTranscriptionResponse(string $text = 'Hello, world!'): Promis
 }
 
 test('transcription request posts to correct endpoint', function () {
-    Http::fake(['*' => fakeOpenAiTranscriptionResponse()]);
+    Http::fake(['*' => fakeTranscriptionResponse()]);
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
-        ->generate(provider: 'openai', model: 'gpt-4o-transcribe');
+        ->generate(provider: 'openai');
 
     Http::assertSent(function (Request $request) {
         return $request->url() === 'https://api.openai.com/v1/audio/transcriptions'
@@ -35,8 +34,19 @@ test('transcription request posts to correct endpoint', function () {
     });
 });
 
+test('transcription includes model in request', function () {
+    Http::fake(['*' => fakeTranscriptionResponse()]);
+
+    Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->generate(provider: 'openai');
+
+    Http::assertSent(function (Request $request) {
+        return str_contains($request->body(), 'gpt-4o-transcribe');
+    });
+});
+
 test('transcription strips diarize suffix from model when diarize is off', function () {
-    Http::fake(['*' => fakeOpenAiTranscriptionResponse()]);
+    Http::fake(['*' => fakeTranscriptionResponse()]);
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
         ->generate(provider: 'openai', model: 'gpt-4o-transcribe-diarize');
@@ -48,31 +58,37 @@ test('transcription strips diarize suffix from model when diarize is off', funct
 });
 
 test('transcription response text is correctly parsed', function () {
-    Http::fake(['*' => fakeOpenAiTranscriptionResponse('Hello, world!')]);
+    Http::fake(['*' => fakeTranscriptionResponse('Hello, world!')]);
 
     $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
-        ->generate(provider: 'openai', model: 'gpt-4o-transcribe');
+        ->generate(provider: 'openai');
 
     expect($response->text)->toBe('Hello, world!')
         ->and($response->meta->provider)->toBe('openai');
 });
 
 test('transcription usage is correctly parsed', function () {
-    Http::fake(['*' => fakeOpenAiTranscriptionResponse()]);
+    Http::fake(['*' => Http::response([
+        'text' => 'Hello',
+        'usage' => [
+            'input_tokens' => 100,
+            'total_tokens' => 150,
+        ],
+    ])]);
 
     $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
-        ->generate(provider: 'openai', model: 'gpt-4o-transcribe');
+        ->generate(provider: 'openai');
 
-    expect($response->usage->promptTokens)->toBe(10)
-        ->and($response->usage->completionTokens)->toBe(15);
+    expect($response->usage->promptTokens)->toBe(100)
+        ->and($response->usage->completionTokens)->toBe(150);
 });
 
 test('transcription sends language when provided', function () {
-    Http::fake(['*' => fakeOpenAiTranscriptionResponse()]);
+    Http::fake(['*' => fakeTranscriptionResponse()]);
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
         ->language('en')
-        ->generate(provider: 'openai', model: 'gpt-4o-transcribe');
+        ->generate(provider: 'openai');
 
     Http::assertSent(function (Request $request) {
         return str_contains($request->body(), 'language')
@@ -81,10 +97,12 @@ test('transcription sends language when provided', function () {
 });
 
 test('transcription request sends bearer token', function () {
-    Http::fake(['*' => fakeOpenAiTranscriptionResponse()]);
+    Http::fake(['*' => fakeTranscriptionResponse()]);
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
-        ->generate(provider: 'openai', model: 'gpt-4o-transcribe');
+        ->generate(provider: 'openai');
 
-    Http::assertSent(fn (Request $request) => $request->hasHeader('Authorization', 'Bearer test-key'));
+    Http::assertSent(function (Request $request) {
+        return $request->hasHeader('Authorization', 'Bearer test-key');
+    });
 });
