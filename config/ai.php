@@ -90,7 +90,6 @@ return [
         'eleven' => [
             'driver' => 'eleven',
             'key' => env('ELEVENLABS_API_KEY'),
-            'url' => env('ELEVENLABS_URL', 'https://api.elevenlabs.io/v1'),
         ],
 
         'gemini' => [
