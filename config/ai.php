@@ -106,6 +106,7 @@ return [
         'jina' => [
             'driver' => 'jina',
             'key' => env('JINA_API_KEY'),
+            'url' => env('JINA_URL', 'https://api.jina.ai/v1'),
         ],
 
         'mistral' => [
