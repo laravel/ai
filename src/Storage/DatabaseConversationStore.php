@@ -112,8 +112,8 @@ class DatabaseConversationStore implements ConversationStore
             ->reverse()
             ->values()
             ->flatMap(function ($record) {
-                $toolCalls = collect(json_decode($record->tool_calls, true));
-                $toolResults = collect(json_decode($record->tool_results, true));
+                $toolCalls = collect(json_decode($record->tool_calls, true))->values();
+                $toolResults = collect(json_decode($record->tool_results, true))->values();
 
                 if ($record->role === 'user') {
                     return [new Message('user', $record->content)];
