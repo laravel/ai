@@ -5,11 +5,13 @@ namespace Laravel\Ai\Providers\Concerns;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Conversational;
+use Laravel\Ai\Contracts\HasMcpServers;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Events\AgentStreamed;
 use Laravel\Ai\Events\StreamingAgent;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Mcp\McpToolResolver;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\Data\Meta;
@@ -54,13 +56,19 @@ trait StreamsText
 
                         $this->listenForToolInvocations($invocationId, $agent);
 
+                        $tools = $agent instanceof HasTools ? [...$agent->tools()] : [];
+
+                        if ($agent instanceof HasMcpServers && filled($agent->mcpServers())) {
+                            $tools = [...$tools, ...resolve(McpToolResolver::class)->tools($agent->mcpServers())];
+                        }
+
                         yield from $this->textGateway()->streamText(
                             $invocationId,
                             $this,
                             $prompt->model,
                             (string) $agent->instructions(),
                             $messages,
-                            $agent instanceof HasTools ? $agent->tools() : [],
+                            $tools,
                             null,
                             TextGenerationOptions::forAgent($agent),
                             $prompt->timeout,

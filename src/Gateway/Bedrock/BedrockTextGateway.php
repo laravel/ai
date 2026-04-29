@@ -777,15 +777,23 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
     {
         return (new Collection($tools))
             ->filter(fn ($tool) => $tool instanceof Tool)
-            ->map(fn (Tool $tool) => [
-                'toolSpec' => [
-                    'name' => class_basename($tool),
-                    'description' => (string) $tool->description(),
-                    'inputSchema' => [
-                        'json' => (new ObjectSchema($tool->schema(new JsonSchemaTypeFactory)))->toArray(),
+            ->map(function (Tool $tool) {
+                $schemaArray = $this->toolSchemaArray($tool);
+
+                if ($this->toolHasRawSchema($tool) && ($schemaArray['properties'] ?? []) === []) {
+                    $schemaArray['properties'] = (object) [];
+                }
+
+                return [
+                    'toolSpec' => [
+                        'name' => $this->toolName($tool),
+                        'description' => (string) $tool->description(),
+                        'inputSchema' => [
+                            'json' => $schemaArray,
+                        ],
                     ],
-                ],
-            ])
+                ];
+            })
             ->values()
             ->all();
     }

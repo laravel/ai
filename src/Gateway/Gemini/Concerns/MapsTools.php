@@ -2,13 +2,12 @@
 
 namespace Laravel\Ai\Gateway\Gemini\Concerns;
 
-use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Arr;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\ObjectSchema;
+use Laravel\Ai\Gateway\Concerns\ResolvesToolMetadata;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\ProviderTool;
@@ -18,6 +17,8 @@ use RuntimeException;
 
 trait MapsTools
 {
+    use ResolvesToolMetadata;
+
     /**
      * Map the given tools to Gemini tool definitions.
      */
@@ -56,24 +57,33 @@ trait MapsTools
      */
     protected function mapTool(Tool $tool): array
     {
-        $schema = $tool->schema(new JsonSchemaTypeFactory);
+        $schemaArray = $this->toolSchemaArray($tool);
+        $isRaw = $this->toolHasRawSchema($tool);
 
         $definition = [
-            'name' => class_basename($tool),
+            'name' => $this->toolName($tool),
             'description' => (string) $tool->description(),
         ];
 
-        if (filled($schema)) {
-            $schemaArray = (new ObjectSchema($schema))->toSchema();
-
-            $definition['parameters'] = Arr::except(
-                $this->convertNullableTypes([
+        if (filled($schemaArray)) {
+            $parameters = $isRaw
+                ? $schemaArray
+                : [
                     'type' => 'object',
                     'properties' => $schemaArray['properties'] ?? [],
                     'required' => $schemaArray['required'] ?? [],
-                ]),
+                ];
+
+            $parameters = Arr::except(
+                $this->convertNullableTypes($parameters),
                 ['additionalProperties'],
             );
+
+            if ($isRaw && ($parameters['properties'] ?? []) === []) {
+                $parameters['properties'] = (object) [];
+            }
+
+            $definition['parameters'] = $parameters;
         }
 
         return $definition;

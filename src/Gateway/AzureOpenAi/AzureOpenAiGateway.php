@@ -4,7 +4,6 @@ namespace Laravel\Ai\Gateway\AzureOpenAi;
 
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
-use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
@@ -21,7 +20,6 @@ use Laravel\Ai\Gateway\OpenAi\Concerns\MapsMessages;
 use Laravel\Ai\Gateway\OpenAi\Concerns\MapsTools;
 use Laravel\Ai\Gateway\OpenAi\Concerns\ParsesTextResponses;
 use Laravel\Ai\Gateway\TextGenerationOptions;
-use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\TextResponse;
@@ -159,21 +157,28 @@ class AzureOpenAiGateway implements EmbeddingGateway, TextGateway
      */
     protected function mapTool(Tool $tool): array
     {
-        $schema = $tool->schema(new JsonSchemaTypeFactory);
+        $schemaArray = $this->toolSchemaArray($tool);
+        $isRaw = $this->toolHasRawSchema($tool);
 
-        $schemaArray = filled($schema)
-            ? (new ObjectSchema($schema))->toSchema()
-            : [];
+        if ($isRaw) {
+            $parameters = $schemaArray;
 
-        return array_filter([
-            'type' => 'function',
-            'name' => class_basename($tool),
-            'description' => (string) $tool->description(),
-            'parameters' => filled($schemaArray) ? [
+            if (($parameters['properties'] ?? []) === []) {
+                $parameters['properties'] = (object) [];
+            }
+        } else {
+            $parameters = filled($schemaArray) ? [
                 'type' => 'object',
                 'properties' => $schemaArray['properties'] ?? (object) [],
                 'required' => $schemaArray['required'] ?? [],
-            ] : null,
+            ] : null;
+        }
+
+        return array_filter([
+            'type' => 'function',
+            'name' => $this->toolName($tool),
+            'description' => (string) $tool->description(),
+            'parameters' => $parameters,
         ]);
     }
 }

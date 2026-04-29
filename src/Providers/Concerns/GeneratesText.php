@@ -10,10 +10,12 @@ use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Contracts\HasMcpServers;
 use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Mcp\McpToolResolver;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
@@ -58,12 +60,18 @@ trait GeneratesText
 
                 $schema = $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null;
 
+                $tools = $agent instanceof HasTools ? [...$agent->tools()] : [];
+
+                if ($agent instanceof HasMcpServers && filled($agent->mcpServers())) {
+                    $tools = [...$tools, ...resolve(McpToolResolver::class)->tools($agent->mcpServers())];
+                }
+
                 $response = $this->textGateway()->generateText(
                     $this,
                     $prompt->model,
                     (string) $agent->instructions(),
                     $messages,
-                    $agent instanceof HasTools ? $agent->tools() : [],
+                    $tools,
                     $schema,
                     TextGenerationOptions::forAgent($agent),
                     $prompt->timeout,
