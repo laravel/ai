@@ -23,10 +23,11 @@ function agent(
     iterable $messages = [],
     iterable $tools = [],
     ?Closure $schema = null,
+    array $mcpServers = [],
 ): Agent {
     return $schema
-        ? new StructuredAnonymousAgent($instructions, $messages, $tools, $schema)
-        : new AnonymousAgent($instructions, $messages, $tools);
+        ? new StructuredAnonymousAgent($instructions, $messages, $tools, $schema, $mcpServers)
+        : new AnonymousAgent($instructions, $messages, $tools, $mcpServers);
 }
 
 /**

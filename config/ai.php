@@ -40,6 +40,27 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | MCP Servers
+    |--------------------------------------------------------------------------
+    |
+    | Here you may define stdio MCP (Model Context Protocol) servers that
+    | agents may opt into for dynamically discovered tool capabilities.
+    |
+    */
+
+    'mcp' => [
+        'servers' => [
+            // 'filesystem' => [
+            //     'transport' => 'stdio',
+            //     'command' => ['npx', '-y', '@modelcontextprotocol/server-filesystem', base_path()],
+            //     'env' => [],
+            //     'timeout' => 30,
+            // ],
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | AI Providers
     |--------------------------------------------------------------------------
     |
