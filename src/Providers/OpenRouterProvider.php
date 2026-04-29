@@ -2,17 +2,41 @@
 
 namespace Laravel\Ai\Providers;
 
-use Laravel\Ai\Contracts\Providers\TextProvider;
+use Illuminate\Contracts\Events\Dispatcher;
+use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
+use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
+use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Gateway\OpenRouter\OpenRouterGateway;
 
 class OpenRouterProvider extends Provider implements EmbeddingProvider, TextProvider
 {
+    use Concerns\GeneratesEmbeddings;
     use Concerns\GeneratesText;
+    use Concerns\HasEmbeddingGateway;
     use Concerns\HasTextGateway;
     use Concerns\StreamsText;
-    use Concerns\GeneratesEmbeddings;
-    use Concerns\HasEmbeddingGateway;
 
+    public function __construct(protected array $config, protected Dispatcher $events)
+    {
+        //
+    }
+
+    /**
+     * Get the provider's text gateway.
+     */
+    public function textGateway(): TextGateway
+    {
+        return $this->textGateway ??= new OpenRouterGateway($this->events);
+    }
+
+    /**
+     * Get the provider's embedding gateway.
+     */
+    public function embeddingGateway(): EmbeddingGateway
+    {
+        return $this->embeddingGateway ??= new OpenRouterGateway($this->events);
+    }
 
     /**
      * Get the name of the default text model.
