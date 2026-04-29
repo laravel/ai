@@ -49,6 +49,14 @@ abstract class Provider
     }
 
     /**
+     * Get the full configuration array for the provider.
+     */
+    public function config(): array
+    {
+        return $this->config;
+    }
+
+    /**
      * Format the given provider / model list.
      */
     public static function formatProviderAndModelList(Lab|array|string $providers, ?string $model = null): array

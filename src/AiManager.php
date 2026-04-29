@@ -25,6 +25,7 @@ use Laravel\Ai\Providers\DeepSeekProvider;
 use Laravel\Ai\Providers\ElevenLabsProvider;
 use Laravel\Ai\Providers\GeminiProvider;
 use Laravel\Ai\Providers\GroqProvider;
+use Laravel\Ai\Providers\InfomaniakProvider;
 use Laravel\Ai\Providers\JinaProvider;
 use Laravel\Ai\Providers\MistralProvider;
 use Laravel\Ai\Providers\OllamaProvider;
@@ -440,6 +441,17 @@ class AiManager extends MultipleInstanceManager
     public function createXaiDriver(array $config): XaiProvider
     {
         return new XaiProvider(
+            $config,
+            $this->app->make(Dispatcher::class),
+        );
+    }
+
+    /**
+     * Create an Infomaniak (Euria) powered instance.
+     */
+    public function createInfomaniakDriver(array $config): InfomaniakProvider
+    {
+        return new InfomaniakProvider(
             $config,
             $this->app->make(Dispatcher::class),
         );

@@ -136,9 +136,9 @@ test('generate accepts ai provider enum', function () {
 test('queued transcription accepts ai provider enum', function () {
     Transcription::fake();
 
-    Transcription::fromPath('/path/to/audio.mp3')->queue(provider: Lab::ElevenLabs);
+    Transcription::fromPath('/path/to/audio.mp3')->queue(provider: Lab::OpenAI);
 
-    Transcription::assertQueued(fn (QueuedTranscriptionPrompt $prompt) => $prompt->provider === Lab::ElevenLabs);
+    Transcription::assertQueued(fn (QueuedTranscriptionPrompt $prompt) => $prompt->provider === Lab::OpenAI);
 });
 
 test('queued transcription language and diarize are recorded', function () {

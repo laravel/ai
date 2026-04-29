@@ -10,6 +10,8 @@ class TranscriptionResponse
 {
     public string $text;
 
+    public ?string $language;
+
     public Collection $segments;
 
     public Usage $usage;
@@ -21,9 +23,11 @@ class TranscriptionResponse
         Collection $segments,
         Usage $usage,
         Meta $meta,
+        ?string $language = null,
     ) {
         $this->text = $text;
-        $this->segments = $segments ?? new Collection;
+        $this->language = $language;
+        $this->segments = $segments;
         $this->usage = $usage;
         $this->meta = $meta;
     }

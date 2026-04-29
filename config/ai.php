@@ -143,6 +143,12 @@ return [
             'key' => env('XAI_API_KEY'),
             'url' => env('XAI_URL', 'https://api.x.ai/v1'),
         ],
+
+        'infomaniak' => [
+            'driver' => 'infomaniak',
+            'key' => env('INFOMANIAK_API_TOKEN'),
+            'url' => env('INFOMANIAK_AI_BASE_URL', 'https://api.infomaniak.com/1/ai'),
+        ],
     ],
 
 ];

@@ -5,7 +5,7 @@ use Laravel\Ai\Audio;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Prompts\AudioPrompt;
 use Laravel\Ai\Prompts\QueuedAudioPrompt;
-use Laravel\Ai\Providers\ElevenLabsProvider;
+use Laravel\Ai\Providers\InfomaniakProvider;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\Meta;
 
@@ -94,7 +94,7 @@ test('stringable audio macro passes through options', function () {
     Audio::fake();
 
     Str::of('Hello world')->toAudio(
-        provider: Lab::ElevenLabs,
+        provider: Lab::OpenAI,
         voice: 'alloy',
         instructions: 'Speak slowly',
         model: 'custom-model',
@@ -103,7 +103,7 @@ test('stringable audio macro passes through options', function () {
 
     Audio::assertGenerated(function (AudioPrompt $prompt) {
         return $prompt->text === 'Hello world'
-            && $prompt->provider instanceof ElevenLabsProvider
+            && $prompt->provider instanceof InfomaniakProvider
             && $prompt->voice === 'alloy'
             && $prompt->instructions === 'Speak slowly'
             && $prompt->model === 'custom-model'
@@ -171,10 +171,10 @@ test('generate accepts ai provider enum', function () {
 test('queued audio accepts ai provider enum', function () {
     Audio::fake();
 
-    Audio::of('Queued enum audio')->queue(provider: Lab::ElevenLabs);
+    Audio::of('Queued enum audio')->queue(provider: Lab::OpenAI);
 
     Audio::assertQueued(fn (QueuedAudioPrompt $prompt) => $prompt->text === 'Queued enum audio'
-        && $prompt->provider === Lab::ElevenLabs);
+        && $prompt->provider === Lab::OpenAI);
 });
 
 test('queued audio voice and instructions are recorded', function () {

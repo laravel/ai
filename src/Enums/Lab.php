@@ -9,7 +9,7 @@ enum Lab: string
     case Bedrock = 'bedrock';
     case Cohere = 'cohere';
     case DeepSeek = 'deepseek';
-    case ElevenLabs = 'eleven';
+    case Elevenlabs = 'eleven';
     case Gemini = 'gemini';
     case Groq = 'groq';
     case Jina = 'jina';
@@ -19,4 +19,5 @@ enum Lab: string
     case OpenRouter = 'openrouter';
     case VoyageAI = 'voyageai';
     case xAI = 'xai';
+    case Infomaniak = 'infomaniak';
 }
