@@ -22,6 +22,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Conversation Store
+    |--------------------------------------------------------------------------
+    |
+    | Here you may configure the behaviour of the conversation store used to
+    | persist agent conversations. Set "title" to false to skip LLM-generated
+    | titles and use a truncated version of the first prompt instead.
+    |
+    */
+
+    'conversations' => [
+        'title' => env('AI_CONVERSATION_TITLE', true),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Caching
     |--------------------------------------------------------------------------
     |

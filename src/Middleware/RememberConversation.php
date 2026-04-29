@@ -68,6 +68,10 @@ class RememberConversation
      */
     protected function generateTitle(string $prompt): string
     {
+        if (config('ai.conversations.title', true) === false) {
+            return Str::limit($prompt, 100, preserveWords: true);
+        }
+
         try {
             $response = $this->provider->textGateway()->generateText(
                 $this->provider,
