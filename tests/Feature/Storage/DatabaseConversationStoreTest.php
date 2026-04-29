@@ -49,22 +49,14 @@ test('it persists tool calls and results from a remembered agent prompt', functi
                 'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5, 'totalTokenCount' => 15],
                 'modelVersion' => 'gemini-3-flash-preview',
             ]),
-            Http::response([
-                'candidates' => [[
-                    'content' => [
-                        'parts' => [['text' => 'Tool conversation']],
-                        'role' => 'model',
-                    ],
-                    'finishReason' => 'STOP',
-                ]],
-                'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5, 'totalTokenCount' => 15],
-                'modelVersion' => 'gemini-3-flash-preview',
-            ]),
         ]),
     ]);
 
+    $user = (object) ['id' => 1];
+    $conversationId = (new DatabaseConversationStore)->storeConversation($user->id, 'Tool conversation');
+
     (new RememberingToolUsingAgent)
-        ->forUser((object) ['id' => 1])
+        ->continue($conversationId, $user)
         ->prompt('Generate a random number', provider: 'gemini');
 
     $record = DB::table('agent_conversation_messages')
