@@ -5,6 +5,7 @@ use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Gateway\Bedrock\BedrockTextGateway;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -224,6 +225,19 @@ test('user message with pdf document attachment produces document block', functi
         ->and($formatted['content'][1]['document']['format'])->toBe('pdf')
         ->and($formatted['content'][1]['document']['name'])->toBe('document')
         ->and($formatted['content'][1]['document']['source']['bytes'])->toBe('pdf-bytes');
+});
+
+test('s3 remote document attachment is sent as s3Location reference', function () {
+    $document = (new RemoteDocument('s3://my-bucket/path/report.pdf', 'application/pdf'))->as('report');
+    $user = new UserMessage('summarize this', [$document]);
+
+    $formatted = textGateway()->callFormatUserMessage($user);
+
+    expect($formatted['content'][1]['document']['format'])->toBe('pdf')
+        ->and($formatted['content'][1]['document']['name'])->toBe('report')
+        ->and($formatted['content'][1]['document']['source'])->toEqual([
+            's3Location' => ['uri' => 's3://my-bucket/path/report.pdf'],
+        ]);
 });
 
 test('document format maps common mime types', function () {
