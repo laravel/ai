@@ -68,7 +68,7 @@ class RememberConversation
      */
     protected function generateTitle(string $prompt): string
     {
-        if (config('ai.conversations.title', true) === false) {
+        if (! (bool) config('ai.generate_conversation_title', true)) {
             return Str::limit($prompt, 100, preserveWords: true);
         }
 
