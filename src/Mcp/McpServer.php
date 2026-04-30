@@ -148,7 +148,7 @@ class McpServer
     /**
      * Forget cached tool definitions.
      */
-    public function refreshTools(): void
+    public function forgetTools(): void
     {
         $this->tools = null;
     }

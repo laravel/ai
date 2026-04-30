@@ -5,6 +5,7 @@ namespace Tests\Unit\Mcp;
 use Laravel\Ai\Mcp\McpServer;
 use Laravel\Ai\Mcp\Protocol\JsonRpc;
 use Laravel\Ai\Mcp\Transports\StdioTransport;
+use Laravel\Ai\Contracts\Mcp\McpTransport;
 use PHPUnit\Framework\TestCase;
 
 class McpServerTest extends TestCase
@@ -39,5 +40,67 @@ class McpServerTest extends TestCase
         } finally {
             $server->disconnect();
         }
+    }
+
+    public function test_it_can_forget_cached_tools(): void
+    {
+        $transport = new class implements McpTransport
+        {
+            public int $toolsListCalls = 0;
+
+            public function open(): void {}
+
+            public function send(array $request): array
+            {
+                if ($request['method'] === 'initialize') {
+                    return [
+                        'jsonrpc' => '2.0',
+                        'id' => $request['id'],
+                        'result' => [
+                            'protocolVersion' => McpServer::ProtocolVersion,
+                            'capabilities' => ['tools' => []],
+                        ],
+                    ];
+                }
+
+                if ($request['method'] === 'tools/list') {
+                    $this->toolsListCalls++;
+
+                    return [
+                        'jsonrpc' => '2.0',
+                        'id' => $request['id'],
+                        'result' => [
+                            'tools' => [[
+                                'name' => 'tool_'.$this->toolsListCalls,
+                                'description' => '',
+                                'inputSchema' => ['type' => 'object'],
+                            ]],
+                        ],
+                    ];
+                }
+
+                return ['jsonrpc' => '2.0', 'id' => $request['id'], 'result' => []];
+            }
+
+            public function notify(array $notification): void {}
+
+            public function close(): void {}
+
+            public function isOpen(): bool
+            {
+                return true;
+            }
+        };
+
+        $server = new McpServer('test', $transport);
+
+        $this->assertSame('tool_1', $server->tools()[0]->name);
+        $this->assertSame('tool_1', $server->tools()[0]->name);
+        $this->assertSame(1, $transport->toolsListCalls);
+
+        $server->forgetTools();
+
+        $this->assertSame('tool_2', $server->tools()[0]->name);
+        $this->assertSame(2, $transport->toolsListCalls);
     }
 }
