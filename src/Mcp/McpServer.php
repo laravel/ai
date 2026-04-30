@@ -8,6 +8,12 @@ use Laravel\Ai\Contracts\Mcp\McpTransport;
 
 class McpServer
 {
+    /**
+     * The MCP protocol version this client implements.
+     *
+     * Servers that negotiate a different version are rejected at the
+     * handshake.
+     */
     public const string ProtocolVersion = '2025-11-25';
 
     /**
