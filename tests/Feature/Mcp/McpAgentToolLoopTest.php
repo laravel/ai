@@ -68,8 +68,7 @@ test('mcp tools surface to the provider as aliased function declarations', funct
 
         return count($tools) === 2
             && in_array($alias, $names, true)
-            && array_all(
-                $tools,
+            && collect($tools)->every(
                 fn ($tool) => is_string($tool['name'])
                     && strlen($tool['name']) <= 64
                     && ! str_contains($tool['name'], '.')
