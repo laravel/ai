@@ -44,11 +44,11 @@ class McpManager extends MultipleInstanceManager
     }
 
     /**
-     * Create an MCP server backed by the stdio transport.
+     * Create an MCP client backed by the stdio transport.
      */
-    public function createStdioTransport(array $config): McpServer
+    public function createStdioTransport(array $config): McpClient
     {
-        return new McpServer($config['name'], new StdioTransport(
+        return new McpClient($config['name'], new StdioTransport(
             command: $config['command'] ?? throw new InvalidArgumentException('MCP stdio servers require a [command] configuration value.'),
             env: $config['env'] ?? [],
             timeout: $config['timeout'] ?? 30,

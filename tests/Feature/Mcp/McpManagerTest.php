@@ -2,7 +2,7 @@
 
 use Laravel\Ai\Contracts\Mcp\McpTransport;
 use Laravel\Ai\Mcp\McpManager;
-use Laravel\Ai\Mcp\McpServer;
+use Laravel\Ai\Mcp\McpClient;
 
 test('the manager resolves stdio servers from config', function () {
     config(['ai.mcp.servers.test' => [
@@ -12,7 +12,7 @@ test('the manager resolves stdio servers from config', function () {
 
     $server = (new McpManager(app()))->instance('test');
 
-    expect($server)->toBeInstanceOf(McpServer::class)
+    expect($server)->toBeInstanceOf(McpClient::class)
         ->and($server->name())->toBe('test');
 });
 
@@ -23,9 +23,9 @@ test('the manager allows third-party transports via extend', function () {
 
     $manager = new McpManager(app());
 
-    $manager->extend('memory', fn ($app, array $config) => new McpServer($config['name'], $transport));
+    $manager->extend('memory', fn ($app, array $config) => new McpClient($config['name'], $transport));
 
-    expect($manager->instance('custom'))->toBeInstanceOf(McpServer::class)
+    expect($manager->instance('custom'))->toBeInstanceOf(McpClient::class)
         ->and($manager->instance('custom')->name())->toBe('custom')
         ->and($manager->instance('custom'))->toBe($manager->instance('custom'));
 });
@@ -43,7 +43,7 @@ test('the manager throws when a configured transport is unsupported', function (
 });
 
 test('purge disconnects and forgets the named server', function () {
-    $server = Mockery::mock(McpServer::class);
+    $server = Mockery::mock(McpClient::class);
     $server->shouldReceive('disconnect')->once();
 
     config(['ai.mcp.servers.custom' => ['transport' => 'memory']]);
@@ -56,10 +56,10 @@ test('purge disconnects and forgets the named server', function () {
 });
 
 test('disconnectAll disconnects every cached server', function () {
-    $alpha = Mockery::mock(McpServer::class);
+    $alpha = Mockery::mock(McpClient::class);
     $alpha->shouldReceive('disconnect')->once();
 
-    $beta = Mockery::mock(McpServer::class);
+    $beta = Mockery::mock(McpClient::class);
     $beta->shouldReceive('disconnect')->once();
 
     config([

@@ -2,7 +2,7 @@
 
 use Laravel\Ai\Mcp;
 use Laravel\Ai\Mcp\McpManager;
-use Laravel\Ai\Mcp\McpServer;
+use Laravel\Ai\Mcp\McpClient;
 use Laravel\Ai\Mcp\ServerReference;
 
 test('the Mcp facade builds a server reference', function () {
@@ -24,7 +24,7 @@ test('the Mcp facade builds a server reference with a tool allowlist', function 
 test('the Mcp facade forwards manager calls via the bound manager', function () {
     config(['ai.mcp.servers.custom' => ['transport' => 'memory']]);
 
-    $stub = Mockery::mock(McpServer::class);
+    $stub = Mockery::mock(McpClient::class);
 
     Mcp::extend('memory', fn () => $stub);
 

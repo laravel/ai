@@ -56,14 +56,14 @@ class McpToolResolver
      * @param  list<string>  $only
      * @return array<Tool>
      */
-    protected function filterTools(McpServer $server, array $tools, array $only): array
+    protected function filterTools(McpClient $client, array $tools, array $only): array
     {
         $available = collect($tools)->keyBy(fn (Tool $tool) => $tool->name);
         $missing = array_values(array_diff($only, $available->keys()->all()));
 
         if (filled($missing)) {
             throw new InvalidArgumentException(
-                'MCP server ['.$server->name().'] does not expose tool(s) ['.implode(', ', $missing).'].'
+                'MCP server ['.$client->name().'] does not expose tool(s) ['.implode(', ', $missing).'].'
             );
         }
 

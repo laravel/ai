@@ -3,14 +3,14 @@
 use Laravel\Ai\Contracts\Mcp\McpTransport;
 use Laravel\Ai\Mcp;
 use Laravel\Ai\Mcp\McpManager;
-use Laravel\Ai\Mcp\McpServer;
+use Laravel\Ai\Mcp\McpClient;
 use Laravel\Ai\Mcp\McpTool;
 use Laravel\Ai\Mcp\McpToolResolver;
 use Laravel\Ai\Mcp\Tool;
 
-function fakeMcpServer(string $name, array $toolDefinitions): McpServer
+function fakeMcpClient(string $name, array $toolDefinitions): McpClient
 {
-    return new class($name, $toolDefinitions) extends McpServer
+    return new class($name, $toolDefinitions) extends McpClient
     {
         public function __construct(string $name, protected array $toolDefinitions)
         {
@@ -44,7 +44,7 @@ function fakeMcpServer(string $name, array $toolDefinitions): McpServer
 }
 
 test('resolver returns adapters for all tools when no allowlist is given', function () {
-    $server = fakeMcpServer('test', [
+    $server = fakeMcpClient('test', [
         ['name' => 'alpha', 'description' => '', 'inputSchema' => ['type' => 'object']],
         ['name' => 'beta', 'description' => '', 'inputSchema' => ['type' => 'object']],
     ]);
@@ -61,7 +61,7 @@ test('resolver returns adapters for all tools when no allowlist is given', funct
 });
 
 test('resolver respects only allowlist and preserves order', function () {
-    $server = fakeMcpServer('test', [
+    $server = fakeMcpClient('test', [
         ['name' => 'alpha', 'description' => '', 'inputSchema' => ['type' => 'object']],
         ['name' => 'beta', 'description' => '', 'inputSchema' => ['type' => 'object']],
         ['name' => 'gamma', 'description' => '', 'inputSchema' => ['type' => 'object']],
@@ -80,7 +80,7 @@ test('resolver respects only allowlist and preserves order', function () {
 });
 
 test('resolver throws when an allowlisted tool is missing from the server', function () {
-    $server = fakeMcpServer('test', [
+    $server = fakeMcpClient('test', [
         ['name' => 'alpha', 'description' => '', 'inputSchema' => ['type' => 'object']],
     ]);
 
@@ -93,7 +93,7 @@ test('resolver throws when an allowlisted tool is missing from the server', func
 });
 
 test('resolver assigns provider-safe aliases to each adapter', function () {
-    $server = fakeMcpServer('files', [
+    $server = fakeMcpClient('files', [
         ['name' => 'read.file', 'description' => '', 'inputSchema' => ['type' => 'object']],
     ]);
 

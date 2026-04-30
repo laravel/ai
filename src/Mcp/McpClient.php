@@ -6,7 +6,7 @@ use Laravel\Ai\Exceptions\McpException;
 use Laravel\Ai\Mcp\Protocol\JsonRpc;
 use Laravel\Ai\Contracts\Mcp\McpTransport;
 
-class McpServer
+class McpClient
 {
     /**
      * The MCP protocol version this client implements.

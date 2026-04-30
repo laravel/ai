@@ -2,13 +2,13 @@
 
 namespace Tests\Unit\Mcp;
 
-use Laravel\Ai\Mcp\McpServer;
+use Laravel\Ai\Mcp\McpClient;
 use Laravel\Ai\Mcp\Protocol\JsonRpc;
 use Laravel\Ai\Mcp\Transports\StdioTransport;
 use Laravel\Ai\Contracts\Mcp\McpTransport;
 use PHPUnit\Framework\TestCase;
 
-class McpServerTest extends TestCase
+class McpClientTest extends TestCase
 {
     protected function setUp(): void
     {
@@ -19,7 +19,7 @@ class McpServerTest extends TestCase
 
     public function test_it_discovers_paginated_stdio_tools_and_calls_them(): void
     {
-        $server = new McpServer('test', new StdioTransport([
+        $server = new McpClient('test', new StdioTransport([
             PHP_BINARY,
             __DIR__.'/../../Fixtures/Mcp/stdio-server.php',
         ]));
@@ -57,7 +57,7 @@ class McpServerTest extends TestCase
                         'jsonrpc' => '2.0',
                         'id' => $request['id'],
                         'result' => [
-                            'protocolVersion' => McpServer::ProtocolVersion,
+                            'protocolVersion' => McpClient::ProtocolVersion,
                             'capabilities' => ['tools' => []],
                         ],
                     ];
@@ -92,7 +92,7 @@ class McpServerTest extends TestCase
             }
         };
 
-        $server = new McpServer('test', $transport);
+        $server = new McpClient('test', $transport);
 
         $this->assertSame('tool_1', $server->tools()[0]->name);
         $this->assertSame('tool_1', $server->tools()[0]->name);

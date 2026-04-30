@@ -12,7 +12,7 @@ use Stringable;
 class McpTool implements HasRawToolSchema, NamedTool, ToolContract
 {
     public function __construct(
-        public readonly McpServer $server,
+        public readonly McpClient $client,
         public readonly Tool $tool,
         protected string $alias,
     ) {}
@@ -46,7 +46,7 @@ class McpTool implements HasRawToolSchema, NamedTool, ToolContract
      */
     public function handle(Request $request): Stringable|string
     {
-        return $this->server
+        return $this->client
             ->callTool($this->tool->name, $request->all())
             ->toText();
     }

@@ -7,7 +7,7 @@ use Laravel\Ai\Mcp\McpManager;
 use Laravel\Ai\Mcp\ServerReference;
 
 /**
- * @method static \Laravel\Ai\Mcp\McpServer instance(?string $name = null)
+ * @method static \Laravel\Ai\Mcp\McpClient instance(?string $name = null)
  * @method static void disconnectAll()
  * @method static void purge(?string $name = null)
  * @method static \Laravel\Ai\Mcp\McpManager extend(string $name, \Closure $callback)
