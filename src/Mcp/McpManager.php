@@ -2,38 +2,25 @@
 
 namespace Laravel\Ai\Mcp;
 
-use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Support\MultipleInstanceManager;
 use InvalidArgumentException;
-use Laravel\Ai\Contracts\Mcp\McpTransport;
 use Laravel\Ai\Mcp\Transports\StdioTransport;
 
-class McpManager
+class McpManager extends MultipleInstanceManager
 {
     /**
-     * The cached MCP server instances.
+     * The configuration key that selects the transport implementation.
      *
-     * @var array<string, McpServer>
+     * @var string
      */
-    protected array $servers = [];
-
-    public function __construct(protected Application $app) {}
+    protected $driverKey = 'transport';
 
     /**
-     * Get or create a configured MCP server by name.
+     * Get a configured MCP server by name.
      */
-    public function server(string $name): McpServer
+    public function server(?string $name = null): McpServer
     {
-        if (isset($this->servers[$name])) {
-            return $this->servers[$name];
-        }
-
-        $config = $this->app['config']->get("ai.mcp.servers.{$name}");
-
-        if (is_null($config)) {
-            throw new InvalidArgumentException("MCP server [{$name}] is not configured.");
-        }
-
-        return $this->servers[$name] = new McpServer($name, $this->createTransport($config));
+        return $this->instance($name);
     }
 
     /**
@@ -41,27 +28,74 @@ class McpManager
      */
     public function disconnectAll(): void
     {
-        foreach ($this->servers as $server) {
+        foreach ($this->instances as $server) {
             $server->disconnect();
         }
 
-        $this->servers = [];
+        $this->instances = [];
     }
 
     /**
-     * Create a transport instance from configuration.
+     * Disconnect and forget the given MCP server instance.
+     *
+     * @param  string|null  $name
      */
-    protected function createTransport(array $config): McpTransport
+    public function purge($name = null): void
     {
-        $transport = $config['transport'] ?? null;
+        $name ??= $this->getDefaultInstance();
 
-        return match ($transport) {
-            'stdio' => new StdioTransport(
-                command: $config['command'] ?? throw new InvalidArgumentException('MCP stdio servers require a [command] configuration value.'),
-                env: $config['env'] ?? [],
-                timeout: $config['timeout'] ?? 30,
-            ),
-            default => throw new InvalidArgumentException("Unsupported MCP transport [{$transport}]."),
-        };
+        if (isset($this->instances[$name])) {
+            $this->instances[$name]->disconnect();
+        }
+
+        unset($this->instances[$name]);
+    }
+
+    /**
+     * Create an MCP server backed by the stdio transport.
+     */
+    public function createStdioTransport(array $config): McpServer
+    {
+        return new McpServer($config['name'], new StdioTransport(
+            command: $config['command'] ?? throw new InvalidArgumentException('MCP stdio servers require a [command] configuration value.'),
+            env: $config['env'] ?? [],
+            timeout: $config['timeout'] ?? 30,
+        ));
+    }
+
+    /**
+     * Get the default instance name.
+     */
+    public function getDefaultInstance(): ?string
+    {
+        return $this->app['config']['ai.mcp.default'];
+    }
+
+    /**
+     * Set the default instance name.
+     *
+     * @param  string  $name
+     */
+    public function setDefaultInstance($name): void
+    {
+        $this->app['config']['ai.mcp.default'] = $name;
+    }
+
+    /**
+     * Get the instance specific configuration.
+     *
+     * @param  string  $name
+     */
+    public function getInstanceConfig($name): array
+    {
+        $config = $this->app['config']->get('ai.mcp.servers.'.$name);
+
+        if (is_null($config)) {
+            throw new InvalidArgumentException("MCP server [{$name}] is not configured.");
+        }
+
+        $config['name'] = $name;
+
+        return $config;
     }
 }
