@@ -10,8 +10,13 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Gateway\Concerns\InvokesTools;
+use Laravel\Ai\Messages\AssistantMessage;
+use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
@@ -27,6 +32,8 @@ use function Laravel\Ai\ulid;
 
 class FakeTextGateway implements TextGateway
 {
+    use InvokesTools;
+
     protected int $currentResponseIndex = 0;
 
     protected bool $preventStrayPrompts = false;
@@ -54,9 +61,56 @@ class FakeTextGateway implements TextGateway
             return $message instanceof UserMessage;
         });
 
-        return $this->nextResponse(
+        $response = $this->nextResponse(
             $provider, $model, $message->content, $message->attachments, $schema
         );
+
+        if ($response instanceof ToolCall) {
+            return $this->handleFakeToolCalls(
+                $response,
+                $provider,
+                $model,
+                $message->content,
+                $message->attachments,
+                $schema,
+                $tools,
+            );
+        }
+
+        return $response;
+    }
+
+    /**
+     * Execute a faked tool call and return the next fake response.
+     */
+    protected function handleFakeToolCalls(
+        ToolCall $toolCall,
+        TextProvider $provider,
+        string $model,
+        string $prompt,
+        Collection $attachments,
+        ?array $schema,
+        array $tools,
+    ): TextResponse {
+        $this->initializeToolCallbacks();
+
+        $toolResults = new Collection;
+
+        if ($tool = $this->findTool($toolCall->name, $tools)) {
+            $toolResults->push(new ToolResult(
+                $toolCall->id,
+                $toolCall->name,
+                $toolCall->arguments,
+                $this->executeTool($tool, $toolCall->arguments),
+                $toolCall->resultId,
+            ));
+        }
+
+        return $this->nextResponse($provider, $model, $prompt, $attachments, $schema)
+            ->withMessages(new Collection([
+                new AssistantMessage('', new Collection([$toolCall])),
+                new ToolResultMessage($toolResults),
+            ]));
     }
 
     /**
@@ -167,6 +221,9 @@ class FakeTextGateway implements TextGateway
      */
     public function onToolInvocation(Closure $invoking, Closure $invoked): self
     {
+        $this->invokingToolCallback = $invoking;
+        $this->toolInvokedCallback = $invoked;
+
         return $this;
     }
 

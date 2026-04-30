@@ -167,7 +167,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, TextGateway
 
         return array_filter([
             'type' => 'function',
-            'name' => class_basename($tool),
+            'name' => $this->getToolName($tool),
             'description' => (string) $tool->description(),
             'parameters' => filled($schemaArray) ? [
                 'type' => 'object',

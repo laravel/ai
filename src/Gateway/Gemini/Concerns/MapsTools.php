@@ -8,6 +8,7 @@ use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Gateway\Concerns\ResolvesToolName;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\FileSearch;
@@ -18,6 +19,8 @@ use RuntimeException;
 
 trait MapsTools
 {
+    use ResolvesToolName;
+
     /**
      * Map the given tools to Gemini tool definitions.
      */
@@ -59,7 +62,7 @@ trait MapsTools
         $schema = $tool->schema(new JsonSchemaTypeFactory);
 
         $definition = [
-            'name' => class_basename($tool),
+            'name' => $this->getToolName($tool),
             'description' => (string) $tool->description(),
         ];
 

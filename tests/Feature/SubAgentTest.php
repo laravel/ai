@@ -1,6 +1,8 @@
 <?php
 
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Prompts\AgentPrompt;
+use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Tools\AgentTool;
 use Tests\Fixtures\Agents\DelegatingAgent;
 use Tests\Fixtures\Agents\SubAgent;
@@ -9,12 +11,24 @@ use Tests\Fixtures\Tools\RandomNumberGenerator;
 use function Laravel\Ai\agent;
 
 test('agent returned from tools is wrapped as agent tool', function () {
-    DelegatingAgent::fake();
+    DelegatingAgent::fake([
+        new ToolCall('call_123', 'research_agent', ['task' => 'Research Laravel']),
+        'Research delegated.',
+    ]);
+
     SubAgent::fake(['Research result']);
 
-    (new DelegatingAgent)->prompt('Delegate research about Laravel');
+    $response = (new DelegatingAgent)->prompt('Delegate research about Laravel');
 
     DelegatingAgent::assertPrompted('Delegate research about Laravel');
+    SubAgent::assertPrompted(function (AgentPrompt $prompt) {
+        return $prompt->prompt === 'Research Laravel';
+    });
+
+    expect($response->toolCalls)->toHaveCount(1)
+        ->and($response->toolCalls->first()->name)->toBe('research_agent')
+        ->and($response->toolResults)->toHaveCount(1)
+        ->and($response->toolResults->first()->result)->toBe('Research result');
 });
 
 test('sub agent can be faked independently', function () {

@@ -6,6 +6,7 @@ use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Gateway\Concerns\ResolvesToolName;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\FileSearch;
@@ -15,6 +16,8 @@ use RuntimeException;
 
 trait MapsTools
 {
+    use ResolvesToolName;
+
     /**
      * Map the given tools to OpenAI function definitions.
      */
@@ -46,7 +49,7 @@ trait MapsTools
 
         return [
             'type' => 'function',
-            'name' => class_basename($tool),
+            'name' => $this->getToolName($tool),
             'description' => (string) $tool->description(),
             'strict' => true,
             'parameters' => [

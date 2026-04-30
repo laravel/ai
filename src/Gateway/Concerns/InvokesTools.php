@@ -8,6 +8,8 @@ use Laravel\Ai\Tools\Request;
 
 trait InvokesTools
 {
+    use ResolvesToolName;
+
     protected Closure $invokingToolCallback;
 
     protected Closure $toolInvokedCallback;
@@ -42,7 +44,7 @@ trait InvokesTools
     protected function findTool(string $name, array $tools): ?Tool
     {
         foreach ($tools as $tool) {
-            if ($tool instanceof Tool && class_basename($tool) === $name) {
+            if ($tool instanceof Tool && $this->getToolName($tool) === $name) {
                 return $tool;
             }
         }
