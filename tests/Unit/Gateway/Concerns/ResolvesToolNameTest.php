@@ -28,28 +28,37 @@ function resolverHost(): object
             return $this->findTool($name, $tools);
         }
     };
-});
+}
 
 test('resolveToolName falls back to class basename when tool has no name() method', function () {
-    expect($this->host->callResolve(new FixedNumberGenerator))->toBe('FixedNumberGenerator');
+    $host = resolverHost();
+
+    expect($host->callResolve(new FixedNumberGenerator))->toBe('FixedNumberGenerator');
 });
 
 test('resolveToolName prefers the declared name() method when present', function () {
-    expect($this->host->callResolve(new NamedTool('aliased_tool')))->toBe('aliased_tool');
+    $host = resolverHost();
+
+    expect($host->callResolve(new NamedTool('aliased_tool')))
+        ->toBe('aliased_tool');
 });
 
 test('findTool matches a tool by its declared name() when multiple share a class', function () {
+    $host = resolverHost();
+
     $tools = [
         new NamedTool('aliased_tool'),
         new NamedTool('other_aliased_tool'),
         new FixedNumberGenerator,
     ];
 
-    expect($this->host->callFind('other_aliased_tool', $tools))->toBe($tools[1])
-        ->and($this->host->callFind('FixedNumberGenerator', $tools))->toBe($tools[2])
-        ->and($this->host->callFind('unknown', $tools))->toBeNull();
+    expect($host->callFind('other_aliased_tool', $tools))->toBe($tools[1])
+        ->and($host->callFind('FixedNumberGenerator', $tools))->toBe($tools[2])
+        ->and($host->callFind('unknown', $tools))->toBeNull();
 });
 
 test('findTool returns null when no tool matches', function () {
-    expect($this->host->callFind('missing', [new FixedNumberGenerator]))->toBeNull();
+    $host = resolverHost();
+
+    expect($host->callFind('missing', [new FixedNumberGenerator]))->toBeNull();
 });
