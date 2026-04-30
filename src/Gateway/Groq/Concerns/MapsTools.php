@@ -2,14 +2,15 @@
 
 namespace Laravel\Ai\Gateway\Groq\Concerns;
 
+use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\Gateway\Concerns\ResolvesToolMetadata;
+use Laravel\Ai\Tools\ToolNameResolver;
+use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Tools\ProviderTool;
 use RuntimeException;
 
 trait MapsTools
 {
-    use ResolvesToolMetadata;
 
     /**
      * Map the given tools to Chat Completions function definitions.
@@ -36,30 +37,23 @@ trait MapsTools
      */
     protected function mapTool(Tool $tool): array
     {
-        $schemaArray = $this->toolSchemaArray($tool);
-        $isRaw = $this->toolHasRawSchema($tool);
+        $schema = $tool->schema(new JsonSchemaTypeFactory);
 
-        if ($isRaw) {
-            $parameters = $schemaArray;
-
-            if (($parameters['properties'] ?? []) === []) {
-                $parameters['properties'] = (object) [];
-            }
-        } else {
-            $parameters = [
-                'type' => 'object',
-                'properties' => $schemaArray['properties'] ?? (object) [],
-                'required' => $schemaArray['required'] ?? [],
-                'additionalProperties' => false,
-            ];
-        }
+        $schemaArray = filled($schema)
+            ? (new ObjectSchema($schema))->toSchema()
+            : [];
 
         return [
             'type' => 'function',
             'function' => [
-                'name' => $this->toolName($tool),
+                'name' => ToolNameResolver::resolve($tool),
                 'description' => (string) $tool->description(),
-                'parameters' => $parameters,
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => $schemaArray['properties'] ?? (object) [],
+                    'required' => $schemaArray['required'] ?? [],
+                    'additionalProperties' => false,
+                ],
             ],
         ];
     }

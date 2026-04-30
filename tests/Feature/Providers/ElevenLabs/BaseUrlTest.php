@@ -1,16 +1,17 @@
 <?php
 
+use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Audio;
 use Laravel\Ai\Transcription;
 
-function fakeElevenBaseUrlAudioResponse(): \GuzzleHttp\Promise\PromiseInterface
+function fakeElevenBaseUrlAudioResponse(): PromiseInterface
 {
     return Http::response('fake-audio-bytes');
 }
 
-function fakeElevenBaseUrlTranscriptionResponse(): \GuzzleHttp\Promise\PromiseInterface
+function fakeElevenBaseUrlTranscriptionResponse(): PromiseInterface
 {
     return Http::response(['text' => 'Hello world']);
 }

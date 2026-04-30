@@ -15,7 +15,8 @@ test('text generation options can be created from agent attributes', function ()
 
     expect($options->maxSteps)->toBe(10)
         ->and($options->maxTokens)->toBe(4096)
-        ->and($options->temperature)->toBe(0.7);
+        ->and($options->temperature)->toBe(0.7)
+        ->and($options->topP)->toBe(0.8);
 });
 
 test('text generation options are null when agent has no attributes', function () {
@@ -23,7 +24,8 @@ test('text generation options are null when agent has no attributes', function (
 
     expect($options->maxSteps)->toBeNull()
         ->and($options->maxTokens)->toBeNull()
-        ->and($options->temperature)->toBeNull();
+        ->and($options->temperature)->toBeNull()
+        ->and($options->topP)->toBeNull();
 });
 
 test('text generation options can be resolved from agent methods', function () {

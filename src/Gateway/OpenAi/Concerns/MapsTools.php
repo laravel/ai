@@ -2,10 +2,12 @@
 
 namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
+use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\Gateway\Concerns\ResolvesToolMetadata;
+use Laravel\Ai\Tools\ToolNameResolver;
+use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\ProviderTool;
@@ -14,7 +16,6 @@ use RuntimeException;
 
 trait MapsTools
 {
-    use ResolvesToolMetadata;
 
     /**
      * Map the given tools to OpenAI function definitions.
@@ -39,30 +40,23 @@ trait MapsTools
      */
     protected function mapTool(Tool $tool): array
     {
-        $schemaArray = $this->toolSchemaArray($tool);
-        $isRaw = $this->toolHasRawSchema($tool);
+        $schema = $tool->schema(new JsonSchemaTypeFactory);
 
-        if ($isRaw) {
-            $parameters = $schemaArray;
+        $schemaArray = filled($schema)
+            ? (new ObjectSchema($schema))->toSchema()
+            : [];
 
-            if (($parameters['properties'] ?? []) === []) {
-                $parameters['properties'] = (object) [];
-            }
-        } else {
-            $parameters = [
+        return [
+            'type' => 'function',
+            'name' => ToolNameResolver::resolve($tool),
+            'description' => (string) $tool->description(),
+            'strict' => true,
+            'parameters' => [
                 'type' => 'object',
                 'properties' => $schemaArray['properties'] ?? (object) [],
                 'required' => $schemaArray['required'] ?? [],
                 'additionalProperties' => false,
-            ];
-        }
-
-        return [
-            'type' => 'function',
-            'name' => $this->toolName($tool),
-            'description' => (string) $tool->description(),
-            ...($isRaw ? [] : ['strict' => true]),
-            'parameters' => $parameters,
+            ],
         ];
     }
 
