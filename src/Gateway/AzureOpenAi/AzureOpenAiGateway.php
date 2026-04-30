@@ -25,6 +25,7 @@ use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\TextResponse;
+use Laravel\Ai\Tools\ToolNameResolver;
 
 class AzureOpenAiGateway implements EmbeddingGateway, TextGateway
 {
@@ -167,7 +168,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, TextGateway
 
         return array_filter([
             'type' => 'function',
-            'name' => $this->resolveToolName($tool),
+            'name' => ToolNameResolver::resolve($tool),
             'description' => (string) $tool->description(),
             'parameters' => filled($schemaArray) ? [
                 'type' => 'object',
