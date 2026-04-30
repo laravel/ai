@@ -1,8 +1,6 @@
 <?php
 
-namespace Laravel\Ai\Mcp\Exceptions;
-
-use Laravel\Ai\Exceptions\AiException;
+namespace Laravel\Ai\Exceptions;
 
 class McpException extends AiException
 {

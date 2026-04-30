@@ -2,7 +2,7 @@
 
 namespace Tests\Unit\Mcp;
 
-use Laravel\Ai\Mcp\Exceptions\McpException;
+use Laravel\Ai\Exceptions\McpException;
 use Laravel\Ai\Mcp\Protocol\JsonRpc;
 use PHPUnit\Framework\TestCase;
 

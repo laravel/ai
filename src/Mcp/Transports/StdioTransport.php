@@ -2,7 +2,7 @@
 
 namespace Laravel\Ai\Mcp\Transports;
 
-use Laravel\Ai\Mcp\Exceptions\McpException;
+use Laravel\Ai\Exceptions\McpException;
 
 class StdioTransport implements McpTransport
 {

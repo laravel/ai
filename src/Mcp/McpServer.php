@@ -2,7 +2,7 @@
 
 namespace Laravel\Ai\Mcp;
 
-use Laravel\Ai\Mcp\Exceptions\McpException;
+use Laravel\Ai\Exceptions\McpException;
 use Laravel\Ai\Mcp\Protocol\JsonRpc;
 use Laravel\Ai\Mcp\Transports\McpTransport;
 
