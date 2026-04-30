@@ -5,7 +5,7 @@ namespace Laravel\Ai\Mcp;
 class ServerReference
 {
     /**
-     * @param  array<int, string>|null  $only
+     * @param  list<string>|null  $only
      */
     public function __construct(
         public readonly string $name,
@@ -15,7 +15,7 @@ class ServerReference
     /**
      * Limit the MCP tools exposed from this server.
      *
-     * @param  array<int, string>  $toolNames
+     * @param  list<string>  $toolNames
      */
     public function only(array $toolNames): self
     {

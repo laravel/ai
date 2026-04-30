@@ -53,7 +53,7 @@ class McpToolResolver
      * Filter tools by an allowlist and fail for missing names.
      *
      * @param  array<Tool>  $tools
-     * @param  array<int, string>  $only
+     * @param  list<string>  $only
      * @return array<Tool>
      */
     protected function filterTools(McpServer $server, array $tools, array $only): array
