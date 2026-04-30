@@ -1,27 +1,25 @@
 <?php
 
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Promptable;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Tools\AgentTool;
 use Tests\Fixtures\Agents\DelegatingAgent;
-use Tests\Fixtures\Agents\SubAgent;
-use Tests\Fixtures\Tools\RandomNumberGenerator;
+use Tests\Fixtures\Agents\ResearchAgent;
 
-use function Laravel\Ai\agent;
-
-test('agent returned from tools is wrapped as agent tool', function () {
+test('agent returned from tools is invoked when called by parent agent', function () {
     DelegatingAgent::fake([
         new ToolCall('call_123', 'research_agent', ['task' => 'Research Laravel']),
         'Research delegated.',
     ]);
 
-    SubAgent::fake(['Research result']);
+    ResearchAgent::fake(['Research result']);
 
     $response = (new DelegatingAgent)->prompt('Delegate research about Laravel');
 
     DelegatingAgent::assertPrompted('Delegate research about Laravel');
-    SubAgent::assertPrompted(function (AgentPrompt $prompt) {
+    ResearchAgent::assertPrompted(function (AgentPrompt $prompt) {
         return $prompt->prompt === 'Research Laravel';
     });
 
@@ -31,50 +29,74 @@ test('agent returned from tools is wrapped as agent tool', function () {
         ->and($response->toolResults->first()->result)->toBe('Research result');
 });
 
-test('sub agent can be faked independently', function () {
-    SubAgent::fake(['Sub-agent research result']);
+test('research agent can be faked independently', function () {
+    ResearchAgent::fake(['Research result']);
 
-    $response = (new SubAgent)->prompt('Research topic');
+    $response = (new ResearchAgent)->prompt('Research topic');
 
-    expect($response->text)->toBe('Sub-agent research result');
+    expect($response->text)->toBe('Research result');
 });
 
-test('anonymous agent can be used as sub agent', function () {
-    $subAgent = agent('You are a research assistant.');
-
-    $tool = new AgentTool($subAgent);
-
-    expect($tool->name())->toBe('AnonymousAgent')
-        ->and($tool->description())->toBe('You are a research assistant.');
-});
-
-test('agent tool uses name and description from agent', function () {
-    $tool = new AgentTool(new SubAgent);
+test('agent tool uses name and description from agent when defined', function () {
+    $tool = new AgentTool(new ResearchAgent);
 
     expect($tool->name())->toBe('research_agent')
         ->and($tool->description())->toBe('Research a topic in depth and return a summary.');
 });
 
-test('agent tool exposes underlying agent', function () {
-    $agent = new SubAgent;
+test('agent tool falls back to class basename for name', function () {
+    $agent = new class implements Agent
+    {
+        use Promptable;
+
+        public function description(): string
+        {
+            return 'A nameless agent.';
+        }
+
+        public function instructions(): string
+        {
+            return '';
+        }
+    };
+
     $tool = new AgentTool($agent);
 
-    expect($tool->agent())->toBe($agent);
+    expect($tool->name())->not->toBeEmpty()
+        ->and($tool->description())->toBe('A nameless agent.');
 });
 
-test('resolve tools wraps agents and preserves regular tools', function () {
-    $delegating = new DelegatingAgent;
-    $tools = iterator_to_array($delegating->tools());
+test('agent tool falls back to a generic description that does not leak instructions', function () {
+    $agent = new class implements Agent
+    {
+        use Promptable;
 
-    expect($tools)->toHaveCount(2);
-    expect($tools[0])->toBeInstanceOf(RandomNumberGenerator::class);
+        public function name(): string
+        {
+            return 'silent_agent';
+        }
+
+        public function instructions(): string
+        {
+            return 'You are a silent agent with very long internal instructions that should never be sent to the parent LLM as a tool description.';
+        }
+    };
+
+    $tool = new AgentTool($agent);
+
+    expect((string) $tool->description())
+        ->toStartWith('Delegates a task to the silent_agent sub-agent')
+        ->not->toContain('long internal instructions');
+});
+
+test('framework wraps an agent in tools automatically when resolving', function () {
+    $tools = (new DelegatingAgent)->tools();
 
     $resolved = array_map(
         fn ($tool) => $tool instanceof Agent ? new AgentTool($tool) : $tool,
-        $tools
+        [...$tools],
     );
 
-    expect($resolved[0])->toBeInstanceOf(RandomNumberGenerator::class)
-        ->and($resolved[1])->toBeInstanceOf(AgentTool::class)
-        ->and($resolved[1]->agent())->toBeInstanceOf(SubAgent::class);
+    expect($resolved[0])->toBeInstanceOf(AgentTool::class)
+        ->and($resolved[0]->agent())->toBeInstanceOf(ResearchAgent::class);
 });

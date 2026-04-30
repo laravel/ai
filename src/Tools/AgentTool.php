@@ -10,7 +10,10 @@ use Throwable;
 
 class AgentTool implements Tool
 {
-    public function __construct(protected Agent $agent) {}
+    public function __construct(protected Agent $agent)
+    {
+        //
+    }
 
     /**
      * Get the name of the tool.
@@ -29,7 +32,10 @@ class AgentTool implements Tool
     {
         return method_exists($this->agent, 'description')
             ? $this->agent->description()
-            : (string) $this->agent->instructions();
+            : sprintf(
+                'Delegates a task to the %s sub-agent and returns its response. Pass a clear, self-contained task description as the sub-agent runs in isolation and has no access to the parent conversation history.',
+                $this->name(),
+            );
     }
 
     /**

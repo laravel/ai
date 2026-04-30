@@ -119,7 +119,7 @@ trait GeneratesText
 
         return array_map(
             fn ($tool) => $tool instanceof Agent ? new AgentTool($tool) : $tool,
-            [...$agent->tools()]
+            [...$agent->tools()],
         );
     }
 
