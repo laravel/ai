@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\OpenRouter\Concerns;
 
 use Generator;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Providers\Provider;
@@ -307,13 +308,10 @@ trait HandlesTextStreaming
                 $body['max_tokens'] = $options->maxTokens;
             }
 
-            if (! is_null($options?->temperature)) {
-                $body['temperature'] = $options->temperature;
-            }
-
-            if (! is_null($options?->topP)) {
-                $body['top_p'] = $options->topP;
-            }
+            $body = array_merge($body, Arr::whereNotNull([
+                'temperature' => $options?->temperature,
+                'top_p' => $options?->topP,
+            ]));
 
             $providerOptions = $options?->providerOptions($provider->driver());
 

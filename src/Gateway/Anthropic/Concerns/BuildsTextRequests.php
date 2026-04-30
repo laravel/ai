@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
+use Illuminate\Support\Arr;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
@@ -58,13 +59,10 @@ trait BuildsTextRequests
             }
         }
 
-        if ($options?->temperature !== null) {
-            $body['temperature'] = $options->temperature;
-        }
-
-        if ($options?->topP !== null) {
-            $body['top_p'] = $options->topP;
-        }
+        $body = array_merge($body, Arr::whereNotNull([
+            'temperature' => $options?->temperature,
+            'top_p' => $options?->topP,
+        ]));
 
         return array_merge($body, $providerOptions);
     }

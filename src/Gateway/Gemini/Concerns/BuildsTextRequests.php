@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway\Gemini\Concerns;
 
+use Illuminate\Support\Arr;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
@@ -80,17 +81,14 @@ trait BuildsTextRequests
             $generationConfig['maxOutputTokens'] = $options->maxTokens;
         }
 
-        if (! is_null($options?->temperature)) {
-            $generationConfig['temperature'] = $options->temperature;
-        }
-
-        if (! is_null($options?->topP)) {
-            $generationConfig['topP'] = $options->topP;
-        }
+        $generationConfig = array_merge($generationConfig, Arr::whereNotNull([
+            'temperature' => $options?->temperature,
+            'topP' => $options?->topP,
+        ]));
 
         $providerOptions = $options?->providerOptions(Lab::tryFrom($provider->driver()) ?? $provider->driver());
 
-        if (! is_null($providerOptions)) {
+        if (filled($providerOptions)) {
             $generationConfig = array_merge($generationConfig, $providerOptions);
         }
 

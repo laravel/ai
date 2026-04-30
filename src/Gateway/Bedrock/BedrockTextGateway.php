@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\Bedrock;
 
 use Generator;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
@@ -527,21 +528,11 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             return [];
         }
 
-        $config = [];
-
-        if ($options->maxTokens) {
-            $config['maxTokens'] = $options->maxTokens;
-        }
-
-        if ($options->temperature !== null) {
-            $config['temperature'] = $options->temperature;
-        }
-
-        if ($options->topP !== null) {
-            $config['topP'] = $options->topP;
-        }
-
-        return $config;
+        return Arr::whereNotNull([
+            'maxTokens' => $options->maxTokens,
+            'temperature' => $options->temperature,
+            'topP' => $options->topP,
+        ]);
     }
 
     /**
