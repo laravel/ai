@@ -1,7 +1,7 @@
 <?php
 
 use Laravel\Ai\Contracts\Agent;
-use Laravel\Ai\Contracts\HasToolMetadata;
+use Laravel\Ai\Contracts\ActsAsTool;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\Data\ToolCall;

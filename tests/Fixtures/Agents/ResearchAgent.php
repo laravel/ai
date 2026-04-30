@@ -3,10 +3,10 @@
 namespace Tests\Fixtures\Agents;
 
 use Laravel\Ai\Contracts\Agent;
-use Laravel\Ai\Contracts\HasToolMetadata;
+use Laravel\Ai\Contracts\ActsAsTool;
 use Laravel\Ai\Promptable;
 
-class ResearchAgent implements Agent, HasToolMetadata
+class ResearchAgent implements Agent, ActsAsTool
 {
     use Promptable;
 

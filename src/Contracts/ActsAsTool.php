@@ -4,7 +4,7 @@ namespace Laravel\Ai\Contracts;
 
 use Stringable;
 
-interface HasToolMetadata
+interface ActsAsTool
 {
     /**
      * Get the name of the tool.

@@ -4,10 +4,10 @@ namespace Tests\Fixtures\Agents;
 
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasTools;
-use Laravel\Ai\Contracts\HasToolMetadata;
+use Laravel\Ai\Contracts\ActsAsTool;
 use Laravel\Ai\Promptable;
 
-class MiddleManagerAgent implements Agent, HasTools, HasToolMetadata
+class MiddleManagerAgent implements Agent, HasTools, ActsAsTool
 {
     use Promptable;
 
