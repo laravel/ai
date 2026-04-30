@@ -12,10 +12,65 @@ use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Messages\ToolResultMessage;
+use Laravel\Ai\Responses\Data\ToolResult;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
 use function Laravel\Ai\agent;
+
+test('tool response parts are serialized as sequential array even with non-sequential input keys', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
+    ]);
+
+    $agent = new class implements Agent, Conversational
+    {
+        use Promptable;
+
+        public function instructions(): string
+        {
+            return 'You are a helpful assistant.';
+        }
+
+        public function messages(): iterable
+        {
+            // Use a collection with non-sequential keys to simulate potential issues
+            $toolResults = collect([
+                'custom_key' => new ToolResult('FixedNumberGenerator', 123, 'call_123'),
+            ]);
+
+            return [
+                new Message(role: 'user', content: 'Generate a number'),
+                new AssistantMessage('', collect([
+                    new ToolCall('call_123', 'FixedNumberGenerator', [], 'call_123'),
+                ])),
+                new ToolResultMessage($toolResults),
+            ];
+        }
+    };
+
+    $agent->prompt('Follow up', provider: 'gemini');
+
+    Http::assertSent(function ($request) {
+        $contents = $request->data()['contents'];
+
+        // Find the tool result message (role: user with functionResponse parts)
+        $toolResultMessage = collect($contents)->first(function ($content) {
+            return $content['role'] === 'user' && isset($content['parts'][0]['functionResponse']);
+        });
+
+        if (! $toolResultMessage) {
+            return false;
+        }
+
+        $parts = $toolResultMessage['parts'];
+
+        // Verify that the 'parts' array is sequentially indexed (list)
+        // json_encode will turn this into [] instead of {}
+        return array_is_list($parts) && count($parts) === 1;
+    });
+});
 
 test('user message maps to gemini format', function () {
     Http::fake([
