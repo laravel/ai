@@ -20,7 +20,7 @@ class McpToolResolver
 
         foreach ($references as $reference) {
             $reference = $this->normalizeReference($reference);
-            $server = $this->manager->server($reference->name);
+            $server = $this->manager->instance($reference->name);
             $tools = $server->tools();
 
             if (! is_null($reference->only)) {

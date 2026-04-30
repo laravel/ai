@@ -10,7 +10,7 @@ test('the manager resolves stdio servers from config', function () {
         'command' => [PHP_BINARY, __DIR__.'/../../Fixtures/Mcp/stdio-server.php'],
     ]]);
 
-    $server = (new McpManager(app()))->server('test');
+    $server = (new McpManager(app()))->instance('test');
 
     expect($server)->toBeInstanceOf(McpServer::class)
         ->and($server->name())->toBe('test');
@@ -25,20 +25,20 @@ test('the manager allows third-party transports via extend', function () {
 
     $manager->extend('memory', fn ($app, array $config) => new McpServer($config['name'], $transport));
 
-    expect($manager->server('custom'))->toBeInstanceOf(McpServer::class)
-        ->and($manager->server('custom')->name())->toBe('custom')
-        ->and($manager->server('custom'))->toBe($manager->server('custom'));
+    expect($manager->instance('custom'))->toBeInstanceOf(McpServer::class)
+        ->and($manager->instance('custom')->name())->toBe('custom')
+        ->and($manager->instance('custom'))->toBe($manager->instance('custom'));
 });
 
 test('the manager throws when a server is not configured', function () {
-    expect(fn () => (new McpManager(app()))->server('missing'))
+    expect(fn () => (new McpManager(app()))->instance('missing'))
         ->toThrow(InvalidArgumentException::class, 'MCP server [missing] is not configured.');
 });
 
 test('the manager throws when a configured transport is unsupported', function () {
     config(['ai.mcp.servers.broken' => ['transport' => 'carrier-pigeon']]);
 
-    expect(fn () => (new McpManager(app()))->server('broken'))
+    expect(fn () => (new McpManager(app()))->instance('broken'))
         ->toThrow(InvalidArgumentException::class, 'carrier-pigeon');
 });
 
@@ -51,7 +51,7 @@ test('purge disconnects and forgets the named server', function () {
     $manager = new McpManager(app());
     $manager->extend('memory', fn () => $server);
 
-    $manager->server('custom');
+    $manager->instance('custom');
     $manager->purge('custom');
 });
 
@@ -70,7 +70,7 @@ test('disconnectAll disconnects every cached server', function () {
     $manager = new McpManager(app());
     $manager->extend('memory', fn ($app, array $config) => $config['name'] === 'alpha' ? $alpha : $beta);
 
-    $manager->server('alpha');
-    $manager->server('beta');
+    $manager->instance('alpha');
+    $manager->instance('beta');
     $manager->disconnectAll();
 });

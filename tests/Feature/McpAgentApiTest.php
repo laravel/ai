@@ -1,7 +1,7 @@
 <?php
 
 use Laravel\Ai\Contracts\HasMcpServers;
-use Laravel\Ai\Mcp\Mcp;
+use Laravel\Ai\Mcp;
 use Laravel\Ai\Mcp\ServerReference;
 
 use function Laravel\Ai\agent;
@@ -35,12 +35,12 @@ test('structured anonymous agents may declare mcp servers', function () {
 });
 
 test('mcp server references are immutable when limiting tools', function () {
-    $server = Mcp::server('github');
-    $limited = $server->only(['search_repositories', 'create_issue']);
+    $reference = Mcp::server('github');
+    $limited = $reference->only(['search_repositories', 'create_issue']);
 
-    expect($server)->not->toBe($limited)
-        ->and($server->name)->toBe('github')
-        ->and($server->only)->toBeNull()
+    expect($reference)->not->toBe($limited)
+        ->and($reference->name)->toBe('github')
+        ->and($reference->only)->toBeNull()
         ->and($limited->name)->toBe('github')
         ->and($limited->only)->toBe(['search_repositories', 'create_issue']);
 });

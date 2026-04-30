@@ -1,12 +1,12 @@
 <?php
 
-use Laravel\Ai\Mcp\Mcp;
+use Laravel\Ai\Contracts\Mcp\McpTransport;
+use Laravel\Ai\Mcp;
 use Laravel\Ai\Mcp\McpManager;
 use Laravel\Ai\Mcp\McpServer;
 use Laravel\Ai\Mcp\McpTool;
 use Laravel\Ai\Mcp\McpToolResolver;
 use Laravel\Ai\Mcp\Tool;
-use Laravel\Ai\Contracts\Mcp\McpTransport;
 
 function fakeMcpServer(string $name, array $toolDefinitions): McpServer
 {
@@ -50,7 +50,7 @@ test('resolver returns adapters for all tools when no allowlist is given', funct
     ]);
 
     $manager = Mockery::mock(McpManager::class);
-    $manager->shouldReceive('server')->with('test')->andReturn($server);
+    $manager->shouldReceive('instance')->with('test')->andReturn($server);
 
     $tools = (new McpToolResolver($manager))->tools(['test']);
 
@@ -68,7 +68,7 @@ test('resolver respects only allowlist and preserves order', function () {
     ]);
 
     $manager = Mockery::mock(McpManager::class);
-    $manager->shouldReceive('server')->with('test')->andReturn($server);
+    $manager->shouldReceive('instance')->with('test')->andReturn($server);
 
     $tools = (new McpToolResolver($manager))->tools([
         Mcp::server('test')->only(['gamma', 'alpha']),
@@ -85,7 +85,7 @@ test('resolver throws when an allowlisted tool is missing from the server', func
     ]);
 
     $manager = Mockery::mock(McpManager::class);
-    $manager->shouldReceive('server')->with('test')->andReturn($server);
+    $manager->shouldReceive('instance')->with('test')->andReturn($server);
 
     expect(fn () => (new McpToolResolver($manager))->tools([
         Mcp::server('test')->only(['alpha', 'missing']),
@@ -98,7 +98,7 @@ test('resolver assigns provider-safe aliases to each adapter', function () {
     ]);
 
     $manager = Mockery::mock(McpManager::class);
-    $manager->shouldReceive('server')->with('files')->andReturn($server);
+    $manager->shouldReceive('instance')->with('files')->andReturn($server);
 
     $tools = (new McpToolResolver($manager))->tools(['files']);
 

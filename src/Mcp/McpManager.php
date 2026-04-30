@@ -16,14 +16,6 @@ class McpManager extends MultipleInstanceManager
     protected $driverKey = 'transport';
 
     /**
-     * Get a configured MCP server by name.
-     */
-    public function server(?string $name = null): McpServer
-    {
-        return $this->instance($name);
-    }
-
-    /**
      * Disconnect all active MCP server connections.
      */
     public function disconnectAll(): void
