@@ -4,6 +4,7 @@ use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Files\Base64Image;
+use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Image;
 
 beforeEach(function () {
@@ -164,6 +165,23 @@ test('attachments are sent as image_url content parts', function () {
             && $content[0]['text'] === 'Edit this image'
             && $content[1]['type'] === 'image_url'
             && str_starts_with($content[1]['image_url']['url'], 'data:image/jpeg;base64,');
+    });
+});
+
+test('remote image attachments are passed as url without downloading', function () {
+    Http::fake(['openrouter.ai/*' => fakeOpenRouterImageResponse()]);
+
+    $attachment = new RemoteImage('https://example.com/photo.jpg', 'image/jpeg');
+
+    Image::of('Edit this image')->attachments([$attachment])->generate(provider: 'openrouter', model: 'google/gemini-2.5-flash-image');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $content = $body['messages'][0]['content'];
+
+        return is_array($content)
+            && $content[1]['type'] === 'image_url'
+            && $content[1]['image_url']['url'] === 'https://example.com/photo.jpg';
     });
 });
 

@@ -11,7 +11,6 @@ use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
-use Laravel\Ai\Files\Image as ImageFile;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
@@ -193,7 +192,7 @@ class OpenRouterGateway implements EmbeddingGateway, ImageGateway, TextGateway
     /**
      * Build the messages array for an image generation request.
      *
-     * @param  array<ImageFile>  $attachments
+     * @param  array<\Laravel\Ai\Files\Image>  $attachments
      */
     protected function buildImageMessages(string $prompt, array $attachments): array
     {
@@ -201,20 +200,10 @@ class OpenRouterGateway implements EmbeddingGateway, ImageGateway, TextGateway
             return [['role' => 'user', 'content' => $prompt]];
         }
 
-        $content = [['type' => 'text', 'text' => $prompt]];
-
-        foreach ($attachments as $attachment) {
-            $mime = $attachment->mime ?? 'image/png';
-
-            $content[] = [
-                'type' => 'image_url',
-                'image_url' => [
-                    'url' => 'data:'.$mime.';base64,'.base64_encode($attachment->content()),
-                ],
-            ];
-        }
-
-        return [['role' => 'user', 'content' => $content]];
+        return [['role' => 'user', 'content' => array_merge(
+            [['type' => 'text', 'text' => $prompt]],
+            $this->mapAttachments(collect($attachments)),
+        )]];
     }
 
     /**

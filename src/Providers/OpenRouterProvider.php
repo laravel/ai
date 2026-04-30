@@ -79,11 +79,15 @@ class OpenRouterProvider extends Provider implements EmbeddingProvider, ImagePro
      */
     public function defaultImageModel(): string
     {
-        return $this->config['models']['image']['default'] ?? 'google/gemini-2.5-flash-image';
+        return $this->config['models']['image']['default'] ?? 'google/gemini-3.1-flash-image-preview';
     }
 
     /**
      * Get the default / normalized image options for the provider.
+     *
+     * image_config, aspect_ratio, and image_size (1K/2K/4K) are OpenRouter's
+     * own API convention and are honored primarily by Gemini-family image models.
+     * Other image models routed via OpenRouter may ignore these fields.
      */
     public function defaultImageOptions(?string $size = null, $quality = null): array
     {
