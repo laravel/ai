@@ -1,101 +1,113 @@
 <?php
 
-namespace Tests\Unit\Tools;
-
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Tools\AgentTool;
-use PHPUnit\Framework\TestCase;
 
-class AgentToolTest extends TestCase
-{
-    public function test_name_uses_agent_name_method_when_available(): void
+test('name uses agent name method when available', function () {
+    $agent = new class implements Agent
     {
-        $agent = new class implements Agent
+        use Promptable;
+
+        public function name(): string
         {
-            use Promptable;
+            return 'custom_agent';
+        }
 
-            public function name(): string
-            {
-                return 'custom_agent';
-            }
-
-            public function instructions(): string
-            {
-                return 'Test instructions.';
-            }
-        };
-
-        $tool = new AgentTool($agent);
-
-        $this->assertEquals('custom_agent', $tool->name());
-    }
-
-    public function test_name_falls_back_to_class_basename(): void
-    {
-        $agent = $this->createMock(Agent::class);
-
-        $tool = new AgentTool($agent);
-
-        $this->assertNotEmpty($tool->name());
-    }
-
-    public function test_description_uses_agent_description_method_when_available(): void
-    {
-        $agent = new class implements Agent
+        public function instructions(): string
         {
-            use Promptable;
+            return 'Test instructions.';
+        }
+    };
 
-            public function description(): string
-            {
-                return 'A specialized research agent.';
-            }
+    $tool = new AgentTool($agent);
 
-            public function instructions(): string
-            {
-                return 'You are a research agent with very long instructions.';
-            }
-        };
+    expect($tool->name())->toBe('custom_agent');
+});
 
-        $tool = new AgentTool($agent);
-
-        $this->assertEquals('A specialized research agent.', $tool->description());
-    }
-
-    public function test_description_falls_back_to_instructions(): void
+test('name falls back to class basename', function () {
+    $agent = new class implements Agent
     {
-        $agent = new class implements Agent
+        use Promptable;
+
+        public function instructions(): string
         {
-            use Promptable;
+            return '';
+        }
+    };
 
-            public function instructions(): string
-            {
-                return 'You are a helpful assistant.';
-            }
-        };
+    $tool = new AgentTool($agent);
 
-        $tool = new AgentTool($agent);
+    expect($tool->name())->not->toBeEmpty();
+});
 
-        $this->assertEquals('You are a helpful assistant.', $tool->description());
-    }
-
-    public function test_schema_returns_task_string_parameter(): void
+test('description uses agent description method when available', function () {
+    $agent = new class implements Agent
     {
-        $agent = $this->createMock(Agent::class);
+        use Promptable;
 
-        $tool = new AgentTool($agent);
-        $schema = $tool->schema(new JsonSchemaTypeFactory);
+        public function description(): string
+        {
+            return 'A specialized research agent.';
+        }
 
-        $this->assertArrayHasKey('task', $schema);
-    }
+        public function instructions(): string
+        {
+            return 'You are a research agent with very long instructions.';
+        }
+    };
 
-    public function test_agent_returns_underlying_agent(): void
+    $tool = new AgentTool($agent);
+
+    expect($tool->description())->toBe('A specialized research agent.');
+});
+
+test('description falls back to instructions', function () {
+    $agent = new class implements Agent
     {
-        $agent = $this->createMock(Agent::class);
+        use Promptable;
 
-        $tool = new AgentTool($agent);
+        public function instructions(): string
+        {
+            return 'You are a helpful assistant.';
+        }
+    };
 
-        $this->assertSame($agent, $tool->agent());
-    }
-}
+    $tool = new AgentTool($agent);
+
+    expect($tool->description())->toBe('You are a helpful assistant.');
+});
+
+test('schema returns task string parameter', function () {
+    $agent = new class implements Agent
+    {
+        use Promptable;
+
+        public function instructions(): string
+        {
+            return '';
+        }
+    };
+
+    $tool = new AgentTool($agent);
+    $schema = $tool->schema(new JsonSchemaTypeFactory);
+
+    expect($schema)->toHaveKey('task');
+});
+
+test('agent returns underlying agent', function () {
+    $agent = new class implements Agent
+    {
+        use Promptable;
+
+        public function instructions(): string
+        {
+            return '';
+        }
+    };
+
+    $tool = new AgentTool($agent);
+
+    expect($tool->agent())->toBe($agent);
+});

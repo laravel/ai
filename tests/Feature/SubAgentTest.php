@@ -1,78 +1,66 @@
 <?php
 
-namespace Tests\Feature;
-
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Tools\AgentTool;
 use Tests\Fixtures\Agents\DelegatingAgent;
 use Tests\Fixtures\Agents\SubAgent;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
-use Tests\TestCase;
 
 use function Laravel\Ai\agent;
 
-class SubAgentTest extends TestCase
-{
-    public function test_agent_returned_from_tools_is_wrapped_as_agent_tool(): void
-    {
-        DelegatingAgent::fake();
-        SubAgent::fake(['Research result']);
+test('agent returned from tools is wrapped as agent tool', function () {
+    DelegatingAgent::fake();
+    SubAgent::fake(['Research result']);
 
-        (new DelegatingAgent)->prompt('Delegate research about Laravel');
+    (new DelegatingAgent)->prompt('Delegate research about Laravel');
 
-        DelegatingAgent::assertPrompted('Delegate research about Laravel');
-    }
+    DelegatingAgent::assertPrompted('Delegate research about Laravel');
+});
 
-    public function test_sub_agent_can_be_faked_independently(): void
-    {
-        SubAgent::fake(['Sub-agent research result']);
+test('sub agent can be faked independently', function () {
+    SubAgent::fake(['Sub-agent research result']);
 
-        $response = (new SubAgent)->prompt('Research topic');
+    $response = (new SubAgent)->prompt('Research topic');
 
-        $this->assertEquals('Sub-agent research result', $response->text);
-    }
+    expect($response->text)->toBe('Sub-agent research result');
+});
 
-    public function test_anonymous_agent_can_be_used_as_sub_agent(): void
-    {
-        $subAgent = agent('You are a research assistant.');
+test('anonymous agent can be used as sub agent', function () {
+    $subAgent = agent('You are a research assistant.');
 
-        $tool = new AgentTool($subAgent);
+    $tool = new AgentTool($subAgent);
 
-        $this->assertEquals('AnonymousAgent', $tool->name());
-        $this->assertEquals('You are a research assistant.', $tool->description());
-    }
+    expect($tool->name())->toBe('AnonymousAgent')
+        ->and($tool->description())->toBe('You are a research assistant.');
+});
 
-    public function test_agent_tool_uses_name_and_description_from_agent(): void
-    {
-        $tool = new AgentTool(new SubAgent);
+test('agent tool uses name and description from agent', function () {
+    $tool = new AgentTool(new SubAgent);
 
-        $this->assertEquals('research_agent', $tool->name());
-        $this->assertEquals('Research a topic in depth and return a summary.', $tool->description());
-    }
+    expect($tool->name())->toBe('research_agent')
+        ->and($tool->description())->toBe('Research a topic in depth and return a summary.');
+});
 
-    public function test_agent_tool_exposes_underlying_agent(): void
-    {
-        $agent = new SubAgent;
-        $tool = new AgentTool($agent);
+test('agent tool exposes underlying agent', function () {
+    $agent = new SubAgent;
+    $tool = new AgentTool($agent);
 
-        $this->assertSame($agent, $tool->agent());
-    }
+    expect($tool->agent())->toBe($agent);
+});
 
-    public function test_resolve_tools_wraps_agents_and_preserves_regular_tools(): void
-    {
-        $delegating = new DelegatingAgent;
-        $tools = iterator_to_array($delegating->tools());
+test('resolve tools wraps agents and preserves regular tools', function () {
+    $delegating = new DelegatingAgent;
+    $tools = iterator_to_array($delegating->tools());
 
-        $this->assertCount(2, $tools);
-        $this->assertInstanceOf(RandomNumberGenerator::class, $tools[0]);
+    expect($tools)->toHaveCount(2);
+    expect($tools[0])->toBeInstanceOf(RandomNumberGenerator::class);
 
-        $resolved = array_map(
-            fn ($tool) => $tool instanceof Agent ? new AgentTool($tool) : $tool,
-            $tools
-        );
+    $resolved = array_map(
+        fn ($tool) => $tool instanceof Agent ? new AgentTool($tool) : $tool,
+        $tools
+    );
 
-        $this->assertInstanceOf(RandomNumberGenerator::class, $resolved[0]);
-        $this->assertInstanceOf(AgentTool::class, $resolved[1]);
-        $this->assertInstanceOf(SubAgent::class, $resolved[1]->agent());
-    }
-}
+    expect($resolved[0])->toBeInstanceOf(RandomNumberGenerator::class)
+        ->and($resolved[1])->toBeInstanceOf(AgentTool::class)
+        ->and($resolved[1]->agent())->toBeInstanceOf(SubAgent::class);
+});
