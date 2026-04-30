@@ -186,3 +186,41 @@ test('request sends x-goog-api-key header', function () {
         return $request->hasHeader('x-goog-api-key', 'test-key');
     });
 });
+
+test('image response includes usage metadata when returned', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'candidates' => [[
+                'content' => [
+                    'parts' => [[
+                        'inlineData' => [
+                            'mimeType' => 'image/png',
+                            'data' => base64_encode('fake-image'),
+                        ],
+                    ]],
+                ],
+            ]],
+            'usageMetadata' => [
+                'promptTokenCount' => 12,
+                'candidatesTokenCount' => 1290,
+                'totalTokenCount' => 1302,
+            ],
+        ]),
+    ]);
+
+    $response = Image::of('A red apple')->generate(provider: 'gemini', model: 'gemini-3.1-flash-image-preview');
+
+    expect($response->usage->promptTokens)->toBe(12)
+        ->and($response->usage->completionTokens)->toBe(1290);
+});
+
+test('image response defaults to zero usage when usage metadata absent', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => fakeGeminiImageResponse(),
+    ]);
+
+    $response = Image::of('A red apple')->generate(provider: 'gemini', model: 'gemini-3.1-flash-image-preview');
+
+    expect($response->usage->promptTokens)->toBe(0)
+        ->and($response->usage->completionTokens)->toBe(0);
+});

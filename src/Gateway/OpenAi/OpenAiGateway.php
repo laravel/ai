@@ -147,12 +147,17 @@ class OpenAiGateway implements Gateway
 
         $data = $response->json();
 
+        $usage = $data['usage'] ?? [];
+
         return new ImageResponse(
             collect($data['data'] ?? [])->map(fn (array $image) => new GeneratedImage(
                 $image['b64_json'] ?? '',
                 'image/png',
             )),
-            new Usage(0, 0),
+            new Usage(
+                $usage['input_tokens'] ?? 0,
+                $usage['output_tokens'] ?? 0,
+            ),
             new Meta($provider->name(), $model),
         );
     }
