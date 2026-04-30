@@ -1,11 +1,14 @@
 <?php
 
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasToolMetadata;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Tools\AgentTool;
 use Tests\Fixtures\Agents\DelegatingAgent;
+use Tests\Fixtures\Agents\MiddleManagerAgent;
+use Tests\Fixtures\Agents\OrchestratorAgent;
 use Tests\Fixtures\Agents\ResearchAgent;
 
 test('agent returned from tools is invoked when called by parent agent', function () {
@@ -44,15 +47,10 @@ test('agent tool uses name and description from agent when defined', function ()
         ->and($tool->description())->toBe('Research a topic in depth and return a summary.');
 });
 
-test('agent tool falls back to class basename for name', function () {
+test('agent tool falls back to class basename for name when has tool metadata is not implemented', function () {
     $agent = new class implements Agent
     {
         use Promptable;
-
-        public function description(): string
-        {
-            return 'A nameless agent.';
-        }
 
         public function instructions(): string
         {
@@ -61,20 +59,17 @@ test('agent tool falls back to class basename for name', function () {
     };
 
     $tool = new AgentTool($agent);
+    $name = $tool->name();
 
-    expect($tool->name())->not->toBeEmpty()
-        ->and($tool->description())->toBe('A nameless agent.');
+    expect($name)->not->toBeEmpty()
+        ->and((string) $tool->description())
+        ->toStartWith("Delegates a task to the {$name} sub-agent");
 });
 
 test('agent tool falls back to a generic description that does not leak instructions', function () {
     $agent = new class implements Agent
     {
         use Promptable;
-
-        public function name(): string
-        {
-            return 'silent_agent';
-        }
 
         public function instructions(): string
         {
@@ -85,7 +80,9 @@ test('agent tool falls back to a generic description that does not leak instruct
     $tool = new AgentTool($agent);
 
     expect((string) $tool->description())
-        ->toStartWith('Delegates a task to the silent_agent sub-agent')
+        ->toStartWith('Delegates a task to the')
+        ->and((string) $tool->description())
+        ->toContain('sub-agent')
         ->not->toContain('long internal instructions');
 });
 
@@ -100,3 +97,34 @@ test('framework wraps an agent in tools automatically when resolving', function 
     expect($resolved[0])->toBeInstanceOf(AgentTool::class)
         ->and($resolved[0]->agent())->toBeInstanceOf(ResearchAgent::class);
 });
+
+test('nested agent delegates through a middle manager to a research agent', function () {
+    OrchestratorAgent::fake([
+        new ToolCall('call_001', 'middle_manager', ['task' => 'Deep-dive on Laravel caching']),
+        'Delegated to middle manager.',
+    ]);
+
+    MiddleManagerAgent::fake([
+        new ToolCall('call_002', 'research_agent', ['task' => 'Research Laravel caching internals']),
+        'Research delegated.',
+    ]);
+
+    ResearchAgent::fake(['Deep research result']);
+
+    $response = (new OrchestratorAgent)->prompt('Do a deep dive on Laravel caching');
+
+    OrchestratorAgent::assertPrompted('Do a deep dive on Laravel caching');
+    MiddleManagerAgent::assertPrompted(function (AgentPrompt $prompt) {
+        return $prompt->prompt === 'Deep-dive on Laravel caching';
+    });
+    ResearchAgent::assertPrompted(function (AgentPrompt $prompt) {
+        return $prompt->prompt === 'Research Laravel caching internals';
+    });
+
+    expect($response->toolCalls)->toHaveCount(1)
+        ->and($response->toolCalls->first()->name)->toBe('middle_manager')
+        ->and($response->toolResults)->toHaveCount(1)
+        ->and($response->toolResults->first()->result)->toBe('Research delegated.');
+});
+
+

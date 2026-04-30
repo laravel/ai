@@ -4,6 +4,7 @@ namespace Laravel\Ai\Tools;
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasToolMetadata;
 use Laravel\Ai\Contracts\Tool;
 use Stringable;
 use Throwable;
@@ -20,7 +21,7 @@ class AgentTool implements Tool
      */
     public function name(): string
     {
-        return method_exists($this->agent, 'name')
+        return $this->agent instanceof HasToolMetadata
             ? $this->agent->name()
             : class_basename($this->agent);
     }
@@ -30,7 +31,7 @@ class AgentTool implements Tool
      */
     public function description(): Stringable|string
     {
-        return method_exists($this->agent, 'description')
+        return $this->agent instanceof HasToolMetadata
             ? $this->agent->description()
             : sprintf(
                 'Delegates a task to the %s sub-agent and returns its response. Pass a clear, self-contained task description as the sub-agent runs in isolation and has no access to the parent conversation history.',
