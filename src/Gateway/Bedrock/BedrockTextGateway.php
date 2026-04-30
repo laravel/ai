@@ -12,7 +12,7 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Files\Document;
-use Laravel\Ai\Files\RemoteDocument;
+use Laravel\Ai\Files\S3Document;
 use Laravel\Ai\Gateway\Bedrock\Concerns\CreatesBedrockClient;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
@@ -694,12 +694,12 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
         $content = [['text' => $message->content]];
 
         foreach ($message->attachments as $attachment) {
-            if ($attachment instanceof RemoteDocument && str_starts_with($attachment->url, 's3://')) {
+            if ($attachment instanceof S3Document) {
                 $content[] = [
                     'document' => [
                         'format' => $this->getDocumentFormat($attachment),
                         'name' => $this->getDocumentName($attachment),
-                        'source' => ['s3Location' => ['uri' => $attachment->url]],
+                        'source' => ['s3Location' => ['uri' => $attachment->uri]],
                     ],
                 ];
             } elseif ($attachment instanceof Document) {

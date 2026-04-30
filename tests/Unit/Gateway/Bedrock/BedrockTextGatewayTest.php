@@ -5,7 +5,7 @@ use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Document;
-use Laravel\Ai\Files\RemoteDocument;
+use Laravel\Ai\Files\S3Document;
 use Laravel\Ai\Gateway\Bedrock\BedrockTextGateway;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -227,8 +227,8 @@ test('user message with pdf document attachment produces document block', functi
         ->and($formatted['content'][1]['document']['source']['bytes'])->toBe('pdf-bytes');
 });
 
-test('s3 remote document attachment is sent as s3Location reference', function () {
-    $document = (new RemoteDocument('s3://my-bucket/path/report.pdf', 'application/pdf'))->as('report');
+test('s3 document attachment is sent as s3Location reference', function () {
+    $document = (new S3Document('s3://my-bucket/path/report.pdf', null, 'application/pdf'))->as('report');
     $user = new UserMessage('summarize this', [$document]);
 
     $formatted = textGateway()->callFormatUserMessage($user);
@@ -239,6 +239,19 @@ test('s3 remote document attachment is sent as s3Location reference', function (
             's3Location' => ['uri' => 's3://my-bucket/path/report.pdf'],
         ]);
 });
+
+test('document fromUrl with s3 scheme returns s3 document', function () {
+    $document = Document::fromUrl('s3://my-bucket/path/report.pdf');
+
+    expect($document)->toBeInstanceOf(S3Document::class)
+        ->and($document->uri)->toBe('s3://my-bucket/path/report.pdf');
+});
+
+test('s3 document content throws unsupported exception', function () {
+    $document = new S3Document('s3://my-bucket/path/report.pdf');
+
+    $document->content();
+})->throws(InvalidArgumentException::class);
 
 test('document format maps common mime types', function () {
     $gateway = textGateway();
