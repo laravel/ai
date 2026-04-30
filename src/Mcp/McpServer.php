@@ -8,7 +8,7 @@ use Laravel\Ai\Contracts\Mcp\McpTransport;
 
 class McpServer
 {
-    public const ProtocolVersion = '2025-11-25';
+    public const string ProtocolVersion = '2025-11-25';
 
     /**
      * Whether the MCP connection has been initialized.
