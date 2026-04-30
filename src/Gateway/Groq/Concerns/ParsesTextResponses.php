@@ -283,6 +283,10 @@ trait ParsesTextResponses
             $body['temperature'] = $options->temperature;
         }
 
+        if (! is_null($options?->topP)) {
+            $body['top_p'] = $options->topP;
+        }
+
         $providerOptions = $options?->providerOptions($provider->driver());
 
         if (filled($providerOptions)) {

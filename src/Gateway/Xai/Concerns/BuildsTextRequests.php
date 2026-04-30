@@ -43,6 +43,10 @@ trait BuildsTextRequests
             $body['temperature'] = $options->temperature;
         }
 
+        if (! is_null($options?->topP)) {
+            $body['top_p'] = $options->topP;
+        }
+
         $providerOptions = $options?->providerOptions(
             Lab::tryFrom($provider->driver()) ?? $provider->driver()
         );

@@ -379,6 +379,10 @@ trait HandlesTextStreaming
                 $body['temperature'] = $options->temperature;
             }
 
+            if (! is_null($options?->topP)) {
+                $body['top_p'] = $options->topP;
+            }
+
             if (! is_null($options?->maxTokens)) {
                 $body['max_output_tokens'] = $options->maxTokens;
             }

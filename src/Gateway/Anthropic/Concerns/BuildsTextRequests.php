@@ -62,6 +62,10 @@ trait BuildsTextRequests
             $body['temperature'] = $options->temperature;
         }
 
+        if ($options?->topP !== null) {
+            $body['top_p'] = $options->topP;
+        }
+
         return array_merge($body, $providerOptions);
     }
 

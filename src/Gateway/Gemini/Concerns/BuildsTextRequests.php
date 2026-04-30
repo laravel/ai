@@ -84,6 +84,10 @@ trait BuildsTextRequests
             $generationConfig['temperature'] = $options->temperature;
         }
 
+        if (! is_null($options?->topP)) {
+            $generationConfig['topP'] = $options->topP;
+        }
+
         $providerOptions = $options?->providerOptions(Lab::tryFrom($provider->driver()) ?? $provider->driver());
 
         if (! is_null($providerOptions)) {

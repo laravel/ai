@@ -537,6 +537,10 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             $config['temperature'] = $options->temperature;
         }
 
+        if ($options->topP !== null) {
+            $config['topP'] = $options->topP;
+        }
+
         return $config;
     }
 

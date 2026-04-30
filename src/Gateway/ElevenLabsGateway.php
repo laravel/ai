@@ -11,7 +11,6 @@ use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Files\Audio;
-use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
