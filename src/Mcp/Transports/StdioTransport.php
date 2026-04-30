@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Mcp\Transports;
 
+use InvalidArgumentException;
 use Laravel\Ai\Contracts\Mcp\McpTransport;
 use Laravel\Ai\Exceptions\McpException;
 
@@ -64,6 +65,10 @@ class StdioTransport implements McpTransport
      */
     public function send(array $request): array
     {
+        if (! array_key_exists('id', $request)) {
+            throw new InvalidArgumentException('JSON-RPC requests sent through the MCP stdio transport must include an [id].');
+        }
+
         $this->ensureOpen();
 
         $this->write($request);
@@ -76,6 +81,10 @@ class StdioTransport implements McpTransport
      */
     public function notify(array $notification): void
     {
+        if (array_key_exists('id', $notification)) {
+            throw new InvalidArgumentException('JSON-RPC notifications sent through the MCP stdio transport must not include an [id].');
+        }
+
         $this->ensureOpen();
 
         $this->write($notification);
