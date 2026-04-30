@@ -1,6 +1,6 @@
 <?php
 
-namespace Laravel\Ai\Mcp\Transports;
+namespace Laravel\Ai\Contracts\Mcp;
 
 interface McpTransport
 {

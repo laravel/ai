@@ -4,7 +4,7 @@ namespace Laravel\Ai\Mcp;
 
 use Illuminate\Contracts\Foundation\Application;
 use InvalidArgumentException;
-use Laravel\Ai\Mcp\Transports\McpTransport;
+use Laravel\Ai\Contracts\Mcp\McpTransport;
 use Laravel\Ai\Mcp\Transports\StdioTransport;
 
 class McpManager

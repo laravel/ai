@@ -6,7 +6,7 @@ use Laravel\Ai\Mcp\McpServer;
 use Laravel\Ai\Mcp\McpTool;
 use Laravel\Ai\Mcp\McpToolResolver;
 use Laravel\Ai\Mcp\Tool;
-use Laravel\Ai\Mcp\Transports\McpTransport;
+use Laravel\Ai\Contracts\Mcp\McpTransport;
 
 function fakeMcpServer(string $name, array $toolDefinitions): McpServer
 {
