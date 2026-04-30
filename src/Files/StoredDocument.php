@@ -37,7 +37,7 @@ class StoredDocument extends Document implements Arrayable, JsonSerializable, St
      */
     public function mimeType(): ?string
     {
-        return Storage::disk($this->disk)->mimeType($this->path);
+        return $this->mime ?? Storage::disk($this->disk)->mimeType($this->path);
     }
 
     /**

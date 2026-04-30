@@ -64,7 +64,7 @@ class BedrockProvider extends Provider implements EmbeddingProvider, ImageProvid
      */
     public function cheapestTextModel(): string
     {
-        return $this->config['models']['text']['cheapest'] ?? 'us.anthropic.claude-haiku-4-5-20250929-v1:0';
+        return $this->config['models']['text']['cheapest'] ?? 'us.anthropic.claude-haiku-4-5-20251001-v1:0';
     }
 
     /**
@@ -72,7 +72,7 @@ class BedrockProvider extends Provider implements EmbeddingProvider, ImageProvid
      */
     public function smartestTextModel(): string
     {
-        return $this->config['models']['text']['smartest'] ?? 'us.anthropic.claude-opus-4-6-20250929-v1:0';
+        return $this->config['models']['text']['smartest'] ?? 'us.anthropic.claude-opus-4-6-v1';
     }
 
     /**
@@ -105,7 +105,11 @@ class BedrockProvider extends Provider implements EmbeddingProvider, ImageProvid
     public function defaultImageOptions(?string $size = null, $quality = null): array
     {
         return [
-            'quality' => $quality ?? 'standard',
+            'quality' => match ($quality) {
+                'high', 'premium' => 'premium',
+                'low', 'medium', 'standard', null => 'standard',
+                default => $quality,
+            },
             'size' => match ($size) {
                 '2:3' => '768x1152',
                 '3:2' => '1152x768',

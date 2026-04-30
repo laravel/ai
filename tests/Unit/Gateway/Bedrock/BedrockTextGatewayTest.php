@@ -151,6 +151,18 @@ test('assistant message with tool calls is formatted with tool use blocks', func
     ]);
 });
 
+test('assistant message with empty tool input is formatted as a json object', function () {
+    $assistant = new AssistantMessage('', new Collection([
+        new ToolCall('tool-1', 'NoArgGenerator', []),
+    ]));
+
+    $formatted = textGateway()->callFormatMessages([$assistant]);
+    $input = $formatted[0]['content'][0]['toolUse']['input'];
+
+    expect($input)->toBeInstanceOf(stdClass::class)
+        ->and(json_encode($input))->toBe('{}');
+});
+
 test('tool result message is formatted with tool result blocks', function () {
     $message = new ToolResultMessage(new Collection([
         new ToolResult('tool-1', 'RandomGenerator', [], 'the result'),

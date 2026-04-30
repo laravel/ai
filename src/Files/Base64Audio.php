@@ -15,8 +15,6 @@ class Base64Audio extends Audio implements Arrayable, JsonSerializable, Storable
 {
     use CanBeUploadedToProvider;
 
-    public ?string $mime = null;
-
     public function __construct(public string $base64, ?string $mimeType = null)
     {
         $this->mime = $mimeType;
@@ -55,16 +53,6 @@ class Base64Audio extends Audio implements Arrayable, JsonSerializable, Storable
     public function transcription(): PendingTranscriptionGeneration
     {
         return Transcription::of($this);
-    }
-
-    /**
-     * Set the audio's MIME type.
-     */
-    public function withMimeType(string $mimeType): static
-    {
-        $this->mime = $mimeType;
-
-        return $this;
     }
 
     /**

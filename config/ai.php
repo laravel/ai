@@ -78,6 +78,7 @@ return [
         'cohere' => [
             'driver' => 'cohere',
             'key' => env('COHERE_API_KEY'),
+            'url' => env('COHERE_URL', 'https://api.cohere.com/v2'),
         ],
 
         'deepseek' => [
@@ -105,6 +106,7 @@ return [
         'jina' => [
             'driver' => 'jina',
             'key' => env('JINA_API_KEY'),
+            'url' => env('JINA_URL', 'https://api.jina.ai/v1'),
         ],
 
         'mistral' => [

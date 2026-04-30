@@ -124,13 +124,13 @@ test('returns default text model', function () {
 test('returns cheapest text model', function () {
     $provider = new BedrockProvider([], $this->dispatcher);
 
-    expect($provider->cheapestTextModel())->toBe('us.anthropic.claude-haiku-4-5-20250929-v1:0');
+    expect($provider->cheapestTextModel())->toBe('us.anthropic.claude-haiku-4-5-20251001-v1:0');
 });
 
 test('returns smartest text model', function () {
     $provider = new BedrockProvider([], $this->dispatcher);
 
-    expect($provider->smartestTextModel())->toBe('us.anthropic.claude-opus-4-6-20250929-v1:0');
+    expect($provider->smartestTextModel())->toBe('us.anthropic.claude-opus-4-6-v1');
 });
 
 test('allows custom text models in config', function () {
@@ -203,6 +203,16 @@ test('converts size ratios to dimensions for images', function () {
     expect($provider->defaultImageOptions('1:1')['size'])->toBe('1024x1024')
         ->and($provider->defaultImageOptions('2:3')['size'])->toBe('768x1152')
         ->and($provider->defaultImageOptions('3:2')['size'])->toBe('1152x768');
+});
+
+test('normalizes canonical quality values to bedrock values', function () {
+    $provider = new BedrockProvider([], $this->dispatcher);
+
+    expect($provider->defaultImageOptions(quality: 'low')['quality'])->toBe('standard')
+        ->and($provider->defaultImageOptions(quality: 'medium')['quality'])->toBe('standard')
+        ->and($provider->defaultImageOptions(quality: 'high')['quality'])->toBe('premium')
+        ->and($provider->defaultImageOptions(quality: 'standard')['quality'])->toBe('standard')
+        ->and($provider->defaultImageOptions(quality: 'premium')['quality'])->toBe('premium');
 });
 
 test('creates text gateway', function () {

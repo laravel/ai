@@ -58,6 +58,30 @@ test('model not ready maps to provider overloaded', function () {
     expect($aiException)->toBeInstanceOf(ProviderOverloadedException::class);
 });
 
+test('model timeout maps to provider overloaded', function () {
+    $bedrock = mockBedrockException('ModelTimeoutException', 408);
+
+    $aiException = BedrockException::toAiException($bedrock, 'bedrock', 'claude-sonnet');
+
+    expect($aiException)->toBeInstanceOf(ProviderOverloadedException::class);
+});
+
+test('model stream error maps to provider overloaded', function () {
+    $bedrock = mockBedrockException('ModelStreamErrorException', 424);
+
+    $aiException = BedrockException::toAiException($bedrock, 'bedrock', 'claude-sonnet');
+
+    expect($aiException)->toBeInstanceOf(ProviderOverloadedException::class);
+});
+
+test('internal server error maps to provider overloaded', function () {
+    $bedrock = mockBedrockException('InternalServerException', 500);
+
+    $aiException = BedrockException::toAiException($bedrock, 'bedrock', 'claude-sonnet');
+
+    expect($aiException)->toBeInstanceOf(ProviderOverloadedException::class);
+});
+
 test('service quota exceeded maps to insufficient credits', function () {
     $bedrock = mockBedrockException('ServiceQuotaExceededException', 402);
 
