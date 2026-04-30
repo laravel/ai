@@ -240,6 +240,20 @@ test('s3 document attachment is sent as s3Location reference', function () {
         ]);
 });
 
+test('s3 document attachment includes bucketOwner when set', function () {
+    $document = (new S3Document('s3://my-bucket/path/report.pdf', '123456789012', 'application/pdf'))->as('report');
+    $user = new UserMessage('summarize this', [$document]);
+
+    $formatted = textGateway()->callFormatUserMessage($user);
+
+    expect($formatted['content'][1]['document']['source'])->toEqual([
+        's3Location' => [
+            'uri' => 's3://my-bucket/path/report.pdf',
+            'bucketOwner' => '123456789012',
+        ],
+    ]);
+});
+
 test('document fromUrl with s3 scheme returns s3 document', function () {
     $document = Document::fromUrl('s3://my-bucket/path/report.pdf');
 

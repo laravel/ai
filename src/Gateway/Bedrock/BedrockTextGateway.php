@@ -699,7 +699,10 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                     'document' => [
                         'format' => $this->getDocumentFormat($attachment),
                         'name' => $this->getDocumentName($attachment),
-                        'source' => ['s3Location' => ['uri' => $attachment->uri]],
+                        'source' => ['s3Location' => array_filter([
+                            'uri' => $attachment->uri,
+                            'bucketOwner' => $attachment->bucketOwner,
+                        ])],
                     ],
                 ];
             } elseif ($attachment instanceof Document) {
