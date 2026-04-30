@@ -17,11 +17,30 @@ use Laravel\Ai\Responses\Data\ToolResult;
 class DatabaseConversationStore implements ConversationStore
 {
     /**
+     * Resolve the conversations table name from config, falling back to
+     * the historical default. Read per call so a runtime config override
+     * (for example inside a test or a feature flag check) takes effect
+     * without rebuilding the store.
+     */
+    protected function conversationsTable(): string
+    {
+        return config('ai.storage.tables.conversations', 'agent_conversations');
+    }
+
+    /**
+     * Resolve the messages table name from config.
+     */
+    protected function messagesTable(): string
+    {
+        return config('ai.storage.tables.messages', 'agent_conversation_messages');
+    }
+
+    /**
      * Get the most recent conversation ID for a given user.
      */
     public function latestConversationId(string|int $userId): ?string
     {
-        return DB::table('agent_conversations')
+        return DB::table($this->conversationsTable())
             ->where('user_id', $userId)
             ->orderBy('updated_at', 'desc')
             ->first()?->id;
@@ -34,7 +53,7 @@ class DatabaseConversationStore implements ConversationStore
     {
         $conversationId = (string) Str::uuid7();
 
-        DB::table('agent_conversations')->insert([
+        DB::table($this->conversationsTable())->insert([
             'id' => $conversationId,
             'user_id' => $userId,
             'title' => $title,
@@ -52,7 +71,7 @@ class DatabaseConversationStore implements ConversationStore
     {
         $messageId = (string) Str::uuid7();
 
-        DB::table('agent_conversation_messages')->insert([
+        DB::table($this->messagesTable())->insert([
             'id' => $messageId,
             'conversation_id' => $conversationId,
             'user_id' => $userId,
@@ -78,7 +97,7 @@ class DatabaseConversationStore implements ConversationStore
     {
         $messageId = (string) Str::uuid7();
 
-        DB::table('agent_conversation_messages')->insert([
+        DB::table($this->messagesTable())->insert([
             'id' => $messageId,
             'conversation_id' => $conversationId,
             'user_id' => $userId,
@@ -104,7 +123,7 @@ class DatabaseConversationStore implements ConversationStore
      */
     public function getLatestConversationMessages(string $conversationId, int $limit): Collection
     {
-        return DB::table('agent_conversation_messages')
+        return DB::table($this->messagesTable())
             ->where('conversation_id', $conversationId)
             ->orderByDesc('id')
             ->limit($limit)
