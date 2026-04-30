@@ -109,36 +109,14 @@ class StdioTransport implements McpTransport
 
         $this->pipes = [];
 
-        $deadline = microtime(true) + 2;
-
-        while (microtime(true) < $deadline) {
-            $status = proc_get_status($this->process);
-
-            if (! $status['running']) {
-                proc_close($this->process);
-                $this->process = null;
-
-                return;
-            }
-
-            usleep(50_000);
+        if ($this->closeProcessIfExitedWithin(2)) {
+            return;
         }
 
         proc_terminate($this->process);
 
-        $deadline = microtime(true) + 2;
-
-        while (microtime(true) < $deadline) {
-            $status = proc_get_status($this->process);
-
-            if (! $status['running']) {
-                proc_close($this->process);
-                $this->process = null;
-
-                return;
-            }
-
-            usleep(50_000);
+        if ($this->closeProcessIfExitedWithin(2)) {
+            return;
         }
 
         proc_terminate($this->process, 9);
@@ -158,6 +136,29 @@ class StdioTransport implements McpTransport
         $status = proc_get_status($this->process);
 
         return $status['running'];
+    }
+
+    /**
+     * Close the process resource if the subprocess exits within the given time.
+     */
+    protected function closeProcessIfExitedWithin(float|int $seconds): bool
+    {
+        $deadline = microtime(true) + $seconds;
+
+        while (microtime(true) < $deadline) {
+            $status = proc_get_status($this->process);
+
+            if (! $status['running']) {
+                proc_close($this->process);
+                $this->process = null;
+
+                return true;
+            }
+
+            usleep(50_000);
+        }
+
+        return false;
     }
 
     /**
