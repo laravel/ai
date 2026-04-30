@@ -1,11 +1,12 @@
 <?php
 
+use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Reranking;
 
-function fakeJinaBaseUrlEmbeddingsResponse(): \GuzzleHttp\Promise\PromiseInterface
+function fakeJinaBaseUrlEmbeddingsResponse(): PromiseInterface
 {
     return Http::response([
         'model' => 'jina-embeddings-v4',
@@ -14,7 +15,7 @@ function fakeJinaBaseUrlEmbeddingsResponse(): \GuzzleHttp\Promise\PromiseInterfa
     ]);
 }
 
-function fakeJinaBaseUrlRerankingResponse(): \GuzzleHttp\Promise\PromiseInterface
+function fakeJinaBaseUrlRerankingResponse(): PromiseInterface
 {
     return Http::response([
         'model' => 'jina-reranker-v3',

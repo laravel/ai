@@ -2,16 +2,38 @@
 
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
-use Laravel\Ai\Gateway\Concerns\ResolvesToolName;
+use Laravel\Ai\Tools\ToolNameResolver;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 use Tests\Fixtures\Tools\NamedTool;
+
+class ProtectedNameTool implements Tool
+{
+    protected function name(): string
+    {
+        return 'should_not_be_used';
+    }
+
+    public function description(): string
+    {
+        return 'A tool with an inaccessible name method.';
+    }
+
+    public function handle(\Laravel\Ai\Tools\Request $request): string
+    {
+        return 'ok';
+    }
+
+    public function schema(\Illuminate\Contracts\JsonSchema\JsonSchema $schema): array
+    {
+        return [];
+    }
+}
 
 function resolverHost(): object
 {
     return new class
     {
         use InvokesTools;
-        use ResolvesToolName;
 
         public function __construct()
         {
@@ -20,7 +42,7 @@ function resolverHost(): object
 
         public function callResolve(Tool $tool): string
         {
-            return $this->getToolName($tool);
+            return ToolNameResolver::resolve($tool);
         }
 
         public function callFind(string $name, array $tools): ?Tool
@@ -30,17 +52,21 @@ function resolverHost(): object
     };
 }
 
-test('getToolName falls back to class basename when tool has no name() method', function () {
+test('resolveToolName falls back to class basename when tool has no name() method', function () {
     $host = resolverHost();
 
     expect($host->callResolve(new FixedNumberGenerator))->toBe('FixedNumberGenerator');
 });
 
-test('getToolName prefers the declared name() method when present', function () {
+test('resolveToolName prefers the declared name() method when present', function () {
     $host = resolverHost();
 
     expect($host->callResolve(new NamedTool('aliased_tool')))
         ->toBe('aliased_tool');
+});
+
+test('resolveToolName falls back when name() is not callable', function () {
+    expect(ToolNameResolver::resolve(new ProtectedNameTool))->toBe('ProtectedNameTool');
 });
 
 test('findTool matches a tool by its declared name() when multiple share a class', function () {

@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\AttributeAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
 use Tests\Fixtures\Agents\StructuredWithThinkingAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
@@ -59,6 +60,42 @@ describe('request structure', function () {
 
         Http::assertSent(function ($request) {
             return $request->data()['max_tokens'] === 64000;
+        });
+    });
+
+    test('temperature and top_p are included when set via attributes', function () {
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeTextResponse(),
+        ]);
+
+        (new AttributeAgent)->prompt(
+            'Hi',
+            provider: 'anthropic',
+        );
+
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+
+            return $body['temperature'] === 0.7
+                && $body['top_p'] === 0.8;
+        });
+    });
+
+    test('temperature and top_p are excluded when not set', function () {
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeTextResponse(),
+        ]);
+
+        (new AssistantAgent)->prompt(
+            'Hi',
+            provider: 'anthropic',
+        );
+
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+
+            return ! array_key_exists('temperature', $body)
+                && ! array_key_exists('top_p', $body);
         });
     });
 

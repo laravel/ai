@@ -6,19 +6,17 @@ use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\Gateway\Concerns\ResolvesToolName;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\ProviderTool;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
+use Laravel\Ai\Tools\ToolNameResolver;
 use LogicException;
 use RuntimeException;
 
 trait MapsTools
 {
-    use ResolvesToolName;
-
     /**
      * Map the given tools to Anthropic tool definitions.
      */
@@ -54,7 +52,7 @@ trait MapsTools
         }
 
         return [
-            'name' => $this->getToolName($tool),
+            'name' => ToolNameResolver::resolve($tool),
             'description' => (string) $tool->description(),
             'input_schema' => $inputSchema,
         ];
