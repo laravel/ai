@@ -11,6 +11,6 @@ trait ResolvesToolName
      */
     protected function resolveToolName(Tool $tool): string
     {
-        return method_exists($tool, 'name') ? $tool->name() : class_basename($tool);
+        return is_callable([$tool, 'name']) ? $tool->name() : class_basename($tool);
     }
 }
