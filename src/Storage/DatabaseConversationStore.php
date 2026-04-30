@@ -68,6 +68,10 @@ class DatabaseConversationStore implements ConversationStore
             'updated_at' => now(),
         ]);
 
+        DB::table('agent_conversations')
+            ->where('id', $conversationId)
+            ->update(['updated_at' => now()]);
+
         return $messageId;
     }
 
@@ -93,6 +97,10 @@ class DatabaseConversationStore implements ConversationStore
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        DB::table('agent_conversations')
+            ->where('id', $conversationId)
+            ->update(['updated_at' => now()]);
 
         return $messageId;
     }
