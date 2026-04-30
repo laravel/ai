@@ -10,7 +10,6 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Gateway\OpenRouter\OpenRouterGateway;
-use Laravel\Ai\Gateway\OpenRouterImageGateway;
 
 class OpenRouterProvider extends Provider implements EmbeddingProvider, ImageProvider, TextProvider
 {
@@ -72,7 +71,7 @@ class OpenRouterProvider extends Provider implements EmbeddingProvider, ImagePro
      */
     public function imageGateway(): ImageGateway
     {
-        return $this->imageGateway ?? new OpenRouterImageGateway;
+        return $this->imageGateway ??= new OpenRouterGateway($this->events);
     }
 
     /**
@@ -89,9 +88,13 @@ class OpenRouterProvider extends Provider implements EmbeddingProvider, ImagePro
     public function defaultImageOptions(?string $size = null, $quality = null): array
     {
         return array_filter([
-            'image_config' => array_filter([
-                'aspect_ratio' => $size,
-            ]),
+            'aspect_ratio' => $size,
+            'image_size' => match ($quality) {
+                'low' => '1K',
+                'medium' => '2K',
+                'high' => '4K',
+                default => null,
+            },
         ]);
     }
 

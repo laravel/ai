@@ -6,18 +6,24 @@ use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
+use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
+use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Files\Image as ImageFile;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
+use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\TextResponse;
 
-class OpenRouterGateway implements EmbeddingGateway, TextGateway
+class OpenRouterGateway implements EmbeddingGateway, ImageGateway, TextGateway
 {
     use Concerns\BuildsTextRequests;
     use Concerns\CreatesOpenRouterClient;
@@ -129,6 +135,86 @@ class OpenRouterGateway implements EmbeddingGateway, TextGateway
             [],
             $timeout,
         );
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function generateImage(
+        ImageProvider $provider,
+        string $model,
+        string $prompt,
+        array $attachments = [],
+        ?string $size = null,
+        ?string $quality = null,
+        ?int $timeout = null,
+    ): ImageResponse {
+        $imageOptions = $provider->defaultImageOptions($size, $quality);
+
+        $imageConfig = array_filter([
+            'aspect_ratio' => $imageOptions['aspect_ratio'] ?? null,
+            'image_size' => $imageOptions['image_size'] ?? null,
+        ]);
+
+        $response = $this->withErrorHandling(
+            $provider->name(),
+            fn () => $this->client($provider, $timeout ?? 120)
+                ->post('chat/completions', array_filter([
+                    'model' => $model,
+                    'messages' => $this->buildImageMessages($prompt, $attachments),
+                    'modalities' => ['image', 'text'],
+                    'image_config' => $imageConfig ?: null,
+                ]))
+        );
+
+        $data = $response->json();
+
+        $message = $data['choices'][0]['message'] ?? [];
+
+        $images = collect($message['images'] ?? [])->map(function (array $image) {
+            $url = $image['image_url']['url'] ?? '';
+
+            if (preg_match('/^data:(image\/[\w+.-]+);base64,(.+)$/', $url, $matches)) {
+                return new GeneratedImage($matches[2], $matches[1]);
+            }
+
+            return null;
+        })->filter()->values();
+
+        $usage = $data['usage'] ?? [];
+
+        return new ImageResponse(
+            $images,
+            new Usage($usage['prompt_tokens'] ?? 0, $usage['completion_tokens'] ?? 0),
+            new Meta($provider->name(), $data['model'] ?? $model),
+        );
+    }
+
+    /**
+     * Build the messages array for an image generation request.
+     *
+     * @param  array<ImageFile>  $attachments
+     */
+    protected function buildImageMessages(string $prompt, array $attachments): array
+    {
+        if (empty($attachments)) {
+            return [['role' => 'user', 'content' => $prompt]];
+        }
+
+        $content = [['type' => 'text', 'text' => $prompt]];
+
+        foreach ($attachments as $attachment) {
+            $mime = $attachment->mime ?? 'image/png';
+
+            $content[] = [
+                'type' => 'image_url',
+                'image_url' => [
+                    'url' => 'data:'.$mime.';base64,'.base64_encode($attachment->content()),
+                ],
+            ];
+        }
+
+        return [['role' => 'user', 'content' => $content]];
     }
 
     /**
