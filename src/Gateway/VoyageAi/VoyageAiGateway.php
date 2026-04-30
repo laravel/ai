@@ -7,6 +7,7 @@ use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\RerankingGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\RerankingProvider;
+use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\RankedDocument;
 use Laravel\Ai\Responses\EmbeddingsResponse;
@@ -15,6 +16,7 @@ use Laravel\Ai\Responses\RerankingResponse;
 class VoyageAiGateway implements EmbeddingGateway, RerankingGateway
 {
     use Concerns\CreatesVoyageAiClient;
+    use HandlesFailoverErrors;
 
     /**
      * Generate embedding vectors representing the given inputs.
@@ -28,11 +30,14 @@ class VoyageAiGateway implements EmbeddingGateway, RerankingGateway
         int $dimensions,
         int $timeout = 30,
     ): EmbeddingsResponse {
-        $data = $this->client($provider, $timeout)->post('/embeddings', [
-            'model' => $model,
-            'input' => $inputs,
-            'output_dimension' => $dimensions,
-        ])->json();
+        $data = $this->withErrorHandling(
+            $provider->name(),
+            fn () => $this->client($provider, $timeout)->post('/embeddings', [
+                'model' => $model,
+                'input' => $inputs,
+                'output_dimension' => $dimensions,
+            ]),
+        )->json();
 
         return new EmbeddingsResponse(
             (new Collection($data['data']))->pluck('embedding')->all(),
@@ -53,12 +58,15 @@ class VoyageAiGateway implements EmbeddingGateway, RerankingGateway
         string $query,
         ?int $limit = null
     ): RerankingResponse {
-        $data = $this->client($provider)->post('/rerank', array_filter([
-            'model' => $model,
-            'query' => $query,
-            'documents' => $documents,
-            'top_k' => $limit,
-        ]))->json();
+        $data = $this->withErrorHandling(
+            $provider->name(),
+            fn () => $this->client($provider)->post('/rerank', array_filter([
+                'model' => $model,
+                'query' => $query,
+                'documents' => $documents,
+                'top_k' => $limit,
+            ])),
+        )->json();
 
         return new RerankingResponse(
             collect($data['data'])->map(fn (array $result) => new RankedDocument(

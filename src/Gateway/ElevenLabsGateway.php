@@ -62,18 +62,10 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
         bool $diarize = false,
         int $timeout = 30
     ): TranscriptionResponse {
-        $audioContent = match (true) {
-            $audio instanceof TranscribableAudio => $audio->content(),
-        };
-
-        $mimeType = match (true) {
-            $audio instanceof TranscribableAudio => $audio->mimeType(),
-        };
-
         $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders([
             'xi-api-key' => $provider->providerCredentials()['key'],
         ])->timeout($timeout)->attach(
-            'file', $audioContent, 'file', ['Content-Type' => $mimeType],
+            'file', $audio->content(), 'file', ['Content-Type' => $audio->mimeType()],
         )->post('https://api.elevenlabs.io/v1/speech-to-text', [
             'model_id' => $model,
             'language' => $language,

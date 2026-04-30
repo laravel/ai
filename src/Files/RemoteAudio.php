@@ -15,8 +15,6 @@ class RemoteAudio extends Audio implements Arrayable, JsonSerializable, Storable
 {
     use CanBeUploadedToProvider, HasRemoteContent;
 
-    public ?string $mime = null;
-
     public function __construct(public string $url, ?string $mimeType = null)
     {
         $this->mime = $mimeType;
@@ -37,7 +35,7 @@ class RemoteAudio extends Audio implements Arrayable, JsonSerializable, Storable
     {
         return [
             'type' => 'remote-audio',
-            'name' => $this->name,
+            'name' => $this->name(),
             'url' => $this->url,
             'mime' => $this->mime,
         ];

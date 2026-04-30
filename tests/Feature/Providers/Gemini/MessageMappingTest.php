@@ -7,6 +7,7 @@ use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Base64Document;
+use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Promptable;
@@ -116,6 +117,30 @@ test('prior assistant tool call with empty arguments omits args in conversation 
 
         return $modelFunctionCall !== null
             && ! array_key_exists('args', $modelFunctionCall);
+    });
+});
+
+test('local image attachment without explicit mime type detects mime from file', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('I see an image'),
+    ]);
+
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')],
+        provider: 'gemini',
+    );
+
+    Http::assertSent(function ($request) {
+        $parts = $request->data()['contents'][0]['parts'];
+
+        foreach ($parts as $part) {
+            if (isset($part['inlineData'])) {
+                return $part['inlineData']['mimeType'] === 'image/png';
+            }
+        }
+
+        return false;
     });
 });
 
