@@ -3,7 +3,6 @@
 namespace Laravel\Ai\Gateway\Bedrock;
 
 use Generator;
-use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -16,6 +15,7 @@ use Laravel\Ai\Files\Document;
 use Laravel\Ai\Gateway\Bedrock\Concerns\CreatesBedrockClient;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
+use Laravel\Ai\Gateway\Concerns\ResolvesToolMetadata;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
@@ -45,6 +45,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
     use CreatesBedrockClient;
     use HandlesFailoverErrors;
     use InvokesTools;
+    use ResolvesToolMetadata;
 
     protected const STRUCTURED_OUTPUT_TOOL = 'structured_output';
 
@@ -773,15 +774,23 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
     {
         return (new Collection($tools))
             ->filter(fn ($tool) => $tool instanceof Tool)
-            ->map(fn (Tool $tool) => [
-                'toolSpec' => [
-                    'name' => ToolNameResolver::resolve($tool),
-                    'description' => (string) $tool->description(),
-                    'inputSchema' => [
-                        'json' => (new ObjectSchema($tool->schema(new JsonSchemaTypeFactory)))->toArray(),
+            ->map(function (Tool $tool) {
+                $schemaArray = $this->toolSchemaArray($tool);
+
+                if ($this->toolHasRawSchema($tool) && ($schemaArray['properties'] ?? []) === []) {
+                    $schemaArray['properties'] = (object) [];
+                }
+
+                return [
+                    'toolSpec' => [
+                        'name' => ToolNameResolver::resolve($tool),
+                        'description' => (string) $tool->description(),
+                        'inputSchema' => [
+                            'json' => $schemaArray,
+                        ],
                     ],
-                ],
-            ])
+                ];
+            })
             ->values()
             ->all();
     }

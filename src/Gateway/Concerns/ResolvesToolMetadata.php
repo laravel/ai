@@ -4,22 +4,11 @@ namespace Laravel\Ai\Gateway\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Contracts\HasRawToolSchema;
-use Laravel\Ai\Contracts\NamedTool;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\ObjectSchema;
 
 trait ResolvesToolMetadata
 {
-    /**
-     * Get the provider-facing name for a tool.
-     */
-    protected function toolName(Tool $tool): string
-    {
-        return $tool instanceof NamedTool
-            ? $tool->name()
-            : class_basename($tool);
-    }
-
     /**
      * Determine if a tool provides its own raw JSON Schema.
      */

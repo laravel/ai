@@ -2,15 +2,15 @@
 
 namespace Laravel\Ai\Gateway\Ollama\Concerns;
 
-use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\Tools\ToolNameResolver;
-use Laravel\Ai\ObjectSchema;
+use Laravel\Ai\Gateway\Concerns\ResolvesToolMetadata;
 use Laravel\Ai\Providers\Tools\ProviderTool;
+use Laravel\Ai\Tools\ToolNameResolver;
 use RuntimeException;
 
 trait MapsTools
 {
+    use ResolvesToolMetadata;
 
     /**
      * Map the given tools to Ollama function definitions.
@@ -37,22 +37,29 @@ trait MapsTools
      */
     protected function mapTool(Tool $tool): array
     {
-        $schema = $tool->schema(new JsonSchemaTypeFactory);
+        $schemaArray = $this->toolSchemaArray($tool);
+        $isRaw = $this->toolHasRawSchema($tool);
 
-        $schemaArray = filled($schema)
-            ? (new ObjectSchema($schema))->toSchema()
-            : [];
+        if ($isRaw) {
+            $parameters = $schemaArray;
+
+            if (($parameters['properties'] ?? []) === []) {
+                $parameters['properties'] = (object) [];
+            }
+        } else {
+            $parameters = [
+                'type' => 'object',
+                'properties' => $schemaArray['properties'] ?? (object) [],
+                'required' => $schemaArray['required'] ?? [],
+            ];
+        }
 
         return [
             'type' => 'function',
             'function' => [
                 'name' => ToolNameResolver::resolve($tool),
                 'description' => (string) $tool->description(),
-                'parameters' => [
-                    'type' => 'object',
-                    'properties' => $schemaArray['properties'] ?? (object) [],
-                    'required' => $schemaArray['required'] ?? [],
-                ],
+                'parameters' => $parameters,
             ],
         ];
     }

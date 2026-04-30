@@ -2,11 +2,10 @@
 
 namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
-use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\ObjectSchema;
+use Laravel\Ai\Gateway\Concerns\ResolvesToolMetadata;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\ProviderTool;
 use Laravel\Ai\Providers\Tools\WebFetch;
@@ -17,6 +16,8 @@ use RuntimeException;
 
 trait MapsTools
 {
+    use ResolvesToolMetadata;
+
     /**
      * Map the given tools to Anthropic tool definitions.
      */
@@ -40,15 +41,21 @@ trait MapsTools
      */
     protected function mapTool(Tool $tool): array
     {
-        $schema = $tool->schema(new JsonSchemaTypeFactory);
+        $schemaArray = $this->toolSchemaArray($tool);
+        $isRaw = $this->toolHasRawSchema($tool);
 
-        $inputSchema = ['type' => 'object', 'properties' => (object) []];
+        if ($isRaw) {
+            $inputSchema = $schemaArray;
 
-        if (filled($schema)) {
-            $schemaArray = (new ObjectSchema($schema))->toSchema();
-
-            $inputSchema['properties'] = (object) ($schemaArray['properties'] ?? []);
-            $inputSchema['required'] = $schemaArray['required'] ?? [];
+            if (($inputSchema['properties'] ?? []) === []) {
+                $inputSchema['properties'] = (object) [];
+            }
+        } else {
+            $inputSchema = [
+                'type' => 'object',
+                'properties' => (object) ($schemaArray['properties'] ?? []),
+                'required' => $schemaArray['required'] ?? [],
+            ];
         }
 
         return [

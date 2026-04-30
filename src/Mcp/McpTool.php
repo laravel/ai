@@ -4,12 +4,11 @@ namespace Laravel\Ai\Mcp;
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\HasRawToolSchema;
-use Laravel\Ai\Contracts\NamedTool;
 use Laravel\Ai\Contracts\Tool as ToolContract;
 use Laravel\Ai\Tools\Request;
 use Stringable;
 
-class McpTool implements HasRawToolSchema, NamedTool, ToolContract
+class McpTool implements HasRawToolSchema, ToolContract
 {
     public function __construct(
         public readonly McpClient $client,

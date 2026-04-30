@@ -2,7 +2,6 @@
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\HasRawToolSchema;
-use Laravel\Ai\Contracts\NamedTool;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Gateway\Concerns\ResolvesToolMetadata;
 use Laravel\Ai\Tools\Request;
@@ -12,7 +11,6 @@ function metadataResolver(): object
     return new class
     {
         use ResolvesToolMetadata {
-            toolName as public;
             toolHasRawSchema as public;
             toolSchemaArray as public;
             normalizeRawToolSchema as public;
@@ -37,38 +35,6 @@ class ResolvesToolMetadataPlainTool implements Tool
         return [];
     }
 }
-
-test('toolName falls back to class basename when not a NamedTool', function () {
-    expect(metadataResolver()->toolName(new ResolvesToolMetadataPlainTool))
-        ->toBe('ResolvesToolMetadataPlainTool');
-});
-
-test('toolName returns NamedTool name when implemented', function () {
-    $tool = new class implements Tool, NamedTool
-    {
-        public function name(): string
-        {
-            return 'custom__alias__abcd1234';
-        }
-
-        public function description(): string
-        {
-            return '';
-        }
-
-        public function handle(Request $request): string
-        {
-            return '';
-        }
-
-        public function schema(JsonSchema $schema): array
-        {
-            return [];
-        }
-    };
-
-    expect(metadataResolver()->toolName($tool))->toBe('custom__alias__abcd1234');
-});
 
 test('toolHasRawSchema reflects the HasRawToolSchema interface', function () {
     $resolver = metadataResolver();
