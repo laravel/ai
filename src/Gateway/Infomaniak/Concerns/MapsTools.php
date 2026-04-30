@@ -8,17 +8,16 @@ trait MapsTools
 {
     protected function mapTools(array $tools): array
     {
-        return array_values(array_map(
-            fn (Tool $tool) => [
+        return array_values(array_map(function (Tool $tool) {
+            return [
                 'type' => 'function',
                 'function' => [
-                    'name' => $tool->name(),
-                    'description' => $tool->description(),
-                    'parameters' => $tool->parameters(),
+                    'name' => (string) $tool->description(), // Temporary: use description as name
+                    'description' => (string) $tool->description(),
+                    'parameters' => $tool->schema(new \Illuminate\JsonSchema\JsonSchemaTypeFactory),
                 ],
-            ],
-            array_filter($tools, fn ($tool) => $tool instanceof Tool)
-        ));
+            ];
+        }, $tools));
     }
 
     protected function findTool(string $name, array $tools): ?Tool

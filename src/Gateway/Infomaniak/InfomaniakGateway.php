@@ -66,6 +66,8 @@ class InfomaniakGateway implements TextGateway
             $tools,
             $schema,
             $options,
+            $instructions,
+            [],
             $timeout,
         );
     }

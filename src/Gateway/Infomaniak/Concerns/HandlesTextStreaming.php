@@ -123,7 +123,7 @@ trait HandlesTextStreaming
                 }
             }
 
-            if (isset($choice['finish_reason']) && $choice['finish_reason'] !== null) {
+            if (! empty($choice['finish_reason'])) {
                 $finishReason = $choice['finish_reason'];
             }
 

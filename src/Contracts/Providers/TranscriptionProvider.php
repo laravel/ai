@@ -32,4 +32,19 @@ interface TranscriptionProvider
      * Get the name of the default transcription (STT) model.
      */
     public function defaultTranscriptionModel(): string;
+
+    /**
+     * Get the provider's configuration.
+     */
+    public function config(): array;
+
+    /**
+     * Get the name of the provider.
+     */
+    public function name(): string;
+
+    /**
+     * Get the driver name of the provider.
+     */
+    public function driver(): string;
 }

@@ -50,7 +50,7 @@ trait MapsMessages
             'role' => 'user',
             'content' => [
                 ['type' => 'text', 'text' => $message->content],
-                ...$this->mapAttachments($message->attachments),
+                ...$this->mapAttachments($message->attachments->all()),
             ],
         ];
     }

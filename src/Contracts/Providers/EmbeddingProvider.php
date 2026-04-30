@@ -33,4 +33,19 @@ interface EmbeddingProvider
      * Get the default dimensions of the default embeddings model.
      */
     public function defaultEmbeddingsDimensions(): int;
+
+    /**
+     * Get the provider's configuration.
+     */
+    public function config(): array;
+
+    /**
+     * Get the name of the provider.
+     */
+    public function name(): string;
+
+    /**
+     * Get the driver name of the provider.
+     */
+    public function driver(): string;
 }

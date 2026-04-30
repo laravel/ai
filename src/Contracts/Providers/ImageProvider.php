@@ -42,4 +42,19 @@ interface ImageProvider
      * Get the default / normalized image options for the provider.
      */
     public function defaultImageOptions(?string $size = null, ?string $quality = null): array;
+
+    /**
+     * Get the provider's configuration.
+     */
+    public function config(): array;
+
+    /**
+     * Get the name of the provider.
+     */
+    public function name(): string;
+
+    /**
+     * Get the driver name of the provider.
+     */
+    public function driver(): string;
 }
