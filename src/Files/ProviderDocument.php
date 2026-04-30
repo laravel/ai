@@ -29,7 +29,7 @@ class ProviderDocument extends Document implements Arrayable, HasProviderId, Jso
         return [
             'type' => 'provider-document',
             'id' => $this->id,
-            'name' => $this->name,
+            'name' => $this->name(),
         ];
     }
 

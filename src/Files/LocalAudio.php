@@ -16,8 +16,6 @@ class LocalAudio extends Audio implements Arrayable, JsonSerializable, StorableF
 {
     use CanBeUploadedToProvider;
 
-    public ?string $mime = null;
-
     public function __construct(public string $path, ?string $mimeType = null)
     {
         $this->mime = $mimeType;
@@ -62,23 +60,13 @@ class LocalAudio extends Audio implements Arrayable, JsonSerializable, StorableF
     }
 
     /**
-     * Set the audio's MIME type.
-     */
-    public function withMimeType(string $mimeType): static
-    {
-        $this->mime = $mimeType;
-
-        return $this;
-    }
-
-    /**
      * Get the instance as an array.
      */
     public function toArray(): array
     {
         return [
             'type' => 'local-audio',
-            'name' => $this->name,
+            'name' => $this->name(),
             'path' => $this->path,
             'mime' => $this->mime,
         ];

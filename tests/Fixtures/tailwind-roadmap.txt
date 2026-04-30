@@ -1,0 +1,13 @@
+Tailwind CSS Six Month Roadmap
+
+Month 1: Expanded color palette and design tokens.
+
+Month 2: New typography plugin presets.
+
+Month 3: Container query utilities.
+
+Month 4: Oxide engine performance improvements.
+
+Month 5: First-class dark mode variant helpers.
+
+Month 6: Deeper Vite integration and improved IDE tooling.
