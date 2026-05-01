@@ -258,7 +258,7 @@ test('document fromUrl with s3 scheme returns s3 document', function () {
     $document = Document::fromUrl('s3://my-bucket/path/report.pdf');
 
     expect($document)->toBeInstanceOf(S3Document::class)
-        ->and($document->uri)->toBe('s3://my-bucket/path/report.pdf');
+        ->and($document->url)->toBe('s3://my-bucket/path/report.pdf');
 });
 
 test('s3 document content throws unsupported exception', function () {

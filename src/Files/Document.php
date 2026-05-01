@@ -7,6 +7,19 @@ use Illuminate\Http\UploadedFile;
 abstract class Document extends File
 {
     /**
+     * Get the raw bytes of the file.
+     */
+    abstract public function content(): string;
+
+    /**
+     * Get the provider-formatted source payload for this document.
+     */
+    public function source(): array
+    {
+        return ['bytes' => $this->content()];
+    }
+
+    /**
      * Create a new document from a string.
      */
     public static function fromString(string $content, ?string $mimeType = null): Base64Document

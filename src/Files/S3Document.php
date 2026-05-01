@@ -9,7 +9,7 @@ use JsonSerializable;
 class S3Document extends Document implements Arrayable, JsonSerializable
 {
     public function __construct(
-        public string $uri,
+        public string $url,
         public ?string $bucketOwner = null,
         ?string $mimeType = null,
     ) {
@@ -17,9 +17,7 @@ class S3Document extends Document implements Arrayable, JsonSerializable
     }
 
     /**
-     * Get the raw representation of the file.
-     *
-     * @throws \InvalidArgumentException
+     * @throws InvalidArgumentException
      */
     public function content(): string
     {
@@ -29,11 +27,24 @@ class S3Document extends Document implements Arrayable, JsonSerializable
     }
 
     /**
+     * Get the provider-formatted source payload for this document.
+     */
+    public function source(): array
+    {
+        return [
+            's3Location' => array_filter([
+                'uri' => $this->url,
+                'bucketOwner' => $this->bucketOwner,
+            ]),
+        ];
+    }
+
+    /**
      * Get the displayable name of the file.
      */
     public function name(): ?string
     {
-        $path = parse_url($this->uri, PHP_URL_PATH);
+        $path = parse_url($this->url, PHP_URL_PATH);
 
         return $this->name ?? basename(is_string($path) ? $path : '');
     }
@@ -54,7 +65,7 @@ class S3Document extends Document implements Arrayable, JsonSerializable
         return [
             'type' => 's3-document',
             'name' => $this->name(),
-            'uri' => $this->uri,
+            'url' => $this->url,
             'bucket_owner' => $this->bucketOwner,
             'mime' => $this->mime,
         ];
