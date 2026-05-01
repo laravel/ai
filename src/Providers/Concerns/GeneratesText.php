@@ -24,6 +24,7 @@ use Laravel\Ai\Middleware\RememberConversation;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StructuredAgentResponse;
+use Laravel\Ai\Responses\TextResponse;
 
 use function Laravel\Ai\pipeline;
 
@@ -94,7 +95,13 @@ trait GeneratesText
         $middleware = Ai::hasFakeGatewayFor($agent::class) ? [function (AgentPrompt $prompt, Closure $next) {
             Ai::recordPrompt($prompt);
 
-            return $next($prompt);
+            $response = $next($prompt);
+
+            if ($response instanceof TextResponse) {
+                Ai::recordToolCalls($prompt->agent::class, $response->toolCalls);
+            }
+
+            return $response;
         }] : [];
 
         if (in_array(RemembersConversations::class, class_uses_recursive($agent))

@@ -10,7 +10,6 @@ use Laravel\Ai\Gateway\FakeTextGateway;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\QueuedAgentPrompt;
 use Laravel\Ai\Responses\Data\ToolCall;
-use Laravel\Ai\Responses\TextResponse;
 use PHPUnit\Framework\Assert as PHPUnit;
 
 trait InteractsWithFakeAgents
@@ -29,6 +28,11 @@ trait InteractsWithFakeAgents
      * All of the recorded agent prompts that were queued.
      */
     protected array $recordedQueuedPrompts = [];
+
+    /**
+     * All of the recorded tool calls, keyed by agent class.
+     */
+    protected array $recordedToolCalls = [];
 
     /**
      * Fake the responses returned by the given agent.
@@ -60,6 +64,18 @@ trait InteractsWithFakeAgents
         return $this->hasFakeGatewayFor($agent)
             ? $this->fakeAgentGateways[$agent::class]
             : throw new InvalidArgumentException('Agent ['.$agent::class.'] has not been faked.');
+    }
+
+    /**
+     * Record the tool calls made during the given agent's response.
+     */
+    public function recordToolCalls(string $agent, Collection $toolCalls): self
+    {
+        foreach ($toolCalls as $toolCall) {
+            $this->recordedToolCalls[$agent][] = $toolCall;
+        }
+
+        return $this;
     }
 
     /**
@@ -175,21 +191,16 @@ trait InteractsWithFakeAgents
     }
 
     /**
-     * Assert that the given tool was called by the agent in the given response.
-     *
-     * The third argument may be:
-     * - null to match any invocation of the tool
-     * - an array of arguments that must be a subset of the recorded call's arguments
-     * - a Closure that receives the recorded arguments and returns a boolean
+     * Assert that the given tool was called by the agent.
      */
     public function assertAgentCalledTool(
-        TextResponse $response,
+        string $agent,
         string $tool,
         Closure|array|null $arguments = null,
     ): self {
-        $matchingCalls = $response->toolCalls
-            ->whereInstanceOf(ToolCall::class)
-            ->filter(fn (ToolCall $call) => $call->name === $tool);
+        $recorded = new Collection($this->recordedToolCalls[$agent] ?? []);
+
+        $matchingCalls = $recorded->filter(fn (ToolCall $call) => $call->name === $tool);
 
         PHPUnit::assertTrue(
             $matchingCalls->isNotEmpty(),
@@ -213,13 +224,12 @@ trait InteractsWithFakeAgents
     }
 
     /**
-     * Assert that the given tool was not called by the agent in the given response.
+     * Assert that the given tool was not called by the agent.
      */
-    public function assertAgentDidNotCallTool(TextResponse $response, string $tool): self
+    public function assertAgentDidNotCalledTool(string $agent, string $tool): self
     {
         PHPUnit::assertFalse(
-            $response->toolCalls
-                ->whereInstanceOf(ToolCall::class)
+            (new Collection($this->recordedToolCalls[$agent] ?? []))
                 ->contains(fn (ToolCall $call) => $call->name === $tool),
             "The unexpected tool [{$tool}] was called."
         );
@@ -228,17 +238,16 @@ trait InteractsWithFakeAgents
     }
 
     /**
-     * Assert that no tools were called by the agent in the given response.
+     * Assert that no tools were called by the agent.
      */
-    public function assertAgentCalledNoTools(TextResponse $response): self
+    public function assertAgentCalledNoTools(string $agent): self
     {
+        $calls = new Collection($this->recordedToolCalls[$agent] ?? []);
+
         PHPUnit::assertTrue(
-            $response->toolCalls->isEmpty(),
+            $calls->isEmpty(),
             'Expected no tools to be called, but the agent called ['.
-                $response->toolCalls
-                    ->whereInstanceOf(ToolCall::class)
-                    ->map(fn (ToolCall $call) => $call->name)
-                    ->implode(', ').
+                $calls->map(fn (ToolCall $call) => $call->name)->implode(', ').
                 '].'
         );
 

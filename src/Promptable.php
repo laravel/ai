@@ -22,7 +22,6 @@ use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\QueuedAgentResponse;
 use Laravel\Ai\Responses\StreamableAgentResponse;
-use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use InvalidArgumentException;
 use ReflectionClass;
@@ -296,32 +295,29 @@ trait Promptable
     }
 
     /**
-     * Assert that the given tool was called by the agent in the given response.
+     * Assert that the given tool was called by the agent.
      *
      * @param  Closure|array<string, mixed>|null  $arguments
      */
-    public static function assertCalledTool(
-        TextResponse $response,
-        string $tool,
-        Closure|array|null $arguments = null,
-    ): void {
-        Ai::assertAgentCalledTool($response, $tool, $arguments);
+    public static function assertCalledTool(string $tool, Closure|array|null $arguments = null): void
+    {
+        Ai::assertAgentCalledTool(static::class, $tool, $arguments);
     }
 
     /**
-     * Assert that the given tool was not called by the agent in the given response.
+     * Assert that the given tool was not called by the agent.
      */
-    public static function assertDidNotCallTool(TextResponse $response, string $tool): void
+    public static function assertDidNotCalledTool(string $tool): void
     {
-        Ai::assertAgentDidNotCallTool($response, $tool);
+        Ai::assertAgentDidNotCalledTool(static::class, $tool);
     }
 
     /**
-     * Assert that no tools were called by the agent in the given response.
+     * Assert that no tools were called by the agent.
      */
-    public static function assertCalledNoTools(TextResponse $response): void
+    public static function assertCalledNoTools(): void
     {
-        Ai::assertAgentCalledNoTools($response);
+        Ai::assertAgentCalledNoTools(static::class);
     }
 
     /**
