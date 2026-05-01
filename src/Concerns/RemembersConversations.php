@@ -16,6 +16,7 @@ trait RemembersConversations
      */
     public function forUser($user): static
     {
+        $this->conversationId = null;
         $this->conversationUser = $user;
 
         return $this;

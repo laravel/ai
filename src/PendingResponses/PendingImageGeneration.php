@@ -8,6 +8,7 @@ use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\FakePendingDispatch;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\StoredImage;
 use Laravel\Ai\Jobs\GenerateImage;
@@ -36,7 +37,7 @@ class PendingImageGeneration
     /**
      * Provide the reference images that should be sent with the request.
      *
-     * @param  array<\Laravel\Ai\Files\Image>  $attachments
+     * @param  array<Image>  $attachments
      */
     public function attachments(array $attachments): self
     {
@@ -48,7 +49,7 @@ class PendingImageGeneration
     /**
      * Specify the size / aspect ratio of the generated image.
      *
-     * @param  '3:2'|'2:3'|'1:1'  $size
+     * @param  string  $size
      */
     public function size(string $size): self
     {
@@ -118,6 +119,8 @@ class PendingImageGeneration
             $provider ?? config('ai.default_for_images'), $model
         );
 
+        $lastException = null;
+
         foreach ($providers as $provider => $model) {
             $provider = Ai::fakeableImageProvider($provider);
 
@@ -128,13 +131,15 @@ class PendingImageGeneration
                     $this->prompt, $this->attachments, $this->size, $this->quality, $model, $this->timeout
                 );
             } catch (FailoverableException $e) {
+                $lastException = $e;
+
                 event(new ProviderFailedOver($provider, $model, $e));
 
                 continue;
             }
         }
 
-        throw $e;
+        throw $lastException;
     }
 
     /**

@@ -29,8 +29,9 @@ class FakeAudioGateway implements AudioGateway
         string $text,
         string $voice,
         ?string $instructions = null,
+        int $timeout = 30,
     ): AudioResponse {
-        $audioPrompt = new AudioPrompt($text, $voice, $instructions, $provider, $model);
+        $audioPrompt = new AudioPrompt($text, $voice, $instructions, $provider, $model, $timeout);
 
         return $this->nextResponse($provider, $model, $audioPrompt);
     }

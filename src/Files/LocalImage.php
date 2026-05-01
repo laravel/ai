@@ -7,12 +7,11 @@ use Illuminate\Filesystem\Filesystem;
 use JsonSerializable;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
+use RuntimeException;
 
 class LocalImage extends Image implements Arrayable, JsonSerializable, StorableFile
 {
     use CanBeUploadedToProvider;
-
-    public ?string $mime = null;
 
     public function __construct(public string $path, ?string $mimeType = null)
     {
@@ -24,7 +23,13 @@ class LocalImage extends Image implements Arrayable, JsonSerializable, StorableF
      */
     public function content(): string
     {
-        return file_get_contents($this->path);
+        $content = file_get_contents($this->path);
+
+        if ($content === false) {
+            throw new RuntimeException("File does not exist at path [{$this->path}]");
+        }
+
+        return $content;
     }
 
     /**
@@ -40,19 +45,7 @@ class LocalImage extends Image implements Arrayable, JsonSerializable, StorableF
      */
     public function mimeType(): ?string
     {
-        return $this->mime ?? (new Filesystem)->mimeType($this->path);
-    }
-
-    /**
-     * Set the image's MIME type.
-     *
-     * @return $this
-     */
-    public function withMimeType(string $mimeType): static
-    {
-        $this->mime = $mimeType;
-
-        return $this;
+        return $this->mime ?? ((new Filesystem)->mimeType($this->path) ?: null);
     }
 
     /**
@@ -62,7 +55,7 @@ class LocalImage extends Image implements Arrayable, JsonSerializable, StorableF
     {
         return [
             'type' => 'local-image',
-            'name' => $this->name,
+            'name' => $this->name(),
             'path' => $this->path,
             'mime' => $this->mime,
         ];

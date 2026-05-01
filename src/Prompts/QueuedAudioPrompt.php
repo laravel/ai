@@ -13,6 +13,7 @@ class QueuedAudioPrompt
         public readonly ?string $instructions,
         public readonly Lab|array|string|null $provider,
         public readonly ?string $model,
+        public readonly int $timeout = 30,
     ) {}
 
     /**

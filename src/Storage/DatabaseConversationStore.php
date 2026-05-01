@@ -6,10 +6,13 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\ConversationStore;
-use Laravel\Ai\Messages\Conversation;
+use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
+use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Responses\Data\ToolResult;
 
 class DatabaseConversationStore implements ConversationStore
 {
@@ -113,7 +116,7 @@ class DatabaseConversationStore implements ConversationStore
     /**
      * Get the latest messages for the given conversation.
      *
-     * @return \Illuminate\Support\Collection<int, \Laravel\Ai\Messages\Message>
+     * @return Collection<int, Message>
      */
     public function getLatestConversationMessages(string $conversationId, int $limit): Collection
     {
@@ -124,6 +127,45 @@ class DatabaseConversationStore implements ConversationStore
             ->get()
             ->reverse()
             ->values()
-            ->map(fn ($m) => new Message($m->role, $m->content));
+            ->flatMap(function ($record) {
+                $toolCalls = collect(json_decode($record->tool_calls, true));
+                $toolResults = collect(json_decode($record->tool_results, true));
+
+                if ($record->role === 'user') {
+                    return [new Message('user', $record->content)];
+                }
+
+                if ($toolCalls->isNotEmpty()) {
+                    $messages = [];
+
+                    $messages[] = new AssistantMessage(
+                        $record->content ?: '',
+                        $toolCalls->map(fn ($toolCall) => new ToolCall(
+                            id: $toolCall['id'],
+                            name: $toolCall['name'],
+                            arguments: $toolCall['arguments'],
+                            resultId: $toolCall['result_id'] ?? null,
+                            reasoningId: $toolCall['reasoning_id'] ?? null,
+                            reasoningSummary: $toolCall['reasoning_summary'] ?? null,
+                        ))
+                    );
+
+                    if ($toolResults->isNotEmpty()) {
+                        $messages[] = new ToolResultMessage(
+                            $toolResults->map(fn ($toolResult) => new ToolResult(
+                                id: $toolResult['id'],
+                                name: $toolResult['name'],
+                                arguments: $toolResult['arguments'],
+                                result: $toolResult['result'],
+                                resultId: $toolResult['result_id'] ?? null,
+                            ))
+                        );
+                    }
+
+                    return $messages;
+                }
+
+                return [new AssistantMessage($record->content)];
+            });
     }
 }
