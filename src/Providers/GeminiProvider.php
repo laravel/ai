@@ -13,8 +13,8 @@ use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
-use Laravel\Ai\Gateway\GeminiFileGateway;
-use Laravel\Ai\Gateway\GeminiStoreGateway;
+use Laravel\Ai\Gateway\Gemini\GeminiFileGateway;
+use Laravel\Ai\Gateway\Gemini\GeminiStoreGateway;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
@@ -129,7 +129,8 @@ class GeminiProvider extends Provider implements EmbeddingProvider, FileProvider
                 '1:1' => '1:1',
                 '2:3' => '2:3',
                 '3:2' => '3:2',
-                default => null,
+                null => null,
+                default => $size,
             },
         ]);
     }

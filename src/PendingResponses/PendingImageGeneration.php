@@ -49,7 +49,7 @@ class PendingImageGeneration
     /**
      * Specify the size / aspect ratio of the generated image.
      *
-     * @param  '3:2'|'2:3'|'1:1'  $size
+     * @param  string  $size
      */
     public function size(string $size): self
     {
