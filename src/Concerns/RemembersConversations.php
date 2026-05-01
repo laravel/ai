@@ -4,6 +4,7 @@ namespace Laravel\Ai\Concerns;
 
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Messages\Conversation;
 
 trait RemembersConversations
 {
@@ -65,19 +66,16 @@ trait RemembersConversations
     /**
      * Get the list of conversations for the current user.
      *
-     * @return \Illuminate\Support\Collection<int, \Laravel\Ai\Messages\Conversation>
+     * @return Collection<int, Conversation>
      */
     public function conversations(int $limit = 25): Collection
     {
         if (! $this->conversationUser) {
-            return collect([]);
+            return collect();
         }
 
         return resolve(ConversationStore::class)
-            ->getConversations(
-                $this->conversationUser->id,
-                $limit
-            );
+            ->getConversations($this->conversationUser->id, $limit);
     }
 
     /**

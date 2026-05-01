@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Messages\AssistantMessage;
+use Laravel\Ai\Messages\Conversation;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
@@ -28,18 +29,17 @@ class DatabaseConversationStore implements ConversationStore
     }
 
     /**
-     * Get the latest conversations fir this user.
+     * Get the list of conversations for the given user.
      *
-     * @return \Illuminate\Support\Collection<int, \Laravel\Ai\Messages\Conversation>
+     * @return Collection<int, Conversation>
      */
     public function getConversations(string|int $userId, int $limit): Collection
     {
         return DB::table('agent_conversations')
             ->where('user_id', $userId)
-            ->orderBy('updated_at', 'desc')
+            ->orderByDesc('updated_at')
             ->limit($limit)
             ->get()
-            ->values()
             ->map(fn ($c) => new Conversation($c->id, $c->title, $c->user_id));
     }
 
