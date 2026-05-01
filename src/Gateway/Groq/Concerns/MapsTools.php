@@ -4,12 +4,14 @@ namespace Laravel\Ai\Gateway\Groq\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Tools\ToolNameResolver;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Tools\ProviderTool;
 use RuntimeException;
 
 trait MapsTools
 {
+
     /**
      * Map the given tools to Chat Completions function definitions.
      */
@@ -44,7 +46,7 @@ trait MapsTools
         return [
             'type' => 'function',
             'function' => [
-                'name' => class_basename($tool),
+                'name' => ToolNameResolver::resolve($tool),
                 'description' => (string) $tool->description(),
                 'parameters' => [
                     'type' => 'object',
