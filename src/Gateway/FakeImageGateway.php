@@ -27,6 +27,7 @@ class FakeImageGateway implements ImageGateway
      * Generate an image.
      *
      * @param  array<ImageAttachment>  $attachments
+     * @param  string  $size
      * @param  'low'|'medium'|'high'  $quality
      */
     public function generateImage(

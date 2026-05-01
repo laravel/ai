@@ -21,6 +21,7 @@ class XaiImageGateway implements ImageGateway
      * Generate an image.
      *
      * @param  array<ImageFile>  $attachments
+     * @param  string  $size
      * @param  'low'|'medium'|'high'  $quality
      */
     public function generateImage(
@@ -32,14 +33,16 @@ class XaiImageGateway implements ImageGateway
         ?string $quality = null,
         ?int $timeout = null,
     ): ImageResponse {
+        $options = $provider->defaultImageOptions($size, $quality);
+
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout ?? 120)
-                ->post('images/generations', [
+                ->post('images/generations', array_merge(array_filter([
                     'model' => $model,
                     'prompt' => $prompt,
                     'response_format' => 'b64_json',
-                ])
+                ]), $options))
         );
 
         $response = $response->json();

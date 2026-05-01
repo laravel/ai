@@ -12,6 +12,7 @@ interface ImageGateway
      * Generate an image.
      *
      * @param  array<ImageFile>  $attachments
+     * @param  string  $size
      * @param  'low'|'medium'|'high'  $quality
      */
     public function generateImage(
