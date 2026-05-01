@@ -2,8 +2,12 @@
 
 namespace Laravel\Ai\Providers;
 
+use Illuminate\Contracts\Events\Dispatcher;
+use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
+use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Gateway\AzureOpenAi\AzureOpenAiGateway;
 
 class AzureOpenAiProvider extends Provider implements EmbeddingProvider, TextProvider
 {
@@ -12,6 +16,37 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, TextPro
     use Concerns\HasEmbeddingGateway;
     use Concerns\HasTextGateway;
     use Concerns\StreamsText;
+
+    protected ?AzureOpenAiGateway $azureGateway = null;
+
+    public function __construct(protected array $config, protected Dispatcher $events)
+    {
+        //
+    }
+
+    /**
+     * Get the shared Azure OpenAI gateway instance.
+     */
+    protected function azureGateway(): AzureOpenAiGateway
+    {
+        return $this->azureGateway ??= new AzureOpenAiGateway($this->events);
+    }
+
+    /**
+     * Get the provider's text gateway.
+     */
+    public function textGateway(): TextGateway
+    {
+        return $this->textGateway ??= $this->azureGateway();
+    }
+
+    /**
+     * Get the provider's embedding gateway.
+     */
+    public function embeddingGateway(): EmbeddingGateway
+    {
+        return $this->embeddingGateway ??= $this->azureGateway();
+    }
 
     /**
      * Get the credentials for the AI provider.
@@ -71,22 +106,8 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, TextPro
     public function additionalConfiguration(): array
     {
         return array_filter([
-            'url' => $this->buildAzureBaseUrl(),
-            'api_version' => $this->config['api_version'] ?? '2024-10-21',
+            'url' => rtrim($this->config['url'] ?? '', '/'),
+            'api_version' => $this->config['api_version'] ?? '2025-04-01-preview',
         ]);
-    }
-
-    /**
-     * Build the Azure OpenAI base URL.
-     */
-    protected function buildAzureBaseUrl(): string
-    {
-        $url = rtrim($this->config['url'] ?? '', '/');
-
-        if (str_contains($url, '/openai/v1')) {
-            return $url;
-        }
-
-        return "{$url}/openai/v1";
     }
 }

@@ -1,26 +1,22 @@
 <?php
 
-namespace Tests\Feature;
-
-use Exception;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\QueuedAgentPrompt;
+use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
 use PHPUnit\Framework\AssertionFailedError;
-use RuntimeException;
-use Tests\Feature\Agents\AssistantAgent;
-use Tests\Feature\Agents\StructuredAgent;
-use Tests\TestCase;
+use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\EmptySchemaStructuredAgent;
+use Tests\Fixtures\Agents\StructuredAgent;
 
-class AgentFakeTest extends TestCase
-{
-    public function test_agents_can_be_faked(): void
-    {
+describe('prompt responses', function () {
+    test('agents can be faked', function () {
         AssistantAgent::fake([
             'First response',
             fn (string $prompt) => 'Second response ('.$prompt.')',
@@ -28,13 +24,13 @@ class AgentFakeTest extends TestCase
         ]);
 
         $response = (new AssistantAgent)->prompt('First prompt');
-        $this->assertEquals('First response', $response->text);
+        expect($response->text)->toEqual('First response');
 
         $response = (new AssistantAgent)->prompt('Second prompt');
-        $this->assertEquals('Second response (Second prompt)', $response->text);
+        expect($response->text)->toEqual('Second response (Second prompt)');
 
         $response = (new AssistantAgent)->prompt('Third prompt');
-        $this->assertEquals('Third response', $response->text);
+        expect($response->text)->toEqual('Third response');
 
         // Assertion tests...
         AssistantAgent::assertPrompted('First prompt');
@@ -43,50 +39,43 @@ class AgentFakeTest extends TestCase
         AssistantAgent::assertPrompted(function (AgentPrompt $prompt) {
             return $prompt->prompt === 'First prompt';
         });
-    }
+    });
 
-    public function test_can_assert_agent_was_never_prompted()
-    {
+    test('can assert agent was never prompted', function () {
         AssistantAgent::fake();
 
         AssistantAgent::assertNeverPrompted();
-    }
+    });
 
-    public function test_agents_can_be_faked_with_no_predefined_responses(): void
-    {
+    test('agents can be faked with no predefined responses', function () {
         AssistantAgent::fake();
 
         $response = (new AssistantAgent)->prompt('First prompt');
-        $this->assertEquals('Fake response for prompt: First prompt', $response->text);
+        expect($response->text)->toEqual('Fake response for prompt: First prompt');
 
         $response = (new AssistantAgent)->prompt('Second prompt');
-        $this->assertEquals('Fake response for prompt: Second prompt', $response->text);
-    }
+        expect($response->text)->toEqual('Fake response for prompt: Second prompt');
+    });
 
-    public function test_agents_can_be_faked_with_a_single_closure_that_is_invoked_for_every_prompt(): void
-    {
+    test('agents can be faked with a single closure that is invoked for every prompt', function () {
         AssistantAgent::fake(function (string $prompt) {
             return 'Fake response for prompt: '.$prompt;
         });
 
         $response = (new AssistantAgent)->prompt('First prompt');
-        $this->assertEquals('Fake response for prompt: First prompt', $response->text);
+        expect($response->text)->toEqual('Fake response for prompt: First prompt');
 
         $response = (new AssistantAgent)->prompt('Second prompt');
-        $this->assertEquals('Fake response for prompt: Second prompt', $response->text);
-    }
+        expect($response->text)->toEqual('Fake response for prompt: Second prompt');
+    });
 
-    public function test_agents_can_prevent_stray_prompts(): void
-    {
-        $this->expectException(RuntimeException::class);
-
+    test('agents can prevent stray prompts', function () {
         AssistantAgent::fake()->preventStrayPrompts();
 
         $response = (new AssistantAgent)->prompt('First prompt');
-    }
+    })->throws(RuntimeException::class);
 
-    public function test_agents_with_structured_output_can_be_faked(): void
-    {
+    test('agents with structured output can be faked', function () {
         StructuredAgent::fake([
             ['symbol' => 'Au'],
             fn (string $prompt) => ['symbol' => 'Ag ('.$prompt.')'],
@@ -99,26 +88,46 @@ class AgentFakeTest extends TestCase
         ]);
 
         $response = (new StructuredAgent)->prompt('Gold prompt');
-        $this->assertEquals('Au', $response['symbol']);
+        expect($response['symbol'])->toEqual('Au');
 
         $response = (new StructuredAgent)->prompt('Silver prompt');
-        $this->assertEquals('Ag (Silver prompt)', $response['symbol']);
+        expect($response['symbol'])->toEqual('Ag (Silver prompt)');
 
         $response = (new StructuredAgent)->prompt('Lead prompt');
-        $this->assertEquals('Pb', $response['symbol']);
-    }
+        expect($response['symbol'])->toEqual('Pb');
+    });
 
-    public function test_agents_with_structured_output_can_be_faked_with_no_predefined_responses()
-    {
+    test('agents with structured output can be faked with no predefined responses', function () {
         StructuredAgent::fake();
 
         $response = (new StructuredAgent)->prompt('Gold prompt');
 
-        $this->assertIsString($response['symbol']);
-    }
+        expect($response['symbol'])->toBeString();
+    });
 
-    public function test_agent_streams_can_be_faked(): void
-    {
+    test('fake closures can throw exceptions', function () {
+        AssistantAgent::fake(function () {
+            throw new Exception('Something went wrong');
+        });
+
+        $response = (new AssistantAgent)->prompt('Test prompt');
+    })->throws(Exception::class);
+
+    test('structured agents with empty schemas fall back to a text response', function () {
+        EmptySchemaStructuredAgent::fake([
+            new TextResponse('Hello', new Usage, new Meta),
+        ]);
+
+        $response = (new EmptySchemaStructuredAgent)->prompt('Anything');
+
+        expect($response)->toBeInstanceOf(AgentResponse::class)
+            ->and($response)->not->toBeInstanceOf(StructuredAgentResponse::class)
+            ->and($response->text)->toEqual('Hello');
+    });
+});
+
+describe('stream responses', function () {
+    test('agent streams can be faked', function () {
         AssistantAgent::fake([
             'First response',
             fn (string $prompt) => 'Second response ('.$prompt.')',
@@ -127,22 +136,23 @@ class AgentFakeTest extends TestCase
 
         $response = (new AssistantAgent)->stream('First prompt');
         $response->each(fn () => true);
-        $this->assertEquals('First response', $response->text);
-        $this->assertCount(6, $response->events);
+        expect($response->text)->toEqual('First response')
+            ->and($response->events)->toHaveCount(6);
 
         $response = (new AssistantAgent)->stream('Second prompt');
         $response->each(fn () => true);
-        $this->assertEquals('Second response (Second prompt)', $response->text);
-        $this->assertCount(8, $response->events);
+        expect($response->text)->toEqual('Second response (Second prompt)')
+            ->and($response->events)->toHaveCount(8);
 
         $response = (new AssistantAgent)->stream('Third prompt');
         $response->each(fn () => true);
-        $this->assertEquals('Third response', $response->text);
-        $this->assertCount(6, $response->events);
-    }
+        expect($response->text)->toEqual('Third response')
+            ->and($response->events)->toHaveCount(6);
+    });
+});
 
-    public function test_queued_agents_can_be_faked()
-    {
+describe('queue responses', function () {
+    test('queued agents can be faked', function () {
         AssistantAgent::fake();
 
         (new AssistantAgent)->queue('First prompt');
@@ -157,10 +167,36 @@ class AgentFakeTest extends TestCase
         AssistantAgent::assertNotQueued(function (QueuedAgentPrompt $prompt) {
             return $prompt->prompt === 'Second prompt';
         });
-    }
+    });
 
-    public function test_queued_agents_accept_ai_provider_enum()
-    {
+    test('can assert agent was never queued', function () {
+        AssistantAgent::fake();
+
+        AssistantAgent::assertNeverQueued();
+    });
+
+    test('assert queued does not throw undefined key when agent was never queued', function () {
+        AssistantAgent::fake();
+
+        // Should fail the assertion gracefully, not throw an undefined array key error.
+        try {
+            AssistantAgent::assertQueued('Some prompt');
+            test()->fail('Expected assertion to fail.');
+        } catch (AssertionFailedError $e) {
+            expect($e->getMessage())->toContain('An expected queued prompt was not received.');
+        }
+    });
+
+    test('assert not queued does not throw undefined key when agent was never queued', function () {
+        AssistantAgent::fake();
+
+        // Should pass gracefully since the agent was never queued.
+        AssistantAgent::assertNotQueued('Some prompt');
+    });
+});
+
+describe('provider enum support', function () {
+    test('queued agents accept ai provider enum', function () {
         AssistantAgent::fake();
 
         (new AssistantAgent)->queue('Enum prompt', provider: Lab::OpenAI);
@@ -169,10 +205,9 @@ class AgentFakeTest extends TestCase
             return $prompt->prompt === 'Enum prompt'
                 && $prompt->provider === Lab::OpenAI;
         });
-    }
+    });
 
-    public function test_prompt_accepts_ai_provider_enum()
-    {
+    test('prompt accepts ai provider enum', function () {
         AssistantAgent::fake();
 
         (new AssistantAgent)->prompt('Enum prompt', provider: Lab::Anthropic);
@@ -180,10 +215,9 @@ class AgentFakeTest extends TestCase
         AssistantAgent::assertPrompted(function (AgentPrompt $prompt) {
             return $prompt->prompt === 'Enum prompt';
         });
-    }
+    });
 
-    public function test_stream_accepts_ai_provider_enum()
-    {
+    test('stream accepts ai provider enum', function () {
         AssistantAgent::fake();
 
         $response = (new AssistantAgent)->stream('Enum stream', provider: Lab::Gemini);
@@ -192,49 +226,11 @@ class AgentFakeTest extends TestCase
         AssistantAgent::assertPrompted(function (AgentPrompt $prompt) {
             return $prompt->prompt === 'Enum stream';
         });
-    }
+    });
+});
 
-    public function test_can_assert_agent_was_never_queued()
-    {
-        AssistantAgent::fake();
-
-        AssistantAgent::assertNeverQueued();
-    }
-
-    public function test_assert_queued_does_not_throw_undefined_key_when_agent_was_never_queued()
-    {
-        AssistantAgent::fake();
-
-        // Should fail the assertion gracefully, not throw an undefined array key error.
-        try {
-            AssistantAgent::assertQueued('Some prompt');
-            $this->fail('Expected assertion to fail.');
-        } catch (AssertionFailedError $e) {
-            $this->assertStringContainsString('An expected queued prompt was not received.', $e->getMessage());
-        }
-    }
-
-    public function test_assert_not_queued_does_not_throw_undefined_key_when_agent_was_never_queued()
-    {
-        AssistantAgent::fake();
-
-        // Should pass gracefully since the agent was never queued.
-        AssistantAgent::assertNotQueued('Some prompt');
-    }
-
-    public function test_fake_closures_can_throw_exceptions()
-    {
-        $this->expectException(Exception::class);
-
-        AssistantAgent::fake(function () {
-            throw new Exception('Something went wrong');
-        });
-
-        $response = (new AssistantAgent)->prompt('Test prompt');
-    }
-
-    public function test_timeout_can_be_passed_to_agent_prompt(): void
-    {
+describe('timeout handling', function () {
+    test('timeout can be passed to agent prompt', function () {
         AssistantAgent::fake();
 
         $timeout = 120;
@@ -245,10 +241,9 @@ class AgentFakeTest extends TestCase
             return $prompt->prompt === 'Test prompt'
                 && $prompt->timeout === 120;
         });
-    }
+    });
 
-    public function test_timeout_defaults_to_sdk_default_when_not_provided(): void
-    {
+    test('timeout defaults to sdk default when not provided', function () {
         AssistantAgent::fake();
 
         (new AssistantAgent)->prompt('Test prompt');
@@ -257,10 +252,9 @@ class AgentFakeTest extends TestCase
             return $prompt->prompt === 'Test prompt'
                 && $prompt->timeout === 60;
         });
-    }
+    });
 
-    public function test_timeout_can_be_passed_to_agent_stream(): void
-    {
+    test('timeout can be passed to agent stream', function () {
         AssistantAgent::fake();
 
         $timeout = 120;
@@ -271,10 +265,9 @@ class AgentFakeTest extends TestCase
             return $prompt->prompt === 'Test prompt'
                 && $prompt->timeout === 120;
         });
-    }
+    });
 
-    public function test_timeout_is_preserved_when_revising_agent_prompt(): void
-    {
+    test('timeout is preserved when revising agent prompt', function () {
         AssistantAgent::fake();
 
         $prompt = new AgentPrompt(
@@ -288,7 +281,7 @@ class AgentFakeTest extends TestCase
 
         $revised = $prompt->revise('Revised prompt');
 
-        $this->assertEquals(150, $revised->timeout);
-        $this->assertEquals('Revised prompt', $revised->prompt);
-    }
-}
+        expect($revised->timeout)->toEqual(150)
+            ->and($revised->prompt)->toEqual('Revised prompt');
+    });
+});
