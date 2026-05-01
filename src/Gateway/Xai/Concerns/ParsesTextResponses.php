@@ -96,8 +96,6 @@ trait ParsesTextResponses
         $model = $data['model'] ?? '';
 
         $text = $this->extractText($output);
-        $toolCalls = $this->extractToolCalls($output);
-        $reasonings = $this->extractReasonings($output);
         $citations = $this->extractCitations($output);
         $usage = $this->extractUsage($data);
         $finishReason = $this->extractFinishReason($data);
@@ -302,22 +300,6 @@ trait ParsesTextResponses
         }
 
         return '';
-    }
-
-    /**
-     * Extract tool calls from the output array.
-     */
-    protected function extractToolCalls(array $output): array
-    {
-        return array_values(array_filter($output, fn (array $item) => ($item['type'] ?? '') === 'function_call'));
-    }
-
-    /**
-     * Extract reasoning blocks from the output array.
-     */
-    protected function extractReasonings(array $output): array
-    {
-        return array_values(array_filter($output, fn (array $item) => ($item['type'] ?? '') === 'reasoning'));
     }
 
     /**

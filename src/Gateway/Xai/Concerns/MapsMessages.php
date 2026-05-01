@@ -61,18 +61,6 @@ trait MapsMessages
      */
     protected function mapAssistantMessage(AssistantMessage|Message $message, array &$input): void
     {
-        if (filled($message->content)) {
-            $input[] = [
-                'role' => 'assistant',
-                'content' => [
-                    [
-                        'type' => 'output_text',
-                        'text' => $message->content,
-                    ],
-                ],
-            ];
-        }
-
         if ($message instanceof AssistantMessage && $message->toolCalls->isNotEmpty()) {
             $reasoningBlocks = $message->toolCalls
                 ->whereNotNull('reasoningId')
@@ -80,7 +68,7 @@ trait MapsMessages
                 ->map(fn ($toolCall) => [
                     'type' => 'reasoning',
                     'id' => $toolCall->reasoningId,
-                    'summary' => $toolCall->reasoningSummary,
+                    'summary' => $toolCall->reasoningSummary ?? [],
                 ])
                 ->values()
                 ->all();
@@ -108,6 +96,18 @@ trait MapsMessages
                     'arguments' => json_encode($toolCall->arguments ?: (object) []),
                 ];
             }
+        }
+
+        if (filled($message->content)) {
+            $input[] = [
+                'role' => 'assistant',
+                'content' => [
+                    [
+                        'type' => 'output_text',
+                        'text' => $message->content,
+                    ],
+                ],
+            ];
         }
     }
 

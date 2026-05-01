@@ -12,8 +12,6 @@ use Laravel\Ai\Promptable;
 use Tests\Fixtures\Agents\RememberingToolAgent;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
-use function Laravel\Ai\agent;
-
 uses(RefreshDatabase::class)->beforeEach(function () {
     $this->artisan('migrate', [
         '--path' => __DIR__.'/../../database/migrations',
@@ -100,7 +98,6 @@ test('reasoning conversation roundtrips through database storage', function () {
     $user = (object) ['id' => 1];
     $firstPrompt = 'What fixed number is available?';
 
-    // Turn 1: Start conversation with reasoning model, persisted to DB...
     $agent = (new RememberingToolAgent(['reasoning' => ['effort' => 'high']]))
         ->forUser($user);
 
@@ -129,9 +126,6 @@ test('reasoning conversation roundtrips through database storage', function () {
     expect($storedToolCalls)->toHaveCount(1)
         ->and($storedToolCalls[0]['reasoning_id'] ?? null)->not->toBeNull();
 
-    // Turn 2: Continue from DB, replaying to a non-reasoning model...
-    // This verifies that DB-persisted reasoning blocks are gracefully
-    // handled when the target model does not natively support them.
     $secondResponse = (new RememberingToolAgent)
         ->continue($conversationId, $user)
         ->prompt(
