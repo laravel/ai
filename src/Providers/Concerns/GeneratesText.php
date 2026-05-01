@@ -50,9 +50,10 @@ trait GeneratesText
 
                 $agent = $prompt->agent;
 
-                $messages = collect($agent instanceof Conversational ? $agent->messages() : [])
-                    ->push(new UserMessage($prompt->prompt, $prompt->attachments->all()))
-                    ->all();
+                $messages = [
+                    ...($agent instanceof Conversational ? $agent->messages() : []),
+                    new UserMessage($prompt->prompt, $prompt->attachments->all()),
+                ];
 
                 $this->listenForToolInvocations($invocationId, $agent);
 
