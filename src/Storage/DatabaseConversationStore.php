@@ -40,7 +40,13 @@ class DatabaseConversationStore implements ConversationStore
             ->orderByDesc('updated_at')
             ->limit($limit)
             ->get()
-            ->map(fn ($c) => new Conversation($c->id, $c->title, $c->user_id));
+            ->map(fn ($conversation) => new Conversation(
+                id: $conversation->id,
+                title: $conversation->title,
+                userId: $conversation->user_id,
+                createdAt: $conversation->created_at,
+                updatedAt: $conversation->updated_at,
+            ));
     }
 
     /**
