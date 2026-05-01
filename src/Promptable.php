@@ -23,6 +23,7 @@ use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\QueuedAgentResponse;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Streaming\Events\StreamEvent;
+use InvalidArgumentException;
 use ReflectionClass;
 use RuntimeException;
 
@@ -188,9 +189,18 @@ trait Promptable
             }
         }
 
-        return Provider::formatProviderAndModelList(
-            $provider ?? config('ai.default'), $model
-        );
+        $resolved = $provider ?? config('ai.default');
+
+        if (is_array($resolved) && array_intersect(array_keys($resolved), ['text', 'image', 'audio', 'transcription', 'embedding', 'reranking'])) {
+            $first = reset($resolved);
+
+            throw new InvalidArgumentException(sprintf(
+                'The "ai.default" config value must be a string provider name or a Lab enum; got array. Did you mean \'default\' => \'%s\'?',
+                is_string($first) && $first !== '' ? $first : 'anthropic',
+            ));
+        }
+
+        return Provider::formatProviderAndModelList($resolved, $model);
     }
 
     /**

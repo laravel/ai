@@ -1,25 +1,28 @@
 <?php
 
-use Laravel\Ai\Ai;
-use Laravel\Ai\Providers\OpenAiProvider;
+use Laravel\Ai\AiManager;
 use Laravel\Ai\Providers\Provider;
+
+use function Laravel\Ai\agent;
 
 test('string default works', function () {
     config(['ai.default' => 'openai']);
 
-    expect(Ai::textProvider())->toBeInstanceOf(OpenAiProvider::class);
+    expect(app(AiManager::class)->getDefaultInstance())->toBe('openai');
 });
 
-test('array default throws helpful error', function () {
+test('array default via Ai facade throws helpful error', function () {
     config(['ai.default' => ['text' => 'anthropic']]);
 
-    expect(fn () => Ai::textProvider())
+    expect(fn () => app(AiManager::class)->getDefaultInstance())
         ->toThrow(InvalidArgumentException::class, "'default' => 'anthropic'");
 });
 
-test('capability keyed provider list throws helpful error', function () {
-    expect(fn () => Provider::formatProviderAndModelList(['text' => 'anthropic']))
-        ->toThrow(InvalidArgumentException::class, 'capability-keyed format');
+test('array default via agent prompt throws helpful error', function () {
+    config(['ai.default' => ['text' => 'anthropic']]);
+
+    expect(fn () => agent(instructions: 'test')->prompt('hello'))
+        ->toThrow(InvalidArgumentException::class, "'default' => 'anthropic'");
 });
 
 test('failover provider list still works', function () {
