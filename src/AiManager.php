@@ -4,6 +4,7 @@ namespace Laravel\Ai;
 
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\MultipleInstanceManager;
+use InvalidArgumentException;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
@@ -452,7 +453,18 @@ class AiManager extends MultipleInstanceManager
     {
         $default = $this->app['config']['ai.default'];
 
-        return $default instanceof Lab ? $default->value : $default;
+        if ($default instanceof Lab) {
+            return $default->value;
+        }
+
+        if (is_array($default)) {
+            throw new InvalidArgumentException(sprintf(
+                'The "ai.default" config value must be a string provider name or a Lab enum; got array. Did you mean \'default\' => \'%s\'?',
+                is_string($first = reset($default)) && $first !== '' ? $first : 'anthropic',
+            ));
+        }
+
+        return $default;
     }
 
     /**

@@ -4,6 +4,7 @@ namespace Laravel\Ai\Providers;
 
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Collection;
+use InvalidArgumentException;
 use Laravel\Ai\Contracts\Gateway\Gateway;
 use Laravel\Ai\Enums\Lab;
 
@@ -59,6 +60,21 @@ abstract class Provider
 
         if (is_string($providers)) {
             return [$providers => $model];
+        }
+
+        $capabilityKeys = ['text', 'image', 'images', 'audio', 'transcription', 'embedding', 'embeddings', 'reranking'];
+
+        if ($matched = array_intersect(array_keys($providers), $capabilityKeys)) {
+            $key = (string) reset($matched);
+            $value = $providers[$key];
+
+            throw new InvalidArgumentException(sprintf(
+                'The provider list uses the unsupported capability-keyed format ["%s" => "%s"]. Use a string provider name (e.g. \'%s\'), a Lab enum, or a failover list keyed by provider name (e.g. [\'%s\' => \'model-name\']).',
+                $key,
+                is_string($value) ? $value : 'provider',
+                is_string($value) && $value !== '' ? $value : 'anthropic',
+                is_string($value) && $value !== '' ? $value : 'anthropic',
+            ));
         }
 
         return (new Collection($providers))->mapWithKeys(function ($value, $key) {
