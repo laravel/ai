@@ -15,14 +15,14 @@ test('array default via Ai facade throws helpful error', function () {
     config(['ai.default' => ['text' => 'anthropic']]);
 
     expect(fn () => app(AiManager::class)->getDefaultInstance())
-        ->toThrow(InvalidArgumentException::class, "'default' => 'anthropic'");
+        ->toThrow(InvalidArgumentException::class, 'must be a string provider name or a Lab enum, not an array');
 });
 
 test('array default via agent prompt throws helpful error', function () {
     config(['ai.default' => ['text' => 'anthropic']]);
 
     expect(fn () => agent(instructions: 'test')->prompt('hello'))
-        ->toThrow(InvalidArgumentException::class, "'default' => 'anthropic'");
+        ->toThrow(InvalidArgumentException::class, 'must be a string provider name or a Lab enum, not an array');
 });
 
 test('failover provider list still works', function () {

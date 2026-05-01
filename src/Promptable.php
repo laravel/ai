@@ -192,12 +192,7 @@ trait Promptable
         $resolved = $provider ?? config('ai.default');
 
         if (is_array($resolved) && array_intersect(array_keys($resolved), ['text', 'image', 'audio', 'transcription', 'embedding', 'reranking'])) {
-            $first = reset($resolved);
-
-            throw new InvalidArgumentException(sprintf(
-                'The "ai.default" config value must be a string provider name or a Lab enum; got array. Did you mean \'default\' => \'%s\'?',
-                is_string($first) && $first !== '' ? $first : 'anthropic',
-            ));
+            throw new InvalidArgumentException('The "ai.default" config value must be a string provider name or a Lab enum, not an array.');
         }
 
         return Provider::formatProviderAndModelList($resolved, $model);

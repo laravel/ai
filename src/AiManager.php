@@ -458,10 +458,7 @@ class AiManager extends MultipleInstanceManager
         }
 
         if (is_array($default)) {
-            throw new InvalidArgumentException(sprintf(
-                'The "ai.default" config value must be a string provider name or a Lab enum; got array. Did you mean \'default\' => \'%s\'?',
-                is_string($first = reset($default)) && $first !== '' ? $first : 'anthropic',
-            ));
+            throw new InvalidArgumentException('The "ai.default" config value must be a string provider name or a Lab enum, not an array.');
         }
 
         return $default;
