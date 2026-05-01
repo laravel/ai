@@ -7,7 +7,7 @@ use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StreamedAgentResponse;
-use Tests\Feature\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\AssistantAgent;
 
 test('agent middleware is invoked', function () {
     AssistantAgent::fake([

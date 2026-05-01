@@ -1,9 +1,19 @@
 <?php
 
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\Conversational;
+use Laravel\Ai\Files;
 use Laravel\Ai\Files\Base64Document;
-use Tests\Feature\Agents\AssistantAgent;
-use Tests\Feature\Agents\ToolUsingAgent;
+use Laravel\Ai\Files\LocalImage;
+use Laravel\Ai\Messages\AssistantMessage;
+use Laravel\Ai\Messages\Message;
+use Laravel\Ai\Promptable;
+use Laravel\Ai\Responses\Data\ToolCall;
+use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\ToolUsingAgent;
 
 use function Laravel\Ai\agent;
 
@@ -45,14 +55,14 @@ test('tool result follow up maps model and function response', function () {
 
     $followUpContents = $recorded[1][0]->data()['contents'];
 
-    $hasModelWithFunctionCall = false;
+    $modelFunctionCall = null;
     $hasFunctionResponse = false;
 
     foreach ($followUpContents as $content) {
         if ($content['role'] === 'model') {
             foreach ($content['parts'] ?? [] as $part) {
                 if (isset($part['functionCall'])) {
-                    $hasModelWithFunctionCall = true;
+                    $modelFunctionCall = $part['functionCall'];
                 }
             }
         }
@@ -66,8 +76,72 @@ test('tool result follow up maps model and function response', function () {
         }
     }
 
-    expect($hasModelWithFunctionCall)->toBeTrue('Follow-up should include model message with functionCall')
+    expect($modelFunctionCall)->not->toBeNull('Follow-up should include model message with functionCall')
+        ->and($modelFunctionCall)->not->toHaveKey('args')
+        ->and($modelFunctionCall)->not->toHaveKey('id')
         ->and($hasFunctionResponse)->toBeTrue('Follow-up should include user message with functionResponse');
+});
+
+test('prior assistant tool call with empty arguments omits args in conversation history', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('OK'),
+    ]);
+
+    $agent = new class implements Agent, Conversational
+    {
+        use Promptable;
+
+        public function instructions(): string
+        {
+            return 'You are a helpful assistant.';
+        }
+
+        public function messages(): iterable
+        {
+            return [
+                new Message(role: 'user', content: 'Generate a number'),
+                new AssistantMessage('', new Collection([
+                    new ToolCall('call_123', 'FixedNumberGenerator', [], 'call_123'),
+                ])),
+            ];
+        }
+    };
+
+    $agent->prompt('And again', provider: 'gemini');
+
+    Http::assertSent(function ($request) {
+        $modelFunctionCall = collect($request->data()['contents'])
+            ->where('role', 'model')
+            ->flatMap(fn ($content) => $content['parts'] ?? [])
+            ->firstWhere(fn ($part) => isset($part['functionCall']))['functionCall'] ?? null;
+
+        return $modelFunctionCall !== null
+            && ! array_key_exists('args', $modelFunctionCall);
+    });
+});
+
+test('local image attachment without explicit mime type detects mime from file', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('I see an image'),
+    ]);
+
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')],
+        provider: 'gemini',
+    );
+
+    Http::assertSent(function ($request) {
+        $parts = $request->data()['contents'][0]['parts'];
+
+        foreach ($parts as $part) {
+            if (isset($part['inlineData'])) {
+                return $part['inlineData']['mimeType'] === 'image/png';
+            }
+        }
+
+        return false;
+    });
 });
 
 test('base64 pdf document maps to inline data', function () {
@@ -90,6 +164,34 @@ test('base64 pdf document maps to inline data', function () {
             if (isset($part['inlineData'])) {
                 return $part['inlineData']['mimeType'] === 'application/pdf'
                     && $part['inlineData']['data'] === base64_encode('fake-pdf-content');
+            }
+        }
+
+        return false;
+    });
+});
+
+test('stored text document sends real mime type', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
+    ]);
+
+    Storage::fake('docs');
+    Storage::disk('docs')->put('notes.txt', 'stored text contents');
+
+    agent('You are helpful.')->prompt(
+        'Read this.',
+        attachments: [Files\Document::fromStorage('notes.txt', 'docs')],
+        provider: 'gemini',
+    );
+
+    Http::assertSent(function ($request) {
+        $parts = $request->data()['contents'][0]['parts'];
+
+        foreach ($parts as $part) {
+            if (isset($part['inlineData'])) {
+                return $part['inlineData']['mimeType'] === 'text/plain'
+                    && $part['inlineData']['data'] === base64_encode('stored text contents');
             }
         }
 

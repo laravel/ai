@@ -1,6 +1,6 @@
 <?php
 
-use Tests\Feature\Agents\OpenAiAgent;
+use Tests\Fixtures\Agents\OpenAiAgent;
 
 test('openai agent can be faked', function () {
     OpenAiAgent::fake(['Test response']);

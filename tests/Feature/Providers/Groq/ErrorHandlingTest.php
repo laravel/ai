@@ -5,7 +5,7 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
-use Tests\Feature\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\AssistantAgent;
 
 beforeEach(function () {
     config(['ai.providers.groq' => [

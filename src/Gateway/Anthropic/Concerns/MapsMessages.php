@@ -86,7 +86,7 @@ trait MapsMessages
                     'type' => 'tool_use',
                     'id' => $toolCall->id,
                     'name' => $toolCall->name,
-                    'input' => $toolCall->arguments,
+                    'input' => $toolCall->arguments ?: (object) [],
                 ];
             }
         }

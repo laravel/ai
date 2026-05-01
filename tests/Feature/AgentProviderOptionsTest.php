@@ -3,8 +3,8 @@
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Prompts\AgentPrompt;
-use Tests\Feature\Agents\AssistantAgent;
-use Tests\Feature\Agents\ProviderOptionsAgent;
+use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\ProviderOptionsAgent;
 
 test('text generation options can extract provider options for openai', function () {
     $options = TextGenerationOptions::forAgent(new ProviderOptionsAgent);
@@ -44,7 +44,7 @@ test('text generation options accept string provider', function () {
 test('text generation options return empty array for unknown provider', function () {
     $options = TextGenerationOptions::forAgent(new ProviderOptionsAgent);
 
-    $providerOptions = $options->providerOptions(Lab::DeepSeek);
+    $providerOptions = $options->providerOptions(Lab::Cohere);
 
     expect($providerOptions)->toBeEmpty();
 });

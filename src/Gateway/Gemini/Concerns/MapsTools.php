@@ -8,6 +8,7 @@ use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Tools\ToolNameResolver;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\FileSearch;
@@ -18,6 +19,7 @@ use RuntimeException;
 
 trait MapsTools
 {
+
     /**
      * Map the given tools to Gemini tool definitions.
      */
@@ -59,21 +61,55 @@ trait MapsTools
         $schema = $tool->schema(new JsonSchemaTypeFactory);
 
         $definition = [
-            'name' => class_basename($tool),
+            'name' => ToolNameResolver::resolve($tool),
             'description' => (string) $tool->description(),
         ];
 
         if (filled($schema)) {
             $schemaArray = (new ObjectSchema($schema))->toSchema();
 
-            $definition['parameters'] = Arr::except([
-                'type' => 'object',
-                'properties' => $schemaArray['properties'] ?? [],
-                'required' => $schemaArray['required'] ?? [],
-            ], ['additionalProperties']);
+            $definition['parameters'] = Arr::except(
+                $this->convertNullableTypes([
+                    'type' => 'object',
+                    'properties' => $schemaArray['properties'] ?? [],
+                    'required' => $schemaArray['required'] ?? [],
+                ]),
+                ['additionalProperties'],
+            );
         }
 
         return $definition;
+    }
+
+    /**
+     * Recursively convert JSON Schema nullable types to OpenAPI-style for Gemini.
+     *
+     * @param  array<string, mixed>  $schema
+     * @return array<string, mixed>
+     */
+    protected function convertNullableTypes(array $schema): array
+    {
+        if (is_array($schema['type'] ?? null) && in_array('null', $schema['type'], true)) {
+            $remaining = array_values(array_diff($schema['type'], ['null']));
+
+            if (count($remaining) === 1) {
+                $schema['type'] = $remaining[0];
+                $schema['nullable'] = true;
+            }
+        }
+
+        if (isset($schema['properties'])) {
+            $schema['properties'] = Arr::map(
+                $schema['properties'],
+                fn ($property) => $this->convertNullableTypes($property),
+            );
+        }
+
+        if (isset($schema['items']) && is_array($schema['items'])) {
+            $schema['items'] = $this->convertNullableTypes($schema['items']);
+        }
+
+        return $schema;
     }
 
     /**

@@ -1,6 +1,6 @@
 <?php
 
-use Tests\Feature\Agents\XaiAgent;
+use Tests\Fixtures\Agents\XaiAgent;
 
 test('xai agent can be faked', function () {
     XaiAgent::fake(['Test response']);

@@ -2,7 +2,7 @@
 
 namespace Tests\Feature\Providers\OpenAi;
 
-use Tests\Feature\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\AssistantAgent;
 
 trait OpenAiHelpers
 {
@@ -106,7 +106,7 @@ trait OpenAiHelpers
         ];
     }
 
-    protected function responseCompleted(int $inputTokens, int $outputTokens, int $cachedTokens = 0, int $reasoningTokens = 0): array
+    protected function responseCompleted(int $inputTokens, int $outputTokens, int $cachedTokens = 0, int $reasoningTokens = 0, ?array $output = null): array
     {
         return [
             'type' => 'response.completed',
@@ -114,7 +114,14 @@ trait OpenAiHelpers
                 'id' => 'resp_1',
                 'model' => 'gpt-5.4',
                 'status' => 'completed',
-                'output' => [],
+                'output' => $output ?? [
+                    [
+                        'type' => 'message',
+                        'status' => 'completed',
+                        'role' => 'assistant',
+                        'content' => [['type' => 'output_text', 'text' => '']],
+                    ],
+                ],
                 'usage' => [
                     'input_tokens' => $inputTokens,
                     'output_tokens' => $outputTokens,

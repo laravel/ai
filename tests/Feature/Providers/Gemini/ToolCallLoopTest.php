@@ -1,7 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
-use Tests\Feature\Agents\ToolUsingAgent;
+use Tests\Fixtures\Agents\NamedToolAgent;
+use Tests\Fixtures\Agents\ToolUsingAgent;
 
 test('tool calls trigger follow up request', function () {
     Http::fake([
@@ -66,8 +67,6 @@ test('max steps limits tool call depth', function () {
 
     $recorded = Http::recorded();
 
-    // ToolUsingAgent has 1 tool, maxSteps = count($tools) * 2 = 2
-    // So max 3 requests (initial + 2 follow-ups)
     expect(count($recorded))->toBeLessThanOrEqual(3);
 });
 
@@ -144,6 +143,35 @@ test('parallel function calls preserve unique ids', function () {
     expect($functionResponseIds)->toHaveCount(2)
         ->toContain('call_1')
         ->toContain('call_2');
+});
+
+test('tool declaring a name() method routes the function call back to itself', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::sequence([
+            $this->fakeToolCallResponse('aliased_tool', 'call_named_1'),
+            $this->fakeTextResponse('done'),
+        ]),
+    ]);
+
+    (new NamedToolAgent('aliased_tool'))->prompt('Search', provider: 'gemini');
+
+    $recorded = Http::recorded();
+    expect($recorded)->toHaveCount(2);
+
+    $followUpContents = $recorded[1][0]->data()['contents'];
+
+    $functionResponsePart = null;
+
+    foreach ($followUpContents as $content) {
+        foreach ($content['parts'] ?? [] as $part) {
+            if (isset($part['functionResponse'])) {
+                $functionResponsePart = $part['functionResponse'];
+            }
+        }
+    }
+
+    expect($functionResponsePart)->not->toBeNull('Follow-up should include a functionResponse for the declared tool name')
+        ->and($functionResponsePart['name'])->toBe('aliased_tool');
 });
 
 test('thinking parts are excluded from tool call continuation', function () {

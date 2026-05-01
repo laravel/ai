@@ -361,12 +361,12 @@ trait ParsesTextResponses
     }
 
     /**
-     * Ensure tool_use content blocks have their input cast to object for JSON serialization.
+     * Ensure tool_use and server_tool_use content blocks have their input cast to object for JSON serialization.
      */
     protected function ensureToolInputIsObject(array $content): array
     {
         return array_map(function (array $block) {
-            if (($block['type'] ?? '') === 'tool_use') {
+            if (in_array($block['type'] ?? '', ['tool_use', 'server_tool_use'], true)) {
                 $block['input'] = (object) ($block['input'] ?? []);
             }
 

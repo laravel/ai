@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
@@ -11,7 +12,7 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
-use Tests\Feature\Agents\ProviderOptionsWithToolsAgent;
+use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 
 beforeEach(function () {
     config(['ai.providers.openai' => [
@@ -156,3 +157,30 @@ test('streaming captures usage from response completed', function () {
         ->and($streamEnd->usage->completionTokens)->toBe(10)
         ->and($streamEnd->usage->cacheReadInputTokens)->toBe(5);
 });
+
+test('streaming finish reason maps correctly', function (string $status, string $type, $expected) {
+    Http::fake([
+        'api.openai.com/*' => Http::response(
+            body: $this->ssePayload([
+                $this->responseCreated(),
+                $this->outputTextDelta('Hello'),
+                $this->outputTextDone('Hello'),
+                $this->responseCompleted(10, 5, output: [
+                    ['type' => $type, 'status' => $status, 'role' => 'assistant', 'content' => [['type' => 'output_text', 'text' => '']]],
+                ]),
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents();
+
+    $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+
+    expect($streamEnd->reason)->toBe($expected->value);
+})->with([
+    'completed message maps to Stop' => ['completed', 'message', FinishReason::Stop],
+    'incomplete maps to Length' => ['incomplete', 'message', FinishReason::Length],
+    'failed maps to Error' => ['failed', 'message', FinishReason::Error],
+]);

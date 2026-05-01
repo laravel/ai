@@ -3,10 +3,11 @@
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Files\Base64Image;
+use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Files\RemoteImage;
-use Tests\Feature\Agents\AssistantAgent;
-use Tests\Feature\Agents\ToolUsingAgent;
+use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\ToolUsingAgent;
 
 use function Laravel\Ai\agent;
 
@@ -105,6 +106,31 @@ test('base64 image attachment maps to data uri', function () {
 
         return $imageBlock !== null
             && str_starts_with($imageBlock['image_url']['url'], 'data:image/png;base64,');
+    });
+});
+
+test('local image attachment without explicit mime type detects mime from file', function () {
+    Http::fake(['*' => $this->fakeTextResponse('I see an image')]);
+
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')],
+        provider: 'mistral',
+    );
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $content = $body['messages'][1]['content'] ?? $body['messages'][0]['content'];
+
+        if (! is_array($content)) {
+            return false;
+        }
+
+        $imageBlock = collect($content)->firstWhere('type', 'image_url');
+
+        return $imageBlock !== null
+            && str_starts_with($imageBlock['image_url']['url'], 'data:image/png;base64,')
+            && ! str_contains($imageBlock['image_url']['url'], 'data:;base64,');
     });
 });
 

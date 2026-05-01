@@ -4,7 +4,7 @@ use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Exceptions\RateLimitedException;
-use Tests\Feature\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\AssistantAgent;
 
 test('http error response throws request exception', function () {
     Http::fake([

@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
@@ -9,7 +10,7 @@ use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
-use Tests\Feature\Agents\ProviderOptionsWithToolsAgent;
+use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 
 beforeEach(function () {
     config(['ai.providers.mistral' => [
@@ -112,3 +113,26 @@ test('streaming error event stops stream', function () {
         ->and($events[0]->type)->toBe('server_error')
         ->and($events[0]->message)->toBe('Internal server error');
 });
+
+test('streaming finish reason maps correctly', function (string $apiReason, $expected) {
+    Http::fake([
+        '*' => Http::response(
+            body: $this->ssePayload([
+                ['id' => 'chatcmpl-123', 'object' => 'chat.completion.chunk', 'model' => 'mistral-medium-latest', 'choices' => [['index' => 0, 'delta' => ['role' => 'assistant', 'content' => 'Hello'], 'finish_reason' => null]]],
+                ['id' => 'chatcmpl-123', 'object' => 'chat.completion.chunk', 'model' => 'mistral-medium-latest', 'choices' => [['index' => 0, 'delta' => [], 'finish_reason' => $apiReason]], 'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5]],
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents();
+
+    $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+
+    expect($streamEnd->reason)->toBe($expected->value);
+})->with([
+    'stop maps to Stop' => ['stop', FinishReason::Stop],
+    'length maps to Length' => ['length', FinishReason::Length],
+    'content_filter maps to ContentFilter' => ['content_filter', FinishReason::ContentFilter],
+]);

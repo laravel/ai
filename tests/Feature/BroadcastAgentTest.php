@@ -4,7 +4,7 @@ use Illuminate\Broadcasting\Channel;
 use Illuminate\Support\Facades\Event;
 use Laravel\Ai\Jobs\BroadcastAgent;
 use Laravel\Ai\Responses\StreamedAgentResponse;
-use Tests\Feature\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\AssistantAgent;
 
 test('then callback receives streamed agent response', function () {
     Event::fake();

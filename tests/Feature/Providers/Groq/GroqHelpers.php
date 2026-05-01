@@ -2,7 +2,7 @@
 
 namespace Tests\Feature\Providers\Groq;
 
-use Tests\Feature\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\AssistantAgent;
 
 trait GroqHelpers
 {

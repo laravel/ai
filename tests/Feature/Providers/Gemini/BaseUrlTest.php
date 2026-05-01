@@ -1,7 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
-use Tests\Feature\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\AssistantAgent;
 
 test('gemini requests use the configured base url', function () {
     config(['ai.providers.gemini.url' => 'https://custom-proxy.example.com/v1']);

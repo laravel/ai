@@ -50,6 +50,7 @@ trait HandlesTextStreaming
         $pendingToolCalls = [];
         $modelParts = [];
         $usage = null;
+        $data = [];
 
         foreach ($this->parseServerSentEvents($streamBody) as $data) {
             if (isset($data['error'])) {
@@ -201,7 +202,7 @@ trait HandlesTextStreaming
 
         yield (new StreamEnd(
             $this->generateEventId(),
-            'stop',
+            $this->extractFinishReason($data, $pendingToolCalls)->value,
             $usage ?? new Usage(0, 0),
             time(),
         ))->withInvocationId($invocationId);
@@ -267,7 +268,7 @@ trait HandlesTextStreaming
         }
 
         if ($depth + 1 < ($maxSteps ?? round(count($tools) * 1.5))) {
-            $contents[] = ['role' => 'model', 'parts' => $this->excludeThinkingParts($modelParts)];
+            $contents[] = ['role' => 'model', 'parts' => $this->sanitizeRequestParts($this->excludeThinkingParts($modelParts))];
             $contents[] = ['role' => 'user', 'parts' => $this->buildFunctionResponseParts($toolResults)];
 
             $body = $this->rebuildContinuationBody($contents, $instructions, $tools, $schema, $options, $provider);

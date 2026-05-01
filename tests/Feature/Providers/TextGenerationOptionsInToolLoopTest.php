@@ -14,7 +14,7 @@ use Laravel\Ai\Gateway\OpenAi\OpenAiGateway;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Providers\GroqProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
-use Tests\Feature\Tools\FixedNumberGenerator;
+use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 #[Temperature(0.2)]
 #[MaxTokens(1024)]

@@ -52,13 +52,13 @@ trait MapsAttachments
                 ],
                 $attachment instanceof LocalImage => [
                     'inlineData' => [
-                        'mimeType' => $attachment->mime,
+                        'mimeType' => $attachment->mimeType() ?? 'image/png',
                         'data' => base64_encode(file_get_contents($attachment->path)),
                     ],
                 ],
                 $attachment instanceof StoredImage => [
                     'inlineData' => [
-                        'mimeType' => 'image/png',
+                        'mimeType' => $attachment->mimeType() ?? 'image/png',
                         'data' => base64_encode(
                             Storage::disk($attachment->disk)->get($attachment->path)
                         ),
@@ -77,7 +77,7 @@ trait MapsAttachments
                 ],
                 $attachment instanceof LocalDocument => [
                     'inlineData' => [
-                        'mimeType' => 'application/octet-stream',
+                        'mimeType' => $attachment->mimeType() ?? 'application/octet-stream',
                         'data' => base64_encode(file_get_contents($attachment->path)),
                     ],
                 ],
@@ -89,7 +89,7 @@ trait MapsAttachments
                 ],
                 $attachment instanceof StoredDocument => [
                     'inlineData' => [
-                        'mimeType' => 'application/octet-stream',
+                        'mimeType' => $attachment->mimeType() ?? 'application/octet-stream',
                         'data' => base64_encode(
                             Storage::disk($attachment->disk)->get($attachment->path)
                         ),

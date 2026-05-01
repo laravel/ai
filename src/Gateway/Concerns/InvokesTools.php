@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\Concerns;
 use Closure;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
+use Laravel\Ai\Tools\ToolNameResolver;
 
 trait InvokesTools
 {
@@ -42,7 +43,7 @@ trait InvokesTools
     protected function findTool(string $name, array $tools): ?Tool
     {
         foreach ($tools as $tool) {
-            if ($tool instanceof Tool && class_basename($tool) === $name) {
+            if ($tool instanceof Tool && ToolNameResolver::resolve($tool) === $name) {
                 return $tool;
             }
         }

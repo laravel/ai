@@ -29,7 +29,7 @@ class ProviderImage extends Image implements Arrayable, HasProviderId, JsonSeria
         return [
             'type' => 'provider-image',
             'id' => $this->id,
-            'name' => $this->name,
+            'name' => $this->name(),
         ];
     }
 

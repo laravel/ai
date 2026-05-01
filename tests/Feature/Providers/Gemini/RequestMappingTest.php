@@ -2,11 +2,11 @@
 
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Responses\Data\FinishReason;
-use Tests\Feature\Agents\AssistantAgent;
-use Tests\Feature\Agents\NestedStructuredAgent;
-use Tests\Feature\Agents\NullableStructuredAgent;
-use Tests\Feature\Agents\StructuredAgent;
-use Tests\Feature\Agents\ToolUsingAgent;
+use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\NestedStructuredAgent;
+use Tests\Fixtures\Agents\NullableStructuredAgent;
+use Tests\Fixtures\Agents\StructuredAgent;
+use Tests\Fixtures\Agents\ToolUsingAgent;
 
 describe('request structure', function () {
     test('request includes model in url and contents', function () {
@@ -289,7 +289,13 @@ describe('usage parsing', function () {
         $response = (new AssistantAgent)->prompt('Hi', provider: 'gemini');
 
         expect($response->steps->last()->finishReason)->toBe($expected);
-    })->with('geminiFinishReasons');
+    })->with([
+        'STOP maps to Stop' => ['STOP', FinishReason::Stop],
+        'MAX_TOKENS maps to Length' => ['MAX_TOKENS', FinishReason::Length],
+        'SAFETY maps to ContentFilter' => ['SAFETY', FinishReason::ContentFilter],
+        'MALFORMED_FUNCTION_CALL maps to ContentFilter' => ['MALFORMED_FUNCTION_CALL', FinishReason::ContentFilter],
+        'RECITATION maps to ContentFilter' => ['RECITATION', FinishReason::ContentFilter],
+    ]);
 });
 
 describe('citations', function () {

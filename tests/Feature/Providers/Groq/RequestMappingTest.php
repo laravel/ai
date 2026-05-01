@@ -2,10 +2,10 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
-use Tests\Feature\Agents\AssistantAgent;
-use Tests\Feature\Agents\AttributeAgent;
-use Tests\Feature\Agents\StructuredAgent;
-use Tests\Feature\Tools\RandomNumberGenerator;
+use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\AttributeAgent;
+use Tests\Fixtures\Agents\StructuredAgent;
+use Tests\Fixtures\Tools\RandomNumberGenerator;
 
 use function Laravel\Ai\agent;
 
@@ -122,6 +122,25 @@ test('request without schema excludes response format', function () {
         $body = json_decode($request->body(), true);
 
         return ! array_key_exists('response_format', $body);
+    });
+});
+
+test('schema combined with tools omits response format but keeps schema instructions', function () {
+    Http::fake(['*' => fakeGroqResponse('{"number": 42}')]);
+
+    agent(
+        tools: [new RandomNumberGenerator],
+        schema: fn ($s) => ['number' => $s->integer()->required()],
+    )->prompt('Give me a number', provider: 'groq');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $systemMsg = collect($body['messages'])->firstWhere('role', 'system');
+
+        return ! array_key_exists('response_format', $body)
+            && is_array($body['tools'])
+            && $systemMsg !== null
+            && str_contains($systemMsg['content'], 'JSON object that strictly adheres');
     });
 });
 
