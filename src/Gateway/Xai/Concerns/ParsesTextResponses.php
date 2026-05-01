@@ -102,7 +102,7 @@ trait ParsesTextResponses
         $usage = $this->extractUsage($data);
         $finishReason = $this->extractFinishReason($data);
 
-        $mappedToolCalls = $this->mapToolCallsWithReasoning($toolCalls, $reasonings);
+        $mappedToolCalls = $this->mapToolCallsWithReasoning($output);
 
         $step = new Step(
             $text,
@@ -391,18 +391,33 @@ trait ParsesTextResponses
      *
      * @return array<ToolCall>
      */
-    protected function mapToolCallsWithReasoning(array $toolCalls, array $reasonings): array
+    protected function mapToolCallsWithReasoning(array $output): array
     {
-        $firstReasoning = $reasonings[0] ?? null;
+        $toolCalls = [];
+        $latestReasoning = null;
 
-        return array_map(fn (array $tc) => new ToolCall(
-            $tc['id'] ?? '',
-            $tc['name'] ?? '',
-            json_decode($tc['arguments'] ?? '{}', true) ?? [],
-            $tc['call_id'] ?? null,
-            $firstReasoning ? $firstReasoning['id'] ?? null : null,
-            $firstReasoning ? $firstReasoning['summary'] ?? null : null,
-        ), $toolCalls);
+        foreach ($output as $item) {
+            $type = $item['type'] ?? '';
+
+            if ($type === 'reasoning') {
+                $latestReasoning = $item;
+
+                continue;
+            }
+
+            if ($type === 'function_call') {
+                $toolCalls[] = new ToolCall(
+                    $item['id'] ?? '',
+                    $item['name'] ?? '',
+                    json_decode($item['arguments'] ?? '{}', true) ?? [],
+                    $item['call_id'] ?? null,
+                    $latestReasoning ? ($latestReasoning['id'] ?? null) : null,
+                    $latestReasoning ? ($latestReasoning['summary'] ?? null) : null,
+                );
+            }
+        }
+
+        return $toolCalls;
     }
 
     /**

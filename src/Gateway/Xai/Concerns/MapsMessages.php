@@ -85,9 +85,21 @@ trait MapsMessages
                 ->values()
                 ->all();
 
-            array_push($input, ...$reasoningBlocks);
+            foreach ($reasoningBlocks as $reasoningBlock) {
+                $input[] = $reasoningBlock;
 
-            foreach ($message->toolCalls as $toolCall) {
+                foreach ($message->toolCalls->where('reasoningId', $reasoningBlock['id']) as $toolCall) {
+                    $input[] = [
+                        'id' => $toolCall->id,
+                        'call_id' => $toolCall->resultId,
+                        'type' => 'function_call',
+                        'name' => $toolCall->name,
+                        'arguments' => json_encode($toolCall->arguments ?: (object) []),
+                    ];
+                }
+            }
+
+            foreach ($message->toolCalls->whereNull('reasoningId') as $toolCall) {
                 $input[] = [
                     'id' => $toolCall->id,
                     'call_id' => $toolCall->resultId,
