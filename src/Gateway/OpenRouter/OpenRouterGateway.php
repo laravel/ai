@@ -11,6 +11,7 @@ use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
@@ -192,7 +193,7 @@ class OpenRouterGateway implements EmbeddingGateway, ImageGateway, TextGateway
     /**
      * Build the messages array for an image generation request.
      *
-     * @param  array<\Laravel\Ai\Files\Image>  $attachments
+     * @param  array<Image>  $attachments
      */
     protected function buildImageMessages(string $prompt, array $attachments): array
     {
