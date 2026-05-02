@@ -54,6 +54,10 @@ trait BuildsTextRequests
             $body = array_merge($body, $providerOptions);
         }
 
+        if ($options?->reasoning === false && ! array_key_exists('reasoning', $body)) {
+            $body['reasoning'] = ['exclude' => true];
+        }
+
         return $body;
     }
 

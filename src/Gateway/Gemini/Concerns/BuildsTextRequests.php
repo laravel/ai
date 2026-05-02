@@ -92,6 +92,10 @@ trait BuildsTextRequests
             $generationConfig = array_merge($generationConfig, $providerOptions);
         }
 
+        if ($options?->reasoning === false && ! array_key_exists('thinkingConfig', $generationConfig)) {
+            $generationConfig['thinkingConfig'] = ['thinkingBudget' => 0];
+        }
+
         if (filled($generationConfig)) {
             $body['generationConfig'] = $generationConfig;
         }

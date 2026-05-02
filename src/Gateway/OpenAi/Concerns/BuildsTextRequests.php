@@ -44,6 +44,10 @@ trait BuildsTextRequests
             'top_p' => $options?->topP,
         ]));
 
+        if ($options?->reasoning === false) {
+            $body['reasoning'] = ['effort' => 'minimal'];
+        }
+
         $providerOptions = $options?->providerOptions(
             Lab::tryFrom($provider->driver()) ?? $provider->driver()
         );

@@ -75,6 +75,10 @@ trait BuildsTextRequests
             $body['options'] = $mergedOptions;
         }
 
+        if ($options?->reasoning === false && ! array_key_exists('think', $body)) {
+            $body['think'] = false;
+        }
+
         return $body;
     }
 

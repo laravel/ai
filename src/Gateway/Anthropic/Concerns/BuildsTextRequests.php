@@ -36,6 +36,10 @@ trait BuildsTextRequests
 
         $providerOptions = $options?->providerOptions(Lab::Anthropic) ?? [];
 
+        if ($options?->reasoning === false) {
+            unset($providerOptions['thinking']);
+        }
+
         if (filled($schema) && $this->supportsNativeStructuredOutput($provider)) {
             $body['output_config'] = [
                 'format' => [

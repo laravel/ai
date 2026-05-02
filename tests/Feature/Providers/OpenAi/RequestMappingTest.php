@@ -4,6 +4,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeAgent;
+use Tests\Fixtures\Agents\ReasoningDisabledAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
 
@@ -178,4 +179,28 @@ test('structured response is correctly parsed', function () {
     $response = (new StructuredAgent)->prompt('What is the symbol for Gold?', provider: 'openai');
 
     expect($response->structured['symbol'])->toBe('Au');
+});
+
+test('reasoning-disabled agent sends reasoning effort minimal', function () {
+    Http::fake(['*' => fakeOpenAiResponse('Hello')]);
+
+    (new ReasoningDisabledAgent)->prompt('Hello', provider: 'openai');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return data_get($body, 'reasoning.effort') === 'minimal';
+    });
+});
+
+test('agents without reasoning attribute do not send reasoning key', function () {
+    Http::fake(['*' => fakeOpenAiResponse('Hello')]);
+
+    agent()->prompt('Hello', provider: 'openai');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return ! array_key_exists('reasoning', $body);
+    });
 });

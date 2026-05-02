@@ -4,6 +4,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeAgent;
+use Tests\Fixtures\Agents\ReasoningDisabledAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
 
@@ -164,6 +165,30 @@ test('structured response is correctly parsed', function () {
     $response = (new StructuredAgent)->prompt('What is the symbol for Gold?', provider: 'ollama');
 
     expect($response->structured['symbol'])->toBe('Au');
+});
+
+test('reasoning-disabled agent sends think:false at the request top level', function () {
+    Http::fake(['*' => $this->fakeTextResponse('Hello')]);
+
+    (new ReasoningDisabledAgent)->prompt('Hello', provider: 'ollama');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return array_key_exists('think', $body) && $body['think'] === false;
+    });
+});
+
+test('agents without reasoning attribute do not send think key', function () {
+    Http::fake(['*' => $this->fakeTextResponse('Hello')]);
+
+    agent()->prompt('Hello', provider: 'ollama');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return ! array_key_exists('think', $body);
+    });
 });
 
 test('request is sent to the chat endpoint', function () {

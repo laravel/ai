@@ -9,6 +9,8 @@ use Tests\Fixtures\Agents\IncompatibleMethodsAgent;
 use Tests\Fixtures\Agents\MethodOptionsAgent;
 use Tests\Fixtures\Agents\MethodOverridesAttributeAgent;
 use Tests\Fixtures\Agents\NullableMethodOptionsAgent;
+use Tests\Fixtures\Agents\ReasoningDisabledAgent;
+use Tests\Fixtures\Agents\ReasoningMethodAgent;
 
 test('text generation options can be created from agent attributes', function () {
     $options = TextGenerationOptions::forAgent(new AttributeAgent);
@@ -58,6 +60,24 @@ test('non-public or parameterized option methods are ignored', function () {
     expect($options->maxSteps)->toBe(8)
         ->and($options->maxTokens)->toBe(1024)
         ->and($options->temperature)->toBe(0.9);
+});
+
+test('reasoning attribute is read from agent class', function () {
+    $options = TextGenerationOptions::forAgent(new ReasoningDisabledAgent);
+
+    expect($options->reasoning)->toBeFalse();
+});
+
+test('reasoning method takes priority over attribute', function () {
+    $options = TextGenerationOptions::forAgent(new ReasoningMethodAgent);
+
+    expect($options->reasoning)->toBeFalse();
+});
+
+test('reasoning is null when neither attribute nor method is provided', function () {
+    $options = TextGenerationOptions::forAgent(new AssistantAgent);
+
+    expect($options->reasoning)->toBeNull();
 });
 
 test('provider attribute is used when prompting', function () {
