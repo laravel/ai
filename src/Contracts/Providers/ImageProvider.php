@@ -11,7 +11,6 @@ interface ImageProvider
      * Generate an image.
      *
      * @param  array<ImageAttachment>  $attachments
-     * @param  string  $size
      * @param  'low'|'medium'|'high'  $quality
      */
     public function image(

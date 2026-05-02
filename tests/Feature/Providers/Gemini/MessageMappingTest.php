@@ -10,12 +10,11 @@ use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
-use Laravel\Ai\Promptable;
 use Laravel\Ai\Messages\ToolResultMessage;
+use Laravel\Ai\Promptable;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Tests\Fixtures\Agents\AssistantAgent;
-use Tests\Fixtures\Agents\ToolUsingAgent;
 
 use function Laravel\Ai\agent;
 

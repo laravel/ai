@@ -2,10 +2,11 @@
 
 namespace Tests\Fixtures\Agents;
 
+use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\HasTools;
-use Laravel\Ai\Concerns\RemembersConversations;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
@@ -25,7 +26,7 @@ class RememberingToolAgent implements Agent, HasProviderOptions, HasTools
         return [new FixedNumberGenerator];
     }
 
-    public function providerOptions(\Laravel\Ai\Enums\Lab|string $provider): array
+    public function providerOptions(Lab|string $provider): array
     {
         return $this->extraProviderOptions;
     }
