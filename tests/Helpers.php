@@ -90,6 +90,27 @@ function fakeOpenAiResponse(string $text = 'Hello'): PromiseInterface
     ]);
 }
 
+function fakeOpenAiToolCallResponse(): PromiseInterface
+{
+    return Http::response([
+        'id' => 'resp_tool_123',
+        'status' => 'completed',
+        'model' => 'gpt-5.4',
+        'output' => [[
+            'type' => 'function_call',
+            'id' => 'fc_123',
+            'call_id' => 'call_123',
+            'name' => 'FixedNumberGenerator',
+            'arguments' => '{}',
+            'status' => 'completed',
+        ]],
+        'usage' => [
+            'input_tokens' => 10,
+            'output_tokens' => 5,
+        ],
+    ]);
+}
+
 function fakeDeepSeekResponse(string $text = 'Hello'): PromiseInterface
 {
     return Http::response([

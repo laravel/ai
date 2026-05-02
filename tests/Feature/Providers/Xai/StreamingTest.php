@@ -81,6 +81,78 @@ test('streaming handles tool calls', function () {
         ->and($toolResultEvents)->not->toBeEmpty();
 });
 
+test('streaming associates reasoning when reasoning item finishes after tool call starts', function () {
+    Http::fake([
+        '*' => Http::sequence([
+            Http::response(
+                body: $this->ssePayload([
+                    ['type' => 'response.created', 'response' => ['id' => 'resp_123', 'model' => 'grok-4-1-fast-reasoning']],
+                    ['type' => 'response.output_item.added', 'output_index' => 0, 'item' => ['type' => 'function_call', 'id' => 'fc_1', 'call_id' => 'call_1', 'name' => 'FixedNumberGenerator']],
+                    ['type' => 'response.function_call_arguments.done', 'item_id' => 'fc_1', 'arguments' => '{}'],
+                    ['type' => 'response.output_item.done', 'item' => ['type' => 'reasoning', 'id' => 'rs_1', 'summary' => [['type' => 'summary_text', 'text' => 'Use the tool']]]],
+                    ['type' => 'response.completed', 'response' => ['id' => 'resp_123', 'status' => 'completed', 'output' => [['type' => 'function_call', 'status' => 'completed', 'id' => 'fc_1', 'call_id' => 'call_1', 'name' => 'FixedNumberGenerator', 'arguments' => '{}']], 'usage' => ['input_tokens' => 10, 'output_tokens' => 5, 'input_tokens_details' => ['cached_tokens' => 0], 'output_tokens_details' => ['reasoning_tokens' => 0]]]],
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+            Http::response(
+                body: $this->ssePayload([
+                    ['type' => 'response.created', 'response' => ['id' => 'resp_456', 'model' => 'grok-4-1-fast-reasoning']],
+                    ['type' => 'response.output_text.delta', 'delta' => 'The number is 72019'],
+                    ['type' => 'response.output_text.done'],
+                    ['type' => 'response.completed', 'response' => ['id' => 'resp_456', 'status' => 'completed', 'output' => [['type' => 'message', 'status' => 'completed', 'role' => 'assistant', 'content' => [['type' => 'output_text', 'text' => '']]]], 'usage' => ['input_tokens' => 20, 'output_tokens' => 10, 'input_tokens_details' => ['cached_tokens' => 0], 'output_tokens_details' => ['reasoning_tokens' => 0]]]],
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]),
+    ]);
+
+    $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+    $toolCall = array_values(array_filter($events, fn ($e) => $e instanceof ToolCallEvent))[0]->toolCall;
+
+    expect($toolCall->reasoningId)->toBe('rs_1')
+        ->and($toolCall->reasoningSummary[0]['text'])->toBe('Use the tool');
+});
+
+test('streaming associates reasoning from completed output', function () {
+    Http::fake([
+        '*' => Http::sequence([
+            Http::response(
+                body: $this->ssePayload([
+                    ['type' => 'response.created', 'response' => ['id' => 'resp_123', 'model' => 'grok-4-1-fast-reasoning']],
+                    ['type' => 'response.output_item.added', 'output_index' => 0, 'item' => ['type' => 'function_call', 'id' => 'fc_1', 'call_id' => 'call_1', 'name' => 'FixedNumberGenerator']],
+                    ['type' => 'response.function_call_arguments.done', 'item_id' => 'fc_1', 'arguments' => '{}'],
+                    ['type' => 'response.completed', 'response' => ['id' => 'resp_123', 'status' => 'completed', 'output' => [
+                        ['type' => 'reasoning', 'id' => 'rs_1', 'summary' => [['type' => 'summary_text', 'text' => 'Use the completed output']]],
+                        ['type' => 'function_call', 'status' => 'completed', 'id' => 'fc_1', 'call_id' => 'call_1', 'name' => 'FixedNumberGenerator', 'arguments' => '{}'],
+                    ], 'usage' => ['input_tokens' => 10, 'output_tokens' => 5, 'input_tokens_details' => ['cached_tokens' => 0], 'output_tokens_details' => ['reasoning_tokens' => 0]]]],
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+            Http::response(
+                body: $this->ssePayload([
+                    ['type' => 'response.created', 'response' => ['id' => 'resp_456', 'model' => 'grok-4-1-fast-reasoning']],
+                    ['type' => 'response.output_text.delta', 'delta' => 'The number is 72019'],
+                    ['type' => 'response.output_text.done'],
+                    ['type' => 'response.completed', 'response' => ['id' => 'resp_456', 'status' => 'completed', 'output' => [['type' => 'message', 'status' => 'completed', 'role' => 'assistant', 'content' => [['type' => 'output_text', 'text' => '']]]], 'usage' => ['input_tokens' => 20, 'output_tokens' => 10, 'input_tokens_details' => ['cached_tokens' => 0], 'output_tokens_details' => ['reasoning_tokens' => 0]]]],
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]),
+    ]);
+
+    $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+    $toolCall = array_values(array_filter($events, fn ($e) => $e instanceof ToolCallEvent))[0]->toolCall;
+
+    expect($toolCall->reasoningId)->toBe('rs_1')
+        ->and($toolCall->reasoningSummary[0]['text'])->toBe('Use the completed output');
+});
+
 test('streaming captures usage', function () {
     Http::fake([
         '*' => Http::response(
