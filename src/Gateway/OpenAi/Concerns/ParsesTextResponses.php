@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Enums\Lab;
@@ -58,6 +59,7 @@ trait ParsesTextResponses
         array $tools = [],
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
+        ?int $timeout = null,
     ): TextResponse {
         return $this->processResponse(
             $data,
@@ -69,6 +71,7 @@ trait ParsesTextResponses
             new Collection,
             maxSteps: $options?->maxSteps,
             options: $options,
+            timeout: $timeout,
         );
     }
 
@@ -86,20 +89,19 @@ trait ParsesTextResponses
         int $depth = 0,
         ?int $maxSteps = null,
         ?TextGenerationOptions $options = null,
+        ?int $timeout = null,
     ): TextResponse {
         $responseId = $data['id'] ?? '';
         $output = $data['output'] ?? [];
         $model = $data['model'] ?? '';
 
         $text = $this->extractText($output);
-        $toolCalls = $this->extractToolCalls($output);
-        $reasonings = $this->extractReasonings($output);
         $citations = $this->extractCitations($output);
         $usage = $this->extractUsage($data);
         $finishReason = $this->extractFinishReason($data);
 
         // Associate reasoning with tool calls...
-        $mappedToolCalls = $this->mapToolCallsWithReasoning($toolCalls, $reasonings);
+        $mappedToolCalls = $this->mapToolCallsWithReasoning($output);
 
         $step = new Step(
             $text,
@@ -140,11 +142,22 @@ trait ParsesTextResponses
             $messages->push($toolResultMessage);
 
             return $this->continueWithToolResults(
-                $responseId, $model, $provider, $structured, $tools, $schema, $steps, $messages, $toolResults, $depth + 1, $maxSteps, $options,
+                $responseId,
+                $model,
+                $provider,
+                $structured,
+                $tools,
+                $schema,
+                $steps,
+                $messages,
+                $toolResults,
+                $depth + 1,
+                $maxSteps,
+                $options,
+                $timeout,
             );
         }
 
-        // Build final response...
         $allToolCalls = $steps->flatMap(fn (Step $s) => $s->toolCalls);
         $allToolResults = $steps->flatMap(fn (Step $s) => $s->toolResults);
 
@@ -217,6 +230,7 @@ trait ParsesTextResponses
         int $depth,
         ?int $maxSteps,
         ?TextGenerationOptions $options = null,
+        ?int $timeout = null,
     ): TextResponse {
         $body = [
             'model' => $model,
@@ -232,24 +246,30 @@ trait ParsesTextResponses
             $body['text'] = $this->buildSchemaFormat($schema);
         }
 
+        $body = array_merge($body, Arr::whereNotNull([
+            'temperature' => $options?->temperature,
+            'top_p' => $options?->topP,
+            'max_output_tokens' => $options?->maxTokens,
+        ]));
+
         $providerOptions = $options?->providerOptions(
             Lab::tryFrom($provider->driver()) ?? $provider->driver()
         );
 
-        if (! is_null($providerOptions)) {
+        if (filled($providerOptions)) {
             $body = array_merge($body, $providerOptions);
         }
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider)->post('responses', $body),
+            fn () => $this->client($provider, $timeout)->post('responses', $body),
         );
 
         $data = $response->json();
 
         $this->validateTextResponse($data);
 
-        return $this->processResponse($data, $provider, $structured, $tools, $schema, $steps, $messages, $depth, $maxSteps, $options);
+        return $this->processResponse($data, $provider, $structured, $tools, $schema, $steps, $messages, $depth, $maxSteps, $options, $timeout);
     }
 
     /**
@@ -296,22 +316,6 @@ trait ParsesTextResponses
         }
 
         return '';
-    }
-
-    /**
-     * Extract tool calls from the output array.
-     */
-    protected function extractToolCalls(array $output): array
-    {
-        return array_values(array_filter($output, fn (array $item) => ($item['type'] ?? '') === 'function_call'));
-    }
-
-    /**
-     * Extract reasoning blocks from the output array.
-     */
-    protected function extractReasonings(array $output): array
-    {
-        return array_values(array_filter($output, fn (array $item) => ($item['type'] ?? '') === 'reasoning'));
     }
 
     /**
@@ -385,18 +389,33 @@ trait ParsesTextResponses
      *
      * @return array<ToolCall>
      */
-    protected function mapToolCallsWithReasoning(array $toolCalls, array $reasonings): array
+    protected function mapToolCallsWithReasoning(array $output): array
     {
-        $firstReasoning = $reasonings[0] ?? null;
+        $toolCalls = [];
+        $latestReasoning = null;
 
-        return array_map(fn (array $tc) => new ToolCall(
-            $tc['id'] ?? '',
-            $tc['name'] ?? '',
-            json_decode($tc['arguments'] ?? '{}', true) ?? [],
-            $tc['call_id'] ?? null,
-            $firstReasoning ? $firstReasoning['id'] ?? null : null,
-            $firstReasoning ? $firstReasoning['summary'] ?? null : null,
-        ), $toolCalls);
+        foreach ($output as $item) {
+            $type = $item['type'] ?? '';
+
+            if ($type === 'reasoning') {
+                $latestReasoning = $item;
+
+                continue;
+            }
+
+            if ($type === 'function_call') {
+                $toolCalls[] = new ToolCall(
+                    $item['id'] ?? '',
+                    $item['name'] ?? '',
+                    json_decode($item['arguments'] ?? '{}', true) ?? [],
+                    $item['call_id'] ?? null,
+                    $latestReasoning ? ($latestReasoning['id'] ?? null) : null,
+                    $latestReasoning ? ($latestReasoning['summary'] ?? null) : null,
+                );
+            }
+        }
+
+        return $toolCalls;
     }
 
     /**

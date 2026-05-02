@@ -8,3 +8,5 @@
 /vendor
 CLAUDE.md
 .env
+.claude
+AGENTS.md

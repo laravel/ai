@@ -1,89 +1,87 @@
 <?php
 
-namespace Tests\Feature\Providers\OpenAi;
-
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
-use Tests\Feature\Tools\FixedNumberGenerator;
-use Tests\Feature\Tools\RandomNumberGenerator;
-use GuzzleHttp\Promise\PromiseInterface;
-use Tests\TestCase;
+use Tests\Fixtures\Tools\FixedNumberGenerator;
+use Tests\Fixtures\Tools\NamedTool;
+use Tests\Fixtures\Tools\RandomNumberGenerator;
 
 use function Laravel\Ai\agent;
 
-class ToolMappingTest extends TestCase
-{
-    protected function setUp(): void
-    {
-        parent::setUp();
+beforeEach(function () {
+    config(['ai.providers.openai' => [
+        ...config('ai.providers.openai'),
+        'key' => 'test-key',
+    ]]);
+});
 
-        config(['ai.providers.openai' => [
-            ...config('ai.providers.openai'),
-            'key' => 'test-key',
-        ]]);
-    }
+test('tool with parameters includes strict compliant schema', function () {
+    Http::fake([
+        '*' => fakeOpenAiResponse('42'),
+    ]);
 
-    public function test_tool_with_parameters_includes_strict_compliant_schema(): void
-    {
-        Http::fake([
-            '*' => $this->fakeOpenAiResponse('42'),
-        ]);
+    agent(tools: [new RandomNumberGenerator])->prompt('Give me a random number', provider: 'openai');
 
-        agent(tools: [new RandomNumberGenerator])->prompt('Give me a random number', provider: 'openai');
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'function');
 
-        Http::assertSent(function (Request $request) {
-            $body = json_decode($request->body(), true);
-            $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'function');
+        return $tool['strict'] === true
+            && $tool['parameters']['type'] === 'object'
+            && array_key_exists('min', $tool['parameters']['properties'])
+            && array_key_exists('max', $tool['parameters']['properties'])
+            && in_array('min', $tool['parameters']['required'])
+            && in_array('max', $tool['parameters']['required'])
+            && $tool['parameters']['additionalProperties'] === false;
+    });
+});
 
-            return $tool['strict'] === true
-                && $tool['parameters']['type'] === 'object'
-                && array_key_exists('min', $tool['parameters']['properties'])
-                && array_key_exists('max', $tool['parameters']['properties'])
-                && in_array('min', $tool['parameters']['required'])
-                && in_array('max', $tool['parameters']['required'])
-                && $tool['parameters']['additionalProperties'] === false;
-        });
-    }
+test('tool with a name() method emits the declared name', function () {
+    Http::fake([
+        '*' => fakeOpenAiResponse('ok'),
+    ]);
 
-    public function test_tool_with_empty_schema_includes_strict_compliant_parameters(): void
-    {
-        Http::fake([
-            '*' => $this->fakeOpenAiResponse('72019'),
-        ]);
+    agent(tools: [new NamedTool('my_custom_tool')])->prompt('Hi', provider: 'openai');
 
-        agent(tools: [new FixedNumberGenerator])->prompt('Give me a random number', provider: 'openai');
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $names = collect(data_get($body, 'tools'))->pluck('name')->all();
 
-        Http::assertSent(function (Request $request) {
-            $body = json_decode($request->body(), true);
-            $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'function');
+        return in_array('my_custom_tool', $names, true);
+    });
+});
 
-            return $tool['strict'] === true
-                && array_key_exists('parameters', $tool)
-                && $tool['parameters']['type'] === 'object'
-                && $tool['parameters']['properties'] === []
-                && $tool['parameters']['required'] === []
-                && $tool['parameters']['additionalProperties'] === false;
-        });
-    }
+test('tool without a name() method falls back to class basename for openai', function () {
+    Http::fake([
+        '*' => fakeOpenAiResponse('ok'),
+    ]);
 
-    protected function fakeOpenAiResponse(string $text): PromiseInterface
-    {
-        return Http::response([
-            'id' => 'resp_123',
-            'status' => 'completed',
-            'model' => 'gpt-5.4',
-            'output' => [[
-                'type' => 'message',
-                'status' => 'completed',
-                'content' => [[
-                    'type' => 'output_text',
-                    'text' => $text,
-                ]],
-            ]],
-            'usage' => [
-                'input_tokens' => 1,
-                'output_tokens' => 1,
-            ],
-        ]);
-    }
-}
+    agent(tools: [new FixedNumberGenerator])->prompt('Hi', provider: 'openai');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $names = collect(data_get($body, 'tools'))->pluck('name')->all();
+
+        return in_array('FixedNumberGenerator', $names, true);
+    });
+});
+
+test('tool with empty schema includes strict compliant parameters', function () {
+    Http::fake([
+        '*' => fakeOpenAiResponse('72019'),
+    ]);
+
+    agent(tools: [new FixedNumberGenerator])->prompt('Give me a random number', provider: 'openai');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'function');
+
+        return $tool['strict'] === true
+            && array_key_exists('parameters', $tool)
+            && $tool['parameters']['type'] === 'object'
+            && $tool['parameters']['properties'] === []
+            && $tool['parameters']['required'] === []
+            && $tool['parameters']['additionalProperties'] === false;
+    });
+});

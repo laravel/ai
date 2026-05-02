@@ -4,7 +4,6 @@ namespace Tests;
 
 use Laravel\Ai\AiServiceProvider;
 use Orchestra\Testbench\TestCase as OrchestraTestCase;
-use Prism\Prism\PrismServiceProvider;
 
 abstract class TestCase extends OrchestraTestCase
 {
@@ -12,7 +11,6 @@ abstract class TestCase extends OrchestraTestCase
     {
         return [
             AiServiceProvider::class,
-            PrismServiceProvider::class,
         ];
     }
 }

@@ -9,6 +9,7 @@ use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\RerankingGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\RerankingProvider;
+use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\RankedDocument;
 use Laravel\Ai\Responses\EmbeddingsResponse;
@@ -16,6 +17,8 @@ use Laravel\Ai\Responses\RerankingResponse;
 
 class CohereGateway implements EmbeddingGateway, RerankingGateway
 {
+    use HandlesFailoverErrors;
+
     /**
      * Generate embedding vectors representing the given inputs.
      *
@@ -29,13 +32,16 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway
         int $timeout = 30,
         bool $truncate = true,
     ): EmbeddingsResponse {
-        $response = $this->client($provider, $timeout)->post('/embed', [
-            'model' => $model,
-            'texts' => $inputs,
-            'input_type' => 'search_document',
-            'embedding_types' => ['float'],
-            'truncate' => $truncate ? 'END' : 'NONE',
-        ]);
+        $response = $this->withErrorHandling(
+            $provider->name(),
+            fn () => $this->client($provider, $timeout)->post('/embed', [
+                'model' => $model,
+                'texts' => $inputs,
+                'input_type' => 'search_document',
+                'embedding_types' => ['float'],
+                'truncate' => $truncate ? 'END' : 'NONE',
+            ]),
+        );
 
         $data = $response->json();
 
@@ -58,12 +64,15 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway
         string $query,
         ?int $limit = null
     ): RerankingResponse {
-        $response = $this->client($provider)->post('/rerank', array_filter([
-            'model' => $model,
-            'query' => $query,
-            'documents' => $documents,
-            'top_n' => $limit,
-        ]));
+        $response = $this->withErrorHandling(
+            $provider->name(),
+            fn () => $this->client($provider)->post('/rerank', array_filter([
+                'model' => $model,
+                'query' => $query,
+                'documents' => $documents,
+                'top_n' => $limit,
+            ])),
+        );
 
         $data = $response->json();
 
