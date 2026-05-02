@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\AzureOpenAi;
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use LogicException;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
@@ -138,6 +139,10 @@ class AzureOpenAiGateway implements EmbeddingGateway, TextGateway
         int $timeout = 30,
         bool $truncate = true,
     ): EmbeddingsResponse {
+        if (! $truncate) {
+            throw new LogicException('The Azure OpenAI provider does not support disabling embedding truncation.');
+        }
+
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post('embeddings', [

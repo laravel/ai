@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\Ollama;
 
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
+use LogicException;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
@@ -139,6 +140,10 @@ class OllamaGateway implements EmbeddingGateway, TextGateway
         int $timeout = 30,
         bool $truncate = true,
     ): EmbeddingsResponse {
+        if (! $truncate) {
+            throw new LogicException('The Ollama provider does not support disabling embedding truncation.');
+        }
+
         $body = array_filter([
             'model' => $model,
             'input' => $inputs,

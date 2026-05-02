@@ -194,6 +194,10 @@ class GeminiGateway implements Gateway
         int $timeout = 30,
         bool $truncate = true,
     ): EmbeddingsResponse {
+        if (! $truncate) {
+            throw new LogicException('The Gemini provider does not support disabling embedding truncation.');
+        }
+
         $requests = array_map(fn (string $input) => [
             'model' => "models/{$model}",
             'content' => ['parts' => [['text' => $input]]],

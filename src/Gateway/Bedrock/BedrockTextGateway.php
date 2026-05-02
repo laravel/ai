@@ -432,7 +432,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                     'body' => json_encode([
                         'texts' => array_values($inputs),
                         'input_type' => 'search_document',
-                        'truncate' => $truncate ? 'END' : 'NONE',
+                        'truncate' => $truncate ? (str_contains($model, 'embed-v4') ? 'RIGHT' : 'END') : 'NONE',
                     ]),
                 ]),
             );

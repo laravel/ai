@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\OpenRouter;
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Collection;
+use LogicException;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
@@ -217,6 +218,10 @@ class OpenRouterGateway implements EmbeddingGateway, ImageGateway, TextGateway
         int $timeout = 30,
         bool $truncate = true,
     ): EmbeddingsResponse {
+        if (! $truncate) {
+            throw new LogicException('The OpenRouter provider does not support disabling embedding truncation.');
+        }
+
         $body = [
             'model' => $model,
             'input' => $inputs,
