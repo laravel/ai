@@ -50,11 +50,14 @@ trait GeneratesText
 
                 $agent = $prompt->agent;
 
-                $messages = $agent instanceof Conversational ? $agent->messages() : [];
-
-                $messages[] = new UserMessage($prompt->prompt, $prompt->attachments->all());
+                $messages = [
+                    ...($agent instanceof Conversational ? $agent->messages() : []),
+                    new UserMessage($prompt->prompt, $prompt->attachments->all()),
+                ];
 
                 $this->listenForToolInvocations($invocationId, $agent);
+
+                $schema = $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null;
 
                 $response = $this->textGateway()->generateText(
                     $this,
@@ -62,12 +65,12 @@ trait GeneratesText
                     (string) $agent->instructions(),
                     $messages,
                     $agent instanceof HasTools ? $agent->tools() : [],
-                    $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null,
+                    $schema,
                     TextGenerationOptions::forAgent($agent),
                     $prompt->timeout,
                 );
 
-                return $agent instanceof HasStructuredOutput
+                return ! empty($schema)
                     ? (new StructuredAgentResponse($invocationId, $response->structured, $response->text, $response->usage, $response->meta))
                         ->withToolCallsAndResults($response->toolCalls, $response->toolResults)
                         ->withSteps($response->steps)

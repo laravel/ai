@@ -86,8 +86,8 @@ class DatabaseConversationStore implements ConversationStore
             'role' => 'assistant',
             'content' => $response->text,
             'attachments' => '[]',
-            'tool_calls' => json_encode($response->toolCalls),
-            'tool_results' => json_encode($response->toolResults),
+            'tool_calls' => json_encode($response->toolCalls->values()),
+            'tool_results' => json_encode($response->toolResults->values()),
             'usage' => json_encode($response->usage),
             'meta' => json_encode($response->meta),
             'created_at' => now(),
@@ -112,8 +112,8 @@ class DatabaseConversationStore implements ConversationStore
             ->reverse()
             ->values()
             ->flatMap(function ($record) {
-                $toolCalls = collect(json_decode($record->tool_calls, true));
-                $toolResults = collect(json_decode($record->tool_results, true));
+                $toolCalls = collect(json_decode($record->tool_calls, true))->values();
+                $toolResults = collect(json_decode($record->tool_results, true))->values();
 
                 if ($record->role === 'user') {
                     return [new Message('user', $record->content)];
@@ -137,34 +137,38 @@ class DatabaseConversationStore implements ConversationStore
                         resultId: $toolResult['result_id'] ?? null,
                     ));
 
-                    // Index tool results by call_id for fast matching.
-                    $resultsByCallId = $reconstructedToolResults->keyBy(fn (ToolResult $r) => $r->resultId);
-
-                    // Group tool calls by reasoning_id, preserving insertion order.
-                    // OpenAI requires each reasoning block to appear immediately before
-                    // its associated function_calls, with tool results interleaved between
-                    // rounds. Flattening all calls into one AssistantMessage breaks this.
-                    $groups = [];
-                    foreach ($reconstructedToolCalls as $tc) {
-                        $groups[$tc->reasoningId ?? '__no_reasoning__'][] = $tc;
-                    }
+                    $reasoningGroups = $reconstructedToolCalls
+                        ->whereNotNull('reasoningId')
+                        ->groupBy('reasoningId');
 
                     $messages = [];
 
-                    foreach ($groups as $groupTcs) {
-                        $groupCollection = collect($groupTcs);
+                    // OpenAI requires each reasoning block to appear immediately before
+                    // its associated function_calls, with the matching function_call_output
+                    // following each round. Split multi-round reasoning into per-group
+                    // AssistantMessage/ToolResultMessage pairs so the order is preserved.
+                    if ($reasoningGroups->count() > 1) {
+                        $resultsByCallId = $reconstructedToolResults->keyBy(fn (ToolResult $r) => $r->resultId);
 
-                        $messages[] = new AssistantMessage('', $groupCollection);
+                        foreach ($reconstructedToolCalls->groupBy(fn ($tc) => $tc->reasoningId ?? '') as $groupCollection) {
+                            $messages[] = new AssistantMessage('', $groupCollection->values());
 
-                        $groupResults = $groupCollection
-                            ->pluck('resultId')
-                            ->filter()
-                            ->map(fn ($callId) => $resultsByCallId->get($callId))
-                            ->filter()
-                            ->values();
+                            $groupResults = $groupCollection
+                                ->pluck('resultId')
+                                ->filter()
+                                ->map(fn ($callId) => $resultsByCallId->get($callId))
+                                ->filter()
+                                ->values();
 
-                        if ($groupResults->isNotEmpty()) {
-                            $messages[] = new ToolResultMessage($groupResults);
+                            if ($groupResults->isNotEmpty()) {
+                                $messages[] = new ToolResultMessage($groupResults);
+                            }
+                        }
+                    } else {
+                        $messages[] = new AssistantMessage('', $reconstructedToolCalls);
+
+                        if ($reconstructedToolResults->isNotEmpty()) {
+                            $messages[] = new ToolResultMessage($reconstructedToolResults);
                         }
                     }
 

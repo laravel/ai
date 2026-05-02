@@ -47,41 +47,40 @@ trait MapsAttachments
                 ],
                 $attachment instanceof LocalImage => [
                     'type' => 'input_image',
-                    'image_url' => 'data:'.$attachment->mime.';base64,'.base64_encode(file_get_contents($attachment->path)),
+                    'image_url' => 'data:'.($attachment->mimeType() ?? 'image/png').';base64,'.base64_encode(file_get_contents($attachment->path)),
                 ],
                 $attachment instanceof StoredImage => [
                     'type' => 'input_image',
-                    'image_url' => 'data:image/png;base64,'.base64_encode(
+                    'image_url' => 'data:'.($attachment->mimeType() ?? 'image/png').';base64,'.base64_encode(
                         Storage::disk($attachment->disk)->get($attachment->path)
                     ),
                 ],
                 $attachment instanceof ProviderDocument => array_filter([
                     'type' => 'input_file',
                     'file_id' => $attachment->id,
-                    'filename' => $attachment->name(),
                 ]),
-                $attachment instanceof Base64Document => array_filter([
+                $attachment instanceof Base64Document => [
                     'type' => 'input_file',
                     'file_data' => 'data:'.$attachment->mime.';base64,'.$attachment->base64,
-                    'filename' => $attachment->name(),
-                ]),
-                $attachment instanceof LocalDocument => array_filter([
+                    'filename' => $attachment->name() ?? $this->fallbackFilename($attachment->mime),
+                ],
+                $attachment instanceof LocalDocument => [
                     'type' => 'input_file',
                     'file_data' => 'data:'.($attachment->mimeType() ?? 'application/octet-stream').';base64,'.base64_encode(file_get_contents($attachment->path)),
-                    'filename' => $attachment->name(),
-                ]),
+                    'filename' => $attachment->name() ?? $this->fallbackFilename($attachment->mimeType()),
+                ],
                 $attachment instanceof RemoteDocument => array_filter([
                     'type' => 'input_file',
                     'file_url' => $attachment->url,
                     'filename' => $attachment->name(),
                 ]),
-                $attachment instanceof StoredDocument => array_filter([
+                $attachment instanceof StoredDocument => [
                     'type' => 'input_file',
                     'file_data' => 'data:'.($attachment->mimeType() ?? 'application/octet-stream').';base64,'.base64_encode(
                         Storage::disk($attachment->disk)->get($attachment->path)
                     ),
-                    'filename' => $attachment->name(),
-                ]),
+                    'filename' => $attachment->name() ?? $this->fallbackFilename($attachment->mimeType()),
+                ],
                 $attachment instanceof UploadedFile && $this->isImage($attachment) => [
                     'type' => 'input_image',
                     'image_url' => 'data:'.$attachment->getClientMimeType().';base64,'.base64_encode($attachment->get()),
@@ -107,5 +106,18 @@ trait MapsAttachments
             'image/gif',
             'image/webp',
         ]);
+    }
+
+    protected function fallbackFilename(?string $mimeType): string
+    {
+        return 'document'.match ($mimeType) {
+            'text/plain' => '.txt',
+            'text/markdown' => '.md',
+            'text/csv' => '.csv',
+            'text/html' => '.html',
+            'application/pdf' => '.pdf',
+            'application/json' => '.json',
+            default => '',
+        };
     }
 }

@@ -48,6 +48,7 @@ trait ParsesTextResponses
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
         array $requestBody = [],
+        ?int $timeout = null,
     ): TextResponse {
         return $this->processResponse(
             $data,
@@ -59,6 +60,7 @@ trait ParsesTextResponses
             new Collection,
             $requestBody,
             maxSteps: $options?->maxSteps,
+            timeout: $timeout,
         );
     }
 
@@ -76,6 +78,7 @@ trait ParsesTextResponses
         array $requestBody,
         int $depth = 0,
         ?int $maxSteps = null,
+        ?int $timeout = null,
     ): TextResponse {
         $model = $data['model'] ?? '';
         $content = $data['content'] ?? [];
@@ -118,6 +121,7 @@ trait ParsesTextResponses
                 $toolResults,
                 $depth + 1,
                 $maxSteps,
+                $timeout,
             );
         }
 
@@ -193,6 +197,7 @@ trait ParsesTextResponses
         array $toolResults,
         int $depth,
         ?int $maxSteps,
+        ?int $timeout = null,
     ): TextResponse {
         $requestBody['messages'][] = [
             'role' => 'assistant',
@@ -216,9 +221,9 @@ trait ParsesTextResponses
 
         unset($requestBody['stream']);
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider)->post('messages', $requestBody),
+            fn () => $this->client($provider, $timeout)->post('messages', $requestBody),
         );
 
         $data = $response->json();
@@ -236,6 +241,7 @@ trait ParsesTextResponses
             $requestBody,
             $depth,
             $maxSteps,
+            $timeout,
         );
     }
 
@@ -355,12 +361,12 @@ trait ParsesTextResponses
     }
 
     /**
-     * Ensure tool_use content blocks have their input cast to object for JSON serialization.
+     * Ensure tool_use and server_tool_use content blocks have their input cast to object for JSON serialization.
      */
     protected function ensureToolInputIsObject(array $content): array
     {
         return array_map(function (array $block) {
-            if (($block['type'] ?? '') === 'tool_use') {
+            if (in_array($block['type'] ?? '', ['tool_use', 'server_tool_use'], true)) {
                 $block['input'] = (object) ($block['input'] ?? []);
             }
 

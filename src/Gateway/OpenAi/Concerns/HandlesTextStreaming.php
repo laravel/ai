@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
 use Generator;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -38,6 +39,7 @@ trait HandlesTextStreaming
         $streamBody,
         int $depth = 0,
         ?int $maxSteps = null,
+        ?int $timeout = null,
     ): Generator {
         $maxSteps ??= $options?->maxSteps;
 
@@ -50,6 +52,7 @@ trait HandlesTextStreaming
         $pendingToolCalls = [];
         $reasoningItems = [];
         $usage = null;
+        $responseData = [];
 
         foreach ($this->parseServerSentEvents($streamBody) as $data) {
             $type = $data['type'] ?? '';
@@ -273,6 +276,7 @@ trait HandlesTextStreaming
 
             if ($type === 'response.completed') {
                 $response = $data['response'] ?? [];
+                $responseData = $response;
                 $responseId = $response['id'] ?? $responseId;
                 $responseUsage = $response['usage'] ?? [];
 
@@ -288,9 +292,19 @@ trait HandlesTextStreaming
 
         if (filled($pendingToolCalls)) {
             yield from $this->handleStreamingToolCalls(
-                $invocationId, $responseId, $provider, $model, $tools, $schema, $options,
-                $pendingToolCalls, $currentText, $reasoningItems,
-                $depth, $maxSteps,
+                $invocationId,
+                $responseId,
+                $provider,
+                $model,
+                $tools,
+                $schema,
+                $options,
+                $pendingToolCalls,
+                $currentText,
+                $reasoningItems,
+                $depth,
+                $maxSteps,
+                $timeout,
             );
 
             return;
@@ -298,7 +312,7 @@ trait HandlesTextStreaming
 
         yield (new StreamEnd(
             $this->generateEventId(),
-            'stop',
+            $this->extractFinishReason($responseData)->value,
             $usage ?? new Usage(0, 0),
             time(),
         ))->withInvocationId($invocationId);
@@ -320,6 +334,7 @@ trait HandlesTextStreaming
         array $reasoningItems,
         int $depth,
         ?int $maxSteps,
+        ?int $timeout = null,
     ): Generator {
         $mappedToolCalls = $this->mapStreamToolCalls($pendingToolCalls);
 
@@ -369,24 +384,38 @@ trait HandlesTextStreaming
                 $body['text'] = $this->buildSchemaFormat($schema);
             }
 
+            $body = array_merge($body, Arr::whereNotNull([
+                'temperature' => $options?->temperature,
+                'top_p' => $options?->topP,
+                'max_output_tokens' => $options?->maxTokens,
+            ]));
+
             $providerOptions = $options?->providerOptions(
                 Lab::tryFrom($provider->driver()) ?? $provider->driver()
             );
 
-            if (! is_null($providerOptions)) {
+            if (filled($providerOptions)) {
                 $body = array_merge($body, $providerOptions);
             }
 
-            $response = $this->withRateLimitHandling(
+            $response = $this->withErrorHandling(
                 $provider->name(),
-                fn () => $this->client($provider)
+                fn () => $this->client($provider, $timeout)
                     ->withOptions(['stream' => true])
                     ->post('responses', $body),
             );
 
             yield from $this->processTextStream(
-                $invocationId, $provider, $model, $tools, $schema, $options,
-                $response->getBody(), $depth + 1, $maxSteps,
+                $invocationId,
+                $provider,
+                $model,
+                $tools,
+                $schema,
+                $options,
+                $response->getBody(),
+                $depth + 1,
+                $maxSteps,
+                $timeout,
             );
         } else {
             yield (new StreamEnd(

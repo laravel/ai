@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway\Groq\Concerns;
 
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\AiException;
@@ -23,7 +24,7 @@ trait ParsesTextResponses
     /**
      * Validate the Groq response data.
      *
-     * @throws \Laravel\Ai\Exceptions\AiException
+     * @throws AiException
      */
     protected function validateTextResponse(array $data): void
     {
@@ -48,6 +49,7 @@ trait ParsesTextResponses
         ?TextGenerationOptions $options = null,
         ?string $instructions = null,
         array $originalMessages = [],
+        ?int $timeout = null,
     ): TextResponse {
         return $this->processResponse(
             $data,
@@ -61,6 +63,7 @@ trait ParsesTextResponses
             originalMessages: $originalMessages,
             maxSteps: $options?->maxSteps,
             options: $options,
+            timeout: $timeout,
         );
     }
 
@@ -80,6 +83,7 @@ trait ParsesTextResponses
         int $depth = 0,
         ?int $maxSteps = null,
         ?TextGenerationOptions $options = null,
+        ?int $timeout = null,
     ): TextResponse {
         $choice = $data['choices'][0] ?? [];
         $message = $choice['message'] ?? [];
@@ -145,6 +149,7 @@ trait ParsesTextResponses
                 $depth + 1,
                 $maxSteps,
                 $options,
+                $timeout,
             );
         }
 
@@ -220,8 +225,16 @@ trait ParsesTextResponses
         int $depth,
         ?int $maxSteps,
         ?TextGenerationOptions $options = null,
+        ?int $timeout = null,
     ): TextResponse {
-        $chatMessages = $this->mapMessagesToChat($originalMessages, $instructions);
+        $mappedTools = filled($tools) ? $this->mapTools($tools) : [];
+        $hasTools = filled($mappedTools);
+        $inlineSchema = $hasTools && filled($schema);
+
+        $chatMessages = $this->mapMessagesToChat(
+            $originalMessages,
+            $inlineSchema ? $this->composeInstructions($instructions, $schema) : $instructions,
+        );
 
         foreach ($messages as $msg) {
             if ($msg instanceof AssistantMessage) {
@@ -254,18 +267,23 @@ trait ParsesTextResponses
             'messages' => $chatMessages,
         ];
 
-        if (filled($tools)) {
-            $mappedTools = $this->mapTools($tools);
-
-            if (filled($mappedTools)) {
-                $body['tool_choice'] = 'auto';
-                $body['tools'] = $mappedTools;
-            }
+        if ($hasTools) {
+            $body['tool_choice'] = 'auto';
+            $body['tools'] = $mappedTools;
         }
 
-        if (filled($schema)) {
+        if (filled($schema) && ! $inlineSchema) {
             $body['response_format'] = $this->buildResponseFormat($schema);
         }
+
+        if (! is_null($options?->maxTokens)) {
+            $body['max_completion_tokens'] = $options->maxTokens;
+        }
+
+        $body = array_merge($body, Arr::whereNotNull([
+            'temperature' => $options?->temperature,
+            'top_p' => $options?->topP,
+        ]));
 
         $providerOptions = $options?->providerOptions($provider->driver());
 
@@ -273,9 +291,9 @@ trait ParsesTextResponses
             $body = array_merge($body, $providerOptions);
         }
 
-        $response = $this->withRateLimitHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider)->post('chat/completions', $body),
+            fn () => $this->client($provider, $timeout)->post('chat/completions', $body),
         );
 
         $data = $response->json();
@@ -295,6 +313,7 @@ trait ParsesTextResponses
             $depth,
             $maxSteps,
             $options,
+            $timeout,
         );
     }
 

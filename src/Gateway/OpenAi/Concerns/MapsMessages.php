@@ -61,18 +61,6 @@ trait MapsMessages
      */
     protected function mapAssistantMessage(AssistantMessage|Message $message, array &$input): void
     {
-        if (filled($message->content)) {
-            $input[] = [
-                'role' => 'assistant',
-                'content' => [
-                    [
-                        'type' => 'output_text',
-                        'text' => $message->content,
-                    ],
-                ],
-            ];
-        }
-
         if ($message instanceof AssistantMessage && $message->toolCalls->isNotEmpty()) {
             $reasoningBlocks = $message->toolCalls
                 ->whereNotNull('reasoningId')
@@ -85,17 +73,41 @@ trait MapsMessages
                 ->values()
                 ->all();
 
-            array_push($input, ...$reasoningBlocks);
+            foreach ($reasoningBlocks as $reasoningBlock) {
+                $input[] = $reasoningBlock;
 
-            foreach ($message->toolCalls as $toolCall) {
+                foreach ($message->toolCalls->where('reasoningId', $reasoningBlock['id']) as $toolCall) {
+                    $input[] = [
+                        'id' => $toolCall->id,
+                        'call_id' => $toolCall->resultId,
+                        'type' => 'function_call',
+                        'name' => $toolCall->name,
+                        'arguments' => json_encode($toolCall->arguments ?: (object) []),
+                    ];
+                }
+            }
+
+            foreach ($message->toolCalls->whereNull('reasoningId') as $toolCall) {
                 $input[] = [
                     'id' => $toolCall->id,
                     'call_id' => $toolCall->resultId,
                     'type' => 'function_call',
                     'name' => $toolCall->name,
-                    'arguments' => json_encode($toolCall->arguments),
+                    'arguments' => json_encode($toolCall->arguments ?: (object) []),
                 ];
             }
+        }
+
+        if (filled($message->content)) {
+            $input[] = [
+                'role' => 'assistant',
+                'content' => [
+                    [
+                        'type' => 'output_text',
+                        'text' => $message->content,
+                    ],
+                ],
+            ];
         }
     }
 

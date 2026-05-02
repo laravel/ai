@@ -1,86 +1,76 @@
 <?php
 
-namespace Tests\Feature;
-
 use Illuminate\Support\Collection;
 use Laravel\Ai\Tools\Request;
 use Laravel\Ai\Tools\SimilaritySearch;
-use Tests\TestCase;
 
-class SimilaritySearchTest extends TestCase
-{
-    public function test_search_results_are_returned(): void
-    {
-        $data = [
-            [
-                'id' => 1,
-                'query' => 'Test query',
-            ],
-            [
-                'id' => 2,
-                'query' => 'Test query',
-            ],
-        ];
-
-        $search = new SimilaritySearch(using: function (string $query) use ($data) {
-            return $data;
-        });
-
-        $results = $search->handle(new Request([
+test('search results are returned', function () {
+    $data = [
+        [
+            'id' => 1,
             'query' => 'Test query',
-        ]));
+        ],
+        [
+            'id' => 2,
+            'query' => 'Test query',
+        ],
+    ];
 
-        $this->assertTrue(str_contains($results, json_encode($data, JSON_PRETTY_PRINT)));
-    }
+    $search = new SimilaritySearch(using: function (string $query) use ($data) {
+        return $data;
+    });
 
-    public function test_using_model_creates_similarity_search(): void
-    {
-        $search = SimilaritySearch::usingModel(
-            FakeVectorModel::class,
-            'embedding',
-            0.7
-        );
+    $results = $search->handle(new Request([
+        'query' => 'Test query',
+    ]));
 
-        $results = $search->handle(new Request([
-            'query' => 'search term',
-        ]));
+    expect(str_contains($results, json_encode($data, JSON_PRETTY_PRINT)))->toBeTrue();
+});
 
-        $this->assertStringContainsString('Relevant results found.', $results);
-        $this->assertStringContainsString('First document', $results);
-        $this->assertStringContainsString('Second document', $results);
-    }
+test('using model creates similarity search', function () {
+    $search = SimilaritySearch::usingModel(
+        FakeVectorModel::class,
+        'embedding',
+        0.7
+    );
 
-    public function test_using_model_applies_custom_query_closure(): void
-    {
-        $search = SimilaritySearch::usingModel(
-            FakeVectorModel::class,
-            'embedding',
-            0.7,
-            query: fn ($query) => $query->where('active', true)
-        );
+    $results = $search->handle(new Request([
+        'query' => 'search term',
+    ]));
 
-        $results = $search->handle(new Request([
-            'query' => 'search term',
-        ]));
+    expect($results)->toContain('Relevant results found.')
+        ->toContain('First document')
+        ->toContain('Second document');
+});
 
-        $this->assertStringContainsString('Relevant results found.', $results);
-    }
+test('using model applies custom query closure', function () {
+    $search = SimilaritySearch::usingModel(
+        FakeVectorModel::class,
+        'embedding',
+        0.7,
+        query: fn ($query) => $query->where('active', true)
+    );
 
-    public function test_using_model_excludes_embedding_column_from_results(): void
-    {
-        $search = SimilaritySearch::usingModel(
-            FakeVectorModel::class,
-            'embedding',
-        );
+    $results = $search->handle(new Request([
+        'query' => 'search term',
+    ]));
 
-        $results = $search->handle(new Request([
-            'query' => 'search term',
-        ]));
+    expect($results)->toContain('Relevant results found.');
+});
 
-        $this->assertStringNotContainsString('embedding', $results);
-        $this->assertStringContainsString('First document', $results);
-    }
-}
+test('using model excludes embedding column from results', function () {
+    $search = SimilaritySearch::usingModel(
+        FakeVectorModel::class,
+        'embedding',
+    );
+
+    $results = $search->handle(new Request([
+        'query' => 'search term',
+    ]));
+
+    expect($results)->not->toContain('embedding')
+        ->toContain('First document');
+});
 
 class FakeVectorModel
 {
@@ -94,7 +84,7 @@ class FakeQueryBuilder
 {
     protected array $conditions = [];
 
-    protected ?int $limit;
+    protected ?int $limit = null;
 
     public function whereVectorSimilarTo(string $column, string $query): self
     {
