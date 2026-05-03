@@ -65,9 +65,6 @@ trait BuildsTextRequests
 
         if (filled($tools)) {
             $body['tools'] = $this->mapTools($tools, $provider);
-            $body['tool_config'] = [
-                'function_calling_config' => ['mode' => 'AUTO'],
-            ];
         }
 
         $generationConfig = [];
