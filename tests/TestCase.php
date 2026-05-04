@@ -13,4 +13,9 @@ abstract class TestCase extends OrchestraTestCase
             AiServiceProvider::class,
         ];
     }
+
+    protected function defineDatabaseMigrations(): void
+    {
+        $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
+    }
 }

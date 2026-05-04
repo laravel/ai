@@ -93,12 +93,20 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
      */
     protected function client(EmbeddingProvider|RerankingProvider $provider, int $timeout = 30): PendingRequest
     {
-        return Http::baseUrl('https://api.jina.ai/v1')
+        return Http::baseUrl($this->baseUrl($provider))
             ->withHeaders([
                 'Authorization' => 'Bearer '.$provider->providerCredentials()['key'],
                 'Content-Type' => 'application/json',
             ])
             ->timeout($timeout)
             ->throw();
+    }
+
+    /**
+     * Get the base URL for the Jina API.
+     */
+    protected function baseUrl(EmbeddingProvider|RerankingProvider $provider): string
+    {
+        return rtrim($provider->additionalConfiguration()['url'] ?? 'https://api.jina.ai/v1', '/');
     }
 }

@@ -9,12 +9,22 @@ class AssistantMessage extends Message
     public Collection $toolCalls;
 
     /**
-     * Create a new text conversation message instance.
+     * Raw provider replay state populated by the SDK's response parser.
+     *
+     * @var array<int, array<string, mixed>>
      */
-    public function __construct(string $content, ?Collection $toolCalls = null)
+    public array $providerContentBlocks;
+
+    /**
+     * Create a new text conversation message instance.
+     *
+     * @param  array<int, array<string, mixed>>  $providerContentBlocks
+     */
+    public function __construct(string $content, ?Collection $toolCalls = null, array $providerContentBlocks = [])
     {
         parent::__construct('assistant', $content);
 
         $this->toolCalls = $toolCalls ?: new Collection;
+        $this->providerContentBlocks = $providerContentBlocks;
     }
 }

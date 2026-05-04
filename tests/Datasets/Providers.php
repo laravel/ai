@@ -48,3 +48,10 @@ dataset('agent-image-providers', [
     'gemini' => ['gemini', 'GEMINI_API_KEY', 'gemini-3.1-flash-lite-preview'],
     'xai' => ['xai', 'XAI_API_KEY', 'grok-4-1-fast-reasoning'],
 ]);
+
+dataset('tool-replay-providers', [
+    // Reasoning model
+    'openai-gpt-5-4-nano' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4-nano', true],
+    // Non-reasoning model (backward compatibility)
+    'openai-gpt-4-1' => ['openai', 'OPENAI_API_KEY', 'gpt-4.1', false],
+]);
