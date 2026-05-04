@@ -5,16 +5,16 @@ namespace Laravel\Ai\Files;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Support\Facades\Storage;
 use JsonSerializable;
-use Laravel\Ai\Contracts\Files\EmbeddableFile;
+use Laravel\Ai\Contracts\Files\InlineFile;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
 use Laravel\Ai\Files\Concerns\EncodesContentToBase64;
-use Laravel\Ai\Files\Concerns\SerializesEmbeddableImage;
+use Laravel\Ai\Files\Concerns\SerializesInlineContent;
 use RuntimeException;
 
-class StoredImage extends Image implements Arrayable, EmbeddableFile, JsonSerializable, StorableFile
+class StoredImage extends Image implements Arrayable, InlineFile, JsonSerializable, StorableFile
 {
-    use CanBeUploadedToProvider, EncodesContentToBase64, SerializesEmbeddableImage;
+    use CanBeUploadedToProvider, EncodesContentToBase64, SerializesInlineContent;
 
     public function __construct(public string $path, public ?string $disk = null) {}
 

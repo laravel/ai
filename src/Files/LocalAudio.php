@@ -5,19 +5,19 @@ namespace Laravel\Ai\Files;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Filesystem\Filesystem;
 use JsonSerializable;
-use Laravel\Ai\Contracts\Files\EmbeddableFile;
+use Laravel\Ai\Contracts\Files\InlineFile;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
 use Laravel\Ai\Files\Concerns\EncodesContentToBase64;
-use Laravel\Ai\Files\Concerns\SerializesEmbeddableAudio;
+use Laravel\Ai\Files\Concerns\SerializesInlineContent;
 use Laravel\Ai\PendingResponses\PendingTranscriptionGeneration;
 use Laravel\Ai\Transcription;
 use RuntimeException;
 
-class LocalAudio extends Audio implements Arrayable, EmbeddableFile, JsonSerializable, StorableFile, TranscribableAudio
+class LocalAudio extends Audio implements Arrayable, InlineFile, JsonSerializable, StorableFile, TranscribableAudio
 {
-    use CanBeUploadedToProvider, EncodesContentToBase64, SerializesEmbeddableAudio;
+    use CanBeUploadedToProvider, EncodesContentToBase64, SerializesInlineContent;
 
     public function __construct(public string $path, ?string $mimeType = null)
     {

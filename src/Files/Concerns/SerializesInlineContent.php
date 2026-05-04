@@ -2,17 +2,15 @@
 
 namespace Laravel\Ai\Files\Concerns;
 
-trait SerializesEmbeddedContent
+trait SerializesInlineContent
 {
     abstract public function base64(): string;
 
     abstract public function mimeType(): ?string;
 
-    abstract protected function defaultMimeType(): string;
-
     public function resolvedMimeType(): string
     {
-        return $this->mimeType() ?? $this->defaultMimeType();
+        return $this->mimeType() ?? static::DEFAULT_INLINE_MIME_TYPE;
     }
 
     public function asDataUri(): string

@@ -4,6 +4,8 @@ namespace Laravel\Ai\Files;
 
 abstract class Audio extends File
 {
+    public const DEFAULT_INLINE_MIME_TYPE = 'audio/mpeg';
+
     /**
      * Create a new audio from Base64 data.
      */

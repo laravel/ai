@@ -2,7 +2,7 @@
 
 namespace Laravel\Ai\Contracts\Files;
 
-interface EmbeddableFile
+interface InlineFile
 {
     /**
      * Get the Base64 encoded representation of the file.

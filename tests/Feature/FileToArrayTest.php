@@ -2,7 +2,7 @@
 
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
-use Laravel\Ai\Contracts\Files\EmbeddableFile;
+use Laravel\Ai\Contracts\Files\InlineFile;
 use Laravel\Ai\Files\Audio;
 use Laravel\Ai\Files\Document;
 use Laravel\Ai\Files\Image;
@@ -240,26 +240,26 @@ test('inline-capable files implement inline serialization contract', function ()
     Storage::disk('files')->put('image.png', 'stored image');
     Storage::disk('files')->put('audio.mp3', 'stored audio');
 
-    expect(Image::fromBase64('abc123'))->toBeInstanceOf(EmbeddableFile::class)
-        ->and(Image::fromPath(__DIR__.'/../Fixtures/Images/red.png'))->toBeInstanceOf(EmbeddableFile::class)
-        ->and(Image::fromStorage('image.png', 'files'))->toBeInstanceOf(EmbeddableFile::class)
-        ->and(Document::fromString('hello world'))->toBeInstanceOf(EmbeddableFile::class)
-        ->and(Document::fromPath(__DIR__.'/../Fixtures/document.txt'))->toBeInstanceOf(EmbeddableFile::class)
-        ->and(Document::fromStorage('document.txt', 'files'))->toBeInstanceOf(EmbeddableFile::class)
-        ->and(Audio::fromBase64('abc123'))->toBeInstanceOf(EmbeddableFile::class)
-        ->and(Audio::fromPath(__DIR__.'/../Fixtures/audio.mp3'))->toBeInstanceOf(EmbeddableFile::class)
-        ->and(Audio::fromStorage('audio.mp3', 'files'))->toBeInstanceOf(EmbeddableFile::class);
+    expect(Image::fromBase64('abc123'))->toBeInstanceOf(InlineFile::class)
+        ->and(Image::fromPath(__DIR__.'/../Fixtures/Images/red.png'))->toBeInstanceOf(InlineFile::class)
+        ->and(Image::fromStorage('image.png', 'files'))->toBeInstanceOf(InlineFile::class)
+        ->and(Document::fromString('hello world'))->toBeInstanceOf(InlineFile::class)
+        ->and(Document::fromPath(__DIR__.'/../Fixtures/document.txt'))->toBeInstanceOf(InlineFile::class)
+        ->and(Document::fromStorage('document.txt', 'files'))->toBeInstanceOf(InlineFile::class)
+        ->and(Audio::fromBase64('abc123'))->toBeInstanceOf(InlineFile::class)
+        ->and(Audio::fromPath(__DIR__.'/../Fixtures/audio.mp3'))->toBeInstanceOf(InlineFile::class)
+        ->and(Audio::fromStorage('audio.mp3', 'files'))->toBeInstanceOf(InlineFile::class);
 });
 
 test('remote and provider files do not expose inline serialization helpers', function () {
-    expect(Image::fromUrl('https://example.com/image.png'))->not->toBeInstanceOf(EmbeddableFile::class)
+    expect(Image::fromUrl('https://example.com/image.png'))->not->toBeInstanceOf(InlineFile::class)
         ->and(method_exists(Image::fromUrl('https://example.com/image.png'), 'asDataUri'))->toBeFalse()
-        ->and(Image::fromId('file_123'))->not->toBeInstanceOf(EmbeddableFile::class)
+        ->and(Image::fromId('file_123'))->not->toBeInstanceOf(InlineFile::class)
         ->and(method_exists(Image::fromId('file_123'), 'asDataUri'))->toBeFalse()
-        ->and(Document::fromUrl('https://example.com/document.pdf'))->not->toBeInstanceOf(EmbeddableFile::class)
+        ->and(Document::fromUrl('https://example.com/document.pdf'))->not->toBeInstanceOf(InlineFile::class)
         ->and(method_exists(Document::fromUrl('https://example.com/document.pdf'), 'asDataUri'))->toBeFalse()
-        ->and(Document::fromId('file_456'))->not->toBeInstanceOf(EmbeddableFile::class)
+        ->and(Document::fromId('file_456'))->not->toBeInstanceOf(InlineFile::class)
         ->and(method_exists(Document::fromId('file_456'), 'asDataUri'))->toBeFalse()
-        ->and(Audio::fromUrl('https://example.com/audio.mp3'))->not->toBeInstanceOf(EmbeddableFile::class)
+        ->and(Audio::fromUrl('https://example.com/audio.mp3'))->not->toBeInstanceOf(InlineFile::class)
         ->and(method_exists(Audio::fromUrl('https://example.com/audio.mp3'), 'asDataUri'))->toBeFalse();
 });

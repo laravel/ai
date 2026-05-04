@@ -6,6 +6,8 @@ use Illuminate\Http\UploadedFile;
 
 abstract class Image extends File
 {
+    public const DEFAULT_INLINE_MIME_TYPE = 'image/png';
+
     /**
      * Create a new image from Base64 data.
      */
