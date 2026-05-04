@@ -54,9 +54,6 @@ trait MapsMessages
      */
     protected function mapAssistantMessage(AssistantMessage|Message $message, array &$mapped): void
     {
-        // In-memory replay only: persisted assistant messages rehydrated by
-        // DatabaseConversationStore have no provider blocks and fall through
-        // to the rebuild path. See #380 for the persistence story.
         if ($message instanceof AssistantMessage && filled($message->providerContentBlocks)) {
             $mapped[] = [
                 'role' => 'assistant',
