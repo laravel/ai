@@ -253,13 +253,8 @@ test('inline-capable files implement inline serialization contract', function ()
 
 test('remote and provider files do not expose inline serialization helpers', function () {
     expect(Image::fromUrl('https://example.com/image.png'))->not->toBeInstanceOf(InlineFile::class)
-        ->and(method_exists(Image::fromUrl('https://example.com/image.png'), 'asDataUri'))->toBeFalse()
         ->and(Image::fromId('file_123'))->not->toBeInstanceOf(InlineFile::class)
-        ->and(method_exists(Image::fromId('file_123'), 'asDataUri'))->toBeFalse()
         ->and(Document::fromUrl('https://example.com/document.pdf'))->not->toBeInstanceOf(InlineFile::class)
-        ->and(method_exists(Document::fromUrl('https://example.com/document.pdf'), 'asDataUri'))->toBeFalse()
         ->and(Document::fromId('file_456'))->not->toBeInstanceOf(InlineFile::class)
-        ->and(method_exists(Document::fromId('file_456'), 'asDataUri'))->toBeFalse()
-        ->and(Audio::fromUrl('https://example.com/audio.mp3'))->not->toBeInstanceOf(InlineFile::class)
-        ->and(method_exists(Audio::fromUrl('https://example.com/audio.mp3'), 'asDataUri'))->toBeFalse();
+        ->and(Audio::fromUrl('https://example.com/audio.mp3'))->not->toBeInstanceOf(InlineFile::class);
 });

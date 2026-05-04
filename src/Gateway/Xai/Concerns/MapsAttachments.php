@@ -7,7 +7,9 @@ use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Base64Image;
+use Laravel\Ai\Files\Document;
 use Laravel\Ai\Files\File;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Files\LocalDocument;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\ProviderDocument;
@@ -15,12 +17,9 @@ use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\StoredDocument;
 use Laravel\Ai\Files\StoredImage;
-use Laravel\Ai\Gateway\Concerns\MapsUploadedFiles;
 
 trait MapsAttachments
 {
-    use MapsUploadedFiles;
-
     /**
      * Map the given Laravel attachments to xAI content parts.
      */
@@ -77,11 +76,11 @@ trait MapsAttachments
                 ]),
                 $attachment instanceof UploadedFile && $this->isImage($attachment) => [
                     'type' => 'input_image',
-                    'image_url' => $this->uploadedImageAsDataUri($attachment),
+                    'image_url' => Image::fromUpload($attachment)->asDataUri(),
                 ],
                 $attachment instanceof UploadedFile => [
                     'type' => 'input_file',
-                    'file_data' => $this->uploadedFileAsDataUri($attachment),
+                    'file_data' => Document::fromUpload($attachment)->asDataUri(),
                     'filename' => $attachment->getClientOriginalName(),
                 ],
                 default => throw new InvalidArgumentException('Unsupported attachment type ['.get_class($attachment).']'),
