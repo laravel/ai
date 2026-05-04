@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -13,10 +14,15 @@ use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Storage\DatabaseConversationStore;
+use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\RememberingToolUsingAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
 uses(RefreshDatabase::class);
+
+afterEach(function () {
+    Carbon::setTestNow();
+});
 
 test('it persists tool calls and results from a remembered agent prompt', function () {
     Http::fake([
@@ -133,3 +139,79 @@ test('it reloads legacy sparse keyed tool calls and results as lists', function 
         ->and($messages[1])->toBeInstanceOf(ToolResultMessage::class)
         ->and($messages[1]->toolResults->keys()->all())->toBe([0, 1]);
 });
+
+test('it returns the most recently active conversation after storing an assistant message', function () {
+    $store = new DatabaseConversationStore;
+
+    Carbon::setTestNow('2026-04-10 10:00:00');
+    $conversationA = $store->storeConversation(1, 'Conversation A');
+
+    Carbon::setTestNow('2026-04-10 10:01:00');
+    $store->storeConversation(1, 'Conversation B');
+
+    Carbon::setTestNow('2026-04-10 10:02:00');
+    $store->storeAssistantMessage(
+        $conversationA,
+        1,
+        databaseConversationStorePrompt(),
+        new AgentResponse(
+            'invocation-1',
+            'Hi',
+            new Usage,
+            new Meta('openai', 'gpt-5-mini'),
+        ),
+    );
+
+    expect($store->latestConversationId(1))->toBe($conversationA);
+});
+
+test('it returns the most recently active conversation after storing a user message', function () {
+    $store = new DatabaseConversationStore;
+
+    Carbon::setTestNow('2026-04-10 10:00:00');
+    $conversationA = $store->storeConversation(1, 'Conversation A');
+
+    Carbon::setTestNow('2026-04-10 10:01:00');
+    $store->storeConversation(1, 'Conversation B');
+
+    Carbon::setTestNow('2026-04-10 10:02:00');
+    $store->storeUserMessage($conversationA, 1, databaseConversationStorePrompt());
+
+    expect($store->latestConversationId(1))->toBe($conversationA);
+});
+
+test('it returns a deterministic conversation when updated timestamps match', function () {
+    $store = new DatabaseConversationStore;
+
+    Carbon::setTestNow('2026-04-10 10:00:00');
+
+    DB::table('agent_conversations')->insert([
+        [
+            'id' => '00000000-0000-0000-0000-000000000001',
+            'user_id' => 1,
+            'title' => 'Conversation A',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ],
+        [
+            'id' => '00000000-0000-0000-0000-000000000002',
+            'user_id' => 1,
+            'title' => 'Conversation B',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ],
+    ]);
+
+    expect($store->latestConversationId(1))->toBe('00000000-0000-0000-0000-000000000002');
+});
+
+function databaseConversationStorePrompt(): AgentPrompt
+{
+    return new AgentPrompt(
+        new AssistantAgent,
+        'Hello',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+}

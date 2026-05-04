@@ -24,6 +24,7 @@ class DatabaseConversationStore implements ConversationStore
         return DB::table('agent_conversations')
             ->where('user_id', $userId)
             ->orderBy('updated_at', 'desc')
+            ->orderBy('id', 'desc')
             ->first()?->id;
     }
 
@@ -51,22 +52,27 @@ class DatabaseConversationStore implements ConversationStore
     public function storeUserMessage(string $conversationId, string|int|null $userId, AgentPrompt $prompt): string
     {
         $messageId = (string) Str::uuid7();
+        $timestamp = now();
 
-        DB::table('agent_conversation_messages')->insert([
-            'id' => $messageId,
-            'conversation_id' => $conversationId,
-            'user_id' => $userId,
-            'agent' => $prompt->agent::class,
-            'role' => 'user',
-            'content' => $prompt->prompt,
-            'attachments' => $prompt->attachments->toJson(),
-            'tool_calls' => '[]',
-            'tool_results' => '[]',
-            'usage' => '[]',
-            'meta' => '[]',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        DB::transaction(function () use ($conversationId, $messageId, $prompt, $timestamp, $userId) {
+            DB::table('agent_conversation_messages')->insert([
+                'id' => $messageId,
+                'conversation_id' => $conversationId,
+                'user_id' => $userId,
+                'agent' => $prompt->agent::class,
+                'role' => 'user',
+                'content' => $prompt->prompt,
+                'attachments' => $prompt->attachments->toJson(),
+                'tool_calls' => '[]',
+                'tool_results' => '[]',
+                'usage' => '[]',
+                'meta' => '[]',
+                'created_at' => $timestamp,
+                'updated_at' => $timestamp,
+            ]);
+
+            $this->touchConversation($conversationId, $timestamp);
+        });
 
         return $messageId;
     }
@@ -79,27 +85,34 @@ class DatabaseConversationStore implements ConversationStore
         $messageId = (string) Str::uuid7();
         $timestamp = now();
 
-        DB::table('agent_conversation_messages')->insert([
-            'id' => $messageId,
-            'conversation_id' => $conversationId,
-            'user_id' => $userId,
-            'agent' => $prompt->agent::class,
-            'role' => 'assistant',
-            'content' => $response->text,
-            'attachments' => '[]',
-            'tool_calls' => json_encode($response->toolCalls->values()),
-            'tool_results' => json_encode($response->toolResults->values()),
-            'usage' => json_encode($response->usage),
-            'meta' => json_encode($response->meta),
-            'created_at' => $timestamp,
-            'updated_at' => $timestamp,
-        ]);
+        DB::transaction(function () use ($conversationId, $messageId, $prompt, $response, $timestamp, $userId) {
+            DB::table('agent_conversation_messages')->insert([
+                'id' => $messageId,
+                'conversation_id' => $conversationId,
+                'user_id' => $userId,
+                'agent' => $prompt->agent::class,
+                'role' => 'assistant',
+                'content' => $response->text,
+                'attachments' => '[]',
+                'tool_calls' => json_encode($response->toolCalls->values()),
+                'tool_results' => json_encode($response->toolResults->values()),
+                'usage' => json_encode($response->usage),
+                'meta' => json_encode($response->meta),
+                'created_at' => $timestamp,
+                'updated_at' => $timestamp,
+            ]);
 
+            $this->touchConversation($conversationId, $timestamp);
+        });
+
+        return $messageId;
+    }
+
+    private function touchConversation(string $conversationId, \DateTimeInterface $timestamp): void
+    {
         DB::table('agent_conversations')
             ->where('id', $conversationId)
             ->update(['updated_at' => $timestamp]);
-
-        return $messageId;
     }
 
     /**

@@ -17,7 +17,7 @@ return new class extends AiMigration
             $table->string('title');
             $table->timestamps();
 
-            $table->index(['user_id', 'updated_at']);
+            $table->index(['user_id', 'updated_at', 'id']);
         });
 
         Schema::create('agent_conversation_messages', function (Blueprint $table) {
