@@ -13,7 +13,7 @@ class AssistantMessage extends Message
      *
      * @var array<int, array<string, mixed>>
      */
-    public array $providerContentBlocks;
+    public array $providerContentBlocks = [];
 
     /**
      * Create a new text conversation message instance.
