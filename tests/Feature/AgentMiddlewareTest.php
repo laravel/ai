@@ -1,6 +1,5 @@
 <?php
 
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Event;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Events\AgentPrompted;
@@ -11,6 +10,7 @@ use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
+use Tests\Fixtures\FakeConversationStore;
 
 test('agent middleware is invoked', function () {
     AssistantAgent::fake([
@@ -67,33 +67,7 @@ test('agent prompted event receives prompt when middleware short circuits', func
 });
 
 test('stream response conversation id is available after remembered conversations stream completes', function () {
-    app()->instance(ConversationStore::class, new class implements ConversationStore
-    {
-        public function latestConversationId(string|int $userId): ?string
-        {
-            return null;
-        }
-
-        public function storeConversation(string|int|null $userId, string $title): string
-        {
-            return 'conversation-123';
-        }
-
-        public function storeUserMessage(string $conversationId, string|int|null $userId, AgentPrompt $prompt): string
-        {
-            return 'user-message-123';
-        }
-
-        public function storeAssistantMessage(string $conversationId, string|int|null $userId, AgentPrompt $prompt, AgentResponse $response): string
-        {
-            return 'assistant-message-123';
-        }
-
-        public function getLatestConversationMessages(string $conversationId, int $limit): Collection
-        {
-            return new Collection;
-        }
-    });
+    app()->instance(ConversationStore::class, new FakeConversationStore);
 
     RememberingAssistantAgent::fake([
         'Fake response',

@@ -65,6 +65,8 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
         if ($this->streamedResponse) {
             $callback($this->streamedResponse);
 
+            $this->syncConversationFromStreamedResponse();
+
             return $this;
         }
 
@@ -160,6 +162,11 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
             call_user_func($callback, $this->streamedResponse);
         }
 
+        $this->syncConversationFromStreamedResponse();
+    }
+
+    protected function syncConversationFromStreamedResponse(): void
+    {
         $this->conversationId = $this->streamedResponse->conversationId;
         $this->conversationUser = $this->streamedResponse->conversationUser;
     }
