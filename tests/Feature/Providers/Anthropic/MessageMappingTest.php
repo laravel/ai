@@ -290,7 +290,7 @@ test('non-empty tool arguments preserve shape on assistant replay', function () 
     expect($toolUse['input'])->toBe(['query' => 'test']);
 });
 
-test('assistant message with contentBlocks is replayed verbatim preserving order', function () {
+test('assistant message with provider content blocks is replayed verbatim preserving order', function () {
     $contentBlocks = [
         ['type' => 'text', 'text' => 'Let me consult the advisor.'],
         [
@@ -338,7 +338,7 @@ test('assistant message with contentBlocks is replayed verbatim preserving order
     expect($serverToolUse['input'])->toBeInstanceOf(stdClass::class);
 });
 
-test('parsed response populates contentBlocks on the assistant message', function () {
+test('parsed response populates provider content blocks on the assistant message', function () {
     Http::fake([
         'api.anthropic.com/*' => Http::response([
             'id' => 'msg_1',
@@ -368,14 +368,22 @@ test('parsed response populates contentBlocks on the assistant message', functio
     $response = (new AssistantAgent)->prompt('hi', provider: 'anthropic');
 
     $assistant = $response->messages->whereInstanceOf(AssistantMessage::class)->first();
+    $blocks = $assistant->providerContentBlocks;
 
     expect($assistant)->not->toBeNull()
-        ->and(array_column($assistant->contentBlocks, 'type'))->toBe([
-            'text',
-            'server_tool_use',
-            'advisor_tool_result',
-            'text',
-        ]);
+        ->and($blocks)->toHaveCount(4)
+        ->and($blocks[0])->toBe(['type' => 'text', 'text' => 'Consulted the advisor.'])
+        ->and($blocks[1])->toMatchArray([
+            'type' => 'server_tool_use',
+            'id' => 'srvtoolu_1',
+            'name' => 'advisor',
+        ])
+        ->and($blocks[2])->toBe([
+            'type' => 'advisor_tool_result',
+            'tool_use_id' => 'srvtoolu_1',
+            'content' => ['type' => 'advisor_result', 'text' => 'Proceed.'],
+        ])
+        ->and($blocks[3])->toBe(['type' => 'text', 'text' => 'Done.']);
 });
 
 test('assistant message produced by parser round-trips through mapping with server blocks intact', function () {
@@ -413,16 +421,26 @@ test('assistant message produced by parser round-trips through mapping with serv
     $method->setAccessible(true);
 
     $mapped = $method->invoke($gateway, [$assistant]);
+    $content = $mapped[0]['content'];
 
-    expect(array_column($mapped[0]['content'], 'type'))->toBe([
-        'text',
-        'server_tool_use',
-        'web_search_tool_result',
-        'text',
-    ]);
+    expect($content)->toHaveCount(4)
+        ->and($content[0])->toBe(['type' => 'text', 'text' => 'Searching.'])
+        ->and($content[1])->toMatchArray([
+            'type' => 'server_tool_use',
+            'id' => 'srvtoolu_1',
+            'name' => 'web_search',
+        ])
+        ->and($content[1]['input'])->toBeInstanceOf(stdClass::class)
+        ->and((array) $content[1]['input'])->toBe(['query' => 'laravel ai'])
+        ->and($content[2])->toBe([
+            'type' => 'web_search_tool_result',
+            'tool_use_id' => 'srvtoolu_1',
+            'content' => [['title' => 'Laravel', 'url' => 'https://laravel.com']],
+        ])
+        ->and($content[3])->toBe(['type' => 'text', 'text' => 'Found it.']);
 });
 
-test('assistant message without contentBlocks falls back to text plus tool calls rebuild', function () {
+test('assistant message without provider content blocks falls back to text plus tool calls rebuild', function () {
     $assistant = new AssistantMessage('Hello');
 
     $gateway = app(AnthropicGateway::class);
@@ -435,6 +453,24 @@ test('assistant message without contentBlocks falls back to text plus tool calls
         ->and($mapped[0]['content'])->toBe([
             ['type' => 'text', 'text' => 'Hello'],
         ]);
+});
+
+test('thinking and redacted_thinking blocks are preserved on replay', function () {
+    $contentBlocks = [
+        ['type' => 'thinking', 'thinking' => 'Considering options.', 'signature' => 'sig_1'],
+        ['type' => 'redacted_thinking', 'data' => 'opaque'],
+        ['type' => 'text', 'text' => 'Answer.'],
+    ];
+
+    $assistant = new AssistantMessage('Answer.', null, $contentBlocks);
+
+    $gateway = app(AnthropicGateway::class);
+    $method = (new ReflectionClass($gateway))->getMethod('mapMessages');
+    $method->setAccessible(true);
+
+    $mapped = $method->invoke($gateway, [$assistant]);
+
+    expect($mapped[0]['content'])->toBe($contentBlocks);
 });
 
 test('system instructions are not in messages array', function () {
