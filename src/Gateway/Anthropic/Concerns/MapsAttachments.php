@@ -84,8 +84,8 @@ trait MapsAttachments
                     'type' => 'document',
                     'source' => $this->documentSource(
                         $attachment->mimeType(),
-                        fn () => file_get_contents($attachment->path),
-                        fn () => base64_encode(file_get_contents($attachment->path)),
+                        fn () => $attachment->content(),
+                        fn () => $attachment->base64(),
                     ),
                 ],
                 $attachment instanceof RemoteDocument => [
