@@ -8,6 +8,7 @@ use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
+use Laravel\Ai\Messages\MessageRole;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
@@ -81,7 +82,7 @@ class DatabaseConversationStore implements ConversationStore
 
         if ($response->messages->isNotEmpty()) {
             $meta['conversation_message_sequence'] = $response->messages
-                ->map(fn (Message $message) => $this->serializeMessage($message, $response->text))
+                ->map(fn (Message $message) => $this->serializeMessage($message))
                 ->values()
                 ->all();
         }
@@ -137,31 +138,24 @@ class DatabaseConversationStore implements ConversationStore
     /**
      * @return array<string, mixed>
      */
-    private function serializeMessage(Message $message, string $responseText): array
+    private function serializeMessage(Message $message): array
     {
         if ($message instanceof AssistantMessage) {
-            $serialized = [
-                'role' => 'assistant',
+            return [
+                'role' => MessageRole::Assistant->value,
+                'content' => $message->content,
                 'tool_call_keys' => $message->toolCalls
-                    ->map(fn (ToolCall $toolCall) => $this->toolCallKey($toolCall))
+                    ->map(fn (ToolCall $toolCall) => $this->itemKey($toolCall))
                     ->values()
                     ->all(),
             ];
-
-            if (filled($message->content)) {
-                $serialized['content'] = $message->content === $responseText
-                    ? ['source' => 'record']
-                    : ['value' => $message->content];
-            }
-
-            return $serialized;
         }
 
         if ($message instanceof ToolResultMessage) {
             return [
-                'role' => 'tool_result',
+                'role' => MessageRole::ToolResult->value,
                 'tool_result_keys' => $message->toolResults
-                    ->map(fn (ToolResult $toolResult) => $this->toolResultKey($toolResult))
+                    ->map(fn (ToolResult $toolResult) => $this->itemKey($toolResult))
                     ->values()
                     ->all(),
             ];
@@ -181,45 +175,30 @@ class DatabaseConversationStore implements ConversationStore
     {
         $toolCalls = $this->hydrateToolCalls(json_decode($record->tool_calls, true) ?: []);
         $toolResults = $this->hydrateToolResults(json_decode($record->tool_results, true) ?: []);
-        $toolCallsByKey = $toolCalls->keyBy(fn (ToolCall $toolCall) => $this->toolCallKey($toolCall));
-        $toolResultsByKey = $toolResults->keyBy(fn (ToolResult $toolResult) => $this->toolResultKey($toolResult));
+        $toolCallsByKey = $toolCalls->keyBy(fn (ToolCall $toolCall) => $this->itemKey($toolCall));
+        $toolResultsByKey = $toolResults->keyBy(fn (ToolResult $toolResult) => $this->itemKey($toolResult));
 
         return collect($sequence)
             ->map(fn (array $message) => match ($message['role'] ?? null) {
-                'assistant' => new AssistantMessage(
-                    $this->hydrateAssistantContent($record, $message),
+                MessageRole::Assistant->value => new AssistantMessage(
+                    (string) ($message['content'] ?? ''),
                     collect($message['tool_call_keys'] ?? [])
                         ->map(fn (string $key) => $toolCallsByKey->get($key))
                         ->filter()
                         ->values()
                 ),
-                'tool_result' => new ToolResultMessage(
+                MessageRole::ToolResult->value => new ToolResultMessage(
                     collect($message['tool_result_keys'] ?? [])
                         ->map(fn (string $key) => $toolResultsByKey->get($key))
                         ->filter()
                         ->values()
                 ),
-                default => new Message($message['role'] ?? 'assistant', $message['content'] ?? ''),
+                default => new Message(
+                    MessageRole::tryFrom((string) ($message['role'] ?? '')) ?? MessageRole::Assistant,
+                    $message['content'] ?? ''
+                ),
             })
             ->values();
-    }
-
-    /**
-     * @param  array<string, mixed>  $message
-     */
-    private function hydrateAssistantContent(object $record, array $message): string
-    {
-        $content = $message['content'] ?? [];
-
-        if (! is_array($content)) {
-            return is_string($content) ? $content : '';
-        }
-
-        if (($content['source'] ?? null) === 'record') {
-            return $record->content;
-        }
-
-        return $content['value'] ?? '';
     }
 
     /**
@@ -241,7 +220,7 @@ class DatabaseConversationStore implements ConversationStore
         $messages = collect();
 
         if ($reasoningGroups->count() > 1) {
-            $resultsByCallId = $toolResults->keyBy(fn (ToolResult $result) => $this->toolResultKey($result));
+            $resultsByCallId = $toolResults->keyBy(fn (ToolResult $result) => $this->itemKey($result));
 
             $toolCalls
                 ->groupBy(fn (ToolCall $toolCall) => $toolCall->reasoningId ?? '')
@@ -250,7 +229,7 @@ class DatabaseConversationStore implements ConversationStore
                     $messages->push(new AssistantMessage('', $group));
 
                     $groupResults = $group
-                        ->map(fn (ToolCall $toolCall) => $resultsByCallId->get($this->toolCallKey($toolCall)))
+                        ->map(fn (ToolCall $toolCall) => $resultsByCallId->get($this->itemKey($toolCall)))
                         ->filter()
                         ->values();
 
@@ -274,7 +253,6 @@ class DatabaseConversationStore implements ConversationStore
     }
 
     /**
-     * @param  array<int, array<string, mixed>>  $toolCalls
      * @return Collection<int, ToolCall>
      */
     private function hydrateToolCalls(array $toolCalls): Collection
@@ -290,7 +268,6 @@ class DatabaseConversationStore implements ConversationStore
     }
 
     /**
-     * @param  array<int, array<string, mixed>>  $toolResults
      * @return Collection<int, ToolResult>
      */
     private function hydrateToolResults(array $toolResults): Collection
@@ -304,13 +281,8 @@ class DatabaseConversationStore implements ConversationStore
         ));
     }
 
-    private function toolCallKey(ToolCall $toolCall): string
+    private function itemKey(ToolCall|ToolResult $item): string
     {
-        return $toolCall->resultId ?? $toolCall->id;
-    }
-
-    private function toolResultKey(ToolResult $toolResult): string
-    {
-        return $toolResult->resultId ?? $toolResult->id;
+        return $item->resultId ?? $item->id;
     }
 }
