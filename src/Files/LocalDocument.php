@@ -73,5 +73,4 @@ class LocalDocument extends Document implements Arrayable, JsonSerializable, Sto
     {
         return $this->content();
     }
-
 }

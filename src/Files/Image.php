@@ -3,12 +3,9 @@
 namespace Laravel\Ai\Files;
 
 use Illuminate\Http\UploadedFile;
-use Laravel\Ai\Files\Concerns\HasBinaryContent;
 
 abstract class Image extends File
 {
-    use HasBinaryContent;
-
     protected function defaultMimeType(): string
     {
         return 'image/png';

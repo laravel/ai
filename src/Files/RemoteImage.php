@@ -37,5 +37,4 @@ class RemoteImage extends Image implements Arrayable, JsonSerializable, Storable
     {
         return $this->toArray();
     }
-
 }

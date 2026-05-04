@@ -2,12 +2,8 @@
 
 namespace Laravel\Ai\Files;
 
-use Laravel\Ai\Files\Concerns\HasBinaryContent;
-
 abstract class Audio extends File
 {
-    use HasBinaryContent;
-
     protected function defaultMimeType(): string
     {
         return 'audio/mpeg';

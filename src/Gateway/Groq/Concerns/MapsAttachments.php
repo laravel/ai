@@ -7,14 +7,13 @@ use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Files\File;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\StoredImage;
-use Laravel\Ai\Gateway\Concerns\MapsUploadedFiles;
 
 trait MapsAttachments
 {
-    use MapsUploadedFiles;
     /**
      * Map the given Laravel attachments to Chat Completions content parts.
      */
@@ -46,7 +45,7 @@ trait MapsAttachments
                 ],
                 $attachment instanceof UploadedFile && $this->isImage($attachment) => [
                     'type' => 'image_url',
-                    'image_url' => ['url' => $this->uploadedFileAsDataUri($attachment)],
+                    'image_url' => ['url' => Image::fromUpload($attachment)->asDataUri()],
                 ],
                 default => throw new InvalidArgumentException('Groq does not support document attachments. Only image attachments are supported.'),
             };
@@ -65,5 +64,4 @@ trait MapsAttachments
             'image/webp',
         ]);
     }
-
 }

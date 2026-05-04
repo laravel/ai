@@ -10,6 +10,8 @@ abstract class File implements HasName
 
     public ?string $mime = null;
 
+    abstract protected function defaultMimeType(): string;
+
     /**
      * Get the displayable name of the file.
      */
@@ -36,5 +38,20 @@ abstract class File implements HasName
         $this->mime = $mimeType;
 
         return $this;
+    }
+
+    public function base64(): string
+    {
+        return base64_encode($this->content());
+    }
+
+    public function resolvedMimeType(): string
+    {
+        return $this->mimeType() ?? $this->defaultMimeType();
+    }
+
+    public function asDataUri(): string
+    {
+        return 'data:'.$this->resolvedMimeType().';base64,'.$this->base64();
     }
 }

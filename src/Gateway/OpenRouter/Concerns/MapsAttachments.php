@@ -7,18 +7,18 @@ use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Base64Image;
+use Laravel\Ai\Files\Document;
 use Laravel\Ai\Files\File;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Files\LocalDocument;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\StoredDocument;
 use Laravel\Ai\Files\StoredImage;
-use Laravel\Ai\Gateway\Concerns\MapsUploadedFiles;
 
 trait MapsAttachments
 {
-    use MapsUploadedFiles;
     /**
      * Map the given Laravel attachments to Chat Completions content parts.
      */
@@ -78,13 +78,13 @@ trait MapsAttachments
                 ],
                 $attachment instanceof UploadedFile && $this->isImage($attachment) => [
                     'type' => 'image_url',
-                    'image_url' => ['url' => $this->uploadedFileAsDataUri($attachment)],
+                    'image_url' => ['url' => Image::fromUpload($attachment)->asDataUri()],
                 ],
                 $attachment instanceof UploadedFile => [
                     'type' => 'file',
                     'file' => [
                         'filename' => $attachment->getClientOriginalName(),
-                        'file_data' => $this->uploadedFileAsDataUri($attachment),
+                        'file_data' => Document::fromUpload($attachment)->asDataUri(),
                     ],
                 ],
                 default => throw new InvalidArgumentException('Unsupported attachment type ['.get_class($attachment).']'),
@@ -104,5 +104,4 @@ trait MapsAttachments
             'image/webp',
         ]);
     }
-
 }

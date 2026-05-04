@@ -48,5 +48,4 @@ class RemoteAudio extends Audio implements Arrayable, JsonSerializable, Storable
     {
         return $this->toArray();
     }
-
 }
