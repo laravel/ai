@@ -166,6 +166,33 @@ test('local image attachment without explicit mime type detects mime from file',
     });
 });
 
+test('remote image attachment maps to file data without fetching mime type', function () {
+    Http::preventStrayRequests();
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('I see an image'),
+    ]);
+
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [Files\Image::fromUrl('https://example.com/image.png')],
+        provider: 'gemini',
+    );
+
+    Http::assertSent(function ($request) {
+        $parts = $request->data()['contents'][0]['parts'];
+
+        foreach ($parts as $part) {
+            if (isset($part['fileData'])) {
+                return $part['fileData'] === [
+                    'fileUri' => 'https://example.com/image.png',
+                ];
+            }
+        }
+
+        return false;
+    });
+});
+
 test('base64 pdf document maps to inline data', function () {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('I see a PDF'),
@@ -186,6 +213,33 @@ test('base64 pdf document maps to inline data', function () {
             if (isset($part['inlineData'])) {
                 return $part['inlineData']['mimeType'] === 'application/pdf'
                     && $part['inlineData']['data'] === base64_encode('fake-pdf-content');
+            }
+        }
+
+        return false;
+    });
+});
+
+test('remote document attachment maps to file data without fetching mime type', function () {
+    Http::preventStrayRequests();
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('I see a document'),
+    ]);
+
+    agent('You are helpful.')->prompt(
+        'What is in this document?',
+        attachments: [Files\Document::fromUrl('https://example.com/document.pdf')],
+        provider: 'gemini',
+    );
+
+    Http::assertSent(function ($request) {
+        $parts = $request->data()['contents'][0]['parts'];
+
+        foreach ($parts as $part) {
+            if (isset($part['fileData'])) {
+                return $part['fileData'] === [
+                    'fileUri' => 'https://example.com/document.pdf',
+                ];
             }
         }
 

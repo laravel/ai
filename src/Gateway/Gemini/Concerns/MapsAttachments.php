@@ -45,7 +45,7 @@ trait MapsAttachments
                 ],
                 $attachment instanceof RemoteImage => [
                     'fileData' => array_filter([
-                        'mimeType' => $attachment->resolvedMimeType(),
+                        'mimeType' => $attachment->mime,
                         'fileUri' => $attachment->url,
                     ]),
                 ],
@@ -80,7 +80,7 @@ trait MapsAttachments
                 ],
                 $attachment instanceof RemoteDocument => [
                     'fileData' => array_filter([
-                        'mimeType' => $attachment->resolvedMimeType(),
+                        'mimeType' => $attachment->mime,
                         'fileUri' => $attachment->url,
                     ]),
                 ],
