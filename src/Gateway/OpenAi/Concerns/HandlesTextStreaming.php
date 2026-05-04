@@ -124,8 +124,6 @@ trait HandlesTextStreaming
                 $delta = (string) ($data['delta'] ?? '');
 
                 if ($delta !== '') {
-                    $this->appendReasoningSummaryDelta($reasoningItems, $data);
-
                     if ($reasoningId === '') {
                         $reasoningId = $this->generateEventId();
 
@@ -147,20 +145,11 @@ trait HandlesTextStreaming
                 continue;
             }
 
-            if ($type === 'response.reasoning_summary_text.done') {
-                $this->recordReasoningSummaryText($reasoningItems, $data);
-
-                continue;
-            }
-
-            if ($type === 'response.output_item.added' && ($data['item']['type'] ?? '') === 'reasoning') {
-                $this->recordReasoningItem($reasoningItems, $data['item'], $data['output_index'] ?? null);
-
-                continue;
-            }
-
             if ($type === 'response.output_item.done' && ($data['item']['type'] ?? '') === 'reasoning') {
-                $this->recordReasoningItem($reasoningItems, $data['item'], $data['output_index'] ?? null);
+                $reasoningItems[] = [
+                    'id' => $data['item']['id'] ?? null,
+                    'summary' => $data['item']['summary'] ?? [],
+                ];
 
                 if ($reasoningId !== '') {
                     yield (new ReasoningEnd(
@@ -177,15 +166,6 @@ trait HandlesTextStreaming
 
             if ($type === 'response.output_item.done') {
                 $itemType = $data['item']['type'] ?? '';
-
-                if ($itemType === 'function_call') {
-                    $index = (int) ($data['output_index'] ?? count($pendingToolCalls));
-
-                    $this->upsertPendingToolCall($pendingToolCalls, $index, $data['item'] ?? []);
-                    $this->attachLatestReasoning($pendingToolCalls[$index], $reasoningItems);
-
-                    continue;
-                }
 
                 if ($itemType !== 'function_call' && str_ends_with((string) $itemType, '_call')) {
                     yield (new ProviderToolEvent(
@@ -221,8 +201,21 @@ trait HandlesTextStreaming
             if (($data['item']['type'] ?? '') === 'function_call' && $type === 'response.output_item.added') {
                 $index = (int) ($data['output_index'] ?? count($pendingToolCalls));
 
-                $this->upsertPendingToolCall($pendingToolCalls, $index, $data['item']);
-                $this->attachLatestReasoning($pendingToolCalls[$index], $reasoningItems);
+                $toolCall = [
+                    'id' => $data['item']['id'] ?? null,
+                    'call_id' => $data['item']['call_id'] ?? null,
+                    'name' => $data['item']['name'] ?? null,
+                    'arguments' => '',
+                ];
+
+                if (filled($reasoningItems)) {
+                    $latestReasoning = end($reasoningItems);
+
+                    $toolCall['reasoning_id'] = $latestReasoning['id'];
+                    $toolCall['reasoning_summary'] = $latestReasoning['summary'] ?? [];
+                }
+
+                $pendingToolCalls[$index] = $toolCall;
 
                 continue;
             }
@@ -244,36 +237,31 @@ trait HandlesTextStreaming
             if ($type === 'response.function_call_arguments.done') {
                 $callId = $data['item_id'] ?? null;
                 $arguments = $data['arguments'] ?? '';
-                $matched = false;
 
                 foreach ($pendingToolCalls as &$call) {
                     if (($call['id'] ?? null) === $callId) {
-                        $matched = true;
-                        $call['output_index'] = $data['output_index'] ?? ($call['output_index'] ?? null);
-
                         if ($arguments !== '') {
                             $call['arguments'] = $arguments;
                         }
 
-                        $this->attachLatestReasoning($call, $reasoningItems);
+                        yield (new ToolCallEvent(
+                            $this->generateEventId(),
+                            new ToolCall(
+                                $call['id'],
+                                $call['name'],
+                                json_decode($call['arguments'] ?? '{}', true) ?? [],
+                                $call['call_id'] ?? null,
+                                $call['reasoning_id'] ?? null,
+                                $call['reasoning_summary'] ?? null,
+                            ),
+                            time(),
+                        ))->withInvocationId($invocationId);
 
                         break;
                     }
                 }
 
                 unset($call);
-
-                if (! $matched) {
-                    $index = (int) ($data['output_index'] ?? count($pendingToolCalls));
-
-                    $this->upsertPendingToolCall($pendingToolCalls, $index, [
-                        'id' => $callId,
-                        'call_id' => $data['call_id'] ?? null,
-                        'name' => $data['name'] ?? null,
-                        'arguments' => $arguments,
-                    ]);
-                    $this->attachLatestReasoning($pendingToolCalls[$index], $reasoningItems);
-                }
 
                 continue;
             }
@@ -283,8 +271,6 @@ trait HandlesTextStreaming
                 $responseData = $response;
                 $responseId = $response['id'] ?? $responseId;
                 $responseUsage = $response['usage'] ?? [];
-
-                $this->syncPendingToolCallsFromOutput($pendingToolCalls, $response['output'] ?? []);
 
                 $usage = new Usage(
                     ($responseUsage['input_tokens'] ?? 0) - ($responseUsage['input_tokens_details']['cached_tokens'] ?? 0),
@@ -342,22 +328,11 @@ trait HandlesTextStreaming
         ?int $maxSteps,
         ?int $timeout = null,
     ): Generator {
-        foreach ($pendingToolCalls as &$pendingToolCall) {
-            $this->attachLatestReasoning($pendingToolCall, $reasoningItems);
-        }
-        unset($pendingToolCall);
-
         $mappedToolCalls = $this->mapStreamToolCalls($pendingToolCalls);
 
         $toolResults = [];
 
         foreach ($mappedToolCalls as $toolCall) {
-            yield (new ToolCallEvent(
-                $this->generateEventId(),
-                $toolCall,
-                time(),
-            ))->withInvocationId($invocationId);
-
             $tool = $this->findTool($toolCall->name, $tools);
 
             if ($tool === null) {
@@ -459,187 +434,6 @@ trait HandlesTextStreaming
             $tc['reasoning_id'] ?? null,
             $tc['reasoning_summary'] ?? null,
         ), array_values($toolCalls));
-    }
-
-    protected function recordReasoningItem(array &$reasoningItems, array $item, int|string|null $outputIndex = null): void
-    {
-        $id = $item['id'] ?? null;
-
-        if (! filled($id)) {
-            return;
-        }
-
-        $reasoningItem = &$this->reasoningItem($reasoningItems, $id);
-
-        if ($outputIndex !== null) {
-            $reasoningItem['output_index'] = (int) $outputIndex;
-        }
-
-        if (isset($item['summary']) && is_array($item['summary']) && filled($item['summary'])) {
-            $reasoningItem['summary'] = array_values($item['summary']);
-        }
-    }
-
-    protected function appendReasoningSummaryDelta(array &$reasoningItems, array $event): void
-    {
-        $itemId = $event['item_id'] ?? null;
-        $delta = (string) ($event['delta'] ?? '');
-
-        if (! filled($itemId) || $delta === '') {
-            return;
-        }
-
-        $summaryIndex = (int) ($event['summary_index'] ?? 0);
-        $reasoningItem = &$this->reasoningItem($reasoningItems, $itemId);
-
-        if (isset($event['output_index'])) {
-            $reasoningItem['output_index'] = (int) $event['output_index'];
-        }
-
-        $summary = $reasoningItem['summary'][$summaryIndex] ?? ['type' => 'summary_text', 'text' => ''];
-        $summary['text'] = ($summary['text'] ?? '').$delta;
-        $summary['type'] = $summary['type'] ?? 'summary_text';
-        $reasoningItem['summary'][$summaryIndex] = $summary;
-        $reasoningItem['summary'] = array_values($reasoningItem['summary']);
-    }
-
-    protected function recordReasoningSummaryText(array &$reasoningItems, array $event): void
-    {
-        $itemId = $event['item_id'] ?? null;
-
-        if (! filled($itemId)) {
-            return;
-        }
-
-        $summaryIndex = (int) ($event['summary_index'] ?? 0);
-        $reasoningItem = &$this->reasoningItem($reasoningItems, $itemId);
-
-        if (isset($event['output_index'])) {
-            $reasoningItem['output_index'] = (int) $event['output_index'];
-        }
-
-        $reasoningItem['summary'][$summaryIndex] = [
-            'type' => 'summary_text',
-            'text' => (string) ($event['text'] ?? ''),
-        ];
-        $reasoningItem['summary'] = array_values($reasoningItem['summary']);
-    }
-
-    protected function &reasoningItem(array &$reasoningItems, string $id): array
-    {
-        foreach ($reasoningItems as &$reasoningItem) {
-            if (($reasoningItem['id'] ?? null) === $id) {
-                return $reasoningItem;
-            }
-        }
-
-        $reasoningItems[] = ['id' => $id, 'summary' => []];
-
-        return $reasoningItems[array_key_last($reasoningItems)];
-    }
-
-    protected function upsertPendingToolCall(array &$toolCalls, int|string $index, array $item): void
-    {
-        $toolCalls[$index] ??= ['arguments' => ''];
-        $toolCalls[$index]['output_index'] = (int) $index;
-
-        foreach (['id', 'call_id', 'name'] as $key) {
-            if (array_key_exists($key, $item) && $item[$key] !== null) {
-                $toolCalls[$index][$key] = $item[$key];
-            }
-        }
-
-        if (array_key_exists('arguments', $item)) {
-            $toolCalls[$index]['arguments'] = (string) ($item['arguments'] ?? '');
-        }
-    }
-
-    protected function syncPendingToolCallsFromOutput(array &$pendingToolCalls, array $output): void
-    {
-        $latestReasoning = null;
-
-        foreach ($output as $index => $item) {
-            $type = $item['type'] ?? '';
-
-            if ($type === 'reasoning') {
-                $latestReasoning = [
-                    'id' => $item['id'] ?? null,
-                    'summary' => $item['summary'] ?? [],
-                ];
-
-                continue;
-            }
-
-            if ($type !== 'function_call') {
-                continue;
-            }
-
-            $toolCallIndex = $this->pendingToolCallIndex($pendingToolCalls, $item) ?? $index;
-
-            $this->upsertPendingToolCall($pendingToolCalls, $toolCallIndex, $item);
-
-            if ($latestReasoning !== null) {
-                $this->attachReasoning($pendingToolCalls[$toolCallIndex], $latestReasoning);
-            }
-        }
-    }
-
-    protected function pendingToolCallIndex(array $pendingToolCalls, array $item): int|string|null
-    {
-        foreach ($pendingToolCalls as $index => $toolCall) {
-            if (filled($item['id'] ?? null) && ($toolCall['id'] ?? null) === $item['id']) {
-                return $index;
-            }
-
-            if (filled($item['call_id'] ?? null) && ($toolCall['call_id'] ?? null) === $item['call_id']) {
-                return $index;
-            }
-        }
-
-        return null;
-    }
-
-    protected function attachLatestReasoning(array &$toolCall, array $reasoningItems): void
-    {
-        if (! filled($reasoningItems)) {
-            return;
-        }
-
-        $latestReasoning = $this->latestReasoningForToolCall($toolCall, $reasoningItems);
-
-        if ($latestReasoning !== null) {
-            $this->attachReasoning($toolCall, $latestReasoning);
-        }
-    }
-
-    protected function latestReasoningForToolCall(array $toolCall, array $reasoningItems): ?array
-    {
-        $toolOutputIndex = $toolCall['output_index'] ?? null;
-        $latestReasoning = null;
-
-        if ($toolOutputIndex !== null) {
-            foreach ($reasoningItems as $reasoningItem) {
-                if (! isset($reasoningItem['output_index'])) {
-                    continue;
-                }
-
-                if ((int) $reasoningItem['output_index'] <= (int) $toolOutputIndex) {
-                    $latestReasoning = $reasoningItem;
-                }
-            }
-        }
-
-        return $latestReasoning ?? (end($reasoningItems) ?: null);
-    }
-
-    protected function attachReasoning(array &$toolCall, array $reasoning): void
-    {
-        if (isset($toolCall['reasoning_id']) || ! filled($reasoning['id'] ?? null)) {
-            return;
-        }
-
-        $toolCall['reasoning_id'] = $reasoning['id'];
-        $toolCall['reasoning_summary'] = $reasoning['summary'] ?? [];
     }
 
     /**

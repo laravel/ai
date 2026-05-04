@@ -1,5 +1,6 @@
 <?php
 
+use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\ProviderOptionsAgent;
@@ -66,3 +67,24 @@ test('provider options are persisted in tool call follow up requests', function 
         ->and(data_get($followUpBody, 'frequency_penalty'))->toBe(0.5)
         ->and($followUpBody)->toHaveKey('previous_response_id');
 });
+
+function fakeOpenAiToolCallResponse(): PromiseInterface
+{
+    return Http::response([
+        'id' => 'resp_tool_123',
+        'status' => 'completed',
+        'model' => 'gpt-5.4',
+        'output' => [[
+            'type' => 'function_call',
+            'id' => 'fc_123',
+            'call_id' => 'call_123',
+            'name' => 'FixedNumberGenerator',
+            'arguments' => '{}',
+            'status' => 'completed',
+        ]],
+        'usage' => [
+            'input_tokens' => 10,
+            'output_tokens' => 5,
+        ],
+    ]);
+}
