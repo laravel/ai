@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Tests\Fixtures\Agents\NamedToolAgent;
 use Tests\Fixtures\Agents\NullableToolAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
@@ -68,6 +69,46 @@ test('nullable tool parameters use OpenAPI-style nullable format', function () {
         return $props['name'] === ['type' => 'string']
             && $props['email'] === ['type' => 'string', 'nullable' => true]
             && $props['age'] === ['type' => 'integer', 'nullable' => true];
+    });
+});
+
+test('tool with a name() method emits the declared name', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    (new NamedToolAgent('aliased_tool'))->prompt('Search', provider: 'gemini');
+
+    Http::assertSent(function ($request) {
+        $names = [];
+
+        foreach ($request->data()['tools'] ?? [] as $toolGroup) {
+            foreach ($toolGroup['function_declarations'] ?? [] as $decl) {
+                $names[] = $decl['name'];
+            }
+        }
+
+        return in_array('aliased_tool', $names, true);
+    });
+});
+
+test('tool without a name() method falls back to class basename', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    (new ToolUsingAgent(fixed: true))->prompt('Generate', provider: 'gemini');
+
+    Http::assertSent(function ($request) {
+        $names = [];
+
+        foreach ($request->data()['tools'] ?? [] as $toolGroup) {
+            foreach ($toolGroup['function_declarations'] ?? [] as $decl) {
+                $names[] = $decl['name'];
+            }
+        }
+
+        return in_array('FixedNumberGenerator', $names, true);
     });
 });
 

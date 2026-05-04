@@ -253,6 +253,73 @@ test('non-empty tool arguments preserve shape on assistant replay', function () 
     });
 });
 
+test('reasoning blocks are interleaved with associated tool calls on assistant replay', function () {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiResponse('hi'),
+    ]);
+
+    agent(
+        instructions: 'Hi.',
+        tools: [(new ToolUsingAgent(fixed: true))->tools()[0]],
+        messages: [
+            new UserMessage('search'),
+            new AssistantMessage('Searching.', collect([
+                new ToolCall(
+                    id: 'call_1',
+                    name: 'FixedNumberGenerator',
+                    arguments: ['q' => 'foo'],
+                    resultId: 'call_1',
+                    reasoningId: 'rs_1',
+                    reasoningSummary: [],
+                ),
+                new ToolCall(
+                    id: 'call_2',
+                    name: 'FixedNumberGenerator',
+                    arguments: ['q' => 'bar'],
+                    resultId: 'call_2',
+                    reasoningId: 'rs_2',
+                    reasoningSummary: [],
+                ),
+                new ToolCall(
+                    id: 'call_3',
+                    name: 'FixedNumberGenerator',
+                    arguments: ['q' => 'baz'],
+                    resultId: 'call_3',
+                ),
+            ])),
+            new ToolResultMessage(collect([
+                new ToolResult(
+                    id: 'call_1',
+                    name: 'FixedNumberGenerator',
+                    arguments: ['q' => 'foo'],
+                    result: '42',
+                    resultId: 'call_1',
+                ),
+            ])),
+            new UserMessage('thanks'),
+        ],
+    )->prompt('', provider: 'openai');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $input = $body['input'];
+
+        $rs1Index = collect($input)->search(fn ($i) => ($i['type'] ?? '') === 'reasoning' && ($i['id'] ?? '') === 'rs_1');
+        $call1Index = collect($input)->search(fn ($i) => ($i['id'] ?? '') === 'call_1');
+        $rs2Index = collect($input)->search(fn ($i) => ($i['type'] ?? '') === 'reasoning' && ($i['id'] ?? '') === 'rs_2');
+        $call2Index = collect($input)->search(fn ($i) => ($i['id'] ?? '') === 'call_2');
+        $call3Index = collect($input)->search(fn ($i) => ($i['id'] ?? '') === 'call_3');
+
+        return $rs1Index !== false
+            && $call1Index !== false
+            && $rs1Index + 1 === $call1Index
+            && $rs2Index !== false
+            && $call2Index !== false
+            && $rs2Index + 1 === $call2Index
+            && $call3Index !== false;
+    });
+});
+
 test('system instructions are in input array as system role', function () {
     Http::fake([
         'api.openai.com/*' => fakeOpenAiResponse(),
