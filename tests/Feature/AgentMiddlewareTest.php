@@ -84,7 +84,31 @@ test('stream response conversation id is available after remembered conversation
         expect($event)->not->toBeNull();
     }
 
-    expect($response->conversationId)->not->toBeNull()
+    expect($response->conversationId)->toBe('conversation-123')
+        ->and($response->conversationUser)->toBe($user);
+});
+
+test('stream response conversation id is available when continuing an existing conversation', function () {
+    app()->instance(ConversationStore::class, new FakeConversationStore);
+
+    RememberingAssistantAgent::fake([
+        'Fake response',
+    ]);
+
+    $user = new class
+    {
+        public int $id = 1;
+    };
+
+    $response = (new RememberingAssistantAgent)
+        ->continue('existing-conversation-id', $user)
+        ->stream('Test prompt');
+
+    foreach ($response as $event) {
+        expect($event)->not->toBeNull();
+    }
+
+    expect($response->conversationId)->toBe('existing-conversation-id')
         ->and($response->conversationUser)->toBe($user);
 });
 
