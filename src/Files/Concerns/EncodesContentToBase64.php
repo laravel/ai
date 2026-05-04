@@ -2,7 +2,7 @@
 
 namespace Laravel\Ai\Files\Concerns;
 
-trait EncodesContentAsBase64
+trait EncodesContentToBase64
 {
     abstract public function content(): string;
 

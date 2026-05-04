@@ -2,9 +2,9 @@
 
 namespace Laravel\Ai\Files\Concerns;
 
-trait SerializesAudioContent
+trait SerializesEmbeddableAudio
 {
-    use SerializesInlineContent;
+    use SerializesEmbeddedContent;
 
     protected function defaultMimeType(): string
     {

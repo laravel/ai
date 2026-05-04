@@ -4,15 +4,15 @@ namespace Laravel\Ai\Files;
 
 use Illuminate\Contracts\Support\Arrayable;
 use JsonSerializable;
-use Laravel\Ai\Contracts\Files\InlineSerializable;
+use Laravel\Ai\Contracts\Files\EmbeddableFile;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
-use Laravel\Ai\Files\Concerns\HasStoredBase64;
-use Laravel\Ai\Files\Concerns\SerializesImageContent;
+use Laravel\Ai\Files\Concerns\HasBase64Content;
+use Laravel\Ai\Files\Concerns\SerializesEmbeddableImage;
 
-class Base64Image extends Image implements Arrayable, InlineSerializable, JsonSerializable, StorableFile
+class Base64Image extends Image implements Arrayable, EmbeddableFile, JsonSerializable, StorableFile
 {
-    use CanBeUploadedToProvider, HasStoredBase64, SerializesImageContent;
+    use CanBeUploadedToProvider, HasBase64Content, SerializesEmbeddableImage;
 
     public function __construct(public string $base64, ?string $mimeType = null)
     {

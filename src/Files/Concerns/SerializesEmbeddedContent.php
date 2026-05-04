@@ -2,7 +2,7 @@
 
 namespace Laravel\Ai\Files\Concerns;
 
-trait SerializesInlineContent
+trait SerializesEmbeddedContent
 {
     abstract public function base64(): string;
 

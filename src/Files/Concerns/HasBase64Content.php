@@ -2,7 +2,7 @@
 
 namespace Laravel\Ai\Files\Concerns;
 
-trait HasStoredBase64
+trait HasBase64Content
 {
     public function base64(): string
     {
