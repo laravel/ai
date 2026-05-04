@@ -87,8 +87,8 @@ class DatabaseConversationStore implements ConversationStore
             'role' => 'assistant',
             'content' => $response->text,
             'attachments' => '[]',
-            'tool_calls' => json_encode($response->toolCalls),
-            'tool_results' => json_encode($response->toolResults),
+            'tool_calls' => json_encode($response->toolCalls->values()),
+            'tool_results' => json_encode($response->toolResults->values()),
             'usage' => json_encode($response->usage),
             'meta' => json_encode($response->meta),
             'created_at' => $timestamp,
@@ -117,8 +117,8 @@ class DatabaseConversationStore implements ConversationStore
             ->reverse()
             ->values()
             ->flatMap(function ($record) {
-                $toolCalls = collect(json_decode($record->tool_calls, true));
-                $toolResults = collect(json_decode($record->tool_results, true));
+                $toolCalls = collect(json_decode($record->tool_calls, true))->values();
+                $toolResults = collect(json_decode($record->tool_results, true))->values();
 
                 if ($record->role === 'user') {
                     return [new Message('user', $record->content)];
@@ -134,6 +134,8 @@ class DatabaseConversationStore implements ConversationStore
                             name: $toolCall['name'],
                             arguments: $toolCall['arguments'],
                             resultId: $toolCall['result_id'] ?? null,
+                            reasoningId: $toolCall['reasoning_id'] ?? null,
+                            reasoningSummary: $toolCall['reasoning_summary'] ?? null,
                         ))
                     );
 

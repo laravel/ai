@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway\DeepSeek\Concerns;
 
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\AiException;
@@ -71,7 +72,7 @@ trait ParsesTextResponses
      *
      * Note: deepseek-reasoner responses include a `reasoning_content` field on
      * each choice's message; it's intentionally ignored here — we only expose
-     * the final `content` text, matching Prism's prior behavior.
+     * the final `content` text.
      */
     protected function processResponse(
         array $data,
@@ -283,9 +284,10 @@ trait ParsesTextResponses
             $body['max_completion_tokens'] = $options->maxTokens;
         }
 
-        if (! is_null($options?->temperature)) {
-            $body['temperature'] = $options->temperature;
-        }
+        $body = array_merge($body, Arr::whereNotNull([
+            'temperature' => $options?->temperature,
+            'top_p' => $options?->topP,
+        ]));
 
         $providerOptions = $options?->providerOptions($provider->driver());
 
@@ -325,10 +327,13 @@ trait ParsesTextResponses
     protected function extractUsage(array $data): Usage
     {
         $usage = $data['usage'] ?? [];
+        $details = $usage['completion_tokens_details'] ?? [];
 
         return new Usage(
-            $usage['prompt_tokens'] ?? 0,
-            $usage['completion_tokens'] ?? 0,
+            promptTokens: $usage['prompt_tokens'] ?? 0,
+            completionTokens: $usage['completion_tokens'] ?? 0,
+            cacheReadInputTokens: $usage['prompt_cache_hit_tokens'] ?? 0,
+            reasoningTokens: $details['reasoning_tokens'] ?? 0,
         );
     }
 
