@@ -3,7 +3,6 @@
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Facades\Facade;
 use Laravel\Ai\Ai;
-use Laravel\Ai\AiManager;
 use Laravel\Ai\Gateway\OpenAi\OpenAiGateway;
 use Laravel\Ai\Providers\OpenAiProvider;
 
@@ -24,11 +23,13 @@ test('driver extensions survive between queue jobs', function () {
         $app->make(Dispatcher::class),
     ));
 
-    // Mirror Illuminate\Queue\Worker::resetScope() (reset path between jobs
-    // in a long-running worker).
-    app()->forgetScopedInstances();
-    Facade::clearResolvedInstances();
+    $runJobOnFreshScope = function () {
+        app()->forgetScopedInstances();
+        Facade::clearResolvedInstances();
 
-    expect(app(AiManager::class)->textProvider('custom'))->toBeInstanceOf(OpenAiProvider::class);
-    expect(Ai::textProvider('custom'))->toBeInstanceOf(OpenAiProvider::class);
+        return Ai::textProvider('custom');
+    };
+
+    expect($runJobOnFreshScope())->toBeInstanceOf(OpenAiProvider::class);
+    expect($runJobOnFreshScope())->toBeInstanceOf(OpenAiProvider::class);
 });
