@@ -213,37 +213,26 @@ class DatabaseConversationStore implements ConversationStore
             return collect([new AssistantMessage($record->content)]);
         }
 
-        $reasoningGroups = $toolCalls
-            ->whereNotNull('reasoningId')
-            ->groupBy('reasoningId');
+        $resultsByCallId = $toolResults->keyBy(fn (ToolResult $result) => $this->itemKey($result));
 
-        $messages = collect();
+        $messages = $toolCalls
+            ->groupBy(fn (ToolCall $toolCall) => $toolCall->reasoningId ?? '')
+            ->values()
+            ->flatMap(function (Collection $group) use ($resultsByCallId) {
+                $group = $group->values();
+                $emitted = [new AssistantMessage('', $group)];
 
-        if ($reasoningGroups->count() > 1) {
-            $resultsByCallId = $toolResults->keyBy(fn (ToolResult $result) => $this->itemKey($result));
+                $groupResults = $group
+                    ->map(fn (ToolCall $toolCall) => $resultsByCallId->get($this->itemKey($toolCall)))
+                    ->filter()
+                    ->values();
 
-            $toolCalls
-                ->groupBy(fn (ToolCall $toolCall) => $toolCall->reasoningId ?? '')
-                ->each(function (Collection $group) use ($messages, $resultsByCallId) {
-                    $group = $group->values();
-                    $messages->push(new AssistantMessage('', $group));
+                if ($groupResults->isNotEmpty()) {
+                    $emitted[] = new ToolResultMessage($groupResults);
+                }
 
-                    $groupResults = $group
-                        ->map(fn (ToolCall $toolCall) => $resultsByCallId->get($this->itemKey($toolCall)))
-                        ->filter()
-                        ->values();
-
-                    if ($groupResults->isNotEmpty()) {
-                        $messages->push(new ToolResultMessage($groupResults));
-                    }
-                });
-        } else {
-            $messages->push(new AssistantMessage('', $toolCalls));
-
-            if ($toolResults->isNotEmpty()) {
-                $messages->push(new ToolResultMessage($toolResults));
-            }
-        }
+                return $emitted;
+            });
 
         if (filled($record->content)) {
             $messages->push(new AssistantMessage($record->content));
