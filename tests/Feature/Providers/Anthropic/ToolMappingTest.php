@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Providers\Tools\FileSearch;
+use Tests\Fixtures\Agents\NamedToolAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
 use function Laravel\Ai\agent;
@@ -45,6 +46,20 @@ test('unsupported provider tool throws logic exception', function () {
         provider: 'anthropic',
     );
 })->throws(LogicException::class, 'is not supported by Anthropic');
+
+test('tool with a name() method emits the declared name', function () {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    (new NamedToolAgent('aliased_tool'))->prompt('Search', provider: 'anthropic');
+
+    Http::assertSent(function ($request) {
+        $names = collect($request->data()['tools'] ?? [])->pluck('name')->all();
+
+        return in_array('aliased_tool', $names, true);
+    });
+});
 
 test('empty schema still includes input schema with type object', function () {
     Http::fake([

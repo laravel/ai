@@ -7,12 +7,14 @@ use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Base64Document;
+use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
+use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Responses\Data\ToolResult;
 use Tests\Fixtures\Agents\AssistantAgent;
-use Tests\Fixtures\Agents\ToolUsingAgent;
 
 use function Laravel\Ai\agent;
 
@@ -37,27 +39,47 @@ test('user message maps to gemini format', function () {
 
 test('tool result follow up maps model and function response', function () {
     Http::fake([
-        'generativelanguage.googleapis.com/*' => Http::sequence([
-            $this->fakeToolCallResponse(),
-            $this->fakeTextResponse('The number is 72019'),
-        ]),
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('The number is 72019'),
     ]);
 
-    (new ToolUsingAgent(fixed: true))->prompt(
-        'Generate a number',
-        provider: 'gemini',
-    );
+    $agent = new class implements Agent, Conversational
+    {
+        use Promptable;
+
+        public function instructions(): string
+        {
+            return 'You are a helpful assistant.';
+        }
+
+        public function messages(): iterable
+        {
+            // Use non-sequential keys to ensure parts serialize as a JSON array
+            $toolResults = collect([
+                'custom_key' => new ToolResult('call_123', 'FixedNumberGenerator', [], 123),
+            ]);
+
+            return [
+                new Message(role: 'user', content: 'Generate a number'),
+                new AssistantMessage('', collect([
+                    new ToolCall('call_123', 'FixedNumberGenerator', [], 'call_123'),
+                ])),
+                new ToolResultMessage($toolResults),
+            ];
+        }
+    };
+
+    $agent->prompt('Follow up', provider: 'gemini');
 
     $recorded = Http::recorded();
 
-    expect($recorded)->toHaveCount(2);
+    expect($recorded)->toHaveCount(1);
 
-    $followUpContents = $recorded[1][0]->data()['contents'];
+    $contents = $recorded[0][0]->data()['contents'];
 
     $modelFunctionCall = null;
-    $hasFunctionResponse = false;
+    $userMessageParts = null;
 
-    foreach ($followUpContents as $content) {
+    foreach ($contents as $content) {
         if ($content['role'] === 'model') {
             foreach ($content['parts'] ?? [] as $part) {
                 if (isset($part['functionCall'])) {
@@ -69,7 +91,7 @@ test('tool result follow up maps model and function response', function () {
         if ($content['role'] === 'user') {
             foreach ($content['parts'] ?? [] as $part) {
                 if (isset($part['functionResponse'])) {
-                    $hasFunctionResponse = true;
+                    $userMessageParts = $content['parts'];
                 }
             }
         }
@@ -78,7 +100,8 @@ test('tool result follow up maps model and function response', function () {
     expect($modelFunctionCall)->not->toBeNull('Follow-up should include model message with functionCall')
         ->and($modelFunctionCall)->not->toHaveKey('args')
         ->and($modelFunctionCall)->not->toHaveKey('id')
-        ->and($hasFunctionResponse)->toBeTrue('Follow-up should include user message with functionResponse');
+        ->and($userMessageParts)->not->toBeNull('Follow-up should include user message with functionResponse')
+        ->and(array_is_list($userMessageParts))->toBeTrue('Tool result parts must be a sequential array');
 });
 
 test('prior assistant tool call with empty arguments omits args in conversation history', function () {
@@ -116,6 +139,30 @@ test('prior assistant tool call with empty arguments omits args in conversation 
 
         return $modelFunctionCall !== null
             && ! array_key_exists('args', $modelFunctionCall);
+    });
+});
+
+test('local image attachment without explicit mime type detects mime from file', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('I see an image'),
+    ]);
+
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')],
+        provider: 'gemini',
+    );
+
+    Http::assertSent(function ($request) {
+        $parts = $request->data()['contents'][0]['parts'];
+
+        foreach ($parts as $part) {
+            if (isset($part['inlineData'])) {
+                return $part['inlineData']['mimeType'] === 'image/png';
+            }
+        }
+
+        return false;
     });
 });
 

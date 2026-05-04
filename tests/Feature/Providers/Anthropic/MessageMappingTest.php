@@ -5,6 +5,10 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Base64Document;
+use Laravel\Ai\Files\LocalImage;
+use Laravel\Ai\Gateway\Anthropic\AnthropicGateway;
+use Laravel\Ai\Messages\AssistantMessage;
+use Laravel\Ai\Responses\Data\ToolCall;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
@@ -80,6 +84,27 @@ test('tool result follow up maps assistant and tool result messages', function (
     $toolResultBlock = collect($toolResultMsg['content'])->firstWhere('type', 'tool_result');
     expect($toolResultBlock['tool_use_id'])->toBe($toolUseBlock['id'])
         ->and($toolResultBlock['content'])->not->toBeEmpty();
+});
+
+test('local image attachment without explicit mime type detects mime from file', function () {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('I see an image'),
+    ]);
+
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')],
+        provider: 'anthropic',
+    );
+
+    Http::assertSent(function ($request) {
+        $content = $request->data()['messages'][0]['content'];
+        $imageBlock = collect($content)->firstWhere('type', 'image');
+
+        return $imageBlock !== null
+            && $imageBlock['source']['type'] === 'base64'
+            && $imageBlock['source']['media_type'] === 'image/png';
+    });
 });
 
 test('base64 pdf document maps to document content block', function () {
@@ -224,6 +249,45 @@ test('uploaded pdf file maps to document content block', function () {
             && $docBlock['source']['type'] === 'base64'
             && $docBlock['source']['media_type'] === 'application/pdf';
     });
+});
+
+test('empty tool arguments serialize as object on assistant replay', function () {
+    $assistant = new AssistantMessage('Listing.', collect([
+        new ToolCall(
+            id: 'toolu_empty',
+            name: 'ListTool',
+            arguments: [],
+        ),
+    ]));
+
+    $gateway = app(AnthropicGateway::class);
+    $method = (new ReflectionClass($gateway))->getMethod('mapMessages');
+    $method->setAccessible(true);
+
+    $mapped = $method->invoke($gateway, [$assistant]);
+    $toolUse = collect($mapped[0]['content'])->firstWhere('type', 'tool_use');
+
+    expect($toolUse['input'])->toBeInstanceOf(stdClass::class)
+        ->and(get_object_vars($toolUse['input']))->toBeEmpty();
+});
+
+test('non-empty tool arguments preserve shape on assistant replay', function () {
+    $assistant = new AssistantMessage('Searching.', collect([
+        new ToolCall(
+            id: 'toolu_args',
+            name: 'SearchTool',
+            arguments: ['query' => 'test'],
+        ),
+    ]));
+
+    $gateway = app(AnthropicGateway::class);
+    $method = (new ReflectionClass($gateway))->getMethod('mapMessages');
+    $method->setAccessible(true);
+
+    $mapped = $method->invoke($gateway, [$assistant]);
+    $toolUse = collect($mapped[0]['content'])->firstWhere('type', 'tool_use');
+
+    expect($toolUse['input'])->toBe(['query' => 'test']);
 });
 
 test('system instructions are not in messages array', function () {

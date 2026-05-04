@@ -22,7 +22,6 @@ use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\TextResponse;
@@ -178,7 +177,7 @@ class GeminiGateway implements Gateway
 
         return new ImageResponse(
             $images,
-            new Usage(0, 0),
+            $this->extractUsage($data),
             new Meta($provider->name(), $model),
         );
     }

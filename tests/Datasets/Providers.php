@@ -14,6 +14,12 @@ dataset('embedding-providers', [
     'voyageai' => ['voyageai', 'VOYAGEAI_API_KEY', 1024],
 ]);
 
+dataset('image-providers', [
+    'openai-dall-e-3' => ['openai', 'OPENAI_API_KEY', 'dall-e-3'],
+    'openai-gpt-image-2' => ['openai', 'OPENAI_API_KEY', 'gpt-image-2'],
+    'xai' => ['xai', 'XAI_API_KEY', 'grok-imagine-image'],
+]);
+
 dataset('reranking-providers', [
     'cohere' => ['cohere', 'COHERE_API_KEY'],
     'voyageai' => ['voyageai', 'VOYAGEAI_API_KEY'],
@@ -35,4 +41,17 @@ dataset('agent-document-providers', [
     'anthropic' => ['anthropic', 'ANTHROPIC_API_KEY', 'claude-haiku-4-5-20251001'],
     'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4-nano'],
     'gemini' => ['gemini', 'GEMINI_API_KEY', 'gemini-3.1-flash-lite-preview'],
+]);
+
+dataset('agent-image-providers', [
+    'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4-nano'],
+    'gemini' => ['gemini', 'GEMINI_API_KEY', 'gemini-3.1-flash-lite-preview'],
+    'xai' => ['xai', 'XAI_API_KEY', 'grok-4-1-fast-reasoning'],
+]);
+
+dataset('tool-replay-providers', [
+    // Reasoning model
+    'openai-gpt-5-4-nano' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4-nano', true],
+    // Non-reasoning model (backward compatibility)
+    'openai-gpt-4-1' => ['openai', 'OPENAI_API_KEY', 'gpt-4.1', false],
 ]);
