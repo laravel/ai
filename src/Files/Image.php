@@ -6,11 +6,6 @@ use Illuminate\Http\UploadedFile;
 
 abstract class Image extends File
 {
-    protected function defaultMimeType(): string
-    {
-        return 'image/png';
-    }
-
     /**
      * Create a new image from Base64 data.
      */

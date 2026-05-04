@@ -5,16 +5,19 @@ namespace Laravel\Ai\Files;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Support\Facades\Storage;
 use JsonSerializable;
+use Laravel\Ai\Contracts\Files\InlineSerializable;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
+use Laravel\Ai\Files\Concerns\EncodesContentAsBase64;
+use Laravel\Ai\Files\Concerns\SerializesAudioContent;
 use Laravel\Ai\PendingResponses\PendingTranscriptionGeneration;
 use Laravel\Ai\Transcription;
 use RuntimeException;
 
-class StoredAudio extends Audio implements Arrayable, JsonSerializable, StorableFile, TranscribableAudio
+class StoredAudio extends Audio implements Arrayable, InlineSerializable, JsonSerializable, StorableFile, TranscribableAudio
 {
-    use CanBeUploadedToProvider;
+    use CanBeUploadedToProvider, EncodesContentAsBase64, SerializesAudioContent;
 
     public function __construct(public string $path, public ?string $disk = null) {}
 

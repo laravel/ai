@@ -5,13 +5,16 @@ namespace Laravel\Ai\Files;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Support\Facades\Storage;
 use JsonSerializable;
+use Laravel\Ai\Contracts\Files\InlineSerializable;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
+use Laravel\Ai\Files\Concerns\EncodesContentAsBase64;
+use Laravel\Ai\Files\Concerns\SerializesDocumentContent;
 use RuntimeException;
 
-class StoredDocument extends Document implements Arrayable, JsonSerializable, StorableFile
+class StoredDocument extends Document implements Arrayable, InlineSerializable, JsonSerializable, StorableFile
 {
-    use CanBeUploadedToProvider;
+    use CanBeUploadedToProvider, EncodesContentAsBase64, SerializesDocumentContent;
 
     public function __construct(public string $path, public ?string $disk = null) {}
 

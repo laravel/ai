@@ -6,11 +6,6 @@ use Illuminate\Http\UploadedFile;
 
 abstract class Document extends File
 {
-    protected function defaultMimeType(): string
-    {
-        return 'application/octet-stream';
-    }
-
     /**
      * Create a new document from a string.
      */

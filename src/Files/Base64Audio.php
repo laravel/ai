@@ -5,15 +5,18 @@ namespace Laravel\Ai\Files;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Http\UploadedFile;
 use JsonSerializable;
+use Laravel\Ai\Contracts\Files\InlineSerializable;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
+use Laravel\Ai\Files\Concerns\HasStoredBase64;
+use Laravel\Ai\Files\Concerns\SerializesAudioContent;
 use Laravel\Ai\PendingResponses\PendingTranscriptionGeneration;
 use Laravel\Ai\Transcription;
 
-class Base64Audio extends Audio implements Arrayable, JsonSerializable, StorableFile, TranscribableAudio
+class Base64Audio extends Audio implements Arrayable, InlineSerializable, JsonSerializable, StorableFile, TranscribableAudio
 {
-    use CanBeUploadedToProvider;
+    use CanBeUploadedToProvider, HasStoredBase64, SerializesAudioContent;
 
     public function __construct(public string $base64, ?string $mimeType = null)
     {
@@ -37,11 +40,6 @@ class Base64Audio extends Audio implements Arrayable, JsonSerializable, Storable
     public function content(): string
     {
         return base64_decode($this->base64);
-    }
-
-    public function base64(): string
-    {
-        return $this->base64;
     }
 
     /**

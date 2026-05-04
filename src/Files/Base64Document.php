@@ -5,12 +5,15 @@ namespace Laravel\Ai\Files;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Http\UploadedFile;
 use JsonSerializable;
+use Laravel\Ai\Contracts\Files\InlineSerializable;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
+use Laravel\Ai\Files\Concerns\HasStoredBase64;
+use Laravel\Ai\Files\Concerns\SerializesDocumentContent;
 
-class Base64Document extends Document implements Arrayable, JsonSerializable, StorableFile
+class Base64Document extends Document implements Arrayable, InlineSerializable, JsonSerializable, StorableFile
 {
-    use CanBeUploadedToProvider;
+    use CanBeUploadedToProvider, HasStoredBase64, SerializesDocumentContent;
 
     public function __construct(public string $base64, ?string $mimeType = null)
     {
@@ -34,11 +37,6 @@ class Base64Document extends Document implements Arrayable, JsonSerializable, St
     public function content(): string
     {
         return base64_decode($this->base64);
-    }
-
-    public function base64(): string
-    {
-        return $this->base64;
     }
 
     /**
