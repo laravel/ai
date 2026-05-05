@@ -4,7 +4,9 @@ use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Files\Base64Document;
+use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Gateway\Bedrock\BedrockTextGateway;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -93,6 +95,11 @@ function textGateway(): object
         public function callFormatUserMessage(UserMessage $message): array
         {
             return $this->formatUserMessage($message);
+        }
+
+        public function callGetImageFormat(Image $image)
+        {
+            return $this->getImageFormat($image);
         }
     };
 }
@@ -253,32 +260,32 @@ test('document format maps common mime types', function () {
 });
 
 test('user message with image attachment produces image block', function () {
-    $user = new UserMessage('see this', [new Base64Document(base64_encode('image-bytes'), 'image/png')]);
+    $user = new UserMessage('see this', [new Base64Image(base64_encode('image-bytes'), 'image/png')]);
 
     $formatted = textGateway()->callFormatUserMessage($user);
 
     expect($formatted['role'])->toBe('user')
         ->and($formatted['content'][0])->toEqual(['text' => 'see this'])
         ->and($formatted['content'][1]['image']['format'])->toBe('png')
-        ->and($formatted['content'][1]['document']['name'])->toBe('image')
-        ->and($formatted['content'][1]['document']['source']['bytes'])->toBe('image-bytes');
+        ->and($formatted['content'][1]['image']['name'])->toBe('image')
+        ->and($formatted['content'][1]['image']['source']['bytes'])->toBe('image-bytes');
 });
 
 test('image formats maps common image mime types', function () {
     $gateway = textGateway();
 
-    expect($gateway->callGetDocumentFormat(new Base64Document('', 'image/png')))->toBe('png');
-    expect($gateway->callGetDocumentFormat(new Base64Document('', 'image/jpeg')))->toBe('jpeg');
-    expect($gateway->callGetDocumentFormat(new Base64Document('', 'image/jpg')))->toBe('jpeg');
-    expect($gateway->callGetDocumentFormat(new Base64Document('', 'image/gif')))->toBe('gif');
-    expect($gateway->callGetDocumentFormat(new Base64Document('', 'image/webp')))->toBe('webp');
+    expect($gateway->callGetImageFormat(new Base64Image('', 'image/png')))->toBe('png');
+    expect($gateway->callGetImageFormat(new Base64Image('', 'image/jpeg')))->toBe('jpeg');
+    expect($gateway->callGetImageFormat(new Base64Image('', 'image/jpg')))->toBe('jpeg');
+    expect($gateway->callGetImageFormat(new Base64Image('', 'image/gif')))->toBe('gif');
+    expect($gateway->callGetImageFormat(new Base64Image('', 'image/webp')))->toBe('webp');
 });
 
 test('image formats throw invalid argument exception when mime not supported', function () {
     $gateway = textGateway();
 
-    expect(fn () => $gateway->callGetDocumentFormat(new Base64Document('', 'image/unsupported')))
-        ->toThrow(InvalidArgumentException::class, 'Unsupported image MIME type: image/unsupported');
+    expect(fn() => $gateway->callGetImageFormat(new Base64Image('', 'image/unsupported')))
+        ->toThrow(InvalidArgumentException::class, 'Unsupported image MIME type [image/unsupported]');
 });
 
 test('format tools produces converse tool specs', function () {

@@ -32,7 +32,7 @@ trait MapsAttachment
                 $attachment instanceof Base64Image => [
                     'image' => [
                         'format' => $this->getImageFormat($attachment),
-                        'name' => $attachment->name(),
+                        'name' => $this->getImageName($attachment),
                         'source' => [
                             'bytes' => $attachment->content()
                         ]
