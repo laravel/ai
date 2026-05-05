@@ -46,9 +46,11 @@ class LocalImage extends Image implements Arrayable, InlineFile, JsonSerializabl
     /**
      * Get the file's MIME type.
      */
-    public function mimeType(): ?string
+    public function mimeType(): string
     {
-        return $this->mime ?? ((new Filesystem)->mimeType($this->path) ?: null);
+        return $this->mime
+            ?? ((new Filesystem)->mimeType($this->path) ?: null)
+            ?? static::DEFAULT_INLINE_MIME_TYPE;
     }
 
     /**

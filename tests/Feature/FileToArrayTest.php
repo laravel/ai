@@ -215,20 +215,20 @@ test('stored image asDataUri returns correct format', function () {
     expect($uri)->toStartWith('data:image/png;base64,');
 });
 
-test('base64 image base64 method returns raw base64', function () {
+test('base64 image asEncoded method returns raw base64', function () {
     $image = Image::fromBase64('abc123', 'image/png');
 
-    expect($image->base64())->toBe('abc123');
+    expect($image->asEncoded())->toBe('abc123');
 });
 
-test('local image base64 method returns encoded content', function () {
+test('local image asEncoded method returns encoded content', function () {
     $path = tempnam(sys_get_temp_dir(), 'local-image');
     file_put_contents($path, 'test-content');
 
     try {
         $image = Image::fromPath($path);
 
-        expect($image->base64())->toBe(base64_encode('test-content'));
+        expect($image->asEncoded())->toBe(base64_encode('test-content'));
     } finally {
         @unlink($path);
     }

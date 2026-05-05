@@ -49,9 +49,11 @@ class LocalAudio extends Audio implements Arrayable, InlineFile, JsonSerializabl
     /**
      * Get the file's MIME type.
      */
-    public function mimeType(): ?string
+    public function mimeType(): string
     {
-        return $this->mime ?? (new Filesystem)->mimeType($this->path);
+        return $this->mime
+            ?? ((new Filesystem)->mimeType($this->path) ?: null)
+            ?? static::DEFAULT_INLINE_MIME_TYPE;
     }
 
     /**

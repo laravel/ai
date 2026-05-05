@@ -26,9 +26,9 @@ trait MapsAttachments
             }
 
             return match (true) {
-                $attachment instanceof Base64Image => $attachment->base64(),
-                $attachment instanceof LocalImage => $attachment->base64(),
-                $attachment instanceof StoredImage => $attachment->base64(),
+                $attachment instanceof Base64Image => $attachment->asEncoded(),
+                $attachment instanceof LocalImage => $attachment->asEncoded(),
+                $attachment instanceof StoredImage => $attachment->asEncoded(),
                 $attachment instanceof UploadedFile && $this->isImage($attachment) => base64_encode($attachment->get()),
                 $attachment instanceof RemoteImage => throw new InvalidArgumentException('Ollama does not support remote image URLs. Use a local or base64 image instead.'),
                 default => throw new InvalidArgumentException('Ollama does not support document attachments. Only image attachments are supported.'),

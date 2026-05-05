@@ -45,9 +45,9 @@ class Base64Audio extends Audio implements Arrayable, InlineFile, JsonSerializab
     /**
      * Get the file's MIME type.
      */
-    public function mimeType(): ?string
+    public function mimeType(): string
     {
-        return $this->mime;
+        return $this->mime ?? static::DEFAULT_INLINE_MIME_TYPE;
     }
 
     /**

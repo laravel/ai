@@ -39,8 +39,8 @@ trait MapsAttachments
                 ],
                 $attachment instanceof Base64Image => [
                     'inlineData' => [
-                        'mimeType' => $attachment->resolvedMimeType(),
-                        'data' => $attachment->base64(),
+                        'mimeType' => $attachment->mimeType(),
+                        'data' => $attachment->asEncoded(),
                     ],
                 ],
                 $attachment instanceof RemoteImage => [
@@ -51,14 +51,14 @@ trait MapsAttachments
                 ],
                 $attachment instanceof LocalImage => [
                     'inlineData' => [
-                        'mimeType' => $attachment->resolvedMimeType(),
-                        'data' => $attachment->base64(),
+                        'mimeType' => $attachment->mimeType(),
+                        'data' => $attachment->asEncoded(),
                     ],
                 ],
                 $attachment instanceof StoredImage => [
                     'inlineData' => [
-                        'mimeType' => $attachment->resolvedMimeType(),
-                        'data' => $attachment->base64(),
+                        'mimeType' => $attachment->mimeType(),
+                        'data' => $attachment->asEncoded(),
                     ],
                 ],
                 $attachment instanceof ProviderDocument => [
@@ -68,14 +68,14 @@ trait MapsAttachments
                 ],
                 $attachment instanceof Base64Document => [
                     'inlineData' => [
-                        'mimeType' => $attachment->resolvedMimeType(),
-                        'data' => $attachment->base64(),
+                        'mimeType' => $attachment->mimeType(),
+                        'data' => $attachment->asEncoded(),
                     ],
                 ],
                 $attachment instanceof LocalDocument => [
                     'inlineData' => [
-                        'mimeType' => $attachment->resolvedMimeType(),
-                        'data' => $attachment->base64(),
+                        'mimeType' => $attachment->mimeType(),
+                        'data' => $attachment->asEncoded(),
                     ],
                 ],
                 $attachment instanceof RemoteDocument => [
@@ -86,8 +86,8 @@ trait MapsAttachments
                 ],
                 $attachment instanceof StoredDocument => [
                     'inlineData' => [
-                        'mimeType' => $attachment->resolvedMimeType(),
-                        'data' => $attachment->base64(),
+                        'mimeType' => $attachment->mimeType(),
+                        'data' => $attachment->asEncoded(),
                     ],
                 ],
                 $attachment instanceof UploadedFile => [

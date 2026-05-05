@@ -38,8 +38,8 @@ trait MapsAttachments
                     'type' => 'image',
                     'source' => [
                         'type' => 'base64',
-                        'media_type' => $attachment->resolvedMimeType(),
-                        'data' => $attachment->base64(),
+                        'media_type' => $attachment->mimeType(),
+                        'data' => $attachment->asEncoded(),
                     ],
                 ],
                 $attachment instanceof RemoteImage => [
@@ -53,16 +53,16 @@ trait MapsAttachments
                     'type' => 'image',
                     'source' => [
                         'type' => 'base64',
-                        'media_type' => $attachment->resolvedMimeType(),
-                        'data' => $attachment->base64(),
+                        'media_type' => $attachment->mimeType(),
+                        'data' => $attachment->asEncoded(),
                     ],
                 ],
                 $attachment instanceof StoredImage => [
                     'type' => 'image',
                     'source' => [
                         'type' => 'base64',
-                        'media_type' => $attachment->resolvedMimeType(),
-                        'data' => $attachment->base64(),
+                        'media_type' => $attachment->mimeType(),
+                        'data' => $attachment->asEncoded(),
                     ],
                 ],
                 $attachment instanceof ProviderDocument => [
@@ -77,7 +77,7 @@ trait MapsAttachments
                     'source' => $this->documentSource(
                         $attachment->mime,
                         fn () => $attachment->content(),
-                        fn () => $attachment->base64(),
+                        fn () => $attachment->asEncoded(),
                     ),
                 ],
                 $attachment instanceof LocalDocument => [
@@ -85,7 +85,7 @@ trait MapsAttachments
                     'source' => $this->documentSource(
                         $attachment->mimeType(),
                         fn () => $attachment->content(),
-                        fn () => $attachment->base64(),
+                        fn () => $attachment->asEncoded(),
                     ),
                 ],
                 $attachment instanceof RemoteDocument => [
@@ -100,7 +100,7 @@ trait MapsAttachments
                     'source' => $this->documentSource(
                         $attachment->mimeType(),
                         fn () => $attachment->content(),
-                        fn () => $attachment->base64(),
+                        fn () => $attachment->asEncoded(),
                     ),
                 ],
                 $attachment instanceof UploadedFile && $this->isImage($attachment) => [

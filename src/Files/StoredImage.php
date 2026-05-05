@@ -38,9 +38,11 @@ class StoredImage extends Image implements Arrayable, InlineFile, JsonSerializab
     /**
      * Get the file's MIME type.
      */
-    public function mimeType(): ?string
+    public function mimeType(): string
     {
-        return $this->mime ?? (Storage::disk($this->disk)->mimeType($this->path) ?: null);
+        return $this->mime
+            ?? (Storage::disk($this->disk)->mimeType($this->path) ?: null)
+            ?? static::DEFAULT_INLINE_MIME_TYPE;
     }
 
     /**
