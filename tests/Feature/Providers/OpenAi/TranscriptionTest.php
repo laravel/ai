@@ -129,4 +129,3 @@ function fakeOpenAiTranscriptionResponse(string $text = 'Hello, world!')
         ],
     ]);
 }
-
