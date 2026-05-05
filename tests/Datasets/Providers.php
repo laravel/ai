@@ -22,7 +22,7 @@ dataset('embedding-providers', [
 dataset('transcription-providers', [
     'openai' => ['openai', 'OPENAI_API_KEY'],
     'gemini' => ['gemini', 'GEMINI_API_KEY'],
- ]);
+]);
 
 dataset('image-providers', [
     'openai-dall-e-3' => ['openai', 'OPENAI_API_KEY', 'dall-e-3'],

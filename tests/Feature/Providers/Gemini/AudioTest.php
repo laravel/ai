@@ -1,5 +1,6 @@
 <?php
 
+use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Audio;
@@ -63,7 +64,6 @@ test('audio instructions are prepended to the prompt instead of sent in speech c
     });
 });
 
-
 test('audio response is wrapped as wav with correct meta', function () {
     Http::fake([
         'generativelanguage.googleapis.com/*' => fakeGeminiAudioResponse("\x01\x00\x02\x00"),
@@ -79,7 +79,6 @@ test('audio response is wrapped as wav with correct meta', function () {
         ->and($response->meta->provider)->toBe('gemini')
         ->and($response->meta->model)->toBe('gemini-2.5-flash-preview-tts');
 });
-
 
 test('audio request passes custom voice name through unchanged', function () {
     Http::fake([
@@ -103,7 +102,7 @@ test('audio uses default model when none specified', function () {
     Http::assertSent(fn (Request $request) => str_contains($request->url(), 'models/gemini-2.5-flash-preview-tts:generateContent'));
 });
 
-function fakeGeminiAudioResponse(string $pcm = "\x00\x00"): \GuzzleHttp\Promise\PromiseInterface
+function fakeGeminiAudioResponse(string $pcm = "\x00\x00"): PromiseInterface
 {
     return Http::response([
         'candidates' => [[

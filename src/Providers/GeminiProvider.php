@@ -30,11 +30,11 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
     use Concerns\GeneratesTranscriptions;
     use Concerns\HasAudioGateway;
     use Concerns\HasEmbeddingGateway;
-    use Concerns\HasTranscriptionGateway;
     use Concerns\HasFileGateway;
     use Concerns\HasImageGateway;
     use Concerns\HasStoreGateway;
     use Concerns\HasTextGateway;
+    use Concerns\HasTranscriptionGateway;
     use Concerns\ManagesFiles;
     use Concerns\ManagesStores;
     use Concerns\StreamsText;
