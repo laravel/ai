@@ -140,14 +140,14 @@ class BedrockProviderTest extends TestCase
     {
         $provider = new BedrockProvider([], $this->dispatcher);
 
-        $this->assertEquals('us.anthropic.claude-haiku-4-5-20250929-v1:0', $provider->cheapestTextModel());
+        $this->assertEquals('us.anthropic.claude-haiku-4-5-20251001-v1:0', $provider->cheapestTextModel());
     }
 
     public function test_returns_smartest_text_model(): void
     {
         $provider = new BedrockProvider([], $this->dispatcher);
 
-        $this->assertEquals('us.anthropic.claude-opus-4-6-20250929-v1:0', $provider->smartestTextModel());
+        $this->assertEquals('us.anthropic.claude-opus-4-6-v1', $provider->smartestTextModel());
     }
 
     public function test_allows_custom_text_models_in_config(): void

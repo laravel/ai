@@ -1,11 +1,12 @@
 <?php
 
+use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Reranking;
 
-function fakeVoyageBaseUrlEmbeddingsResponse(): \GuzzleHttp\Promise\PromiseInterface
+function fakeVoyageBaseUrlEmbeddingsResponse(): PromiseInterface
 {
     return Http::response([
         'object' => 'list',
@@ -15,7 +16,7 @@ function fakeVoyageBaseUrlEmbeddingsResponse(): \GuzzleHttp\Promise\PromiseInter
     ]);
 }
 
-function fakeVoyageBaseUrlRerankingResponse(): \GuzzleHttp\Promise\PromiseInterface
+function fakeVoyageBaseUrlRerankingResponse(): PromiseInterface
 {
     return Http::response([
         'object' => 'list',

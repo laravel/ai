@@ -153,7 +153,7 @@ class OpenAiGateway implements Gateway
                 $image['b64_json'] ?? '',
                 'image/png',
             )),
-            new Usage(0, 0),
+            $this->extractUsage($data),
             new Meta($provider->name(), $model),
         );
     }
