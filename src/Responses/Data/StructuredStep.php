@@ -20,4 +20,22 @@ class StructuredStep extends Step
     ) {
         parent::__construct($text, $toolCalls, $toolResults, $finishReason, $usage, $meta);
     }
+
+    /**
+     * Get the instance as an array.
+     */
+    public function toArray(): array
+    {
+        return array_merge(parent::toArray(), [
+            'structured' => $this->structured,
+        ]);
+    }
+
+    /**
+     * Get the JSON serializable representation of the instance.
+     */
+    public function jsonSerialize(): mixed
+    {
+        return $this->toArray();
+    }
 }
