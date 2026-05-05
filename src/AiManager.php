@@ -3,7 +3,6 @@
 namespace Laravel\Ai;
 
 use Illuminate\Contracts\Events\Dispatcher;
-use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\MultipleInstanceManager;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Agent;
@@ -54,41 +53,6 @@ class AiManager extends MultipleInstanceManager
      * @var string
      */
     protected $driverKey = 'driver';
-
-    /**
-     * Custom driver creators that survive scoped instance resets between queue jobs.
-     *
-     * @var array<string, \Closure>
-     */
-    protected static array $extensions = [];
-
-    /**
-     * Create a new manager instance.
-     *
-     * @param  Application  $app
-     */
-    public function __construct($app)
-    {
-        parent::__construct($app);
-
-        foreach (static::$extensions as $name => $callback) {
-            parent::extend($name, $callback);
-        }
-    }
-
-    /**
-     * Register a custom provider driver.
-     *
-     * @param  string  $name
-     * @param  \Closure  $callback
-     * @return $this
-     */
-    public function extend($name, Closure $callback): static
-    {
-        static::$extensions[$name] = $callback;
-
-        return parent::extend($name, $callback);
-    }
 
     /**
      * Get a provider instance by name.
