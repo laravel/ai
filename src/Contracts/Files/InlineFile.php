@@ -5,7 +5,7 @@ namespace Laravel\Ai\Contracts\Files;
 interface InlineFile
 {
     /**
-     * Get the Base64 encoded representation of the file.
+     * Get the encoded representation of the file.
      */
     public function asEncoded(): string;
 
