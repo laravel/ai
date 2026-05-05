@@ -1,7 +1,10 @@
 <?php
 
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Transcription;
 
 beforeEach(function () {
@@ -106,3 +109,45 @@ test('transcription request sends bearer token', function () {
         return $request->hasHeader('Authorization', 'Bearer test-key');
     });
 });
+
+test('transcription rate limit response throws rate limited exception', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::response([
+            'error' => [
+                'type' => 'rate_limit_error',
+                'message' => 'Rate limit exceeded',
+            ],
+        ], 429),
+    ]);
+
+    Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->generate(provider: 'openai', model: 'gpt-4o-transcribe');
+})->throws(RateLimitedException::class);
+
+test('transcription overloaded response throws provider overloaded exception', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::response([
+            'error' => [
+                'type' => 'server_error',
+                'message' => 'The server is currently overloaded.',
+            ],
+        ], 503),
+    ]);
+
+    Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->generate(provider: 'openai', model: 'gpt-4o-transcribe');
+})->throws(ProviderOverloadedException::class);
+
+test('transcription http error response throws request exception', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::response([
+            'error' => [
+                'type' => 'invalid_request_error',
+                'message' => 'Invalid file format',
+            ],
+        ], 400),
+    ]);
+
+    Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->generate(provider: 'openai', model: 'gpt-4o-transcribe');
+})->throws(RequestException::class);
