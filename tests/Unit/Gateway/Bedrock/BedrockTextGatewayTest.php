@@ -14,6 +14,7 @@ use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Tools\Request;
+use Tests\Fixtures\Tools\NamedTool;
 
 function textGateway(): object
 {
@@ -151,6 +152,18 @@ test('assistant message with tool calls is formatted with tool use blocks', func
     ]);
 });
 
+test('assistant message with empty tool input is formatted as a json object', function () {
+    $assistant = new AssistantMessage('', new Collection([
+        new ToolCall('tool-1', 'NoArgGenerator', []),
+    ]));
+
+    $formatted = textGateway()->callFormatMessages([$assistant]);
+    $input = $formatted[0]['content'][0]['toolUse']['input'];
+
+    expect($input)->toBeInstanceOf(stdClass::class)
+        ->and(json_encode($input))->toBe('{}');
+});
+
 test('tool result message is formatted with tool result blocks', function () {
     $message = new ToolResultMessage(new Collection([
         new ToolResult('tool-1', 'RandomGenerator', [], 'the result'),
@@ -239,6 +252,13 @@ test('format tools produces converse tool specs', function () {
         ->and($formatted[0]['toolSpec']['name'])->toBe('BedrockSampleTool')
         ->and($formatted[0]['toolSpec']['description'])->toBe('Sample description')
         ->and($formatted[0]['toolSpec']['inputSchema']['json'])->toBeArray();
+});
+
+test('format tools uses a tool name() method when present', function () {
+    $formatted = textGateway()->callFormatTools([new NamedTool('aliased_tool')]);
+
+    expect($formatted)->toHaveCount(1)
+        ->and($formatted[0]['toolSpec']['name'])->toBe('aliased_tool');
 });
 
 test('format tools ignores non tool values', function () {

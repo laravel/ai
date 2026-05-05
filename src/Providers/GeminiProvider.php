@@ -135,7 +135,8 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
                 '1:1' => '1:1',
                 '2:3' => '2:3',
                 '3:2' => '3:2',
-                default => null,
+                null => null,
+                default => $size,
             },
         ]);
     }

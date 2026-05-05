@@ -1,11 +1,12 @@
 <?php
 
+use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Reranking;
 
-function fakeCohereBaseUrlEmbeddingsResponse(): \GuzzleHttp\Promise\PromiseInterface
+function fakeCohereBaseUrlEmbeddingsResponse(): PromiseInterface
 {
     return Http::response([
         'embeddings' => ['float' => [[0.1, 0.2, 0.3]]],
@@ -13,7 +14,7 @@ function fakeCohereBaseUrlEmbeddingsResponse(): \GuzzleHttp\Promise\PromiseInter
     ]);
 }
 
-function fakeCohereBaseUrlRerankingResponse(): \GuzzleHttp\Promise\PromiseInterface
+function fakeCohereBaseUrlRerankingResponse(): PromiseInterface
 {
     return Http::response([
         'results' => [['index' => 0, 'relevance_score' => 0.9]],

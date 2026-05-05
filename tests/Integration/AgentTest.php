@@ -5,6 +5,11 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\Conversational;
+use Laravel\Ai\Contracts\HasProviderOptions;
+use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\AgentStreamed;
 use Laravel\Ai\Events\InvokingTool;
@@ -13,6 +18,8 @@ use Laravel\Ai\Events\StreamingAgent;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\LocalImage;
+use Laravel\Ai\Messages\UserMessage;
+use Laravel\Ai\Promptable;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Streaming\Events\TextDelta;
@@ -20,6 +27,7 @@ use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ConversationalAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
+use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 use function Laravel\Ai\agent;
 
@@ -235,6 +243,70 @@ test('agents can use tools', function (string $provider, string $apiKey, string 
     );
 
     expect($response['number'])->toBe(72019);
+})->with('agent-providers');
+
+test('agents can replay empty tool arguments', function (string $provider, string $apiKey, string $model) {
+    requiresApiKey($apiKey);
+
+    $tool = new FixedNumberGenerator;
+    $instructions = 'For every request, call the FixedNumberGenerator tool before answering. Answer with one short sentence.';
+    $firstPrompt = 'What fixed number is available?';
+    $makeAgent = fn (iterable $messages = []) => new class($instructions, $messages, [$tool]) implements Agent, Conversational, HasProviderOptions, HasTools
+    {
+        use Promptable;
+
+        public function __construct(
+            public string $instructions,
+            public iterable $messages,
+            public iterable $tools,
+        ) {}
+
+        public function instructions(): string
+        {
+            return $this->instructions;
+        }
+
+        public function messages(): iterable
+        {
+            return $this->messages;
+        }
+
+        public function tools(): iterable
+        {
+            return $this->tools;
+        }
+
+        public function providerOptions(Lab|string $provider): array
+        {
+            $provider = is_string($provider) ? Lab::tryFrom($provider) : $provider;
+
+            return $provider === Lab::DeepSeek
+                ? ['thinking' => ['type' => 'disabled']]
+                : [];
+        }
+    };
+
+    $firstResponse = $makeAgent()->prompt(
+        $firstPrompt,
+        provider: $provider,
+        model: $model,
+    );
+
+    expect($firstResponse->toolCalls)->toHaveCount(1)
+        ->and($firstResponse->toolCalls->first()->arguments)->toBe([]);
+
+    $secondResponse = $makeAgent([
+        new UserMessage($firstPrompt),
+        ...$firstResponse->messages->all(),
+    ])->prompt(
+        'Thanks. Confirm the fixed number again.',
+        provider: $provider,
+        model: $model,
+    );
+
+    expect($secondResponse->text)->not->toBeEmpty()
+        ->and($secondResponse->toolCalls)->toHaveCount(1)
+        ->and($secondResponse->toolCalls->first()->arguments)->toBe([]);
 })->with('agent-providers');
 
 test('agents can analyze text document attachments', function (string $provider, string $apiKey, string $model) {

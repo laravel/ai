@@ -63,6 +63,7 @@ trait BuildsTextRequests
 
         $ollamaOptions = Arr::whereNotNull([
             'temperature' => $options?->temperature,
+            'top_p' => $options?->topP,
             'num_predict' => $options?->maxTokens,
         ]);
 

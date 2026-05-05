@@ -184,11 +184,7 @@ class GeminiGateway implements Gateway
 
         return new ImageResponse(
             $images,
-            new Usage(
-                promptTokens: $usageMeta['promptTokenCount'] ?? 0,
-                completionTokens: $usageMeta['candidatesTokenCount'] ?? 0,
-                reasoningTokens: $usageMeta['thoughtsTokenCount'] ?? 0,
-            ),
+            $this->extractUsage($data),
             new Meta($provider->name(), $model),
         );
     }
