@@ -63,6 +63,7 @@ return [
             'api_version' => env('AZURE_OPENAI_API_VERSION', '2025-04-01-preview'),
             'deployment' => env('AZURE_OPENAI_DEPLOYMENT', 'gpt-4o'),
             'embedding_deployment' => env('AZURE_OPENAI_EMBEDDING_DEPLOYMENT', 'text-embedding-3-small'),
+            'image_deployment' => env('AZURE_OPENAI_IMAGE_DEPLOYMENT', 'dall-e-3'),
         ],
 
         'bedrock' => [

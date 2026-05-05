@@ -4,12 +4,21 @@ namespace Laravel\Ai\Gateway\AzureOpenAi;
 
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Http\UploadedFile;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Illuminate\Support\Facades\Storage;
+use InvalidArgumentException;
+use Laravel\Ai\Contracts\Files\HasName;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
+use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
+use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Files\File;
+use Laravel\Ai\Files\LocalImage;
+use Laravel\Ai\Files\StoredImage;
 use Laravel\Ai\Gateway\AzureOpenAi\Concerns\CreatesAzureOpenAiClient;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
@@ -22,12 +31,15 @@ use Laravel\Ai\Gateway\OpenAi\Concerns\MapsTools;
 use Laravel\Ai\Gateway\OpenAi\Concerns\ParsesTextResponses;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
+use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
+use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Tools\ToolNameResolver;
 
-class AzureOpenAiGateway implements EmbeddingGateway, TextGateway
+class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
 {
     use BuildsTextRequests;
     use CreatesAzureOpenAiClient;
@@ -153,6 +165,104 @@ class AzureOpenAiGateway implements EmbeddingGateway, TextGateway
             $data['usage']['prompt_tokens'] ?? 0,
             new Meta($provider->name(), $model),
         );
+    }
+
+    /**
+     * Generate an image.
+     *
+     * @param  array<ImageFile>  $attachments
+     * @param  '3:2'|'2:3'|'1:1'  $size
+     * @param  'low'|'medium'|'high'  $quality
+     */
+    public function generateImage(
+        ImageProvider $provider,
+        string $model,
+        string $prompt,
+        array $attachments = [],
+        ?string $size = null,
+        ?string $quality = null,
+        ?int $timeout = null,
+    ): ImageResponse {
+        $hasAttachments = filled($attachments);
+
+        $response = $this->withErrorHandling(
+            $provider->name(),
+            fn () => $hasAttachments
+                ? $this->sendImageEditRequest($provider, $model, $prompt, $attachments, $size, $quality, $timeout)
+                : $this->sendImageGenerationRequest($provider, $model, $prompt, $size, $quality, $timeout),
+        );
+
+        $data = $response->json();
+
+        return new ImageResponse(
+            collect($data['data'] ?? [])->map(fn (array $image) => new GeneratedImage(
+                $image['b64_json'] ?? '',
+                'image/png',
+            )),
+            new \Laravel\Ai\Responses\Data\Usage(
+                $data['usage']['input_tokens'] ?? 0,
+                $data['usage']['total_tokens'] ?? 0,
+            ),
+            new Meta($provider->name(), $model),
+        );
+    }
+
+    /**
+     * Send an image generation request.
+     */
+    protected function sendImageGenerationRequest(
+        ImageProvider $provider,
+        string $model,
+        string $prompt,
+        ?string $size,
+        ?string $quality,
+        ?int $timeout,
+    ) {
+        return $this->client($provider, $timeout ?? 120)->post('images/generations', [
+            'model' => $model,
+            'prompt' => $prompt,
+            ...$provider->defaultImageOptions($size, $quality),
+            ...(str_starts_with($model, 'gpt-image') ? ['moderation' => 'low'] : []),
+        ]);
+    }
+
+    /**
+     * Send an image edit request with attachments.
+     */
+    protected function sendImageEditRequest(
+        ImageProvider $provider,
+        string $model,
+        string $prompt,
+        array $attachments,
+        ?string $size,
+        ?string $quality,
+        ?int $timeout,
+    ) {
+        $request = $this->client($provider, $timeout ?? 120);
+
+        foreach ($attachments as $attachment) {
+            if (! $attachment instanceof File && ! $attachment instanceof UploadedFile) {
+                throw new InvalidArgumentException(
+                    'Unsupported attachment type ['.get_class($attachment).']'
+                );
+            }
+
+            $content = match (true) {
+                $attachment instanceof LocalImage => file_get_contents($attachment->path),
+                $attachment instanceof StoredImage => Storage::disk($attachment->disk)->get($attachment->path),
+                $attachment instanceof UploadedFile => $attachment->get(),
+                default => throw new InvalidArgumentException('Unsupported image attachment type ['.get_class($attachment).']'),
+            };
+
+            $request = $request->attach('image[]', $content, 'image.png');
+        }
+
+        return $request->post('images/edits', array_filter([
+            'model' => $model,
+            'prompt' => $prompt,
+            ...$provider->defaultImageOptions($size, $quality),
+            ...(str_starts_with($model, 'gpt-image') ? ['moderation' => 'low'] : []),
+        ]));
     }
 
     /**
