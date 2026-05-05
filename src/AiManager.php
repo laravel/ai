@@ -55,6 +55,41 @@ class AiManager extends MultipleInstanceManager
     protected $driverKey = 'driver';
 
     /**
+     * Custom driver creators that survive scoped instance resets between queue jobs.
+     *
+     * @var array<string, \Closure>
+     */
+    protected static array $extensions = [];
+
+    /**
+     * Create a new manager instance.
+     *
+     * @param  \Illuminate\Contracts\Foundation\Application  $app
+     */
+    public function __construct($app)
+    {
+        parent::__construct($app);
+
+        foreach (static::$extensions as $name => $callback) {
+            parent::extend($name, $callback);
+        }
+    }
+
+    /**
+     * Register a custom provider driver.
+     *
+     * @param  string  $name
+     * @param  \Closure  $callback
+     * @return $this
+     */
+    public function extend($name, Closure $callback): static
+    {
+        static::$extensions[$name] = $callback;
+
+        return parent::extend($name, $callback);
+    }
+
+    /**
      * Get a provider instance by name.
      *
      * @throws LogicException
