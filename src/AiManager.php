@@ -3,6 +3,7 @@
 namespace Laravel\Ai;
 
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\MultipleInstanceManager;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Agent;
@@ -64,7 +65,7 @@ class AiManager extends MultipleInstanceManager
     /**
      * Create a new manager instance.
      *
-     * @param  \Illuminate\Contracts\Foundation\Application  $app
+     * @param  Application  $app
      */
     public function __construct($app)
     {
