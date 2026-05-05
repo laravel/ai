@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Transcription;
 
@@ -83,6 +84,50 @@ test('transcription usage is correctly parsed', function () {
     expect($response->usage->promptTokens)->toBe(100)
         ->and($response->usage->completionTokens)->toBe(50);
 });
+
+test('transcription omits language and sends diarize flag when diarizing', function () {
+    Http::fake(['*' => fakeTranscriptionResponse()]);
+
+    Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->language('en')
+        ->diarize()
+        ->generate(provider: 'mistral');
+
+    Http::assertSent(function (Request $request) {
+        return str_contains($request->body(), 'diarize')
+            && str_contains($request->body(), 'segment')
+            && ! str_contains($request->body(), 'language');
+    });
+});
+
+test('transcription response segments are parsed when diarizing', function () {
+    Http::fake(['*' => Http::response([
+        'text' => 'Hello world',
+        'segments' => [
+            ['text' => 'Hello', 'speaker_id' => 'speaker_0', 'start' => 0.0, 'end' => 0.5],
+            ['text' => 'world', 'speaker_id' => 'speaker_1', 'start' => 0.6, 'end' => 1.0],
+        ],
+        'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
+    ])]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->diarize()
+        ->generate(provider: 'mistral');
+
+    expect($response->segments)->toHaveCount(2)
+        ->and($response->segments[0]->text)->toBe('Hello')
+        ->and($response->segments[0]->speaker)->toBe('speaker_0')
+        ->and($response->segments[0]->startSeconds)->toBe(0.0)
+        ->and($response->segments[1]->text)->toBe('world')
+        ->and($response->segments[1]->speaker)->toBe('speaker_1');
+});
+
+test('transcription throws when the API returns an error', function () {
+    Http::fake(['*' => Http::response(['message' => 'Unauthorized'], 401)]);
+
+    Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->generate(provider: 'mistral');
+})->throws(RequestException::class);
 
 function fakeTranscriptionResponse(string $text = 'Hello, world!')
 {
