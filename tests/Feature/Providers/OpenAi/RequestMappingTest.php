@@ -45,7 +45,7 @@ test('system instructions are sent as system message in input', function () {
     });
 });
 
-test('temperature and max tokens are included when set via attributes', function () {
+test('temperature, max tokens, and top_p are included when set via attributes', function () {
     Http::fake(['*' => fakeOpenAiResponse('Hello')]);
 
     (new AttributeAgent)->prompt('Hello', provider: 'openai');
@@ -54,11 +54,12 @@ test('temperature and max tokens are included when set via attributes', function
         $body = json_decode($request->body(), true);
 
         return data_get($body, 'temperature') === 0.7
-            && data_get($body, 'max_output_tokens') === 4096;
+            && data_get($body, 'max_output_tokens') === 4096
+            && data_get($body, 'top_p') === 0.8;
     });
 });
 
-test('temperature and max tokens are excluded when not set', function () {
+test('temperature, max tokens, and top_p are excluded when not set', function () {
     Http::fake(['*' => fakeOpenAiResponse('Hello')]);
 
     agent()->prompt('Hello', provider: 'openai');
@@ -67,7 +68,8 @@ test('temperature and max tokens are excluded when not set', function () {
         $body = json_decode($request->body(), true);
 
         return ! array_key_exists('temperature', $body)
-            && ! array_key_exists('max_output_tokens', $body);
+            && ! array_key_exists('max_output_tokens', $body)
+            && ! array_key_exists('top_p', $body);
     });
 });
 

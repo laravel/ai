@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\Bedrock;
 
 use Generator;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
@@ -35,6 +36,7 @@ use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
+use Laravel\Ai\Tools\ToolNameResolver;
 use stdClass;
 use Throwable;
 
@@ -527,17 +529,11 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             return [];
         }
 
-        $config = [];
-
-        if ($options->maxTokens) {
-            $config['maxTokens'] = $options->maxTokens;
-        }
-
-        if ($options->temperature !== null) {
-            $config['temperature'] = $options->temperature;
-        }
-
-        return $config;
+        return Arr::whereNotNull([
+            'maxTokens' => $options->maxTokens,
+            'temperature' => $options->temperature,
+            'topP' => $options->topP,
+        ]);
     }
 
     /**
@@ -555,7 +551,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                     'toolUse' => [
                         'toolUseId' => $toolCall->id,
                         'name' => $toolCall->name,
-                        'input' => $toolCall->arguments,
+                        'input' => $toolCall->arguments ?: new stdClass,
                     ],
                 ], $toolCalls),
             ),
@@ -615,7 +611,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                 'tools' => $schemaTools,
                 'toolChoice' => ($isFinalStep || $toolsEmpty)
                     ? ['tool' => ['name' => self::STRUCTURED_OUTPUT_TOOL]]
-                    : ['auto' => new stdClass],
+                    : ['auto' => []],
             ];
         }
 
@@ -656,7 +652,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                 'toolUse' => [
                     'toolUseId' => $toolCall->id,
                     'name' => $toolCall->name,
-                    'input' => $toolCall->arguments,
+                    'input' => $toolCall->arguments ?: new stdClass,
                 ],
             ];
         }
@@ -697,7 +693,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                 $content[] = [
                     'document' => [
                         'format' => $this->getDocumentFormat($attachment),
-                        'name' => $attachment->name ?? 'document',
+                        'name' => $this->getDocumentName($attachment),
                         'source' => [
                             'bytes' => $attachment->content(),
                         ],
@@ -754,6 +750,21 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
     }
 
     /**
+     * Build a unique, Bedrock-compliant document name.
+     *
+     * Bedrock requires document names to be unique within a message and limits
+     * them to alphanumerics, whitespace, hyphens, parentheses, and square brackets.
+     */
+    protected function getDocumentName(Document $document): string
+    {
+        $name = $document->name() ?? 'document';
+        $name = pathinfo($name, PATHINFO_FILENAME) ?: $name;
+        $name = preg_replace('/[^A-Za-z0-9\-\(\)\[\] ]+/', '-', $name);
+
+        return trim(preg_replace('/\s+/', ' ', $name)) ?: 'document';
+    }
+
+    /**
      * Format tools for the Converse API.
      *
      * @param  array<Tool>  $tools
@@ -764,7 +775,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             ->filter(fn ($tool) => $tool instanceof Tool)
             ->map(fn (Tool $tool) => [
                 'toolSpec' => [
-                    'name' => class_basename($tool),
+                    'name' => ToolNameResolver::resolve($tool),
                     'description' => (string) $tool->description(),
                     'inputSchema' => [
                         'json' => (new ObjectSchema($tool->schema(new JsonSchemaTypeFactory)))->toArray(),
@@ -800,11 +811,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                 continue;
             }
 
-            try {
-                $result = $this->executeTool($tool, $toolCall->arguments);
-            } catch (Throwable $e) {
-                $result = 'Error executing tool: '.$e->getMessage();
-            }
+            $result = $this->executeTool($tool, $toolCall->arguments);
 
             $results[] = new ToolResult(
                 $toolCall->id,

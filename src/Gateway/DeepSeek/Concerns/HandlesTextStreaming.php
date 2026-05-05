@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\DeepSeek\Concerns;
 
 use Generator;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Providers\Provider;
@@ -283,9 +284,10 @@ trait HandlesTextStreaming
                 $body['max_completion_tokens'] = $options->maxTokens;
             }
 
-            if (! is_null($options?->temperature)) {
-                $body['temperature'] = $options->temperature;
-            }
+            $body = array_merge($body, Arr::whereNotNull([
+                'temperature' => $options?->temperature,
+                'top_p' => $options?->topP,
+            ]));
 
             $providerOptions = $options?->providerOptions($provider->driver());
 
