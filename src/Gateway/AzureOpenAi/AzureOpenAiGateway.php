@@ -8,7 +8,6 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
-use Laravel\Ai\Contracts\Files\HasName;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
@@ -199,7 +198,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
                 $image['b64_json'] ?? '',
                 'image/png',
             )),
-            new \Laravel\Ai\Responses\Data\Usage(
+            new Usage(
                 $data['usage']['input_tokens'] ?? 0,
                 $data['usage']['total_tokens'] ?? 0,
             ),
