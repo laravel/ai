@@ -25,9 +25,9 @@ return [
     | Conversation Store
     |--------------------------------------------------------------------------
     |
-    | Here you may configure the database connection used by the conversation
-    | store to persist agent conversations and messages. Set "connection" to
-    | null to use your application's default database connection.
+    | Here you may configure the database connection that the conversation store
+    | uses to persist agent conversations and messages. Set "connection" to
+    | null to use the default database connection from your application.
     |
     */
 
