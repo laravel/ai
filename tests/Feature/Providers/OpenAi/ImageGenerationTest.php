@@ -108,3 +108,89 @@ test('image request does not include size when not specified', function () {
         return ! array_key_exists('size', $body);
     });
 });
+
+test('image response includes usage tokens when returned by gpt-image', function () {
+    Http::fake([
+        '*' => Http::response([
+            'data' => [[
+                'b64_json' => base64_encode('fake-image'),
+            ]],
+            'usage' => [
+                'input_tokens' => 41,
+                'output_tokens' => 1024,
+                'input_tokens_details' => [
+                    'text_tokens' => 41,
+                    'image_tokens' => 0,
+                ],
+            ],
+        ]),
+    ]);
+
+    $response = Image::of('A red apple')->generate(provider: 'openai', model: 'gpt-image-1');
+
+    expect($response->usage->promptTokens)->toBe(41)
+        ->and($response->usage->completionTokens)->toBe(1024);
+});
+
+test('image response subtracts cached tokens from prompt tokens', function () {
+    Http::fake([
+        '*' => Http::response([
+            'data' => [[
+                'b64_json' => base64_encode('fake-image'),
+            ]],
+            'usage' => [
+                'input_tokens' => 100,
+                'output_tokens' => 1024,
+                'input_tokens_details' => [
+                    'cached_tokens' => 30,
+                    'text_tokens' => 70,
+                ],
+            ],
+        ]),
+    ]);
+
+    $response = Image::of('A red apple')->generate(provider: 'openai', model: 'gpt-image-1');
+
+    expect($response->usage->promptTokens)->toBe(70)
+        ->and($response->usage->cacheReadInputTokens)->toBe(30)
+        ->and($response->usage->completionTokens)->toBe(1024);
+});
+
+test('image response defaults to zero usage when not returned by dalle', function () {
+    Http::fake([
+        '*' => fakeOpenAiImageResponse(),
+    ]);
+
+    $response = Image::of('A red apple')->generate(provider: 'openai', model: 'dall-e-3');
+
+    expect($response->usage->promptTokens)->toBe(0)
+        ->and($response->usage->completionTokens)->toBe(0);
+});
+
+test('image generation request adds response_format b64_json for dall-e models', function () {
+    Http::fake([
+        '*' => fakeOpenAiImageResponse(),
+    ]);
+
+    Image::of('A red apple')->generate(provider: 'openai', model: 'dall-e-3');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return ($body['response_format'] ?? null) === 'b64_json';
+    });
+});
+
+test('image generation request omits response_format for gpt-image models', function () {
+    Http::fake([
+        '*' => fakeOpenAiImageResponse(),
+    ]);
+
+    Image::of('A red apple')->generate(provider: 'openai', model: 'gpt-image-1');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return ! array_key_exists('response_format', $body);
+    });
+});

@@ -111,7 +111,7 @@ test('remote document toArray handles urls without a path component', function (
     Http::fake();
 
     set_error_handler(static function (int $severity, string $message, string $file, int $line): never {
-        throw new \ErrorException($message, 0, $severity, $file, $line);
+        throw new ErrorException($message, 0, $severity, $file, $line);
     });
 
     try {

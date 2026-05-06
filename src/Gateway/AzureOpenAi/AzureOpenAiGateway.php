@@ -6,10 +6,13 @@ use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
+use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
+use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Files\Image as ImageFile;
 use Laravel\Ai\Gateway\AzureOpenAi\Concerns\CreatesAzureOpenAiClient;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
@@ -22,11 +25,16 @@ use Laravel\Ai\Gateway\OpenAi\Concerns\MapsTools;
 use Laravel\Ai\Gateway\OpenAi\Concerns\ParsesTextResponses;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
+use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
+use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\TextResponse;
+use Laravel\Ai\Tools\ToolNameResolver;
+use LogicException;
 
-class AzureOpenAiGateway implements EmbeddingGateway, TextGateway
+class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
 {
     use BuildsTextRequests;
     use CreatesAzureOpenAiClient;
@@ -155,6 +163,64 @@ class AzureOpenAiGateway implements EmbeddingGateway, TextGateway
     }
 
     /**
+     * Generate an image.
+     *
+     * @param  array<ImageFile>  $attachments
+     * @param  '3:2'|'2:3'|'1:1'  $size
+     * @param  'low'|'medium'|'high'  $quality
+     */
+    public function generateImage(
+        ImageProvider $provider,
+        string $model,
+        string $prompt,
+        array $attachments = [],
+        ?string $size = null,
+        ?string $quality = null,
+        ?int $timeout = null,
+    ): ImageResponse {
+        if (filled($attachments)) {
+            throw new LogicException('The Azure OpenAI provider does not support image edits.');
+        }
+
+        $response = $this->withErrorHandling(
+            $provider->name(),
+            fn () => $this->client($provider, $timeout ?? 120)->post('images/generations', [
+                'model' => $model,
+                'prompt' => $prompt,
+                'moderation' => 'low',
+                ...$provider->defaultImageOptions($size, $quality),
+            ]),
+        );
+
+        $data = $response->json();
+
+        return new ImageResponse(
+            collect($data['data'] ?? [])->map(fn (array $image) => new GeneratedImage(
+                $image['b64_json'] ?? '',
+                'image/png',
+            )),
+            $this->extractImageUsage($data),
+            new Meta($provider->name(), $model),
+        );
+    }
+
+    /**
+     * Extract usage from an Azure OpenAI image response.
+     */
+    protected function extractImageUsage(array $data): Usage
+    {
+        $usage = $data['usage'] ?? [];
+        $inputTokens = $usage['input_tokens'] ?? 0;
+        $cachedTokens = $usage['input_tokens_details']['cached_tokens'] ?? 0;
+
+        return new Usage(
+            promptTokens: $inputTokens - $cachedTokens,
+            completionTokens: $usage['output_tokens'] ?? 0,
+            cacheReadInputTokens: $cachedTokens,
+        );
+    }
+
+    /**
      * {@inheritdoc}
      */
     protected function mapTool(Tool $tool): array
@@ -167,7 +233,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, TextGateway
 
         return array_filter([
             'type' => 'function',
-            'name' => class_basename($tool),
+            'name' => ToolNameResolver::resolve($tool),
             'description' => (string) $tool->description(),
             'parameters' => filled($schemaArray) ? [
                 'type' => 'object',

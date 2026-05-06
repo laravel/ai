@@ -4,16 +4,20 @@ namespace Laravel\Ai\Providers;
 
 use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
+use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
+use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Gateway\AzureOpenAi\AzureOpenAiGateway;
 
-class AzureOpenAiProvider extends Provider implements EmbeddingProvider, TextProvider
+class AzureOpenAiProvider extends Provider implements EmbeddingProvider, ImageProvider, TextProvider
 {
     use Concerns\GeneratesEmbeddings;
+    use Concerns\GeneratesImages;
     use Concerns\GeneratesText;
     use Concerns\HasEmbeddingGateway;
+    use Concerns\HasImageGateway;
     use Concerns\HasTextGateway;
     use Concerns\StreamsText;
 
@@ -82,6 +86,38 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, TextPro
     public function smartestTextModel(): string
     {
         return $this->config['deployment'] ?? 'gpt-4o';
+    }
+
+    /**
+     * Get the provider's image gateway.
+     */
+    public function imageGateway(): ImageGateway
+    {
+        return $this->imageGateway ??= $this->azureGateway();
+    }
+
+    /**
+     * Get the name of the default image deployment.
+     */
+    public function defaultImageModel(): string
+    {
+        return $this->config['image_deployment'] ?? 'gpt-image-1';
+    }
+
+    /**
+     * Get the default / normalized image options for the provider.
+     */
+    public function defaultImageOptions(?string $size = null, $quality = null): array
+    {
+        return array_filter([
+            'size' => match ($size) {
+                '1:1' => '1024x1024',
+                '2:3' => '1024x1536',
+                '3:2' => '1536x1024',
+                default => $size,
+            },
+            'quality' => $quality,
+        ]);
     }
 
     /**

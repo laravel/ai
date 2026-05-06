@@ -21,7 +21,7 @@ class AiServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->scoped(AiManager::class, fn ($app): AiManager => new AiManager($app));
+        $this->app->singleton(AiManager::class, fn ($app): AiManager => new AiManager($app));
         $this->app->singleton(ConversationStore::class, DatabaseConversationStore::class);
 
         $this->mergeConfigFrom(__DIR__.'/../config/ai.php', 'ai');
