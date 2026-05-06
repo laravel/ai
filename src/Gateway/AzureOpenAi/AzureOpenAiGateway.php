@@ -32,7 +32,6 @@ use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\TextResponse;
@@ -198,10 +197,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
                 $image['b64_json'] ?? '',
                 'image/png',
             )),
-            new Usage(
-                $data['usage']['input_tokens'] ?? 0,
-                $data['usage']['total_tokens'] ?? 0,
-            ),
+            $this->extractUsage($data),
             new Meta($provider->name(), $model),
         );
     }
@@ -221,12 +217,20 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
             'model' => $model,
             'prompt' => $prompt,
             ...$provider->defaultImageOptions($size, $quality),
-            ...(str_starts_with($model, 'gpt-image') ? ['moderation' => 'low'] : []),
+            ...(str_starts_with($model, 'gpt-image')
+                ? ['moderation' => 'low']
+                : ['response_format' => 'b64_json']),
         ]);
     }
 
     /**
      * Send an image edit request with attachments.
+     *
+     * Azure documents image edits at the deployment-scoped path
+     * `/openai/deployments/{deployment}/images/edits?api-version=…`,
+     * not the v1-compatible base used for generations.
+     *
+     * @see https://learn.microsoft.com/en-us/azure/ai-services/openai/dall-e-quickstart
      */
     protected function sendImageEditRequest(
         ImageProvider $provider,
@@ -238,6 +242,9 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
         ?int $timeout,
     ) {
         $request = $this->client($provider, $timeout ?? 120);
+
+        $isGptImage = str_starts_with($model, 'gpt-image');
+        $field = $isGptImage ? 'image[]' : 'image';
 
         foreach ($attachments as $attachment) {
             if (! $attachment instanceof File && ! $attachment instanceof UploadedFile) {
@@ -253,14 +260,21 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
                 default => throw new InvalidArgumentException('Unsupported image attachment type ['.get_class($attachment).']'),
             };
 
-            $request = $request->attach('image[]', $content, 'image.png');
+            $request = $request->attach($field, $content, 'image.png');
         }
 
-        return $request->post('images/edits', array_filter([
+        $config = $provider->additionalConfiguration();
+        $base = rtrim($config['url'] ?? '', '/');
+        $apiVersion = $config['api_version'] ?? '2025-04-01-preview';
+        $url = "{$base}/openai/deployments/{$model}/images/edits?api-version={$apiVersion}";
+
+        return $request->post($url, array_filter([
             'model' => $model,
             'prompt' => $prompt,
             ...$provider->defaultImageOptions($size, $quality),
-            ...(str_starts_with($model, 'gpt-image') ? ['moderation' => 'low'] : []),
+            ...($isGptImage
+                ? ['moderation' => 'low']
+                : ['response_format' => 'b64_json']),
         ]));
     }
 

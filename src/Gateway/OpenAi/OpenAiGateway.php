@@ -172,7 +172,9 @@ class OpenAiGateway implements Gateway
             'model' => $model,
             'prompt' => $prompt,
             ...$provider->defaultImageOptions($size, $quality),
-            ...(str_starts_with($model, 'gpt-image') ? ['moderation' => 'low'] : []),
+            ...(str_starts_with($model, 'gpt-image')
+                ? ['moderation' => 'low']
+                : ['response_format' => 'b64_json']),
         ]);
     }
 
@@ -190,6 +192,9 @@ class OpenAiGateway implements Gateway
     ) {
         $request = $this->client($provider, $timeout ?? 120);
 
+        $isGptImage = str_starts_with($model, 'gpt-image');
+        $field = $isGptImage ? 'image[]' : 'image';
+
         foreach ($attachments as $attachment) {
             if (! $attachment instanceof File && ! $attachment instanceof UploadedFile) {
                 throw new InvalidArgumentException(
@@ -204,14 +209,16 @@ class OpenAiGateway implements Gateway
                 default => throw new InvalidArgumentException('Unsupported image attachment type ['.get_class($attachment).']'),
             };
 
-            $request = $request->attach('image[]', $content, 'image.png');
+            $request = $request->attach($field, $content, 'image.png');
         }
 
         return $request->post('images/edits', array_filter([
             'model' => $model,
             'prompt' => $prompt,
             ...$provider->defaultImageOptions($size, $quality),
-            ...(str_starts_with($model, 'gpt-image') ? ['moderation' => 'low'] : []),
+            ...($isGptImage
+                ? ['moderation' => 'low']
+                : ['response_format' => 'b64_json']),
         ]));
     }
 

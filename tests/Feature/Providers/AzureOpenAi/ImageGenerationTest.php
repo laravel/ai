@@ -3,6 +3,7 @@
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Image;
 
 beforeEach(function () {
@@ -22,7 +23,7 @@ function fakeAzureImageResponse(): PromiseInterface
     ]);
 }
 
-test('image request uses correct deployment', function () {
+test('image request uses correct deployment and url', function () {
     Http::fake([
         '*' => fakeAzureImageResponse(),
     ]);
@@ -32,7 +33,8 @@ test('image request uses correct deployment', function () {
     Http::assertSent(function (Request $request) {
         $body = json_decode($request->body(), true);
 
-        return $body['model'] === 'dall-e-2';
+        return $request->url() === 'https://test-resource.openai.azure.com/openai/v1/images/generations'
+            && $body['model'] === 'dall-e-2';
     });
 });
 
@@ -118,4 +120,147 @@ test('image request does not include moderation for non gpt-image models', funct
 
         return ! array_key_exists('moderation', $body);
     });
+});
+
+test('image edit request hits deployment-scoped endpoint with multipart attachment', function () {
+    Http::fake([
+        '*' => fakeAzureImageResponse(),
+    ]);
+
+    Image::of('Add a leaf to the apple')
+        ->attachments([new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')])
+        ->generate(provider: 'azure', model: 'gpt-image-1');
+
+    Http::assertSent(function (Request $request) {
+        $body = $request->body();
+
+        return $request->url() === 'https://test-resource.openai.azure.com/openai/deployments/gpt-image-1/images/edits?api-version=2025-04-01-preview'
+            && str_contains($request->header('Content-Type')[0] ?? '', 'multipart/form-data')
+            && str_contains($body, 'name="image[]"')
+            && str_contains($body, 'name="model"')
+            && str_contains($body, 'gpt-image-1')
+            && str_contains($body, 'Add a leaf to the apple')
+            && str_contains($body, 'name="moderation"')
+            && str_contains($body, "\r\nlow\r\n");
+    });
+});
+
+test('image edit request honors configured api version', function () {
+    config(['ai.providers.azure.api_version' => '2025-09-01-preview']);
+
+    Http::fake([
+        '*' => fakeAzureImageResponse(),
+    ]);
+
+    Image::of('Add a leaf to the apple')
+        ->attachments([new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')])
+        ->generate(provider: 'azure', model: 'gpt-image-1');
+
+    Http::assertSent(fn (Request $request) => str_contains($request->url(), 'api-version=2025-09-01-preview'));
+});
+
+test('image edit request uses image field for dall-e-2', function () {
+    Http::fake([
+        '*' => fakeAzureImageResponse(),
+    ]);
+
+    Image::of('Add a leaf to the apple')
+        ->attachments([new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')])
+        ->generate(provider: 'azure', model: 'dall-e-2');
+
+    Http::assertSent(function (Request $request) {
+        $body = $request->body();
+
+        return $request->url() === 'https://test-resource.openai.azure.com/openai/deployments/dall-e-2/images/edits?api-version=2025-04-01-preview'
+            && str_contains($body, 'name="image"')
+            && ! str_contains($body, 'name="image[]"')
+            && str_contains($body, 'name="response_format"')
+            && str_contains($body, "\r\nb64_json\r\n");
+    });
+});
+
+test('image generation request adds response_format b64_json for dall-e models', function () {
+    Http::fake([
+        '*' => fakeAzureImageResponse(),
+    ]);
+
+    Image::of('A red apple')->generate(provider: 'azure', model: 'dall-e-3');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return $body['response_format'] === 'b64_json';
+    });
+});
+
+test('image generation request omits response_format for gpt-image models', function () {
+    Http::fake([
+        '*' => fakeAzureImageResponse(),
+    ]);
+
+    Image::of('A red apple')->generate(provider: 'azure', model: 'gpt-image-1');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return ! array_key_exists('response_format', $body);
+    });
+});
+
+test('image response includes usage tokens when returned by gpt-image', function () {
+    Http::fake([
+        '*' => Http::response([
+            'data' => [[
+                'b64_json' => base64_encode('fake-image'),
+            ]],
+            'usage' => [
+                'input_tokens' => 41,
+                'output_tokens' => 1024,
+                'input_tokens_details' => [
+                    'text_tokens' => 41,
+                    'image_tokens' => 0,
+                ],
+            ],
+        ]),
+    ]);
+
+    $response = Image::of('A red apple')->generate(provider: 'azure', model: 'gpt-image-1');
+
+    expect($response->usage->promptTokens)->toBe(41)
+        ->and($response->usage->completionTokens)->toBe(1024);
+});
+
+test('image response subtracts cached tokens from prompt tokens', function () {
+    Http::fake([
+        '*' => Http::response([
+            'data' => [[
+                'b64_json' => base64_encode('fake-image'),
+            ]],
+            'usage' => [
+                'input_tokens' => 100,
+                'output_tokens' => 1024,
+                'input_tokens_details' => [
+                    'cached_tokens' => 30,
+                    'text_tokens' => 70,
+                ],
+            ],
+        ]),
+    ]);
+
+    $response = Image::of('A red apple')->generate(provider: 'azure', model: 'gpt-image-1');
+
+    expect($response->usage->promptTokens)->toBe(70)
+        ->and($response->usage->cacheReadInputTokens)->toBe(30)
+        ->and($response->usage->completionTokens)->toBe(1024);
+});
+
+test('image response defaults to zero usage when not returned by dalle', function () {
+    Http::fake([
+        '*' => fakeAzureImageResponse(),
+    ]);
+
+    $response = Image::of('A red apple')->generate(provider: 'azure', model: 'dall-e-3');
+
+    expect($response->usage->promptTokens)->toBe(0)
+        ->and($response->usage->completionTokens)->toBe(0);
 });
