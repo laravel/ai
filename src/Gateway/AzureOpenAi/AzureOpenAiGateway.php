@@ -4,10 +4,7 @@ namespace Laravel\Ai\Gateway\AzureOpenAi;
 
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
-use Illuminate\Http\UploadedFile;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
-use Illuminate\Support\Facades\Storage;
-use InvalidArgumentException;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
@@ -15,10 +12,7 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\Files\File;
 use Laravel\Ai\Files\Image as ImageFile;
-use Laravel\Ai\Files\LocalImage;
-use Laravel\Ai\Files\StoredImage;
 use Laravel\Ai\Gateway\AzureOpenAi\Concerns\CreatesAzureOpenAiClient;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
@@ -33,10 +27,12 @@ use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Tools\ToolNameResolver;
+use LogicException;
 
 class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
 {
@@ -182,13 +178,18 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
         ?string $quality = null,
         ?int $timeout = null,
     ): ImageResponse {
-        $hasAttachments = filled($attachments);
+        if (filled($attachments)) {
+            throw new LogicException('The Azure OpenAI provider does not support image edits.');
+        }
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $hasAttachments
-                ? $this->sendImageEditRequest($provider, $model, $prompt, $attachments, $size, $quality, $timeout)
-                : $this->sendImageGenerationRequest($provider, $model, $prompt, $size, $quality, $timeout),
+            fn () => $this->client($provider, $timeout ?? 120)->post('images/generations', [
+                'model' => $model,
+                'prompt' => $prompt,
+                'moderation' => 'low',
+                ...$provider->defaultImageOptions($size, $quality),
+            ]),
         );
 
         $data = $response->json();
@@ -198,73 +199,25 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
                 $image['b64_json'] ?? '',
                 'image/png',
             )),
-            $this->extractUsage($data),
+            $this->extractImageUsage($data),
             new Meta($provider->name(), $model),
         );
     }
 
     /**
-     * Send an image generation request.
+     * Extract usage from an Azure OpenAI image response.
      */
-    protected function sendImageGenerationRequest(
-        ImageProvider $provider,
-        string $model,
-        string $prompt,
-        ?string $size,
-        ?string $quality,
-        ?int $timeout,
-    ) {
-        return $this->client($provider, $timeout ?? 120)->post('images/generations', [
-            'model' => $model,
-            'prompt' => $prompt,
-            'moderation' => 'low',
-            ...$provider->defaultImageOptions($size, $quality),
-        ]);
-    }
+    protected function extractImageUsage(array $data): Usage
+    {
+        $usage = $data['usage'] ?? [];
+        $inputTokens = $usage['input_tokens'] ?? 0;
+        $cachedTokens = $usage['input_tokens_details']['cached_tokens'] ?? 0;
 
-    /**
-     * Send an image edit request with attachments.
-     *
-     * Azure documents image edits at the deployment-scoped path
-     * `/openai/deployments/{deployment}/images/edits?api-version=…`,
-     * not the v1-compatible base used for generations.
-     *
-     * @see https://learn.microsoft.com/en-us/azure/ai-services/openai/dall-e-quickstart
-     */
-    protected function sendImageEditRequest(
-        ImageProvider $provider,
-        string $model,
-        string $prompt,
-        array $attachments,
-        ?string $size,
-        ?string $quality,
-        ?int $timeout,
-    ) {
-        $request = $this->deploymentClient($provider, $model, $timeout ?? 120);
-
-        foreach ($attachments as $attachment) {
-            if (! $attachment instanceof File && ! $attachment instanceof UploadedFile) {
-                throw new InvalidArgumentException(
-                    'Unsupported attachment type ['.get_class($attachment).']'
-                );
-            }
-
-            $content = match (true) {
-                $attachment instanceof LocalImage => file_get_contents($attachment->path),
-                $attachment instanceof StoredImage => Storage::disk($attachment->disk)->get($attachment->path),
-                $attachment instanceof UploadedFile => $attachment->get(),
-                default => throw new InvalidArgumentException('Unsupported image attachment type ['.get_class($attachment).']'),
-            };
-
-            $request = $request->attach('image[]', $content, 'image.png');
-        }
-
-        return $request->post('images/edits', array_filter([
-            'model' => $model,
-            'prompt' => $prompt,
-            'moderation' => 'low',
-            ...$provider->defaultImageOptions($size, $quality),
-        ]));
+        return new Usage(
+            promptTokens: $inputTokens - $cachedTokens,
+            completionTokens: $usage['output_tokens'] ?? 0,
+            cacheReadInputTokens: $cachedTokens,
+        );
     }
 
     /**

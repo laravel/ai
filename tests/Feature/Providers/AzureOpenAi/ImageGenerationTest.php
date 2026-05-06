@@ -3,9 +3,7 @@
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Storage;
 use Laravel\Ai\Files\LocalImage;
-use Laravel\Ai\Files\StoredImage;
 use Laravel\Ai\Image;
 
 beforeEach(function () {
@@ -110,7 +108,7 @@ test('image request always includes moderation low', function () {
     });
 });
 
-test('image edit request hits deployment-scoped endpoint with multipart attachment', function () {
+test('image generation throws when attachments are passed', function () {
     Http::fake([
         '*' => fakeAzureImageResponse(),
     ]);
@@ -118,34 +116,7 @@ test('image edit request hits deployment-scoped endpoint with multipart attachme
     Image::of('Add a leaf to the apple')
         ->attachments([new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')])
         ->generate(provider: 'azure', model: 'gpt-image-1');
-
-    Http::assertSent(function (Request $request) {
-        $body = $request->body();
-
-        return $request->url() === 'https://test-resource.openai.azure.com/openai/deployments/gpt-image-1/images/edits?api-version=2025-04-01-preview'
-            && str_contains($request->header('Content-Type')[0] ?? '', 'multipart/form-data')
-            && str_contains($body, 'name="image[]"')
-            && str_contains($body, 'name="model"')
-            && str_contains($body, 'gpt-image-1')
-            && str_contains($body, 'Add a leaf to the apple')
-            && str_contains($body, 'name="moderation"')
-            && str_contains($body, "\r\nlow\r\n");
-    });
-});
-
-test('image edit request honors configured api version', function () {
-    config(['ai.providers.azure.api_version' => '2025-09-01-preview']);
-
-    Http::fake([
-        '*' => fakeAzureImageResponse(),
-    ]);
-
-    Image::of('Add a leaf to the apple')
-        ->attachments([new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')])
-        ->generate(provider: 'azure', model: 'gpt-image-1');
-
-    Http::assertSent(fn (Request $request) => str_contains($request->url(), 'api-version=2025-09-01-preview'));
-});
+})->throws(LogicException::class, 'The Azure OpenAI provider does not support image edits.');
 
 test('image generation request omits response_format', function () {
     Http::fake([
@@ -217,28 +188,6 @@ test('image response defaults to zero usage when not returned', function () {
 
     expect($response->usage->promptTokens)->toBe(0)
         ->and($response->usage->completionTokens)->toBe(0);
-});
-
-test('image edit reads bytes from configured storage disk for StoredImage attachments', function () {
-    Storage::fake('images');
-    Storage::disk('images')->put('apple.png', 'fake-stored-bytes');
-
-    Http::fake([
-        '*' => fakeAzureImageResponse(),
-    ]);
-
-    Image::of('Add a leaf to the apple')
-        ->attachments([new StoredImage('apple.png', 'images')])
-        ->generate(provider: 'azure', model: 'gpt-image-1');
-
-    Http::assertSent(function (Request $request) {
-        $body = $request->body();
-
-        return str_contains($request->url(), '/openai/deployments/gpt-image-1/images/edits')
-            && str_contains($request->url(), 'api-version=2025-04-01-preview')
-            && str_contains($body, 'name="image[]"')
-            && str_contains($body, 'fake-stored-bytes');
-    });
 });
 
 test('default image model falls back to gpt-image-1', function () {
