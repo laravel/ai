@@ -223,10 +223,6 @@ describe('usage tracking', function () {
     });
 
     test('streaming finish reason maps correctly', function (string $apiReason, $expected) {
-        if ($expected === FinishReason::ToolCalls) {
-            $this->markTestSkipped('Tool use finish reason triggers tool call handling, not StreamEnd');
-        }
-
         Http::fake([
             'api.anthropic.com/*' => Http::response(
                 body: $this->ssePayload([
@@ -250,6 +246,6 @@ describe('usage tracking', function () {
         'end_turn maps to Stop' => ['end_turn', FinishReason::Stop],
         'stop_sequence maps to Stop' => ['stop_sequence', FinishReason::Stop],
         'max_tokens maps to Length' => ['max_tokens', FinishReason::Length],
-        'tool_use maps to ToolCalls' => ['tool_use', FinishReason::ToolCalls],
+        'tool_use maps to ToolCalls without tool blocks (StreamEnd still emitted)' => ['tool_use', FinishReason::ToolCalls],
     ]);
 });
