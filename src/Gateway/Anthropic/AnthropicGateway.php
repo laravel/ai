@@ -65,7 +65,7 @@ class AnthropicGateway implements Gateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('messages', $body),
+            fn () => $this->client($provider, $timeout)->post('messages', $this->stripInternalKeys($body)),
         );
 
         $data = $response->json();
@@ -114,7 +114,7 @@ class AnthropicGateway implements Gateway
             $provider->name(),
             fn () => $this->client($provider, $timeout)
                 ->withOptions(['stream' => true])
-                ->post('messages', $body),
+                ->post('messages', $this->stripInternalKeys($body)),
         );
 
         yield from $this->processTextStream(

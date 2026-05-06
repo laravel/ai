@@ -11,6 +11,30 @@ use Laravel\Ai\Providers\Provider;
 trait BuildsTextRequests
 {
     /**
+     * Internal request-body key used to carry `tool_result_cache_type` across
+     * recursive tool-loop follow-up requests. Stripped before the HTTP send.
+     */
+    private const INTERNAL_TOOL_RESULT_CACHE_KEY = '__sdk_tool_result_cache_control';
+
+    protected function stripInternalKeys(array $body): array
+    {
+        unset($body[self::INTERNAL_TOOL_RESULT_CACHE_KEY]);
+
+        return $body;
+    }
+
+    /**
+     * Normalize a cache_control value to Anthropic's array format.
+     *
+     * Accepts the string shorthand 'ephemeral' or the full array form
+     * ['type' => 'ephemeral', 'ttl' => '5m'|'1h'].
+     */
+    protected function normalizeCacheControl(mixed $value): array
+    {
+        return is_array($value) ? $value : ['type' => 'ephemeral'];
+    }
+
+    /**
      * Build the request body for the Anthropic Messages API.
      */
     protected function buildTextRequestBody(
@@ -35,6 +59,26 @@ trait BuildsTextRequests
         $mappedTools = filled($tools) ? $this->mapTools($tools, $provider) : [];
 
         $providerOptions = $options?->providerOptions(Lab::Anthropic) ?? [];
+
+        if (isset($providerOptions['cache_control'])) {
+            if (isset($body['system']) && is_string($body['system'])) {
+                $body['system'] = [[
+                    'type' => 'text',
+                    'text' => $body['system'],
+                    'cache_control' => $this->normalizeCacheControl($providerOptions['cache_control']),
+                ]];
+            }
+
+            unset($providerOptions['cache_control']);
+        }
+
+        if (isset($providerOptions['tool_result_cache_type'])) {
+            $cacheControl = $this->normalizeCacheControl($providerOptions['tool_result_cache_type']);
+            $body['messages'] = $this->applyToolResultCacheControl($body['messages'], $cacheControl);
+            $body[self::INTERNAL_TOOL_RESULT_CACHE_KEY] = $cacheControl;
+
+            unset($providerOptions['tool_result_cache_type']);
+        }
 
         if (filled($schema) && $this->supportsNativeStructuredOutput($provider)) {
             $body['output_config'] = [
@@ -93,6 +137,33 @@ trait BuildsTextRequests
         $beta = $provider->additionalConfiguration()['anthropic_beta'] ?? '';
 
         return str_contains($beta, 'structured-outputs');
+    }
+
+    /**
+     * Attach a cache_control breakpoint to the last tool_result content block
+     * across the mapped messages. Used by the `tool_result_cache_type` shorthand.
+     *
+     * @param  array<int, array<string, mixed>>  $messages
+     * @param  array<string, mixed>  $cacheControl
+     * @return array<int, array<string, mixed>>
+     */
+    protected function applyToolResultCacheControl(array $messages, array $cacheControl): array
+    {
+        for ($i = count($messages) - 1; $i >= 0; $i--) {
+            if (! isset($messages[$i]['content']) || ! is_array($messages[$i]['content'])) {
+                continue;
+            }
+
+            for ($j = count($messages[$i]['content']) - 1; $j >= 0; $j--) {
+                if (($messages[$i]['content'][$j]['type'] ?? null) === 'tool_result') {
+                    $messages[$i]['content'][$j]['cache_control'] = $cacheControl;
+
+                    return $messages;
+                }
+            }
+        }
+
+        return $messages;
     }
 
     /**

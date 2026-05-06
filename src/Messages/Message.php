@@ -17,6 +17,13 @@ class Message
     public ?string $content;
 
     /**
+     * Provider-specific options for this message (e.g. cache_control).
+     *
+     * @var array<string, mixed>
+     */
+    public array $providerOptions = [];
+
+    /**
      * Create a new text conversation message instance.
      */
     public function __construct(MessageRole|string $role, ?string $content = '')
@@ -26,6 +33,18 @@ class Message
         $this->role = $role instanceof MessageRole
             ? $role
             : (MessageRole::tryFrom($role) ?? throw new InvalidArgumentException('Invalid message role.'));
+    }
+
+    /**
+     * Merge provider-specific options into this message.
+     *
+     * @param  array<string, mixed>  $options
+     */
+    public function withProviderOptions(array $options): static
+    {
+        $this->providerOptions = array_merge($this->providerOptions, $options);
+
+        return $this;
     }
 
     /**

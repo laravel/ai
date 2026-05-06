@@ -43,10 +43,7 @@ trait MapsMessages
             $content = array_merge($this->mapAttachments($message->attachments), $content);
         }
 
-        $mapped[] = [
-            'role' => 'user',
-            'content' => $content,
-        ];
+        $mapped[] = $this->withCacheControl(['role' => 'user', 'content' => $content], $message);
     }
 
     /**
@@ -55,10 +52,10 @@ trait MapsMessages
     protected function mapAssistantMessage(AssistantMessage|Message $message, array &$mapped): void
     {
         if ($message instanceof AssistantMessage && filled($message->providerContentBlocks)) {
-            $mapped[] = [
+            $mapped[] = $this->withCacheControl([
                 'role' => 'assistant',
                 'content' => $this->ensureToolInputIsObject($message->providerContentBlocks),
-            ];
+            ], $message);
 
             return;
         }
@@ -101,10 +98,7 @@ trait MapsMessages
         }
 
         if (filled($content)) {
-            $mapped[] = [
-                'role' => 'assistant',
-                'content' => $content,
-            ];
+            $mapped[] = $this->withCacheControl(['role' => 'assistant', 'content' => $content], $message);
         }
     }
 
@@ -127,9 +121,30 @@ trait MapsMessages
             ];
         }
 
-        $mapped[] = [
-            'role' => 'user',
-            'content' => $content,
-        ];
+        $mapped[] = $this->withCacheControl(['role' => 'user', 'content' => $content], $message);
+    }
+
+    /**
+     * Attach a `cache_control` breakpoint to the last content block of the
+     * mapped message when the source carries one in `providerOptions`.
+     *
+     * @param  array<string, mixed>  $entry
+     * @return array<string, mixed>
+     */
+    protected function withCacheControl(array $entry, Message $message): array
+    {
+        if (! isset($message->providerOptions['cache_control'])) {
+            return $entry;
+        }
+
+        if (! is_array($entry['content']) || count($entry['content']) === 0) {
+            return $entry;
+        }
+
+        $lastIndex = array_key_last($entry['content']);
+        $entry['content'][$lastIndex]['cache_control'] =
+            $this->normalizeCacheControl($message->providerOptions['cache_control']);
+
+        return $entry;
     }
 }

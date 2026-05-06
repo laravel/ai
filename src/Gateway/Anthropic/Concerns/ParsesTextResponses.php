@@ -219,11 +219,18 @@ trait ParsesTextResponses
             'content' => $toolResultContent,
         ];
 
+        if (isset($requestBody[self::INTERNAL_TOOL_RESULT_CACHE_KEY])) {
+            $requestBody['messages'] = $this->applyToolResultCacheControl(
+                $requestBody['messages'],
+                $requestBody[self::INTERNAL_TOOL_RESULT_CACHE_KEY],
+            );
+        }
+
         unset($requestBody['stream']);
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('messages', $requestBody),
+            fn () => $this->client($provider, $timeout)->post('messages', $this->stripInternalKeys($requestBody)),
         );
 
         $data = $response->json();

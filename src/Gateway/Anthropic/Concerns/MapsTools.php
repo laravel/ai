@@ -3,9 +3,11 @@
 namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\ProviderTool;
@@ -23,13 +25,32 @@ trait MapsTools
     protected function mapTools(array $tools, Provider $provider): array
     {
         $mapped = [];
+        $lastCacheIndex = null;
+        $lastCacheControl = null;
 
         foreach ($tools as $tool) {
             if ($tool instanceof ProviderTool) {
                 $mapped[] = $this->mapProviderTool($tool, $provider);
             } elseif ($tool instanceof Tool) {
                 $mapped[] = $this->mapTool($tool);
+            } else {
+                continue;
             }
+
+            if ($tool instanceof HasProviderOptions) {
+                $options = $tool->providerOptions(Lab::Anthropic);
+
+                if (isset($options['cache_control'])) {
+                    $lastCacheIndex = array_key_last($mapped);
+                    $lastCacheControl = $this->normalizeCacheControl($options['cache_control']);
+                }
+            }
+        }
+
+        // Anthropic caches every tool up to and including the marked tool as one prefix,
+        // so a single breakpoint on the last opting-in tool is the canonical pattern.
+        if ($lastCacheIndex !== null) {
+            $mapped[$lastCacheIndex]['cache_control'] = $lastCacheControl;
         }
 
         return $mapped;
