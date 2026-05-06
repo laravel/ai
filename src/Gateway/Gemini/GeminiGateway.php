@@ -25,6 +25,7 @@ use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
+use RuntimeException;
 
 class GeminiGateway implements Gateway
 {
@@ -180,8 +181,6 @@ class GeminiGateway implements Gateway
                 $part['inlineData']['mimeType'],
             ));
 
-        $usageMeta = $data['usageMetadata'] ?? [];
-
         return new ImageResponse(
             $images,
             $this->extractUsage($data),
@@ -221,6 +220,9 @@ class GeminiGateway implements Gateway
         );
     }
 
+    /**
+     * Generate audio from the given text.
+     */
     public function generateAudio(
         AudioProvider $provider,
         string $model,
@@ -258,16 +260,17 @@ class GeminiGateway implements Gateway
         );
 
         $data = $response->json();
+
         $encodedAudio = $data['candidates'][0]['content']['parts'][0]['inlineData']['data'] ?? null;
 
         if (! is_string($encodedAudio) || $encodedAudio === '') {
-            throw new \RuntimeException('No audio data received from Gemini API.');
+            throw new RuntimeException('No audio data received from Gemini API.');
         }
 
         $pcm = base64_decode($encodedAudio, true);
 
         if ($pcm === false) {
-            throw new \RuntimeException('Gemini returned invalid audio data.');
+            throw new RuntimeException('Gemini returned invalid audio data.');
         }
 
         return new AudioResponse(
@@ -277,6 +280,9 @@ class GeminiGateway implements Gateway
         );
     }
 
+    /**
+     * Generate text from the given audio.
+     */
     public function generateTranscription(
         TranscriptionProvider $provider,
         string $model,
@@ -327,6 +333,7 @@ class GeminiGateway implements Gateway
             );
 
             $data = json_decode($response->json('candidates.0.content.parts.0.text') ?? '{}', true);
+
             $text = $data['transcript'] ?? '';
 
             $segments = (new Collection($data['segments'] ?? []))->map(fn ($seg) => new TranscriptionSegment(
@@ -350,6 +357,7 @@ class GeminiGateway implements Gateway
             );
 
             $text = $response->json('candidates.0.content.parts.0.text') ?? '';
+
             $segments = new Collection;
         }
 
@@ -367,6 +375,9 @@ class GeminiGateway implements Gateway
         );
     }
 
+    /**
+     * Convert a timestamp string to seconds.
+     */
     protected function timestampToSeconds(string $timestamp): float
     {
         $timestamp = str_replace(',', '.', trim($timestamp));
@@ -386,6 +397,9 @@ class GeminiGateway implements Gateway
             + ((float) ($parts[2] ?? 0)) * 3600;
     }
 
+    /**
+     * Wrap raw PCM audio in a WAV container.
+     */
     protected function pcmToWav(string $pcm): string
     {
         $dataSize = strlen($pcm);

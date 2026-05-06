@@ -142,6 +142,22 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
     }
 
     /**
+     * Get the name of the default audio (TTS) model.
+     */
+    public function defaultAudioModel(): string
+    {
+        return $this->config['models']['audio']['default'] ?? 'gemini-2.5-flash-preview-tts';
+    }
+
+    /**
+     * Get the name of the default transcription (STT) model.
+     */
+    public function defaultTranscriptionModel(): string
+    {
+        return $this->config['models']['transcription']['default'] ?? 'gemini-3-flash-preview';
+    }
+
+    /**
      * Get the name of the default embeddings model.
      */
     public function defaultEmbeddingsModel(): string
@@ -171,21 +187,5 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
     public function storeGateway(): StoreGateway
     {
         return $this->storeGateway ??= new GeminiStoreGateway;
-    }
-
-    /**
-     * Get the name of the default audio (TTS) model.
-     */
-    public function defaultAudioModel(): string
-    {
-        return $this->config['models']['audio']['default'] ?? 'gemini-2.5-flash-preview-tts';
-    }
-
-    /**
-     * Get the name of the default transcription (STT) model.
-     */
-    public function defaultTranscriptionModel(): string
-    {
-        return $this->config['models']['transcription']['default'] ?? 'gemini-3-flash-preview';
     }
 }
