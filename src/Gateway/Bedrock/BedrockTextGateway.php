@@ -13,7 +13,7 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Gateway\Bedrock\Concerns\CreatesBedrockClient;
-use Laravel\Ai\Gateway\Bedrock\Concerns\MapsAttachment;
+use Laravel\Ai\Gateway\Bedrock\Concerns\MapsAttachments;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -45,7 +45,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
     use CreatesBedrockClient;
     use HandlesFailoverErrors;
     use InvokesTools;
-    use MapsAttachment;
+    use MapsAttachments;
 
     protected const STRUCTURED_OUTPUT_TOOL = 'structured_output';
 
@@ -71,7 +71,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
         $conversationMessages = $this->formatMessages($messages);
         $maxSteps = $this->resolveMaxSteps($tools, $options);
         $schemaTools = $schema ? $this->buildSchemaTools($schema, $tools) : null;
-        $formattedTools = $schemaTools === null && !empty($tools) ? $this->formatTools($tools) : null;
+        $formattedTools = $schemaTools === null && ! empty($tools) ? $this->formatTools($tools) : null;
 
         $allToolCalls = [];
         $allToolResults = [];
@@ -98,7 +98,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             try {
                 $response = $this->withErrorHandling(
                     $provider->name(),
-                    fn() => $client->converse($parameters),
+                    fn () => $client->converse($parameters),
                 );
 
                 $result = $response->toArray();
@@ -121,7 +121,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                     continue;
                 }
 
-                if (!isset($block['toolUse'])) {
+                if (! isset($block['toolUse'])) {
                     continue;
                 }
 
@@ -138,7 +138,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                 );
             }
 
-            if (!$schemaTools) {
+            if (! $schemaTools) {
                 $finalOutput = $output;
             }
 
@@ -166,7 +166,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
 
             $steps->push(new Step($output, $toolCalls, $toolResults, $finishReason, $stepUsage, $meta));
 
-            if (!empty($toolResults)) {
+            if (! empty($toolResults)) {
                 $conversationMessages[] = $this->buildToolResultConversationMessage($toolResults);
                 $responseMessages->push(new ToolResultMessage(new Collection($toolResults)));
             }
@@ -209,7 +209,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
         $conversationMessages = $this->formatMessages($messages);
         $maxSteps = $this->resolveMaxSteps($tools, $options);
         $schemaTools = $schema ? $this->buildSchemaTools($schema, $tools) : null;
-        $formattedTools = $schemaTools === null && !empty($tools) ? $this->formatTools($tools) : null;
+        $formattedTools = $schemaTools === null && ! empty($tools) ? $this->formatTools($tools) : null;
 
         $messageId = (string) Str::uuid();
         $timestamp = time();
@@ -232,7 +232,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             try {
                 $response = $this->withErrorHandling(
                     $provider->name(),
-                    fn() => $client->converseStream($parameters),
+                    fn () => $client->converseStream($parameters),
                 );
             } catch (Throwable $e) {
                 throw BedrockException::toAiException($e, $provider->name(), $model);
@@ -343,7 +343,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                 ))->withInvocationId($invocationId);
             }
 
-            if (!empty($toolResults)) {
+            if (! empty($toolResults)) {
                 $conversationMessages[] = $this->buildToolResultConversationMessage($toolResults);
             }
 
@@ -383,7 +383,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             try {
                 $response = $this->withErrorHandling(
                     $provider->name(),
-                    fn() => $client->invokeModel([
+                    fn () => $client->invokeModel([
                         'modelId' => $model,
                         'contentType' => 'application/json',
                         'accept' => 'application/json',
@@ -424,7 +424,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
         try {
             $response = $this->withErrorHandling(
                 $provider->name(),
-                fn() => $client->invokeModel([
+                fn () => $client->invokeModel([
                     'modelId' => $model,
                     'contentType' => 'application/json',
                     'accept' => 'application/json',
@@ -442,7 +442,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
 
         $embeddings = array_values(array_filter(
             $result['embeddings'] ?? [],
-            fn($vector) => is_array($vector),
+            fn ($vector) => is_array($vector),
         ));
 
         return new EmbeddingsResponse(
@@ -514,7 +514,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
 
         $inferenceConfig = $this->buildInferenceConfig($options);
 
-        if (!empty($inferenceConfig)) {
+        if (! empty($inferenceConfig)) {
             $parameters['inferenceConfig'] = $inferenceConfig;
         }
 
@@ -548,7 +548,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             'role' => 'assistant',
             'content' => array_merge(
                 $text !== '' ? [['text' => $text]] : [],
-                array_map(fn(ToolCall $toolCall) => [
+                array_map(fn (ToolCall $toolCall) => [
                     'toolUse' => [
                         'toolUseId' => $toolCall->id,
                         'name' => $toolCall->name,
@@ -568,7 +568,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
     {
         return [
             'role' => 'user',
-            'content' => array_map(fn(ToolResult $toolResult) => [
+            'content' => array_map(fn (ToolResult $toolResult) => [
                 'toolResult' => [
                     'toolUseId' => $toolResult->id,
                     'content' => [
@@ -605,12 +605,8 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
      * When a schema is present, toolChoice is only forced to the synthetic tool on the
      * final step so real tools can be invoked on earlier iterations.
      */
-    protected function buildToolConfig(
-        ?array $schemaTools,
-        ?array $formattedTools,
-        bool $toolsEmpty,
-        bool $isFinalStep
-    ): ?array {
+    protected function buildToolConfig(?array $schemaTools, ?array $formattedTools, bool $toolsEmpty, bool $isFinalStep): ?array
+    {
         if ($schemaTools !== null) {
             return [
                 'tools' => $schemaTools,
@@ -632,7 +628,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
      */
     protected function formatMessages(array $messages): array
     {
-        return (new Collection($messages))->map(fn($message) => match (true) {
+        return (new Collection($messages))->map(fn ($message) => match (true) {
             $message instanceof AssistantMessage => $this->formatAssistantMessage($message),
             $message instanceof ToolResultMessage => $this->formatToolResultMessage($message),
             $message instanceof UserMessage => $this->formatUserMessage($message),
@@ -648,7 +644,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
     {
         $content = [];
 
-        if (!empty($message->content)) {
+        if (! empty($message->content)) {
             $content[] = ['text' => $message->content];
         }
 
@@ -732,8 +728,8 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
     protected function formatTools(array $tools): array
     {
         return (new Collection($tools))
-            ->filter(fn($tool) => $tool instanceof Tool)
-            ->map(fn(Tool $tool) => [
+            ->filter(fn ($tool) => $tool instanceof Tool)
+            ->map(fn (Tool $tool) => [
                 'toolSpec' => [
                     'name' => ToolNameResolver::resolve($tool),
                     'description' => (string) $tool->description(),

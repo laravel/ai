@@ -1,12 +1,16 @@
 <?php
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Http\Testing\File as TestingFile;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Files\Document;
 use Laravel\Ai\Files\Image;
+use Laravel\Ai\Files\LocalImage;
+use Laravel\Ai\Files\ProviderImage;
+use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Gateway\Bedrock\BedrockTextGateway;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -20,7 +24,13 @@ use Tests\Fixtures\Tools\NamedTool;
 
 function textGateway(): object
 {
-    return new class extends BedrockTextGateway {
+    return new class extends BedrockTextGateway
+    {
+        public function callMapAttachments(Collection $attachments): array
+        {
+            return $this->mapAttachments($attachments);
+        }
+
         public function callFormatMessages(array $messages): array
         {
             return $this->formatMessages($messages);
@@ -36,12 +46,8 @@ function textGateway(): object
             return $this->buildSchemaTools($schema, $tools);
         }
 
-        public function callBuildToolConfig(
-            ?array $schemaTools,
-            ?array $formattedTools,
-            bool $toolsEmpty,
-            bool $isFinalStep
-        ): ?array {
+        public function callBuildToolConfig(?array $schemaTools, ?array $formattedTools, bool $toolsEmpty, bool $isFinalStep): ?array
+        {
             return $this->buildToolConfig($schemaTools, $formattedTools, $toolsEmpty, $isFinalStep);
         }
 
@@ -153,13 +159,11 @@ test('assistant message with tool calls is formatted with tool use blocks', func
         'role' => 'assistant',
         'content' => [
             ['text' => 'calling tool'],
-            [
-                'toolUse' => [
-                    'toolUseId' => 'tool-1',
-                    'name' => 'RandomGenerator',
-                    'input' => ['n' => 5],
-                ]
-            ],
+            ['toolUse' => [
+                'toolUseId' => 'tool-1',
+                'name' => 'RandomGenerator',
+                'input' => ['n' => 5],
+            ]],
         ],
     ]);
 });
@@ -185,14 +189,12 @@ test('tool result message is formatted with tool result blocks', function () {
 
     expect($formatted[0])->toEqual([
         'role' => 'user',
-        'content' => [
-            [
-                'toolResult' => [
-                    'toolUseId' => 'tool-1',
-                    'content' => [['text' => 'the result']],
-                ],
-            ]
-        ],
+        'content' => [[
+            'toolResult' => [
+                'toolUseId' => 'tool-1',
+                'content' => [['text' => 'the result']],
+            ],
+        ]],
     ]);
 });
 
@@ -247,11 +249,9 @@ test('document format maps common mime types', function () {
     expect($gateway->callGetDocumentFormat(new Base64Document('', 'application/pdf')))->toBe('pdf');
     expect($gateway->callGetDocumentFormat(new Base64Document('', 'text/csv')))->toBe('csv');
     expect($gateway->callGetDocumentFormat(new Base64Document('', 'application/msword')))->toBe('doc');
-    expect($gateway->callGetDocumentFormat(new Base64Document('',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document')))->toBe('docx');
+    expect($gateway->callGetDocumentFormat(new Base64Document('', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')))->toBe('docx');
     expect($gateway->callGetDocumentFormat(new Base64Document('', 'application/vnd.ms-excel')))->toBe('xls');
-    expect($gateway->callGetDocumentFormat(new Base64Document('',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')))->toBe('xlsx');
+    expect($gateway->callGetDocumentFormat(new Base64Document('', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')))->toBe('xlsx');
     expect($gateway->callGetDocumentFormat(new Base64Document('', 'text/html')))->toBe('html');
     expect($gateway->callGetDocumentFormat(new Base64Document('', 'text/markdown')))->toBe('md');
     expect($gateway->callGetDocumentFormat(new Base64Document('', 'text/x-markdown')))->toBe('md');
@@ -259,19 +259,60 @@ test('document format maps common mime types', function () {
     expect($gateway->callGetDocumentFormat(new Base64Document('', null)))->toBe('txt');
 });
 
-test('user message with image attachment produces image block', function () {
+test('user message with base64 image attachment produces image block', function () {
     $user = new UserMessage('see this', [new Base64Image(base64_encode('image-bytes'), 'image/png')]);
 
     $formatted = textGateway()->callFormatUserMessage($user);
 
     expect($formatted['role'])->toBe('user')
         ->and($formatted['content'][0])->toEqual(['text' => 'see this'])
-        ->and($formatted['content'][1]['image']['format'])->toBe('png')
-        ->and($formatted['content'][1]['image']['name'])->toBe('image')
-        ->and($formatted['content'][1]['image']['source']['bytes'])->toBe('image-bytes');
+        ->and($formatted['content'][1])->toEqual([
+            'image' => [
+                'format' => 'png',
+                'source' => ['bytes' => 'image-bytes'],
+            ],
+        ]);
 });
 
-test('image formats maps common image mime types', function () {
+test('local image attachment is read from disk into bytes', function () {
+    $tmp = tempnam(sys_get_temp_dir(), 'bedrock-image-');
+    file_put_contents($tmp, 'local-image-bytes');
+
+    try {
+        $mapped = textGateway()->callMapAttachments(new Collection([
+            new LocalImage($tmp, 'image/jpeg'),
+        ]));
+
+        expect($mapped[0])->toEqual([
+            'image' => [
+                'format' => 'jpeg',
+                'source' => ['bytes' => 'local-image-bytes'],
+            ],
+        ]);
+    } finally {
+        @unlink($tmp);
+    }
+});
+
+test('remote image attachment is rejected', function () {
+    expect(fn () => textGateway()->callMapAttachments(new Collection([
+        new RemoteImage('https://example.com/cat.png', 'image/png'),
+    ])))->toThrow(InvalidArgumentException::class, 'Remote attachments are not supported by Bedrock');
+});
+
+test('provider image attachment is rejected', function () {
+    expect(fn () => textGateway()->callMapAttachments(new Collection([
+        new ProviderImage('img_123'),
+    ])))->toThrow(InvalidArgumentException::class, 'Provider-stored attachments are not supported by Bedrock');
+});
+
+test('uploaded file attachment is rejected as unsupported', function () {
+    expect(fn () => textGateway()->callMapAttachments(new Collection([
+        TestingFile::create('cat.png'),
+    ])))->toThrow(InvalidArgumentException::class, 'Unsupported attachment type');
+});
+
+test('image format maps common image mime types', function () {
     $gateway = textGateway();
 
     expect($gateway->callGetImageFormat(new Base64Image('', 'image/png')))->toBe('png');
@@ -281,11 +322,14 @@ test('image formats maps common image mime types', function () {
     expect($gateway->callGetImageFormat(new Base64Image('', 'image/webp')))->toBe('webp');
 });
 
-test('image formats throw invalid argument exception when mime not supported', function () {
-    $gateway = textGateway();
-
-    expect(fn() => $gateway->callGetImageFormat(new Base64Image('', 'image/unsupported')))
+test('image format throws when mime type is unsupported', function () {
+    expect(fn () => textGateway()->callGetImageFormat(new Base64Image('', 'image/unsupported')))
         ->toThrow(InvalidArgumentException::class, 'Unsupported image MIME type [image/unsupported]');
+});
+
+test('image format throws when mime type is missing', function () {
+    expect(fn () => textGateway()->callGetImageFormat(new Base64Image('', null)))
+        ->toThrow(InvalidArgumentException::class, 'Unable to determine MIME type');
 });
 
 test('format tools produces converse tool specs', function () {
@@ -405,14 +449,12 @@ test('build tool result conversation message uses array form', function () {
 
     expect($message)->toEqual([
         'role' => 'user',
-        'content' => [
-            [
-                'toolResult' => [
-                    'toolUseId' => 't-1',
-                    'content' => [['text' => '{"out":true}']],
-                ],
-            ]
-        ],
+        'content' => [[
+            'toolResult' => [
+                'toolUseId' => 't-1',
+                'content' => [['text' => '{"out":true}']],
+            ],
+        ]],
     ]);
 });
 
