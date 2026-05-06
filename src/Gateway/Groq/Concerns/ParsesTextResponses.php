@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway\Groq\Concerns;
 
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\AiException;
@@ -226,7 +227,14 @@ trait ParsesTextResponses
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): TextResponse {
-        $chatMessages = $this->mapMessagesToChat($originalMessages, $instructions);
+        $mappedTools = filled($tools) ? $this->mapTools($tools) : [];
+        $hasTools = filled($mappedTools);
+        $inlineSchema = $hasTools && filled($schema);
+
+        $chatMessages = $this->mapMessagesToChat(
+            $originalMessages,
+            $inlineSchema ? $this->composeInstructions($instructions, $schema) : $instructions,
+        );
 
         foreach ($messages as $msg) {
             if ($msg instanceof AssistantMessage) {
@@ -259,16 +267,12 @@ trait ParsesTextResponses
             'messages' => $chatMessages,
         ];
 
-        if (filled($tools)) {
-            $mappedTools = $this->mapTools($tools);
-
-            if (filled($mappedTools)) {
-                $body['tool_choice'] = 'auto';
-                $body['tools'] = $mappedTools;
-            }
+        if ($hasTools) {
+            $body['tool_choice'] = 'auto';
+            $body['tools'] = $mappedTools;
         }
 
-        if (filled($schema)) {
+        if (filled($schema) && ! $inlineSchema) {
             $body['response_format'] = $this->buildResponseFormat($schema);
         }
 
@@ -276,9 +280,10 @@ trait ParsesTextResponses
             $body['max_completion_tokens'] = $options->maxTokens;
         }
 
-        if (! is_null($options?->temperature)) {
-            $body['temperature'] = $options->temperature;
-        }
+        $body = array_merge($body, Arr::whereNotNull([
+            'temperature' => $options?->temperature,
+            'top_p' => $options?->topP,
+        ]));
 
         $providerOptions = $options?->providerOptions($provider->driver());
 

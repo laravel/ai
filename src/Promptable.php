@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Container\Container;
 use Illuminate\Queue\SerializesModels;
+use InvalidArgumentException;
 use Laravel\Ai\Attributes\Model as ModelAttribute;
 use Laravel\Ai\Attributes\Provider as ProviderAttribute;
 use Laravel\Ai\Attributes\Timeout as TimeoutAttribute;
@@ -188,9 +189,13 @@ trait Promptable
             }
         }
 
-        return Provider::formatProviderAndModelList(
-            $provider ?? config('ai.default'), $model
-        );
+        $resolved = $provider ?? config('ai.default');
+
+        if (is_array($resolved) && array_intersect(array_keys($resolved), ['text', 'image', 'audio', 'transcription', 'embedding', 'reranking'])) {
+            throw new InvalidArgumentException('The "ai.default" config value must be a string provider name or a Lab enum, not an array.');
+        }
+
+        return Provider::formatProviderAndModelList($resolved, $model);
     }
 
     /**

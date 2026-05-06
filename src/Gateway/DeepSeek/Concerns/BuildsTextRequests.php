@@ -3,12 +3,14 @@
 namespace Laravel\Ai\Gateway\DeepSeek\Concerns;
 
 use Illuminate\Support\Arr;
+use Laravel\Ai\Gateway\Concerns\ComposesSchemaInstructions;
 use Laravel\Ai\Gateway\TextGenerationOptions;
-use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 
 trait BuildsTextRequests
 {
+    use ComposesSchemaInstructions;
+
     /**
      * Build the request body for the Chat Completions API.
      */
@@ -23,7 +25,10 @@ trait BuildsTextRequests
     ): array {
         $body = [
             'model' => $model,
-            'messages' => $this->mapMessagesToChat($messages, $instructions),
+            'messages' => $this->mapMessagesToChat(
+                $messages,
+                $this->composeInstructions($instructions, $schema),
+            ),
         ];
 
         if (filled($tools)) {
@@ -36,16 +41,17 @@ trait BuildsTextRequests
         }
 
         if (filled($schema)) {
-            $body['response_format'] = $this->buildResponseFormat($schema);
+            $body['response_format'] = $this->buildResponseFormat();
         }
 
         if (! is_null($options?->maxTokens)) {
             $body['max_completion_tokens'] = $options->maxTokens;
         }
 
-        if (! is_null($options?->temperature)) {
-            $body['temperature'] = $options->temperature;
-        }
+        $body = array_merge($body, Arr::whereNotNull([
+            'temperature' => $options?->temperature,
+            'top_p' => $options?->topP,
+        ]));
 
         $providerOptions = $options?->providerOptions($provider->driver());
 
@@ -59,19 +65,8 @@ trait BuildsTextRequests
     /**
      * Build the response format options for structured output.
      */
-    protected function buildResponseFormat(array $schema): array
+    protected function buildResponseFormat(): array
     {
-        $objectSchema = new ObjectSchema($schema);
-
-        $schemaArray = $objectSchema->toSchema();
-
-        return [
-            'type' => 'json_schema',
-            'json_schema' => [
-                'name' => $schemaArray['name'] ?? 'schema_definition',
-                'schema' => Arr::except($schemaArray, ['name']),
-                'strict' => true,
-            ],
-        ];
+        return ['type' => 'json_object'];
     }
 }

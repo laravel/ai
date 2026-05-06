@@ -76,6 +76,20 @@ class XaiProvider extends Provider implements ImageProvider, TextProvider
      */
     public function defaultImageOptions(?string $size = null, $quality = null): array
     {
-        return [];
+        return array_filter([
+            'aspect_ratio' => match ($size) {
+                '1:1' => '1:1',
+                '2:3' => '2:3',
+                '3:2' => '3:2',
+                null => null,
+                default => $size,
+            },
+            'resolution' => match ($quality) {
+                'low', '1K' => '1k',
+                'medium', '2K' => '2k',
+                'high', '4K' => '2k',
+                default => null,
+            },
+        ]);
     }
 }

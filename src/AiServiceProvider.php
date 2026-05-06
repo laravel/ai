@@ -21,7 +21,7 @@ class AiServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->scoped(AiManager::class, fn ($app): AiManager => new AiManager($app));
+        $this->app->singleton(AiManager::class, fn ($app): AiManager => new AiManager($app));
         $this->app->singleton(ConversationStore::class, DatabaseConversationStore::class);
 
         $this->mergeConfigFrom(__DIR__.'/../config/ai.php', 'ai');
@@ -60,6 +60,31 @@ class AiServiceProvider extends ServiceProvider
             }
 
             return $request->generate(provider: $provider, model: $model)->embeddings[0];
+        });
+
+        // Audio macro...
+        Stringable::macro('toAudio', function (
+            Lab|array|string|null $provider = null,
+            ?string $voice = null,
+            ?string $instructions = null,
+            ?string $model = null,
+            ?int $timeout = null,
+        ) {
+            $request = Audio::of($this->value);
+
+            if (! is_null($voice)) {
+                $request->voice($voice);
+            }
+
+            if (! is_null($instructions)) {
+                $request->instructions($instructions);
+            }
+
+            if (! is_null($timeout)) {
+                $request->timeout($timeout);
+            }
+
+            return $request->generate(provider: $provider, model: $model);
         });
 
         // Reranking macro...

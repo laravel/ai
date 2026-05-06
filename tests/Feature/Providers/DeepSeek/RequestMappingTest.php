@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Files\LocalImage;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
@@ -97,19 +98,30 @@ test('request without tools excludes tool fields', function () {
     });
 });
 
-test('structured output includes json schema response format', function () {
+test('structured output uses json object response format', function () {
     Http::fake(['*' => fakeDeepSeekResponse('{"symbol": "Au"}')]);
 
     (new StructuredAgent)->prompt('What is the symbol for Gold?', provider: 'deepseek');
 
     Http::assertSent(function (Request $request) {
         $body = json_decode($request->body(), true);
-        $format = data_get($body, 'response_format');
 
-        return $format['type'] === 'json_schema'
-            && isset($format['json_schema']['name'])
-            && isset($format['json_schema']['schema'])
-            && $format['json_schema']['strict'] === true;
+        return data_get($body, 'response_format') === ['type' => 'json_object'];
+    });
+});
+
+test('structured output appends schema instructions to system message', function () {
+    Http::fake(['*' => fakeDeepSeekResponse('{"symbol": "Au"}')]);
+
+    (new StructuredAgent)->prompt('What is the symbol for Gold?', provider: 'deepseek');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $systemMsg = collect($body['messages'])->firstWhere('role', 'system');
+
+        return $systemMsg !== null
+            && str_contains($systemMsg['content'], 'JSON object that strictly adheres')
+            && str_contains($systemMsg['content'], '"symbol"');
     });
 });
 
@@ -183,6 +195,37 @@ test('response usage is correctly parsed', function () {
         ->and($response->usage->completionTokens)->toBe(5);
 });
 
+test('response usage includes cache hit and reasoning tokens', function () {
+    Http::fake(['*' => Http::response([
+        'id' => 'chatcmpl-reasoner-1',
+        'object' => 'chat.completion',
+        'model' => 'deepseek-reasoner',
+        'choices' => [[
+            'index' => 0,
+            'message' => ['role' => 'assistant', 'content' => 'The answer is 4.'],
+            'finish_reason' => 'stop',
+        ]],
+        'usage' => [
+            'prompt_tokens' => 100,
+            'completion_tokens' => 50,
+            'prompt_cache_hit_tokens' => 20,
+            'prompt_cache_miss_tokens' => 80,
+            'total_tokens' => 150,
+            'completion_tokens_details' => [
+                'reasoning_tokens' => 15,
+            ],
+        ],
+    ])]);
+
+    $response = agent()->prompt('What is 2+2?', provider: 'deepseek', model: 'deepseek-reasoner');
+
+    expect($response->usage->promptTokens)->toBe(100)
+        ->and($response->usage->completionTokens)->toBe(50)
+        ->and($response->usage->cacheReadInputTokens)->toBe(20)
+        ->and($response->usage->cacheWriteInputTokens)->toBe(0)
+        ->and($response->usage->reasoningTokens)->toBe(15);
+});
+
 test('reasoning content from deepseek-reasoner is ignored, only content surfaces', function () {
     Http::fake(['*' => Http::response([
         'id' => 'chatcmpl-reasoner-1',
@@ -206,4 +249,24 @@ test('reasoning content from deepseek-reasoner is ignored, only content surfaces
     $response = agent()->prompt('What is 2+2?', provider: 'deepseek', model: 'deepseek-reasoner');
 
     expect($response->text)->toBe('The answer is 4.');
+});
+
+test('local image attachment without explicit mime type detects mime from file', function () {
+    Http::fake(['*' => fakeDeepSeekResponse('I see an image')]);
+
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')],
+        provider: 'deepseek',
+    );
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $userMsg = collect($body['messages'])->firstWhere('role', 'user');
+        $imageBlock = collect($userMsg['content'])->firstWhere('type', 'image_url');
+
+        return $imageBlock !== null
+            && str_starts_with($imageBlock['image_url']['url'], 'data:image/png;base64,')
+            && ! str_contains($imageBlock['image_url']['url'], 'data:;base64,');
+    });
 });

@@ -125,6 +125,25 @@ test('request without schema excludes response format', function () {
     });
 });
 
+test('schema combined with tools omits response format but keeps schema instructions', function () {
+    Http::fake(['*' => fakeGroqResponse('{"number": 42}')]);
+
+    agent(
+        tools: [new RandomNumberGenerator],
+        schema: fn ($s) => ['number' => $s->integer()->required()],
+    )->prompt('Give me a number', provider: 'groq');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $systemMsg = collect($body['messages'])->firstWhere('role', 'system');
+
+        return ! array_key_exists('response_format', $body)
+            && is_array($body['tools'])
+            && $systemMsg !== null
+            && str_contains($systemMsg['content'], 'JSON object that strictly adheres');
+    });
+});
+
 test('streaming request includes stream options', function () {
     Http::fake(['*' => Http::response("data: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"Hi\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1}}\n\ndata: [DONE]\n\n")]);
 

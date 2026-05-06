@@ -74,7 +74,7 @@ class AnthropicProvider extends Provider implements FileProvider, SupportsWebFet
      */
     public function smartestTextModel(): string
     {
-        return $this->config['models']['text']['smartest'] ?? 'claude-opus-4-6';
+        return $this->config['models']['text']['smartest'] ?? 'claude-opus-4-7';
     }
 
     /**

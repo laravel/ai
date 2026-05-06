@@ -152,7 +152,7 @@ class OpenAiGateway implements Gateway
                 $image['b64_json'] ?? '',
                 'image/png',
             )),
-            new Usage(0, 0),
+            $this->extractUsage($data),
             new Meta($provider->name(), $model),
         );
     }
@@ -172,6 +172,7 @@ class OpenAiGateway implements Gateway
             'model' => $model,
             'prompt' => $prompt,
             ...$provider->defaultImageOptions($size, $quality),
+            ...(str_starts_with($model, 'gpt-image') ? ['moderation' => 'low'] : []),
         ]);
     }
 
@@ -210,6 +211,7 @@ class OpenAiGateway implements Gateway
             'model' => $model,
             'prompt' => $prompt,
             ...$provider->defaultImageOptions($size, $quality),
+            ...(str_starts_with($model, 'gpt-image') ? ['moderation' => 'low'] : []),
         ]));
     }
 

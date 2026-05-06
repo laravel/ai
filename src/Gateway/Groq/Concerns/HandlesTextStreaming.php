@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\Groq\Concerns;
 
 use Generator;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Providers\Provider;
@@ -257,8 +258,15 @@ trait HandlesTextStreaming
 
             $updatedPriorMessages = [...$priorChatMessages, $assistantMsg, ...$toolResultMessages];
 
+            $mappedTools = filled($tools) ? $this->mapTools($tools) : [];
+            $hasTools = filled($mappedTools);
+            $inlineSchema = $hasTools && filled($schema);
+
             $chatMessages = [
-                ...$this->mapMessagesToChat($originalMessages, $instructions),
+                ...$this->mapMessagesToChat(
+                    $originalMessages,
+                    $inlineSchema ? $this->composeInstructions($instructions, $schema) : $instructions,
+                ),
                 ...$updatedPriorMessages,
             ];
 
@@ -269,16 +277,12 @@ trait HandlesTextStreaming
                 'stream_options' => ['include_usage' => true],
             ];
 
-            if (filled($tools)) {
-                $mappedTools = $this->mapTools($tools);
-
-                if (filled($mappedTools)) {
-                    $body['tool_choice'] = 'auto';
-                    $body['tools'] = $mappedTools;
-                }
+            if ($hasTools) {
+                $body['tool_choice'] = 'auto';
+                $body['tools'] = $mappedTools;
             }
 
-            if (filled($schema)) {
+            if (filled($schema) && ! $inlineSchema) {
                 $body['response_format'] = $this->buildResponseFormat($schema);
             }
 
@@ -286,9 +290,10 @@ trait HandlesTextStreaming
                 $body['max_completion_tokens'] = $options->maxTokens;
             }
 
-            if (! is_null($options?->temperature)) {
-                $body['temperature'] = $options->temperature;
-            }
+            $body = array_merge($body, Arr::whereNotNull([
+                'temperature' => $options?->temperature,
+                'top_p' => $options?->topP,
+            ]));
 
             $providerOptions = $options?->providerOptions($provider->driver());
 

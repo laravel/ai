@@ -116,7 +116,7 @@ trait ParsesTextResponses
         if (filled($toolResults)) {
             $messages->push(new ToolResultMessage(collect($toolResults)));
 
-            $contents[] = ['role' => 'model', 'parts' => $this->excludeThinkingParts($parts)];
+            $contents[] = ['role' => 'model', 'parts' => $this->sanitizeRequestParts($this->excludeThinkingParts($parts))];
             $contents[] = ['role' => 'user', 'parts' => $this->buildFunctionResponseParts($toolResults)];
 
             return $this->continueWithToolResults(
@@ -246,10 +246,31 @@ trait ParsesTextResponses
     }
 
     /**
+     * Sanitize functionCall parts so they can be sent back to Gemini as conversation history.
+     */
+    protected function sanitizeRequestParts(array $parts): array
+    {
+        return array_map(function (array $part) {
+            if (! isset($part['functionCall'])) {
+                return $part;
+            }
+
+            $functionCall = ['name' => $part['functionCall']['name'] ?? ''];
+
+            $args = $part['functionCall']['args'] ?? null;
+
+            if (filled($args)) {
+                $functionCall['args'] = $args;
+            }
+
+            $part['functionCall'] = $functionCall;
+
+            return $part;
+        }, $parts);
+    }
+
+    /**
      * Filter out thinking parts from the response, keeping only text and functionCall parts.
-     *
-     * Gemini may reject thought content in the conversation history, so these
-     * must be excluded from continuation requests.
      */
     protected function excludeThinkingParts(array $parts): array
     {

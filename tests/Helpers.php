@@ -48,6 +48,27 @@ function fakeOllamaResponse(string $text = 'Hello'): PromiseInterface
     ]);
 }
 
+function fakeAzureResponse(string $text = 'Hello'): PromiseInterface
+{
+    return Http::response([
+        'id' => 'resp_azure_123',
+        'status' => 'completed',
+        'model' => 'gpt-4o',
+        'output' => [[
+            'type' => 'message',
+            'status' => 'completed',
+            'content' => [[
+                'type' => 'output_text',
+                'text' => $text,
+            ]],
+        ]],
+        'usage' => [
+            'input_tokens' => 1,
+            'output_tokens' => 1,
+        ],
+    ]);
+}
+
 function fakeOpenAiResponse(string $text = 'Hello'): PromiseInterface
 {
     return Http::response([
@@ -117,6 +138,35 @@ function fakeOpenRouterToolCallResponse(): PromiseInterface
         'id' => 'chatcmpl-tool-123',
         'object' => 'chat.completion',
         'model' => 'anthropic/claude-sonnet-4.6',
+        'choices' => [[
+            'index' => 0,
+            'message' => [
+                'role' => 'assistant',
+                'content' => null,
+                'tool_calls' => [[
+                    'id' => 'call_123',
+                    'type' => 'function',
+                    'function' => [
+                        'name' => 'FixedNumberGenerator',
+                        'arguments' => '{}',
+                    ],
+                ]],
+            ],
+            'finish_reason' => 'tool_calls',
+        ]],
+        'usage' => [
+            'prompt_tokens' => 10,
+            'completion_tokens' => 5,
+        ],
+    ]);
+}
+
+function fakeDeepSeekToolCallResponse(): PromiseInterface
+{
+    return Http::response([
+        'id' => 'chatcmpl-deepseek-tool-123',
+        'object' => 'chat.completion',
+        'model' => 'deepseek-chat',
         'choices' => [[
             'index' => 0,
             'message' => [

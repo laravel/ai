@@ -36,6 +36,9 @@ class ProviderOptionsWithToolsAgent implements Agent, HasProviderOptions, HasToo
                     'budget_tokens' => 10000,
                 ],
             ],
+            Lab::Azure => [
+                'frequency_penalty' => 0.5,
+            ],
             Lab::OpenAI => [
                 'reasoning' => [
                     'effort' => 'high',
@@ -61,6 +64,9 @@ class ProviderOptionsWithToolsAgent implements Agent, HasProviderOptions, HasToo
                 'thinkingConfig' => [
                     'thinkingBudget' => 10000,
                 ],
+            ],
+            Lab::DeepSeek => [
+                'frequency_penalty' => 0.5,
             ],
             default => [],
         };
