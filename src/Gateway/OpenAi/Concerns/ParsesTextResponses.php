@@ -336,13 +336,15 @@ trait ParsesTextResponses
                         $citations->push(new UrlCitation(
                             $annotation['url'] ?? '',
                             $annotation['title'] ?? null,
+                            isset($annotation['start_index']) ? (int) $annotation['start_index'] : null,
+                            isset($annotation['end_index']) ? (int) $annotation['end_index'] : null,
                         ));
                     }
                 }
             }
         }
 
-        return $citations->unique('url')->values();
+        return $citations->values();
     }
 
     /**
