@@ -342,7 +342,7 @@ trait ParsesTextResponses
             }
         }
 
-        return $citations->unique('title')->values();
+        return $citations->unique('url')->values();
     }
 
     /**

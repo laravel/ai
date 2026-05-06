@@ -179,3 +179,46 @@ test('structured response is correctly parsed', function () {
 
     expect($response->structured['symbol'])->toBe('Au');
 });
+
+test('citations are deduplicated by url, not title', function () {
+    Http::fake(['*' => Http::response([
+        'id' => 'resp_123',
+        'status' => 'completed',
+        'model' => 'gpt-5.4',
+        'output' => [[
+            'type' => 'message',
+            'status' => 'completed',
+            'content' => [[
+                'type' => 'output_text',
+                'text' => 'Here are sources',
+                'annotations' => [
+                    [
+                        'type' => 'url_citation',
+                        'url' => 'https://example.com/one',
+                        'title' => 'Same Title',
+                    ],
+                    [
+                        'type' => 'url_citation',
+                        'url' => 'https://example.com/two',
+                        'title' => 'Same Title',
+                    ],
+                    [
+                        'type' => 'url_citation',
+                        'url' => 'https://example.com/one',
+                        'title' => 'Same Title',
+                    ],
+                ],
+            ]],
+        ]],
+        'usage' => [
+            'input_tokens' => 10,
+            'output_tokens' => 5,
+        ],
+    ])]);
+
+    $response = agent()->prompt('Give me sources', provider: 'openai');
+
+    expect($response->meta->citations)->toHaveCount(2)
+        ->and($response->meta->citations[0]->url)->toBe('https://example.com/one')
+        ->and($response->meta->citations[1]->url)->toBe('https://example.com/two');
+});
