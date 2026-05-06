@@ -1,9 +1,9 @@
 <?php
 
-use Laravel\Ai\Responses\Data\Step;
 use Laravel\Ai\Responses\Data\FinishReason;
-use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Step;
+use Laravel\Ai\Responses\Data\Usage;
 
 test('step stores text tool calls and other properties', function () {
     $usage = new Usage(10, 5);

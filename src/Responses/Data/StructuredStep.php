@@ -26,9 +26,7 @@ class StructuredStep extends Step
      */
     public function toArray(): array
     {
-        return array_merge(parent::toArray(), [
-            'structured' => $this->structured,
-        ]);
+        return [...parent::toArray(), 'structured' => $this->structured];
     }
 
     /**
