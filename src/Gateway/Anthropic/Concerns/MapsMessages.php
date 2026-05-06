@@ -142,8 +142,7 @@ trait MapsMessages
         }
 
         $lastIndex = array_key_last($entry['content']);
-        $entry['content'][$lastIndex]['cache_control'] =
-            $this->normalizeCacheControl($message->providerOptions['cache_control']);
+        $entry['content'][$lastIndex]['cache_control'] = $message->providerOptions['cache_control'];
 
         return $entry;
     }

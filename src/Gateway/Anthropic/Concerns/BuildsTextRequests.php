@@ -11,7 +11,7 @@ use Laravel\Ai\Providers\Provider;
 trait BuildsTextRequests
 {
     /**
-     * Internal request-body key used to carry `tool_result_cache_type` across
+     * Internal request-body key used to carry `tool_result_cache_control` across
      * recursive tool-loop follow-up requests. Stripped before the HTTP send.
      */
     private const INTERNAL_TOOL_RESULT_CACHE_KEY = '__sdk_tool_result_cache_control';
@@ -21,17 +21,6 @@ trait BuildsTextRequests
         unset($body[self::INTERNAL_TOOL_RESULT_CACHE_KEY]);
 
         return $body;
-    }
-
-    /**
-     * Normalize a cache_control value to Anthropic's array format.
-     *
-     * Accepts the string shorthand 'ephemeral' or the full array form
-     * ['type' => 'ephemeral', 'ttl' => '5m'|'1h'].
-     */
-    protected function normalizeCacheControl(mixed $value): array
-    {
-        return is_array($value) ? $value : ['type' => 'ephemeral'];
     }
 
     /**
@@ -65,19 +54,19 @@ trait BuildsTextRequests
                 $body['system'] = [[
                     'type' => 'text',
                     'text' => $body['system'],
-                    'cache_control' => $this->normalizeCacheControl($providerOptions['cache_control']),
+                    'cache_control' => $providerOptions['cache_control'],
                 ]];
             }
 
             unset($providerOptions['cache_control']);
         }
 
-        if (isset($providerOptions['tool_result_cache_type'])) {
-            $cacheControl = $this->normalizeCacheControl($providerOptions['tool_result_cache_type']);
+        if (isset($providerOptions['tool_result_cache_control'])) {
+            $cacheControl = $providerOptions['tool_result_cache_control'];
             $body['messages'] = $this->applyToolResultCacheControl($body['messages'], $cacheControl);
             $body[self::INTERNAL_TOOL_RESULT_CACHE_KEY] = $cacheControl;
 
-            unset($providerOptions['tool_result_cache_type']);
+            unset($providerOptions['tool_result_cache_control']);
         }
 
         if (filled($schema) && $this->supportsNativeStructuredOutput($provider)) {

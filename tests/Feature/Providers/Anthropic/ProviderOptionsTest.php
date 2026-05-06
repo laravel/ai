@@ -20,13 +20,13 @@ use Tests\Fixtures\Agents\ProviderOptionsAgent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
-function cachedSystemPromptAgent(array|string $cacheControl = ['type' => 'ephemeral']): object
+function cachedSystemPromptAgent(array $cacheControl = ['type' => 'ephemeral']): object
 {
     return new class($cacheControl) implements Agent, HasProviderOptions
     {
         use Promptable;
 
-        public function __construct(public array|string $cacheControl) {}
+        public function __construct(public array $cacheControl) {}
 
         public function instructions(): string
         {
@@ -152,18 +152,6 @@ test('system prompt remains a string when cache_control absent', function () {
     Http::assertSent(fn ($request) => is_string($request->data()['system']));
 });
 
-test('cache_control accepts string shorthand on system prompt', function () {
-    Http::fake([
-        'api.anthropic.com/*' => $this->fakeTextResponse(),
-    ]);
-
-    cachedSystemPromptAgent('ephemeral')->prompt('Hi', provider: 'anthropic');
-
-    Http::assertSent(function ($request) {
-        return $request->data()['system'][0]['cache_control'] === ['type' => 'ephemeral'];
-    });
-});
-
 test('tool implementing HasProviderOptions attaches cache_control to that tool', function () {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse(),
@@ -223,7 +211,7 @@ test('tool implementing HasProviderOptions attaches cache_control to that tool',
     });
 });
 
-test('tool_result_cache_type attaches cache_control to the last tool_result content block', function () {
+test('tool_result_cache_control attaches cache_control to the last tool_result content block', function () {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence([
             $this->fakeToolCallResponse(),
@@ -247,7 +235,7 @@ test('tool_result_cache_type attaches cache_control to the last tool_result cont
 
         public function providerOptions(Lab|string $provider): array
         {
-            return ['tool_result_cache_type' => 'ephemeral'];
+            return ['tool_result_cache_control' => ['type' => 'ephemeral']];
         }
     };
 
@@ -264,7 +252,7 @@ test('tool_result_cache_type attaches cache_control to the last tool_result cont
         ->and($toolResultMessage['content'][0]['cache_control'])
         ->toBe(['type' => 'ephemeral']);
 
-    expect($secondBody)->not->toHaveKey('tool_result_cache_type');
+    expect($secondBody)->not->toHaveKey('tool_result_cache_control');
 });
 
 test('ToolResultMessage::withProviderOptions attaches cache_control to its last content block', function () {

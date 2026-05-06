@@ -42,7 +42,7 @@ trait MapsTools
 
                 if (isset($options['cache_control'])) {
                     $lastCacheIndex = array_key_last($mapped);
-                    $lastCacheControl = $this->normalizeCacheControl($options['cache_control']);
+                    $lastCacheControl = $options['cache_control'];
                 }
             }
         }
