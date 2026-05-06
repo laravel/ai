@@ -97,11 +97,11 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, ImagePr
     }
 
     /**
-     * Get the name of the default image model.
+     * Get the name of the default image deployment.
      */
     public function defaultImageModel(): string
     {
-        return $this->config['image_deployment'] ?? 'dall-e-3';
+        return $this->config['image_deployment'] ?? 'gpt-image-1';
     }
 
     /**

@@ -16,6 +16,7 @@ use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Files\File;
+use Laravel\Ai\Files\Image as ImageFile;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\StoredImage;
 use Laravel\Ai\Gateway\AzureOpenAi\Concerns\CreatesAzureOpenAiClient;
@@ -216,10 +217,8 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
         return $this->client($provider, $timeout ?? 120)->post('images/generations', [
             'model' => $model,
             'prompt' => $prompt,
+            'moderation' => 'low',
             ...$provider->defaultImageOptions($size, $quality),
-            ...(str_starts_with($model, 'gpt-image')
-                ? ['moderation' => 'low']
-                : ['response_format' => 'b64_json']),
         ]);
     }
 
@@ -241,10 +240,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
         ?string $quality,
         ?int $timeout,
     ) {
-        $request = $this->client($provider, $timeout ?? 120);
-
-        $isGptImage = str_starts_with($model, 'gpt-image');
-        $field = $isGptImage ? 'image[]' : 'image';
+        $request = $this->deploymentClient($provider, $model, $timeout ?? 120);
 
         foreach ($attachments as $attachment) {
             if (! $attachment instanceof File && ! $attachment instanceof UploadedFile) {
@@ -260,21 +256,14 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
                 default => throw new InvalidArgumentException('Unsupported image attachment type ['.get_class($attachment).']'),
             };
 
-            $request = $request->attach($field, $content, 'image.png');
+            $request = $request->attach('image[]', $content, 'image.png');
         }
 
-        $config = $provider->additionalConfiguration();
-        $base = rtrim($config['url'] ?? '', '/');
-        $apiVersion = $config['api_version'] ?? '2025-04-01-preview';
-        $url = "{$base}/openai/deployments/{$model}/images/edits?api-version={$apiVersion}";
-
-        return $request->post($url, array_filter([
+        return $request->post('images/edits', array_filter([
             'model' => $model,
             'prompt' => $prompt,
+            'moderation' => 'low',
             ...$provider->defaultImageOptions($size, $quality),
-            ...($isGptImage
-                ? ['moderation' => 'low']
-                : ['response_format' => 'b64_json']),
         ]));
     }
 
