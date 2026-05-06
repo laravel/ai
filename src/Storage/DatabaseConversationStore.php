@@ -23,14 +23,6 @@ class DatabaseConversationStore implements ConversationStore
     public function __construct(protected ?string $connection = null) {}
 
     /**
-     * Get a query builder for the given table using the configured connection.
-     */
-    protected function table(string $table): Builder
-    {
-        return DB::connection($this->connection)->table($table);
-    }
-
-    /**
      * Get the most recent conversation ID for a given user.
      */
     public function latestConversationId(string|int $userId): ?string
@@ -165,5 +157,13 @@ class DatabaseConversationStore implements ConversationStore
 
                 return [new AssistantMessage($record->content)];
             });
+    }
+
+    /**
+     * Get a query builder for the given table using the configured connection.
+     */
+    protected function table(string $table): Builder
+    {
+        return DB::connection($this->connection)->table($table);
     }
 }

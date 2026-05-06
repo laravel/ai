@@ -22,21 +22,6 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Conversation Store
-    |--------------------------------------------------------------------------
-    |
-    | Here you may configure the database connection that the conversation store
-    | uses to persist agent conversations and messages. Set "connection" to
-    | null to use the default database connection from your application.
-    |
-    */
-
-    'conversations' => [
-        'connection' => env('AI_CONVERSATION_CONNECTION'),
-    ],
-
-    /*
-    |--------------------------------------------------------------------------
     | Caching
     |--------------------------------------------------------------------------
     |
