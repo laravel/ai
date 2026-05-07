@@ -6,6 +6,7 @@ use Generator;
 use Illuminate\Support\Str;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\Data\UrlCitation;
@@ -404,7 +405,7 @@ trait HandlesTextStreaming
         if ($depth + 1 >= ($maxSteps ?? round(count($tools) * 1.5))) {
             yield (new StreamEnd(
                 $this->generateEventId(),
-                'stop',
+                FinishReason::ToolCalls->value,
                 new Usage(0, 0),
                 time(),
             ))->withInvocationId($invocationId);
