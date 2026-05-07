@@ -22,19 +22,6 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Conversation Title
-    |--------------------------------------------------------------------------
-    |
-    | Here you may configure how conversation titles are generated. By default,
-    | an LLM request generates the title. Setting this option to false will
-    | use a truncated version of the first prompt as the title instead.
-    |
-    */
-
-    'generate_conversation_title' => env('AI_GENERATE_CONVERSATION_TITLE', true),
-
-    /*
-    |--------------------------------------------------------------------------
     | Caching
     |--------------------------------------------------------------------------
     |
