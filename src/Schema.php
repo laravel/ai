@@ -13,7 +13,7 @@ class Schema implements Schemable
     public function __construct(
         public Type $schema,
         public string $name = 'schema_definition',
-        public bool $strict = true
+        public bool $strict = false
     ) {}
 
     /**

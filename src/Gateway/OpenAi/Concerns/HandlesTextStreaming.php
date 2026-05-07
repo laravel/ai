@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 use Generator;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
+use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Providers\Provider;
@@ -373,7 +374,7 @@ trait HandlesTextStreaming
             }
 
             if (filled($schema)) {
-                $body['text'] = $this->buildSchemaFormat($schema);
+                $body['text'] = $this->buildSchemaFormat($schema, Strict::isAppliedTo($options?->agent));
             }
 
             $body = array_merge($body, Arr::whereNotNull([
