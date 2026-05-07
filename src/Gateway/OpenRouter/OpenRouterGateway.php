@@ -5,13 +5,13 @@ namespace Laravel\Ai\Gateway\OpenRouter;
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Collection;
-use LogicException;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
@@ -193,7 +193,7 @@ class OpenRouterGateway implements EmbeddingGateway, ImageGateway, TextGateway
     /**
      * Build the messages array for an image generation request.
      *
-     * @param  array<\Laravel\Ai\Files\Image>  $attachments
+     * @param  array<Image>  $attachments
      */
     protected function buildImageMessages(string $prompt, array $attachments): array
     {
@@ -218,10 +218,6 @@ class OpenRouterGateway implements EmbeddingGateway, ImageGateway, TextGateway
         int $timeout = 30,
         bool $truncate = true,
     ): EmbeddingsResponse {
-        if (! $truncate) {
-            throw new LogicException('The OpenRouter provider does not support disabling embedding truncation.');
-        }
-
         $body = [
             'model' => $model,
             'input' => $inputs,

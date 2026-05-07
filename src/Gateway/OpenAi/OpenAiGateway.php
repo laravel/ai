@@ -7,7 +7,6 @@ use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
-use LogicException;
 use Laravel\Ai\Contracts\Files\HasName;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\Gateway;
@@ -330,10 +329,6 @@ class OpenAiGateway implements Gateway
         int $timeout = 30,
         bool $truncate = true,
     ): EmbeddingsResponse {
-        if (! $truncate) {
-            throw new LogicException('The OpenAI provider does not support disabling embedding truncation.');
-        }
-
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post('embeddings', [

@@ -4,7 +4,6 @@ namespace Laravel\Ai\Gateway\Mistral;
 
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
-use LogicException;
 use Laravel\Ai\Contracts\Files\HasName;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
@@ -146,10 +145,6 @@ class MistralGateway implements EmbeddingGateway, TextGateway, TranscriptionGate
         int $timeout = 30,
         bool $truncate = true,
     ): EmbeddingsResponse {
-        if (! $truncate) {
-            throw new LogicException('The Mistral provider does not support disabling embedding truncation.');
-        }
-
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post('embeddings', [
