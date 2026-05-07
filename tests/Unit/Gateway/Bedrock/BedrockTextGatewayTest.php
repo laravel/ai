@@ -94,7 +94,7 @@ function textGateway(): object
             return $this->resolveMaxSteps($tools, $options);
         }
 
-        public function callGetDocumentFormat(Document $document): string
+        public function callGetDocumentFormat(Document $document): ?string
         {
             return $this->getDocumentFormat($document);
         }
@@ -297,7 +297,7 @@ test('document format maps common mime types', function () {
     expect($gateway->callGetDocumentFormat(new Base64Document('', 'text/markdown')))->toBe('md');
     expect($gateway->callGetDocumentFormat(new Base64Document('', 'text/x-markdown')))->toBe('md');
     expect($gateway->callGetDocumentFormat(new Base64Document('', 'text/plain; charset=utf-8')))->toBe('txt');
-    expect($gateway->callGetDocumentFormat(new Base64Document('', null)))->toBe('txt');
+    expect($gateway->callGetDocumentFormat(new Base64Document('', null)))->toBeNull();
 });
 
 test('user message with base64 image attachment produces image block', function () {

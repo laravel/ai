@@ -59,11 +59,11 @@ trait MapsAttachments
     protected function buildDocumentBlock(Document $document): array
     {
         return [
-            'document' => [
+            'document' => array_filter([
                 'format' => $this->getDocumentFormat($document),
                 'name' => $this->getDocumentName($document),
                 'source' => $document->source(),
-            ],
+            ]),
         ];
     }
 
@@ -85,9 +85,13 @@ trait MapsAttachments
     /**
      * Map a Document's MIME type to a Bedrock document format.
      */
-    protected function getDocumentFormat(Document $document): string
+    protected function getDocumentFormat(Document $document): ?string
     {
-        $mime = strtolower(trim(strtok($document->mimeType() ?? 'text/plain', ';')));
+        $mime = strtolower(trim(strtok($document->mimeType() ?? '', ';')));
+
+        if (!$mime) {
+            return null;
+        }
 
         return match ($mime) {
             'application/pdf' => 'pdf',
@@ -98,7 +102,8 @@ trait MapsAttachments
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
             'text/html' => 'html',
             'text/markdown', 'text/x-markdown' => 'md',
-            default => 'txt',
+            'text/plain' => 'txt',
+            default => null,
         };
     }
 
