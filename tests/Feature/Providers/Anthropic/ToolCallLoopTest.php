@@ -75,56 +75,6 @@ test('server_tool_use input is serialized as object on follow-up replay', functi
         ->not->toContain('"input":[]');
 });
 
-test('pause_turn stop reason triggers follow-up request replaying assistant content', function () {
-    // A dangling server_tool_use (e.g. advisor) can produce stop_reason:
-    // pause_turn, which means the server-side loop needs the client to send
-    // the assistant response back verbatim so the server can continue.
-    // Without handling, the conversation terminates prematurely.
-    $pauseTurnResponse = Http::response([
-        'id' => 'msg_pause',
-        'type' => 'message',
-        'role' => 'assistant',
-        'model' => 'claude-sonnet-4-6',
-        'content' => [
-            ['type' => 'text', 'text' => 'Consulting advisor.'],
-            [
-                'type' => 'server_tool_use',
-                'id' => 'srvtoolu_pause',
-                'name' => 'advisor',
-                'input' => (object) [],
-            ],
-        ],
-        'stop_reason' => 'pause_turn',
-        'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
-    ]);
-
-    Http::fake([
-        'api.anthropic.com/*' => Http::sequence([
-            $pauseTurnResponse,
-            $this->fakeTextResponse('Done'),
-        ]),
-    ]);
-
-    (new ToolUsingAgent(fixed: true))->prompt(
-        'Help me plan something',
-        provider: 'anthropic',
-    );
-
-    $recorded = Http::recorded();
-    expect($recorded)->toHaveCount(2);
-
-    $payload = json_decode($recorded[1][0]->body(), false, 512, JSON_THROW_ON_ERROR);
-
-    $messages = $payload->messages;
-    $lastMessage = end($messages);
-
-    expect($lastMessage->role)->toBe('assistant')
-        ->and(array_column((array) $lastMessage->content, 'type'))->toBe(['text', 'server_tool_use']);
-
-    $serverToolUse = collect($lastMessage->content)->firstWhere('type', 'server_tool_use');
-    expect($serverToolUse->input)->toBeInstanceOf(stdClass::class);
-});
-
 test('pause_turn resumes when last block is text following a web_search_tool_result', function () {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence([

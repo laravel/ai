@@ -236,14 +236,14 @@ trait HandlesTextStreaming
                             time(),
                         ))->withInvocationId($invocationId);
                     }
-                } elseif ($deltaType === 'input_json_delta' && $currentBlockType === 'tool_use') {
-                    $partial = $data['delta']['partial_json'] ?? '';
+                } elseif ($deltaType === 'input_json_delta') {
+                    $partial = (string) ($data['delta']['partial_json'] ?? '');
 
-                    if ($currentToolIndex >= 0 && isset($pendingToolCalls[$currentToolIndex])) {
+                    if ($currentBlockType === 'tool_use' && $currentToolIndex >= 0 && isset($pendingToolCalls[$currentToolIndex])) {
                         $pendingToolCalls[$currentToolIndex]['arguments'] .= $partial;
+                    } elseif ($currentBlockType === 'server_tool_use') {
+                        $currentServerToolInput .= $partial;
                     }
-                } elseif ($deltaType === 'input_json_delta' && $currentBlockType === 'server_tool_use') {
-                    $currentServerToolInput .= (string) ($data['delta']['partial_json'] ?? '');
                 }
 
                 continue;
@@ -353,8 +353,7 @@ trait HandlesTextStreaming
             return;
         }
 
-        if ($stopReason === 'pause_turn'
-            && $depth + 1 < ($maxSteps ?? 5)) {
+        if ($stopReason === 'pause_turn' && $depth + 1 < ($maxSteps ?? 5)) {
             yield from $this->resumeFromPauseTurn(
                 $invocationId,
                 $provider,
