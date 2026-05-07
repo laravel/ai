@@ -6,6 +6,7 @@ use Generator;
 use Illuminate\Support\Str;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\Data\UrlCitation;
@@ -344,12 +345,8 @@ trait HandlesTextStreaming
             return;
         }
 
-        $lastBlock = $responseContent !== [] ? end($responseContent) : [];
-        $lastBlockType = $lastBlock['type'] ?? '';
-
         if ($stopReason === 'pause_turn'
-            && $lastBlockType === 'server_tool_use'
-            && $depth + 1 < ($maxSteps ?? max(3, round(count($tools) * 1.5)))) {
+            && $depth + 1 < ($maxSteps ?? 5)) {
             yield from $this->resumeFromPauseTurn(
                 $invocationId,
                 $provider,
@@ -427,7 +424,7 @@ trait HandlesTextStreaming
         if ($depth + 1 >= ($maxSteps ?? round(count($tools) * 1.5))) {
             yield (new StreamEnd(
                 $this->generateEventId(),
-                'stop',
+                FinishReason::ToolCalls->value,
                 new Usage(0, 0),
                 time(),
             ))->withInvocationId($invocationId);

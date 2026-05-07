@@ -100,15 +100,8 @@ trait ParsesTextResponses
             && filled($realToolCalls)
             && $depth + 1 < ($maxSteps ?? round(count($tools) * 1.5));
 
-        // pause_turn is a server-side loop signal: the last content block is
-        // a dangling server_tool_use that the server needs echoed back. Can
-        // happen with no client tools registered, so its cap can't be tied
-        // to the tool count the way tool_use is. Fall back to a small
-        // default when not set.
-        $lastBlockType = $content !== [] ? ($content[array_key_last($content)]['type'] ?? '') : '';
         $shouldResumePauseTurn = $stopReason === 'pause_turn'
-            && $lastBlockType === 'server_tool_use'
-            && $depth + 1 < ($maxSteps ?? max(3, round(count($tools) * 1.5)));
+            && $depth + 1 < ($maxSteps ?? 5);
 
         if ($shouldContinue) {
             $toolResults = $this->executeToolCalls($realToolCalls, $tools);
@@ -275,8 +268,7 @@ trait ParsesTextResponses
 
     /**
      * Continue the conversation after a pause_turn stop reason by replaying
-     * the assistant response as-is. No tool results are sent — the
-     * server-side loop resumes from the dangling server_tool_use block.
+     * the assistant response as-is so the server can resume its turn.
      */
     protected function continueFromPauseTurn(
         array $previousData,

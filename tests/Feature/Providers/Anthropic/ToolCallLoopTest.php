@@ -125,11 +125,7 @@ test('pause_turn stop reason triggers follow-up request replaying assistant cont
     expect($serverToolUse->input)->toBeInstanceOf(stdClass::class);
 });
 
-test('pause_turn is ignored when last block is not server_tool_use', function () {
-    // Guard: pause_turn should only resume when the last content block is a
-    // dangling server_tool_use (matches Anthropic's documented contract).
-    // If it fires on any pause_turn we risk spurious continuations and
-    // possibly reflecting wrong content back to the server.
+test('pause_turn resumes when last block is text following a web_search_tool_result', function () {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence([
             Http::response([
@@ -141,15 +137,20 @@ test('pause_turn is ignored when last block is not server_tool_use', function ()
                     [
                         'type' => 'server_tool_use',
                         'id' => 'srvtoolu_1',
-                        'name' => 'advisor',
-                        'input' => (object) [],
+                        'name' => 'web_search',
+                        'input' => (object) ['query' => 'q'],
                     ],
-                    ['type' => 'text', 'text' => 'Paused here.'],
+                    [
+                        'type' => 'web_search_tool_result',
+                        'tool_use_id' => 'srvtoolu_1',
+                        'content' => [],
+                    ],
+                    ['type' => 'text', 'text' => 'Paused mid-summary.'],
                 ],
                 'stop_reason' => 'pause_turn',
                 'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
             ]),
-            $this->fakeTextResponse('should not be called'),
+            $this->fakeTextResponse('Done'),
         ]),
     ]);
 
@@ -158,7 +159,7 @@ test('pause_turn is ignored when last block is not server_tool_use', function ()
         provider: 'anthropic',
     );
 
-    expect(Http::recorded())->toHaveCount(1);
+    expect(Http::recorded())->toHaveCount(2);
 });
 
 test('full compose: pause_turn + server_tool_use replay with input cast and block order preserved', function () {
