@@ -40,6 +40,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Conversations
+    |--------------------------------------------------------------------------
+    |
+    | These options control how conversational metadata is generated when
+    | a new persisted conversation is created for an agent prompt.
+    |
+    */
+
+    'conversations' => [
+        'generate_title' => env('AI_GENERATE_CONVERSATION_TITLE', true),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | AI Providers
     |--------------------------------------------------------------------------
     |
