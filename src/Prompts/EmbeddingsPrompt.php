@@ -21,7 +21,13 @@ class EmbeddingsPrompt implements Countable
      */
     public function contains(string $string): bool
     {
-        return array_any($this->inputs, fn ($input) => Str::contains($input, $string));
+        foreach ($this->inputs as $input) {
+            if (Str::contains($input, $string)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
