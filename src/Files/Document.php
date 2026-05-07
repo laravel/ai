@@ -52,14 +52,10 @@ abstract class Document extends File
     }
 
     /**
-     * Create a new remote document using the document at the given URL.
+     * Create a new remote document using the document at the given HTTP(S) URL.
      */
-    public static function fromUrl(string $url): Document
+    public static function fromUrl(string $url): RemoteDocument
     {
-        if (str_starts_with($url, 's3://')) {
-            return new S3Document($url);
-        }
-
         return new RemoteDocument($url);
     }
 
