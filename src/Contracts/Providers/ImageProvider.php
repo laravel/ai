@@ -40,5 +40,5 @@ interface ImageProvider
     /**
      * Get the default / normalized image options for the provider.
      */
-    public function defaultImageOptions(?string $size = null, $quality = null): array;
+    public function defaultImageOptions(?string $size = null, ?string $quality = null): array;
 }
