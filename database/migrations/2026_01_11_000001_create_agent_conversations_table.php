@@ -11,8 +11,8 @@ return new class extends AiMigration
      */
     public function up(): void
     {
-        $conversationsTable = config('ai.storage.tables.conversations', 'agent_conversations');
-        $messagesTable = config('ai.storage.tables.messages', 'agent_conversation_messages');
+        $conversationsTable = config('ai.conversations.tables.conversations', 'agent_conversations');
+        $messagesTable = config('ai.conversations.tables.messages', 'agent_conversation_messages');
 
         Schema::create($conversationsTable, function (Blueprint $table) {
             $table->string('id', 36)->primary();
@@ -47,7 +47,7 @@ return new class extends AiMigration
      */
     public function down(): void
     {
-        Schema::dropIfExists(config('ai.storage.tables.messages', 'agent_conversation_messages'));
-        Schema::dropIfExists(config('ai.storage.tables.conversations', 'agent_conversations'));
+        Schema::dropIfExists(config('ai.conversations.tables.messages', 'agent_conversation_messages'));
+        Schema::dropIfExists(config('ai.conversations.tables.conversations', 'agent_conversations'));
     }
 };

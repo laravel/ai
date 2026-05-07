@@ -40,24 +40,6 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Storage
-    |--------------------------------------------------------------------------
-    |
-    | Configure the tables the default DatabaseConversationStore reads and
-    | writes. Override these names to namespace the tables when running
-    | multiple AI features in one app, or to use naming conventions.
-    |
-    */
-
-    'storage' => [
-        'tables' => [
-            'conversations' => env('AI_TABLE_CONVERSATIONS', 'agent_conversations'),
-            'messages' => env('AI_TABLE_MESSAGES', 'agent_conversation_messages'),
-        ],
-    ],
-
-    /*
-    |--------------------------------------------------------------------------
     | AI Providers
     |--------------------------------------------------------------------------
     |

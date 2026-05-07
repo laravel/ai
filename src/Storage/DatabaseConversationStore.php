@@ -172,7 +172,7 @@ class DatabaseConversationStore implements ConversationStore
      */
     protected function conversationsTable(): string
     {
-        return config('ai.storage.tables.conversations', 'agent_conversations');
+        return config('ai.conversations.tables.conversations', 'agent_conversations');
     }
 
     /**
@@ -180,6 +180,6 @@ class DatabaseConversationStore implements ConversationStore
      */
     protected function messagesTable(): string
     {
-        return config('ai.storage.tables.messages', 'agent_conversation_messages');
+        return config('ai.conversations.tables.messages', 'agent_conversation_messages');
     }
 }
