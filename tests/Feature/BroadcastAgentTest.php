@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Broadcasting\Channel;
+use Illuminate\Broadcasting\BroadcastException;
+use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Event;
 use Laravel\Ai\Jobs\BroadcastAgent;
 use Laravel\Ai\Responses\StreamedAgentResponse;
@@ -77,5 +79,36 @@ test('streamed response passed to then is fully resolved', function () {
     expect($received)->not->toBeNull('then() callback was never invoked')
         ->toBeInstanceOf(StreamedAgentResponse::class)
         ->and($received->events)->not->toBeEmpty()
+        ->and($received->text)->toBe('Hello world');
+});
+
+test('broadcast failures do not fail the queued stream job', function () {
+    Event::fake();
+    AssistantAgent::fake(['Hello world']);
+
+    $pendingBroadcast = Mockery::mock();
+    $pendingBroadcast->shouldReceive('as')->andReturnSelf();
+    $pendingBroadcast->shouldReceive('with')->andReturnSelf();
+    $pendingBroadcast->shouldReceive('sendNow')
+        ->andThrow(new BroadcastException('Payload too large'));
+
+    Broadcast::shouldReceive('on')
+        ->andReturn($pendingBroadcast);
+
+    $received = null;
+
+    $job = new BroadcastAgent(
+        agent: new AssistantAgent,
+        prompt: 'Say hello',
+        channels: new Channel('test-channel'),
+    );
+
+    $job->then(function ($response) use (&$received) {
+        $received = $response;
+    });
+
+    expect(fn () => $job->handle())->not->toThrow(BroadcastException::class);
+
+    expect($received)->toBeInstanceOf(StreamedAgentResponse::class)
         ->and($received->text)->toBe('Hello world');
 });

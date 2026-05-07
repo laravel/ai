@@ -33,7 +33,11 @@ class BroadcastAgent implements ShouldQueue
 
         $this->agent->stream($this->prompt, $this->attachments, $this->provider, $this->model)
             ->each(function (StreamEvent $event) {
-                $event->broadcastNow($this->channels);
+                try {
+                    $event->broadcastNow($this->channels);
+                } catch (\Throwable $e) {
+                    report($e);
+                }
             })
             ->then(function ($response) use (&$streamedResponse) {
                 $streamedResponse = $response;
