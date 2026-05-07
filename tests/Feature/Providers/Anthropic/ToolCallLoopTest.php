@@ -163,12 +163,6 @@ test('pause_turn resumes when last block is text following a web_search_tool_res
 });
 
 test('full compose: pause_turn + server_tool_use replay with input cast and block order preserved', function () {
-    // End-to-end unit test exercising PR 1 + PR 2 + PR 3 together.
-    // First response: server_tool_use + advisor_tool_result + text with
-    // stop_reason pause_turn AND a dangling server_tool_use as the final
-    // block. The SDK must replay all blocks in original order, cast the
-    // empty server_tool_use.input to {}, and recurse without user
-    // intervention.
     Http::fake([
         'api.anthropic.com/*' => Http::sequence([
             Http::response([

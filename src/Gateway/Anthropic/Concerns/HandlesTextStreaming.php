@@ -6,7 +6,6 @@ use Generator;
 use Illuminate\Support\Str;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Providers\Provider;
-use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\Data\UrlCitation;
@@ -58,6 +57,7 @@ trait HandlesTextStreaming
         $currentThinkingText = '';
         $currentSignature = '';
         $currentToolIndex = -1;
+        $currentServerToolInput = '';
         $pendingToolCalls = [];
         $responseContent = [];
 
@@ -156,6 +156,8 @@ trait HandlesTextStreaming
                         'arguments' => '',
                     ];
                 } elseif ($blockType === 'server_tool_use') {
+                    $currentServerToolInput = '';
+
                     yield (new ProviderToolEvent(
                         $this->generateEventId(),
                         $data['content_block']['id'] ?? '',
@@ -240,6 +242,8 @@ trait HandlesTextStreaming
                     if ($currentToolIndex >= 0 && isset($pendingToolCalls[$currentToolIndex])) {
                         $pendingToolCalls[$currentToolIndex]['arguments'] .= $partial;
                     }
+                } elseif ($deltaType === 'input_json_delta' && $currentBlockType === 'server_tool_use') {
+                    $currentServerToolInput .= (string) ($data['delta']['partial_json'] ?? '');
                 }
 
                 continue;
@@ -297,6 +301,10 @@ trait HandlesTextStreaming
                     ))->withInvocationId($invocationId);
                 } elseif ($currentBlockType === 'server_tool_use') {
                     $index = $data['index'] ?? count($responseContent) - 1;
+
+                    if ($currentServerToolInput !== '' && isset($responseContent[$index])) {
+                        $responseContent[$index]['input'] = json_decode($currentServerToolInput, true) ?? [];
+                    }
 
                     yield (new ProviderToolEvent(
                         $this->generateEventId(),
@@ -424,7 +432,7 @@ trait HandlesTextStreaming
         if ($depth + 1 >= ($maxSteps ?? round(count($tools) * 1.5))) {
             yield (new StreamEnd(
                 $this->generateEventId(),
-                FinishReason::ToolCalls->value,
+                'stop',
                 new Usage(0, 0),
                 time(),
             ))->withInvocationId($invocationId);

@@ -164,16 +164,13 @@ describe('thinking blocks', function () {
 
 describe('pause_turn', function () {
     test('streaming pause_turn triggers follow-up stream with assistant replayed', function () {
-        // A paused server-side loop (e.g. a dangling server_tool_use for
-        // advisor) ends the first stream with stop_reason: pause_turn.
-        // The client must reopen the stream replaying the assistant content
-        // verbatim so the server can resume.
         Http::fake([
             'api.anthropic.com/*' => Http::sequence([
                 Http::response(
                     body: $this->ssePayload([
                         $this->messageStart(),
-                        $this->contentBlockStart(0, ['type' => 'server_tool_use', 'id' => 'srvtoolu_pause', 'name' => 'advisor']),
+                        $this->contentBlockStart(0, ['type' => 'server_tool_use', 'id' => 'srvtoolu_pause', 'name' => 'web_search']),
+                        $this->contentBlockDelta(0, ['type' => 'input_json_delta', 'partial_json' => '{"query":"laravel ai"}']),
                         $this->contentBlockStop(0),
                         $this->messageDelta('pause_turn', 5),
                     ]),
@@ -204,7 +201,8 @@ describe('pause_turn', function () {
 
         expect($lastMessage['role'])->toBe('assistant')
             ->and($lastMessage['content'][0]['type'])->toBe('server_tool_use')
-            ->and($lastMessage['content'][0]['input'])->toBeInstanceOf(stdClass::class);
+            ->and($lastMessage['content'][0]['input'])->toBeInstanceOf(stdClass::class)
+            ->and($lastMessage['content'][0]['input']->query)->toBe('laravel ai');
 
         $textDeltas = array_values(array_filter($events, fn ($e) => $e instanceof TextDelta));
         expect($textDeltas)->not->toBeEmpty()
