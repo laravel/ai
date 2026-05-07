@@ -20,14 +20,17 @@ class DatabaseConversationStore implements ConversationStore
     /**
      * Create a new conversation store instance.
      */
-    public function __construct(protected ?string $connection = null) {}
+    public function __construct(protected ?string $connection = null)
+    {
+        //
+    }
 
     /**
      * Get the most recent conversation ID for a given user.
      */
     public function latestConversationId(string|int $userId): ?string
     {
-        return DB::table($this->conversationsTable())
+        return $this->table($this->conversationsTable())
             ->where('user_id', $userId)
             ->orderBy('updated_at', 'desc')
             ->first()?->id;
@@ -40,7 +43,7 @@ class DatabaseConversationStore implements ConversationStore
     {
         $conversationId = (string) Str::uuid7();
 
-        DB::table($this->conversationsTable())->insert([
+        $this->table($this->conversationsTable())->insert([
             'id' => $conversationId,
             'user_id' => $userId,
             'title' => $title,
@@ -58,7 +61,7 @@ class DatabaseConversationStore implements ConversationStore
     {
         $messageId = (string) Str::uuid7();
 
-        DB::table($this->messagesTable())->insert([
+        $this->table($this->messagesTable())->insert([
             'id' => $messageId,
             'conversation_id' => $conversationId,
             'user_id' => $userId,
@@ -84,7 +87,7 @@ class DatabaseConversationStore implements ConversationStore
     {
         $messageId = (string) Str::uuid7();
 
-        DB::table($this->messagesTable())->insert([
+        $this->table($this->messagesTable())->insert([
             'id' => $messageId,
             'conversation_id' => $conversationId,
             'user_id' => $userId,
@@ -110,7 +113,7 @@ class DatabaseConversationStore implements ConversationStore
      */
     public function getLatestConversationMessages(string $conversationId, int $limit): Collection
     {
-        return DB::table($this->messagesTable())
+        return $this->table($this->messagesTable())
             ->where('conversation_id', $conversationId)
             ->orderByDesc('id')
             ->limit($limit)
