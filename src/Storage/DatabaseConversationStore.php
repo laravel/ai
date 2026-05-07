@@ -182,5 +182,4 @@ class DatabaseConversationStore implements ConversationStore
     {
         return config('ai.storage.tables.messages', 'agent_conversation_messages');
     }
-
 }
