@@ -1,7 +1,10 @@
 <?php
 
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Reranking;
 use Laravel\Ai\Responses\Data\RankedDocument;
 
@@ -61,6 +64,30 @@ test('reranking request sends bearer token', function () {
 
     Http::assertSent(fn (Request $request) => $request->hasHeader('Authorization', 'Bearer test-key'));
 });
+
+test('reranking rate limit response throws rate limited exception', function () {
+    Http::fake([
+        'api.voyageai.com/*' => Http::response(['detail' => 'Rate limit exceeded'], 429),
+    ]);
+
+    Reranking::of(['Doc A', 'Doc B'])->rerank('query', provider: 'voyageai', model: 'rerank-2.5-lite');
+})->throws(RateLimitedException::class);
+
+test('reranking overloaded response throws provider overloaded exception', function () {
+    Http::fake([
+        'api.voyageai.com/*' => Http::response(['detail' => 'Service unavailable'], 503),
+    ]);
+
+    Reranking::of(['Doc A', 'Doc B'])->rerank('query', provider: 'voyageai', model: 'rerank-2.5-lite');
+})->throws(ProviderOverloadedException::class);
+
+test('reranking http error response throws request exception', function () {
+    Http::fake([
+        'api.voyageai.com/*' => Http::response(['detail' => 'Invalid model'], 400),
+    ]);
+
+    Reranking::of(['Doc A', 'Doc B'])->rerank('query', provider: 'voyageai', model: 'rerank-2.5-lite');
+})->throws(RequestException::class);
 
 function fakeVoyageRerankingResponse()
 {
