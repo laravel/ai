@@ -89,7 +89,7 @@ trait MapsAttachments
     {
         $mime = strtolower(trim(strtok($document->mimeType() ?? '', ';')));
 
-        if (!$mime) {
+        if (! $mime) {
             return null;
         }
 
