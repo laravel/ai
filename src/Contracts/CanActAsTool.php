@@ -4,7 +4,7 @@ namespace Laravel\Ai\Contracts;
 
 use Stringable;
 
-interface ActsAsTool
+interface CanActAsTool
 {
     /**
      * Get the name of the tool.

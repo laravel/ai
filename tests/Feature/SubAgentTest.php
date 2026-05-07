@@ -1,7 +1,6 @@
 <?php
 
 use Laravel\Ai\Contracts\Agent;
-use Laravel\Ai\Contracts\ActsAsTool;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -126,5 +125,3 @@ test('nested agent delegates through a middle manager to a research agent', func
         ->and($response->toolResults)->toHaveCount(1)
         ->and($response->toolResults->first()->result)->toBe('Research delegated.');
 });
-
-

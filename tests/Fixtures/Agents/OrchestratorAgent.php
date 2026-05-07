@@ -3,11 +3,11 @@
 namespace Tests\Fixtures\Agents;
 
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\CanActAsTool;
 use Laravel\Ai\Contracts\HasTools;
-use Laravel\Ai\Contracts\ActsAsTool;
 use Laravel\Ai\Promptable;
 
-class OrchestratorAgent implements Agent, HasTools, ActsAsTool
+class OrchestratorAgent implements Agent, CanActAsTool, HasTools
 {
     use Promptable;
 
