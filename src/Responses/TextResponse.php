@@ -57,7 +57,7 @@ class TextResponse
             fn ($toolCall) => $toolCall->name === 'output_structured_data'
         )->values();
 
-        $this->toolResults = $toolResults;
+        $this->toolResults = $toolResults->values();
 
         return $this;
     }

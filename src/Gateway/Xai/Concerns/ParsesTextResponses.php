@@ -96,13 +96,11 @@ trait ParsesTextResponses
         $model = $data['model'] ?? '';
 
         $text = $this->extractText($output);
-        $toolCalls = $this->extractToolCalls($output);
-        $reasonings = $this->extractReasonings($output);
         $citations = $this->extractCitations($output);
         $usage = $this->extractUsage($data);
         $finishReason = $this->extractFinishReason($data);
 
-        $mappedToolCalls = $this->mapToolCallsWithReasoning($toolCalls, $reasonings);
+        $mappedToolCalls = $this->mapToolCallsWithReasoning($output);
 
         $step = new Step(
             $text,
@@ -305,22 +303,6 @@ trait ParsesTextResponses
     }
 
     /**
-     * Extract tool calls from the output array.
-     */
-    protected function extractToolCalls(array $output): array
-    {
-        return array_values(array_filter($output, fn (array $item) => ($item['type'] ?? '') === 'function_call'));
-    }
-
-    /**
-     * Extract reasoning blocks from the output array.
-     */
-    protected function extractReasonings(array $output): array
-    {
-        return array_values(array_filter($output, fn (array $item) => ($item['type'] ?? '') === 'reasoning'));
-    }
-
-    /**
      * Extract citations from the output array.
      */
     protected function extractCitations(array $output): Collection
@@ -338,13 +320,15 @@ trait ParsesTextResponses
                         $citations->push(new UrlCitation(
                             $annotation['url'] ?? '',
                             $annotation['title'] ?? null,
+                            isset($annotation['start_index']) ? (int) $annotation['start_index'] : null,
+                            isset($annotation['end_index']) ? (int) $annotation['end_index'] : null,
                         ));
                     }
                 }
             }
         }
 
-        return $citations->unique('title')->values();
+        return $citations->values();
     }
 
     /**
@@ -391,18 +375,33 @@ trait ParsesTextResponses
      *
      * @return array<ToolCall>
      */
-    protected function mapToolCallsWithReasoning(array $toolCalls, array $reasonings): array
+    protected function mapToolCallsWithReasoning(array $output): array
     {
-        $firstReasoning = $reasonings[0] ?? null;
+        $toolCalls = [];
+        $latestReasoning = null;
 
-        return array_map(fn (array $tc) => new ToolCall(
-            $tc['id'] ?? '',
-            $tc['name'] ?? '',
-            json_decode($tc['arguments'] ?? '{}', true) ?? [],
-            $tc['call_id'] ?? null,
-            $firstReasoning ? $firstReasoning['id'] ?? null : null,
-            $firstReasoning ? $firstReasoning['summary'] ?? null : null,
-        ), $toolCalls);
+        foreach ($output as $item) {
+            $type = $item['type'] ?? '';
+
+            if ($type === 'reasoning') {
+                $latestReasoning = $item;
+
+                continue;
+            }
+
+            if ($type === 'function_call') {
+                $toolCalls[] = new ToolCall(
+                    $item['id'] ?? '',
+                    $item['name'] ?? '',
+                    json_decode($item['arguments'] ?? '{}', true) ?? [],
+                    $item['call_id'] ?? null,
+                    $latestReasoning ? ($latestReasoning['id'] ?? null) : null,
+                    $latestReasoning ? ($latestReasoning['summary'] ?? null) : null,
+                );
+            }
+        }
+
+        return $toolCalls;
     }
 
     /**

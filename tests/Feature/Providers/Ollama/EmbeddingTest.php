@@ -1,8 +1,11 @@
 <?php
 
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\RateLimitedException;
 
 beforeEach(function () {
     config(['ai.providers.ollama' => [
@@ -75,6 +78,36 @@ test('embeddings request sends no authorization header when key is empty', funct
         return ! $request->hasHeader('Authorization');
     });
 });
+
+test('embeddings rate limit response throws rate limited exception', function () {
+    Http::fake([
+        'localhost:11434/*' => Http::response([
+            'error' => 'rate limit exceeded',
+        ], 429),
+    ]);
+
+    Embeddings::for(['Hello'])->generate(provider: 'ollama', model: 'nomic-embed-text');
+})->throws(RateLimitedException::class);
+
+test('embeddings overloaded response throws provider overloaded exception', function () {
+    Http::fake([
+        'localhost:11434/*' => Http::response([
+            'error' => 'server overloaded',
+        ], 503),
+    ]);
+
+    Embeddings::for(['Hello'])->generate(provider: 'ollama', model: 'nomic-embed-text');
+})->throws(ProviderOverloadedException::class);
+
+test('embeddings http error response throws request exception', function () {
+    Http::fake([
+        'localhost:11434/*' => Http::response([
+            'error' => 'model not found',
+        ], 400),
+    ]);
+
+    Embeddings::for(['Hello'])->generate(provider: 'ollama', model: 'nomic-embed-text');
+})->throws(RequestException::class);
 
 function fakeOllamaEmbeddingsResponse()
 {

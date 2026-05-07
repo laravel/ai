@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Storage;
 
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -17,23 +18,9 @@ use Laravel\Ai\Responses\Data\ToolResult;
 class DatabaseConversationStore implements ConversationStore
 {
     /**
-     * Resolve the conversations table name from config, falling back to
-     * the historical default. Read per call so a runtime config override
-     * (for example inside a test or a feature flag check) takes effect
-     * without rebuilding the store.
+     * Create a new conversation store instance.
      */
-    protected function conversationsTable(): string
-    {
-        return config('ai.storage.tables.conversations', 'agent_conversations');
-    }
-
-    /**
-     * Resolve the messages table name from config.
-     */
-    protected function messagesTable(): string
-    {
-        return config('ai.storage.tables.messages', 'agent_conversation_messages');
-    }
+    public function __construct(protected ?string $connection = null) {}
 
     /**
      * Get the most recent conversation ID for a given user.
@@ -105,8 +92,8 @@ class DatabaseConversationStore implements ConversationStore
             'role' => 'assistant',
             'content' => $response->text,
             'attachments' => '[]',
-            'tool_calls' => json_encode($response->toolCalls),
-            'tool_results' => json_encode($response->toolResults),
+            'tool_calls' => json_encode($response->toolCalls->values()),
+            'tool_results' => json_encode($response->toolResults->values()),
             'usage' => json_encode($response->usage),
             'meta' => json_encode($response->meta),
             'created_at' => now(),
@@ -131,8 +118,8 @@ class DatabaseConversationStore implements ConversationStore
             ->reverse()
             ->values()
             ->flatMap(function ($record) {
-                $toolCalls = collect(json_decode($record->tool_calls, true));
-                $toolResults = collect(json_decode($record->tool_results, true));
+                $toolCalls = collect(json_decode($record->tool_calls, true))->values();
+                $toolResults = collect(json_decode($record->tool_results, true))->values();
 
                 if ($record->role === 'user') {
                     return [new Message('user', $record->content)];
@@ -171,4 +158,29 @@ class DatabaseConversationStore implements ConversationStore
                 return [new AssistantMessage($record->content)];
             });
     }
+
+    /**
+     * Get a query builder for the given table using the configured connection.
+     */
+    protected function table(string $table): Builder
+    {
+        return DB::connection($this->connection)->table($table);
+    }
+
+    /**
+     * Resolve the conversations table name from config.
+     */
+    protected function conversationsTable(): string
+    {
+        return config('ai.storage.tables.conversations', 'agent_conversations');
+    }
+
+    /**
+     * Resolve the messages table name from config.
+     */
+    protected function messagesTable(): string
+    {
+        return config('ai.storage.tables.messages', 'agent_conversation_messages');
+    }
+
 }
