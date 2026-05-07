@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Storage;
 
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -17,11 +18,16 @@ use Laravel\Ai\Responses\Data\ToolResult;
 class DatabaseConversationStore implements ConversationStore
 {
     /**
+     * Create a new conversation store instance.
+     */
+    public function __construct(protected ?string $connection = null) {}
+
+    /**
      * Get the most recent conversation ID for a given user.
      */
     public function latestConversationId(string|int $userId): ?string
     {
-        return DB::table('agent_conversations')
+        return $this->table('agent_conversations')
             ->where('user_id', $userId)
             ->orderBy('updated_at', 'desc')
             ->first()?->id;
@@ -34,7 +40,7 @@ class DatabaseConversationStore implements ConversationStore
     {
         $conversationId = (string) Str::uuid7();
 
-        DB::table('agent_conversations')->insert([
+        $this->table('agent_conversations')->insert([
             'id' => $conversationId,
             'user_id' => $userId,
             'title' => $title,
@@ -52,7 +58,7 @@ class DatabaseConversationStore implements ConversationStore
     {
         $messageId = (string) Str::uuid7();
 
-        DB::table('agent_conversation_messages')->insert([
+        $this->table('agent_conversation_messages')->insert([
             'id' => $messageId,
             'conversation_id' => $conversationId,
             'user_id' => $userId,
@@ -78,7 +84,7 @@ class DatabaseConversationStore implements ConversationStore
     {
         $messageId = (string) Str::uuid7();
 
-        DB::table('agent_conversation_messages')->insert([
+        $this->table('agent_conversation_messages')->insert([
             'id' => $messageId,
             'conversation_id' => $conversationId,
             'user_id' => $userId,
@@ -104,7 +110,7 @@ class DatabaseConversationStore implements ConversationStore
      */
     public function getLatestConversationMessages(string $conversationId, int $limit): Collection
     {
-        return DB::table('agent_conversation_messages')
+        return $this->table('agent_conversation_messages')
             ->where('conversation_id', $conversationId)
             ->orderByDesc('id')
             ->limit($limit)
@@ -151,5 +157,13 @@ class DatabaseConversationStore implements ConversationStore
 
                 return [new AssistantMessage($record->content)];
             });
+    }
+
+    /**
+     * Get a query builder for the given table using the configured connection.
+     */
+    protected function table(string $table): Builder
+    {
+        return DB::connection($this->connection)->table($table);
     }
 }

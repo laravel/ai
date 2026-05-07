@@ -104,7 +104,7 @@ trait ParsesTextResponses
 
         $steps->push(new Step($text, $toolCalls, $toolResults, $finishReason, $usage, $meta));
 
-        $messages->push(new AssistantMessage($text, collect($toolCalls)));
+        $messages->push(new AssistantMessage($text, collect($toolCalls), $content));
 
         if ($shouldContinue) {
             $messages->push(new ToolResultMessage(collect($toolResults)));

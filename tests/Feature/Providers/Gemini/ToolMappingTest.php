@@ -1,9 +1,14 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Providers\Tools\FileSearch;
+use Laravel\Ai\Providers\Tools\WebSearch;
 use Tests\Fixtures\Agents\NamedToolAgent;
 use Tests\Fixtures\Agents\NullableToolAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
+use Tests\Fixtures\Tools\FixedNumberGenerator;
+
+use function Laravel\Ai\agent;
 
 test('empty schema omits parameters key', function () {
     Http::fake([
@@ -109,6 +114,49 @@ test('tool without a name() method falls back to class basename', function () {
         }
 
         return in_array('FixedNumberGenerator', $names, true);
+    });
+});
+
+test('provider tools are sent without function_calling_config', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(
+        'Answer using the uploaded knowledge base.',
+        tools: [new FileSearch(['fileSearchStores/store123'])],
+    )->prompt('Question?', provider: 'gemini');
+
+    Http::assertSent(function ($request) {
+        $body = $request->data();
+        $tools = $body['tools'] ?? [];
+
+        return isset($tools[0]['fileSearch']['fileSearchStoreNames'])
+            && $tools[0]['fileSearch']['fileSearchStoreNames'] === ['fileSearchStores/store123']
+            && ! isset($body['tool_config']);
+    });
+});
+
+test('mixed function and provider tools are sent without tool_config', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(
+        'Generate a number, optionally searching the web.',
+        tools: [new FixedNumberGenerator, new WebSearch],
+    )->prompt('Generate', provider: 'gemini');
+
+    Http::assertSent(function ($request) {
+        $body = $request->data();
+        $tools = $body['tools'] ?? [];
+
+        $hasFunctionDeclarations = collect($tools)->contains(fn ($tool) => isset($tool['function_declarations']));
+        $hasGoogleSearch = collect($tools)->contains(fn ($tool) => isset($tool['google_search']));
+
+        return $hasFunctionDeclarations
+            && $hasGoogleSearch
+            && ! isset($body['tool_config']);
     });
 });
 

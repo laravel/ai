@@ -79,7 +79,7 @@ describe('request structure', function () {
         });
     });
 
-    test('tools include tool config', function () {
+    test('tool_config is omitted to rely on Gemini default AUTO mode', function () {
         Http::fake([
             'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('The number is 42'),
         ]);
@@ -93,8 +93,7 @@ describe('request structure', function () {
             $body = $request->data();
 
             return isset($body['tools'])
-                && isset($body['tool_config'])
-                && $body['tool_config']['function_calling_config']['mode'] === 'AUTO';
+                && ! isset($body['tool_config']);
         });
     });
 
