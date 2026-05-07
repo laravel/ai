@@ -151,7 +151,7 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
             $this->meta,
         );
 
-        if ($this->conversationId !== null) {
+        if ($this->conversationId !== null && $this->conversationUser !== null) {
             $this->streamedResponse->withinConversation(
                 $this->conversationId,
                 $this->conversationUser
@@ -167,6 +167,10 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
 
     protected function syncConversationFromStreamedResponse(): void
     {
+        if ($this->streamedResponse->conversationId === null) {
+            return;
+        }
+
         $this->conversationId = $this->streamedResponse->conversationId;
         $this->conversationUser = $this->streamedResponse->conversationUser;
     }

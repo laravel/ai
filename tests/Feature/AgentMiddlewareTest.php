@@ -112,6 +112,47 @@ test('stream response conversation id is available when continuing an existing c
         ->and($response->conversationUser)->toBe($user);
 });
 
+test('stream response conversation id syncs after late then callbacks', function () {
+    AssistantAgent::fake([
+        'Fake response',
+    ]);
+
+    $user = new class
+    {
+        public int $id = 1;
+    };
+
+    $response = (new AssistantAgent)->stream('Test prompt');
+
+    foreach ($response as $event) {
+        expect($event)->not->toBeNull();
+    }
+
+    $response->then(function (StreamedAgentResponse $response) use ($user) {
+        $response->withinConversation('late-conversation-id', $user);
+    });
+
+    expect($response->conversationId)->toBe('late-conversation-id')
+        ->and($response->conversationUser)->toBe($user);
+});
+
+test('stream response preserves manually assigned conversation id without a participant', function () {
+    AssistantAgent::fake([
+        'Fake response',
+    ]);
+
+    $response = (new AssistantAgent)
+        ->stream('Test prompt')
+        ->withinConversation('manual-conversation-id');
+
+    foreach ($response as $event) {
+        expect($event)->not->toBeNull();
+    }
+
+    expect($response->conversationId)->toBe('manual-conversation-id')
+        ->and($response->conversationUser)->toBeNull();
+});
+
 function shortCircuitingMiddleware(): object
 {
     return new class

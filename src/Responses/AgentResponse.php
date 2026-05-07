@@ -23,7 +23,7 @@ class AgentResponse extends TextResponse
     /**
      * Set the conversation UUID and participant for this response.
      */
-    public function withinConversation(?string $conversationId, ?object $conversationUser = null): self
+    public function withinConversation(string $conversationId, object $conversationUser): self
     {
         $this->conversationId = $conversationId;
         $this->conversationUser = $conversationUser;
