@@ -9,7 +9,7 @@ use Laravel\SerializableClosure\SerializableClosure;
 
 class StructuredAnonymousAgent extends AnonymousAgent implements HasStructuredOutput
 {
-    public $schema;
+    public SerializableClosure $schema;
 
     public function __construct(
         public string $instructions,
