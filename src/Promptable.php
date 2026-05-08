@@ -81,13 +81,11 @@ trait Promptable
         $invocationId = (string) Str::uuid7();
 
         if (count($providers) === 1) {
-            foreach ($this->iterateProvidersWithFailover($providers) as [$provider, $model]) {
-                return $provider->stream(
-                    new AgentPrompt($this, $prompt, $attachments, $provider, $model, $resolvedTimeout, $invocationId)
-                );
-            }
+            [$resolved, $resolvedModel] = $this->iterateProvidersWithFailover($providers)->current();
 
-            throw new RuntimeException('No AI providers were configured.');
+            return $resolved->stream(
+                new AgentPrompt($this, $prompt, $attachments, $resolved, $resolvedModel, $resolvedTimeout, $invocationId)
+            );
         }
 
         $meta = new Meta;
@@ -124,7 +122,7 @@ trait Promptable
                     }
                 }
 
-                throw $lastException ?? new RuntimeException('No AI providers were configured.');
+                throw $lastException;
             },
             $meta,
         );
@@ -202,7 +200,7 @@ trait Promptable
             }
         }
 
-        throw $lastException ?? new RuntimeException('No AI providers were configured.');
+        throw $lastException;
     }
 
     /**
