@@ -22,6 +22,8 @@ class FakeAudioGateway implements AudioGateway
 
     /**
      * Generate audio from the given text.
+     *
+     * @param  array<string, mixed>  $providerOptions
      */
     public function generateAudio(
         AudioProvider $provider,
@@ -30,8 +32,9 @@ class FakeAudioGateway implements AudioGateway
         string $voice,
         ?string $instructions = null,
         int $timeout = 30,
+        array $providerOptions = [],
     ): AudioResponse {
-        $audioPrompt = new AudioPrompt($text, $voice, $instructions, $provider, $model, $timeout);
+        $audioPrompt = new AudioPrompt($text, $voice, $instructions, $provider, $model, $timeout, $providerOptions);
 
         return $this->nextResponse($provider, $model, $audioPrompt);
     }

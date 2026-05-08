@@ -152,6 +152,8 @@ class AnthropicGateway implements Gateway
     /**
      * Generate audio from the given text.
      *
+     * @param  array<string, mixed>  $providerOptions
+     *
      * @throws LogicException
      */
     public function generateAudio(
@@ -161,6 +163,7 @@ class AnthropicGateway implements Gateway
         string $voice,
         ?string $instructions = null,
         int $timeout = 30,
+        array $providerOptions = [],
     ): AudioResponse {
         throw new LogicException('Anthropic does not support audio generation.');
     }

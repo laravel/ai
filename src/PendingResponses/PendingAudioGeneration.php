@@ -25,6 +25,11 @@ class PendingAudioGeneration
 
     protected int $timeout = 30;
 
+    /**
+     * @var array<string, mixed>
+     */
+    protected array $providerOptions = [];
+
     public function __construct(
         protected string $text,
     ) {}
@@ -80,6 +85,18 @@ class PendingAudioGeneration
     }
 
     /**
+     * Specify provider-specific options for the audio generation.
+     *
+     * @param  array<string, mixed>  $options
+     */
+    public function providerOptions(array $options): self
+    {
+        $this->providerOptions = $options;
+
+        return $this;
+    }
+
+    /**
      * Generate the audio.
      */
     public function generate(Lab|array|string|null $provider = null, ?string $model = null): AudioResponse
@@ -97,7 +114,7 @@ class PendingAudioGeneration
 
             try {
                 return $provider->audio(
-                    $this->text, $this->voice, $this->instructions, $model, $this->timeout
+                    $this->text, $this->voice, $this->instructions, $model, $this->timeout, $this->providerOptions,
                 );
             } catch (FailoverableException $e) {
                 $lastException = $e;
@@ -125,6 +142,7 @@ class PendingAudioGeneration
                     $provider,
                     $model,
                     $this->timeout,
+                    $this->providerOptions,
                 )
             );
 

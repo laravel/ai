@@ -7,6 +7,9 @@ use Laravel\Ai\Contracts\Providers\AudioProvider;
 
 class AudioPrompt
 {
+    /**
+     * @param  array<string, mixed>  $providerOptions
+     */
     public function __construct(
         public readonly string $text,
         public readonly string $voice,
@@ -14,6 +17,7 @@ class AudioPrompt
         public readonly AudioProvider $provider,
         public readonly string $model,
         public readonly int $timeout = 30,
+        public readonly array $providerOptions = [],
     ) {}
 
     /**

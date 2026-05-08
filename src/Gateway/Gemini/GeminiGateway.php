@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\Gemini;
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Collection;
+use InvalidArgumentException;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\Gateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
@@ -222,6 +223,8 @@ class GeminiGateway implements Gateway
 
     /**
      * Generate audio from the given text.
+     *
+     * @param  array<string, mixed>  $providerOptions
      */
     public function generateAudio(
         AudioProvider $provider,
@@ -230,6 +233,7 @@ class GeminiGateway implements Gateway
         string $voice,
         ?string $instructions = null,
         int $timeout = 30,
+        array $providerOptions = [],
     ): AudioResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
@@ -244,17 +248,7 @@ class GeminiGateway implements Gateway
                 ]],
                 'generationConfig' => [
                     'responseModalities' => ['AUDIO'],
-                    'speechConfig' => [
-                        'voiceConfig' => [
-                            'prebuiltVoiceConfig' => [
-                                'voiceName' => match ($voice) {
-                                    'default-female' => 'Kore',
-                                    'default-male' => 'Puck',
-                                    default => $voice,
-                                },
-                            ],
-                        ],
-                    ],
+                    'speechConfig' => $this->buildSpeechConfig($voice, $providerOptions),
                 ],
             ]),
         );
@@ -278,6 +272,71 @@ class GeminiGateway implements Gateway
             new Meta($provider->name(), $model),
             'audio/wav',
         );
+    }
+
+    /**
+     * Build the speech configuration for a single- or multi-speaker request.
+     *
+     * @param  array<string, mixed>  $providerOptions
+     * @return array<string, mixed>
+     */
+    protected function buildSpeechConfig(string $voice, array $providerOptions): array
+    {
+        if (isset($providerOptions['speakers'])) {
+            return ['multiSpeakerVoiceConfig' => [
+                'speakerVoiceConfigs' => $this->buildSpeakerVoiceConfigs($providerOptions['speakers']),
+            ]];
+        }
+
+        return ['voiceConfig' => [
+            'prebuiltVoiceConfig' => ['voiceName' => $this->resolveVoiceName($voice)],
+        ]];
+    }
+
+    /**
+     * Build the per-speaker voice configurations for a multi-speaker request.
+     *
+     * @param  array<int, array<string, string>>  $speakers
+     * @return array<int, array<string, mixed>>
+     */
+    protected function buildSpeakerVoiceConfigs(array $speakers): array
+    {
+        if (count($speakers) < 2) {
+            throw new InvalidArgumentException('Gemini multi-speaker audio requires at least two speakers.');
+        }
+
+        return array_map(fn (array $speaker) => [
+            'speaker' => $this->requireSpeakerKey($speaker, 'name'),
+            'voiceConfig' => [
+                'prebuiltVoiceConfig' => [
+                    'voiceName' => $this->resolveVoiceName($this->requireSpeakerKey($speaker, 'voice')),
+                ],
+            ],
+        ], $speakers);
+    }
+
+    /**
+     * Read a required key from a speaker definition.
+     *
+     * @param  array<string, string>  $speaker
+     */
+    protected function requireSpeakerKey(array $speaker, string $key): string
+    {
+        return $speaker[$key] ?? throw new InvalidArgumentException(
+            sprintf('Each speaker must define a "%s".', $key),
+        );
+    }
+
+    /**
+     * Resolve a voice alias to its underlying Gemini voice name.
+     */
+    protected function resolveVoiceName(string $voice): string
+    {
+        return match ($voice) {
+            'default-female' => 'Kore',
+            'default-male' => 'Puck',
+            default => $voice,
+        };
     }
 
     /**

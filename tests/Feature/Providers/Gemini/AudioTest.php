@@ -102,6 +102,88 @@ test('audio uses default model when none specified', function () {
     Http::assertSent(fn (Request $request) => str_contains($request->url(), 'models/gemini-2.5-flash-preview-tts:generateContent'));
 });
 
+test('multi-speaker audio request builds a multi-speaker speech config', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => fakeGeminiAudioResponse(),
+    ]);
+
+    Audio::of("Host: Welcome.\nGuest: Thanks!")
+        ->providerOptions([
+            'speakers' => [
+                ['name' => 'Host', 'voice' => 'Kore'],
+                ['name' => 'Guest', 'voice' => 'Puck'],
+            ],
+        ])
+        ->generate(provider: 'gemini', model: 'gemini-2.5-flash-preview-tts');
+
+    Http::assertSent(function (Request $request) {
+        $speechConfig = $request->data()['generationConfig']['speechConfig'];
+
+        return ! isset($speechConfig['voiceConfig'])
+            && $speechConfig['multiSpeakerVoiceConfig']['speakerVoiceConfigs'] === [
+                [
+                    'speaker' => 'Host',
+                    'voiceConfig' => ['prebuiltVoiceConfig' => ['voiceName' => 'Kore']],
+                ],
+                [
+                    'speaker' => 'Guest',
+                    'voiceConfig' => ['prebuiltVoiceConfig' => ['voiceName' => 'Puck']],
+                ],
+            ];
+    });
+});
+
+test('multi-speaker audio resolves default voice aliases per speaker', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => fakeGeminiAudioResponse(),
+    ]);
+
+    Audio::of("Host: Hi.\nGuest: Hello.")
+        ->providerOptions([
+            'speakers' => [
+                ['name' => 'Host', 'voice' => 'default-female'],
+                ['name' => 'Guest', 'voice' => 'default-male'],
+            ],
+        ])
+        ->generate(provider: 'gemini', model: 'gemini-2.5-flash-preview-tts');
+
+    Http::assertSent(function (Request $request) {
+        $configs = $request->data()['generationConfig']['speechConfig']['multiSpeakerVoiceConfig']['speakerVoiceConfigs'];
+
+        return $configs[0]['voiceConfig']['prebuiltVoiceConfig']['voiceName'] === 'Kore'
+            && $configs[1]['voiceConfig']['prebuiltVoiceConfig']['voiceName'] === 'Puck';
+    });
+});
+
+test('multi-speaker audio rejects fewer than two speakers', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => fakeGeminiAudioResponse(),
+    ]);
+
+    Audio::of('Host: Solo show.')
+        ->providerOptions([
+            'speakers' => [
+                ['name' => 'Host', 'voice' => 'Kore'],
+            ],
+        ])
+        ->generate(provider: 'gemini', model: 'gemini-2.5-flash-preview-tts');
+})->throws(InvalidArgumentException::class, 'at least two speakers');
+
+test('multi-speaker audio rejects speakers missing required keys', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => fakeGeminiAudioResponse(),
+    ]);
+
+    Audio::of('Host: Hi.')
+        ->providerOptions([
+            'speakers' => [
+                ['name' => 'Host'],
+                ['name' => 'Guest', 'voice' => 'Puck'],
+            ],
+        ])
+        ->generate(provider: 'gemini', model: 'gemini-2.5-flash-preview-tts');
+})->throws(InvalidArgumentException::class, 'Each speaker must define a "voice"');
+
 function fakeGeminiAudioResponse(string $pcm = "\x00\x00"): PromiseInterface
 {
     return Http::response([
