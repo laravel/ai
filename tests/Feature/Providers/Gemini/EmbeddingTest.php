@@ -5,6 +5,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 
 beforeEach(function () {
@@ -138,6 +139,20 @@ test('rate limit response throws rate limited exception', function () {
 
     Embeddings::for(['Hello'])->generate(provider: 'gemini', model: 'gemini-embedding-001');
 })->throws(RateLimitedException::class);
+
+test('overloaded response throws provider overloaded exception', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'error' => [
+                'code' => 503,
+                'message' => 'The model is overloaded. Please try again later.',
+                'status' => 'UNAVAILABLE',
+            ],
+        ], 503),
+    ]);
+
+    Embeddings::for(['Hello'])->generate(provider: 'gemini', model: 'gemini-embedding-001');
+})->throws(ProviderOverloadedException::class);
 
 test('http error response throws request exception', function () {
     Http::fake([
