@@ -269,3 +269,32 @@ test('image http error response throws request exception', function () {
 
     Image::of('A red apple')->generate(provider: 'gemini', model: 'gemini-3.1-flash-image-preview');
 })->throws(RequestException::class);
+
+test('image response is empty when prompt is blocked and candidates array is empty', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'candidates' => [],
+            'promptFeedback' => [
+                'blockReason' => 'SAFETY',
+            ],
+        ]),
+    ]);
+
+    $response = Image::of('A red apple')->generate(provider: 'gemini', model: 'gemini-3.1-flash-image-preview');
+
+    expect($response->images)->toHaveCount(0);
+});
+
+test('image response is empty when candidate is blocked with no content parts', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'candidates' => [[
+                'finishReason' => 'PROHIBITED_CONTENT',
+            ]],
+        ]),
+    ]);
+
+    $response = Image::of('A red apple')->generate(provider: 'gemini', model: 'gemini-3.1-flash-image-preview');
+
+    expect($response->images)->toHaveCount(0);
+});
