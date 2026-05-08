@@ -75,35 +75,30 @@ trait Promptable
         ?string $model = null,
         ?int $timeout = null): StreamableAgentResponse
     {
-        $providers = $this->getProvidersAndModels($provider, $model);
+        $providers = $this->getProvidersAndModelsForFailover($provider, $model);
         $resolvedTimeout = $this->getTimeout($timeout);
-
-        if (empty($providers)) {
-            throw new RuntimeException('No AI providers were configured.');
-        }
 
         $invocationId = (string) Str::uuid7();
 
         if (count($providers) === 1) {
-            $p = array_key_first($providers);
-            $resolved = Ai::textProviderFor($this, $p);
+            foreach ($this->iterateProvidersWithFailover($providers) as [$provider, $model]) {
+                return $provider->stream(
+                    new AgentPrompt($this, $prompt, $attachments, $provider, $model, $resolvedTimeout, $invocationId)
+                );
+            }
 
-            return $resolved->stream(
-                new AgentPrompt($this, $prompt, $attachments, $resolved, $providers[$p] ?? $this->getDefaultModelFor($resolved), $resolvedTimeout, $invocationId)
-            );
+            throw new RuntimeException('No AI providers were configured.');
         }
 
         $meta = new Meta;
-        $capturedInnerResponse = null;
+        $outer = null;
 
         $outer = new StreamableAgentResponse(
             $invocationId,
-            function () use ($providers, $prompt, $attachments, $resolvedTimeout, $invocationId, $meta, &$capturedInnerResponse) {
+            function () use ($providers, $prompt, $attachments, $resolvedTimeout, $invocationId, &$outer) {
                 $lastException = null;
 
-                foreach ($providers as $p => $m) {
-                    $provider = Ai::textProviderFor($this, $p);
-                    $model = $m ?? $this->getDefaultModelFor($provider);
+                foreach ($this->iterateProvidersWithFailover($providers) as [$provider, $model]) {
                     $started = false;
 
                     try {
@@ -111,9 +106,7 @@ trait Promptable
                             new AgentPrompt($this, $prompt, $attachments, $provider, $model, $resolvedTimeout, $invocationId)
                         );
 
-                        $innerResponse->then(function (StreamedAgentResponse $sr) use (&$capturedInnerResponse) {
-                            $capturedInnerResponse = $sr;
-                        });
+                        $innerResponse->then(fn (StreamedAgentResponse $response) => $outer->adoptStateFrom($response));
 
                         foreach ($innerResponse as $event) {
                             $started = true;
@@ -121,18 +114,13 @@ trait Promptable
                             yield $event;
                         }
 
-                        $meta->provider = $provider->name();
-                        $meta->model = $model;
-
                         return;
                     } catch (FailoverableException $e) {
                         if ($started) {
                             throw $e;
                         }
 
-                        $lastException = $e;
-
-                        event(new AgentFailedOver($this, $provider, $model, $e));
+                        $lastException = $this->recordAgentFailover($provider, $model, $e);
                     }
                 }
 
@@ -140,13 +128,6 @@ trait Promptable
             },
             $meta,
         );
-
-        $outer->then(function (StreamedAgentResponse $sr) use (&$capturedInnerResponse) {
-            if ($capturedInnerResponse !== null) {
-                $sr->conversationId = $capturedInnerResponse->conversationId;
-                $sr->conversationUser = $capturedInnerResponse->conversationUser;
-            }
-        });
 
         return $outer;
     }
@@ -211,27 +192,53 @@ trait Promptable
      */
     private function withModelFailover(Closure $callback, Lab|array|string|null $provider, ?string $model): mixed
     {
-        $providers = $this->getProvidersAndModels($provider, $model);
-
         $lastException = null;
 
-        foreach ($providers as $provider => $model) {
-            $provider = Ai::textProviderFor($this, $provider);
-
-            $model ??= $this->getDefaultModelFor($provider);
-
+        foreach ($this->iterateProvidersWithFailover($this->getProvidersAndModelsForFailover($provider, $model)) as [$provider, $model]) {
             try {
                 return $callback($provider, $model);
             } catch (FailoverableException $e) {
-                $lastException = $e;
-
-                event(new AgentFailedOver($this, $provider, $model, $e));
-
-                continue;
+                $lastException = $this->recordAgentFailover($provider, $model, $e);
             }
         }
 
         throw $lastException ?? new RuntimeException('No AI providers were configured.');
+    }
+
+    /**
+     * Get the configured providers and models for failover.
+     */
+    private function getProvidersAndModelsForFailover(Lab|array|string|null $provider, ?string $model): array
+    {
+        $providers = $this->getProvidersAndModels($provider, $model);
+
+        if (empty($providers)) {
+            throw new RuntimeException('No AI providers were configured.');
+        }
+
+        return $providers;
+    }
+
+    /**
+     * Iterate the configured provider / model pairs.
+     */
+    private function iterateProvidersWithFailover(array $providers): iterable
+    {
+        foreach ($providers as $provider => $model) {
+            $provider = Ai::textProviderFor($this, $provider);
+
+            yield [$provider, $model ?? $this->getDefaultModelFor($provider)];
+        }
+    }
+
+    /**
+     * Record that an agent failed over to the next configured provider.
+     */
+    private function recordAgentFailover(Provider $provider, string $model, FailoverableException $exception): FailoverableException
+    {
+        event(new AgentFailedOver($this, $provider, $model, $exception));
+
+        return $exception;
     }
 
     /**

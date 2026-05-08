@@ -135,6 +135,31 @@ test('stream does not fail over when primary succeeds', function () {
     Event::assertNotDispatched(AgentFailedOver::class);
 });
 
+test('single provider stream does not dispatch failover event when rate limited', function () {
+    Event::fake();
+
+    config([
+        'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
+    ]);
+
+    Http::preventStrayRequests();
+
+    Http::fakeSequence()
+        ->push(status: 429);
+
+    $response = (new AssistantAgent)->stream(
+        'Hello',
+        provider: 'primary',
+    );
+
+    expect(function () use ($response) {
+        foreach ($response as $_) {
+        }
+    })->toThrow(RateLimitedException::class);
+
+    Event::assertNotDispatched(AgentFailedOver::class);
+});
+
 test('stream does not fail over when primary emits event then throws', function () {
     Event::fake();
 
@@ -180,6 +205,60 @@ test('stream does not fail over when primary emits event then throws', function 
         foreach ($response as $_) {
         }
     })->toThrow(RateLimitedException::class);
+
+    Event::assertNotDispatched(AgentFailedOver::class);
+});
+
+test('stream does not fail over when primary throws non failoverable exception', function () {
+    Event::fake();
+
+    $manager = app(AiManager::class);
+    $backupStreamed = false;
+
+    $manager->extend('malformed_stream', fn ($app, $config) => new FakeStreamingProvider(
+        $config,
+        $app->make(Dispatcher::class),
+        fn ($provider, $prompt) => new StreamableAgentResponse(
+            (string) Str::uuid7(),
+            function () {
+                throw new InvalidArgumentException('Malformed stream response.');
+            },
+            new Meta($provider->name(), $prompt->model),
+        ),
+    ));
+
+    $manager->extend('backup_after_malformed_stream', fn ($app, $config) => new FakeStreamingProvider(
+        $config,
+        $app->make(Dispatcher::class),
+        function ($provider, $prompt) use (&$backupStreamed) {
+            $backupStreamed = true;
+
+            return new StreamableAgentResponse(
+                (string) Str::uuid7(),
+                function () {
+                    yield (new TextDelta('m2', 'm2', 'World', 0))->withInvocationId('inner-success');
+                },
+                new Meta($provider->name(), $prompt->model),
+            );
+        },
+    ));
+
+    config([
+        'ai.providers.primary' => ['driver' => 'malformed_stream'],
+        'ai.providers.backup' => ['driver' => 'backup_after_malformed_stream'],
+    ]);
+
+    $response = (new AssistantAgent)->stream(
+        'Hello',
+        provider: ['primary', 'backup'],
+    );
+
+    expect(function () use ($response) {
+        foreach ($response as $_) {
+        }
+    })->toThrow(InvalidArgumentException::class, 'Malformed stream response.');
+
+    expect($backupStreamed)->toBeFalse();
 
     Event::assertNotDispatched(AgentFailedOver::class);
 });

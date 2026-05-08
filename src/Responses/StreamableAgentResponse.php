@@ -87,6 +87,24 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     }
 
     /**
+     * Adopt state from a completed streamed response.
+     */
+    public function adoptStateFrom(StreamedAgentResponse $response): self
+    {
+        if ($this->meta !== null) {
+            $this->meta->provider = $response->meta->provider;
+            $this->meta->model = $response->meta->model;
+            $this->meta->citations = $response->meta->citations;
+        }
+
+        if ($response->conversationId !== null) {
+            $this->withinConversation($response->conversationId, $response->conversationUser);
+        }
+
+        return $this;
+    }
+
+    /**
      * Stream the response using Vercel's AI SDK stream protocol.
      *
      * See: https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol
@@ -151,7 +169,7 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
             $this->meta,
         );
 
-        if ($this->conversationId !== null && $this->conversationUser !== null) {
+        if ($this->conversationId !== null) {
             $this->streamedResponse->withinConversation(
                 $this->conversationId,
                 $this->conversationUser
