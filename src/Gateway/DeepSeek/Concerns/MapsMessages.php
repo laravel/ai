@@ -25,12 +25,20 @@ trait MapsMessages
             ];
         }
 
+        $skipToolResults = false;
+
         foreach ($messages as $message) {
             $message = Message::tryFrom($message);
 
+            if ($skipToolResults && $message->role === MessageRole::ToolResult) {
+                continue;
+            }
+
+            $skipToolResults = false;
+
             match ($message->role) {
                 MessageRole::User => $this->mapUserMessage($message, $chatMessages),
-                MessageRole::Assistant => $this->mapAssistantMessage($message, $chatMessages),
+                MessageRole::Assistant => $skipToolResults = $this->mapAssistantMessage($message, $chatMessages),
                 MessageRole::ToolResult => $this->mapToolResultMessage($message, $chatMessages),
             };
         }
@@ -63,8 +71,11 @@ trait MapsMessages
 
     /**
      * Map an assistant message to Chat Completions format.
+     *
+     * Returns true if tool_calls were stripped due to missing reasoning_content
+     * (signals the caller to skip the following ToolResultMessage).
      */
-    protected function mapAssistantMessage(AssistantMessage|Message $message, array &$chatMessages): void
+    protected function mapAssistantMessage(AssistantMessage|Message $message, array &$chatMessages): bool
     {
         $msg = ['role' => 'assistant'];
 
@@ -72,13 +83,36 @@ trait MapsMessages
             $msg['content'] = $message->content;
         }
 
-        if ($message instanceof AssistantMessage && $message->toolCalls->isNotEmpty()) {
+        $hasReasoningContent = $message instanceof AssistantMessage
+            && isset($message->providerContentBlocks['reasoning_content']);
+
+        if ($hasReasoningContent) {
+            $msg['reasoning_content'] = $message->providerContentBlocks['reasoning_content'];
+        }
+
+        $hasToolCalls = $message instanceof AssistantMessage && $message->toolCalls->isNotEmpty();
+
+        // Per DeepSeek docs: assistant messages with tool_calls MUST include
+        // reasoning_content. If it's missing (e.g. from external conversation
+        // history that didn't persist it), we gracefully degrade by stripping
+        // the tool_calls and signaling the caller to skip the corresponding
+        // ToolResultMessage. The assistant's text response already contains
+        // a summary of the tool output, preserving conversational context.
+        if ($hasToolCalls && ! $hasReasoningContent) {
+            $chatMessages[] = $msg;
+
+            return true;
+        }
+
+        if ($hasToolCalls) {
             $msg['tool_calls'] = $message->toolCalls->map(
                 fn (ToolCall $toolCall) => $this->serializeToolCallToChat($toolCall)
             )->all();
         }
 
         $chatMessages[] = $msg;
+
+        return false;
     }
 
     /**

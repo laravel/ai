@@ -71,8 +71,8 @@ trait ParsesTextResponses
      * Process a single response, handling tool loops recursively.
      *
      * Note: deepseek-reasoner responses include a `reasoning_content` field on
-     * each choice's message; it's intentionally ignored here — we only expose
-     * the final `content` text.
+     * each choice's message. We capture this into `providerContentBlocks` so it
+     * can be replayed to the API during recursive tool calls.
      */
     protected function processResponse(
         array $data,
@@ -116,7 +116,12 @@ trait ParsesTextResponses
 
         $steps->push($step);
 
-        $assistantMessage = new AssistantMessage($text, collect($mappedToolCalls));
+        $providerContentBlocks = [];
+        if (filled($message['reasoning_content'] ?? null)) {
+            $providerContentBlocks['reasoning_content'] = $message['reasoning_content'];
+        }
+
+        $assistantMessage = new AssistantMessage($text, collect($mappedToolCalls), $providerContentBlocks);
 
         $messages->push($assistantMessage);
 
@@ -242,6 +247,10 @@ trait ParsesTextResponses
 
                 if (filled($msg->content)) {
                     $mapped['content'] = $msg->content;
+                }
+
+                if (isset($msg->providerContentBlocks['reasoning_content'])) {
+                    $mapped['reasoning_content'] = $msg->providerContentBlocks['reasoning_content'];
                 }
 
                 if ($msg->toolCalls->isNotEmpty()) {
