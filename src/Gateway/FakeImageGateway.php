@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
+use Laravel\Ai\Files\Image as ImageFile;
 use Laravel\Ai\Prompts\ImagePrompt;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
@@ -26,7 +27,7 @@ class FakeImageGateway implements ImageGateway
     /**
      * Generate an image.
      *
-     * @param  array<ImageAttachment>  $attachments
+     * @param  array<ImageFile>  $attachments
      * @param  'low'|'medium'|'high'  $quality
      */
     public function generateImage(
