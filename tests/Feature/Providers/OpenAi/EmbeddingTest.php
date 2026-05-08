@@ -5,6 +5,8 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\RateLimitedException;
 
 beforeEach(function () {
     config(['ai.providers.openai' => [
@@ -91,8 +93,41 @@ test('embeddings default to 1536 dimensions when none specified', function () {
     Http::assertSent(fn (Request $request) => json_decode($request->body(), true)['dimensions'] === 1536);
 });
 
-test('embeddings throw when the API returns an error', function () {
-    Http::fake(['*' => Http::response(['error' => ['message' => 'unauthorized']], 401)]);
+test('embeddings rate limit response throws rate limited exception', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::response([
+            'error' => [
+                'type' => 'rate_limit_error',
+                'message' => 'Rate limit exceeded',
+            ],
+        ], 429),
+    ]);
+
+    Embeddings::for(['Hello'])->generate(provider: 'openai', model: 'text-embedding-3-small');
+})->throws(RateLimitedException::class);
+
+test('embeddings overloaded response throws provider overloaded exception', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::response([
+            'error' => [
+                'type' => 'server_error',
+                'message' => 'The server is currently overloaded. Please try again later.',
+            ],
+        ], 503),
+    ]);
+
+    Embeddings::for(['Hello'])->generate(provider: 'openai', model: 'text-embedding-3-small');
+})->throws(ProviderOverloadedException::class);
+
+test('embeddings http error response throws request exception', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::response([
+            'error' => [
+                'type' => 'invalid_request_error',
+                'message' => 'Unauthorized',
+            ],
+        ], 401),
+    ]);
 
     Embeddings::for(['Hello'])->generate(provider: 'openai', model: 'text-embedding-3-small');
 })->throws(RequestException::class);
