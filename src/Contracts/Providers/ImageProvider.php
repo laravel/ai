@@ -11,7 +11,6 @@ interface ImageProvider
      * Generate an image.
      *
      * @param  array<ImageAttachment>  $attachments
-     * @param  string  $size
      * @param  'low'|'medium'|'high'  $quality
      */
     public function image(
@@ -40,6 +39,8 @@ interface ImageProvider
 
     /**
      * Get the default / normalized image options for the provider.
+     *
+     * @param  'low'|'medium'|'high'|null  $quality
      */
-    public function defaultImageOptions(?string $size = null, $quality = null): array;
+    public function defaultImageOptions(?string $size = null, ?string $quality = null): array;
 }

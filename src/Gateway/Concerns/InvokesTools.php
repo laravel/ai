@@ -14,6 +14,11 @@ trait InvokesTools
     protected Closure $toolInvokedCallback;
 
     /**
+     * @var array<int, array{invoking: Closure, invoked: Closure}>
+     */
+    protected array $toolInvocationCallbackStack = [];
+
+    /**
      * Specify callbacks that should be invoked when tools are invoking / invoked.
      */
     public function onToolInvocation(Closure $invoking, Closure $invoked): self
@@ -29,12 +34,18 @@ trait InvokesTools
      */
     protected function executeTool(Tool $tool, array $arguments): string
     {
-        call_user_func($this->invokingToolCallback, $tool, $arguments);
+        $callbacks = $this->pushToolInvocationCallbacks();
 
-        return (string) tap(
-            $tool->handle(new Request($arguments)),
-            fn ($result) => call_user_func($this->toolInvokedCallback, $tool, $arguments, $result)
-        );
+        try {
+            call_user_func($callbacks['invoking'], $tool, $arguments);
+
+            return (string) tap(
+                $tool->handle(new Request($arguments)),
+                fn ($result) => call_user_func($callbacks['invoked'], $tool, $arguments, $result)
+            );
+        } finally {
+            $this->popToolInvocationCallbacks();
+        }
     }
 
     /**
@@ -58,5 +69,35 @@ trait InvokesTools
     {
         $this->invokingToolCallback ??= fn () => true;
         $this->toolInvokedCallback ??= fn () => true;
+    }
+
+    /**
+     * Snapshot the current callbacks for the duration of a single tool invocation.
+     *
+     * @return array{invoking: Closure, invoked: Closure}
+     */
+    protected function pushToolInvocationCallbacks(): array
+    {
+        $this->initializeToolCallbacks();
+
+        return $this->toolInvocationCallbackStack[] = [
+            'invoking' => $this->invokingToolCallback,
+            'invoked' => $this->toolInvokedCallback,
+        ];
+    }
+
+    /**
+     * Restore the callbacks that were active before the current tool invocation.
+     */
+    protected function popToolInvocationCallbacks(): void
+    {
+        $callbacks = array_pop($this->toolInvocationCallbackStack);
+
+        if ($callbacks === null) {
+            return;
+        }
+
+        $this->invokingToolCallback = $callbacks['invoking'];
+        $this->toolInvokedCallback = $callbacks['invoked'];
     }
 }

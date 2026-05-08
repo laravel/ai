@@ -1,0 +1,10 @@
+name: fix code styling
+
+on: [push]
+
+permissions:
+  contents: write
+
+jobs:
+  lint:
+    uses: laravel/.github/.github/workflows/coding-standards.yml@main

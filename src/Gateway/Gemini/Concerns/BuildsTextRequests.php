@@ -65,9 +65,6 @@ trait BuildsTextRequests
 
         if (filled($tools)) {
             $body['tools'] = $this->mapTools($tools, $provider);
-            $body['tool_config'] = [
-                'function_calling_config' => ['mode' => 'AUTO'],
-            ];
         }
 
         $generationConfig = [];
@@ -106,7 +103,7 @@ trait BuildsTextRequests
      */
     protected function buildFunctionResponseParts(array $toolResults): array
     {
-        return array_map(function ($result) {
+        return array_values(array_map(function ($result) {
             $functionResponse = [
                 'name' => $result->name,
                 'response' => [
@@ -120,7 +117,7 @@ trait BuildsTextRequests
             }
 
             return ['functionResponse' => $functionResponse];
-        }, $toolResults);
+        }, $toolResults));
     }
 
     /**
