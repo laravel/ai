@@ -230,6 +230,8 @@ class OpenRouterGateway implements EmbeddingGateway, ImageGateway, TextGateway
 
         $data = $response->json();
 
+        $this->validateTextResponse($data);
+
         return new EmbeddingsResponse(
             (new Collection($data['data'] ?? []))->pluck('embedding')->all(),
             $data['usage']['prompt_tokens'] ?? 0,

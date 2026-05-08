@@ -2,6 +2,11 @@
 
 dataset('text-providers', ['anthropic', 'gemini', 'groq', 'openai']);
 
+dataset('tts-providers', [
+    'openai' => ['openai', 'OPENAI_API_KEY'],
+    'gemini' => ['gemini', 'GEMINI_API_KEY'],
+]);
+
 dataset('providers-with-urls', [
     'anthropic' => ['anthropic', 'api.anthropic.com'],
     'gemini' => ['gemini', 'generativelanguage.googleapis.com'],
@@ -12,6 +17,11 @@ dataset('providers-with-urls', [
 dataset('embedding-providers', [
     'openai' => ['openai', 'OPENAI_API_KEY', 1536],
     'voyageai' => ['voyageai', 'VOYAGEAI_API_KEY', 1024],
+]);
+
+dataset('transcription-providers', [
+    'openai' => ['openai', 'OPENAI_API_KEY'],
+    'gemini' => ['gemini', 'GEMINI_API_KEY'],
 ]);
 
 dataset('image-providers', [

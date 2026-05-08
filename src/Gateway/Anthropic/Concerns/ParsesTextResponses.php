@@ -94,9 +94,14 @@ trait ParsesTextResponses
         $hasStructuredToolCall = count($realToolCalls) < count($toolCalls);
         $toolResults = [];
 
+        $stopReason = $data['stop_reason'] ?? '';
+
         $shouldContinue = $finishReason === FinishReason::ToolCalls
             && filled($realToolCalls)
             && $depth + 1 < ($maxSteps ?? round(count($tools) * 1.5));
+
+        $shouldResumePauseTurn = $stopReason === 'pause_turn'
+            && $depth + 1 < ($maxSteps ?? 5);
 
         if ($shouldContinue) {
             $toolResults = $this->executeToolCalls($realToolCalls, $tools);
@@ -105,6 +110,22 @@ trait ParsesTextResponses
         $steps->push(new Step($text, $toolCalls, $toolResults, $finishReason, $usage, $meta));
 
         $messages->push(new AssistantMessage($text, collect($toolCalls), $content));
+
+        if ($shouldResumePauseTurn) {
+            return $this->continueFromPauseTurn(
+                $data,
+                $provider,
+                $structured,
+                $tools,
+                $schema,
+                $steps,
+                $messages,
+                $requestBody,
+                $depth + 1,
+                $maxSteps,
+                $timeout,
+            );
+        }
 
         if ($shouldContinue) {
             $messages->push(new ToolResultMessage(collect($toolResults)));
@@ -217,6 +238,54 @@ trait ParsesTextResponses
         $requestBody['messages'][] = [
             'role' => 'user',
             'content' => $toolResultContent,
+        ];
+
+        unset($requestBody['stream']);
+
+        $response = $this->withErrorHandling(
+            $provider->name(),
+            fn () => $this->client($provider, $timeout)->post('messages', $requestBody),
+        );
+
+        $data = $response->json();
+
+        $this->validateTextResponse($data);
+
+        return $this->processResponse(
+            $data,
+            $provider,
+            $structured,
+            $tools,
+            $schema,
+            $steps,
+            $messages,
+            $requestBody,
+            $depth,
+            $maxSteps,
+            $timeout,
+        );
+    }
+
+    /**
+     * Continue the conversation after a pause_turn stop reason by replaying
+     * the assistant response as-is so the server can resume its turn.
+     */
+    protected function continueFromPauseTurn(
+        array $previousData,
+        Provider $provider,
+        bool $structured,
+        array $tools,
+        ?array $schema,
+        Collection $steps,
+        Collection $messages,
+        array $requestBody,
+        int $depth,
+        ?int $maxSteps,
+        ?int $timeout = null,
+    ): TextResponse {
+        $requestBody['messages'][] = [
+            'role' => 'assistant',
+            'content' => $this->ensureToolInputIsObject($previousData['content'] ?? []),
         ];
 
         unset($requestBody['stream']);

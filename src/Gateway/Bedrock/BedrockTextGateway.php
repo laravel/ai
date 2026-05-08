@@ -12,8 +12,8 @@ use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\Files\Document;
 use Laravel\Ai\Gateway\Bedrock\Concerns\CreatesBedrockClient;
+use Laravel\Ai\Gateway\Bedrock\Concerns\MapsAttachments;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -45,6 +45,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
     use CreatesBedrockClient;
     use HandlesFailoverErrors;
     use InvokesTools;
+    use MapsAttachments;
 
     protected const STRUCTURED_OUTPUT_TOOL = 'structured_output';
 
@@ -688,18 +689,8 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
     {
         $content = [['text' => $message->content]];
 
-        foreach ($message->attachments as $attachment) {
-            if ($attachment instanceof Document) {
-                $content[] = [
-                    'document' => [
-                        'format' => $this->getDocumentFormat($attachment),
-                        'name' => $this->getDocumentName($attachment),
-                        'source' => [
-                            'bytes' => $attachment->content(),
-                        ],
-                    ],
-                ];
-            }
+        if ($message->attachments->isNotEmpty()) {
+            $content = array_merge($content, $this->mapAttachments($message->attachments));
         }
 
         return ['role' => 'user', 'content' => $content];
@@ -727,41 +718,6 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             'role' => $message['role'] === MessageRole::Assistant->value ? 'assistant' : 'user',
             'content' => [['text' => $message['content']]],
         ];
-    }
-
-    /**
-     * Map a Document's MIME type to a Bedrock document format.
-     */
-    protected function getDocumentFormat(Document $document): string
-    {
-        $mime = strtolower(trim(strtok($document->mimeType() ?? 'text/plain', ';')));
-
-        return match ($mime) {
-            'application/pdf' => 'pdf',
-            'text/csv' => 'csv',
-            'application/msword' => 'doc',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
-            'application/vnd.ms-excel' => 'xls',
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
-            'text/html' => 'html',
-            'text/markdown', 'text/x-markdown' => 'md',
-            default => 'txt',
-        };
-    }
-
-    /**
-     * Build a unique, Bedrock-compliant document name.
-     *
-     * Bedrock requires document names to be unique within a message and limits
-     * them to alphanumerics, whitespace, hyphens, parentheses, and square brackets.
-     */
-    protected function getDocumentName(Document $document): string
-    {
-        $name = $document->name() ?? 'document';
-        $name = pathinfo($name, PATHINFO_FILENAME) ?: $name;
-        $name = preg_replace('/[^A-Za-z0-9\-\(\)\[\] ]+/', '-', $name);
-
-        return trim(preg_replace('/\s+/', ' ', $name)) ?: 'document';
     }
 
     /**

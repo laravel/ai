@@ -1,8 +1,11 @@
 <?php
 
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\RateLimitedException;
 
 beforeEach(function () {
     config(['ai.providers.mistral' => [
@@ -62,6 +65,42 @@ test('multiple inputs return multiple embeddings', function () {
 
     expect($response->embeddings)->toHaveCount(2);
 });
+
+test('embeddings rate limit response throws rate limited exception', function () {
+    Http::fake([
+        'api.mistral.ai/*' => Http::response([
+            'object' => 'error',
+            'message' => 'Rate limit exceeded',
+            'type' => 'rate_limit_error',
+        ], 429),
+    ]);
+
+    Embeddings::for(['Hello'])->generate(provider: 'mistral', model: 'mistral-embed');
+})->throws(RateLimitedException::class);
+
+test('embeddings overloaded response throws provider overloaded exception', function () {
+    Http::fake([
+        'api.mistral.ai/*' => Http::response([
+            'object' => 'error',
+            'message' => 'The server is currently overloaded.',
+            'type' => 'server_error',
+        ], 503),
+    ]);
+
+    Embeddings::for(['Hello'])->generate(provider: 'mistral', model: 'mistral-embed');
+})->throws(ProviderOverloadedException::class);
+
+test('embeddings http error response throws request exception', function () {
+    Http::fake([
+        'api.mistral.ai/*' => Http::response([
+            'object' => 'error',
+            'message' => 'Invalid API key',
+            'type' => 'authentication_error',
+        ], 401),
+    ]);
+
+    Embeddings::for(['Hello'])->generate(provider: 'mistral', model: 'mistral-embed');
+})->throws(RequestException::class);
 
 function fakeEmbeddingsResponse()
 {
