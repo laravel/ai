@@ -236,3 +236,55 @@ test('image http error response throws request exception', function () {
 
     Image::of('A blue circle')->generate(provider: 'openrouter', model: 'google/gemini-2.5-flash-image');
 })->throws(RequestException::class);
+
+test('image response is empty when choices array is empty', function () {
+    Http::fake([
+        'openrouter.ai/*' => Http::response([
+            'choices' => [],
+            'model' => 'google/gemini-2.5-flash-image',
+        ]),
+    ]);
+
+    $response = Image::of('A blue circle')->generate(provider: 'openrouter', model: 'google/gemini-2.5-flash-image');
+
+    expect($response->images)->toHaveCount(0);
+});
+
+test('image with non base64 url is filtered out of response', function () {
+    Http::fake([
+        'openrouter.ai/*' => Http::response([
+            'choices' => [[
+                'message' => [
+                    'images' => [
+                        ['image_url' => ['url' => 'https://cdn.example.com/generated/abc123.png']],
+                        ['image_url' => ['url' => 'data:image/png;base64,'.base64_encode('valid')]],
+                    ],
+                ],
+            ]],
+        ]),
+    ]);
+
+    $response = Image::of('A blue circle')->generate(provider: 'openrouter', model: 'google/gemini-2.5-flash-image');
+
+    expect($response->images)->toHaveCount(1)
+        ->and($response->images->first()->image)->toBe(base64_encode('valid'))
+        ->and($response->images->first()->mime)->toBe('image/png');
+});
+
+test('image response falls back to requested model when response omits model', function () {
+    Http::fake([
+        'openrouter.ai/*' => Http::response([
+            'choices' => [[
+                'message' => [
+                    'images' => [
+                        ['image_url' => ['url' => 'data:image/png;base64,'.base64_encode('img')]],
+                    ],
+                ],
+            ]],
+        ]),
+    ]);
+
+    $response = Image::of('A blue circle')->generate(provider: 'openrouter', model: 'google/gemini-2.5-flash-image');
+
+    expect($response->meta->model)->toBe('google/gemini-2.5-flash-image');
+});
