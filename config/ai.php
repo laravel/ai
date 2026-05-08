@@ -112,6 +112,12 @@ return [
             'key' => env('MISTRAL_API_KEY'),
         ],
 
+        'nvidia' => [
+            'driver' => 'nvidia',
+            'key' => env('NVIDIA_API_KEY'),
+            'url' => env('NVIDIA_NIM_URL', 'https://integrate.api.nvidia.com/v1'),
+        ],
+
         'ollama' => [
             'driver' => 'ollama',
             'key' => env('OLLAMA_API_KEY', ''),

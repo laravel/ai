@@ -5,6 +5,7 @@ use Tests\Feature\Providers\AzureOpenAi\AzureOpenAiHelpers;
 use Tests\Feature\Providers\Gemini\GeminiHelpers;
 use Tests\Feature\Providers\Groq\GroqHelpers;
 use Tests\Feature\Providers\Mistral\MistralHelpers;
+use Tests\Feature\Providers\Nvidia\NvidiaHelpers;
 use Tests\Feature\Providers\Ollama\OllamaHelpers;
 use Tests\Feature\Providers\OpenAi\OpenAiHelpers;
 use Tests\Feature\Providers\OpenRouter\OpenRouterHelpers;
@@ -22,6 +23,7 @@ pest()->use(AzureOpenAiHelpers::class)->group('provider-azure')->in('Feature/Pro
 pest()->use(GeminiHelpers::class)->group('provider-gemini')->in('Feature/Providers/Gemini');
 pest()->use(GroqHelpers::class)->group('provider-groq')->in('Feature/Providers/Groq');
 pest()->use(MistralHelpers::class)->group('provider-mistral')->in('Feature/Providers/Mistral');
+pest()->use(NvidiaHelpers::class)->group('provider-nvidia')->in('Feature/Providers/Nvidia');
 pest()->use(OllamaHelpers::class)->group('provider-ollama')->in('Feature/Providers/Ollama');
 pest()->use(OpenAiHelpers::class)->group('provider-openai')->in('Feature/Providers/OpenAi');
 pest()->use(XaiHelpers::class)->group('provider-xai')->in('Feature/Providers/Xai');

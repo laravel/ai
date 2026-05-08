@@ -189,3 +189,53 @@ function fakeDeepSeekToolCallResponse(): PromiseInterface
         ],
     ]);
 }
+
+function fakeNvidiaResponse(string $text = 'Hello'): PromiseInterface
+{
+    return Http::response([
+        'id' => 'chatcmpl-nv-123',
+        'object' => 'chat.completion',
+        'model' => 'meta/llama-3.3-70b-instruct',
+        'choices' => [[
+            'index' => 0,
+            'message' => [
+                'role' => 'assistant',
+                'content' => $text,
+            ],
+            'finish_reason' => 'stop',
+        ]],
+        'usage' => [
+            'prompt_tokens' => 1,
+            'completion_tokens' => 1,
+        ],
+    ]);
+}
+
+function fakeNvidiaToolCallResponse(): PromiseInterface
+{
+    return Http::response([
+        'id' => 'chatcmpl-nv-tool-123',
+        'object' => 'chat.completion',
+        'model' => 'meta/llama-3.3-70b-instruct',
+        'choices' => [[
+            'index' => 0,
+            'message' => [
+                'role' => 'assistant',
+                'content' => null,
+                'tool_calls' => [[
+                    'id' => 'call_nv_123',
+                    'type' => 'function',
+                    'function' => [
+                        'name' => 'FixedNumberGenerator',
+                        'arguments' => '{}',
+                    ],
+                ]],
+            ],
+            'finish_reason' => 'tool_calls',
+        ]],
+        'usage' => [
+            'prompt_tokens' => 10,
+            'completion_tokens' => 5,
+        ],
+    ]);
+}

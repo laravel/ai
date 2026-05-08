@@ -28,6 +28,7 @@ use Laravel\Ai\Providers\GeminiProvider;
 use Laravel\Ai\Providers\GroqProvider;
 use Laravel\Ai\Providers\JinaProvider;
 use Laravel\Ai\Providers\MistralProvider;
+use Laravel\Ai\Providers\NvidiaProvider;
 use Laravel\Ai\Providers\OllamaProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Providers\OpenRouterProvider;
@@ -385,6 +386,17 @@ class AiManager extends MultipleInstanceManager
     public function createMistralDriver(array $config): MistralProvider
     {
         return new MistralProvider(
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create an NVIDIA NIM powered instance.
+     */
+    public function createNvidiaDriver(array $config): NvidiaProvider
+    {
+        return new NvidiaProvider(
             $config,
             $this->app->make(Dispatcher::class)
         );

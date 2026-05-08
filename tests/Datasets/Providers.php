@@ -42,6 +42,7 @@ dataset('agent-providers', [
     'gemini' => ['gemini', 'GEMINI_API_KEY', 'gemini-3.1-flash-lite-preview'],
     'groq' => ['groq', 'GROQ_API_KEY', 'openai/gpt-oss-20b'],
     'mistral' => ['mistral', 'MISTRAL_API_KEY', 'mistral-small-latest'],
+    'nvidia' => ['nvidia', 'NVIDIA_API_KEY', 'meta/llama-3.3-70b-instruct'],
     'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4-nano'],
     'openrouter' => ['openrouter', 'OPENROUTER_API_KEY', 'anthropic/claude-haiku-4.5'],
     'xai' => ['xai', 'XAI_API_KEY', 'grok-4-1-fast-reasoning'],
