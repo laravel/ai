@@ -15,7 +15,7 @@ trait GeneratesEmbeddings
     /**
      * Get embedding vectors representing the given inputs.
      *
-     * @param  string[]  $input
+     * @param  string[]  $inputs
      */
     public function embeddings(array $inputs, ?int $dimensions = null, ?string $model = null, int $timeout = 30): EmbeddingsResponse
     {
