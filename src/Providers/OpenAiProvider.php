@@ -112,7 +112,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     /**
      * Get the default / normalized image options for the provider.
      */
-    public function defaultImageOptions(?string $size = null, $quality = null): array
+    public function defaultImageOptions(?string $size = null, ?string $quality = null): array
     {
         return array_filter([
             'size' => match ($size) {

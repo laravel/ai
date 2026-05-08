@@ -14,7 +14,7 @@ class EmbeddingsResponse implements Arrayable, Countable, IteratorAggregate, Jso
     /**
      * Create a new embeddings response instance.
      *
-     * @param  array<int, array<float>>
+     * @param  array<int, array<float>>  $embeddings
      */
     public function __construct(public array $embeddings, public int $tokens, public Meta $meta) {}
 

@@ -3,6 +3,9 @@
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\RateLimitedException;
 
 beforeEach(function () {
     config(['ai.providers.openrouter' => [
@@ -72,4 +75,36 @@ test('embeddings request uses openrouter base url', function () {
     Ai::instance('openrouter')->embeddings(['test']);
 
     Http::assertSent(fn (Request $request) => $request->url() === 'https://openrouter.ai/api/v1/embeddings');
+});
+
+test('embeddings rate limit response throws rate limited exception', function () {
+    Http::fake([
+        'openrouter.ai/*' => Http::response(['error' => ['message' => 'Rate limited']], 429),
+    ]);
+
+    expect(fn () => Ai::instance('openrouter')->embeddings(['Hello']))
+        ->toThrow(RateLimitedException::class);
+});
+
+test('embeddings overloaded response throws provider overloaded exception', function () {
+    Http::fake([
+        'openrouter.ai/*' => Http::response(['error' => ['message' => 'Server overloaded']], 503),
+    ]);
+
+    expect(fn () => Ai::instance('openrouter')->embeddings(['Hello']))
+        ->toThrow(ProviderOverloadedException::class);
+});
+
+test('embeddings error in 200 response throws ai exception', function () {
+    Http::fake([
+        'openrouter.ai/*' => Http::response([
+            'error' => [
+                'type' => 'invalid_request_error',
+                'message' => 'The model does not exist.',
+            ],
+        ]),
+    ]);
+
+    expect(fn () => Ai::instance('openrouter')->embeddings(['Hello']))
+        ->toThrow(AiException::class, 'OpenRouter Error');
 });

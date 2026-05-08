@@ -11,6 +11,6 @@ abstract class AiMigration extends Migration
      */
     public function getConnection(): ?string
     {
-        return config('database.default');
+        return config('ai.conversations.connection', config('database.default'));
     }
 }

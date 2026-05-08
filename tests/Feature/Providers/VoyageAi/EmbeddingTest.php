@@ -1,8 +1,11 @@
 <?php
 
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Files\Image;
 use Laravel\Ai\Files\Video;
 
@@ -164,6 +167,30 @@ test('multimodal embeddings allow mixed media types with the same source type', 
             && data_get($body, 'inputs.1.content.0.type') === 'video_url';
     });
 });
+
+test('embeddings rate limit response throws rate limited exception', function () {
+    Http::fake([
+        'api.voyageai.com/*' => Http::response(['detail' => 'Rate limit exceeded'], 429),
+    ]);
+
+    Embeddings::for(['Hello'])->generate(provider: 'voyageai', model: 'voyage-4');
+})->throws(RateLimitedException::class);
+
+test('embeddings overloaded response throws provider overloaded exception', function () {
+    Http::fake([
+        'api.voyageai.com/*' => Http::response(['detail' => 'Service unavailable'], 503),
+    ]);
+
+    Embeddings::for(['Hello'])->generate(provider: 'voyageai', model: 'voyage-4');
+})->throws(ProviderOverloadedException::class);
+
+test('embeddings http error response throws request exception', function () {
+    Http::fake([
+        'api.voyageai.com/*' => Http::response(['detail' => 'Invalid model'], 400),
+    ]);
+
+    Embeddings::for(['Hello'])->generate(provider: 'voyageai', model: 'voyage-4');
+})->throws(RequestException::class);
 
 function fakeVoyageEmbeddingsResponse()
 {

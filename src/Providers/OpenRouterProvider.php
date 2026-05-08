@@ -89,7 +89,7 @@ class OpenRouterProvider extends Provider implements EmbeddingProvider, ImagePro
      * own API convention and are honored primarily by Gemini-family image models.
      * Other image models routed via OpenRouter may ignore these fields.
      */
-    public function defaultImageOptions(?string $size = null, $quality = null): array
+    public function defaultImageOptions(?string $size = null, ?string $quality = null): array
     {
         return array_filter([
             'aspect_ratio' => $size,
