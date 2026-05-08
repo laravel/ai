@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Broadcasting\AnonymousEvent;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Support\Facades\Event;
 use Laravel\Ai\Jobs\BroadcastAgent;
@@ -54,6 +55,24 @@ test('multiple then callbacks all receive streamed agent response', function () 
 
     expect($receivedA)->toBeInstanceOf(StreamedAgentResponse::class)
         ->and($receivedB)->toBeInstanceOf(StreamedAgentResponse::class);
+});
+
+test('failed broadcasts a stream_failed event with recoverable false', function () {
+    Event::fake();
+
+    $job = new BroadcastAgent(
+        agent: new AssistantAgent,
+        prompt: 'Say hello',
+        channels: new Channel('test-channel'),
+    );
+
+    $job->failed(new RuntimeException('Something went wrong'));
+
+    Event::assertDispatched(AnonymousEvent::class, function (AnonymousEvent $event) {
+        return $event->broadcastAs() === 'stream_failed'
+            && $event->broadcastWith()['recoverable'] === false
+            && $event->broadcastWith()['message'] === 'The agent stream failed.';
+    });
 });
 
 test('streamed response passed to then is fully resolved', function () {

@@ -52,7 +52,7 @@ class BroadcastAgent implements ShouldQueue
         (new Error(
             id: (string) Str::uuid(),
             type: 'stream_failed',
-            message: $exception->getMessage(),
+            message: 'The agent stream failed.',
             recoverable: false,
             timestamp: now()->timestamp,
         ))->broadcastNow($this->channels);
