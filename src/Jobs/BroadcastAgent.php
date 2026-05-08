@@ -5,8 +5,10 @@ namespace Laravel\Ai\Jobs;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 
 class BroadcastAgent implements ShouldQueue
@@ -40,6 +42,20 @@ class BroadcastAgent implements ShouldQueue
             });
 
         $this->withCallbacks(fn () => $streamedResponse);
+    }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        (new Error(
+            id: (string) Str::uuid(),
+            type: 'stream_failed',
+            message: $exception->getMessage(),
+            recoverable: false,
+            timestamp: now()->timestamp,
+        ))->broadcastNow($this->channels);
     }
 
     /**
