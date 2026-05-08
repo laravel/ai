@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway\DeepSeek\Concerns;
 
+use Illuminate\Support\Facades\Log;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\MessageRole;
@@ -86,19 +87,25 @@ trait MapsMessages
         $hasReasoningContent = $message instanceof AssistantMessage
             && isset($message->providerContentBlocks['reasoning_content']);
 
-        if ($hasReasoningContent) {
+        $hasToolCalls = $message instanceof AssistantMessage && $message->toolCalls->isNotEmpty();
+
+        if ($hasReasoningContent && $hasToolCalls) {
             $msg['reasoning_content'] = $message->providerContentBlocks['reasoning_content'];
         }
 
-        $hasToolCalls = $message instanceof AssistantMessage && $message->toolCalls->isNotEmpty();
-
         // Per DeepSeek docs: assistant messages with tool_calls MUST include
         // reasoning_content. If it's missing (e.g. from external conversation
-        // history that didn't persist it), we gracefully degrade by stripping
-        // the tool_calls and signaling the caller to skip the corresponding
-        // ToolResultMessage. The assistant's text response already contains
-        // a summary of the tool output, preserving conversational context.
+        // history that didn't persist it), we warn and degrade by stripping
+        // the tool_calls and signaling the caller to skip corresponding
+        // ToolResultMessages.
         if ($hasToolCalls && ! $hasReasoningContent) {
+            Log::warning(
+                'DeepSeek assistant message with tool_calls is missing reasoning_content; stripping tool_calls and skipping following tool result messages.',
+                [
+                    'tool_call_ids' => $message->toolCalls->pluck('id')->values()->all(),
+                ],
+            );
+
             $chatMessages[] = $msg;
 
             return true;

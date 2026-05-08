@@ -70,9 +70,9 @@ trait ParsesTextResponses
     /**
      * Process a single response, handling tool loops recursively.
      *
-     * Note: deepseek-reasoner responses include a `reasoning_content` field on
-     * each choice's message. We capture this into `providerContentBlocks` so it
-     * can be replayed to the API during recursive tool calls.
+     * DeepSeek thinking-mode responses can include `reasoning_content` on each
+     * choice's message. We capture it into `providerContentBlocks`; the message
+     * mapper only replays it for assistant messages that include tool calls.
      */
     protected function processResponse(
         array $data,
@@ -244,16 +244,17 @@ trait ParsesTextResponses
         foreach ($messages as $msg) {
             if ($msg instanceof AssistantMessage) {
                 $mapped = ['role' => 'assistant'];
+                $hasToolCalls = $msg->toolCalls->isNotEmpty();
 
                 if (filled($msg->content)) {
                     $mapped['content'] = $msg->content;
                 }
 
-                if (isset($msg->providerContentBlocks['reasoning_content'])) {
+                if ($hasToolCalls && isset($msg->providerContentBlocks['reasoning_content'])) {
                     $mapped['reasoning_content'] = $msg->providerContentBlocks['reasoning_content'];
                 }
 
-                if ($msg->toolCalls->isNotEmpty()) {
+                if ($hasToolCalls) {
                     $mapped['tool_calls'] = $msg->toolCalls->map(
                         fn (ToolCall $toolCall) => $this->serializeToolCallToChat($toolCall)
                     )->all();

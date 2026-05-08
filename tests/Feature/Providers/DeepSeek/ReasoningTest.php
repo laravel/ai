@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -82,6 +83,65 @@ test('reasoning content is preserved in non-streaming response and replayed in t
         ->and($assistantMsg['tool_calls'][0]['function']['name'])->toBe('FixedNumberGenerator');
 });
 
+test('reasoning content is not replayed for deepseek-reasoner messages without tool calls', function () {
+    Http::fake([
+        'api.deepseek.com/*' => Http::response([
+            'id' => 'chatcmpl-reasoner-2',
+            'object' => 'chat.completion',
+            'model' => 'deepseek-reasoner',
+            'choices' => [[
+                'index' => 0,
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => 'The answer is 6.',
+                ],
+                'finish_reason' => 'stop',
+            ]],
+            'usage' => [
+                'prompt_tokens' => 5,
+                'completion_tokens' => 3,
+            ],
+        ]),
+    ]);
+
+    $agent = new class implements Agent, Conversational
+    {
+        use Promptable;
+
+        public function instructions(): Stringable|string
+        {
+            return 'You are a helpful assistant.';
+        }
+
+        public function provider(): string
+        {
+            return 'deepseek';
+        }
+
+        public function messages(): iterable
+        {
+            return [
+                new UserMessage('What is 2+2?'),
+                new AssistantMessage(
+                    'The answer is 4.',
+                    providerContentBlocks: ['reasoning_content' => 'Let me think... 2+2 = 4.'],
+                ),
+            ];
+        }
+    };
+
+    $agent->prompt('What is 3+3?', provider: 'deepseek', model: 'deepseek-reasoner');
+
+    $recorded = Http::recorded();
+    $body = json_decode($recorded[0][0]->body(), true);
+    $assistantMsg = collect($body['messages'])->first(fn ($m) => $m['role'] === 'assistant');
+
+    expect($body['model'])->toBe('deepseek-reasoner')
+        ->and($assistantMsg['content'])->toBe('The answer is 4.')
+        ->and($assistantMsg)->not->toHaveKey('reasoning_content')
+        ->and($assistantMsg)->not->toHaveKey('tool_calls');
+});
+
 test('streaming emits reasoning start, delta, and end events', function () {
     Http::fake([
         'api.deepseek.com/*' => Http::response(
@@ -158,6 +218,11 @@ test('historical assistant messages with tool_calls but missing reasoning_conten
     Http::fake([
         'api.deepseek.com/*' => fakeDeepSeekResponse('Sure, here is the info.'),
     ]);
+
+    Log::shouldReceive('warning')
+        ->once()
+        ->withArgs(fn (string $message, array $context) => str_contains($message, 'missing reasoning_content')
+            && $context['tool_call_ids'] === ['call_old']);
 
     $agent = new class implements Agent, Conversational
     {
