@@ -213,8 +213,8 @@ test('image rate limit response throws rate limited exception', function () {
     Http::fake([
         'test-resource.openai.azure.com/*' => Http::response([
             'error' => [
-                'type' => 'rate_limit_error',
-                'message' => 'Rate limit exceeded',
+                'code' => '429',
+                'message' => 'Requests to the Generations_Create Operation under Azure OpenAI API have exceeded call rate limit of your current OpenAI S0 pricing tier.',
             ],
         ], 429),
     ]);
@@ -226,7 +226,7 @@ test('image overloaded response throws provider overloaded exception', function 
     Http::fake([
         'test-resource.openai.azure.com/*' => Http::response([
             'error' => [
-                'type' => 'server_error',
+                'code' => 'ServiceUnavailable',
                 'message' => 'The server is currently overloaded. Please try again later.',
             ],
         ], 503),
@@ -239,8 +239,15 @@ test('image http error response throws request exception', function () {
     Http::fake([
         'test-resource.openai.azure.com/*' => Http::response([
             'error' => [
-                'type' => 'invalid_request_error',
-                'message' => 'Invalid model',
+                'code' => 'contentFilter',
+                'message' => 'Your task failed as a result of our safety system. Image generations failure reason: The generated image was filtered as a result of our content policy.',
+                'innererror' => [
+                    'code' => 'ResponsibleAIPolicyViolation',
+                    'content_filter_result' => [
+                        'sexual' => ['filtered' => false, 'severity' => 'safe'],
+                        'violence' => ['filtered' => true, 'severity' => 'medium'],
+                    ],
+                ],
             ],
         ], 400),
     ]);

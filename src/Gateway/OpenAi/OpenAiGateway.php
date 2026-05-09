@@ -16,7 +16,7 @@ use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Files\File;
-use Laravel\Ai\Files\Image as ImageFile;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\StoredImage;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
@@ -124,9 +124,9 @@ class OpenAiGateway implements Gateway
     /**
      * Generate an image.
      *
-     * @param  array<ImageFile>  $attachments
-     * @param  '3:2'|'2:3'|'1:1'  $size
-     * @param  'low'|'medium'|'high'  $quality
+     * @param  array<Image>  $attachments
+     * @param  '3:2'|'2:3'|'1:1'|null  $size
+     * @param  'low'|'medium'|'high'|null  $quality
      */
     public function generateImage(
         ImageProvider $provider,
