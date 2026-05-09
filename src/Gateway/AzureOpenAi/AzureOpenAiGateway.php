@@ -12,7 +12,7 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\Files\Image as ImageFile;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Gateway\AzureOpenAi\Concerns\CreatesAzureOpenAiClient;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
@@ -165,7 +165,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
     /**
      * Generate an image.
      *
-     * @param  array<ImageFile>  $attachments
+     * @param  array<Image>  $attachments
      * @param  '3:2'|'2:3'|'1:1'  $size
      * @param  'low'|'medium'|'high'  $quality
      */

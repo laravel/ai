@@ -6,7 +6,7 @@ use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Events\GeneratingImage;
 use Laravel\Ai\Events\ImageGenerated;
-use Laravel\Ai\Files\Image as ImageFile;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Prompts\ImagePrompt;
 use Laravel\Ai\Responses\ImageResponse;
 
@@ -15,7 +15,7 @@ trait GeneratesImages
     /**
      * Generate an image.
      *
-     * @param  array<ImageFile>  $attachments
+     * @param  array<Image>  $attachments
      * @param  'low'|'medium'|'high'  $quality
      */
     public function image(
