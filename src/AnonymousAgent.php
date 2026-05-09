@@ -6,6 +6,9 @@ use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasTools;
 
+/**
+ * @phpstan-consistent-constructor
+ */
 class AnonymousAgent implements Agent, Conversational, HasTools
 {
     use Promptable;

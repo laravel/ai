@@ -32,7 +32,7 @@ class SimilaritySearch implements Tool
         int $limit = 15,
         ?Closure $query = null): self
     {
-        return new static(function (string $queryString) use ($model, $column, $minSimilarity, $limit, $query) {
+        return new self(function (string $queryString) use ($model, $column, $minSimilarity, $limit, $query) {
             $pendingQuery = $model::query()->whereVectorSimilarTo($column, $queryString, $minSimilarity);
 
             if ($query) {

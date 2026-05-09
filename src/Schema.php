@@ -29,7 +29,7 @@ class Schema implements Schemable
      */
     public function withName(string $name): self
     {
-        return new static(
+        return new self(
             $this->schema,
             $name,
             $this->strict,
