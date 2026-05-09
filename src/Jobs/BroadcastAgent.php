@@ -12,6 +12,8 @@ use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Throwable;
 
+use function Laravel\Ai\ulid;
+
 class BroadcastAgent implements ShouldQueue
 {
     use Concerns\InvokesQueuedResponseCallbacks, Queueable;
