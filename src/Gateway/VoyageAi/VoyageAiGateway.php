@@ -29,14 +29,15 @@ class VoyageAiGateway implements EmbeddingGateway, RerankingGateway
         array $inputs,
         int $dimensions,
         int $timeout = 30,
+        array $providerOptions = [],
     ): EmbeddingsResponse {
         $data = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('/embeddings', [
+            fn () => $this->client($provider, $timeout)->post('/embeddings', array_merge([
                 'model' => $model,
                 'input' => $inputs,
                 'output_dimension' => $dimensions,
-            ]),
+            ], $providerOptions)),
         )->json();
 
         return new EmbeddingsResponse(
