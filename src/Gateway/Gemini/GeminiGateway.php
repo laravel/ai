@@ -12,6 +12,7 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
@@ -135,7 +136,7 @@ class GeminiGateway implements Gateway
     /**
      * Generate an image.
      *
-     * @param  array<ImageFile>  $attachments
+     * @param  array<Image>  $attachments
      * @param  '3:2'|'2:3'|'1:1'  $size
      * @param  'low'|'medium'|'high'  $quality
      */
