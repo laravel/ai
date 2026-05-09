@@ -2,14 +2,8 @@
 
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Laravel\Ai\Contracts\Agent;
-use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Messages\AssistantMessage;
-use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
-use Laravel\Ai\Promptable;
-use Laravel\Ai\Responses\Data\ToolCall;
-use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
 use Laravel\Ai\Streaming\Events\ReasoningStart;
@@ -19,6 +13,10 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Tests\Feature\Providers\DeepSeek\DeepSeekHelpers;
+use Tests\Fixtures\Agents\HistoricalReasoningWithoutToolCallsAgent;
+use Tests\Fixtures\Agents\HistoricalToolCallWithEmptyReasoningAgent;
+use Tests\Fixtures\Agents\HistoricalToolCallWithReasoningAgent;
+use Tests\Fixtures\Agents\HistoricalToolCallWithoutReasoningAgent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
@@ -31,7 +29,7 @@ beforeEach(function () {
     ]]);
 });
 
-test('reasoning content is preserved in non-streaming response and replayed in tool call loop', function () {
+test('preserves reasoning content across tool-call loops', function () {
     Http::fake([
         'api.deepseek.com/*' => Http::sequence([
             Http::response([
@@ -55,94 +53,23 @@ test('reasoning content is preserved in non-streaming response and replayed in t
                     ],
                     'finish_reason' => 'tool_calls',
                 ]],
-                'usage' => [
-                    'prompt_tokens' => 10,
-                    'completion_tokens' => 5,
-                ],
+                'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
             ]),
             fakeDeepSeekResponse('The number is 72019'),
         ]),
     ]);
 
-    (new ToolUsingAgent(fixed: true))->prompt(
-        'Generate a number',
-        provider: 'deepseek',
-    );
+    (new ToolUsingAgent(fixed: true))->prompt('Generate a number', provider: 'deepseek');
 
-    $recorded = Http::recorded();
+    $followUpMessages = $this->requestMessages(1);
+    $assistantMsg = $this->findMessage($followUpMessages, role: 'assistant', has: 'tool_calls');
 
-    expect($recorded)->toHaveCount(2);
-
-    $followUpBody = json_decode($recorded[1][0]->body(), true);
-    $followUpMessages = $followUpBody['messages'];
-
-    $assistantMsg = collect($followUpMessages)->first(fn ($m) => $m['role'] === 'assistant' && isset($m['tool_calls']));
-
-    expect($assistantMsg)->not->toBeNull()
-        ->and($assistantMsg['reasoning_content'])->toBe('Let me think. I need to call the FixedNumberGenerator.')
+    expect($assistantMsg['reasoning_content'])
+        ->toBe('Let me think. I need to call the FixedNumberGenerator.')
         ->and($assistantMsg['tool_calls'][0]['function']['name'])->toBe('FixedNumberGenerator');
 });
 
-test('reasoning content is not replayed for deepseek-reasoner messages without tool calls', function () {
-    Http::fake([
-        'api.deepseek.com/*' => Http::response([
-            'id' => 'chatcmpl-reasoner-2',
-            'object' => 'chat.completion',
-            'model' => 'deepseek-reasoner',
-            'choices' => [[
-                'index' => 0,
-                'message' => [
-                    'role' => 'assistant',
-                    'content' => 'The answer is 6.',
-                ],
-                'finish_reason' => 'stop',
-            ]],
-            'usage' => [
-                'prompt_tokens' => 5,
-                'completion_tokens' => 3,
-            ],
-        ]),
-    ]);
-
-    $agent = new class implements Agent, Conversational
-    {
-        use Promptable;
-
-        public function instructions(): Stringable|string
-        {
-            return 'You are a helpful assistant.';
-        }
-
-        public function provider(): string
-        {
-            return 'deepseek';
-        }
-
-        public function messages(): iterable
-        {
-            return [
-                new UserMessage('What is 2+2?'),
-                new AssistantMessage(
-                    'The answer is 4.',
-                    providerContentBlocks: ['reasoning_content' => 'Let me think... 2+2 = 4.'],
-                ),
-            ];
-        }
-    };
-
-    $agent->prompt('What is 3+3?', provider: 'deepseek', model: 'deepseek-reasoner');
-
-    $recorded = Http::recorded();
-    $body = json_decode($recorded[0][0]->body(), true);
-    $assistantMsg = collect($body['messages'])->first(fn ($m) => $m['role'] === 'assistant');
-
-    expect($body['model'])->toBe('deepseek-reasoner')
-        ->and($assistantMsg['content'])->toBe('The answer is 4.')
-        ->and($assistantMsg)->not->toHaveKey('reasoning_content')
-        ->and($assistantMsg)->not->toHaveKey('tool_calls');
-});
-
-test('streaming emits reasoning start, delta, and end events', function () {
+test('emits reasoning start, delta, and end events while streaming', function () {
     Http::fake([
         'api.deepseek.com/*' => Http::response(
             body: $this->ssePayload([
@@ -172,7 +99,7 @@ test('streaming emits reasoning start, delta, and end events', function () {
         ->and($events[9])->toBeInstanceOf(StreamEnd::class);
 });
 
-test('streaming reasoning content is replayed in streaming tool call loops', function () {
+test('preserves reasoning content across streaming tool-call loops', function () {
     Http::fake([
         'api.deepseek.com/*' => Http::sequence([
             Http::response(
@@ -198,143 +125,92 @@ test('streaming reasoning content is replayed in streaming tool call loops', fun
         ]),
     ]);
 
-    $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+    $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
 
-    $recorded = Http::recorded();
+    $followUpMessages = $this->requestMessages(1);
+    $assistantMsg = $this->findMessage($followUpMessages, role: 'assistant', has: 'tool_calls');
 
-    expect($recorded)->toHaveCount(2);
-
-    $followUpBody = json_decode($recorded[1][0]->body(), true);
-    $followUpMessages = $followUpBody['messages'];
-
-    $assistantMsg = collect($followUpMessages)->last(fn ($m) => $m['role'] === 'assistant' && isset($m['tool_calls']));
-
-    expect($assistantMsg)->not->toBeNull()
-        ->and($assistantMsg['reasoning_content'])->toBe('Thinking process...')
+    expect($assistantMsg['reasoning_content'])->toBe('Thinking process...')
         ->and($assistantMsg['tool_calls'][0]['function']['name'])->toBe('FixedNumberGenerator');
 });
 
-test('historical assistant messages with tool_calls but missing reasoning_content are gracefully degraded', function () {
+test('strips reasoning from deepseek-reasoner historical messages without tool calls', function () {
     Http::fake([
-        'api.deepseek.com/*' => fakeDeepSeekResponse('Sure, here is the info.'),
+        'api.deepseek.com/*' => Http::response([
+            'id' => 'chatcmpl-reasoner-2',
+            'object' => 'chat.completion',
+            'model' => 'deepseek-reasoner',
+            'choices' => [[
+                'index' => 0,
+                'message' => ['role' => 'assistant', 'content' => 'The answer is 6.'],
+                'finish_reason' => 'stop',
+            ]],
+            'usage' => ['prompt_tokens' => 5, 'completion_tokens' => 3],
+        ]),
     ]);
+
+    (new HistoricalReasoningWithoutToolCallsAgent)->prompt('What is 3+3?', provider: 'deepseek', model: 'deepseek-reasoner');
+
+    $assistantMsg = $this->findMessage($this->requestMessages(0), role: 'assistant');
+
+    expect($assistantMsg['content'])->toBe('The answer is 8.')
+        ->and($assistantMsg)->not->toHaveKey('reasoning_content')
+        ->and($assistantMsg)->not->toHaveKey('tool_calls');
+});
+
+test('strips tool calls when historical reasoning content is empty string', function () {
+    Http::fake(['api.deepseek.com/*' => fakeDeepSeekResponse('Here you go.')]);
 
     Log::shouldReceive('warning')
         ->once()
         ->withArgs(fn (string $message, array $context) => str_contains($message, 'missing reasoning_content')
-            && $context['tool_call_ids'] === ['call_old']);
+            && $context['tool_call_ids'] === ['call_empty']);
 
-    $agent = new class implements Agent, Conversational
-    {
-        use Promptable;
+    (new HistoricalToolCallWithEmptyReasoningAgent)->prompt('tell me more', provider: 'deepseek');
 
-        public function instructions(): Stringable|string
-        {
-            return 'You are a helpful assistant.';
-        }
+    $messages = $this->requestMessages(0);
+    $assistantMsg = $this->findMessage($messages, role: 'assistant');
 
-        public function provider(): string
-        {
-            return 'deepseek';
-        }
+    expect($assistantMsg['content'])->toBe('Found the products.')
+        ->and($assistantMsg)->not->toHaveKey('reasoning_content')
+        ->and($assistantMsg)->not->toHaveKey('tool_calls');
 
-        public function messages(): iterable
-        {
-            return [
-                new UserMessage('check stock lampu'),
-                // Historical assistant message WITH tool_calls but WITHOUT reasoning_content
-                new AssistantMessage(
-                    'Found the products.',
-                    collect([
-                        new ToolCall('call_old', 'SearchProducts', ['keyword' => 'lampu'], 'call_old'),
-                    ]),
-                    [] // No reasoning_content!
-                ),
-                new ToolResultMessage(collect([
-                    new ToolResult('call_old', 'SearchProducts', ['keyword' => 'lampu'], '[{"name":"Lampu LED"}]', 'call_old'),
-                ])),
-                new UserMessage('tell me more'),
-            ];
-        }
-    };
+    expect($this->filterMessages($messages, 'tool'))->toHaveCount(0);
+});
 
-    $agent->prompt('tell me more', provider: 'deepseek');
+test('strips tool calls when historical reasoning content is missing', function () {
+    Http::fake(['api.deepseek.com/*' => fakeDeepSeekResponse('Sure, here is the info.')]);
 
-    $recorded = Http::recorded();
-    $body = json_decode($recorded[0][0]->body(), true);
-    $messages = $body['messages'];
+    Log::shouldReceive('warning')
+        ->once()
+        ->withArgs(fn (string $message, array $context) => str_contains($message, 'missing reasoning_content')
+            && $context['tool_call_ids'] === ['call_1']);
 
-    // The assistant message should have its tool_calls stripped (content preserved)
-    $assistantMsgs = collect($messages)->filter(fn ($m) => $m['role'] === 'assistant');
-    expect($assistantMsgs)->toHaveCount(1);
+    (new HistoricalToolCallWithoutReasoningAgent)->prompt('tell me more', provider: 'deepseek');
 
-    $assistantMsg = $assistantMsgs->first();
+    $messages = $this->requestMessages(0);
+    $assistantMsg = $this->findMessage($messages, role: 'assistant');
+
     expect($assistantMsg['content'])->toBe('Found the products.')
         ->and($assistantMsg)->not->toHaveKey('tool_calls')
         ->and($assistantMsg)->not->toHaveKey('reasoning_content');
 
-    // The tool result message should have been skipped entirely
-    $toolMsgs = collect($messages)->filter(fn ($m) => $m['role'] === 'tool');
-    expect($toolMsgs)->toHaveCount(0);
-
-    // User messages should still be present (2 from history + 1 from prompt)
-    $userMsgs = collect($messages)->filter(fn ($m) => $m['role'] === 'user');
-    expect($userMsgs)->toHaveCount(3);
+    expect($this->filterMessages($messages, 'tool'))->toHaveCount(0);
+    expect($this->filterMessages($messages, 'user'))->toHaveCount(3);
 });
 
-test('historical assistant messages with tool_calls AND reasoning_content are preserved intact', function () {
-    Http::fake([
-        'api.deepseek.com/*' => fakeDeepSeekResponse('Here you go.'),
-    ]);
+test('preserves tool calls when historical reasoning content is present', function () {
+    Http::fake(['api.deepseek.com/*' => fakeDeepSeekResponse('Here you go.')]);
 
-    $agent = new class implements Agent, Conversational
-    {
-        use Promptable;
+    (new HistoricalToolCallWithReasoningAgent)->prompt('tell me more', provider: 'deepseek');
 
-        public function instructions(): Stringable|string
-        {
-            return 'You are a helpful assistant.';
-        }
+    $messages = $this->requestMessages(0);
+    $assistantMsg = $this->findMessage($messages, role: 'assistant');
 
-        public function provider(): string
-        {
-            return 'deepseek';
-        }
-
-        public function messages(): iterable
-        {
-            return [
-                new UserMessage('check stock lampu'),
-                // Historical assistant message WITH tool_calls AND reasoning_content
-                new AssistantMessage(
-                    'Found the products.',
-                    collect([
-                        new ToolCall('call_old', 'SearchProducts', ['keyword' => 'lampu'], 'call_old'),
-                    ]),
-                    ['reasoning_content' => 'I need to search for lampu products.']
-                ),
-                new ToolResultMessage(collect([
-                    new ToolResult('call_old', 'SearchProducts', ['keyword' => 'lampu'], '[{"name":"Lampu LED"}]', 'call_old'),
-                ])),
-                new UserMessage('tell me more'),
-            ];
-        }
-    };
-
-    $agent->prompt('tell me more', provider: 'deepseek');
-
-    $recorded = Http::recorded();
-    $body = json_decode($recorded[0][0]->body(), true);
-    $messages = $body['messages'];
-
-    // The assistant message should be preserved intact
-    $assistantMsg = collect($messages)->first(fn ($m) => $m['role'] === 'assistant');
     expect($assistantMsg['content'])->toBe('Found the products.')
         ->and($assistantMsg['reasoning_content'])->toBe('I need to search for lampu products.')
         ->and($assistantMsg['tool_calls'])->toHaveCount(1)
         ->and($assistantMsg['tool_calls'][0]['function']['name'])->toBe('SearchProducts');
 
-    // The tool result message should be present
-    $toolMsgs = collect($messages)->filter(fn ($m) => $m['role'] === 'tool');
-    expect($toolMsgs)->toHaveCount(1);
+    expect($this->filterMessages($messages, 'tool'))->toHaveCount(1);
 });

@@ -85,7 +85,7 @@ trait MapsMessages
         }
 
         $hasReasoningContent = $message instanceof AssistantMessage
-            && isset($message->providerContentBlocks['reasoning_content']);
+            && filled($message->providerContentBlocks['reasoning_content'] ?? null);
 
         $hasToolCalls = $message instanceof AssistantMessage && $message->toolCalls->isNotEmpty();
 
