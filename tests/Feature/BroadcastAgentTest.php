@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Broadcasting\AnonymousEvent;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Support\Facades\Event;
 use Laravel\Ai\Jobs\BroadcastAgent;
@@ -54,6 +55,77 @@ test('multiple then callbacks all receive streamed agent response', function () 
 
     expect($receivedA)->toBeInstanceOf(StreamedAgentResponse::class)
         ->and($receivedB)->toBeInstanceOf(StreamedAgentResponse::class);
+});
+
+test('failed broadcasts a stream_failed event with recoverable false on the configured channel', function () {
+    Event::fake();
+
+    $channel = new Channel('test-channel');
+
+    $job = new BroadcastAgent(
+        agent: new AssistantAgent,
+        prompt: 'Say hello',
+        channels: $channel,
+    );
+
+    $invocationId = $job->invocationId;
+    $job = unserialize(serialize($job));
+
+    $job->failed(new RuntimeException('Something went wrong'));
+
+    Event::assertDispatched(AnonymousEvent::class, function (AnonymousEvent $event) use ($channel, $invocationId) {
+        $payload = $event->broadcastWith();
+
+        return $event->broadcastAs() === 'stream_failed'
+            && $payload['invocation_id'] === $invocationId
+            && $payload['recoverable'] === false
+            && $payload['message'] === 'The stream failed.'
+            && $event->broadcastOn() == [$channel];
+    });
+});
+
+test('failed broadcasts on every channel when given an array', function () {
+    Event::fake();
+
+    $channels = [new Channel('a'), new Channel('b')];
+
+    $job = new BroadcastAgent(
+        agent: new AssistantAgent,
+        prompt: 'Say hello',
+        channels: $channels,
+    );
+
+    $job->failed(new RuntimeException('boom'));
+
+    Event::assertDispatched(AnonymousEvent::class, function (AnonymousEvent $event) use ($channels) {
+        return $event->broadcastAs() === 'stream_failed'
+            && $event->broadcastOn() === $channels;
+    });
+});
+
+test('failed event shares the invocation id with broadcasts from handle', function () {
+    Event::fake();
+    AssistantAgent::fake(['Hello world']);
+
+    $job = new BroadcastAgent(
+        agent: new AssistantAgent,
+        prompt: 'Say hello',
+        channels: new Channel('test-channel'),
+    );
+
+    $job->handle();
+
+    $invocationId = $job->invocationId;
+
+    $broadcastIds = [];
+
+    Event::assertDispatched(AnonymousEvent::class, function (AnonymousEvent $event) use (&$broadcastIds) {
+        $broadcastIds[] = $event->broadcastWith()['invocation_id'] ?? null;
+
+        return true;
+    });
+
+    expect(array_values(array_unique($broadcastIds)))->toBe([$invocationId]);
 });
 
 test('streamed response passed to then is fully resolved', function () {
