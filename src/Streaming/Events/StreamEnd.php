@@ -13,6 +13,7 @@ class StreamEnd extends StreamEvent
         public Usage $usage,
         public int $timestamp,
         public ?string $responseId = null,
+        public array $providerContentBlocks = [],
     ) {
         //
     }

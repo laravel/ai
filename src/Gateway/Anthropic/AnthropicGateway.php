@@ -70,12 +70,6 @@ class AnthropicGateway implements Gateway
 
         $this->validateTextResponse($data);
 
-        if (($data['stop_reason'] ?? '') === 'pause_turn') {
-            return $this->continueFromPauseTurn(
-                $data, $provider, filled($schema), $body, $options, $timeout,
-            );
-        }
-
         return $this->parseTextResponse($data, $provider, filled($schema));
     }
 
@@ -107,13 +101,18 @@ class AnthropicGateway implements Gateway
 
         $body['stream'] = true;
 
-        yield from $this->resumeFromPauseTurn(
+        $response = $this->withErrorHandling(
+            $provider->name(),
+            fn () => $this->client($provider, $timeout)
+                ->withOptions(['stream' => true])
+                ->post('messages', $body),
+        );
+
+        yield from $this->processTextStream(
             $invocationId,
             $provider,
             $model,
-            $body,
-            $options,
-            $timeout,
+            $response->getBody(),
         );
     }
 

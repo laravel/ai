@@ -4,9 +4,7 @@ namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Generator;
 use Illuminate\Support\Str;
-use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Providers\Provider;
-use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\UrlCitation;
 use Laravel\Ai\Responses\Data\Usage;
@@ -26,55 +24,6 @@ use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 trait HandlesTextStreaming
 {
     /**
-     * Resume a paused server-side loop by replaying the assistant response
-     * as-is and continuing to stream the follow-up response.
-     */
-    protected function resumeFromPauseTurn(
-        string $invocationId,
-        Provider $provider,
-        string $model,
-        array $requestBody,
-        ?TextGenerationOptions $options,
-        ?int $timeout,
-    ): Generator {
-        $maxResumes = $options?->maxSteps ?? 5;
-
-        for ($depth = 0; $depth < $maxResumes; $depth++) {
-            $response = $this->withErrorHandling(
-                $provider->name(),
-                fn () => $this->client($provider, $timeout)
-                    ->withOptions(['stream' => true])
-                    ->post('messages', $requestBody),
-            );
-
-            $responseContent = [];
-            $stopReason = '';
-            $bufferedStreamEnd = null;
-
-            foreach ($this->processTextStream($invocationId, $provider, $model, $response->getBody(), $responseContent, $stopReason) as $event) {
-                if ($event instanceof StreamEnd) {
-                    $bufferedStreamEnd = $event;
-                } else {
-                    yield $event;
-                }
-            }
-
-            if ($stopReason !== 'pause_turn') {
-                if ($bufferedStreamEnd) {
-                    yield $bufferedStreamEnd;
-                }
-
-                return;
-            }
-
-            $requestBody['messages'][] = [
-                'role' => 'assistant',
-                'content' => $this->ensureToolInputIsObject(array_values($responseContent)),
-            ];
-        }
-    }
-
-    /**
      * Process an Anthropic streaming response for a single turn and yield Laravel stream events.
      */
     protected function processTextStream(
@@ -82,8 +31,6 @@ trait HandlesTextStreaming
         Provider $provider,
         string $model,
         $streamBody,
-        array &$outResponseContent = [],
-        string &$outStopReason = '',
     ): Generator {
         $messageId = $this->generateEventId();
         $reasoningId = '';
@@ -364,14 +311,12 @@ trait HandlesTextStreaming
             }
         }
 
-        $outResponseContent = $responseContent;
-        $outStopReason = $stopReason;
-
         yield (new StreamEnd(
             $this->generateEventId(),
             $this->extractFinishReason(['stop_reason' => $stopReason])->value,
             $usage ?? new Usage(0, 0),
             time(),
+            providerContentBlocks: $responseContent,
         ))->withInvocationId($invocationId);
     }
 

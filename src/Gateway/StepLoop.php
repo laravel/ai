@@ -53,7 +53,7 @@ class StepLoop
     ): TextResponse {
         $steps = new Collection;
         $allMessages = $messages;
-        $maxSteps = $options?->maxSteps ?? (count($tools) > 0 ? (int) round(count($tools) * 1.5) : 1);
+        $maxSteps = $options?->maxSteps ?? (count($tools) > 0 ? (int) round(count($tools) * 1.5) : 5);
         $previousResponseId = null;
         $lastResult = null;
 
@@ -66,6 +66,18 @@ class StepLoop
             $lastResult = $this->gateway->generateText(
                 $provider, $model, $instructions, $allMessages, $tools, $schema, $options, $timeout, $previousResponseId, $stepContext,
             );
+
+            if ($lastResult->finishReason === FinishReason::Continue) {
+                $steps->push($this->buildStep($lastResult));
+
+                $allMessages[] = new AssistantMessage(
+                    $lastResult->text,
+                    new Collection($lastResult->toolCalls),
+                    $lastResult->providerContentBlocks,
+                );
+
+                continue;
+            }
 
             if ($lastResult->finishReason !== FinishReason::ToolCalls || empty($lastResult->toolCalls)) {
                 $steps->push($this->buildStep($lastResult));
@@ -117,13 +129,15 @@ class StepLoop
         ?int $timeout,
     ): Generator {
         $allMessages = $messages;
-        $maxSteps = $options?->maxSteps ?? (count($tools) > 0 ? (int) round(count($tools) * 1.5) : 1);
+        $maxSteps = $options?->maxSteps ?? (count($tools) > 0 ? (int) round(count($tools) * 1.5) : 5);
         $previousResponseId = null;
 
         for ($step = 0; $step < $maxSteps; $step++) {
             $pendingToolCalls = [];
             $currentText = '';
             $streamResponseId = null;
+            $streamFinishReason = null;
+            $streamProviderContentBlocks = [];
 
             $stepContext = new StepContext(
                 stepNumber: $step,
@@ -143,8 +157,22 @@ class StepLoop
 
                 if ($event instanceof StreamEnd) {
                     $streamResponseId = $event->responseId;
+                    $streamFinishReason = FinishReason::tryFrom($event->reason);
+                    $streamProviderContentBlocks = $event->providerContentBlocks;
                     break;
                 }
+            }
+
+            if ($streamFinishReason === FinishReason::Continue) {
+                $allMessages[] = new AssistantMessage(
+                    $currentText,
+                    new Collection($pendingToolCalls),
+                    $streamProviderContentBlocks,
+                );
+
+                $previousResponseId = $streamResponseId;
+
+                continue;
             }
 
             if (empty($pendingToolCalls)) {
