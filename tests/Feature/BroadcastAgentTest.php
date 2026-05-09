@@ -68,15 +68,19 @@ test('failed broadcasts a stream_failed event with recoverable false on the conf
         channels: $channel,
     );
 
+    $invocationId = $job->invocationId;
+    $job = unserialize(serialize($job));
+
     $job->failed(new RuntimeException('Something went wrong'));
 
-    Event::assertDispatched(AnonymousEvent::class, function (AnonymousEvent $event) use ($channel) {
+    Event::assertDispatched(AnonymousEvent::class, function (AnonymousEvent $event) use ($channel, $invocationId) {
         $payload = $event->broadcastWith();
 
         return $event->broadcastAs() === 'stream_failed'
+            && $payload['invocation_id'] === $invocationId
             && $payload['recoverable'] === false
-            && $payload['message'] === RuntimeException::class
-            && $event->broadcastOn() === [$channel];
+            && $payload['message'] === 'The stream failed.'
+            && $event->broadcastOn() == [$channel];
     });
 });
 
@@ -112,9 +116,6 @@ test('failed event shares the invocation id with broadcasts from handle', functi
     $job->handle();
 
     $invocationId = $job->invocationId;
-    expect($invocationId)->not->toBeNull();
-
-    $job->failed(new RuntimeException('boom'));
 
     $broadcastIds = [];
 
@@ -124,7 +125,7 @@ test('failed event shares the invocation id with broadcasts from handle', functi
         return true;
     });
 
-    expect(array_unique($broadcastIds))->toBe([$invocationId]);
+    expect(array_values(array_unique($broadcastIds)))->toBe([$invocationId]);
 });
 
 test('streamed response passed to then is fully resolved', function () {

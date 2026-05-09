@@ -5,6 +5,7 @@ namespace Laravel\Ai\Jobs;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Streaming\Events\Error;
@@ -17,10 +18,9 @@ class BroadcastAgent implements ShouldQueue
 {
     use Concerns\InvokesQueuedResponseCallbacks, Queueable;
 
-    /**
-     * The job-level invocation ID used to correlate broadcasts with their failure event.
-     */
-    public ?string $invocationId = null;
+    public int $tries = 1;
+
+    public string $invocationId;
 
     /**
      * Create a new job instance.
@@ -31,15 +31,16 @@ class BroadcastAgent implements ShouldQueue
         public Channel|array $channels,
         public array $attachments = [],
         public Lab|array|string|null $provider = null,
-        public ?string $model = null) {}
+        public ?string $model = null,
+    ) {
+        $this->invocationId = (string) Str::uuid7();
+    }
 
     /**
      * Execute the job.
      */
     public function handle(): void
     {
-        $this->invocationId = ulid();
-
         $streamedResponse = null;
 
         $this->agent->stream($this->prompt, $this->attachments, $this->provider, $this->model)
@@ -61,10 +62,10 @@ class BroadcastAgent implements ShouldQueue
         (new Error(
             id: ulid(),
             type: 'stream_failed',
-            message: $exception::class,
+            message: 'The stream failed.',
             recoverable: false,
             timestamp: time(),
-        ))->withInvocationId($this->invocationId ?? ulid())
+        ))->withInvocationId($this->invocationId)
             ->broadcastNow($this->channels);
     }
 
