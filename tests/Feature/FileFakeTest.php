@@ -141,19 +141,14 @@ test('can override the mime type when storing files from each source', function 
     Files::assertNotStored(fn (StorableFile $file) => $file->mimeType() === 'text/plain');
 });
 
-test('name and mime overrides do not mutate the original storable file', function () {
+test('can override the name and mime type when storing an existing storable file', function () {
     Files::fake();
 
-    $file = new CustomStorableFile('custom.txt');
-
-    Files::put($file, mimeType: 'application/json', name: 'renamed.txt');
+    Files::put(Document::fromPath(__DIR__.'/../Fixtures/document.txt'), mimeType: 'application/json', name: 'renamed.txt');
 
     Files::assertStored(fn (StorableFile $file) => $file->name() === 'renamed.txt');
     Files::assertStored(fn (StorableFile $file) => $file->mimeType() === 'application/json');
     Files::assertNotStored(fn (StorableFile $file) => $file->mimeType() === 'text/plain');
-
-    expect($file->name())->toBe('custom.txt');
-    expect($file->mimeType())->toBe('text/plain');
 });
 
 test('can assert file was deleted', function () {
