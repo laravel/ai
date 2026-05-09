@@ -57,8 +57,51 @@ test('multiple then callbacks all receive streamed agent response', function () 
         ->and($receivedB)->toBeInstanceOf(StreamedAgentResponse::class);
 });
 
-test('failed broadcasts a stream_failed event with recoverable false', function () {
+test('failed broadcasts a stream_failed event with recoverable false on the configured channel', function () {
     Event::fake();
+
+    $channel = new Channel('test-channel');
+
+    $job = new BroadcastAgent(
+        agent: new AssistantAgent,
+        prompt: 'Say hello',
+        channels: $channel,
+    );
+
+    $job->failed(new RuntimeException('Something went wrong'));
+
+    Event::assertDispatched(AnonymousEvent::class, function (AnonymousEvent $event) use ($channel) {
+        $payload = $event->broadcastWith();
+
+        return $event->broadcastAs() === 'stream_failed'
+            && $payload['recoverable'] === false
+            && $payload['message'] === RuntimeException::class
+            && $event->broadcastOn() === [$channel];
+    });
+});
+
+test('failed broadcasts on every channel when given an array', function () {
+    Event::fake();
+
+    $channels = [new Channel('a'), new Channel('b')];
+
+    $job = new BroadcastAgent(
+        agent: new AssistantAgent,
+        prompt: 'Say hello',
+        channels: $channels,
+    );
+
+    $job->failed(new RuntimeException('boom'));
+
+    Event::assertDispatched(AnonymousEvent::class, function (AnonymousEvent $event) use ($channels) {
+        return $event->broadcastAs() === 'stream_failed'
+            && $event->broadcastOn() === $channels;
+    });
+});
+
+test('failed event shares the invocation id with broadcasts from handle', function () {
+    Event::fake();
+    AssistantAgent::fake(['Hello world']);
 
     $job = new BroadcastAgent(
         agent: new AssistantAgent,
@@ -66,13 +109,22 @@ test('failed broadcasts a stream_failed event with recoverable false', function 
         channels: new Channel('test-channel'),
     );
 
-    $job->failed(new RuntimeException('Something went wrong'));
+    $job->handle();
 
-    Event::assertDispatched(AnonymousEvent::class, function (AnonymousEvent $event) {
-        return $event->broadcastAs() === 'stream_failed'
-            && $event->broadcastWith()['recoverable'] === false
-            && $event->broadcastWith()['message'] === 'The agent stream failed.';
+    $invocationId = $job->invocationId;
+    expect($invocationId)->not->toBeNull();
+
+    $job->failed(new RuntimeException('boom'));
+
+    $broadcastIds = [];
+
+    Event::assertDispatched(AnonymousEvent::class, function (AnonymousEvent $event) use (&$broadcastIds) {
+        $broadcastIds[] = $event->broadcastWith()['invocation_id'] ?? null;
+
+        return true;
     });
+
+    expect(array_unique($broadcastIds))->toBe([$invocationId]);
 });
 
 test('streamed response passed to then is fully resolved', function () {

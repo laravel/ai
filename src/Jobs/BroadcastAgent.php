@@ -5,15 +5,22 @@ namespace Laravel\Ai\Jobs;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEvent;
+use Throwable;
+
+use function Laravel\Ai\ulid;
 
 class BroadcastAgent implements ShouldQueue
 {
     use Concerns\InvokesQueuedResponseCallbacks, Queueable;
+
+    /**
+     * The job-level invocation ID used to correlate broadcasts with their failure event.
+     */
+    public ?string $invocationId = null;
 
     /**
      * Create a new job instance.
@@ -31,11 +38,13 @@ class BroadcastAgent implements ShouldQueue
      */
     public function handle(): void
     {
+        $this->invocationId = ulid();
+
         $streamedResponse = null;
 
         $this->agent->stream($this->prompt, $this->attachments, $this->provider, $this->model)
             ->each(function (StreamEvent $event) {
-                $event->broadcastNow($this->channels);
+                $event->withInvocationId($this->invocationId)->broadcastNow($this->channels);
             })
             ->then(function ($response) use (&$streamedResponse) {
                 $streamedResponse = $response;
@@ -47,15 +56,16 @@ class BroadcastAgent implements ShouldQueue
     /**
      * Handle a job failure.
      */
-    public function failed(\Throwable $exception): void
+    public function failed(Throwable $exception): void
     {
         (new Error(
-            id: (string) Str::uuid(),
+            id: ulid(),
             type: 'stream_failed',
-            message: 'The agent stream failed.',
+            message: $exception::class,
             recoverable: false,
-            timestamp: now()->timestamp,
-        ))->broadcastNow($this->channels);
+            timestamp: time(),
+        ))->withInvocationId($this->invocationId ?? ulid())
+            ->broadcastNow($this->channels);
     }
 
     /**
