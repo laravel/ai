@@ -6,7 +6,6 @@ use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Document;
 use Laravel\Ai\Responses\FileResponse;
-use Tests\Fixtures\Files\CustomStorableFile;
 
 test('files can be faked', function () {
     Files::fake([
