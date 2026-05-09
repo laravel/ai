@@ -207,9 +207,9 @@ class GeminiGateway implements Gateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post("models/{$model}:batchEmbedContents", [
+            fn () => $this->client($provider, $timeout)->post("models/{$model}:batchEmbedContents", array_merge([
                 'requests' => $requests,
-            ]),
+            ], $providerOptions)),
         );
 
         $data = $response->json();

@@ -218,11 +218,11 @@ class OpenRouterGateway implements EmbeddingGateway, ImageGateway, TextGateway
         int $timeout = 30,
         array $providerOptions = [],
     ): EmbeddingsResponse {
-        $body = [
+        $body = array_merge([
             'model' => $model,
             'input' => $inputs,
             'dimensions' => $dimensions,
-        ];
+        ], $providerOptions);
 
         $response = $this->withErrorHandling(
             $provider->name(),

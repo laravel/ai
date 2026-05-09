@@ -34,12 +34,12 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
     ): EmbeddingsResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('/embeddings', [
+            fn () => $this->client($provider, $timeout)->post('/embeddings', array_merge([
                 'model' => $model,
                 'input' => array_map(fn (string $text) => ['text' => $text], $inputs),
                 'dimensions' => $dimensions,
                 'task' => 'retrieval.passage',
-            ]),
+            ], $providerOptions)),
         );
 
         $data = $response->json();
