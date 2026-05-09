@@ -37,18 +37,6 @@ trait HasRemoteContent
     }
 
     /**
-     * Set the file's MIME type.
-     *
-     * @return $this
-     */
-    public function withMimeType(string $mimeType): static
-    {
-        $this->mime = $mimeType;
-
-        return $this;
-    }
-
-    /**
      * Get the HTTP response for the remote file.
      */
     protected function response(): Response

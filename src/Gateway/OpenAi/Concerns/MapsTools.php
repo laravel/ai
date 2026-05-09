@@ -11,6 +11,7 @@ use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\ProviderTool;
 use Laravel\Ai\Providers\Tools\WebSearch;
+use Laravel\Ai\Tools\ToolNameResolver;
 use RuntimeException;
 
 trait MapsTools
@@ -46,7 +47,7 @@ trait MapsTools
 
         return [
             'type' => 'function',
-            'name' => class_basename($tool),
+            'name' => ToolNameResolver::resolve($tool),
             'description' => (string) $tool->description(),
             'strict' => true,
             'parameters' => [

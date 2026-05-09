@@ -37,7 +37,7 @@ class StoredImage extends Image implements Arrayable, JsonSerializable, Storable
      */
     public function mimeType(): ?string
     {
-        return Storage::disk($this->disk)->mimeType($this->path) ?: null;
+        return $this->mime ?? (Storage::disk($this->disk)->mimeType($this->path) ?: null);
     }
 
     /**

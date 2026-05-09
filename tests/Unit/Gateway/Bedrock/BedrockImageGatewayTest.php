@@ -8,7 +8,10 @@ function imageGateway(): object
     {
         public function callPrepareBody(string $model, string $prompt, ?string $size, ?string $quality): array
         {
-            return $this->prepareImageRequestBody($model, $prompt, $size, $quality);
+            return $this->prepareImageRequestBody($model, $prompt, $size, [
+                'quality' => $quality ?? 'standard',
+                'size' => $size ?? '1:1',
+            ]);
         }
 
         public function callParseResponse(string $model, array $result)
@@ -36,22 +39,23 @@ test('parse size defaults to square dimensions', function () {
     expect(imageGateway()->callParseSize('1:1'))->toEqual([1024, 1024]);
 });
 
-test('stability model body uses text prompts and steps', function () {
-    $body = imageGateway()->callPrepareBody('stability.sd3-large', 'a cat', '1:1', 'high');
+test('stability body uses prompt and aspect ratio', function () {
+    $body = imageGateway()->callPrepareBody('stability.sd3-5-large-v1:0', 'a cat', '2:3', 'standard');
 
     expect($body)->toEqual([
-        'text_prompts' => [['text' => 'a cat', 'weight' => 1.0]],
-        'cfg_scale' => 7.0,
-        'steps' => 50,
-        'width' => 1024,
-        'height' => 1024,
+        'prompt' => 'a cat',
+        'aspect_ratio' => '2:3',
+        'output_format' => 'png',
     ]);
 });
 
-test('stability model body uses 30 steps for non-high quality', function () {
-    $body = imageGateway()->callPrepareBody('stability.sd3-large', 'a cat', '1:1', 'standard');
+test('stability body omits aspect ratio when size is null', function () {
+    $body = imageGateway()->callPrepareBody('stability.stable-image-ultra-v1:0', 'a cat', null, 'standard');
 
-    expect($body['steps'])->toBe(30);
+    expect($body)->toEqual([
+        'prompt' => 'a cat',
+        'output_format' => 'png',
+    ]);
 });
 
 test('titan image body uses text to image params', function () {
@@ -71,7 +75,7 @@ test('titan image body uses text to image params', function () {
 });
 
 test('titan image body defaults quality to standard', function () {
-    $body = imageGateway()->callPrepareBody('amazon.titan-image-generator-v1', 'a dog', null, null);
+    $body = imageGateway()->callPrepareBody('amazon.titan-image-generator-v1', 'a dog', null, 'standard');
 
     expect($body['imageGenerationConfig']['quality'])->toBe('standard');
 });
@@ -97,18 +101,15 @@ test('unknown model family falls back to plain prompt body', function () {
     expect($body)->toEqual(['prompt' => 'something']);
 });
 
-test('stability response is parsed from artifacts', function () {
-    $images = imageGateway()->callParseResponse('stability.sd3-large', [
-        'artifacts' => [
-            ['base64' => 'imgdata-1'],
-            ['base64' => 'imgdata-2'],
-        ],
+test('stability response is parsed from images array', function () {
+    $images = imageGateway()->callParseResponse('stability.sd3-5-large-v1:0', [
+        'images' => ['sd-image-1', 'sd-image-2'],
     ]);
 
     expect($images)->toHaveCount(2)
-        ->and($images[0]->image)->toBe('imgdata-1')
+        ->and($images[0]->image)->toBe('sd-image-1')
         ->and($images[0]->mime)->toBe('image/png')
-        ->and($images[1]->image)->toBe('imgdata-2');
+        ->and($images[1]->image)->toBe('sd-image-2');
 });
 
 test('titan response is parsed from images array', function () {
@@ -139,8 +140,8 @@ test('unknown model family returns empty collection', function () {
     expect($images)->toHaveCount(0);
 });
 
-test('missing artifacts or images key yields empty collection', function () {
-    expect(imageGateway()->callParseResponse('stability.sd3', [])->count())->toBe(0);
+test('missing images key yields empty collection', function () {
+    expect(imageGateway()->callParseResponse('stability.sd3-5-large-v1:0', [])->count())->toBe(0);
     expect(imageGateway()->callParseResponse('amazon.titan-image-v1', [])->count())->toBe(0);
     expect(imageGateway()->callParseResponse('amazon.nova-canvas-v1', [])->count())->toBe(0);
 });

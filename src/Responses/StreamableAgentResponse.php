@@ -65,6 +65,8 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
         if ($this->streamedResponse) {
             $callback($this->streamedResponse);
 
+            $this->syncConversationFromStreamedResponse();
+
             return $this;
         }
 
@@ -149,8 +151,27 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
             $this->meta,
         );
 
+        if ($this->conversationId !== null && $this->conversationUser !== null) {
+            $this->streamedResponse->withinConversation(
+                $this->conversationId,
+                $this->conversationUser
+            );
+        }
+
         foreach ($this->thenCallbacks as $callback) {
             call_user_func($callback, $this->streamedResponse);
         }
+
+        $this->syncConversationFromStreamedResponse();
+    }
+
+    protected function syncConversationFromStreamedResponse(): void
+    {
+        if ($this->streamedResponse->conversationId === null) {
+            return;
+        }
+
+        $this->conversationId = $this->streamedResponse->conversationId;
+        $this->conversationUser = $this->streamedResponse->conversationUser;
     }
 }

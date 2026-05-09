@@ -1,263 +1,243 @@
 <?php
 
-namespace Tests\Unit\Providers;
-
 use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Gateway\Bedrock\BedrockImageGateway;
 use Laravel\Ai\Gateway\Bedrock\BedrockTextGateway;
 use Laravel\Ai\Providers\BedrockProvider;
-use Mockery;
-use PHPUnit\Framework\TestCase;
 
-class BedrockProviderTest extends TestCase
-{
-    protected $dispatcher;
+beforeEach(function () {
+    $this->dispatcher = Mockery::mock(Dispatcher::class);
+});
 
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->dispatcher = Mockery::mock(Dispatcher::class);
-    }
+afterEach(function () {
+    Mockery::close();
+});
 
-    protected function tearDown(): void
-    {
-        Mockery::close();
-        parent::tearDown();
-    }
+test('can be instantiated with config', function () {
+    $config = [
+        'driver' => 'bedrock',
+        'name' => 'bedrock',
+        'access_key_id' => 'test-key',
+        'secret_access_key' => 'test-secret',
+        'region' => 'us-east-1',
+    ];
 
-    public function test_can_be_instantiated_with_config(): void
-    {
-        $config = [
-            'driver' => 'bedrock',
-            'name' => 'bedrock',
-            'access_key_id' => 'test-key',
-            'secret_access_key' => 'test-secret',
-            'region' => 'us-east-1',
-        ];
+    $provider = new BedrockProvider($config, $this->dispatcher);
 
-        $provider = new BedrockProvider($config, $this->dispatcher);
+    expect($provider)->toBeInstanceOf(BedrockProvider::class);
+});
 
-        $this->assertInstanceOf(BedrockProvider::class, $provider);
-    }
+test('returns iam credentials', function () {
+    $config = [
+        'access_key_id' => 'test-key',
+        'secret_access_key' => 'test-secret',
+        'session_token' => 'test-session',
+    ];
 
-    public function test_returns_iam_credentials(): void
-    {
-        $config = [
-            'access_key_id' => 'test-key',
-            'secret_access_key' => 'test-secret',
-            'session_token' => 'test-session',
-        ];
+    $provider = new BedrockProvider($config, $this->dispatcher);
+    $credentials = $provider->providerCredentials();
 
-        $provider = new BedrockProvider($config, $this->dispatcher);
-        $credentials = $provider->providerCredentials();
+    expect($credentials)
+        ->toHaveKey('access_key_id')
+        ->toHaveKey('secret_access_key')
+        ->toHaveKey('session_token');
 
-        $this->assertArrayHasKey('access_key_id', $credentials);
-        $this->assertArrayHasKey('secret_access_key', $credentials);
-        $this->assertArrayHasKey('session_token', $credentials);
-        $this->assertEquals('test-key', $credentials['access_key_id']);
-        $this->assertEquals('test-secret', $credentials['secret_access_key']);
-        $this->assertEquals('test-session', $credentials['session_token']);
-    }
+    expect($credentials['access_key_id'])->toBe('test-key')
+        ->and($credentials['secret_access_key'])->toBe('test-secret')
+        ->and($credentials['session_token'])->toBe('test-session');
+});
 
-    public function test_filters_out_empty_credential_values(): void
-    {
-        $config = [
-            'access_key_id' => 'test-key',
-            'secret_access_key' => 'test-secret',
-            'session_token' => null,
-        ];
+test('filters out empty credential values', function () {
+    $config = [
+        'access_key_id' => 'test-key',
+        'secret_access_key' => 'test-secret',
+        'session_token' => null,
+    ];
 
-        $provider = new BedrockProvider($config, $this->dispatcher);
-        $credentials = $provider->providerCredentials();
+    $provider = new BedrockProvider($config, $this->dispatcher);
+    $credentials = $provider->providerCredentials();
 
-        $this->assertArrayHasKey('access_key_id', $credentials);
-        $this->assertArrayHasKey('secret_access_key', $credentials);
-        $this->assertArrayNotHasKey('session_token', $credentials);
-    }
+    expect($credentials)
+        ->toHaveKey('access_key_id')
+        ->toHaveKey('secret_access_key')
+        ->not->toHaveKey('session_token');
+});
 
-    public function test_returns_additional_configuration_with_region(): void
-    {
-        $config = [
-            'region' => 'us-west-2',
-            'use_default_credential_provider' => true,
-        ];
+test('returns additional configuration with region', function () {
+    $config = [
+        'region' => 'us-west-2',
+        'use_default_credential_provider' => true,
+    ];
 
-        $provider = new BedrockProvider($config, $this->dispatcher);
-        $additionalConfig = $provider->additionalConfiguration();
+    $provider = new BedrockProvider($config, $this->dispatcher);
+    $additionalConfig = $provider->additionalConfiguration();
 
-        $this->assertArrayHasKey('region', $additionalConfig);
-        $this->assertArrayHasKey('use_default_credential_provider', $additionalConfig);
-        $this->assertEquals('us-west-2', $additionalConfig['region']);
-        $this->assertTrue($additionalConfig['use_default_credential_provider']);
-    }
+    expect($additionalConfig)
+        ->toHaveKey('region')
+        ->toHaveKey('use_default_credential_provider');
 
-    public function test_preserves_false_value_for_use_default_credential_provider(): void
-    {
-        $config = [
-            'region' => 'us-east-1',
-            'use_default_credential_provider' => false,
-        ];
+    expect($additionalConfig['region'])->toBe('us-west-2')
+        ->and($additionalConfig['use_default_credential_provider'])->toBeTrue();
+});
 
-        $provider = new BedrockProvider($config, $this->dispatcher);
-        $additionalConfig = $provider->additionalConfiguration();
+test('preserves false value for use default credential provider', function () {
+    $config = [
+        'region' => 'us-east-1',
+        'use_default_credential_provider' => false,
+    ];
 
-        $this->assertArrayHasKey('use_default_credential_provider', $additionalConfig);
-        $this->assertFalse($additionalConfig['use_default_credential_provider']);
-    }
+    $provider = new BedrockProvider($config, $this->dispatcher);
+    $additionalConfig = $provider->additionalConfiguration();
 
-    public function test_returns_bearer_token_credential_when_provided(): void
-    {
-        $config = [
-            'key' => 'bedrock-bearer-token',
-        ];
+    expect($additionalConfig)
+        ->toHaveKey('use_default_credential_provider');
 
-        $provider = new BedrockProvider($config, $this->dispatcher);
-        $credentials = $provider->providerCredentials();
+    expect($additionalConfig['use_default_credential_provider'])->toBeFalse();
+});
 
-        $this->assertArrayHasKey('key', $credentials);
-        $this->assertEquals('bedrock-bearer-token', $credentials['key']);
-    }
+test('returns bearer token credential when provided', function () {
+    $config = [
+        'key' => 'bedrock-bearer-token',
+    ];
 
-    public function test_defaults_to_us_east_1_region_when_not_specified(): void
-    {
-        $config = [];
+    $provider = new BedrockProvider($config, $this->dispatcher);
+    $credentials = $provider->providerCredentials();
 
-        $provider = new BedrockProvider($config, $this->dispatcher);
-        $additionalConfig = $provider->additionalConfiguration();
+    expect($credentials)->toHaveKey('key')
+        ->and($credentials['key'])->toBe('bedrock-bearer-token');
+});
 
-        $this->assertArrayHasKey('region', $additionalConfig);
-        $this->assertEquals('us-east-1', $additionalConfig['region']);
-    }
+test('defaults to us east 1 region when not specified', function () {
+    $provider = new BedrockProvider([], $this->dispatcher);
+    $additionalConfig = $provider->additionalConfiguration();
 
-    public function test_returns_default_text_model(): void
-    {
-        $provider = new BedrockProvider([], $this->dispatcher);
+    expect($additionalConfig)->toHaveKey('region')
+        ->and($additionalConfig['region'])->toBe('us-east-1');
+});
 
-        $this->assertEquals('us.anthropic.claude-sonnet-4-5-20250929-v1:0', $provider->defaultTextModel());
-    }
+test('returns default text model', function () {
+    $provider = new BedrockProvider([], $this->dispatcher);
 
-    public function test_returns_cheapest_text_model(): void
-    {
-        $provider = new BedrockProvider([], $this->dispatcher);
+    expect($provider->defaultTextModel())->toBe('us.anthropic.claude-sonnet-4-5-20250929-v1:0');
+});
 
-        $this->assertEquals('us.anthropic.claude-haiku-4-5-20250929-v1:0', $provider->cheapestTextModel());
-    }
+test('returns cheapest text model', function () {
+    $provider = new BedrockProvider([], $this->dispatcher);
 
-    public function test_returns_smartest_text_model(): void
-    {
-        $provider = new BedrockProvider([], $this->dispatcher);
+    expect($provider->cheapestTextModel())->toBe('us.anthropic.claude-haiku-4-5-20251001-v1:0');
+});
 
-        $this->assertEquals('us.anthropic.claude-opus-4-6-20250929-v1:0', $provider->smartestTextModel());
-    }
+test('returns smartest text model', function () {
+    $provider = new BedrockProvider([], $this->dispatcher);
 
-    public function test_allows_custom_text_models_in_config(): void
-    {
-        $config = [
-            'models' => [
-                'text' => [
-                    'default' => 'custom-model',
-                    'cheapest' => 'custom-cheapest',
-                    'smartest' => 'custom-smartest',
-                ],
+    expect($provider->smartestTextModel())->toBe('us.anthropic.claude-opus-4-6-v1');
+});
+
+test('allows custom text models in config', function () {
+    $config = [
+        'models' => [
+            'text' => [
+                'default' => 'custom-model',
+                'cheapest' => 'custom-cheapest',
+                'smartest' => 'custom-smartest',
             ],
-        ];
+        ],
+    ];
 
-        $provider = new BedrockProvider($config, $this->dispatcher);
+    $provider = new BedrockProvider($config, $this->dispatcher);
 
-        $this->assertEquals('custom-model', $provider->defaultTextModel());
-        $this->assertEquals('custom-cheapest', $provider->cheapestTextModel());
-        $this->assertEquals('custom-smartest', $provider->smartestTextModel());
-    }
+    expect($provider->defaultTextModel())->toBe('custom-model')
+        ->and($provider->cheapestTextModel())->toBe('custom-cheapest')
+        ->and($provider->smartestTextModel())->toBe('custom-smartest');
+});
 
-    public function test_returns_default_embeddings_model(): void
-    {
-        $provider = new BedrockProvider([], $this->dispatcher);
+test('returns default embeddings model', function () {
+    $provider = new BedrockProvider([], $this->dispatcher);
 
-        $this->assertEquals('amazon.titan-embed-text-v2:0', $provider->defaultEmbeddingsModel());
-    }
+    expect($provider->defaultEmbeddingsModel())->toBe('amazon.titan-embed-text-v2:0');
+});
 
-    public function test_returns_default_embeddings_dimensions(): void
-    {
-        $provider = new BedrockProvider([], $this->dispatcher);
+test('returns default embeddings dimensions', function () {
+    $provider = new BedrockProvider([], $this->dispatcher);
 
-        $this->assertEquals(1024, $provider->defaultEmbeddingsDimensions());
-    }
+    expect($provider->defaultEmbeddingsDimensions())->toBe(1024);
+});
 
-    public function test_allows_custom_embeddings_config(): void
-    {
-        $config = [
-            'models' => [
-                'embeddings' => [
-                    'default' => 'custom-embed-model',
-                    'dimensions' => 1536,
-                ],
+test('allows custom embeddings config', function () {
+    $config = [
+        'models' => [
+            'embeddings' => [
+                'default' => 'custom-embed-model',
+                'dimensions' => 1536,
             ],
-        ];
+        ],
+    ];
 
-        $provider = new BedrockProvider($config, $this->dispatcher);
+    $provider = new BedrockProvider($config, $this->dispatcher);
 
-        $this->assertEquals('custom-embed-model', $provider->defaultEmbeddingsModel());
-        $this->assertEquals(1536, $provider->defaultEmbeddingsDimensions());
-    }
+    expect($provider->defaultEmbeddingsModel())->toBe('custom-embed-model')
+        ->and($provider->defaultEmbeddingsDimensions())->toBe(1536);
+});
 
-    public function test_returns_default_image_model(): void
-    {
-        $provider = new BedrockProvider([], $this->dispatcher);
+test('returns default image model', function () {
+    $provider = new BedrockProvider([], $this->dispatcher);
 
-        $this->assertEquals('amazon.nova-canvas-v1:0', $provider->defaultImageModel());
-    }
+    expect($provider->defaultImageModel())->toBe('amazon.nova-canvas-v1:0');
+});
 
-    public function test_returns_default_image_options(): void
-    {
-        $provider = new BedrockProvider([], $this->dispatcher);
-        $options = $provider->defaultImageOptions();
+test('returns default image options', function () {
+    $provider = new BedrockProvider([], $this->dispatcher);
+    $options = $provider->defaultImageOptions();
 
-        $this->assertArrayHasKey('quality', $options);
-        $this->assertArrayHasKey('size', $options);
-        $this->assertEquals('standard', $options['quality']);
-        $this->assertEquals('1024x1024', $options['size']);
-    }
+    expect($options)
+        ->toHaveKey('quality')
+        ->toHaveKey('size');
 
-    public function test_converts_size_ratios_to_dimensions_for_images(): void
-    {
-        $provider = new BedrockProvider([], $this->dispatcher);
+    expect($options['quality'])->toBe('standard')
+        ->and($options['size'])->toBe('1024x1024');
+});
 
-        $this->assertEquals('1024x1024', $provider->defaultImageOptions('1:1')['size']);
-        $this->assertEquals('768x1152', $provider->defaultImageOptions('2:3')['size']);
-        $this->assertEquals('1152x768', $provider->defaultImageOptions('3:2')['size']);
-    }
+test('converts size ratios to dimensions for images', function () {
+    $provider = new BedrockProvider([], $this->dispatcher);
 
-    public function test_creates_text_gateway(): void
-    {
-        $provider = new BedrockProvider([], $this->dispatcher);
-        $gateway = $provider->textGateway();
+    expect($provider->defaultImageOptions('1:1')['size'])->toBe('1024x1024')
+        ->and($provider->defaultImageOptions('2:3')['size'])->toBe('768x1152')
+        ->and($provider->defaultImageOptions('3:2')['size'])->toBe('1152x768');
+});
 
-        $this->assertInstanceOf(BedrockTextGateway::class, $gateway);
-    }
+test('normalizes canonical quality values to bedrock values', function () {
+    $provider = new BedrockProvider([], $this->dispatcher);
 
-    public function test_creates_embedding_gateway(): void
-    {
-        $provider = new BedrockProvider([], $this->dispatcher);
-        $gateway = $provider->embeddingGateway();
+    expect($provider->defaultImageOptions(quality: 'low')['quality'])->toBe('standard')
+        ->and($provider->defaultImageOptions(quality: 'medium')['quality'])->toBe('standard')
+        ->and($provider->defaultImageOptions(quality: 'high')['quality'])->toBe('premium')
+        ->and($provider->defaultImageOptions(quality: 'standard')['quality'])->toBe('standard')
+        ->and($provider->defaultImageOptions(quality: 'premium')['quality'])->toBe('premium');
+});
 
-        $this->assertInstanceOf(BedrockTextGateway::class, $gateway);
-    }
+test('creates text gateway', function () {
+    $provider = new BedrockProvider([], $this->dispatcher);
 
-    public function test_creates_image_gateway(): void
-    {
-        $provider = new BedrockProvider([], $this->dispatcher);
-        $gateway = $provider->imageGateway();
+    expect($provider->textGateway())->toBeInstanceOf(BedrockTextGateway::class);
+});
 
-        $this->assertInstanceOf(BedrockImageGateway::class, $gateway);
-    }
+test('creates embedding gateway', function () {
+    $provider = new BedrockProvider([], $this->dispatcher);
 
-    public function test_reuses_gateway_instances(): void
-    {
-        $provider = new BedrockProvider([], $this->dispatcher);
+    expect($provider->embeddingGateway())->toBeInstanceOf(BedrockTextGateway::class);
+});
 
-        $gateway1 = $provider->textGateway();
-        $gateway2 = $provider->textGateway();
+test('creates image gateway', function () {
+    $provider = new BedrockProvider([], $this->dispatcher);
 
-        $this->assertSame($gateway1, $gateway2);
-    }
-}
+    expect($provider->imageGateway())->toBeInstanceOf(BedrockImageGateway::class);
+});
+
+test('reuses gateway instances', function () {
+    $provider = new BedrockProvider([], $this->dispatcher);
+
+    $gateway1 = $provider->textGateway();
+    $gateway2 = $provider->textGateway();
+
+    expect($gateway1)->toBe($gateway2);
+});

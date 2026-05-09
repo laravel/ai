@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway\Gemini\Concerns;
 
+use Illuminate\Support\Arr;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
@@ -64,9 +65,6 @@ trait BuildsTextRequests
 
         if (filled($tools)) {
             $body['tools'] = $this->mapTools($tools, $provider);
-            $body['tool_config'] = [
-                'function_calling_config' => ['mode' => 'AUTO'],
-            ];
         }
 
         $generationConfig = [];
@@ -80,13 +78,23 @@ trait BuildsTextRequests
             $generationConfig['maxOutputTokens'] = $options->maxTokens;
         }
 
-        if (! is_null($options?->temperature)) {
-            $generationConfig['temperature'] = $options->temperature;
+        $generationConfig = array_merge($generationConfig, Arr::whereNotNull([
+            'temperature' => $options?->temperature,
+            'topP' => $options?->topP,
+        ]));
+
+        $providerOptions = $options?->providerOptions(Lab::tryFrom($provider->driver()) ?? $provider->driver()) ?? [];
+
+        // Hoist keys that need to be passed at top level, as everything else is passed in generationConfig
+        $topLevelKeys = ['cachedContent'];
+        foreach ($topLevelKeys as $key) {
+            if (array_key_exists($key, $providerOptions)) {
+                $body[$key] = $providerOptions[$key];
+                unset($providerOptions[$key]);
+            }
         }
 
-        $providerOptions = $options?->providerOptions(Lab::tryFrom($provider->driver()) ?? $provider->driver());
-
-        if (! is_null($providerOptions)) {
+        if (filled($providerOptions)) {
             $generationConfig = array_merge($generationConfig, $providerOptions);
         }
 
@@ -104,7 +112,7 @@ trait BuildsTextRequests
      */
     protected function buildFunctionResponseParts(array $toolResults): array
     {
-        return array_map(function ($result) {
+        return array_values(array_map(function ($result) {
             $functionResponse = [
                 'name' => $result->name,
                 'response' => [
@@ -118,7 +126,7 @@ trait BuildsTextRequests
             }
 
             return ['functionResponse' => $functionResponse];
-        }, $toolResults);
+        }, $toolResults));
     }
 
     /**

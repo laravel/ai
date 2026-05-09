@@ -4,16 +4,20 @@ namespace Laravel\Ai\Providers;
 
 use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
+use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
+use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Gateway\OpenRouter\OpenRouterGateway;
 
-class OpenRouterProvider extends Provider implements EmbeddingProvider, TextProvider
+class OpenRouterProvider extends Provider implements EmbeddingProvider, ImageProvider, TextProvider
 {
     use Concerns\GeneratesEmbeddings;
+    use Concerns\GeneratesImages;
     use Concerns\GeneratesText;
     use Concerns\HasEmbeddingGateway;
+    use Concerns\HasImageGateway;
     use Concerns\HasTextGateway;
     use Concerns\StreamsText;
 
@@ -60,6 +64,42 @@ class OpenRouterProvider extends Provider implements EmbeddingProvider, TextProv
     public function smartestTextModel(): string
     {
         return $this->config['models']['text']['smartest'] ?? 'anthropic/claude-opus-4.6';
+    }
+
+    /**
+     * Get the provider's image gateway.
+     */
+    public function imageGateway(): ImageGateway
+    {
+        return $this->imageGateway ??= new OpenRouterGateway($this->events);
+    }
+
+    /**
+     * Get the name of the default image model.
+     */
+    public function defaultImageModel(): string
+    {
+        return $this->config['models']['image']['default'] ?? 'google/gemini-3.1-flash-image-preview';
+    }
+
+    /**
+     * Get the default / normalized image options for the provider.
+     *
+     * image_config, aspect_ratio, and image_size (1K/2K/4K) are OpenRouter's
+     * own API convention and are honored primarily by Gemini-family image models.
+     * Other image models routed via OpenRouter may ignore these fields.
+     */
+    public function defaultImageOptions(?string $size = null, ?string $quality = null): array
+    {
+        return array_filter([
+            'aspect_ratio' => $size,
+            'image_size' => match ($quality) {
+                'low' => '1K',
+                'medium' => '2K',
+                'high' => '4K',
+                default => null,
+            },
+        ]);
     }
 
     /**
