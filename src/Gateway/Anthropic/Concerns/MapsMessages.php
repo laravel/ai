@@ -67,19 +67,33 @@ trait MapsMessages
         $hasToolCalls = $message instanceof AssistantMessage && $message->toolCalls->isNotEmpty();
 
         if ($hasToolCalls) {
-            $thinkingBlocks = $message->toolCalls
-                ->whereNotNull('reasoningId')
-                ->unique('reasoningId')
-                ->map(fn ($toolCall) => [
-                    'type' => 'thinking',
-                    'thinking' => is_array($toolCall->reasoningSummary)
-                        ? implode("\n", array_column($toolCall->reasoningSummary, 'text'))
-                        : ($toolCall->reasoningSummary ?? ''),
-                ])
-                ->values()
-                ->all();
+            $firstToolCall = $message->toolCalls->first();
 
-            array_push($content, ...$thinkingBlocks);
+            if ($firstToolCall?->reasoningSignature !== null) {
+                $thinkingText = is_array($firstToolCall->reasoningSummary)
+                    ? implode("\n", $firstToolCall->reasoningSummary)
+                    : ($firstToolCall->reasoningSummary ?? '');
+
+                $content[] = [
+                    'type' => 'thinking',
+                    'thinking' => $thinkingText,
+                    'signature' => $firstToolCall->reasoningSignature,
+                ];
+            } elseif ($message->toolCalls->whereNotNull('reasoningId')->isNotEmpty()) {
+                $thinkingBlocks = $message->toolCalls
+                    ->whereNotNull('reasoningId')
+                    ->unique('reasoningId')
+                    ->map(fn ($toolCall) => [
+                        'type' => 'thinking',
+                        'thinking' => is_array($toolCall->reasoningSummary)
+                            ? implode("\n", array_column($toolCall->reasoningSummary, 'text'))
+                            : ($toolCall->reasoningSummary ?? ''),
+                    ])
+                    ->values()
+                    ->all();
+
+                array_push($content, ...$thinkingBlocks);
+            }
         }
 
         if (filled($message->content)) {
@@ -92,7 +106,7 @@ trait MapsMessages
         if ($hasToolCalls) {
             foreach ($message->toolCalls as $toolCall) {
                 $content[] = [
-                    'type' => 'tool_use',
+                    'type' => $toolCall->providerExecuted ? 'server_tool_use' : 'tool_use',
                     'id' => $toolCall->id,
                     'name' => $toolCall->name,
                     'input' => $toolCall->arguments ?: (object) [],
@@ -131,5 +145,31 @@ trait MapsMessages
             'role' => 'user',
             'content' => $content,
         ];
+    }
+
+    /**
+     * Serialize a tool result output value to a string suitable for the API.
+     */
+    protected function serializeToolResultOutput(mixed $output): string
+    {
+        return match (true) {
+            is_string($output) => $output,
+            is_array($output) => json_encode($output),
+            default => strval($output),
+        };
+    }
+
+    /**
+     * Ensure tool_use and server_tool_use input fields are objects for the API.
+     */
+    protected function ensureToolInputIsObject(array $content): array
+    {
+        return array_map(function (array $block) {
+            if (in_array($block['type'] ?? '', ['tool_use', 'server_tool_use'], true)) {
+                $block['input'] = (object) ($block['input'] ?? []);
+            }
+
+            return $block;
+        }, $content);
     }
 }

@@ -128,4 +128,16 @@ trait MapsMessages
             ];
         }
     }
+
+    /**
+     * Serialize a tool result output value to a string suitable for the API.
+     */
+    protected function serializeToolResultOutput(mixed $output): string
+    {
+        if (is_string($output)) {
+            return $output;
+        }
+
+        return is_array($output) ? json_encode($output) : strval($output);
+    }
 }

@@ -158,6 +158,8 @@ class DatabaseConversationStore implements ConversationStore
                             resultId: $toolCall['result_id'] ?? null,
                             reasoningId: $toolCall['reasoning_id'] ?? null,
                             reasoningSummary: $toolCall['reasoning_summary'] ?? null,
+                            reasoningSignature: $toolCall['reasoning_signature'] ?? null,
+                            providerExecuted: $toolCall['provider_executed'] ?? false,
                         ))
                     );
 

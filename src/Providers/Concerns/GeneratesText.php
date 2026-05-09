@@ -18,6 +18,7 @@ use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\ToolInvoked;
+use Laravel\Ai\Gateway\StepLoop;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Middleware\RememberConversation;
@@ -56,11 +57,11 @@ trait GeneratesText
                     new UserMessage($prompt->prompt, $prompt->attachments->all()),
                 ];
 
-                $this->listenForToolInvocations($invocationId, $agent);
+                $loop = $this->createStepLoop($invocationId, $agent);
 
                 $schema = $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null;
 
-                $response = $this->textGateway()->generateText(
+                $response = $loop->generate(
                     $this,
                     $prompt->model,
                     (string) $agent->instructions(),
@@ -125,11 +126,13 @@ trait GeneratesText
     }
 
     /**
-     * Listen for gateway tool invocations and dispatch events for the given agent when the tools are invoked.
+     * Create a StepLoop wired with tool invocation events.
      */
-    protected function listenForToolInvocations(string $invocationId, Agent $agent): void
+    protected function createStepLoop(string $invocationId, Agent $agent): StepLoop
     {
-        $this->textGateway()->onToolInvocation(
+        $loop = new StepLoop($this->textGateway(), $this->events);
+
+        $loop->onToolInvocation(
             invoking: function (Tool $tool, array $arguments) use ($invocationId, $agent) {
                 $this->currentToolInvocationId = (string) Str::uuid7();
 
@@ -143,5 +146,7 @@ trait GeneratesText
                 ));
             },
         );
+
+        return $loop;
     }
 }

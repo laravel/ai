@@ -32,6 +32,8 @@ test('tool call to array returns all properties', function () {
         'result_id' => null,
         'reasoning_id' => null,
         'reasoning_summary' => null,
+        'reasoning_signature' => null,
+        'provider_executed' => false,
     ]);
 });
 

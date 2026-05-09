@@ -77,8 +77,12 @@ test('follow up request preserves tools', function () {
 
     $recorded = Http::recorded();
 
+    $firstBody = json_decode($recorded[0][0]->body(), true);
     $followUpBody = json_decode($recorded[1][0]->body(), true);
 
-    expect($followUpBody)->toHaveKey('tools')
+    expect(data_get($firstBody, 'tool_choice'))->toBe('auto')
+        ->and($firstBody)->toHaveKey('tools')
+        ->and(data_get($followUpBody, 'tool_choice'))->toBe('auto')
+        ->and($followUpBody)->toHaveKey('tools')
         ->and($followUpBody['tools'])->not->toBeEmpty();
 });

@@ -15,7 +15,6 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Files\Image;
 use Laravel\Ai\Gateway\AzureOpenAi\Concerns\CreatesAzureOpenAiClient;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
-use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\OpenAi\Concerns\BuildsTextRequests;
 use Laravel\Ai\Gateway\OpenAi\Concerns\HandlesTextStreaming;
@@ -23,6 +22,8 @@ use Laravel\Ai\Gateway\OpenAi\Concerns\MapsAttachments;
 use Laravel\Ai\Gateway\OpenAi\Concerns\MapsMessages;
 use Laravel\Ai\Gateway\OpenAi\Concerns\MapsTools;
 use Laravel\Ai\Gateway\OpenAi\Concerns\ParsesTextResponses;
+use Laravel\Ai\Gateway\SingleTurnResponse;
+use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Responses\Data\GeneratedImage;
@@ -30,7 +31,6 @@ use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
-use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Tools\ToolNameResolver;
 use LogicException;
 
@@ -40,17 +40,13 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
     use CreatesAzureOpenAiClient;
     use HandlesFailoverErrors;
     use HandlesTextStreaming;
-    use InvokesTools;
     use MapsAttachments;
     use MapsMessages;
     use MapsTools;
     use ParsesServerSentEvents;
     use ParsesTextResponses;
 
-    public function __construct(protected Dispatcher $events)
-    {
-        $this->initializeToolCallbacks();
-    }
+    public function __construct(protected Dispatcher $events) {}
 
     /**
      * {@inheritdoc}
@@ -64,16 +60,12 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
-    ): TextResponse {
-        $body = $this->buildTextRequestBody(
-            $provider,
-            $model,
-            $instructions,
-            $messages,
-            $tools,
-            $schema,
-            $options,
-        );
+        ?string $previousResponseId = null,
+        ?StepContext $context = null,
+    ): SingleTurnResponse {
+        $body = $previousResponseId
+            ? $this->buildContinuationBody($previousResponseId, $model, $messages, $tools, $provider, $schema, $options)
+            : $this->buildTextRequestBody($provider, $model, $instructions, $messages, $tools, $schema, $options);
 
         $response = $this->withErrorHandling(
             $provider->name(),
@@ -84,7 +76,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, filled($schema), $tools, $schema, $options, $timeout);
+        return $this->parseTextResponse($data, $provider, filled($schema));
     }
 
     /**
@@ -100,16 +92,12 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
+        ?string $previousResponseId = null,
+        ?StepContext $context = null,
     ): Generator {
-        $body = $this->buildTextRequestBody(
-            $provider,
-            $model,
-            $instructions,
-            $messages,
-            $tools,
-            $schema,
-            $options,
-        );
+        $body = $previousResponseId
+            ? $this->buildContinuationBody($previousResponseId, $model, $messages, $tools, $provider, $schema, $options)
+            : $this->buildTextRequestBody($provider, $model, $instructions, $messages, $tools, $schema, $options);
 
         $body['stream'] = true;
 
@@ -124,13 +112,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
             $invocationId,
             $provider,
             $model,
-            $tools,
-            $schema,
-            $options,
             $response->getBody(),
-            0,
-            null,
-            $timeout,
         );
     }
 

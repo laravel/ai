@@ -56,16 +56,6 @@ function textGateway(): object
             return $this->buildInferenceConfig($options);
         }
 
-        public function callBuildAssistantConversationMessage(string $text, array $toolCalls): array
-        {
-            return $this->buildAssistantConversationMessage($text, $toolCalls);
-        }
-
-        public function callBuildToolResultConversationMessage(array $toolResults): array
-        {
-            return $this->buildToolResultConversationMessage($toolResults);
-        }
-
         public function callBuildConverseParameters(
             string $model,
             ?string $instructions,
@@ -86,11 +76,6 @@ function textGateway(): object
                 $options,
                 $isFinalStep,
             );
-        }
-
-        public function callResolveMaxSteps(array $tools, ?TextGenerationOptions $options): int
-        {
-            return $this->resolveMaxSteps($tools, $options);
         }
 
         public function callGetDocumentFormat(Document $document): string
@@ -422,56 +407,15 @@ test('build inference config includes temperature of zero', function () {
     ]);
 });
 
-test('build assistant conversation message omits text block when empty', function () {
-    $message = textGateway()->callBuildAssistantConversationMessage('', [
+test('assistant message omits text block when content is empty', function () {
+    $assistant = new AssistantMessage('', new Collection([
         new ToolCall('t-1', 'X', []),
-    ]);
+    ]));
 
-    expect($message['content'])->toHaveCount(1)
-        ->and($message['content'][0]['toolUse']['name'])->toBe('X');
-});
+    $formatted = textGateway()->callFormatMessages([$assistant]);
 
-test('build assistant conversation message includes text and tool calls', function () {
-    $message = textGateway()->callBuildAssistantConversationMessage('thinking', [
-        new ToolCall('t-1', 'X', ['a' => 1]),
-    ]);
-
-    expect($message['content'])->toEqual([
-        ['text' => 'thinking'],
-        ['toolUse' => ['toolUseId' => 't-1', 'name' => 'X', 'input' => ['a' => 1]]],
-    ]);
-});
-
-test('build tool result conversation message uses array form', function () {
-    $message = textGateway()->callBuildToolResultConversationMessage([
-        new ToolResult('t-1', 'X', [], ['out' => true]),
-    ]);
-
-    expect($message)->toEqual([
-        'role' => 'user',
-        'content' => [[
-            'toolResult' => [
-                'toolUseId' => 't-1',
-                'content' => [['text' => '{"out":true}']],
-            ],
-        ]],
-    ]);
-});
-
-test('resolve max steps returns one when no tools', function () {
-    expect(textGateway()->callResolveMaxSteps([], null))->toBe(1);
-});
-
-test('resolve max steps honors explicit option', function () {
-    $options = new TextGenerationOptions(maxSteps: 10);
-
-    expect(textGateway()->callResolveMaxSteps([new BedrockSampleTool], $options))->toBe(10);
-});
-
-test('resolve max steps falls back to tool count times one and a half', function () {
-    $tools = [new BedrockSampleTool, new BedrockSampleTool];
-
-    expect(textGateway()->callResolveMaxSteps($tools, null))->toBe(3);
+    expect($formatted[0]['content'])->toHaveCount(1)
+        ->and($formatted[0]['content'][0]['toolUse']['name'])->toBe('X');
 });
 
 test('build converse parameters attaches system instructions', function () {

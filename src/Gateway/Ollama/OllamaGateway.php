@@ -10,11 +10,11 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
-use Laravel\Ai\Gateway\Concerns\InvokesTools;
+use Laravel\Ai\Gateway\SingleTurnResponse;
+use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\EmbeddingsResponse;
-use Laravel\Ai\Responses\TextResponse;
 
 class OllamaGateway implements EmbeddingGateway, TextGateway
 {
@@ -26,12 +26,8 @@ class OllamaGateway implements EmbeddingGateway, TextGateway
     use Concerns\MapsTools;
     use Concerns\ParsesTextResponses;
     use HandlesFailoverErrors;
-    use InvokesTools;
 
-    public function __construct(protected Dispatcher $events)
-    {
-        $this->initializeToolCallbacks();
-    }
+    public function __construct(protected Dispatcher $events) {}
 
     /**
      * {@inheritdoc}
@@ -45,7 +41,9 @@ class OllamaGateway implements EmbeddingGateway, TextGateway
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
-    ): TextResponse {
+        ?string $previousResponseId = null,
+        ?StepContext $context = null,
+    ): SingleTurnResponse {
         $body = $this->buildTextRequestBody(
             $provider,
             $model,
@@ -65,17 +63,7 @@ class OllamaGateway implements EmbeddingGateway, TextGateway
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse(
-            $data,
-            $provider,
-            filled($schema),
-            $tools,
-            $schema,
-            $options,
-            $instructions,
-            $messages,
-            $timeout,
-        );
+        return $this->parseTextResponse($data, $provider, filled($schema));
     }
 
     /**
@@ -91,6 +79,8 @@ class OllamaGateway implements EmbeddingGateway, TextGateway
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
+        ?string $previousResponseId = null,
+        ?StepContext $context = null,
     ): Generator {
         $body = $this->buildTextRequestBody(
             $provider,
@@ -115,16 +105,7 @@ class OllamaGateway implements EmbeddingGateway, TextGateway
             $invocationId,
             $provider,
             $model,
-            $tools,
-            $schema,
-            $options,
             $response->getBody(),
-            $instructions,
-            $messages,
-            0,
-            null,
-            [],
-            $timeout,
         );
     }
 

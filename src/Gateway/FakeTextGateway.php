@@ -10,13 +10,10 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
-use Laravel\Ai\Gateway\Concerns\InvokesTools;
-use Laravel\Ai\Messages\AssistantMessage;
-use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
+use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
-use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
@@ -32,8 +29,6 @@ use function Laravel\Ai\ulid;
 
 class FakeTextGateway implements TextGateway
 {
-    use InvokesTools;
-
     protected int $currentResponseIndex = 0;
 
     protected bool $preventStrayPrompts = false;
@@ -56,7 +51,9 @@ class FakeTextGateway implements TextGateway
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
-    ): TextResponse {
+        ?string $previousResponseId = null,
+        ?StepContext $context = null,
+    ): SingleTurnResponse {
         $message = (new Collection($messages))->last(function ($message) {
             return $message instanceof UserMessage;
         });
@@ -66,51 +63,43 @@ class FakeTextGateway implements TextGateway
         );
 
         if ($response instanceof ToolCall) {
-            return $this->handleFakeToolCalls(
-                $response,
-                $provider,
-                $model,
-                $message->content,
-                $message->attachments,
-                $schema,
-                $tools,
+            return new SingleTurnResponse(
+                '',
+                [$response],
+                FinishReason::ToolCalls,
+                new Usage,
+                new Meta($provider->name(), $model),
             );
         }
 
-        return $response;
-    }
-
-    /**
-     * Execute a faked tool call and return the next fake response.
-     */
-    protected function handleFakeToolCalls(
-        ToolCall $toolCall,
-        TextProvider $provider,
-        string $model,
-        string $prompt,
-        Collection $attachments,
-        ?array $schema,
-        array $tools,
-    ): TextResponse {
-        $this->initializeToolCallbacks();
-
-        $toolResults = new Collection;
-
-        if ($tool = $this->findTool($toolCall->name, $tools)) {
-            $toolResults->push(new ToolResult(
-                $toolCall->id,
-                $toolCall->name,
-                $toolCall->arguments,
-                $this->executeTool($tool, $toolCall->arguments),
-                $toolCall->resultId,
-            ));
+        if ($response instanceof StructuredTextResponse) {
+            return new SingleTurnResponse(
+                $response->text,
+                [],
+                FinishReason::Stop,
+                $response->usage,
+                $response->meta,
+                structured: $response->structured,
+            );
         }
 
-        return $this->nextResponse($provider, $model, $prompt, $attachments, $schema)
-            ->withMessages(new Collection([
-                new AssistantMessage('', new Collection([$toolCall])),
-                new ToolResultMessage($toolResults),
-            ]));
+        if ($response instanceof TextResponse) {
+            return new SingleTurnResponse(
+                $response->text,
+                [],
+                FinishReason::Stop,
+                $response->usage,
+                $response->meta,
+            );
+        }
+
+        return new SingleTurnResponse(
+            (string) $response,
+            [],
+            FinishReason::Stop,
+            new Usage,
+            new Meta($provider->name(), $model),
+        );
     }
 
     /**
@@ -128,6 +117,8 @@ class FakeTextGateway implements TextGateway
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
+        ?string $previousResponseId = null,
+        ?StepContext $context = null,
     ): Generator {
         $messageId = ulid();
 
@@ -143,7 +134,9 @@ class FakeTextGateway implements TextGateway
             $provider, $model, $message->content, $message->attachments, $schema
         );
 
-        $events = Str::of($fakeResponse->text)
+        $text = $fakeResponse instanceof TextResponse ? $fakeResponse->text : (string) $fakeResponse;
+
+        $events = Str::of($text)
             ->explode(' ')
             ->map(fn ($word, $index) => new TextDelta(
                 ulid(),
@@ -214,17 +207,6 @@ class FakeTextGateway implements TextGateway
             ),
             default => $response,
         };
-    }
-
-    /**
-     * Specify callbacks that should be invoked when tools are invoking / invoked.
-     */
-    public function onToolInvocation(Closure $invoking, Closure $invoked): self
-    {
-        $this->invokingToolCallback = $invoking;
-        $this->toolInvokedCallback = $invoked;
-
-        return $this;
     }
 
     /**

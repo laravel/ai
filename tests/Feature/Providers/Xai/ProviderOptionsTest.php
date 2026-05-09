@@ -59,9 +59,14 @@ test('provider options are persisted in tool call follow up requests', function 
 
     expect(count($requests))->toBeGreaterThanOrEqual(2);
 
+    $firstBody = json_decode($requests[0][0]->body(), true);
     $followUpBody = json_decode($requests[1][0]->body(), true);
 
-    expect(data_get($followUpBody, 'frequency_penalty'))->toBe(0.5);
+    expect(data_get($firstBody, 'tool_choice'))->toBe('auto')
+        ->and($firstBody)->toHaveKey('tools')
+        ->and(data_get($followUpBody, 'tool_choice'))->toBe('auto')
+        ->and($followUpBody)->toHaveKey('tools')
+        ->and(data_get($followUpBody, 'frequency_penalty'))->toBe(0.5);
 });
 
 function fakeXaiProviderOptionsToolCallResponse(): PromiseInterface

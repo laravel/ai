@@ -205,6 +205,51 @@ test('thinking parts are excluded from tool call continuation', function () {
         if ($content['role'] === 'model') {
             foreach ($content['parts'] as $part) {
                 expect($part['thought'] ?? false)->toBeFalse('Thinking parts should be excluded from tool call continuation');
+
+                if (isset($part['text'])) {
+                    expect($part['text'])->not->toContain(
+                        'Let me think about this...',
+                        'Thinking text content must not leak into the assistant turn as a non-flagged text part'
+                    );
+                }
+            }
+        }
+    }
+});
+
+test('functionCall parts on continuation only carry name and args', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::sequence([
+            Http::response([
+                'candidates' => [[
+                    'content' => [
+                        'parts' => [
+                            ['functionCall' => ['id' => 'call_1', 'name' => 'FixedNumberGenerator', 'args' => (object) []]],
+                        ],
+                        'role' => 'model',
+                    ],
+                    'finishReason' => 'STOP',
+                ]],
+                'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5],
+            ]),
+            $this->fakeTextResponse('Done'),
+        ]),
+    ]);
+
+    (new ToolUsingAgent(fixed: true))->prompt('Generate', provider: 'gemini');
+
+    $recorded = Http::recorded();
+    expect($recorded)->toHaveCount(2);
+
+    $followUpContents = $recorded[1][0]->data()['contents'];
+
+    foreach ($followUpContents as $content) {
+        if ($content['role'] === 'model') {
+            foreach ($content['parts'] as $part) {
+                if (isset($part['functionCall'])) {
+                    expect(array_keys($part['functionCall']))
+                        ->each->toBeIn(['name', 'args'], 'functionCall parts must not echo extraneous fields (e.g. id) back to Gemini');
+                }
             }
         }
     }

@@ -2,23 +2,28 @@
 
 namespace Laravel\Ai\Contracts\Gateway;
 
-use Closure;
 use Generator;
 use Illuminate\JsonSchema\Types\Type;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Gateway\SingleTurnResponse;
+use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\Message;
-use Laravel\Ai\Responses\TextResponse;
 
 interface TextGateway
 {
     /**
-     * Generate text representing the next message in a conversation.
+     * Generate text for a single LLM turn.
+     *
+     * Gateways make exactly one LLM call and return the raw result.
+     * The multi-step tool loop is handled by the orchestrator.
      *
      * @param  Message[]  $messages
      * @param  Tool[]  $tools
      * @param  array<string, Type>|null  $schema
+     * @param  string|null  $previousResponseId  Opaque provider response ID from a prior turn for stateful continuation.
+     * @param  StepContext|null  $context  Per-call orchestration hints (e.g. is-final-step).
      */
     public function generateText(
         TextProvider $provider,
@@ -29,14 +34,21 @@ interface TextGateway
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
-    ): TextResponse;
+        ?string $previousResponseId = null,
+        ?StepContext $context = null,
+    ): SingleTurnResponse;
 
     /**
-     * Stream text representing the next message in a conversation.
+     * Stream text for a single LLM turn.
+     *
+     * Gateways stream events for exactly one LLM call.
+     * The multi-step tool loop is handled by the orchestrator.
      *
      * @param  Message[]  $messages
      * @param  Tool[]  $tools
      * @param  array<string, Type>|null  $schema
+     * @param  string|null  $previousResponseId  Opaque provider response ID from a prior turn for stateful continuation.
+     * @param  StepContext|null  $context  Per-call orchestration hints (e.g. is-final-step).
      */
     public function streamText(
         string $invocationId,
@@ -48,10 +60,7 @@ interface TextGateway
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
+        ?string $previousResponseId = null,
+        ?StepContext $context = null,
     ): Generator;
-
-    /**
-     * Specify callbacks that should be invoked when tools are invoking / invoked.
-     */
-    public function onToolInvocation(Closure $invoking, Closure $invoked): self;
 }

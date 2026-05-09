@@ -52,9 +52,9 @@ trait StreamsText
                             new UserMessage($prompt->prompt, $prompt->attachments->all()),
                         ];
 
-                        $this->listenForToolInvocations($invocationId, $agent);
+                        $loop = $this->createStepLoop($invocationId, $agent);
 
-                        yield from $this->textGateway()->streamText(
+                        yield from $loop->stream(
                             $invocationId,
                             $this,
                             $prompt->model,

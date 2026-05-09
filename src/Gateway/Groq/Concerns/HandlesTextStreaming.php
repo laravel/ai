@@ -3,12 +3,9 @@
 namespace Laravel\Ai\Gateway\Groq\Concerns;
 
 use Generator;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
-use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\ToolCall;
-use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
@@ -17,34 +14,21 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
-use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 
 trait HandlesTextStreaming
 {
     /**
-     * Process a Chat Completions streaming response and yield Laravel stream events.
+     * Process a Chat Completions streaming response for a single turn and yield Laravel stream events.
      */
     protected function processTextStream(
         string $invocationId,
         Provider $provider,
         string $model,
-        array $tools,
-        ?array $schema,
-        ?TextGenerationOptions $options,
         $streamBody,
-        ?string $instructions = null,
-        array $originalMessages = [],
-        int $depth = 0,
-        ?int $maxSteps = null,
-        array $priorChatMessages = [],
-        ?int $timeout = null,
     ): Generator {
-        $maxSteps ??= $options?->maxSteps;
-
         $messageId = $this->generateEventId();
         $streamStartEmitted = false;
         $textStartEmitted = false;
-        $currentText = '';
         $pendingToolCalls = [];
         $usage = null;
         $finishReason = null;
@@ -98,8 +82,6 @@ trait HandlesTextStreaming
                         time(),
                     ))->withInvocationId($invocationId);
                 }
-
-                $currentText .= $delta['content'];
 
                 yield (new TextDelta(
                     $this->generateEventId(),
@@ -157,25 +139,6 @@ trait HandlesTextStreaming
                     time(),
                 ))->withInvocationId($invocationId);
             }
-
-            yield from $this->handleStreamingToolCalls(
-                $invocationId,
-                $provider,
-                $model,
-                $tools,
-                $schema,
-                $options,
-                $mappedToolCalls,
-                $currentText,
-                $instructions,
-                $originalMessages,
-                $depth,
-                $maxSteps,
-                $priorChatMessages,
-                $timeout,
-            );
-
-            return;
         }
 
         yield (new StreamEnd(
@@ -184,153 +147,6 @@ trait HandlesTextStreaming
             $usage ?? new Usage(0, 0),
             time(),
         ))->withInvocationId($invocationId);
-    }
-
-    /**
-     * Handle tool calls detected during streaming.
-     */
-    protected function handleStreamingToolCalls(
-        string $invocationId,
-        Provider $provider,
-        string $model,
-        array $tools,
-        ?array $schema,
-        ?TextGenerationOptions $options,
-        array $mappedToolCalls,
-        string $currentText,
-        ?string $instructions,
-        array $originalMessages,
-        int $depth,
-        ?int $maxSteps,
-        array $priorChatMessages,
-        ?int $timeout = null,
-    ): Generator {
-        $toolResults = [];
-
-        foreach ($mappedToolCalls as $toolCall) {
-            $tool = $this->findTool($toolCall->name, $tools);
-
-            if ($tool === null) {
-                continue;
-            }
-
-            $result = $this->executeTool($tool, $toolCall->arguments);
-
-            $toolResult = new ToolResult(
-                $toolCall->id,
-                $toolCall->name,
-                $toolCall->arguments,
-                $result,
-                $toolCall->resultId,
-            );
-
-            $toolResults[] = $toolResult;
-
-            yield (new ToolResultEvent(
-                $this->generateEventId(),
-                $toolResult,
-                true,
-                null,
-                time(),
-            ))->withInvocationId($invocationId);
-        }
-
-        if ($depth + 1 < ($maxSteps ?? round(count($tools) * 1.5))) {
-            $assistantMsg = ['role' => 'assistant'];
-
-            if (filled($currentText)) {
-                $assistantMsg['content'] = $currentText;
-            }
-
-            $assistantMsg['tool_calls'] = array_map(
-                fn (ToolCall $toolCall) => $this->serializeToolCallToChat($toolCall), $mappedToolCalls
-            );
-
-            $toolResultMessages = [];
-
-            foreach ($toolResults as $toolResult) {
-                $toolResultMessages[] = [
-                    'role' => 'tool',
-                    'tool_call_id' => $toolResult->resultId ?? $toolResult->id,
-                    'content' => $this->serializeToolResultOutput($toolResult->result),
-                ];
-            }
-
-            $updatedPriorMessages = [...$priorChatMessages, $assistantMsg, ...$toolResultMessages];
-
-            $mappedTools = filled($tools) ? $this->mapTools($tools) : [];
-            $hasTools = filled($mappedTools);
-            $inlineSchema = $hasTools && filled($schema);
-
-            $chatMessages = [
-                ...$this->mapMessagesToChat(
-                    $originalMessages,
-                    $inlineSchema ? $this->composeInstructions($instructions, $schema) : $instructions,
-                ),
-                ...$updatedPriorMessages,
-            ];
-
-            $body = [
-                'model' => $model,
-                'messages' => $chatMessages,
-                'stream' => true,
-                'stream_options' => ['include_usage' => true],
-            ];
-
-            if ($hasTools) {
-                $body['tool_choice'] = 'auto';
-                $body['tools'] = $mappedTools;
-            }
-
-            if (filled($schema) && ! $inlineSchema) {
-                $body['response_format'] = $this->buildResponseFormat($schema);
-            }
-
-            if (! is_null($options?->maxTokens)) {
-                $body['max_completion_tokens'] = $options->maxTokens;
-            }
-
-            $body = array_merge($body, Arr::whereNotNull([
-                'temperature' => $options?->temperature,
-                'top_p' => $options?->topP,
-            ]));
-
-            $providerOptions = $options?->providerOptions($provider->driver());
-
-            if (filled($providerOptions)) {
-                $body = array_merge($body, $providerOptions);
-            }
-
-            $response = $this->withErrorHandling(
-                $provider->name(),
-                fn () => $this->client($provider, $timeout)
-                    ->withOptions(['stream' => true])
-                    ->post('chat/completions', $body),
-            );
-
-            yield from $this->processTextStream(
-                $invocationId,
-                $provider,
-                $model,
-                $tools,
-                $schema,
-                $options,
-                $response->getBody(),
-                $instructions,
-                $originalMessages,
-                $depth + 1,
-                $maxSteps,
-                $updatedPriorMessages,
-                $timeout,
-            );
-        } else {
-            yield (new StreamEnd(
-                $this->generateEventId(),
-                'stop',
-                new Usage(0, 0),
-                time(),
-            ))->withInvocationId($invocationId);
-        }
     }
 
     /**

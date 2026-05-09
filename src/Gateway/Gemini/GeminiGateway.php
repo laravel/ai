@@ -14,9 +14,10 @@ use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Files\Image;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
-use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\Concerns\WrapsPcmAudio;
+use Laravel\Ai\Gateway\SingleTurnResponse;
+use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
@@ -25,7 +26,6 @@ use Laravel\Ai\Responses\Data\TranscriptionSegment;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
-use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
 use RuntimeException;
 
@@ -39,14 +39,10 @@ class GeminiGateway implements Gateway
     use Concerns\MapsTools;
     use Concerns\ParsesTextResponses;
     use HandlesFailoverErrors;
-    use InvokesTools;
     use ParsesServerSentEvents;
     use WrapsPcmAudio;
 
-    public function __construct(protected Dispatcher $events)
-    {
-        $this->initializeToolCallbacks();
-    }
+    public function __construct(protected Dispatcher $events) {}
 
     /**
      * {@inheritdoc}
@@ -60,8 +56,10 @@ class GeminiGateway implements Gateway
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
-    ): TextResponse {
-        [$body, $contents] = $this->buildTextRequestBody(
+        ?string $previousResponseId = null,
+        ?StepContext $context = null,
+    ): SingleTurnResponse {
+        [$body] = $this->buildTextRequestBody(
             $provider, $instructions, $messages, $tools, $schema, $options,
         );
 
@@ -79,12 +77,6 @@ class GeminiGateway implements Gateway
             $provider,
             $model,
             filled($schema),
-            $tools,
-            $schema,
-            $options,
-            $contents,
-            $instructions,
-            $timeout,
         );
     }
 
@@ -101,8 +93,10 @@ class GeminiGateway implements Gateway
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
+        ?string $previousResponseId = null,
+        ?StepContext $context = null,
     ): Generator {
-        [$body, $contents] = $this->buildTextRequestBody(
+        [$body] = $this->buildTextRequestBody(
             $provider, $instructions, $messages, $tools, $schema, $options,
         );
 
@@ -117,15 +111,7 @@ class GeminiGateway implements Gateway
             $invocationId,
             $provider,
             $model,
-            $tools,
-            $schema,
-            $options,
             $response->getBody(),
-            $contents,
-            $instructions,
-            0,
-            null,
-            $timeout,
         );
     }
 
