@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\SingleTurnResponse;
+use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
@@ -78,6 +79,45 @@ trait ParsesTextResponses
             structured: $structuredData,
             providerContentBlocks: $content,
         );
+    }
+
+    /**
+     * Continue the conversation after a pause_turn stop reason by replaying
+     * the assistant response as-is so the server can resume its turn.
+     */
+    protected function continueFromPauseTurn(
+        array $data,
+        Provider $provider,
+        bool $structured,
+        array $requestBody,
+        ?TextGenerationOptions $options,
+        ?int $timeout,
+    ): SingleTurnResponse {
+        $maxResumes = $options?->maxSteps ?? 5;
+
+        for ($depth = 0; $depth < $maxResumes; $depth++) {
+            $requestBody['messages'][] = [
+                'role' => 'assistant',
+                'content' => $this->ensureToolInputIsObject($data['content'] ?? []),
+            ];
+
+            unset($requestBody['stream']);
+
+            $response = $this->withErrorHandling(
+                $provider->name(),
+                fn () => $this->client($provider, $timeout)->post('messages', $requestBody),
+            );
+
+            $data = $response->json();
+
+            $this->validateTextResponse($data);
+
+            if (($data['stop_reason'] ?? '') !== 'pause_turn') {
+                return $this->parseTextResponse($data, $provider, $structured);
+            }
+        }
+
+        return $this->parseTextResponse($data, $provider, $structured);
     }
 
     /**

@@ -26,10 +26,10 @@ use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 trait HandlesTextStreaming
 {
     /**
-     * Stream with automatic pause_turn resume — a provider-internal server-tool
-     * continuation that is transparent to the caller / StepLoop.
+     * Resume a paused server-side loop by replaying the assistant response
+     * as-is and continuing to stream the follow-up response.
      */
-    protected function processTextStreamWithPauseTurnResume(
+    protected function resumeFromPauseTurn(
         string $invocationId,
         Provider $provider,
         string $model,

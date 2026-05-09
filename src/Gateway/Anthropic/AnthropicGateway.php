@@ -61,26 +61,19 @@ class AnthropicGateway implements Gateway
             $options,
         );
 
-        $maxPauseTurnResumes = $options?->maxSteps ?? 5;
+        $response = $this->withErrorHandling(
+            $provider->name(),
+            fn () => $this->client($provider, $timeout)->post('messages', $body),
+        );
 
-        for ($depth = 0; $depth < $maxPauseTurnResumes; $depth++) {
-            $response = $this->withErrorHandling(
-                $provider->name(),
-                fn () => $this->client($provider, $timeout)->post('messages', $body),
+        $data = $response->json();
+
+        $this->validateTextResponse($data);
+
+        if (($data['stop_reason'] ?? '') === 'pause_turn') {
+            return $this->continueFromPauseTurn(
+                $data, $provider, filled($schema), $body, $options, $timeout,
             );
-
-            $data = $response->json();
-
-            $this->validateTextResponse($data);
-
-            if (($data['stop_reason'] ?? '') !== 'pause_turn') {
-                return $this->parseTextResponse($data, $provider, filled($schema));
-            }
-
-            $body['messages'][] = [
-                'role' => 'assistant',
-                'content' => $this->ensureToolInputIsObject($data['content'] ?? []),
-            ];
         }
 
         return $this->parseTextResponse($data, $provider, filled($schema));
@@ -114,7 +107,7 @@ class AnthropicGateway implements Gateway
 
         $body['stream'] = true;
 
-        yield from $this->processTextStreamWithPauseTurnResume(
+        yield from $this->resumeFromPauseTurn(
             $invocationId,
             $provider,
             $model,
