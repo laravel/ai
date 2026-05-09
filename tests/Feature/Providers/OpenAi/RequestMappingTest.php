@@ -73,6 +73,19 @@ test('temperature, max tokens, and top_p are excluded when not set', function ()
     });
 });
 
+test('temperature and top_p are excluded for reasoning models', function (string $model) {
+    Http::fake(['*' => fakeOpenAiResponse('Hello')]);
+
+    (new AttributeAgent)->prompt('Hello', provider: 'openai', model: $model);
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return ! array_key_exists('temperature', $body)
+            && ! array_key_exists('top_p', $body);
+    });
+})->with(['o1', 'o1-mini', 'o1-preview', 'o3', 'o3-mini', 'o3-pro']);
+
 test('tools include tool choice auto', function () {
     Http::fake(['*' => fakeOpenAiResponse('42')]);
 

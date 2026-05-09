@@ -377,10 +377,15 @@ trait HandlesTextStreaming
             }
 
             $body = array_merge($body, Arr::whereNotNull([
-                'temperature' => $options?->temperature,
-                'top_p' => $options?->topP,
                 'max_output_tokens' => $options?->maxTokens,
             ]));
+
+            if ($this->modelSupportsTemperature($model)) {
+                $body = array_merge($body, Arr::whereNotNull([
+                    'temperature' => $options?->temperature,
+                    'top_p' => $options?->topP,
+                ]));
+            }
 
             $providerOptions = $options?->providerOptions(
                 Lab::tryFrom($provider->driver()) ?? $provider->driver()

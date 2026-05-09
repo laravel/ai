@@ -39,10 +39,12 @@ trait BuildsTextRequests
             $body['max_output_tokens'] = $options->maxTokens;
         }
 
-        $body = array_merge($body, Arr::whereNotNull([
-            'temperature' => $options?->temperature,
-            'top_p' => $options?->topP,
-        ]));
+        if ($this->modelSupportsTemperature($model)) {
+            $body = array_merge($body, Arr::whereNotNull([
+                'temperature' => $options?->temperature,
+                'top_p' => $options?->topP,
+            ]));
+        }
 
         $providerOptions = $options?->providerOptions(
             Lab::tryFrom($provider->driver()) ?? $provider->driver()
@@ -53,6 +55,15 @@ trait BuildsTextRequests
         }
 
         return $body;
+    }
+
+    /**
+     * Determine whether the given model supports temperature / top_p parameters.
+     * OpenAI reasoning models (o1, o3 series) reject these parameters.
+     */
+    protected function modelSupportsTemperature(string $model): bool
+    {
+        return ! preg_match('/^o\d/', $model);
     }
 
     /**
