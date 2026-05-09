@@ -124,7 +124,7 @@ class OpenAiGateway implements Gateway
     /**
      * Generate an image.
      *
-     * @param  array<ImageFile>  $attachments
+     * @param  array<Image>  $attachments
      * @param  '3:2'|'2:3'|'1:1'  $size
      * @param  'low'|'medium'|'high'  $quality
      */
