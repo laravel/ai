@@ -38,14 +38,16 @@ trait HandlesTextStreaming
         $textStartEmitted = false;
         $reasoningStartEmitted = false;
 
+        $currentText = '';
         $currentBlockType = '';
+        $currentBlockIndex = -1;
+        $currentBlockText = '';
         $currentThinkingText = '';
         $currentSignature = '';
         $currentToolIndex = -1;
         $currentServerToolInput = '';
         $pendingToolCalls = [];
         $responseContent = [];
-        $currentServerToolBlock = [];
 
         $inputTokens = 0;
         $cacheCreationTokens = 0;
@@ -118,10 +120,11 @@ trait HandlesTextStreaming
             if ($type === 'content_block_start') {
                 $blockType = $data['content_block']['type'] ?? '';
                 $currentBlockType = $blockType;
-                $index = $data['index'] ?? count($responseContent);
-                $responseContent[$index] = $data['content_block'] ?? [];
+                $currentBlockIndex = $data['index'] ?? count($responseContent);
 
                 if ($blockType === 'text') {
+                    $currentBlockText = '';
+
                     if ($event = $emitTextStart()) {
                         yield $event;
                     }
@@ -142,13 +145,12 @@ trait HandlesTextStreaming
                     ];
                 } elseif ($blockType === 'server_tool_use') {
                     $currentServerToolInput = '';
-                    $currentServerToolBlock = $data['content_block'] ?? [];
 
                     yield (new ProviderToolEvent(
                         $this->generateEventId(),
-                        $currentServerToolBlock['id'] ?? '',
+                        $data['content_block']['id'] ?? '',
                         $blockType,
-                        $currentServerToolBlock,
+                        $data['content_block'] ?? [],
                         'started',
                         time(),
                     ))->withInvocationId($invocationId);
@@ -163,6 +165,10 @@ trait HandlesTextStreaming
                     ))->withInvocationId($invocationId);
                 }
 
+                if (isset($data['content_block'])) {
+                    $responseContent[$data['index'] ?? count($responseContent)] = $data['content_block'];
+                }
+
                 continue;
             }
 
@@ -173,14 +179,12 @@ trait HandlesTextStreaming
                     $textDelta = (string) ($data['delta']['text'] ?? '');
 
                     if ($textDelta !== '') {
-                        $blockIndex = $data['index'] ?? array_key_last($responseContent);
-                        if ($blockIndex !== null && isset($responseContent[$blockIndex])) {
-                            $responseContent[$blockIndex]['text'] = ($responseContent[$blockIndex]['text'] ?? '').$textDelta;
-                        }
-
                         if ($event = $emitTextStart()) {
                             yield $event;
                         }
+
+                        $currentText .= $textDelta;
+                        $currentBlockText .= $textDelta;
 
                         yield (new TextDelta(
                             $this->generateEventId(),
@@ -234,6 +238,10 @@ trait HandlesTextStreaming
 
             if ($type === 'content_block_stop') {
                 if ($currentBlockType === 'text' && $textStartEmitted) {
+                    if (isset($responseContent[$currentBlockIndex])) {
+                        $responseContent[$currentBlockIndex]['text'] = $currentBlockText;
+                    }
+
                     yield (new TextEnd(
                         $this->generateEventId(),
                         $messageId,
@@ -242,6 +250,11 @@ trait HandlesTextStreaming
 
                     $textStartEmitted = false;
                 } elseif ($currentBlockType === 'thinking' && $reasoningStartEmitted) {
+                    if (isset($responseContent[$currentBlockIndex])) {
+                        $responseContent[$currentBlockIndex]['thinking'] = $currentThinkingText;
+                        $responseContent[$currentBlockIndex]['signature'] = $currentSignature;
+                    }
+
                     yield (new ReasoningEnd(
                         $this->generateEventId(),
                         $reasoningId,
@@ -254,43 +267,41 @@ trait HandlesTextStreaming
                     $call = $pendingToolCalls[$currentToolIndex];
                     $parsedArguments = json_decode($call['arguments'] ?: '{}', true) ?? [];
 
-                    // Don't emit the synthetic structured output tool call as a real tool call.
-                    if ($call['name'] !== 'output_structured_data') {
-                        yield (new ToolCallEvent(
-                            $this->generateEventId(),
-                            new ToolCall(
-                                $call['id'],
-                                $call['name'],
-                                $parsedArguments,
-                                $call['id'],
-                                reasoningSummary: $currentThinkingText !== '' ? [$currentThinkingText] : null,
-                                reasoningSignature: $currentSignature ?: null,
-                            ),
-                            time(),
-                        ))->withInvocationId($invocationId);
+                    $index = $data['index'] ?? $currentToolIndex;
+
+                    if (isset($responseContent[$index])) {
+                        $responseContent[$index]['input'] = $parsedArguments;
                     }
+
+                    $pendingToolCalls[$currentToolIndex]['parsed_arguments'] = $parsedArguments;
+
+                    yield (new ToolCallEvent(
+                        $this->generateEventId(),
+                        new ToolCall(
+                            $call['id'],
+                            $call['name'],
+                            $parsedArguments,
+                            $call['id'],
+                            reasoningSummary: $currentThinkingText !== '' ? [$currentThinkingText] : null,
+                            reasoningSignature: $currentSignature ?: null,
+                        ),
+                        time(),
+                    ))->withInvocationId($invocationId);
                 } elseif ($currentBlockType === 'server_tool_use') {
-                    $blockIndex = $data['index'] ?? array_key_last($responseContent);
+                    $index = $data['index'] ?? count($responseContent) - 1;
 
-                    if ($currentServerToolInput !== '') {
-                        $decodedInput = json_decode($currentServerToolInput, true) ?? [];
-                        $currentServerToolBlock['input'] = $decodedInput;
-
-                        if ($blockIndex !== null && isset($responseContent[$blockIndex])) {
-                            $responseContent[$blockIndex]['input'] = $decodedInput;
-                        }
+                    if ($currentServerToolInput !== '' && isset($responseContent[$index])) {
+                        $responseContent[$index]['input'] = json_decode($currentServerToolInput, true) ?? [];
                     }
 
                     yield (new ProviderToolEvent(
                         $this->generateEventId(),
-                        $currentServerToolBlock['id'] ?? '',
+                        $responseContent[$index]['id'] ?? '',
                         $currentBlockType,
-                        $currentServerToolBlock,
+                        $responseContent[$index] ?? [],
                         'completed',
                         time(),
                     ))->withInvocationId($invocationId);
-
-                    $currentServerToolBlock = [];
                 }
 
                 $currentBlockType = '';
