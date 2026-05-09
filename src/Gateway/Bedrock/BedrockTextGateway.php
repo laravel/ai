@@ -369,6 +369,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
         array $inputs,
         int $dimensions,
         int $timeout = 30,
+        array $providerOptions = [],
     ): EmbeddingsResponse {
         $client = $this->createBedrockClient($provider, $timeout);
 

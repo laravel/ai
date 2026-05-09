@@ -216,6 +216,7 @@ class OpenRouterGateway implements EmbeddingGateway, ImageGateway, TextGateway
         array $inputs,
         int $dimensions,
         int $timeout = 30,
+        array $providerOptions = [],
     ): EmbeddingsResponse {
         $body = [
             'model' => $model,

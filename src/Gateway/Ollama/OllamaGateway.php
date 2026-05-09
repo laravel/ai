@@ -137,6 +137,7 @@ class OllamaGateway implements EmbeddingGateway, TextGateway
         array $inputs,
         int $dimensions,
         int $timeout = 30,
+        array $providerOptions = [],
     ): EmbeddingsResponse {
         $body = array_filter([
             'model' => $model,

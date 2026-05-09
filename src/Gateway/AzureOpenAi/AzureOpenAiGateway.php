@@ -143,6 +143,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
         array $inputs,
         int $dimensions,
         int $timeout = 30,
+        array $providerOptions = [],
     ): EmbeddingsResponse {
         $response = $this->withErrorHandling(
             $provider->name(),

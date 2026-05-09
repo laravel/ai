@@ -335,6 +335,7 @@ class OpenAiGateway implements Gateway
         array $inputs,
         int $dimensions,
         int $timeout = 30,
+        array $providerOptions = [],
     ): EmbeddingsResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
