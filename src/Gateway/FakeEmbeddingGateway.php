@@ -32,6 +32,7 @@ class FakeEmbeddingGateway implements EmbeddingGateway
         array $inputs,
         int $dimensions,
         int $timeout = 30,
+        array $providerOptions = [],
     ): EmbeddingsResponse {
         $prompt = new EmbeddingsPrompt($inputs, $dimensions, $provider, $model, $timeout);
 

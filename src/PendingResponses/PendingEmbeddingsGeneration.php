@@ -27,6 +27,8 @@ class PendingEmbeddingsGeneration
 
     protected int $timeout = 30;
 
+    protected array $providerOptions = [];
+
     public function __construct(
         protected array $inputs,
     ) {}
@@ -62,6 +64,16 @@ class PendingEmbeddingsGeneration
     }
 
     /**
+     * Specify provider-specific options for embeddings generation.
+     */
+    public function providerOptions(array $options): self
+    {
+        $this->providerOptions = $options;
+
+        return $this;
+    }
+
+    /**
      * Generate the embeddings.
      */
     public function generate(Lab|array|string|null $provider = null, ?string $model = null): EmbeddingsResponse
@@ -85,7 +97,7 @@ class PendingEmbeddingsGeneration
 
             try {
                 return tap(
-                    $provider->embeddings($this->inputs, $dimensions, $model, $this->timeout),
+                    $provider->embeddings($this->inputs, $dimensions, $model, $this->timeout, $this->providerOptions),
                     fn ($response) => $this->cacheEmbeddings($provider, $model, $dimensions, $response)
                 );
             } catch (FailoverableException $e) {
