@@ -2,7 +2,10 @@
 
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Transcription;
 use LogicException;
 
@@ -147,3 +150,53 @@ test('transcription usage is correctly parsed', function () {
     expect($response->usage->promptTokens)->toBe(100)
         ->and($response->usage->completionTokens)->toBe(150);
 });
+
+test('transcription request sends bearer token', function () {
+    Http::fake(['*' => fakeOpenRouterTranscriptionResponse()]);
+
+    Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'openrouter');
+
+    Http::assertSent(fn (Request $request) => $request->hasHeader('Authorization', 'Bearer test-key'));
+});
+
+test('transcription rate limit response throws rate limited exception', function () {
+    Http::fake([
+        'openrouter.ai/*' => Http::response([
+            'error' => [
+                'message' => 'Rate limit exceeded',
+                'code' => 429,
+            ],
+        ], 429),
+    ]);
+
+    Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->generate(provider: 'openrouter', model: 'openai/gpt-4o-transcribe');
+})->throws(RateLimitedException::class);
+
+test('transcription overloaded response throws provider overloaded exception', function () {
+    Http::fake([
+        'openrouter.ai/*' => Http::response([
+            'error' => [
+                'message' => 'Service overloaded',
+                'code' => 503,
+            ],
+        ], 503),
+    ]);
+
+    Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->generate(provider: 'openrouter', model: 'openai/gpt-4o-transcribe');
+})->throws(ProviderOverloadedException::class);
+
+test('transcription http error response throws request exception', function () {
+    Http::fake([
+        'openrouter.ai/*' => Http::response([
+            'error' => [
+                'message' => 'Invalid audio format',
+                'code' => 400,
+            ],
+        ], 400),
+    ]);
+
+    Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->generate(provider: 'openrouter', model: 'openai/gpt-4o-transcribe');
+})->throws(RequestException::class);
