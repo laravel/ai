@@ -86,3 +86,64 @@ test('transcription maps audio mime types to openrouter format values', function
     'aac via audio/aac' => ['audio/aac', 'aac'],
     'fallback to mp3 for unknown mime' => ['audio/unknown-format', 'mp3'],
 ]);
+
+test('transcription request includes language when specified', function () {
+    Http::fake(['*' => fakeOpenRouterTranscriptionResponse()]);
+
+    Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->language('fr')
+        ->generate(provider: 'openrouter');
+
+    Http::assertSent(function (Request $request) {
+        return json_decode($request->body(), true)['language'] === 'fr';
+    });
+});
+
+test('transcription request omits language when not specified', function () {
+    Http::fake(['*' => fakeOpenRouterTranscriptionResponse()]);
+
+    Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'openrouter');
+
+    Http::assertSent(function (Request $request) {
+        return ! array_key_exists('language', json_decode($request->body(), true));
+    });
+});
+
+test('transcription uses default model when none specified', function () {
+    Http::fake(['*' => fakeOpenRouterTranscriptionResponse()]);
+
+    Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'openrouter');
+
+    Http::assertSent(function (Request $request) {
+        return json_decode($request->body(), true)['model'] === 'openai/gpt-4o-transcribe';
+    });
+});
+
+test('transcription response text is correctly parsed', function () {
+    Http::fake(['*' => fakeOpenRouterTranscriptionResponse('Hello, world!')]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'openrouter');
+
+    expect($response->text)->toBe('Hello, world!')
+        ->and($response->segments)->toHaveCount(0)
+        ->and($response->meta->provider)->toBe('openrouter')
+        ->and($response->meta->model)->toBe('openai/gpt-4o-transcribe');
+});
+
+test('transcription usage is correctly parsed', function () {
+    Http::fake(['*' => Http::response([
+        'text' => 'Hello',
+        'usage' => [
+            'seconds' => 2.0,
+            'total_tokens' => 150,
+            'input_tokens' => 100,
+            'output_tokens' => 50,
+            'cost' => 0.0005,
+        ],
+    ])]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'openrouter');
+
+    expect($response->usage->promptTokens)->toBe(100)
+        ->and($response->usage->completionTokens)->toBe(150);
+});
