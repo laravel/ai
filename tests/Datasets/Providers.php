@@ -5,6 +5,7 @@ dataset('text-providers', ['anthropic', 'gemini', 'groq', 'openai']);
 dataset('tts-providers', [
     'openai' => ['openai', 'OPENAI_API_KEY'],
     'gemini' => ['gemini', 'GEMINI_API_KEY'],
+    'openrouter' => ['openrouter', 'OPENROUTER_API_KEY'],
 ]);
 
 dataset('providers-with-urls', [
@@ -20,6 +21,12 @@ dataset('embedding-providers', [
 ]);
 
 dataset('transcription-providers', [
+    'openai' => ['openai', 'OPENAI_API_KEY'],
+    'gemini' => ['gemini', 'GEMINI_API_KEY'],
+    'openrouter' => ['openrouter', 'OPENROUTER_API_KEY'],
+]);
+
+dataset('diarization-providers', [
     'openai' => ['openai', 'OPENAI_API_KEY'],
     'gemini' => ['gemini', 'GEMINI_API_KEY'],
 ]);
