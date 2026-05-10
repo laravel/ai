@@ -104,3 +104,29 @@ test('audio response is base64-encoded with audio/mpeg mime type', function () {
         ->and($response->meta->provider)->toBe('openrouter')
         ->and($response->meta->model)->toBe('openai/gpt-4o-mini-tts-2025-12-15');
 });
+
+test('audio request sends bearer token', function () {
+    Http::fake(['*' => fakeOpenRouterAudioResponse()]);
+
+    Audio::of('Hello')->generate(provider: 'openrouter', model: 'openai/gpt-4o-mini-tts-2025-12-15');
+
+    Http::assertSent(fn (Request $request) => $request->hasHeader('Authorization', 'Bearer test-key'));
+});
+
+test('audio request sends openrouter attribution headers when configured', function () {
+    config(['ai.providers.openrouter' => [
+        ...config('ai.providers.openrouter'),
+        'key' => 'test-key',
+        'http_referer' => 'https://example.test',
+        'x_title' => 'Example App',
+    ]]);
+
+    Http::fake(['*' => fakeOpenRouterAudioResponse()]);
+
+    Audio::of('Hello')->generate(provider: 'openrouter', model: 'openai/gpt-4o-mini-tts-2025-12-15');
+
+    Http::assertSent(function (Request $request) {
+        return $request->hasHeader('HTTP-Referer', 'https://example.test')
+            && $request->hasHeader('X-OpenRouter-Title', 'Example App');
+    });
+});
