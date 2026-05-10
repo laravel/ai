@@ -5,9 +5,11 @@ namespace Laravel\Ai\Gateway\OpenRouter;
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Collection;
+use Laravel\Ai\Contracts\Gateway\AudioGateway;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
+use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -16,6 +18,7 @@ use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
@@ -23,7 +26,7 @@ use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\TextResponse;
 
-class OpenRouterGateway implements EmbeddingGateway, ImageGateway, TextGateway
+class OpenRouterGateway implements AudioGateway, EmbeddingGateway, ImageGateway, TextGateway
 {
     use Concerns\BuildsTextRequests;
     use Concerns\CreatesOpenRouterClient;
@@ -205,6 +208,42 @@ class OpenRouterGateway implements EmbeddingGateway, ImageGateway, TextGateway
             [['type' => 'text', 'text' => $prompt]],
             $this->mapAttachments(collect($attachments)),
         )]];
+    }
+
+    /**
+     * Generate audio from the given text.
+     */
+    public function generateAudio(
+        AudioProvider $provider,
+        string $model,
+        string $text,
+        string $voice,
+        ?string $instructions = null,
+        int $timeout = 30,
+    ): AudioResponse {
+        $voice = match ($voice) {
+            'default-male' => 'ash',
+            'default-female' => 'alloy',
+            default => $voice,
+        };
+
+        $response = $this->withErrorHandling(
+            $provider->name(),
+            fn () => $this->client($provider, $timeout)->post('audio/speech', array_filter([
+                'model' => $model,
+                'input' => $text,
+                'voice' => $voice,
+                'response_format' => 'mp3',
+                'speed' => 1.0,
+                'instructions' => $instructions,
+            ])),
+        );
+
+        return new AudioResponse(
+            base64_encode($response->body()),
+            new Meta($provider->name(), $model),
+            'audio/mpeg',
+        );
     }
 
     /**
