@@ -5,14 +5,13 @@ namespace Laravel\Ai\Gateway\OpenRouter;
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Collection;
-use Laravel\Ai\Contracts\Gateway\AudioGateway;
-use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
-use Laravel\Ai\Contracts\Gateway\ImageGateway;
-use Laravel\Ai\Contracts\Gateway\TextGateway;
+use Laravel\Ai\Contracts\Files\TranscribableAudio;
+use Laravel\Ai\Contracts\Gateway\Gateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Files\Image;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
@@ -25,8 +24,10 @@ use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\TextResponse;
+use Laravel\Ai\Responses\TranscriptionResponse;
+use LogicException;
 
-class OpenRouterGateway implements AudioGateway, EmbeddingGateway, ImageGateway, TextGateway
+class OpenRouterGateway implements Gateway
 {
     use Concerns\BuildsTextRequests;
     use Concerns\CreatesOpenRouterClient;
@@ -244,6 +245,67 @@ class OpenRouterGateway implements AudioGateway, EmbeddingGateway, ImageGateway,
             new Meta($provider->name(), $model),
             'audio/mpeg',
         );
+    }
+
+    /**
+     * Generate text from the given audio.
+     *
+     * @throws LogicException
+     */
+    public function generateTranscription(
+        TranscriptionProvider $provider,
+        string $model,
+        TranscribableAudio $audio,
+        ?string $language = null,
+        bool $diarize = false,
+        int $timeout = 30,
+    ): TranscriptionResponse {
+        if ($diarize) {
+            throw new LogicException(
+                'OpenRouter does not support diarized transcription. Use the OpenAI, ElevenLabs, Mistral, or Gemini provider for diarization.'
+            );
+        }
+
+        $response = $this->withErrorHandling(
+            $provider->name(),
+            fn () => $this->client($provider, $timeout)->post('audio/transcriptions', array_filter([
+                'model' => $model,
+                'input_audio' => [
+                    'data' => base64_encode($audio->content()),
+                    'format' => $this->audioFormat($audio->mimeType()),
+                ],
+                'language' => $language,
+            ])),
+        );
+
+        $data = $response->json();
+
+        return new TranscriptionResponse(
+            $data['text'] ?? '',
+            collect(),
+            new Usage(
+                $data['usage']['input_tokens'] ?? 0,
+                $data['usage']['total_tokens'] ?? 0,
+            ),
+            new Meta($provider->name(), $model),
+        );
+    }
+
+    /**
+     * Map an audio MIME type to OpenRouter's input_audio.format value.
+     */
+    protected function audioFormat(string $mimeType): string
+    {
+        return match ($mimeType) {
+            'audio/webm' => 'webm',
+            'audio/ogg', 'audio/ogg; codecs=opus' => 'ogg',
+            'audio/wav', 'audio/x-wav' => 'wav',
+            'audio/mp4', 'audio/m4a', 'audio/x-m4a' => 'm4a',
+            'audio/flac', 'audio/x-flac' => 'flac',
+            'audio/aac' => 'aac',
+            'audio/mpeg', 'audio/mp3' => 'mp3',
+            default => 'mp3',
+        };
     }
 
     /**
