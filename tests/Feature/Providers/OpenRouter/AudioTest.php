@@ -2,8 +2,11 @@
 
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Audio;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\RateLimitedException;
 
 beforeEach(function () {
     config(['ai.providers.openrouter' => [
@@ -130,3 +133,42 @@ test('audio request sends openrouter attribution headers when configured', funct
             && $request->hasHeader('X-OpenRouter-Title', 'Example App');
     });
 });
+
+test('audio rate limit response throws rate limited exception', function () {
+    Http::fake([
+        'openrouter.ai/*' => Http::response([
+            'error' => [
+                'message' => 'Rate limit exceeded',
+                'code' => 429,
+            ],
+        ], 429),
+    ]);
+
+    Audio::of('Hello')->generate(provider: 'openrouter', model: 'openai/gpt-4o-mini-tts-2025-12-15');
+})->throws(RateLimitedException::class);
+
+test('audio overloaded response throws provider overloaded exception', function () {
+    Http::fake([
+        'openrouter.ai/*' => Http::response([
+            'error' => [
+                'message' => 'Service overloaded',
+                'code' => 503,
+            ],
+        ], 503),
+    ]);
+
+    Audio::of('Hello')->generate(provider: 'openrouter', model: 'openai/gpt-4o-mini-tts-2025-12-15');
+})->throws(ProviderOverloadedException::class);
+
+test('audio http error response throws request exception', function () {
+    Http::fake([
+        'openrouter.ai/*' => Http::response([
+            'error' => [
+                'message' => 'Bad request',
+                'code' => 400,
+            ],
+        ], 400),
+    ]);
+
+    Audio::of('Hello')->generate(provider: 'openrouter', model: 'openai/gpt-4o-mini-tts-2025-12-15');
+})->throws(RequestException::class);
