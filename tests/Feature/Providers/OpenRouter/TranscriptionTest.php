@@ -61,3 +61,28 @@ test('transcription diarize throws logic exception without sending request', fun
 
     Http::assertNothingSent();
 });
+
+test('transcription maps audio mime types to openrouter format values', function (string $mimeType, string $expectedFormat) {
+    Http::fake(['*' => fakeOpenRouterTranscriptionResponse()]);
+
+    Transcription::fromBase64(base64_encode('fake-audio'), $mimeType)->generate(provider: 'openrouter');
+
+    Http::assertSent(function (Request $request) use ($expectedFormat) {
+        return json_decode($request->body(), true)['input_audio']['format'] === $expectedFormat;
+    });
+})->with([
+    'mp3 via audio/mpeg' => ['audio/mpeg', 'mp3'],
+    'mp3 via audio/mp3' => ['audio/mp3', 'mp3'],
+    'wav via audio/wav' => ['audio/wav', 'wav'],
+    'wav via audio/x-wav' => ['audio/x-wav', 'wav'],
+    'm4a via audio/m4a' => ['audio/m4a', 'm4a'],
+    'm4a via audio/mp4' => ['audio/mp4', 'm4a'],
+    'm4a via audio/x-m4a' => ['audio/x-m4a', 'm4a'],
+    'ogg via audio/ogg' => ['audio/ogg', 'ogg'],
+    'ogg via audio/ogg opus' => ['audio/ogg; codecs=opus', 'ogg'],
+    'flac via audio/flac' => ['audio/flac', 'flac'],
+    'flac via audio/x-flac' => ['audio/x-flac', 'flac'],
+    'webm via audio/webm' => ['audio/webm', 'webm'],
+    'aac via audio/aac' => ['audio/aac', 'aac'],
+    'fallback to mp3 for unknown mime' => ['audio/unknown-format', 'mp3'],
+]);
