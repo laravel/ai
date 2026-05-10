@@ -63,3 +63,44 @@ test('audio request passes custom voice id through unchanged', function () {
         return json_decode($request->body(), true)['voice'] === 'shimmer';
     });
 });
+
+test('audio request includes instructions when provided', function () {
+    Http::fake(['*' => fakeOpenRouterAudioResponse()]);
+
+    Audio::of('Hello')->instructions('Speak slowly')->generate(provider: 'openrouter', model: 'openai/gpt-4o-mini-tts-2025-12-15');
+
+    Http::assertSent(function (Request $request) {
+        return json_decode($request->body(), true)['instructions'] === 'Speak slowly';
+    });
+});
+
+test('audio request omits instructions when not provided', function () {
+    Http::fake(['*' => fakeOpenRouterAudioResponse()]);
+
+    Audio::of('Hello')->generate(provider: 'openrouter', model: 'openai/gpt-4o-mini-tts-2025-12-15');
+
+    Http::assertSent(function (Request $request) {
+        return ! array_key_exists('instructions', json_decode($request->body(), true));
+    });
+});
+
+test('audio uses default model when none specified', function () {
+    Http::fake(['*' => fakeOpenRouterAudioResponse()]);
+
+    Audio::of('Hello')->generate(provider: 'openrouter');
+
+    Http::assertSent(function (Request $request) {
+        return json_decode($request->body(), true)['model'] === 'openai/gpt-4o-mini-tts-2025-12-15';
+    });
+});
+
+test('audio response is base64-encoded with audio/mpeg mime type', function () {
+    Http::fake(['*' => fakeOpenRouterAudioResponse()]);
+
+    $response = Audio::of('Hello')->generate(provider: 'openrouter', model: 'openai/gpt-4o-mini-tts-2025-12-15');
+
+    expect($response->audio)->toBe(base64_encode('fake-audio-bytes'))
+        ->and($response->mimeType())->toBe('audio/mpeg')
+        ->and($response->meta->provider)->toBe('openrouter')
+        ->and($response->meta->model)->toBe('openai/gpt-4o-mini-tts-2025-12-15');
+});
