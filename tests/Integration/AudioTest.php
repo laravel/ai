@@ -54,4 +54,4 @@ test('transcription can be diarized', function (string $provider, string $apiKey
 
     expect(str_contains(strtolower((string) $transcription), 'how are you today'))->toBeTrue()
         ->and($transcription->segments->count())->toBeGreaterThan(0);
-})->with('tts-providers');
+})->with('diarization-providers');
