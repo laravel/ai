@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Streaming\Events;
 
+use Illuminate\Broadcasting\BroadcastException;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Support\Facades\Broadcast;
 
@@ -14,10 +15,14 @@ abstract class StreamEvent
      */
     public function broadcast(Channel|array $channels, bool $now = false): void
     {
-        Broadcast::on($channels)
-            ->as($this->type())
-            ->with($this->toArray())
-            ->{$now ? 'sendNow' : 'send'}();
+        try {
+            Broadcast::on($channels)
+                ->as($this->type())
+                ->with($this->toArray())
+                ->{$now ? 'sendNow' : 'send'}();
+        } catch (BroadcastException $e) {
+            report($e);
+        }
     }
 
     /**
