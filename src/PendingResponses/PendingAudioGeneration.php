@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\PendingResponses;
 
+use BackedEnum;
 use Illuminate\Support\Traits\Conditionable;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Enums\Lab;
@@ -31,9 +32,9 @@ class PendingAudioGeneration
     /**
      * Specify a specific voice for the generated audio.
      */
-    public function voice(string $voice): self
+    public function voice(BackedEnum|string $voice): self
     {
-        $this->voice = $voice;
+        $this->voice = $voice instanceof BackedEnum ? (string) $voice->value : $voice;
 
         return $this;
     }

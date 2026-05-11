@@ -79,6 +79,30 @@ describe('generating embeddings', function () {
         Embeddings::for(['Hello world'])->timeout(45)->generate();
     });
 
+    test('fake embeddings prompt carries provider options', function () {
+        Embeddings::fake();
+
+        Embeddings::for(['Hello'])
+            ->providerOptions(['input_type' => 'search_query'])
+            ->generate();
+
+        Embeddings::assertGenerated(
+            fn (EmbeddingsPrompt $prompt) => $prompt->providerOptions === ['input_type' => 'search_query'],
+        );
+    });
+
+    test('fake queued embeddings prompt carries provider options', function () {
+        Embeddings::fake();
+
+        Embeddings::for(['Hello'])
+            ->providerOptions(['input_type' => 'search_query'])
+            ->queue();
+
+        Embeddings::assertQueued(
+            fn (QueuedEmbeddingsPrompt $prompt) => $prompt->providerOptions === ['input_type' => 'search_query'],
+        );
+    });
+
     test('fake embeddings are normalized', function () {
         $embedding = Embeddings::fakeEmbedding(100);
 

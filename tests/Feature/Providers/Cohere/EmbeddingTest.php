@@ -68,6 +68,37 @@ test('multiple inputs return multiple embeddings', function () {
         ->and($response->embeddings[1])->toBe([0.4, 0.5, 0.6]);
 });
 
+test('embeddings request includes provider options and lets them override default input_type', function () {
+    Http::fake(['*' => fakeCohereEmbeddingsResponse()]);
+
+    Embeddings::for(['Hello'])
+        ->providerOptions(['input_type' => 'search_query', 'truncate' => 'END'])
+        ->generate(provider: 'cohere', model: 'embed-v4.0');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return $body['input_type'] === 'search_query'
+            && $body['truncate'] === 'END'
+            && $body['model'] === 'embed-v4.0'
+            && $body['texts'] === ['Hello'];
+    });
+});
+
+test('provider options cannot override framework controlled keys', function () {
+    Http::fake(['*' => fakeCohereEmbeddingsResponse()]);
+
+    Embeddings::for(['Hello'])
+        ->providerOptions(['model' => 'hijacked', 'texts' => ['hijacked']])
+        ->generate(provider: 'cohere', model: 'embed-v4.0');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return $body['model'] === 'embed-v4.0' && $body['texts'] === ['Hello'];
+    });
+});
+
 test('embeddings throw when the API returns an error', function () {
     Http::fake(['*' => Http::response(['message' => 'unauthorized'], 401)]);
 
