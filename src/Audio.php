@@ -3,6 +3,7 @@
 namespace Laravel\Ai;
 
 use Closure;
+use InvalidArgumentException;
 use Laravel\Ai\Gateway\FakeAudioGateway;
 use Laravel\Ai\PendingResponses\PendingAudioGeneration;
 
@@ -13,6 +14,10 @@ class Audio
      */
     public static function of(string $text): PendingAudioGeneration
     {
+        if (trim($text) === '') {
+            throw new InvalidArgumentException('Text content is required to generate audio.');
+        }
+
         return new PendingAudioGeneration($text);
     }
 

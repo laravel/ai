@@ -3,6 +3,7 @@
 namespace Laravel\Ai;
 
 use Closure;
+use InvalidArgumentException;
 use Laravel\Ai\Gateway\FakeImageGateway;
 use Laravel\Ai\PendingResponses\PendingImageGeneration;
 
@@ -13,6 +14,10 @@ class Image
      */
     public static function of(string $prompt): PendingImageGeneration
     {
+        if (trim($prompt) === '') {
+            throw new InvalidArgumentException('A prompt is required to generate an image.');
+        }
+
         return new PendingImageGeneration($prompt);
     }
 
