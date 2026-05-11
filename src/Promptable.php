@@ -223,9 +223,6 @@ trait Promptable
 
     /**
      * Iterate the configured provider / model pairs.
-     *
-     * Each entry is a [specifier, ?model] tuple where specifier is either a configured
-     * provider name or a runtime Provider configuration.
      */
     private function iterateProvidersWithFailover(array $providers): iterable
     {
@@ -241,20 +238,10 @@ trait Promptable
      */
     private function ensureProviderIsQueueable(Lab|array|string|ProviderConfig|null $provider): void
     {
-        if ($provider instanceof ProviderConfig) {
+        if ($provider instanceof ProviderConfig || (is_array($provider) && array_any($provider, fn ($value) => $value instanceof ProviderConfig))) {
             throw new InvalidArgumentException(
                 'Cannot queue an agent with a runtime Provider configuration. Credentials must not be serialized into queue payloads.'
             );
-        }
-
-        if (is_array($provider)) {
-            foreach ($provider as $key => $value) {
-                if ($key instanceof ProviderConfig || $value instanceof ProviderConfig) {
-                    throw new InvalidArgumentException(
-                        'Cannot queue an agent with a runtime Provider configuration. Credentials must not be serialized into queue payloads.'
-                    );
-                }
-            }
         }
     }
 
@@ -270,9 +257,6 @@ trait Promptable
 
     /**
      * Get the providers and models array for the given initial provider and model values.
-     *
-     * Returns a list of [specifier, ?model] tuples. Specifier is a provider name (string)
-     * or a runtime Provider configuration.
      */
     protected function getProvidersAndModels(Lab|array|string|ProviderConfig|null $provider, ?string $model): array
     {
@@ -306,8 +290,7 @@ trait Promptable
     }
 
     /**
-     * Normalize a provider input (string, Lab, runtime Provider, or array of any of those) into
-     * a list of [specifier, ?model] tuples for failover iteration.
+     * Normalize the provider input into a list of [specifier, ?model] tuples for failover iteration.
      */
     private function normalizeProviderSpecifiers(Lab|array|string|ProviderConfig $providers, ?string $model): array
     {

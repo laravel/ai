@@ -193,7 +193,6 @@ class AiManager extends MultipleInstanceManager
     /**
      * Get a provider instance for an agent.
      *
-     *
      * @throws LogicException
      */
     public function textProviderFor(Agent $agent, string|ProviderConfig|null $name = null): TextProvider
@@ -218,7 +217,7 @@ class AiManager extends MultipleInstanceManager
 
         if (empty($merged['driver'])) {
             throw new InvalidArgumentException(
-                "Runtime provider [{$config->name()}] has no driver. Pass driver: '...' to Provider::for() or define ai.providers.{$config->name()}."
+                "Runtime provider [{$config->name()}] has no driver. Pass a driver in the config array to Ai::provider() or define ai.providers.{$config->name()}."
             );
         }
 
