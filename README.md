@@ -10,6 +10,23 @@
 
 The Laravel AI SDK provides a unified, expressive API for interacting with AI providers such as OpenAI, Anthropic, Gemini, and more. With the AI SDK, you can build intelligent agents with tools and structured output, generate images, synthesize and transcribe audio, create vector embeddings, and much more — all using a consistent, Laravel-friendly interface.
 
+## Requirements
+
+### PHP
+
+**PHP 8.3+** — see the `php` constraint in this repository’s `composer.json`.
+
+### Laravel
+
+**Laravel 12.x or 13.x** — this package’s `illuminate/*` dependencies follow those major versions.
+
+### Database
+
+- **Conversation storage** — The published migrations for `agent_conversations` and `agent_conversation_messages` use standard Eloquent schema builders (`string`, `text`, `foreignId`, indexes, timestamps). They are intended for **relational** databases that Laravel can migrate with `Schema` (for example MySQL, PostgreSQL, SQLite, or SQL Server), consistent with [Laravel’s database documentation](https://laravel.com/docs/database). You may use a separate connection for these tables via `config('ai.conversations.connection')`; it defaults to your application’s default connection.
+- **Embeddings without a vector database** — Generating embeddings through the SDK (for example `Embeddings::for([...])` or `Str::of(...)->toEmbeddings(...)`) only requires HTTP access to your configured provider. You do **not** need PostgreSQL, pgvector, or any local vector store unless your own application chooses to persist vectors.
+- **Local vector similarity** — Features that rely on Laravel’s vector column APIs (for example `whereVectorSimilarTo` as used by the `SimilaritySearch` tool) require a database setup that Laravel supports for those APIs. Refer to Laravel’s docs for **vectors / pgvector** and your chosen driver; this is separate from the default conversation migrations, which do not define vector columns.
+- **NoSQL (e.g. MongoDB)** — The bundled migrations are SQL-oriented. They are not aimed at MongoDB or other document stores; using those for the same persistence model would require custom storage.
+
 ## Documentation
 
 Documentation for the Laravel AI SDK can be found on the [Laravel website](https://laravel.com/docs/ai-sdk).
