@@ -12,6 +12,8 @@ use Tests\Fixtures\Agents\ResearchAgent;
 test('a parent agent delegates to a sub-agent and the sub-agent runs end-to-end', function (string $provider, string $apiKey, string $model) {
     requiresApiKey($apiKey);
 
+    config(['ai.default' => $provider]);
+
     Event::fake();
 
     $response = (new DelegatingAgent)->prompt(

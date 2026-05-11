@@ -16,6 +16,7 @@ use Laravel\Ai\Files\Image;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
+use Laravel\Ai\Gateway\Concerns\WrapsPcmAudio;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
@@ -30,12 +31,6 @@ use RuntimeException;
 
 class GeminiGateway implements Gateway
 {
-    protected const GEMINI_TTS_BITS_PER_SAMPLE = 16;
-
-    protected const GEMINI_TTS_CHANNELS = 1;
-
-    protected const GEMINI_TTS_SAMPLE_RATE = 24000;
-
     use Concerns\BuildsTextRequests;
     use Concerns\CreatesGeminiClient;
     use Concerns\HandlesTextStreaming;
@@ -46,6 +41,7 @@ class GeminiGateway implements Gateway
     use HandlesFailoverErrors;
     use InvokesTools;
     use ParsesServerSentEvents;
+    use WrapsPcmAudio;
 
     public function __construct(protected Dispatcher $events)
     {
@@ -397,24 +393,5 @@ class GeminiGateway implements Gateway
         return (float) $parts[0]
             + ((float) ($parts[1] ?? 0)) * 60
             + ((float) ($parts[2] ?? 0)) * 3600;
-    }
-
-    /**
-     * Wrap raw PCM audio in a WAV container.
-     */
-    protected function pcmToWav(string $pcm): string
-    {
-        $dataSize = strlen($pcm);
-        $byteRate = intdiv(self::GEMINI_TTS_SAMPLE_RATE * self::GEMINI_TTS_CHANNELS * self::GEMINI_TTS_BITS_PER_SAMPLE, 8);
-        $blockAlign = intdiv(self::GEMINI_TTS_CHANNELS * self::GEMINI_TTS_BITS_PER_SAMPLE, 8);
-
-        return 'RIFF'
-            .pack('V', 36 + $dataSize)
-            .'WAVE'
-            .'fmt '
-            .pack('VvvVVvv', 16, 1, self::GEMINI_TTS_CHANNELS, self::GEMINI_TTS_SAMPLE_RATE, $byteRate, $blockAlign, self::GEMINI_TTS_BITS_PER_SAMPLE)
-            .'data'
-            .pack('V', $dataSize)
-            .$pcm;
     }
 }
