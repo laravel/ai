@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\OpenRouter;
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Collection;
+use InvalidArgumentException;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\Gateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
@@ -16,6 +17,7 @@ use Laravel\Ai\Files\Image;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
+use Laravel\Ai\Gateway\Concerns\WrapsPcmAudio;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
@@ -39,6 +41,7 @@ class OpenRouterGateway implements Gateway
     use HandlesFailoverErrors;
     use InvokesTools;
     use ParsesServerSentEvents;
+    use WrapsPcmAudio;
 
     public function __construct(protected Dispatcher $events)
     {
@@ -222,19 +225,15 @@ class OpenRouterGateway implements Gateway
         ?string $instructions = null,
         int $timeout = 30,
     ): AudioResponse {
-        $voice = match ($voice) {
-            'default-male' => 'ash',
-            'default-female' => 'alloy',
-            default => $voice,
-        };
+        $format = $this->audioResponseFormat($model);
 
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post('audio/speech', array_filter([
                 'model' => $model,
                 'input' => $text,
-                'voice' => $voice,
-                'response_format' => 'mp3',
+                'voice' => $this->resolveVoice($model, $voice),
+                'response_format' => $format,
                 'speed' => 1.0,
                 'instructions' => $instructions,
             ])),
@@ -243,8 +242,57 @@ class OpenRouterGateway implements Gateway
         return new AudioResponse(
             base64_encode($response->body()),
             new Meta($provider->name(), $model),
-            'audio/mpeg',
+            $this->audioResponseMimeType($format),
         );
+    }
+
+    /**
+     * Resolve the alias voice for the given model.
+     */
+    protected function resolveVoice(string $model, string $voice): string
+    {
+        if ($this->isGeminiTtsModel($model)) {
+            return match ($voice) {
+                'default-male' => 'Puck',
+                'default-female' => 'Kore',
+                default => $voice,
+            };
+        }
+
+        return match ($voice) {
+            'default-male' => 'ash',
+            'default-female' => 'alloy',
+            default => $voice,
+        };
+    }
+
+    /**
+     * Resolve the response_format the model accepts. Gemini TTS only accepts pcm.
+     */
+    protected function audioResponseFormat(string $model): string
+    {
+        return $this->isGeminiTtsModel($model) ? 'pcm' : 'mp3';
+    }
+
+    /**
+     * Map a response_format value to the HTTP audio MIME type.
+     */
+    protected function audioResponseMimeType(string $format): string
+    {
+        return match ($format) {
+            'mp3' => 'audio/mpeg',
+            'pcm' => 'audio/pcm',
+            'wav' => 'audio/wav',
+            'opus' => 'audio/opus',
+            'aac' => 'audio/aac',
+            'flac' => 'audio/flac',
+            default => 'audio/mpeg',
+        };
+    }
+
+    protected function isGeminiTtsModel(string $model): bool
+    {
+        return str_contains($model, 'gemini') && str_contains($model, 'tts');
     }
 
     /**
@@ -266,13 +314,21 @@ class OpenRouterGateway implements Gateway
             );
         }
 
+        $mimeType = $audio->mimeType();
+        $content = $audio->content();
+
+        if ($mimeType === 'audio/pcm') {
+            $content = $this->pcmToWav($content);
+            $mimeType = 'audio/wav';
+        }
+
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post('audio/transcriptions', array_filter([
                 'model' => $model,
                 'input_audio' => [
-                    'data' => base64_encode($audio->content()),
-                    'format' => $this->audioFormat($audio->mimeType()),
+                    'data' => base64_encode($content),
+                    'format' => $this->audioFormat($mimeType),
                 ],
                 'language' => $language,
             ])),
@@ -304,7 +360,9 @@ class OpenRouterGateway implements Gateway
             'audio/flac', 'audio/x-flac' => 'flac',
             'audio/aac' => 'aac',
             'audio/mpeg', 'audio/mp3' => 'mp3',
-            default => 'mp3',
+            default => throw new InvalidArgumentException(
+                "Unsupported audio MIME type [{$mimeType}] for OpenRouter transcription. Supported types: audio/wav, audio/mp3, audio/mpeg, audio/flac, audio/m4a, audio/mp4, audio/ogg, audio/webm, audio/aac."
+            ),
         };
     }
 

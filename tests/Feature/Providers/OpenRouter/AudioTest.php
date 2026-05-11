@@ -93,7 +93,39 @@ test('audio uses default model when none specified', function () {
     Audio::of('Hello')->generate(provider: 'openrouter');
 
     Http::assertSent(function (Request $request) {
-        return json_decode($request->body(), true)['model'] === 'openai/gpt-4o-mini-tts-2025-12-15';
+        return json_decode($request->body(), true)['model'] === 'google/gemini-3.1-flash-tts-preview';
+    });
+});
+
+test('audio request to gemini tts model uses pcm response format and pcm mime', function () {
+    Http::fake(['*' => fakeOpenRouterAudioResponse()]);
+
+    $response = Audio::of('Hello')->generate(provider: 'openrouter');
+
+    Http::assertSent(function (Request $request) {
+        return json_decode($request->body(), true)['response_format'] === 'pcm';
+    });
+
+    expect($response->mimeType())->toBe('audio/pcm');
+});
+
+test('audio request to gemini tts model resolves default-female voice to Kore', function () {
+    Http::fake(['*' => fakeOpenRouterAudioResponse()]);
+
+    Audio::of('Hello')->female()->generate(provider: 'openrouter');
+
+    Http::assertSent(function (Request $request) {
+        return json_decode($request->body(), true)['voice'] === 'Kore';
+    });
+});
+
+test('audio request to gemini tts model resolves default-male voice to Puck', function () {
+    Http::fake(['*' => fakeOpenRouterAudioResponse()]);
+
+    Audio::of('Hello')->male()->generate(provider: 'openrouter');
+
+    Http::assertSent(function (Request $request) {
+        return json_decode($request->body(), true)['voice'] === 'Puck';
     });
 });
 

@@ -4,6 +4,7 @@ use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
+use InvalidArgumentException;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Transcription;
@@ -87,8 +88,36 @@ test('transcription maps audio mime types to openrouter format values', function
     'flac via audio/x-flac' => ['audio/x-flac', 'flac'],
     'webm via audio/webm' => ['audio/webm', 'webm'],
     'aac via audio/aac' => ['audio/aac', 'aac'],
-    'fallback to mp3 for unknown mime' => ['audio/unknown-format', 'mp3'],
 ]);
+
+test('transcription wraps raw pcm audio in a wav header and sends as wav format', function () {
+    Http::fake(['*' => fakeOpenRouterTranscriptionResponse()]);
+
+    $pcm = str_repeat("\x01\x00", 1000);
+
+    Transcription::fromBase64(base64_encode($pcm), 'audio/pcm')->generate(provider: 'openrouter');
+
+    Http::assertSent(function (Request $request) use ($pcm) {
+        $body = json_decode($request->body(), true);
+
+        $sent = base64_decode($body['input_audio']['data']);
+
+        return $body['input_audio']['format'] === 'wav'
+            && str_starts_with($sent, 'RIFF')
+            && substr($sent, 8, 4) === 'WAVE'
+            && str_ends_with($sent, $pcm);
+    });
+});
+
+test('transcription throws invalid argument exception for unsupported mime type', function () {
+    Http::fake();
+
+    expect(fn () => Transcription::fromBase64(base64_encode('fake-audio'), 'audio/x-aiff')
+        ->generate(provider: 'openrouter'))
+        ->toThrow(InvalidArgumentException::class, 'Unsupported audio MIME type [audio/x-aiff]');
+
+    Http::assertNothingSent();
+});
 
 test('transcription request includes language when specified', function () {
     Http::fake(['*' => fakeOpenRouterTranscriptionResponse()]);
@@ -118,7 +147,7 @@ test('transcription uses default model when none specified', function () {
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'openrouter');
 
     Http::assertSent(function (Request $request) {
-        return json_decode($request->body(), true)['model'] === 'openai/gpt-4o-transcribe';
+        return json_decode($request->body(), true)['model'] === 'openai/whisper-1';
     });
 });
 
@@ -130,7 +159,7 @@ test('transcription response text is correctly parsed', function () {
     expect($response->text)->toBe('Hello, world!')
         ->and($response->segments)->toHaveCount(0)
         ->and($response->meta->provider)->toBe('openrouter')
-        ->and($response->meta->model)->toBe('openai/gpt-4o-transcribe');
+        ->and($response->meta->model)->toBe('openai/whisper-1');
 });
 
 test('transcription usage is correctly parsed', function () {
@@ -170,7 +199,7 @@ test('transcription rate limit response throws rate limited exception', function
     ]);
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
-        ->generate(provider: 'openrouter', model: 'openai/gpt-4o-transcribe');
+        ->generate(provider: 'openrouter', model: 'openai/whisper-1');
 })->throws(RateLimitedException::class);
 
 test('transcription overloaded response throws provider overloaded exception', function () {
@@ -184,7 +213,7 @@ test('transcription overloaded response throws provider overloaded exception', f
     ]);
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
-        ->generate(provider: 'openrouter', model: 'openai/gpt-4o-transcribe');
+        ->generate(provider: 'openrouter', model: 'openai/whisper-1');
 })->throws(ProviderOverloadedException::class);
 
 test('transcription http error response throws request exception', function () {
@@ -198,5 +227,5 @@ test('transcription http error response throws request exception', function () {
     ]);
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
-        ->generate(provider: 'openrouter', model: 'openai/gpt-4o-transcribe');
+        ->generate(provider: 'openrouter', model: 'openai/whisper-1');
 })->throws(RequestException::class);

@@ -123,7 +123,7 @@ class OpenRouterProvider extends Provider implements AudioProvider, EmbeddingPro
      */
     public function defaultAudioModel(): string
     {
-        return $this->config['models']['audio']['default'] ?? 'openai/gpt-4o-mini-tts-2025-12-15';
+        return $this->config['models']['audio']['default'] ?? 'google/gemini-3.1-flash-tts-preview';
     }
 
     /**
@@ -139,7 +139,7 @@ class OpenRouterProvider extends Provider implements AudioProvider, EmbeddingPro
      */
     public function defaultTranscriptionModel(): string
     {
-        return $this->config['models']['transcription']['default'] ?? 'openai/gpt-4o-transcribe';
+        return $this->config['models']['transcription']['default'] ?? 'openai/whisper-1';
     }
 
     /**
