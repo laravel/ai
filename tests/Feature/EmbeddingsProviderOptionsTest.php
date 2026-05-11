@@ -3,6 +3,8 @@
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
+use Laravel\Ai\Jobs\GenerateEmbeddings;
+use Laravel\Ai\PendingResponses\PendingEmbeddingsGeneration;
 use Laravel\Ai\Prompts\QueuedEmbeddingsPrompt;
 use Laravel\Ai\Providers\Provider;
 
@@ -125,6 +127,32 @@ test('closure provider options are not recorded on the queued prompt fake', func
     Embeddings::assertQueued(
         fn (QueuedEmbeddingsPrompt $prompt) => $prompt->providerOptions === [],
     );
+});
+
+test('closure provider options survive queue serialization round-trip', function () {
+    Http::fake([
+        'api.cohere.com/*' => Http::response([
+            'embeddings' => ['float' => [[0.1]]],
+            'meta' => ['billed_units' => ['input_tokens' => 1]],
+        ]),
+    ]);
+
+    $pending = Embeddings::for(['Hello'])
+        ->providerOptions(fn (Provider $provider) => ['input_type' => 'search_query']);
+
+    $job = new GenerateEmbeddings($pending, 'cohere', 'embed-v4.0');
+
+    $restored = unserialize(serialize($job));
+
+    expect($restored->pendingEmbeddings)->toBeInstanceOf(PendingEmbeddingsGeneration::class);
+
+    $restored->handle();
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return ($body['input_type'] ?? null) === 'search_query';
+    });
 });
 
 test('closure resolver returning null is treated as no options', function () {

@@ -17,6 +17,7 @@ use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\QueuedEmbeddingsResponse;
+use Laravel\SerializableClosure\SerializableClosure;
 
 class PendingEmbeddingsGeneration
 {
@@ -28,8 +29,8 @@ class PendingEmbeddingsGeneration
 
     protected int $timeout = 30;
 
-    /** @var array<string, mixed>|Closure(Provider): array<string, mixed> */
-    protected array|Closure $providerOptions = [];
+    /** @var array<string, mixed>|SerializableClosure */
+    protected array|SerializableClosure $providerOptions = [];
 
     public function __construct(
         protected array $inputs,
@@ -68,16 +69,13 @@ class PendingEmbeddingsGeneration
     /**
      * Specify provider-specific options for embeddings generation.
      *
-     * Pass a flat array to apply the same options to every selected provider,
-     * or a closure that receives the resolved Provider and returns the options
-     * for that provider (useful when failover targets need different options).
-     * If you intend to call queue(), the closure must be queue-serializable.
-     *
      * @param  array<string, mixed>|Closure(Provider): array<string, mixed>  $options
      */
     public function providerOptions(array|Closure $options): self
     {
-        $this->providerOptions = $options;
+        $this->providerOptions = $options instanceof Closure
+            ? new SerializableClosure($options)
+            : $options;
 
         return $this;
     }
@@ -89,7 +87,7 @@ class PendingEmbeddingsGeneration
      */
     protected function resolveProviderOptions(Provider $provider): array
     {
-        if ($this->providerOptions instanceof Closure) {
+        if ($this->providerOptions instanceof SerializableClosure) {
             return ($this->providerOptions)($provider) ?: [];
         }
 
