@@ -1,6 +1,10 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasProviderOptions;
+use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Promptable;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ProviderOptionsAgent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
@@ -66,4 +70,38 @@ test('provider options are persisted in tool call follow up requests', function 
     $secondConfig = $recorded[1][0]->data()['generationConfig'] ?? [];
     expect($secondConfig)->toHaveKey('thinkingConfig')
         ->and($secondConfig['thinkingConfig']['thinkingBudget'])->toBe(10000);
+});
+
+test('cachedContent is placed at top level of request body, not in generationConfig', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
+    ]);
+
+    $agent = new class implements Agent, HasProviderOptions
+    {
+        use Promptable;
+
+        public function instructions(): string
+        {
+            return 'You are a helpful assistant.';
+        }
+
+        public function providerOptions(Lab|string $provider): array
+        {
+            return match ($provider) {
+                Lab::Gemini => ['cachedContent' => 'cachedContents/test-cache-123'],
+                default => [],
+            };
+        }
+    };
+
+    $agent->prompt('Hi', provider: 'gemini');
+
+    Http::assertSent(function ($request) {
+        $body = $request->data();
+
+        return isset($body['cachedContent'])
+            && $body['cachedContent'] === 'cachedContents/test-cache-123'
+            && ! isset($body['generationConfig']['cachedContent']);
+    });
 });

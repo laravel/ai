@@ -77,6 +77,26 @@ test('embeddings request uses openrouter base url', function () {
     Http::assertSent(fn (Request $request) => $request->url() === 'https://openrouter.ai/api/v1/embeddings');
 });
 
+test('embeddings request includes provider options in the request body', function () {
+    Http::fake(['*' => Http::response([
+        'object' => 'list',
+        'data' => [['object' => 'embedding', 'index' => 0, 'embedding' => [0.1]]],
+        'usage' => ['prompt_tokens' => 1],
+    ])]);
+
+    Ai::instance('openrouter')->embeddings(
+        inputs: ['Hello'],
+        providerOptions: ['encoding_format' => 'base64'],
+    );
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return $body['encoding_format'] === 'base64'
+            && $body['input'] === ['Hello'];
+    });
+});
+
 test('embeddings rate limit response throws rate limited exception', function () {
     Http::fake([
         'openrouter.ai/*' => Http::response(['error' => ['message' => 'Rate limited']], 429),

@@ -47,6 +47,7 @@ class AiServiceProvider extends ServiceProvider
             ?string $model = null,
             bool|int|null $cache = null,
             ?int $timeout = null,
+            array|Closure $providerOptions = [],
         ) {
             $request = Embeddings::for([$this->value]);
 
@@ -60,6 +61,10 @@ class AiServiceProvider extends ServiceProvider
 
             if (! is_null($timeout)) {
                 $request->timeout($timeout);
+            }
+
+            if (filled($providerOptions)) {
+                $request->providerOptions($providerOptions);
             }
 
             return $request->generate(provider: $provider, model: $model)->embeddings[0];

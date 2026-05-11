@@ -100,6 +100,21 @@ test('embeddings http error response throws request exception', function () {
     Embeddings::for(['Hello'])->generate(provider: 'voyageai', model: 'voyage-4');
 })->throws(RequestException::class);
 
+test('embeddings request includes provider options in the request body', function () {
+    Http::fake(['*' => fakeVoyageEmbeddingsResponse()]);
+
+    Embeddings::for(['Hello'])
+        ->providerOptions(['input_type' => 'query', 'truncation' => true])
+        ->generate(provider: 'voyageai', model: 'voyage-4');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return $body['input_type'] === 'query'
+            && $body['truncation'] === true;
+    });
+});
+
 function fakeVoyageEmbeddingsResponse()
 {
     return Http::response([

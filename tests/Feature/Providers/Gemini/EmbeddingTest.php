@@ -5,6 +5,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 
 beforeEach(function () {
@@ -139,6 +140,20 @@ test('rate limit response throws rate limited exception', function () {
     Embeddings::for(['Hello'])->generate(provider: 'gemini', model: 'gemini-embedding-001');
 })->throws(RateLimitedException::class);
 
+test('overloaded response throws provider overloaded exception', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'error' => [
+                'code' => 503,
+                'message' => 'The model is overloaded. Please try again later.',
+                'status' => 'UNAVAILABLE',
+            ],
+        ], 503),
+    ]);
+
+    Embeddings::for(['Hello'])->generate(provider: 'gemini', model: 'gemini-embedding-001');
+})->throws(ProviderOverloadedException::class);
+
 test('http error response throws request exception', function () {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::response(['error' => ['message' => 'Unauthorized']], 401),
@@ -156,5 +171,58 @@ test('request sends x-goog-api-key header', function () {
 
     Http::assertSent(function (Request $request) {
         return $request->hasHeader('x-goog-api-key', 'test-key');
+    });
+});
+
+test('embeddings request merges provider options into each per-input request', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => fakeGeminiEmbeddingsResponse(),
+    ]);
+
+    Embeddings::for(['Hello', 'World'])
+        ->providerOptions(['taskType' => 'RETRIEVAL_QUERY', 'title' => 'doc'])
+        ->generate(provider: 'gemini', model: 'gemini-embedding-001');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        if (array_key_exists('taskType', $body) || array_key_exists('title', $body)) {
+            return false;
+        }
+
+        foreach ($body['requests'] as $req) {
+            if (($req['taskType'] ?? null) !== 'RETRIEVAL_QUERY' || ($req['title'] ?? null) !== 'doc') {
+                return false;
+            }
+
+            if (! isset($req['model'], $req['content'], $req['output_dimensionality'])) {
+                return false;
+            }
+        }
+
+        return count($body['requests']) === 2;
+    });
+});
+
+test('gemini provider options cannot override framework controlled per-request keys', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => fakeGeminiEmbeddingsResponse(),
+    ]);
+
+    Embeddings::for(['Hello'])
+        ->providerOptions([
+            'model' => 'hijacked',
+            'content' => ['hijacked'],
+            'output_dimensionality' => 1,
+        ])
+        ->generate(provider: 'gemini', model: 'gemini-embedding-001');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $req = $body['requests'][0];
+
+        return $req['model'] === 'models/gemini-embedding-001'
+            && $req['content'] === ['parts' => [['text' => 'Hello']]]
+            && $req['output_dimensionality'] === 3072;
     });
 });

@@ -25,6 +25,10 @@ class Reranking
             throw new InvalidArgumentException('Documents to rerank must be a list, not an associative array.');
         }
 
+        if ($documents === []) {
+            throw new InvalidArgumentException('At least one document is required to rerank.');
+        }
+
         return new PendingReranking($documents);
     }
 

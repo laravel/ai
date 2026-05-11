@@ -102,6 +102,22 @@ test('embeddings http error response throws request exception', function () {
     Embeddings::for(['Hello'])->generate(provider: 'mistral', model: 'mistral-embed');
 })->throws(RequestException::class);
 
+test('embeddings request includes provider options in the request body', function () {
+    Http::fake(['*' => fakeEmbeddingsResponse()]);
+
+    Embeddings::for(['Hello'])
+        ->providerOptions(['output_dimension' => 256, 'output_dtype' => 'float'])
+        ->generate(provider: 'mistral', model: 'mistral-embed');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return $body['output_dimension'] === 256
+            && $body['output_dtype'] === 'float'
+            && $body['model'] === 'mistral-embed';
+    });
+});
+
 function fakeEmbeddingsResponse()
 {
     return Http::response([

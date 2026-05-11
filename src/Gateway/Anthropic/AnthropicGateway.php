@@ -193,6 +193,7 @@ class AnthropicGateway implements Gateway
         array $inputs,
         int $dimensions,
         int $timeout = 30,
+        array $providerOptions = [],
     ): EmbeddingsResponse {
         throw new LogicException('Anthropic does not support embeddings.');
     }
