@@ -52,7 +52,7 @@ trait Promptable
     public function prompt(
         string $prompt,
         array $attachments = [],
-        Lab|array|string|null $provider = null,
+        Lab|array|string|ProviderConfig|null $provider = null,
         ?string $model = null,
         ?int $timeout = null): AgentResponse
     {
@@ -71,7 +71,7 @@ trait Promptable
     public function stream(
         string $prompt,
         array $attachments = [],
-        Lab|array|string|null $provider = null,
+        Lab|array|string|ProviderConfig|null $provider = null,
         ?string $model = null,
         ?int $timeout = null): StreamableAgentResponse
     {
@@ -133,8 +133,10 @@ trait Promptable
     /**
      * Invoke the agent in a queued job.
      */
-    public function queue(string $prompt, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
+    public function queue(string $prompt, array $attachments = [], Lab|array|string|ProviderConfig|null $provider = null, ?string $model = null): QueuedAgentResponse
     {
+        $this->ensureProviderIsQueueable($provider);
+
         if (static::isFaked()) {
             Ai::recordPrompt(
                 new QueuedAgentPrompt($this, $prompt, $attachments, $provider, $model),
@@ -151,7 +153,7 @@ trait Promptable
     /**
      * Invoke the agent with a given prompt and broadcast the streamed events.
      */
-    public function broadcast(string $prompt, Channel|array $channels, array $attachments = [], bool $now = false, Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
+    public function broadcast(string $prompt, Channel|array $channels, array $attachments = [], bool $now = false, Lab|array|string|ProviderConfig|null $provider = null, ?string $model = null): StreamableAgentResponse
     {
         return $this->stream($prompt, $attachments, $provider, $model)
             ->each(function (StreamEvent $event) use ($channels, $now) {
@@ -162,7 +164,7 @@ trait Promptable
     /**
      * Invoke the agent with a given prompt and broadcast the streamed events immediately.
      */
-    public function broadcastNow(string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
+    public function broadcastNow(string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|ProviderConfig|null $provider = null, ?string $model = null): StreamableAgentResponse
     {
         return $this->broadcast($prompt, $channels, $attachments, now: true, provider: $provider, model: $model);
     }
@@ -170,8 +172,10 @@ trait Promptable
     /**
      * Invoke the agent with a given prompt and broadcast the streamed events.
      */
-    public function broadcastOnQueue(string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
+    public function broadcastOnQueue(string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|ProviderConfig|null $provider = null, ?string $model = null): QueuedAgentResponse
     {
+        $this->ensureProviderIsQueueable($provider);
+
         if (static::isFaked()) {
             Ai::recordPrompt(
                 new QueuedAgentPrompt($this, $prompt, $attachments, $provider, $model),
@@ -188,7 +192,7 @@ trait Promptable
     /**
      * Invoke the given Closure with provider / model failover.
      */
-    private function withModelFailover(Closure $callback, Lab|array|string|null $provider, ?string $model): mixed
+    private function withModelFailover(Closure $callback, Lab|array|string|ProviderConfig|null $provider, ?string $model): mixed
     {
         $lastException = null;
 
@@ -206,7 +210,7 @@ trait Promptable
     /**
      * Get the configured providers and models for failover.
      */
-    private function getProvidersAndModelsForFailover(Lab|array|string|null $provider, ?string $model): array
+    private function getProvidersAndModelsForFailover(Lab|array|string|ProviderConfig|null $provider, ?string $model): array
     {
         $providers = $this->getProvidersAndModels($provider, $model);
 
@@ -219,13 +223,38 @@ trait Promptable
 
     /**
      * Iterate the configured provider / model pairs.
+     *
+     * Each entry is a [specifier, ?model] tuple where specifier is either a configured
+     * provider name or a runtime Provider configuration.
      */
     private function iterateProvidersWithFailover(array $providers): iterable
     {
-        foreach ($providers as $provider => $model) {
-            $provider = Ai::textProviderFor($this, $provider);
+        foreach ($providers as [$specifier, $model]) {
+            $provider = Ai::textProviderFor($this, $specifier);
 
             yield [$provider, $model ?? $this->getDefaultModelFor($provider)];
+        }
+    }
+
+    /**
+     * Throw if the given provider argument carries credentials that must not be serialized into a queue payload.
+     */
+    private function ensureProviderIsQueueable(Lab|array|string|ProviderConfig|null $provider): void
+    {
+        if ($provider instanceof ProviderConfig) {
+            throw new InvalidArgumentException(
+                'Cannot queue an agent with a runtime Provider configuration. Credentials must not be serialized into queue payloads.'
+            );
+        }
+
+        if (is_array($provider)) {
+            foreach ($provider as $key => $value) {
+                if ($key instanceof ProviderConfig || $value instanceof ProviderConfig) {
+                    throw new InvalidArgumentException(
+                        'Cannot queue an agent with a runtime Provider configuration. Credentials must not be serialized into queue payloads.'
+                    );
+                }
+            }
         }
     }
 
@@ -241,8 +270,11 @@ trait Promptable
 
     /**
      * Get the providers and models array for the given initial provider and model values.
+     *
+     * Returns a list of [specifier, ?model] tuples. Specifier is a provider name (string)
+     * or a runtime Provider configuration.
      */
-    protected function getProvidersAndModels(Lab|array|string|null $provider, ?string $model): array
+    protected function getProvidersAndModels(Lab|array|string|ProviderConfig|null $provider, ?string $model): array
     {
         if (is_null($provider)) {
             if (method_exists($this, 'provider')) {
@@ -254,7 +286,7 @@ trait Promptable
             }
         }
 
-        if (! is_array($provider) && is_null($model)) {
+        if (! is_array($provider) && ! $provider instanceof ProviderConfig && is_null($model)) {
             if (method_exists($this, 'model')) {
                 $model = $this->model();
             } else {
@@ -270,7 +302,46 @@ trait Promptable
             throw new InvalidArgumentException('The "ai.default" config value must be a string provider name or a Lab enum, not an array.');
         }
 
-        return Provider::formatProviderAndModelList($resolved, $model);
+        return $this->normalizeProviderSpecifiers($resolved, $model);
+    }
+
+    /**
+     * Normalize a provider input (string, Lab, runtime Provider, or array of any of those) into
+     * a list of [specifier, ?model] tuples for failover iteration.
+     */
+    private function normalizeProviderSpecifiers(Lab|array|string|ProviderConfig $providers, ?string $model): array
+    {
+        if ($providers instanceof ProviderConfig) {
+            return [[$providers, $model]];
+        }
+
+        if ($providers instanceof Lab) {
+            return [[$providers->value, $model]];
+        }
+
+        if (is_string($providers)) {
+            return [[$providers, $model]];
+        }
+
+        $tuples = [];
+
+        foreach ($providers as $key => $value) {
+            if ($value instanceof ProviderConfig) {
+                $tuples[] = [$value, null];
+
+                continue;
+            }
+
+            if (is_int($key)) {
+                $name = $value instanceof Lab ? $value->value : $value;
+                $tuples[] = [$name, null];
+            } else {
+                $name = $key instanceof Lab ? $key->value : $key;
+                $tuples[] = [$name, $value];
+            }
+        }
+
+        return $tuples;
     }
 
     /**
