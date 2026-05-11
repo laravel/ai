@@ -65,9 +65,6 @@ trait BuildsTextRequests
 
         if (filled($tools)) {
             $body['tools'] = $this->mapTools($tools, $provider);
-            $body['tool_config'] = [
-                'function_calling_config' => ['mode' => 'AUTO'],
-            ];
         }
 
         $generationConfig = [];
@@ -86,7 +83,16 @@ trait BuildsTextRequests
             'topP' => $options?->topP,
         ]));
 
-        $providerOptions = $options?->providerOptions(Lab::tryFrom($provider->driver()) ?? $provider->driver());
+        $providerOptions = $options?->providerOptions(Lab::tryFrom($provider->driver()) ?? $provider->driver()) ?? [];
+
+        // Hoist keys that need to be passed at top level, as everything else is passed in generationConfig
+        $topLevelKeys = ['cachedContent'];
+        foreach ($topLevelKeys as $key) {
+            if (array_key_exists($key, $providerOptions)) {
+                $body[$key] = $providerOptions[$key];
+                unset($providerOptions[$key]);
+            }
+        }
 
         if (filled($providerOptions)) {
             $generationConfig = array_merge($generationConfig, $providerOptions);

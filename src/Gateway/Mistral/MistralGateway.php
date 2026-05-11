@@ -143,13 +143,14 @@ class MistralGateway implements EmbeddingGateway, TextGateway, TranscriptionGate
         array $inputs,
         int $dimensions,
         int $timeout = 30,
+        array $providerOptions = [],
     ): EmbeddingsResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('embeddings', [
+            fn () => $this->client($provider, $timeout)->post('embeddings', array_merge($providerOptions, [
                 'model' => $model,
                 'input' => $inputs,
-            ]),
+            ])),
         );
 
         $data = $response->json();

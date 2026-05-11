@@ -5,6 +5,8 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\RateLimitedException;
 
 beforeEach(function () {
     config(['ai.providers.openai' => [
@@ -91,8 +93,73 @@ test('embeddings default to 1536 dimensions when none specified', function () {
     Http::assertSent(fn (Request $request) => json_decode($request->body(), true)['dimensions'] === 1536);
 });
 
-test('embeddings throw when the API returns an error', function () {
-    Http::fake(['*' => Http::response(['error' => ['message' => 'unauthorized']], 401)]);
+test('embeddings request includes provider options in the request body', function () {
+    Http::fake(['*' => fakeOpenAiEmbeddingResponse()]);
+
+    Embeddings::for(['Hello'])
+        ->providerOptions(['encoding_format' => 'base64', 'user' => 'tester'])
+        ->generate(provider: 'openai', model: 'text-embedding-3-small');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return $body['encoding_format'] === 'base64'
+            && $body['user'] === 'tester'
+            && $body['model'] === 'text-embedding-3-small';
+    });
+});
+
+test('provider options cannot override framework controlled keys', function () {
+    Http::fake(['*' => fakeOpenAiEmbeddingResponse()]);
+
+    Embeddings::for(['Hello'])
+        ->providerOptions(['model' => 'hijacked', 'input' => ['hijacked'], 'dimensions' => 1])
+        ->generate(provider: 'openai', model: 'text-embedding-3-small');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return $body['model'] === 'text-embedding-3-small'
+            && $body['input'] === ['Hello']
+            && $body['dimensions'] === 1536;
+    });
+});
+
+test('embeddings rate limit response throws rate limited exception', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::response([
+            'error' => [
+                'type' => 'rate_limit_error',
+                'message' => 'Rate limit exceeded',
+            ],
+        ], 429),
+    ]);
+
+    Embeddings::for(['Hello'])->generate(provider: 'openai', model: 'text-embedding-3-small');
+})->throws(RateLimitedException::class);
+
+test('embeddings overloaded response throws provider overloaded exception', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::response([
+            'error' => [
+                'type' => 'server_error',
+                'message' => 'The server is currently overloaded. Please try again later.',
+            ],
+        ], 503),
+    ]);
+
+    Embeddings::for(['Hello'])->generate(provider: 'openai', model: 'text-embedding-3-small');
+})->throws(ProviderOverloadedException::class);
+
+test('embeddings http error response throws request exception', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::response([
+            'error' => [
+                'type' => 'invalid_request_error',
+                'message' => 'Unauthorized',
+            ],
+        ], 401),
+    ]);
 
     Embeddings::for(['Hello'])->generate(provider: 'openai', model: 'text-embedding-3-small');
 })->throws(RequestException::class);

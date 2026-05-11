@@ -11,6 +11,7 @@ interface EmbeddingGateway
      * Generate embedding vectors representing the given inputs.
      *
      * @param  string[]  $inputs
+     * @param  array<string, mixed>  $providerOptions
      */
-    public function generateEmbeddings(EmbeddingProvider $provider, string $model, array $inputs, int $dimensions, int $timeout = 30): EmbeddingsResponse;
+    public function generateEmbeddings(EmbeddingProvider $provider, string $model, array $inputs, int $dimensions, int $timeout = 30, array $providerOptions = []): EmbeddingsResponse;
 }
