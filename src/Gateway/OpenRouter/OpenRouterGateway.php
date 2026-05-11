@@ -298,6 +298,8 @@ class OpenRouterGateway implements Gateway
     /**
      * Generate text from the given audio.
      *
+     * @param  array<string, mixed>  $providerOptions
+     *
      * @throws LogicException
      */
     public function generateTranscription(
@@ -307,6 +309,7 @@ class OpenRouterGateway implements Gateway
         ?string $language = null,
         bool $diarize = false,
         int $timeout = 30,
+        array $providerOptions = [],
     ): TranscriptionResponse {
         if ($diarize) {
             throw new LogicException(
@@ -324,14 +327,14 @@ class OpenRouterGateway implements Gateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('audio/transcriptions', array_filter([
+            fn () => $this->client($provider, $timeout)->post('audio/transcriptions', array_merge($providerOptions, array_filter([
                 'model' => $model,
                 'input_audio' => [
                     'data' => base64_encode($content),
                     'format' => $this->audioFormat($mimeType),
                 ],
                 'language' => $language,
-            ])),
+            ]))),
         );
 
         $data = $response->json();

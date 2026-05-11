@@ -177,7 +177,7 @@ class AnthropicGateway implements Gateway
         ?string $language = null,
         bool $diarize = false,
         int $timeout = 30,
-        ?string $context = null,
+        array $providerOptions = [],
     ): TranscriptionResponse {
         throw new LogicException('Anthropic does not support transcription.');
     }

@@ -7,6 +7,9 @@ use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 
 class TranscriptionPrompt
 {
+    /**
+     * @param  array<string, mixed>  $providerOptions
+     */
     public function __construct(
         public readonly TranscribableAudio $audio,
         public readonly ?string $language,
@@ -14,7 +17,7 @@ class TranscriptionPrompt
         public readonly TranscriptionProvider $provider,
         public readonly string $model,
         public readonly ?int $timeout = null,
-        public readonly ?string $context = null,
+        public readonly array $providerOptions = [],
     ) {}
 
     /**

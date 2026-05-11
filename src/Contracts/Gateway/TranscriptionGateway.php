@@ -10,6 +10,8 @@ interface TranscriptionGateway
 {
     /**
      * Generate text from the given audio.
+     *
+     * @param  array<string, mixed>  $providerOptions
      */
     public function generateTranscription(
         TranscriptionProvider $provider,
@@ -18,6 +20,6 @@ interface TranscriptionGateway
         ?string $language = null,
         bool $diarize = false,
         int $timeout = 30,
-        ?string $context = null
+        array $providerOptions = [],
     ): TranscriptionResponse;
 }

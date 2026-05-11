@@ -14,11 +14,11 @@ beforeEach(function () {
     ]]);
 });
 
-test('transcription sends prompt when context is provided', function () {
+test('transcription sends prompt from provider options', function () {
     Http::fake(['*' => fakeOpenAiTranscriptionResponse()]);
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
-        ->context('Laravel Forge and Vapor')
+        ->providerOptions(['prompt' => 'Laravel Forge and Vapor'])
         ->generate(provider: 'openai', model: 'gpt-4o-transcribe');
 
     Http::assertSent(function (Request $request) {
@@ -28,14 +28,14 @@ test('transcription sends prompt when context is provided', function () {
     });
 });
 
-test('transcription context is not sent for diarized transcriptions', function () {
+test('transcription throws when prompt provider option is used with diarized models', function () {
     Http::fake(['*' => fakeOpenAiTranscriptionResponse()]);
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
-        ->context('Laravel Forge and Vapor')
+        ->providerOptions(['prompt' => 'Laravel Forge and Vapor'])
         ->diarize()
         ->generate(provider: 'openai', model: 'gpt-4o-transcribe-diarize');
-})->throws(LogicException::class, 'OpenAI does not support transcription context for diarized transcriptions.');
+})->throws(LogicException::class, 'OpenAI does not support the `prompt` option for diarized transcriptions.');
 
 test('transcription request posts to correct endpoint', function () {
     Http::fake(['*' => fakeOpenAiTranscriptionResponse()]);

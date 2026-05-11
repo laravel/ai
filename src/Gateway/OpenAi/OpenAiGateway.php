@@ -262,6 +262,8 @@ class OpenAiGateway implements Gateway
 
     /**
      * Generate text from the given audio.
+     *
+     * @param  array<string, mixed>  $providerOptions
      */
     public function generateTranscription(
         TranscriptionProvider $provider,
@@ -270,10 +272,10 @@ class OpenAiGateway implements Gateway
         ?string $language = null,
         bool $diarize = false,
         int $timeout = 30,
-        ?string $context = null,
+        array $providerOptions = [],
     ): TranscriptionResponse {
-        if ($diarize && filled($context)) {
-            throw new LogicException('OpenAI does not support transcription context for diarized transcriptions.');
+        if ($diarize && filled($providerOptions['prompt'] ?? null)) {
+            throw new LogicException('OpenAI does not support the `prompt` option for diarized transcriptions.');
         }
 
         if ($provider->driver() === 'openai' && ! $diarize) {
@@ -284,12 +286,11 @@ class OpenAiGateway implements Gateway
             $provider->name(),
             fn () => $this->client($provider, $timeout)
                 ->attach('file', $audio->content(), $this->audioFilename($audio), ['Content-Type' => $audio->mimeType()])
-                ->post('audio/transcriptions', array_filter([
+                ->post('audio/transcriptions', array_merge($providerOptions, array_filter([
                     'model' => $model,
                     'language' => $language,
-                    'prompt' => $context,
                     'response_format' => $diarize ? 'diarized_json' : 'json',
-                ])),
+                ]))),
         );
 
         $data = $response->json();

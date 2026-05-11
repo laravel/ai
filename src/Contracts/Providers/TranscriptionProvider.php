@@ -10,6 +10,8 @@ interface TranscriptionProvider
 {
     /**
      * Generate audio from the given text.
+     *
+     * @param  array<string, mixed>  $providerOptions
      */
     public function transcribe(
         TranscribableAudio $audio,
@@ -17,7 +19,7 @@ interface TranscriptionProvider
         bool $diarize = false,
         ?string $model = null,
         ?int $timeout = null,
-        ?string $context = null,
+        array $providerOptions = [],
     ): TranscriptionResponse;
 
     /**
