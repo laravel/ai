@@ -1,9 +1,6 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
-use Laravel\Ai\Messages\AssistantMessage;
-use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
 use Laravel\Ai\Streaming\Events\ReasoningStart;
@@ -15,8 +12,8 @@ use Laravel\Ai\Streaming\Events\TextStart;
 use Tests\Feature\Providers\DeepSeek\DeepSeekHelpers;
 use Tests\Fixtures\Agents\HistoricalReasoningWithoutToolCallsAgent;
 use Tests\Fixtures\Agents\HistoricalToolCallWithEmptyReasoningAgent;
-use Tests\Fixtures\Agents\HistoricalToolCallWithReasoningAgent;
 use Tests\Fixtures\Agents\HistoricalToolCallWithoutReasoningAgent;
+use Tests\Fixtures\Agents\HistoricalToolCallWithReasoningAgent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
@@ -158,13 +155,8 @@ test('strips reasoning from deepseek-reasoner historical messages without tool c
         ->and($assistantMsg)->not->toHaveKey('tool_calls');
 });
 
-test('strips tool calls when historical reasoning content is empty string', function () {
+test('defaults reasoning content to empty string when historical reasoning is empty', function () {
     Http::fake(['api.deepseek.com/*' => fakeDeepSeekResponse('Here you go.')]);
-
-    Log::shouldReceive('warning')
-        ->once()
-        ->withArgs(fn (string $message, array $context) => str_contains($message, 'missing reasoning_content')
-            && $context['tool_call_ids'] === ['call_empty']);
 
     (new HistoricalToolCallWithEmptyReasoningAgent)->prompt('tell me more', provider: 'deepseek');
 
@@ -172,19 +164,15 @@ test('strips tool calls when historical reasoning content is empty string', func
     $assistantMsg = $this->findMessage($messages, role: 'assistant');
 
     expect($assistantMsg['content'])->toBe('Found the products.')
-        ->and($assistantMsg)->not->toHaveKey('reasoning_content')
-        ->and($assistantMsg)->not->toHaveKey('tool_calls');
+        ->and($assistantMsg['reasoning_content'])->toBe('')
+        ->and($assistantMsg['tool_calls'])->toHaveCount(1)
+        ->and($assistantMsg['tool_calls'][0]['function']['name'])->toBe('SearchProducts');
 
-    expect($this->filterMessages($messages, 'tool'))->toHaveCount(0);
+    expect($this->filterMessages($messages, 'tool'))->toHaveCount(1);
 });
 
-test('strips tool calls when historical reasoning content is missing', function () {
+test('defaults reasoning content to empty string when historical reasoning is missing', function () {
     Http::fake(['api.deepseek.com/*' => fakeDeepSeekResponse('Sure, here is the info.')]);
-
-    Log::shouldReceive('warning')
-        ->once()
-        ->withArgs(fn (string $message, array $context) => str_contains($message, 'missing reasoning_content')
-            && $context['tool_call_ids'] === ['call_1']);
 
     (new HistoricalToolCallWithoutReasoningAgent)->prompt('tell me more', provider: 'deepseek');
 
@@ -192,11 +180,11 @@ test('strips tool calls when historical reasoning content is missing', function 
     $assistantMsg = $this->findMessage($messages, role: 'assistant');
 
     expect($assistantMsg['content'])->toBe('Found the products.')
-        ->and($assistantMsg)->not->toHaveKey('tool_calls')
-        ->and($assistantMsg)->not->toHaveKey('reasoning_content');
+        ->and($assistantMsg['reasoning_content'])->toBe('')
+        ->and($assistantMsg['tool_calls'])->toHaveCount(1)
+        ->and($assistantMsg['tool_calls'][0]['function']['name'])->toBe('SearchProducts');
 
-    expect($this->filterMessages($messages, 'tool'))->toHaveCount(0);
-    expect($this->filterMessages($messages, 'user'))->toHaveCount(3);
+    expect($this->filterMessages($messages, 'tool'))->toHaveCount(1);
 });
 
 test('preserves tool calls when historical reasoning content is present', function () {

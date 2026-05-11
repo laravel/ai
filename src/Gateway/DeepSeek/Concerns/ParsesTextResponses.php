@@ -242,34 +242,11 @@ trait ParsesTextResponses
         );
 
         foreach ($messages as $msg) {
-            if ($msg instanceof AssistantMessage) {
-                $mapped = ['role' => 'assistant'];
-                $hasToolCalls = $msg->toolCalls->isNotEmpty();
-
-                if (filled($msg->content)) {
-                    $mapped['content'] = $msg->content;
-                }
-
-                if ($hasToolCalls && isset($msg->providerContentBlocks['reasoning_content'])) {
-                    $mapped['reasoning_content'] = $msg->providerContentBlocks['reasoning_content'];
-                }
-
-                if ($hasToolCalls) {
-                    $mapped['tool_calls'] = $msg->toolCalls->map(
-                        fn (ToolCall $toolCall) => $this->serializeToolCallToChat($toolCall)
-                    )->all();
-                }
-
-                $chatMessages[] = $mapped;
-            } elseif ($msg instanceof ToolResultMessage) {
-                foreach ($msg->toolResults as $toolResult) {
-                    $chatMessages[] = [
-                        'role' => 'tool',
-                        'tool_call_id' => $toolResult->resultId ?? $toolResult->id,
-                        'content' => $this->serializeToolResultOutput($toolResult->result),
-                    ];
-                }
-            }
+            match (true) {
+                $msg instanceof AssistantMessage => $this->mapAssistantMessage($msg, $chatMessages),
+                $msg instanceof ToolResultMessage => $this->mapToolResultMessage($msg, $chatMessages),
+                default => null,
+            };
         }
 
         $body = [
