@@ -388,7 +388,10 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                         'modelId' => $model,
                         'contentType' => 'application/json',
                         'accept' => 'application/json',
-                        'body' => json_encode(['inputText' => $input, 'dimensions' => $dimensions]),
+                        'body' => json_encode(array_merge($providerOptions, [
+                            'inputText' => $input,
+                            'dimensions' => $dimensions,
+                        ])),
                     ]),
                 );
 
@@ -430,10 +433,11 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                     'modelId' => $model,
                     'contentType' => 'application/json',
                     'accept' => 'application/json',
-                    'body' => json_encode(array_merge([
-                        'texts' => array_values($inputs),
-                        'input_type' => 'search_document',
-                    ], $providerOptions)),
+                    'body' => json_encode(array_merge(
+                        ['input_type' => 'search_document'],
+                        $providerOptions,
+                        ['texts' => array_values($inputs)],
+                    )),
                 ]),
             );
 

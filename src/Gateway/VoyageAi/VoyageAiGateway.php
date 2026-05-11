@@ -22,6 +22,7 @@ class VoyageAiGateway implements EmbeddingGateway, RerankingGateway
      * Generate embedding vectors representing the given inputs.
      *
      * @param  string[]  $inputs
+     * @param  array<string, mixed>  $providerOptions
      */
     public function generateEmbeddings(
         EmbeddingProvider $provider,
@@ -33,11 +34,11 @@ class VoyageAiGateway implements EmbeddingGateway, RerankingGateway
     ): EmbeddingsResponse {
         $data = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('/embeddings', array_merge([
+            fn () => $this->client($provider, $timeout)->post('/embeddings', array_merge($providerOptions, [
                 'model' => $model,
                 'input' => $inputs,
                 'output_dimension' => $dimensions,
-            ], $providerOptions)),
+            ])),
         )->json();
 
         return new EmbeddingsResponse(

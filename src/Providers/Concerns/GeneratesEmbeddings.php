@@ -16,6 +16,7 @@ trait GeneratesEmbeddings
      * Get embedding vectors representing the given inputs.
      *
      * @param  string[]  $inputs
+     * @param  array<string, mixed>  $providerOptions
      */
     public function embeddings(array $inputs, ?int $dimensions = null, ?string $model = null, int $timeout = 30, array $providerOptions = []): EmbeddingsResponse
     {
@@ -28,7 +29,7 @@ trait GeneratesEmbeddings
         $model ??= $this->defaultEmbeddingsModel();
         $dimensions ??= $this->defaultEmbeddingsDimensions();
 
-        $prompt = new EmbeddingsPrompt($inputs, $dimensions, $this, $model, $timeout);
+        $prompt = new EmbeddingsPrompt($inputs, $dimensions, $this, $model, $timeout, $providerOptions);
 
         if (Ai::embeddingsAreFaked()) {
             Ai::recordEmbeddingsGeneration($prompt);

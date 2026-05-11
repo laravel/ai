@@ -339,11 +339,11 @@ class OpenAiGateway implements Gateway
     ): EmbeddingsResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('embeddings', array_merge([
+            fn () => $this->client($provider, $timeout)->post('embeddings', array_merge($providerOptions, [
                 'model' => $model,
                 'input' => $inputs,
                 'dimensions' => $dimensions,
-            ], $providerOptions)),
+            ])),
         );
 
         $data = $response->json();

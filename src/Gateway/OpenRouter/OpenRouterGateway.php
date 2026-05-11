@@ -377,11 +377,11 @@ class OpenRouterGateway implements Gateway
         int $timeout = 30,
         array $providerOptions = [],
     ): EmbeddingsResponse {
-        $body = array_merge([
+        $body = array_merge($providerOptions, [
             'model' => $model,
             'input' => $inputs,
             'dimensions' => $dimensions,
-        ], $providerOptions);
+        ]);
 
         $response = $this->withErrorHandling(
             $provider->name(),

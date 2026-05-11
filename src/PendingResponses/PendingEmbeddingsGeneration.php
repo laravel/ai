@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\PendingResponses;
 
+use Closure;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Traits\Conditionable;
@@ -27,7 +28,8 @@ class PendingEmbeddingsGeneration
 
     protected int $timeout = 30;
 
-    protected array $providerOptions = [];
+    /** @var array<string, mixed>|Closure(Provider): array<string, mixed> */
+    protected array|Closure $providerOptions = [];
 
     public function __construct(
         protected array $inputs,
@@ -65,12 +67,32 @@ class PendingEmbeddingsGeneration
 
     /**
      * Specify provider-specific options for embeddings generation.
+     *
+     * Pass a flat array to apply the same options to every selected provider,
+     * or a closure that receives the resolved Provider and returns the options
+     * for that provider (useful when failover targets need different options).
+     *
+     * @param  array<string, mixed>|Closure(Provider): array<string, mixed>  $options
      */
-    public function providerOptions(array $options): self
+    public function providerOptions(array|Closure $options): self
     {
         $this->providerOptions = $options;
 
         return $this;
+    }
+
+    /**
+     * Resolve provider options for the given provider.
+     *
+     * @return array<string, mixed>
+     */
+    protected function resolveProviderOptions(Provider $provider): array
+    {
+        if ($this->providerOptions instanceof Closure) {
+            return ($this->providerOptions)($provider) ?: [];
+        }
+
+        return $this->providerOptions;
     }
 
     /**
@@ -91,14 +113,16 @@ class PendingEmbeddingsGeneration
 
             $dimensions = $this->dimensions ?: $provider->defaultEmbeddingsDimensions();
 
-            if ($cached = $this->generateFromCache($provider, $model, $dimensions)) {
+            $providerOptions = $this->resolveProviderOptions($provider);
+
+            if ($cached = $this->generateFromCache($provider, $model, $dimensions, $providerOptions)) {
                 return $cached;
             }
 
             try {
                 return tap(
-                    $provider->embeddings($this->inputs, $dimensions, $model, $this->timeout, $this->providerOptions),
-                    fn ($response) => $this->cacheEmbeddings($provider, $model, $dimensions, $response)
+                    $provider->embeddings($this->inputs, $dimensions, $model, $this->timeout, $providerOptions),
+                    fn ($response) => $this->cacheEmbeddings($provider, $model, $dimensions, $providerOptions, $response)
                 );
             } catch (FailoverableException $e) {
                 $lastException = $e;
@@ -114,14 +138,16 @@ class PendingEmbeddingsGeneration
 
     /**
      * Generate the embeddings from a cached response if possible.
+     *
+     * @param  array<string, mixed>  $providerOptions
      */
-    protected function generateFromCache(Provider $provider, string $model, int $dimensions): ?EmbeddingsResponse
+    protected function generateFromCache(Provider $provider, string $model, int $dimensions, array $providerOptions): ?EmbeddingsResponse
     {
         if (! $this->shouldCache()) {
             return null;
         }
 
-        $response = $this->cacheStore()->get($this->cacheKey($provider, $model, $dimensions));
+        $response = $this->cacheStore()->get($this->cacheKey($provider, $model, $dimensions, $providerOptions));
 
         if (! is_null($response)) {
             $response = json_decode($response, true);
@@ -137,15 +163,17 @@ class PendingEmbeddingsGeneration
 
     /**
      * Cache the given embeddings response.
+     *
+     * @param  array<string, mixed>  $providerOptions
      */
-    protected function cacheEmbeddings(Provider $provider, string $model, int $dimensions, EmbeddingsResponse $response): void
+    protected function cacheEmbeddings(Provider $provider, string $model, int $dimensions, array $providerOptions, EmbeddingsResponse $response): void
     {
         if (! $this->shouldCache()) {
             return;
         }
 
         $this->cacheStore()->put(
-            $this->cacheKey($provider, $model, $dimensions),
+            $this->cacheKey($provider, $model, $dimensions, $providerOptions),
             json_encode($response),
             now()->addSeconds($this->cacheSeconds ?? config('ai.caching.embeddings.seconds', 60 * 60 * 24 * 30))
         );
@@ -153,10 +181,51 @@ class PendingEmbeddingsGeneration
 
     /**
      * Get the cache key for the given embeddings request.
+     *
+     * @param  array<string, mixed>  $providerOptions
      */
-    protected function cacheKey(Provider $provider, string $model, int $dimensions): string
+    protected function cacheKey(Provider $provider, string $model, int $dimensions, array $providerOptions): string
     {
-        return 'laravel-embeddings:'.hash('sha256', $provider->driver().'-'.$model.'-'.$dimensions.'-'.implode('-', $this->inputs));
+        $optionsFingerprint = $this->fingerprintProviderOptions($providerOptions);
+
+        return 'laravel-embeddings:'.hash(
+            'sha256',
+            $provider->driver().'-'.$model.'-'.$dimensions.'-'.$optionsFingerprint.'-'.implode('-', $this->inputs),
+        );
+    }
+
+    /**
+     * Produce a deterministic fingerprint for the given provider options.
+     *
+     * @param  array<string, mixed>  $providerOptions
+     */
+    protected function fingerprintProviderOptions(array $providerOptions): string
+    {
+        if ($providerOptions === []) {
+            return '';
+        }
+
+        $normalized = $this->normalizeForFingerprint($providerOptions);
+
+        return hash('sha256', json_encode($normalized));
+    }
+
+    /**
+     * Recursively sort array keys so fingerprinting is insensitive to key order.
+     */
+    protected function normalizeForFingerprint(mixed $value): mixed
+    {
+        if (! is_array($value)) {
+            return $value;
+        }
+
+        if (array_is_list($value)) {
+            return array_map(fn ($item) => $this->normalizeForFingerprint($item), $value);
+        }
+
+        ksort($value);
+
+        return array_map(fn ($item) => $this->normalizeForFingerprint($item), $value);
     }
 
     /**
@@ -172,6 +241,7 @@ class PendingEmbeddingsGeneration
                     $provider,
                     $model,
                     $this->timeout,
+                    is_array($this->providerOptions) ? $this->providerOptions : [],
                 )
             );
 

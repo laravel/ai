@@ -93,6 +93,38 @@ test('embeddings default to 1536 dimensions when none specified', function () {
     Http::assertSent(fn (Request $request) => json_decode($request->body(), true)['dimensions'] === 1536);
 });
 
+test('embeddings request includes provider options in the request body', function () {
+    Http::fake(['*' => fakeOpenAiEmbeddingResponse()]);
+
+    Embeddings::for(['Hello'])
+        ->providerOptions(['encoding_format' => 'base64', 'user' => 'tester'])
+        ->generate(provider: 'openai', model: 'text-embedding-3-small');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return $body['encoding_format'] === 'base64'
+            && $body['user'] === 'tester'
+            && $body['model'] === 'text-embedding-3-small';
+    });
+});
+
+test('provider options cannot override framework controlled keys', function () {
+    Http::fake(['*' => fakeOpenAiEmbeddingResponse()]);
+
+    Embeddings::for(['Hello'])
+        ->providerOptions(['model' => 'hijacked', 'input' => ['hijacked'], 'dimensions' => 1])
+        ->generate(provider: 'openai', model: 'text-embedding-3-small');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return $body['model'] === 'text-embedding-3-small'
+            && $body['input'] === ['Hello']
+            && $body['dimensions'] === 1536;
+    });
+});
+
 test('embeddings rate limit response throws rate limited exception', function () {
     Http::fake([
         'api.openai.com/*' => Http::response([

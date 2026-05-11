@@ -23,6 +23,7 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway
      * Generate embedding vectors representing the given inputs.
      *
      * @param  string[]  $inputs
+     * @param  array<string, mixed>  $providerOptions
      */
     public function generateEmbeddings(
         EmbeddingProvider $provider,
@@ -34,12 +35,17 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway
     ): EmbeddingsResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('/embed', array_merge([
-                'model' => $model,
-                'texts' => $inputs,
-                'input_type' => 'search_document',
-                'embedding_types' => ['float'],
-            ], $providerOptions)),
+            fn () => $this->client($provider, $timeout)->post('/embed', array_merge(
+                [
+                    'input_type' => 'search_document',
+                    'embedding_types' => ['float'],
+                ],
+                $providerOptions,
+                [
+                    'model' => $model,
+                    'texts' => $inputs,
+                ],
+            )),
         );
 
         $data = $response->json();
