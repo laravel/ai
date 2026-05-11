@@ -69,7 +69,11 @@ class PendingEmbeddingsGeneration
     /**
      * Specify provider-specific options for embeddings generation.
      *
-     * @param  array<string, mixed>|Closure(Provider): array<string, mixed>  $options
+     * Pass a flat array to apply the same options to every selected provider,
+     * or a closure that receives the resolved Provider and returns the options
+     * for that provider. Queued closures may only capture serializable values.
+     *
+     * @param  array<string, mixed>|Closure(Provider): ?array<string, mixed>  $options
      */
     public function providerOptions(array|Closure $options): self
     {
