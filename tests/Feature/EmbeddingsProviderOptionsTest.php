@@ -3,6 +3,7 @@
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
+use Laravel\Ai\Prompts\QueuedEmbeddingsPrompt;
 use Laravel\Ai\Providers\Provider;
 
 beforeEach(function () {
@@ -112,6 +113,18 @@ test('closure resolver receives the resolved provider and applies per-provider o
 
         return ($body['input_type'] ?? null) === 'search_query';
     });
+});
+
+test('closure provider options are not recorded on the queued prompt fake', function () {
+    Embeddings::fake();
+
+    Embeddings::for(['Hello'])
+        ->providerOptions(fn (Provider $provider) => ['input_type' => 'search_query'])
+        ->queue(provider: 'cohere', model: 'embed-v4.0');
+
+    Embeddings::assertQueued(
+        fn (QueuedEmbeddingsPrompt $prompt) => $prompt->providerOptions === [],
+    );
 });
 
 test('closure resolver returning null is treated as no options', function () {

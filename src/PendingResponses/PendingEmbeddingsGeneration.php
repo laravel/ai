@@ -71,6 +71,7 @@ class PendingEmbeddingsGeneration
      * Pass a flat array to apply the same options to every selected provider,
      * or a closure that receives the resolved Provider and returns the options
      * for that provider (useful when failover targets need different options).
+     * If you intend to call queue(), the closure must be queue-serializable.
      *
      * @param  array<string, mixed>|Closure(Provider): array<string, mixed>  $options
      */
@@ -195,8 +196,6 @@ class PendingEmbeddingsGeneration
     }
 
     /**
-     * Produce a deterministic fingerprint for the given provider options.
-     *
      * @param  array<string, mixed>  $providerOptions
      */
     protected function fingerprintProviderOptions(array $providerOptions): string
@@ -207,11 +206,11 @@ class PendingEmbeddingsGeneration
 
         $normalized = $this->normalizeForFingerprint($providerOptions);
 
-        return hash('sha256', json_encode($normalized));
+        return hash('sha256', json_encode($normalized, JSON_THROW_ON_ERROR));
     }
 
     /**
-     * Recursively sort array keys so fingerprinting is insensitive to key order.
+     * Recursively sort associative keys so the fingerprint is insensitive to key order.
      */
     protected function normalizeForFingerprint(mixed $value): mixed
     {
