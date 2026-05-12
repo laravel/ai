@@ -15,6 +15,7 @@ use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Storage\DatabaseConversationStore;
+use Tests\Fixtures\Agents\AliasedAgent;
 use Tests\Fixtures\Agents\RememberingToolUsingAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
@@ -149,6 +150,50 @@ test('it stores the agent fully qualified class name on assistant messages', fun
 
     expect($record->agent)->toBe(ToolUsingAgent::class)
         ->and($record->agent)->toBe('Tests\\Fixtures\\Agents\\ToolUsingAgent');
+});
+
+test('it uses the Alias attribute value on user messages', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Hello');
+
+    $prompt = new AgentPrompt(
+        new AliasedAgent,
+        'Hi.',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $store->storeUserMessage($conversationId, 1, $prompt);
+
+    $record = DB::table('agent_conversation_messages')
+        ->where('role', 'user')
+        ->first();
+
+    expect($record->agent)->toBe('aliased-agent');
+});
+
+test('it uses the Alias attribute value on assistant messages', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Hello');
+
+    $prompt = new AgentPrompt(
+        new AliasedAgent,
+        'Hi.',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $response = new AgentResponse('invocation-id', 'Hello back.', new Usage, new Meta);
+
+    $store->storeAssistantMessage($conversationId, 1, $prompt, $response);
+
+    $record = DB::table('agent_conversation_messages')
+        ->where('role', 'assistant')
+        ->first();
+
+    expect($record->agent)->toBe('aliased-agent');
 });
 
 test('it stores sparse keyed tool calls and results as JSON arrays', function () {
