@@ -7,7 +7,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Messages\AssistantMessage;
-use Laravel\Ai\Messages\Conversation;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
@@ -26,27 +25,6 @@ class DatabaseConversationStore implements ConversationStore
             ->where('user_id', $userId)
             ->orderBy('updated_at', 'desc')
             ->first()?->id;
-    }
-
-    /**
-     * Get the list of conversations for the given user.
-     *
-     * @return Collection<int, Conversation>
-     */
-    public function getConversations(string|int $userId, int $limit): Collection
-    {
-        return DB::table('agent_conversations')
-            ->where('user_id', $userId)
-            ->orderByDesc('updated_at')
-            ->limit($limit)
-            ->get()
-            ->map(fn ($conversation) => new Conversation(
-                id: $conversation->id,
-                title: $conversation->title,
-                userId: $conversation->user_id,
-                createdAt: $conversation->created_at,
-                updatedAt: $conversation->updated_at,
-            ));
     }
 
     /**
@@ -74,6 +52,8 @@ class DatabaseConversationStore implements ConversationStore
     {
         $messageId = (string) Str::uuid7();
 
+        $now = now();
+
         DB::table('agent_conversation_messages')->insert([
             'id' => $messageId,
             'conversation_id' => $conversationId,
@@ -86,9 +66,11 @@ class DatabaseConversationStore implements ConversationStore
             'tool_results' => '[]',
             'usage' => '[]',
             'meta' => '[]',
-            'created_at' => now(),
-            'updated_at' => now(),
+            'created_at' => $now,
+            'updated_at' => $now,
         ]);
+
+        $this->touchConversation($conversationId, $now);
 
         return $messageId;
     }
@@ -99,6 +81,8 @@ class DatabaseConversationStore implements ConversationStore
     public function storeAssistantMessage(string $conversationId, string|int|null $userId, AgentPrompt $prompt, AgentResponse $response): string
     {
         $messageId = (string) Str::uuid7();
+
+        $now = now();
 
         DB::table('agent_conversation_messages')->insert([
             'id' => $messageId,
@@ -112,11 +96,23 @@ class DatabaseConversationStore implements ConversationStore
             'tool_results' => json_encode($response->toolResults),
             'usage' => json_encode($response->usage),
             'meta' => json_encode($response->meta),
-            'created_at' => now(),
-            'updated_at' => now(),
+            'created_at' => $now,
+            'updated_at' => $now,
         ]);
 
+        $this->touchConversation($conversationId, $now);
+
         return $messageId;
+    }
+
+    /**
+     * Update the conversation's activity timestamp.
+     */
+    protected function touchConversation(string $conversationId, mixed $timestamp): void
+    {
+        DB::table('agent_conversations')
+            ->where('id', $conversationId)
+            ->update(['updated_at' => $timestamp]);
     }
 
     /**

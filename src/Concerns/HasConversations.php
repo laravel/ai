@@ -2,17 +2,16 @@
 
 namespace Laravel\Ai\Concerns;
 
-use Illuminate\Support\Collection;
-use Laravel\Ai\Contracts\ConversationStore;
-use Laravel\Ai\Messages\Conversation;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Laravel\Ai\Models\Conversation;
 
 trait HasConversations
 {
     /**
-     * @return Collection<int, Conversation>
+     * Get the conversations for the model.
      */
-    public function conversations(int $limit = 25): Collection
+    public function conversations(): HasMany
     {
-        return resolve(ConversationStore::class)->getConversations($this->id, $limit);
+        return $this->hasMany(Conversation::class, 'user_id');
     }
 }
