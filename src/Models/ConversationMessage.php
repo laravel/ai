@@ -8,13 +8,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class ConversationMessage extends Model
 {
     /**
-     * The table associated with the model.
-     *
-     * @var string
-     */
-    protected $table = 'agent_conversation_messages';
-
-    /**
      * Indicates if the model's ID is auto-incrementing.
      *
      * @var bool
@@ -47,6 +40,14 @@ class ConversationMessage extends Model
         'usage' => 'array',
         'meta' => 'array',
     ];
+
+    /**
+     * Get the table associated with the model.
+     */
+    public function getTable(): string
+    {
+        return config('ai.conversations.tables.messages', 'agent_conversation_messages');
+    }
 
     /**
      * Get the conversation that owns the message.

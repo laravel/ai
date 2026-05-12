@@ -8,13 +8,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Conversation extends Model
 {
     /**
-     * The table associated with the model.
-     *
-     * @var string
-     */
-    protected $table = 'agent_conversations';
-
-    /**
      * Indicates if the model's ID is auto-incrementing.
      *
      * @var bool
@@ -34,6 +27,14 @@ class Conversation extends Model
      * @var array<int, string>
      */
     protected $guarded = [];
+
+    /**
+     * Get the table associated with the model.
+     */
+    public function getTable(): string
+    {
+        return config('ai.conversations.tables.conversations', 'agent_conversations');
+    }
 
     /**
      * Get the messages for the conversation.
