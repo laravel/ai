@@ -124,6 +124,12 @@ return [
             'url' => env('OPENAI_URL', 'https://api.openai.com/v1'),
         ],
 
+        'opencode' => [
+            'driver' => 'opencode',
+            'key' => env('OPENCODE_API_KEY'),
+            'url' => env('OPENCODE_URL', 'https://api.opencode.ai/v1'),
+        ],
+
         'openrouter' => [
             'driver' => 'openrouter',
             'key' => env('OPENROUTER_API_KEY'),
