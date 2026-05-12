@@ -14,19 +14,13 @@ class Reranking
      * Create a new pending reranking for the given documents.
      *
      * @param  Collection<int, string>|array<int, string>  $documents
+     *
+     * @throws InvalidArgumentException if the given documents are not a list or are empty.
      */
     public static function of(Collection|array $documents): PendingReranking
     {
         if ($documents instanceof Collection) {
             $documents = $documents->values()->all();
-        }
-
-        if (! array_is_list($documents)) {
-            throw new InvalidArgumentException('Documents to rerank must be a list, not an associative array.');
-        }
-
-        if ($documents === []) {
-            throw new InvalidArgumentException('At least one document is required to rerank.');
         }
 
         return new PendingReranking($documents);

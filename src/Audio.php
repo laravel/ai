@@ -11,13 +11,11 @@ class Audio
 {
     /**
      * Generate audio from the given text.
+     *
+     * @throws InvalidArgumentException if the given text is empty or whitespace-only.
      */
     public static function of(string $text): PendingAudioGeneration
     {
-        if (trim($text) === '') {
-            throw new InvalidArgumentException('Text content is required to generate audio.');
-        }
-
         return new PendingAudioGeneration($text);
     }
 

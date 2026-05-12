@@ -10,6 +10,18 @@ use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\TranscriptionResponse;
 use Laravel\Ai\Transcription;
 
+test('transcription rejects empty audio string', function () {
+    Transcription::fake();
+
+    Transcription::of('')->generate();
+})->throws(InvalidArgumentException::class, 'Audio content is required to generate a transcription.');
+
+test('transcription rejects empty base64 audio', function () {
+    Transcription::fake();
+
+    Transcription::fromBase64('')->generate();
+})->throws(InvalidArgumentException::class, 'Audio content is required to generate a transcription.');
+
 test('transcriptions can be faked', function () {
     Transcription::fake([
         'First transcription',

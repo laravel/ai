@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Traits\Conditionable;
+use InvalidArgumentException;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
@@ -32,9 +33,21 @@ class PendingEmbeddingsGeneration
     /** @var array<string, mixed>|SerializableClosure */
     protected array|SerializableClosure $providerOptions = [];
 
-    public function __construct(
-        protected array $inputs,
-    ) {}
+    /**
+     * Create a new pending embeddings generation instance.
+     *
+     * @param  string[]  $inputs
+     */
+    public function __construct(protected array $inputs)
+    {
+        if (! array_is_list($inputs)) {
+            throw new InvalidArgumentException('Inputs to embed must be a list, not an associative array.');
+        }
+
+        if (blank($inputs)) {
+            throw new InvalidArgumentException('At least one input is required to generate embeddings.');
+        }
+    }
 
     /**
      * Specify the dimensions for the embeddings.

@@ -5,6 +5,18 @@ use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Prompts\EmbeddingsPrompt;
 use Laravel\Ai\Prompts\QueuedEmbeddingsPrompt;
 
+test('embeddings reject empty input list', function () {
+    Embeddings::fake();
+
+    Embeddings::for([])->generate();
+})->throws(InvalidArgumentException::class, 'At least one input is required to generate embeddings.');
+
+test('embeddings reject associative input array', function () {
+    Embeddings::fake();
+
+    Embeddings::for(['first' => 'Hello world'])->generate();
+})->throws(InvalidArgumentException::class, 'Inputs to embed must be a list, not an associative array.');
+
 describe('generating embeddings', function () {
     test('can fake embeddings', function () {
         Embeddings::fake();

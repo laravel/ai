@@ -4,6 +4,7 @@ namespace Laravel\Ai\Files;
 
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Http\UploadedFile;
+use InvalidArgumentException;
 use JsonSerializable;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
@@ -17,6 +18,10 @@ class Base64Audio extends Audio implements Arrayable, JsonSerializable, Storable
 
     public function __construct(public string $base64, ?string $mimeType = null)
     {
+        if (blank($base64)) {
+            throw new InvalidArgumentException('Audio content is required to generate a transcription.');
+        }
+
         $this->mime = $mimeType;
     }
 
