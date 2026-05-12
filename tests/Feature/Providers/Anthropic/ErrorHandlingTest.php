@@ -3,6 +3,7 @@
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Tests\Fixtures\Agents\AssistantAgent;
 
@@ -56,3 +57,20 @@ test('error in 200 response throws ai exception', function () {
         provider: 'anthropic',
     );
 })->throws(AiException::class, 'api_error');
+
+test('529 overloaded response throws provider overloaded exception', function () {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response([
+            'type' => 'error',
+            'error' => [
+                'type' => 'overloaded_error',
+                'message' => 'Overloaded',
+            ],
+        ], 529),
+    ]);
+
+    (new AssistantAgent)->prompt(
+        'Hi',
+        provider: 'anthropic',
+    );
+})->throws(ProviderOverloadedException::class);
