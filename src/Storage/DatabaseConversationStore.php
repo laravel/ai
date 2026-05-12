@@ -172,9 +172,7 @@ class DatabaseConversationStore implements ConversationStore
     {
         $attributes = (new ReflectionClass($agent))->getAttributes(Alias::class);
 
-        return ! empty($attributes)
-            ? $attributes[0]->newInstance()->value
-            : $agent::class;
+        return ! empty($attributes) ? $attributes[0]->newInstance()->value : $agent::class;
     }
 
     /**
