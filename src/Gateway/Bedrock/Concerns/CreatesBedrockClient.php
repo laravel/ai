@@ -3,6 +3,9 @@
 namespace Laravel\Ai\Gateway\Bedrock\Concerns;
 
 use Aws\BedrockRuntime\BedrockRuntimeClient;
+use Aws\Credentials\AssumeRoleCredentialProvider;
+use Aws\Credentials\CredentialProvider;
+use Aws\Sts\StsClient;
 use Laravel\Ai\Providers\Provider;
 
 trait CreatesBedrockClient
@@ -56,10 +59,45 @@ trait CreatesBedrockClient
             return ['credentials' => $awsCredentials];
         }
 
+        if (! empty($config['assume_role_arn'])) {
+            return ['credentials' => $this->assumeRoleCredentialProvider($config)];
+        }
+
         if (! ($config['use_default_credential_provider'] ?? true)) {
             return ['credentials' => false];
         }
 
         return [];
+    }
+
+    /**
+     * Create a memoized assume-role credential provider.
+     *
+     * @param  array<string, mixed>  $config
+     */
+    protected function assumeRoleCredentialProvider(array $config): callable
+    {
+        $region = $config['region'] ?? 'us-east-1';
+
+        $stsClient = new StsClient([
+            'region' => $region,
+            'version' => 'latest',
+        ]);
+
+        $assumeRoleParams = [
+            'RoleArn' => $config['assume_role_arn'],
+            'RoleSessionName' => $config['assume_role_session_name']
+                ?? 'laravel-ai-bedrock-'.bin2hex(random_bytes(4)),
+            'DurationSeconds' => (int) ($config['assume_role_duration_seconds'] ?? 3600),
+        ];
+
+        if (! empty($config['assume_role_external_id'])) {
+            $assumeRoleParams['ExternalId'] = $config['assume_role_external_id'];
+        }
+
+        return CredentialProvider::memoize(new AssumeRoleCredentialProvider([
+            'client' => $stsClient,
+            'assume_role_params' => $assumeRoleParams,
+        ]));
     }
 }

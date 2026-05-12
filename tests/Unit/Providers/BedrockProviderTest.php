@@ -241,3 +241,31 @@ test('reuses gateway instances', function () {
 
     expect($gateway1)->toBe($gateway2);
 });
+
+test('returns assume role configuration when provided', function () {
+    $config = [
+        'region' => 'us-west-2',
+        'assume_role_arn' => 'arn:aws:iam::123456789012:role/test-role',
+        'assume_role_session_name' => 'my-session',
+        'assume_role_duration_seconds' => 900,
+        'assume_role_external_id' => 'ext-123',
+    ];
+
+    $provider = new BedrockProvider($config, $this->dispatcher);
+    $additionalConfig = $provider->additionalConfiguration();
+
+    expect($additionalConfig['assume_role_arn'])->toBe('arn:aws:iam::123456789012:role/test-role')
+        ->and($additionalConfig['assume_role_session_name'])->toBe('my-session')
+        ->and($additionalConfig['assume_role_duration_seconds'])->toBe(900)
+        ->and($additionalConfig['assume_role_external_id'])->toBe('ext-123');
+});
+
+test('assume role configuration defaults to null when not set', function () {
+    $provider = new BedrockProvider([], $this->dispatcher);
+    $additionalConfig = $provider->additionalConfiguration();
+
+    expect($additionalConfig['assume_role_arn'])->toBeNull()
+        ->and($additionalConfig['assume_role_session_name'])->toBeNull()
+        ->and($additionalConfig['assume_role_duration_seconds'])->toBeNull()
+        ->and($additionalConfig['assume_role_external_id'])->toBeNull();
+});

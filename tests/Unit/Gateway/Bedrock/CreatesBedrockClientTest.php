@@ -98,3 +98,75 @@ test('partial iam credentials fall back to default provider', function () {
 
     expect($config)->toEqual([]);
 });
+
+test('assume role arn produces a callable credential provider', function () {
+    $config = bedrockClientTrait()->resolve(
+        [],
+        [
+            'assume_role_arn' => 'arn:aws:iam::123456789012:role/test-role',
+            'region' => 'us-west-2',
+        ],
+    );
+
+    expect($config)->toHaveKey('credentials')
+        ->and($config['credentials'])->toBeCallable();
+});
+
+test('assume role is not used when arn is empty', function () {
+    $config = bedrockClientTrait()->resolve(
+        [],
+        ['assume_role_arn' => null],
+    );
+
+    expect($config)->toEqual([]);
+});
+
+test('assume role is not used when arn is empty string', function () {
+    $config = bedrockClientTrait()->resolve(
+        [],
+        ['assume_role_arn' => ''],
+    );
+
+    expect($config)->toEqual([]);
+});
+
+test('static iam credentials take priority over assume role', function () {
+    $config = bedrockClientTrait()->resolve(
+        [
+            'access_key_id' => 'AKIA123',
+            'secret_access_key' => 'secret',
+        ],
+        ['assume_role_arn' => 'arn:aws:iam::123456789012:role/test-role'],
+    );
+
+    expect($config)->toEqual([
+        'credentials' => [
+            'key' => 'AKIA123',
+            'secret' => 'secret',
+        ],
+    ]);
+});
+
+test('bearer token takes priority over assume role', function () {
+    $config = bedrockClientTrait()->resolve(
+        ['key' => 'bedrock-token'],
+        ['assume_role_arn' => 'arn:aws:iam::123456789012:role/test-role'],
+    );
+
+    expect($config)->toHaveKey('token')
+        ->and($config)->not->toHaveKey('credentials');
+});
+
+test('assume role takes priority over disabled default provider', function () {
+    $config = bedrockClientTrait()->resolve(
+        [],
+        [
+            'use_default_credential_provider' => false,
+            'assume_role_arn' => 'arn:aws:iam::123456789012:role/test-role',
+            'region' => 'us-east-1',
+        ],
+    );
+
+    expect($config)->toHaveKey('credentials')
+        ->and($config['credentials'])->toBeCallable();
+});
