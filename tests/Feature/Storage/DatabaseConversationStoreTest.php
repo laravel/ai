@@ -105,6 +105,52 @@ test('it persists tool calls and results from a remembered agent prompt', functi
         ->and(json_decode($record->tool_results, true))->toBeList();
 });
 
+test('it stores the agent fully qualified class name on user messages', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Hello');
+
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        'Check my order status.',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $store->storeUserMessage($conversationId, 1, $prompt);
+
+    $record = DB::table('agent_conversation_messages')
+        ->where('role', 'user')
+        ->first();
+
+    expect($record->agent)->toBe(ToolUsingAgent::class)
+        ->and($record->agent)->toBe('Tests\\Fixtures\\Agents\\ToolUsingAgent');
+});
+
+test('it stores the agent fully qualified class name on assistant messages', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Hello');
+
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        'Check my order status.',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $response = new AgentResponse('invocation-id', 'The order has shipped.', new Usage, new Meta);
+
+    $store->storeAssistantMessage($conversationId, 1, $prompt, $response);
+
+    $record = DB::table('agent_conversation_messages')
+        ->where('role', 'assistant')
+        ->first();
+
+    expect($record->agent)->toBe(ToolUsingAgent::class)
+        ->and($record->agent)->toBe('Tests\\Fixtures\\Agents\\ToolUsingAgent');
+});
+
 test('it stores sparse keyed tool calls and results as JSON arrays', function () {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Tool conversation');
