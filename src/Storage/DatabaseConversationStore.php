@@ -6,6 +6,8 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Laravel\Ai\Attributes\Alias;
+use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
@@ -14,6 +16,7 @@ use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
+use ReflectionClass;
 
 class DatabaseConversationStore implements ConversationStore
 {
@@ -65,7 +68,7 @@ class DatabaseConversationStore implements ConversationStore
             'id' => $messageId,
             'conversation_id' => $conversationId,
             'user_id' => $userId,
-            'agent' => $prompt->agent::class,
+            'agent' => $this->aliasFor($prompt->agent),
             'role' => 'user',
             'content' => $prompt->prompt,
             'attachments' => $prompt->attachments->toJson(),
@@ -91,7 +94,7 @@ class DatabaseConversationStore implements ConversationStore
             'id' => $messageId,
             'conversation_id' => $conversationId,
             'user_id' => $userId,
-            'agent' => $prompt->agent::class,
+            'agent' => $this->aliasFor($prompt->agent),
             'role' => 'assistant',
             'content' => $response->text,
             'attachments' => '[]',
@@ -160,6 +163,18 @@ class DatabaseConversationStore implements ConversationStore
 
                 return [new AssistantMessage($record->content)];
             });
+    }
+
+    /**
+     * Resolve the alias used to persist the given agent.
+     */
+    protected function aliasFor(Agent $agent): string
+    {
+        $attributes = (new ReflectionClass($agent))->getAttributes(Alias::class);
+
+        return ! empty($attributes)
+            ? $attributes[0]->newInstance()->value
+            : $agent::class;
     }
 
     /**
