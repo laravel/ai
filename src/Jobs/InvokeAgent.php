@@ -6,6 +6,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Providers\Provider;
 
 class InvokeAgent implements ShouldQueue
 {
@@ -18,7 +19,7 @@ class InvokeAgent implements ShouldQueue
         public Agent $agent,
         public string $prompt,
         public array $attachments = [],
-        public Lab|array|string|null $provider = null,
+        public Lab|array|string|Provider|null $provider = null,
         public ?string $model = null) {}
 
     /**

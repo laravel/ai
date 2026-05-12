@@ -222,9 +222,13 @@ class AiManager extends MultipleInstanceManager
      *
      * @throws LogicException
      */
-    public function textProviderFor(Agent $agent, TextProvider|string|null $name = null): TextProvider
+    public function textProviderFor(Agent $agent, Provider|string|null $name = null): TextProvider
     {
-        $provider = $name instanceof TextProvider ? $name : $this->textProvider($name);
+        $provider = $name instanceof Provider ? $name : $this->textProvider($name);
+
+        if (! $provider instanceof TextProvider) {
+            throw new LogicException('Provider ['.$provider::class.'] does not support text generation.');
+        }
 
         return $this->hasFakeGatewayFor($agent)
             ? (clone $provider)->useTextGateway($this->fakeGatewayFor($agent))

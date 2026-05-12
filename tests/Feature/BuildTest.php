@@ -7,6 +7,7 @@ use Laravel\Ai\Gateway\OpenAi\OpenAiGateway;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Providers\AnthropicProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
+use Laravel\Ai\QueuedAgentPrompt;
 use Tests\Fixtures\Agents\AssistantAgent;
 
 describe('Ai::build()', function () {
@@ -143,5 +144,37 @@ describe('agents accept an on-demand provider via the provider argument', functi
         );
 
         expect($response)->not->toBeNull();
+    });
+
+    test('throws when an on-demand provider does not support text generation', function () {
+        (new AssistantAgent)->prompt('Hello',
+            provider: Ai::build(['driver' => 'eleven', 'key' => 'k']),
+        );
+    })->throws(LogicException::class, 'does not support text generation');
+
+    test('queue accepts an on-demand provider', function () {
+        AssistantAgent::fake();
+
+        (new AssistantAgent)->queue('Hello',
+            provider: Ai::build(['driver' => 'anthropic', 'key' => 'tenant-k']),
+        );
+
+        AssistantAgent::assertQueued(function (QueuedAgentPrompt $prompt) {
+            return $prompt->provider instanceof AnthropicProvider
+                && $prompt->provider->providerCredentials()['key'] === 'tenant-k';
+        });
+    });
+
+    test('broadcast on queue accepts an on-demand provider', function () {
+        AssistantAgent::fake();
+
+        (new AssistantAgent)->broadcastOnQueue('Hello', [],
+            provider: Ai::build(['driver' => 'openai', 'key' => 'tenant-k']),
+        );
+
+        AssistantAgent::assertQueued(function (QueuedAgentPrompt $prompt) {
+            return $prompt->provider instanceof OpenAiProvider
+                && $prompt->provider->providerCredentials()['key'] === 'tenant-k';
+        });
     });
 });

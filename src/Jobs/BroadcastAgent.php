@@ -8,6 +8,7 @@ use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Throwable;
@@ -30,7 +31,7 @@ class BroadcastAgent implements ShouldQueue
         public string $prompt,
         public Channel|array $channels,
         public array $attachments = [],
-        public Lab|array|string|null $provider = null,
+        public Lab|array|string|Provider|null $provider = null,
         public ?string $model = null,
     ) {
         $this->invocationId = (string) Str::uuid7();
