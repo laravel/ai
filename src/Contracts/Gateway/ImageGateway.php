@@ -3,7 +3,7 @@
 namespace Laravel\Ai\Contracts\Gateway;
 
 use Laravel\Ai\Contracts\Providers\ImageProvider;
-use Laravel\Ai\Files\Image as ImageFile;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Responses\ImageResponse;
 
 interface ImageGateway
@@ -11,9 +11,8 @@ interface ImageGateway
     /**
      * Generate an image.
      *
-     * @param  array<ImageFile>  $attachments
-     * @param  string  $size
-     * @param  'low'|'medium'|'high'  $quality
+     * @param  array<Image>  $attachments
+     * @param  'low'|'medium'|'high'|null  $quality
      */
     public function generateImage(
         ImageProvider $provider,

@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
+use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Exceptions\AiException;
@@ -243,7 +244,7 @@ trait ParsesTextResponses
         }
 
         if (filled($schema)) {
-            $body['text'] = $this->buildSchemaFormat($schema);
+            $body['text'] = $this->buildSchemaFormat($schema, Strict::isAppliedTo($options?->agent));
         }
 
         $body = array_merge($body, Arr::whereNotNull([
@@ -336,13 +337,15 @@ trait ParsesTextResponses
                         $citations->push(new UrlCitation(
                             $annotation['url'] ?? '',
                             $annotation['title'] ?? null,
+                            isset($annotation['start_index']) ? (int) $annotation['start_index'] : null,
+                            isset($annotation['end_index']) ? (int) $annotation['end_index'] : null,
                         ));
                     }
                 }
             }
         }
 
-        return $citations->unique('title')->values();
+        return $citations->values();
     }
 
     /**

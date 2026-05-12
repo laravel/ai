@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Responses\Concerns;
 
-use Illuminate\Http\Request;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\ToolCall;
@@ -14,7 +13,6 @@ trait CanStreamUsingVercelProtocol
     /**
      * Create an HTTP response that represents the object using the Vercel AI SDK protocol
      *
-     * @param  Request  $request
      * @return Response
      */
     protected function toVercelProtocolResponse()

@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Contracts\Providers;
 
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Responses\ImageResponse;
 
 interface ImageProvider
@@ -10,9 +11,8 @@ interface ImageProvider
     /**
      * Generate an image.
      *
-     * @param  array<ImageAttachment>  $attachments
-     * @param  string  $size
-     * @param  'low'|'medium'|'high'  $quality
+     * @param  array<Image>  $attachments
+     * @param  'low'|'medium'|'high'|null  $quality
      */
     public function image(
         string $prompt,
@@ -40,6 +40,8 @@ interface ImageProvider
 
     /**
      * Get the default / normalized image options for the provider.
+     *
+     * @param  'low'|'medium'|'high'|null  $quality
      */
-    public function defaultImageOptions(?string $size = null, $quality = null): array;
+    public function defaultImageOptions(?string $size = null, ?string $quality = null): array;
 }

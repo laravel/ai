@@ -1,7 +1,9 @@
 <?php
 
+use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
+use Laravel\Ai\Tools\Request;
 use Laravel\Ai\Tools\ToolNameResolver;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 use Tests\Fixtures\Tools\NamedTool;
@@ -18,12 +20,12 @@ class ProtectedNameTool implements Tool
         return 'A tool with an inaccessible name method.';
     }
 
-    public function handle(\Laravel\Ai\Tools\Request $request): string
+    public function handle(Request $request): string
     {
         return 'ok';
     }
 
-    public function schema(\Illuminate\Contracts\JsonSchema\JsonSchema $schema): array
+    public function schema(JsonSchema $schema): array
     {
         return [];
     }

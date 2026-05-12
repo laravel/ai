@@ -16,6 +16,7 @@ use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Files\File;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\StoredImage;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
@@ -123,9 +124,9 @@ class OpenAiGateway implements Gateway
     /**
      * Generate an image.
      *
-     * @param  array<ImageFile>  $attachments
-     * @param  '3:2'|'2:3'|'1:1'  $size
-     * @param  'low'|'medium'|'high'  $quality
+     * @param  array<Image>  $attachments
+     * @param  '3:2'|'2:3'|'1:1'|null  $size
+     * @param  'low'|'medium'|'high'|null  $quality
      */
     public function generateImage(
         ImageProvider $provider,
@@ -152,7 +153,7 @@ class OpenAiGateway implements Gateway
                 $image['b64_json'] ?? '',
                 'image/png',
             )),
-            new Usage(0, 0),
+            $this->extractUsage($data),
             new Meta($provider->name(), $model),
         );
     }
@@ -172,7 +173,9 @@ class OpenAiGateway implements Gateway
             'model' => $model,
             'prompt' => $prompt,
             ...$provider->defaultImageOptions($size, $quality),
-            ...(str_starts_with($model, 'gpt-image') ? ['moderation' => 'low'] : []),
+            ...(str_starts_with($model, 'gpt-image')
+                ? ['moderation' => 'low']
+                : ['response_format' => 'b64_json']),
         ]);
     }
 
@@ -190,6 +193,9 @@ class OpenAiGateway implements Gateway
     ) {
         $request = $this->client($provider, $timeout ?? 120);
 
+        $isGptImage = str_starts_with($model, 'gpt-image');
+        $field = $isGptImage ? 'image[]' : 'image';
+
         foreach ($attachments as $attachment) {
             if (! $attachment instanceof File && ! $attachment instanceof UploadedFile) {
                 throw new InvalidArgumentException(
@@ -204,14 +210,16 @@ class OpenAiGateway implements Gateway
                 default => throw new InvalidArgumentException('Unsupported image attachment type ['.get_class($attachment).']'),
             };
 
-            $request = $request->attach('image[]', $content, 'image.png');
+            $request = $request->attach($field, $content, 'image.png');
         }
 
         return $request->post('images/edits', array_filter([
             'model' => $model,
             'prompt' => $prompt,
             ...$provider->defaultImageOptions($size, $quality),
-            ...(str_starts_with($model, 'gpt-image') ? ['moderation' => 'low'] : []),
+            ...($isGptImage
+                ? ['moderation' => 'low']
+                : ['response_format' => 'b64_json']),
         ]));
     }
 
@@ -327,14 +335,15 @@ class OpenAiGateway implements Gateway
         array $inputs,
         int $dimensions,
         int $timeout = 30,
+        array $providerOptions = [],
     ): EmbeddingsResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('embeddings', [
+            fn () => $this->client($provider, $timeout)->post('embeddings', array_merge($providerOptions, [
                 'model' => $model,
                 'input' => $inputs,
                 'dimensions' => $dimensions,
-            ]),
+            ])),
         );
 
         $data = $response->json();

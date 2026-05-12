@@ -87,6 +87,22 @@ test('embeddings default to 2048 dimensions when none specified', function () {
     Http::assertSent(fn (Request $request) => json_decode($request->body(), true)['dimensions'] === 2048);
 });
 
+test('embeddings request includes provider options and overrides default task', function () {
+    Http::fake(['*' => fakeJinaEmbeddingsResponse()]);
+
+    Embeddings::for(['Hello'])
+        ->providerOptions(['task' => 'retrieval.query', 'late_chunking' => true])
+        ->generate(provider: 'jina', model: 'jina-embeddings-v4');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return $body['task'] === 'retrieval.query'
+            && $body['late_chunking'] === true
+            && $body['model'] === 'jina-embeddings-v4';
+    });
+});
+
 function fakeJinaEmbeddingsResponse()
 {
     return Http::response([

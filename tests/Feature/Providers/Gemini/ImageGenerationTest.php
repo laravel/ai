@@ -2,7 +2,10 @@
 
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Image;
 
@@ -185,4 +188,113 @@ test('request sends x-goog-api-key header', function () {
     Http::assertSent(function (Request $request) {
         return $request->hasHeader('x-goog-api-key', 'test-key');
     });
+});
+
+test('image response includes usage metadata when returned', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'candidates' => [[
+                'content' => [
+                    'parts' => [[
+                        'inlineData' => [
+                            'mimeType' => 'image/png',
+                            'data' => base64_encode('fake-image'),
+                        ],
+                    ]],
+                ],
+            ]],
+            'usageMetadata' => [
+                'promptTokenCount' => 12,
+                'candidatesTokenCount' => 1290,
+                'totalTokenCount' => 1302,
+            ],
+        ]),
+    ]);
+
+    $response = Image::of('A red apple')->generate(provider: 'gemini', model: 'gemini-3.1-flash-image-preview');
+
+    expect($response->usage->promptTokens)->toBe(12)
+        ->and($response->usage->completionTokens)->toBe(1290);
+});
+
+test('image response defaults to zero usage when usage metadata absent', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => fakeGeminiImageResponse(),
+    ]);
+
+    $response = Image::of('A red apple')->generate(provider: 'gemini', model: 'gemini-3.1-flash-image-preview');
+
+    expect($response->usage->promptTokens)->toBe(0)
+        ->and($response->usage->completionTokens)->toBe(0);
+});
+
+test('image rate limit response throws rate limited exception', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'error' => [
+                'code' => 429,
+                'message' => 'Resource has been exhausted',
+                'status' => 'RESOURCE_EXHAUSTED',
+            ],
+        ], 429),
+    ]);
+
+    Image::of('A red apple')->generate(provider: 'gemini', model: 'gemini-3.1-flash-image-preview');
+})->throws(RateLimitedException::class);
+
+test('image overloaded response throws provider overloaded exception', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'error' => [
+                'code' => 503,
+                'message' => 'The model is overloaded. Please try again later.',
+                'status' => 'UNAVAILABLE',
+            ],
+        ], 503),
+    ]);
+
+    Image::of('A red apple')->generate(provider: 'gemini', model: 'gemini-3.1-flash-image-preview');
+})->throws(ProviderOverloadedException::class);
+
+test('image http error response throws request exception', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'error' => [
+                'code' => 400,
+                'message' => 'Invalid value at prompt',
+                'status' => 'INVALID_ARGUMENT',
+            ],
+        ], 400),
+    ]);
+
+    Image::of('A red apple')->generate(provider: 'gemini', model: 'gemini-3.1-flash-image-preview');
+})->throws(RequestException::class);
+
+test('image response is empty when prompt is blocked and candidates array is empty', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'candidates' => [],
+            'promptFeedback' => [
+                'blockReason' => 'SAFETY',
+            ],
+        ]),
+    ]);
+
+    $response = Image::of('A red apple')->generate(provider: 'gemini', model: 'gemini-3.1-flash-image-preview');
+
+    expect($response->images)->toHaveCount(0);
+});
+
+test('image response is empty when candidate is blocked with no content parts', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'candidates' => [[
+                'finishReason' => 'PROHIBITED_CONTENT',
+            ]],
+        ]),
+    ]);
+
+    $response = Image::of('A red apple')->generate(provider: 'gemini', model: 'gemini-3.1-flash-image-preview');
+
+    expect($response->images)->toHaveCount(0);
 });

@@ -29,6 +29,7 @@ class AudioResponse
     protected function randomStorageName(): string
     {
         return once(fn () => Str::random(40).match ($this->mime) {
+            'audio/wav', 'audio/x-wav' => '.wav',
             default => '.mp3',
         });
     }

@@ -145,6 +145,9 @@ test('streaming finish reason maps correctly', function (string $status, string 
     expect($streamEnd->reason)->toBe($expected->value);
 })->with([
     'completed message maps to Stop' => ['completed', 'message', FinishReason::Stop],
+    'completed function_call maps to ToolCalls' => ['completed', 'function_call', FinishReason::ToolCalls],
     'incomplete maps to Length' => ['incomplete', 'message', FinishReason::Length],
     'failed maps to Error' => ['failed', 'message', FinishReason::Error],
+    'unknown status maps to Unknown' => ['mystery_status', 'message', FinishReason::Unknown],
+    'completed unknown type maps to Unknown' => ['completed', 'mystery_output', FinishReason::Unknown],
 ]);

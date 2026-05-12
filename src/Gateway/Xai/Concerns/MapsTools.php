@@ -4,14 +4,13 @@ namespace Laravel\Ai\Gateway\Xai\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\Tools\ToolNameResolver;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\ProviderTool;
+use Laravel\Ai\Tools\ToolNameResolver;
 
 trait MapsTools
 {
-
     /**
      * Map the given tools to xAI function definitions.
      */

@@ -6,6 +6,18 @@ use Laravel\Ai\Prompts\RerankingPrompt;
 use Laravel\Ai\Reranking;
 use Laravel\Ai\Responses\Data\RankedDocument;
 
+test('rerank rejects empty document list', function () {
+    Reranking::fake();
+
+    Reranking::of([])->rerank('What is Laravel?');
+})->throws(InvalidArgumentException::class, 'At least one document is required to rerank.');
+
+test('rerank rejects empty collection of documents', function () {
+    Reranking::fake();
+
+    Reranking::of(collect([]))->rerank('What is Laravel?');
+})->throws(InvalidArgumentException::class, 'At least one document is required to rerank.');
+
 test('can fake reranking', function () {
     Reranking::fake();
 

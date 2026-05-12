@@ -3,20 +3,20 @@
 namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\Tools\ToolNameResolver;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\ProviderTool;
 use Laravel\Ai\Providers\Tools\WebSearch;
+use Laravel\Ai\Tools\ToolNameResolver;
 use RuntimeException;
 
 trait MapsTools
 {
-
     /**
      * Map the given tools to OpenAI function definitions.
      */
@@ -40,17 +40,19 @@ trait MapsTools
      */
     protected function mapTool(Tool $tool): array
     {
+        $strict = Strict::isAppliedTo($tool);
+
         $schema = $tool->schema(new JsonSchemaTypeFactory);
 
         $schemaArray = filled($schema)
-            ? (new ObjectSchema($schema))->toSchema()
+            ? (new ObjectSchema($schema, strict: $strict))->toSchema()
             : [];
 
         return [
             'type' => 'function',
             'name' => ToolNameResolver::resolve($tool),
             'description' => (string) $tool->description(),
-            'strict' => true,
+            'strict' => $strict,
             'parameters' => [
                 'type' => 'object',
                 'properties' => $schemaArray['properties'] ?? (object) [],
