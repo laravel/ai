@@ -183,11 +183,19 @@ trait HandlesTextStreaming
             }
         }
 
+        $streamProviderContentBlocks = [];
+
+        if (filled($pendingToolCalls) && $finishReason === 'tool_calls' && filled($currentReasoning)) {
+            $streamProviderContentBlocks['reasoning_content'] = $currentReasoning;
+        }
+
         yield (new StreamEnd(
             $this->generateEventId(),
             $this->extractFinishReason(['finish_reason' => $finishReason ?? ''])->value,
             $usage ?? new Usage(0, 0),
             time(),
+            null,
+            $streamProviderContentBlocks,
         ))->withInvocationId($invocationId);
     }
 

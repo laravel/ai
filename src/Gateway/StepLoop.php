@@ -196,6 +196,7 @@ class StepLoop
             $allMessages[] = new AssistantMessage(
                 $currentText,
                 new Collection($pendingToolCalls),
+                $streamProviderContentBlocks,
             );
 
             $allMessages[] = new ToolResultMessage(new Collection($toolResults));
