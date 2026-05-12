@@ -49,7 +49,7 @@ class AiServiceProvider extends ServiceProvider
             ?int $timeout = null,
             array|Closure $providerOptions = [],
         ) {
-            $request = Embeddings::for([$this->value]);
+            $request = Embeddings::for([$this->value()]);
 
             if ($dimensions) {
                 $request->dimensions($dimensions);
@@ -78,7 +78,7 @@ class AiServiceProvider extends ServiceProvider
             ?string $model = null,
             ?int $timeout = null,
         ) {
-            $request = Audio::of($this->value);
+            $request = Audio::of($this->value());
 
             if (! is_null($voice)) {
                 $request->voice($voice);

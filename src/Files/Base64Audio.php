@@ -30,7 +30,7 @@ class Base64Audio extends Audio implements Arrayable, JsonSerializable, Storable
      */
     public static function fromUpload(UploadedFile $file, ?string $mimeType = null): self
     {
-        return new static(
+        return new self(
             base64_encode($file->getContent()),
             mimeType: $mimeType ?? $file->getClientMimeType(),
         );

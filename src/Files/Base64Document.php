@@ -22,7 +22,7 @@ class Base64Document extends Document implements Arrayable, JsonSerializable, St
      */
     public static function fromUpload(UploadedFile $file, ?string $mimeType = null): self
     {
-        return new static(
+        return new self(
             base64_encode($file->getContent()),
             mimeType: $mimeType ?? $file->getClientMimeType(),
         );

@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
+use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Exceptions\AiException;
@@ -243,7 +244,7 @@ trait ParsesTextResponses
         }
 
         if (filled($schema)) {
-            $body['text'] = $this->buildSchemaFormat($schema);
+            $body['text'] = $this->buildSchemaFormat($schema, Strict::isAppliedTo($options?->agent));
         }
 
         $body = array_merge($body, Arr::whereNotNull([

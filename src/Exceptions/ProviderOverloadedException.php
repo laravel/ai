@@ -8,7 +8,7 @@ class ProviderOverloadedException extends AiException implements FailoverableExc
 {
     public static function forProvider(string $provider, int $code = 0, ?Throwable $previous = null): self
     {
-        return new static(
+        return new self(
             'AI provider ['.$provider.'] is overloaded.',
             $code,
             $previous,

@@ -67,7 +67,7 @@ class AgentPrompt extends Prompt
             $attachments = new Collection($attachments);
         }
 
-        return new static(
+        return new self(
             $this->agent,
             $prompt,
             $attachments ?? $this->attachments,
