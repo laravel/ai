@@ -32,6 +32,7 @@ use Laravel\Ai\Providers\MistralProvider;
 use Laravel\Ai\Providers\OllamaProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Providers\OpenRouterProvider;
+use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\VoyageAiProvider;
 use Laravel\Ai\Providers\XaiProvider;
 use LogicException;
@@ -181,13 +182,39 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
-     * Build a runtime provider configuration that can be passed to any agent's provider argument.
+     * Build an on-demand provider instance with the given configuration.
      *
      * @param  array<string, mixed>  $config
+     *
+     * @throws InvalidArgumentException
      */
-    public function provider(string|Lab $name, array $config = []): ProviderConfig
+    public function build(array $config): Provider
     {
-        return ProviderConfig::for($name, $config);
+        $config['name'] ??= 'ondemand';
+
+        if (! array_key_exists($this->driverKey, $config)) {
+            throw new InvalidArgumentException(
+                "On-demand provider config must specify a [{$this->driverKey}]."
+            );
+        }
+
+        if ($config[$this->driverKey] instanceof Lab) {
+            $config[$this->driverKey] = $config[$this->driverKey]->value;
+        }
+
+        $driver = $config[$this->driverKey];
+
+        if (isset($this->customCreators[$driver])) {
+            return $this->callCustomCreator($config);
+        }
+
+        $method = 'create'.Str::studly($driver).ucfirst($this->driverKey);
+
+        if (method_exists($this, $method)) {
+            return $this->{$method}($config);
+        }
+
+        throw new InvalidArgumentException("Provider [{$this->driverKey}] [{$driver}] is not supported.");
     }
 
     /**
@@ -195,60 +222,13 @@ class AiManager extends MultipleInstanceManager
      *
      * @throws LogicException
      */
-    public function textProviderFor(Agent $agent, string|ProviderConfig|null $name = null): TextProvider
+    public function textProviderFor(Agent $agent, TextProvider|string|null $name = null): TextProvider
     {
-        $provider = $name instanceof ProviderConfig
-            ? $this->buildTextProviderFromConfig($name)
-            : $this->textProvider($name);
+        $provider = $name instanceof TextProvider ? $name : $this->textProvider($name);
 
         return $this->hasFakeGatewayFor($agent)
             ? (clone $provider)->useTextGateway($this->fakeGatewayFor($agent))
             : $provider;
-    }
-
-    /**
-     * Build a fresh text provider from a runtime configuration, merging it over the base config.
-     */
-    protected function buildTextProviderFromConfig(ProviderConfig $config): TextProvider
-    {
-        $base = $this->app['config']->get('ai.providers.'.$config->name(), []) ?? [];
-        $merged = array_merge($base, $config->overrides());
-        $merged['name'] = $config->name();
-
-        if (empty($merged['driver'])) {
-            throw new InvalidArgumentException(
-                "Runtime provider [{$config->name()}] has no driver. Pass a driver in the config array to Ai::provider() or define ai.providers.{$config->name()}."
-            );
-        }
-
-        $driver = $merged['driver'] instanceof Lab ? $merged['driver']->value : $merged['driver'];
-        $merged['driver'] = $driver;
-
-        $provider = $this->resolveDriverWithConfig($driver, $merged);
-
-        if (! $provider instanceof TextProvider) {
-            throw new LogicException('Provider ['.$provider::class.'] does not support text generation.');
-        }
-
-        return $provider;
-    }
-
-    /**
-     * Resolve a provider instance via either an extend()-registered creator or a built-in driver method.
-     */
-    protected function resolveDriverWithConfig(string $driver, array $config): mixed
-    {
-        if (isset($this->customCreators[$driver])) {
-            return $this->callCustomCreator($config);
-        }
-
-        $method = 'create'.Str::studly($driver).'Driver';
-
-        if (method_exists($this, $method)) {
-            return $this->{$method}($config);
-        }
-
-        throw new InvalidArgumentException("Driver [{$driver}] is not supported.");
     }
 
     /**
