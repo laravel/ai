@@ -19,7 +19,7 @@ class Base64Audio extends Audio implements Arrayable, JsonSerializable, Storable
     public function __construct(public string $base64, ?string $mimeType = null)
     {
         if (blank($base64)) {
-            throw new InvalidArgumentException('Audio content is required to generate a transcription.');
+            throw new InvalidArgumentException('Base64 audio content cannot be empty.');
         }
 
         $this->mime = $mimeType;

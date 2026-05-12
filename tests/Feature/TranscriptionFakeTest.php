@@ -14,13 +14,13 @@ test('transcription rejects empty audio string', function () {
     Transcription::fake();
 
     Transcription::of('')->generate();
-})->throws(InvalidArgumentException::class, 'Audio content is required to generate a transcription.');
+})->throws(InvalidArgumentException::class, 'Base64 audio content cannot be empty.');
 
 test('transcription rejects empty base64 audio', function () {
     Transcription::fake();
 
     Transcription::fromBase64('')->generate();
-})->throws(InvalidArgumentException::class, 'Audio content is required to generate a transcription.');
+})->throws(InvalidArgumentException::class, 'Base64 audio content cannot be empty.');
 
 test('transcriptions can be faked', function () {
     Transcription::fake([

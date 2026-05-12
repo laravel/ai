@@ -4,6 +4,7 @@ namespace Laravel\Ai\Files;
 
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Support\Facades\Storage;
+use InvalidArgumentException;
 use JsonSerializable;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
@@ -16,7 +17,12 @@ class StoredAudio extends Audio implements Arrayable, JsonSerializable, Storable
 {
     use CanBeUploadedToProvider;
 
-    public function __construct(public string $path, public ?string $disk = null) {}
+    public function __construct(public string $path, public ?string $disk = null)
+    {
+        if (blank($path)) {
+            throw new InvalidArgumentException('Audio file path cannot be empty.');
+        }
+    }
 
     /**
      * Get the raw representation of the file.
