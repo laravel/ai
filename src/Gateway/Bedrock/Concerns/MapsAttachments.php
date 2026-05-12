@@ -58,11 +58,21 @@ trait MapsAttachments
      */
     protected function buildDocumentBlock(Document $document): array
     {
+        $source = match (true) {
+            $document instanceof S3Document => [
+                's3Location' => array_filter([
+                    'uri' => $document->url,
+                    'bucketOwner' => $document->bucketOwner,
+                ]),
+            ],
+            default => ['bytes' => $document->content()],
+        };
+
         return [
             'document' => array_filter([
                 'format' => $this->getDocumentFormat($document),
                 'name' => $this->getDocumentName($document),
-                'source' => $document->source(),
+                'source' => $source,
             ]),
         ];
     }

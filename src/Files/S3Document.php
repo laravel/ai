@@ -27,19 +27,6 @@ class S3Document extends Document implements Arrayable, JsonSerializable
     }
 
     /**
-     * Get the provider-formatted source payload for this document.
-     */
-    public function source(): array
-    {
-        return [
-            's3Location' => array_filter([
-                'uri' => $this->url,
-                'bucketOwner' => $this->bucketOwner,
-            ]),
-        ];
-    }
-
-    /**
      * Get the displayable name of the file.
      */
     public function name(): ?string
