@@ -72,10 +72,18 @@ trait MapsMessages
             $msg['content'] = $message->content;
         }
 
-        if ($message instanceof AssistantMessage && $message->toolCalls->isNotEmpty()) {
+        if (! $message instanceof AssistantMessage) {
+            $chatMessages[] = $msg;
+
+            return;
+        }
+
+        if ($message->toolCalls->isNotEmpty()) {
             $msg['tool_calls'] = $message->toolCalls->map(
                 fn (ToolCall $toolCall) => $this->serializeToolCallToChat($toolCall)
             )->all();
+
+            $msg['reasoning_content'] = $message->providerContentBlocks['reasoning_content'] ?? '';
         }
 
         $chatMessages[] = $msg;

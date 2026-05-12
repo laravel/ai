@@ -177,6 +177,7 @@ class AnthropicGateway implements Gateway
         ?string $language = null,
         bool $diarize = false,
         int $timeout = 30,
+        array $providerOptions = [],
     ): TranscriptionResponse {
         throw new LogicException('Anthropic does not support transcription.');
     }
@@ -192,6 +193,7 @@ class AnthropicGateway implements Gateway
         array $inputs,
         int $dimensions,
         int $timeout = 30,
+        array $providerOptions = [],
     ): EmbeddingsResponse {
         throw new LogicException('Anthropic does not support embeddings.');
     }

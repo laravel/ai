@@ -4,6 +4,8 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Audio;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\RateLimitedException;
 
 beforeEach(function () {
     config(['ai.providers.eleven' => [
@@ -74,6 +76,18 @@ test('audio throws when the API returns an error', function () {
 
     Audio::of('Hello')->generate(provider: 'eleven', model: 'eleven_multilingual_v2');
 })->throws(RequestException::class);
+
+test('audio rate limit response throws rate limited exception', function () {
+    Http::fake(['api.elevenlabs.io/*' => Http::response(['detail' => 'rate limit exceeded'], 429)]);
+
+    Audio::of('Hello')->generate(provider: 'eleven', model: 'eleven_multilingual_v2');
+})->throws(RateLimitedException::class);
+
+test('audio overloaded response throws provider overloaded exception', function () {
+    Http::fake(['api.elevenlabs.io/*' => Http::response(['detail' => 'service unavailable'], 503)]);
+
+    Audio::of('Hello')->generate(provider: 'eleven', model: 'eleven_multilingual_v2');
+})->throws(ProviderOverloadedException::class);
 
 function fakeElevenAudioResponse()
 {

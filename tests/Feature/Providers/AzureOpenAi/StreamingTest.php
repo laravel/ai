@@ -148,4 +148,20 @@ test('streaming finish reason maps correctly', function (array $output, $expecte
         [['type' => 'message', 'status' => 'incomplete', 'role' => 'assistant', 'content' => [['type' => 'output_text', 'text' => '']]]],
         FinishReason::Length,
     ],
+    'completed function_call maps to ToolCalls' => [
+        [['type' => 'function_call', 'status' => 'completed', 'name' => 'FixedNumberGenerator', 'arguments' => '{}']],
+        FinishReason::ToolCalls,
+    ],
+    'failed maps to Error' => [
+        [['type' => 'message', 'status' => 'failed', 'role' => 'assistant', 'content' => [['type' => 'output_text', 'text' => '']]]],
+        FinishReason::Error,
+    ],
+    'unknown status maps to Unknown' => [
+        [['type' => 'message', 'status' => 'mystery_status', 'role' => 'assistant', 'content' => [['type' => 'output_text', 'text' => '']]]],
+        FinishReason::Unknown,
+    ],
+    'completed unknown type maps to Unknown' => [
+        [['type' => 'mystery_output', 'status' => 'completed']],
+        FinishReason::Unknown,
+    ],
 ]);

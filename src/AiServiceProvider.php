@@ -22,7 +22,10 @@ class AiServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(AiManager::class, fn ($app): AiManager => new AiManager($app));
-        $this->app->singleton(ConversationStore::class, DatabaseConversationStore::class);
+
+        $this->app->singleton(ConversationStore::class, fn () => new DatabaseConversationStore(
+            config('ai.conversations.connection'),
+        ));
 
         $this->mergeConfigFrom(__DIR__.'/../config/ai.php', 'ai');
     }
@@ -44,8 +47,9 @@ class AiServiceProvider extends ServiceProvider
             ?string $model = null,
             bool|int|null $cache = null,
             ?int $timeout = null,
+            array|Closure $providerOptions = [],
         ) {
-            $request = Embeddings::for([$this->value]);
+            $request = Embeddings::for([$this->value()]);
 
             if ($dimensions) {
                 $request->dimensions($dimensions);
@@ -59,6 +63,10 @@ class AiServiceProvider extends ServiceProvider
                 $request->timeout($timeout);
             }
 
+            if (filled($providerOptions)) {
+                $request->providerOptions($providerOptions);
+            }
+
             return $request->generate(provider: $provider, model: $model)->embeddings[0];
         });
 
@@ -70,7 +78,7 @@ class AiServiceProvider extends ServiceProvider
             ?string $model = null,
             ?int $timeout = null,
         ) {
-            $request = Audio::of($this->value);
+            $request = Audio::of($this->value());
 
             if (! is_null($voice)) {
                 $request->voice($voice);

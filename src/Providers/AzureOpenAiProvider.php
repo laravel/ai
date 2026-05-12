@@ -107,7 +107,7 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, ImagePr
     /**
      * Get the default / normalized image options for the provider.
      */
-    public function defaultImageOptions(?string $size = null, $quality = null): array
+    public function defaultImageOptions(?string $size = null, ?string $quality = null): array
     {
         return array_filter([
             'size' => match ($size) {

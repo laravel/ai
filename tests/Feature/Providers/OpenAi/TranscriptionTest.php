@@ -14,16 +14,28 @@ beforeEach(function () {
     ]]);
 });
 
-function fakeOpenAiTranscriptionResponse(string $text = 'Hello, world!')
-{
-    return Http::response([
-        'text' => $text,
-        'usage' => [
-            'input_tokens' => 10,
-            'total_tokens' => 15,
-        ],
-    ]);
-}
+test('transcription sends prompt from provider options', function () {
+    Http::fake(['*' => fakeOpenAiTranscriptionResponse()]);
+
+    Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->providerOptions(['prompt' => 'Laravel Forge and Vapor'])
+        ->generate(provider: 'openai', model: 'gpt-4o-transcribe');
+
+    Http::assertSent(function (Request $request) {
+        return $request->url() === 'https://api.openai.com/v1/audio/transcriptions'
+            && str_contains($request->body(), 'prompt')
+            && str_contains($request->body(), 'Laravel Forge and Vapor');
+    });
+});
+
+test('transcription throws when prompt provider option is used with diarized models', function () {
+    Http::fake(['*' => fakeOpenAiTranscriptionResponse()]);
+
+    Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->providerOptions(['prompt' => 'Laravel Forge and Vapor'])
+        ->diarize()
+        ->generate(provider: 'openai', model: 'gpt-4o-transcribe-diarize');
+})->throws(LogicException::class, 'OpenAI does not support the `prompt` option for diarized transcriptions.');
 
 test('transcription request posts to correct endpoint', function () {
     Http::fake(['*' => fakeOpenAiTranscriptionResponse()]);
@@ -151,3 +163,14 @@ test('transcription http error response throws request exception', function () {
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
         ->generate(provider: 'openai', model: 'gpt-4o-transcribe');
 })->throws(RequestException::class);
+
+function fakeOpenAiTranscriptionResponse(string $text = 'Hello, world!')
+{
+    return Http::response([
+        'text' => $text,
+        'usage' => [
+            'input_tokens' => 10,
+            'total_tokens' => 15,
+        ],
+    ]);
+}

@@ -2,7 +2,10 @@
 
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Image;
 
 beforeEach(function () {
@@ -194,3 +197,42 @@ test('image generation request omits response_format for gpt-image models', func
         return ! array_key_exists('response_format', $body);
     });
 });
+
+test('image rate limit response throws rate limited exception', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::response([
+            'error' => [
+                'type' => 'rate_limit_error',
+                'message' => 'Rate limit exceeded',
+            ],
+        ], 429),
+    ]);
+
+    Image::of('A red apple')->generate(provider: 'openai', model: 'gpt-image-1');
+})->throws(RateLimitedException::class);
+
+test('image overloaded response throws provider overloaded exception', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::response([
+            'error' => [
+                'type' => 'server_error',
+                'message' => 'The server is currently overloaded. Please try again later.',
+            ],
+        ], 503),
+    ]);
+
+    Image::of('A red apple')->generate(provider: 'openai', model: 'gpt-image-1');
+})->throws(ProviderOverloadedException::class);
+
+test('image http error response throws request exception', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::response([
+            'error' => [
+                'type' => 'invalid_request_error',
+                'message' => 'Invalid model',
+            ],
+        ], 400),
+    ]);
+
+    Image::of('A red apple')->generate(provider: 'openai', model: 'gpt-image-1');
+})->throws(RequestException::class);

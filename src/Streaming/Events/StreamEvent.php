@@ -10,6 +10,13 @@ abstract class StreamEvent
     public ?string $invocationId = null;
 
     /**
+     * Get the array representation of the event.
+     *
+     * @return array<string, mixed>
+     */
+    abstract public function toArray(): array;
+
+    /**
      * Broadcast the stream event using the queue.
      */
     public function broadcast(Channel|array $channels, bool $now = false): void

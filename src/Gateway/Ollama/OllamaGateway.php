@@ -137,12 +137,13 @@ class OllamaGateway implements EmbeddingGateway, TextGateway
         array $inputs,
         int $dimensions,
         int $timeout = 30,
+        array $providerOptions = [],
     ): EmbeddingsResponse {
-        $body = array_filter([
+        $body = array_merge($providerOptions, array_filter([
             'model' => $model,
             'input' => $inputs,
             'dimensions' => $dimensions ?: null,
-        ]);
+        ]));
 
         $response = $this->withErrorHandling(
             $provider->name(),
