@@ -263,6 +263,32 @@ test('it reloads legacy sparse keyed tool calls and results as lists', function 
         ->and($messages[1]->toolResults->keys()->all())->toBe([0, 1]);
 });
 
+test('it reads messages back when the agent column holds an alias', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Aliased conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => 'aliased-agent',
+        'role' => 'user',
+        'content' => 'Hi.',
+        'attachments' => '[]',
+        'tool_calls' => '[]',
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toHaveCount(1)
+        ->and($messages[0]->content)->toBe('Hi.');
+});
+
 function createConversationSchema(?string $connection = null): void
 {
     $schema = Schema::connection($connection);
