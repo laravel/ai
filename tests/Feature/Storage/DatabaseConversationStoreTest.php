@@ -6,8 +6,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Files\RemoteImage;
+use Laravel\Ai\Files\StoredDocument;
 use Laravel\Ai\Messages\AssistantMessage;
+use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
+use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
@@ -170,6 +174,96 @@ test('it reloads legacy sparse keyed tool calls and results as lists', function 
         ->and($messages[0]->toolCalls->keys()->all())->toBe([0, 1])
         ->and($messages[1])->toBeInstanceOf(ToolResultMessage::class)
         ->and($messages[1]->toolResults->keys()->all())->toBe([0, 1]);
+});
+
+test('user messages with stored attachments are rehydrated as UserMessage', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Attachment conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'user',
+        'content' => 'Describe this image.',
+        'attachments' => json_encode([
+            ['type' => 'remote-image', 'url' => 'https://example.com/photo.jpg', 'mime' => 'image/jpeg', 'name' => null],
+        ]),
+        'tool_calls' => '[]',
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toHaveCount(1)
+        ->and($messages[0])->toBeInstanceOf(UserMessage::class)
+        ->and($messages[0]->content)->toBe('Describe this image.')
+        ->and($messages[0]->attachments)->toHaveCount(1)
+        ->and($messages[0]->attachments->first())->toBeInstanceOf(RemoteImage::class)
+        ->and($messages[0]->attachments->first()->url)->toBe('https://example.com/photo.jpg');
+});
+
+test('user messages with multiple attachment types are all rehydrated', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Multi-attachment conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'user',
+        'content' => 'Analyze these files.',
+        'attachments' => json_encode([
+            ['type' => 'remote-image', 'url' => 'https://example.com/photo.jpg', 'mime' => 'image/jpeg', 'name' => null],
+            ['type' => 'stored-document', 'path' => 'docs/report.pdf', 'disk' => 'local', 'name' => 'report.pdf'],
+        ]),
+        'tool_calls' => '[]',
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages[0])->toBeInstanceOf(UserMessage::class)
+        ->and($messages[0]->attachments)->toHaveCount(2)
+        ->and($messages[0]->attachments[0])->toBeInstanceOf(RemoteImage::class)
+        ->and($messages[0]->attachments[1])->toBeInstanceOf(StoredDocument::class)
+        ->and($messages[0]->attachments[1]->path)->toBe('docs/report.pdf');
+});
+
+test('user messages with no attachments are returned as plain Message', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Plain conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'user',
+        'content' => 'Hello.',
+        'attachments' => '[]',
+        'tool_calls' => '[]',
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages[0])->toBeInstanceOf(Message::class)
+        ->and($messages[0])->not->toBeInstanceOf(UserMessage::class);
 });
 
 function createConversationSchema(?string $connection = null): void
