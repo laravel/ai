@@ -3,7 +3,6 @@
 namespace Laravel\Ai\Gateway\Gemini\Concerns;
 
 use Illuminate\Support\Arr;
-use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
