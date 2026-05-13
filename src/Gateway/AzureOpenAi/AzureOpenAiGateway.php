@@ -169,6 +169,8 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
      * @param  array<Image>  $attachments
      * @param  '3:2'|'2:3'|'1:1'|null  $size
      * @param  'low'|'medium'|'high'|null  $quality
+     *
+     * @throws LogicException if attachments are passed; Azure OpenAI does not support image edits.
      */
     public function generateImage(
         ImageProvider $provider,
