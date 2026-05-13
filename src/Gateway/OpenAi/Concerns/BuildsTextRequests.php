@@ -4,7 +4,6 @@ namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
 use Illuminate\Support\Arr;
 use Laravel\Ai\Attributes\Strict;
-use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
@@ -45,9 +44,7 @@ trait BuildsTextRequests
             'top_p' => $options?->topP,
         ]));
 
-        $providerOptions = $options?->providerOptions(
-            Lab::tryFrom($provider->driver()) ?? $provider->driver()
-        );
+        $providerOptions = $options?->providerOptions($provider->driver());
 
         if (filled($providerOptions)) {
             $body = array_merge($body, $providerOptions);

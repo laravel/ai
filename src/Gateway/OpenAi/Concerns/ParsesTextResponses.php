@@ -6,7 +6,6 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -253,9 +252,7 @@ trait ParsesTextResponses
             'max_output_tokens' => $options?->maxTokens,
         ]));
 
-        $providerOptions = $options?->providerOptions(
-            Lab::tryFrom($provider->driver()) ?? $provider->driver()
-        );
+        $providerOptions = $options?->providerOptions($provider->driver());
 
         if (filled($providerOptions)) {
             $body = array_merge($body, $providerOptions);

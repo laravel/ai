@@ -34,7 +34,7 @@ trait BuildsTextRequests
 
         $mappedTools = filled($tools) ? $this->mapTools($tools, $provider) : [];
 
-        $providerOptions = $options?->providerOptions(Lab::Anthropic) ?? [];
+        $providerOptions = $options?->providerOptions($provider->driver()) ?? [];
 
         if (filled($schema) && $this->supportsNativeStructuredOutput($provider)) {
             $body['output_config'] = [
