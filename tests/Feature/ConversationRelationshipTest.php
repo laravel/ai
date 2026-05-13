@@ -88,6 +88,40 @@ test('conversation can retrieve messages using relationship', function () {
         ->and($conversation->messages->first()->attachments)->toBeArray();
 });
 
+test('conversation model uses configured database connection', function () {
+    config(['database.connections.secondary' => [
+        'driver' => 'sqlite',
+        'database' => ':memory:',
+        'prefix' => '',
+        'foreign_key_constraints' => true,
+    ]]);
+
+    Schema::connection('secondary')->create('agent_conversations', function (Blueprint $table) {
+        $table->string('id', 36)->primary();
+        $table->foreignId('user_id')->nullable();
+        $table->string('title');
+        $table->timestamps();
+    });
+
+    config(['ai.conversations.connection' => 'secondary']);
+
+    DB::connection('secondary')->table('agent_conversations')->insert([
+        'id' => 'secondary-conversation-1',
+        'user_id' => 1,
+        'title' => 'On Secondary DB',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $conversation = Conversation::find('secondary-conversation-1');
+
+    expect($conversation)->not->toBeNull()
+        ->and($conversation->title)->toBe('On Secondary DB')
+        ->and(DB::table('agent_conversations')->where('id', 'secondary-conversation-1')->exists())->toBeFalse();
+})->after(function () {
+    config(['ai.conversations.connection' => null]);
+});
+
 class ConversationRelationshipUser extends Model
 {
     use HasConversations;

@@ -29,6 +29,14 @@ class Conversation extends Model
     protected $guarded = [];
 
     /**
+     * Get the database connection for the model.
+     */
+    public function getConnectionName(): ?string
+    {
+        return config('ai.conversations.connection');
+    }
+
+    /**
      * Get the table associated with the model.
      */
     public function getTable(): string
