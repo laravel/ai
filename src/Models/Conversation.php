@@ -38,6 +38,8 @@ class Conversation extends Model
 
     /**
      * Get the messages for the conversation.
+     *
+     * @return HasMany<ConversationMessage, $this>
      */
     public function messages(): HasMany
     {

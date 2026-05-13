@@ -51,6 +51,8 @@ class ConversationMessage extends Model
 
     /**
      * Get the conversation that owns the message.
+     *
+     * @return BelongsTo<Conversation, $this>
      */
     public function conversation(): BelongsTo
     {

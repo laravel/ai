@@ -9,6 +9,8 @@ trait HasConversations
 {
     /**
      * Get the conversations for the model.
+     *
+     * @return HasMany<Conversation, $this>
      */
     public function conversations(): HasMany
     {
