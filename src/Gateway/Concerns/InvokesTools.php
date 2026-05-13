@@ -49,6 +49,20 @@ trait InvokesTools
     }
 
     /**
+     * Execute the given tool, returning result status alongside the output.
+     *
+     * @return array{result: string, successful: bool, error: ?string}
+     */
+    protected function executeToolSafely(Tool $tool, array $arguments): array
+    {
+        try {
+            return ['result' => $this->executeTool($tool, $arguments), 'successful' => true, 'error' => null];
+        } catch (\Throwable $e) {
+            return ['result' => $e->getMessage(), 'successful' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
      * Find a tool by its name from the given tools array.
      */
     protected function findTool(string $name, array $tools): ?Tool

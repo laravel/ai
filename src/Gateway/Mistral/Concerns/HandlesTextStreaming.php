@@ -228,8 +228,8 @@ trait HandlesTextStreaming
             yield (new ToolResultEvent(
                 $this->generateEventId(),
                 $toolResult,
-                true,
-                null,
+                $toolResult->successful,
+                $toolResult->error,
                 time(),
             ))->withInvocationId($invocationId);
         }

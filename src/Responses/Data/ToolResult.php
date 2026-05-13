@@ -13,6 +13,8 @@ class ToolResult implements Arrayable, JsonSerializable
         public array $arguments,
         public mixed $result,
         public ?string $resultId = null,
+        public bool $successful = true,
+        public ?string $error = null,
     ) {}
 
     /**
@@ -26,6 +28,8 @@ class ToolResult implements Arrayable, JsonSerializable
             'arguments' => $this->arguments,
             'result' => $this->result,
             'result_id' => $this->resultId,
+            'successful' => $this->successful,
+            'error' => $this->error,
         ];
     }
 

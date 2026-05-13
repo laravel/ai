@@ -137,6 +137,64 @@ test('it stores sparse keyed tool calls and results as JSON arrays', function ()
         ->and(array_is_list(json_decode($record->tool_results, true)))->toBeTrue();
 });
 
+test('it persists and rehydrates tool result successful status', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Status conversation');
+
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        'Check status.',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $response = new AgentResponse('invocation-id', 'Done.', new Usage, new Meta);
+    $response->toolCalls = collect([new ToolCall('call-1', 'lookup', [])]);
+    $response->toolResults = collect([
+        new ToolResult('call-1', 'lookup', [], 'not found', null, false, 'Tool lookup failed.'),
+    ]);
+
+    $store->storeAssistantMessage($conversationId, 1, $prompt, $response);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages[1])->toBeInstanceOf(ToolResultMessage::class)
+        ->and($messages[1]->toolResults->first()->successful)->toBeFalse()
+        ->and($messages[1]->toolResults->first()->error)->toBe('Tool lookup failed.');
+});
+
+test('it defaults successful to true when loading legacy tool results without the field', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Legacy conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => 'Done.',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call-1', 'name' => 'lookup', 'arguments' => []],
+        ]),
+        'tool_results' => json_encode([
+            ['id' => 'call-1', 'name' => 'lookup', 'arguments' => [], 'result' => 'ok'],
+        ]),
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages[1])->toBeInstanceOf(ToolResultMessage::class)
+        ->and($messages[1]->toolResults->first()->successful)->toBeTrue()
+        ->and($messages[1]->toolResults->first()->error)->toBeNull();
+});
+
 test('it reloads legacy sparse keyed tool calls and results as lists', function () {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Tool conversation');

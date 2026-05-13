@@ -169,6 +169,8 @@ class DatabaseConversationStore implements ConversationStore
                                 arguments: $toolResult['arguments'],
                                 result: $toolResult['result'],
                                 resultId: $toolResult['result_id'] ?? null,
+                                successful: $toolResult['successful'] ?? true,
+                                error: $toolResult['error'] ?? null,
                             ))
                         );
                     }

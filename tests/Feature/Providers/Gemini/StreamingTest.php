@@ -12,6 +12,7 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
+use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 
 describe('text streaming', function () {
@@ -157,6 +158,43 @@ describe('thinking blocks', function () {
 
         $reasoningDelta = array_values(array_filter($events, fn ($e) => $e instanceof ReasoningDelta))[0];
         expect($reasoningDelta->delta)->toBe('Let me think...');
+    });
+});
+
+describe('tool result status', function () {
+    test('successful tool result event has successful true and null error', function () {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::sequence([
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->geminiChunkWithUsage([[
+                            'functionCall' => [
+                                'id' => 'call_1',
+                                'name' => 'FixedNumberGenerator',
+                                'args' => (object) [],
+                            ],
+                        ]], 10, 5),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->geminiChunkWithUsage([['text' => 'The number is 72019']], 20, 10),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+            ]),
+        ]);
+
+        $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+        $toolResultEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolResultEvent));
+
+        expect($toolResultEvents)->not->toBeEmpty()
+            ->and($toolResultEvents[0]->successful)->toBeTrue()
+            ->and($toolResultEvents[0]->error)->toBeNull();
     });
 });
 

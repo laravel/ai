@@ -337,8 +337,8 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                 yield (new ToolResultEvent(
                     (string) Str::uuid(),
                     $toolResult,
-                    true,
-                    null,
+                    $toolResult->successful,
+                    $toolResult->error,
                     $timestamp,
                 ))->withInvocationId($invocationId);
             }
@@ -768,18 +768,24 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                     $toolCall->name,
                     $toolCall->arguments,
                     'Error: Tool "'.$toolCall->name.'" not found.',
+                    null,
+                    false,
+                    'Tool "'.$toolCall->name.'" not found.',
                 );
 
                 continue;
             }
 
-            $result = $this->executeTool($tool, $toolCall->arguments);
+            ['result' => $result, 'successful' => $successful, 'error' => $error] = $this->executeToolSafely($tool, $toolCall->arguments);
 
             $results[] = new ToolResult(
                 $toolCall->id,
                 $toolCall->name,
                 $toolCall->arguments,
                 $result,
+                null,
+                $successful,
+                $error,
             );
         }
 
