@@ -14,7 +14,7 @@ class Embeddings
      *
      * @param  string[]  $inputs
      *
-     * @throws InvalidArgumentException if the given inputs are not a list or are empty.
+     * @throws InvalidArgumentException if the given inputs are not a list, are empty, are not strings, or contain only blank strings.
      */
     public static function for(array $inputs): PendingEmbeddingsGeneration
     {

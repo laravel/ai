@@ -47,6 +47,12 @@ class PendingEmbeddingsGeneration
         if (blank($inputs)) {
             throw new InvalidArgumentException('At least one input is required to generate embeddings.');
         }
+
+        foreach ($inputs as $index => $input) {
+            if (! is_string($input) || blank($input)) {
+                throw new InvalidArgumentException("Each input to embed must be a non-blank string (index {$index}).");
+            }
+        }
     }
 
     /**
