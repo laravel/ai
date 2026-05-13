@@ -33,9 +33,9 @@ abstract class Image extends File
     /**
      * Create a new remote image using the image at the given URL.
      */
-    public static function fromUrl(string $url): RemoteImage
+    public static function fromUrl(string $url, ?string $mimeType = null): RemoteImage
     {
-        return new RemoteImage($url);
+        return new RemoteImage($url, $mimeType);
     }
 
     /**

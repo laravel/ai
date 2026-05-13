@@ -41,9 +41,9 @@ abstract class Document extends File
     /**
      * Create a new remote document using the document at the given URL.
      */
-    public static function fromUrl(string $url): RemoteDocument
+    public static function fromUrl(string $url, ?string $mimeType = null): RemoteDocument
     {
-        return new RemoteDocument($url);
+        return new RemoteDocument($url, $mimeType);
     }
 
     /**
