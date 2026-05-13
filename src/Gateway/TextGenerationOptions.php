@@ -31,7 +31,9 @@ class TextGenerationOptions
     public function providerOptions(Lab|string $provider): ?array
     {
         if ($this->agent instanceof HasProviderOptions) {
-            return $this->agent->providerOptions($provider);
+            return $this->agent->providerOptions(
+                $provider instanceof Lab ? $provider : (Lab::tryFrom($provider) ?? $provider)
+            );
         }
 
         return null;
