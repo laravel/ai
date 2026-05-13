@@ -10,6 +10,18 @@ use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\ImageResponse;
 
+test('image rejects empty prompt', function () {
+    Image::fake();
+
+    Image::of('')->generate();
+})->throws(InvalidArgumentException::class, 'A prompt is required to generate an image.');
+
+test('image rejects whitespace-only prompt', function () {
+    Image::fake();
+
+    Image::of('   ')->generate();
+})->throws(InvalidArgumentException::class, 'A prompt is required to generate an image.');
+
 test('images can be faked', function () {
     Image::fake([
         base64_encode('first-image'),

@@ -3,6 +3,7 @@
 namespace Laravel\Ai;
 
 use Closure;
+use InvalidArgumentException;
 use Laravel\Ai\Gateway\FakeEmbeddingGateway;
 use Laravel\Ai\PendingResponses\PendingEmbeddingsGeneration;
 
@@ -12,6 +13,8 @@ class Embeddings
      * Get embedding vectors representing the given inputs.
      *
      * @param  string[]  $inputs
+     *
+     * @throws InvalidArgumentException if the given inputs are not a list or are empty.
      */
     public static function for(array $inputs): PendingEmbeddingsGeneration
     {

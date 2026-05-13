@@ -20,14 +20,17 @@ class DatabaseConversationStore implements ConversationStore
     /**
      * Create a new conversation store instance.
      */
-    public function __construct(protected ?string $connection = null) {}
+    public function __construct(protected ?string $connection = null)
+    {
+        //
+    }
 
     /**
      * Get the most recent conversation ID for a given user.
      */
     public function latestConversationId(string|int $userId): ?string
     {
-        return $this->table('agent_conversations')
+        return $this->table($this->conversationsTable())
             ->where('user_id', $userId)
             ->orderBy('updated_at', 'desc')
             ->first()?->id;
@@ -40,7 +43,7 @@ class DatabaseConversationStore implements ConversationStore
     {
         $conversationId = (string) Str::uuid7();
 
-        $this->table('agent_conversations')->insert([
+        $this->table($this->conversationsTable())->insert([
             'id' => $conversationId,
             'user_id' => $userId,
             'title' => $title,
@@ -58,7 +61,9 @@ class DatabaseConversationStore implements ConversationStore
     {
         $messageId = (string) Str::uuid7();
 
-        $this->table('agent_conversation_messages')->insert([
+        $now = now();
+
+        $this->table($this->messagesTable())->insert([
             'id' => $messageId,
             'conversation_id' => $conversationId,
             'user_id' => $userId,
@@ -70,9 +75,11 @@ class DatabaseConversationStore implements ConversationStore
             'tool_results' => '[]',
             'usage' => '[]',
             'meta' => '[]',
-            'created_at' => now(),
-            'updated_at' => now(),
+            'created_at' => $now,
+            'updated_at' => $now,
         ]);
+
+        $this->touchConversation($conversationId, $now);
 
         return $messageId;
     }
@@ -84,7 +91,9 @@ class DatabaseConversationStore implements ConversationStore
     {
         $messageId = (string) Str::uuid7();
 
-        $this->table('agent_conversation_messages')->insert([
+        $now = now();
+
+        $this->table($this->messagesTable())->insert([
             'id' => $messageId,
             'conversation_id' => $conversationId,
             'user_id' => $userId,
@@ -96,11 +105,23 @@ class DatabaseConversationStore implements ConversationStore
             'tool_results' => json_encode($response->toolResults->values()),
             'usage' => json_encode($response->usage),
             'meta' => json_encode($response->meta),
-            'created_at' => now(),
-            'updated_at' => now(),
+            'created_at' => $now,
+            'updated_at' => $now,
         ]);
 
+        $this->touchConversation($conversationId, $now);
+
         return $messageId;
+    }
+
+    /**
+     * Update the conversation's activity timestamp.
+     */
+    protected function touchConversation(string $conversationId, mixed $timestamp): void
+    {
+        $this->table($this->conversationsTable())
+            ->where('id', $conversationId)
+            ->update(['updated_at' => $timestamp]);
     }
 
     /**
@@ -110,7 +131,7 @@ class DatabaseConversationStore implements ConversationStore
      */
     public function getLatestConversationMessages(string $conversationId, int $limit): Collection
     {
-        return $this->table('agent_conversation_messages')
+        return $this->table($this->messagesTable())
             ->where('conversation_id', $conversationId)
             ->orderByDesc('id')
             ->limit($limit)
@@ -165,5 +186,21 @@ class DatabaseConversationStore implements ConversationStore
     protected function table(string $table): Builder
     {
         return DB::connection($this->connection)->table($table);
+    }
+
+    /**
+     * Resolve the conversations table name from config.
+     */
+    protected function conversationsTable(): string
+    {
+        return config('ai.conversations.tables.conversations', 'agent_conversations');
+    }
+
+    /**
+     * Resolve the messages table name from config.
+     */
+    protected function messagesTable(): string
+    {
+        return config('ai.conversations.tables.messages', 'agent_conversation_messages');
     }
 }

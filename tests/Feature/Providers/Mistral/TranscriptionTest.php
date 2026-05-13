@@ -58,6 +58,19 @@ test('transcription sends language when provided', function () {
     });
 });
 
+test('transcription sends context bias from provider options', function () {
+    Http::fake(['*' => fakeTranscriptionResponse()]);
+
+    Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->providerOptions(['context_bias' => 'Laravel,Forge,Vapor'])
+        ->generate(provider: 'mistral');
+
+    Http::assertSent(function (Request $request) {
+        return str_contains($request->body(), 'context_bias')
+            && str_contains($request->body(), 'Laravel,Forge,Vapor');
+    });
+});
+
 test('transcription sends bearer token', function () {
     Http::fake(['*' => fakeTranscriptionResponse()]);
 

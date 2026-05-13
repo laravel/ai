@@ -128,6 +128,22 @@ test('embeddings http error response throws request exception', function () {
     Embeddings::for(['Hello'])->generate(provider: 'azure', model: 'text-embedding-3-small');
 })->throws(RequestException::class);
 
+test('embeddings request includes provider options in the request body', function () {
+    Http::fake(['*' => fakeAzureEmbeddingsResponse()]);
+
+    Embeddings::for(['Hello'])
+        ->providerOptions(['encoding_format' => 'base64', 'user' => 'tester'])
+        ->generate(provider: 'azure', model: 'text-embedding-3-small');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return $body['encoding_format'] === 'base64'
+            && $body['user'] === 'tester'
+            && $body['model'] === 'text-embedding-3-small';
+    });
+});
+
 function fakeAzureEmbeddingsResponse()
 {
     return Http::response([

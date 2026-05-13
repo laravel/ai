@@ -369,11 +369,12 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
         array $inputs,
         int $dimensions,
         int $timeout = 30,
+        array $providerOptions = [],
     ): EmbeddingsResponse {
         $client = $this->createBedrockClient($provider, $timeout);
 
         if (str_starts_with($model, 'cohere.')) {
-            return $this->generateCohereEmbeddings($provider, $model, $client, $inputs);
+            return $this->generateCohereEmbeddings($provider, $model, $client, $inputs, $providerOptions);
         }
 
         $embeddings = [];
@@ -387,7 +388,10 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                         'modelId' => $model,
                         'contentType' => 'application/json',
                         'accept' => 'application/json',
-                        'body' => json_encode(['inputText' => $input, 'dimensions' => $dimensions]),
+                        'body' => json_encode(array_merge($providerOptions, [
+                            'inputText' => $input,
+                            'dimensions' => $dimensions,
+                        ])),
                     ]),
                 );
 
@@ -420,6 +424,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
         string $model,
         $client,
         array $inputs,
+        array $providerOptions = [],
     ): EmbeddingsResponse {
         try {
             $response = $this->withErrorHandling(
@@ -428,10 +433,11 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                     'modelId' => $model,
                     'contentType' => 'application/json',
                     'accept' => 'application/json',
-                    'body' => json_encode([
-                        'texts' => array_values($inputs),
-                        'input_type' => 'search_document',
-                    ]),
+                    'body' => json_encode(array_merge(
+                        ['input_type' => 'search_document'],
+                        $providerOptions,
+                        ['texts' => array_values($inputs)],
+                    )),
                 ]),
             );
 

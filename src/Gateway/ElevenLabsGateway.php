@@ -53,6 +53,8 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
 
     /**
      * Generate text from the given audio.
+     *
+     * @param  array<string, mixed>  $providerOptions
      */
     public function generateTranscription(
         TranscriptionProvider $provider,
@@ -60,15 +62,16 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
         TranscribableAudio $audio,
         ?string $language = null,
         bool $diarize = false,
-        int $timeout = 30
+        int $timeout = 30,
+        array $providerOptions = [],
     ): TranscriptionResponse {
         $response = $this->withErrorHandling($provider->name(), fn () => $this->client($provider, $timeout)
             ->attach('file', $audio->content(), 'file', ['Content-Type' => $audio->mimeType()])
-            ->post('speech-to-text', [
+            ->post('speech-to-text', array_merge($providerOptions, [
                 'model_id' => $model,
                 'language' => $language,
                 'diarize' => $diarize ? 'true' : 'false',
-            ])->throw());
+            ]))->throw());
 
         $response = $response->json();
 

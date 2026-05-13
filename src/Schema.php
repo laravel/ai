@@ -13,7 +13,7 @@ class Schema implements Schemable
     public function __construct(
         public Type $schema,
         public string $name = 'schema_definition',
-        public bool $strict = true
+        public bool $strict = false
     ) {}
 
     /**
@@ -29,7 +29,7 @@ class Schema implements Schemable
      */
     public function withName(string $name): self
     {
-        return new static(
+        return new self(
             $this->schema,
             $name,
             $this->strict,

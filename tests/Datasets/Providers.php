@@ -5,6 +5,7 @@ dataset('text-providers', ['anthropic', 'gemini', 'groq', 'openai']);
 dataset('tts-providers', [
     'openai' => ['openai', 'OPENAI_API_KEY'],
     'gemini' => ['gemini', 'GEMINI_API_KEY'],
+    'openrouter' => ['openrouter', 'OPENROUTER_API_KEY'],
 ]);
 
 dataset('providers-with-urls', [
@@ -20,6 +21,12 @@ dataset('embedding-providers', [
 ]);
 
 dataset('transcription-providers', [
+    'openai' => ['openai', 'OPENAI_API_KEY'],
+    'gemini' => ['gemini', 'GEMINI_API_KEY'],
+    'openrouter' => ['openrouter', 'OPENROUTER_API_KEY'],
+]);
+
+dataset('diarization-providers', [
     'openai' => ['openai', 'OPENAI_API_KEY'],
     'gemini' => ['gemini', 'GEMINI_API_KEY'],
 ]);
@@ -38,7 +45,7 @@ dataset('reranking-providers', [
 dataset('agent-providers', [
     'anthropic' => ['anthropic', 'ANTHROPIC_API_KEY', 'claude-haiku-4-5-20251001'],
     'azure' => ['azure', 'AZURE_OPENAI_API_KEY', 'gpt-5.4-mini'],
-    'deepseek' => ['deepseek', 'DEEPSEEK_API_KEY', 'deepseek-chat'],
+    'deepseek' => ['deepseek', 'DEEPSEEK_API_KEY', 'deepseek-v4-pro'],
     'gemini' => ['gemini', 'GEMINI_API_KEY', 'gemini-3.1-flash-lite-preview'],
     'groq' => ['groq', 'GROQ_API_KEY', 'openai/gpt-oss-20b'],
     'mistral' => ['mistral', 'MISTRAL_API_KEY', 'mistral-small-latest'],
