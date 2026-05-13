@@ -35,6 +35,29 @@ return [
         'embeddings' => [
             'cache' => false,
             'store' => env('CACHE_STORE', 'database'),
+            'seconds' => 60 * 60 * 24 * 30,
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Conversations
+    |--------------------------------------------------------------------------
+    |
+    | Below you may configure how the database-backed conversation store
+    | persists conversations and their messages. The "connection" value
+    | controls which database connection is used; the "tables" values
+    | let you customize the table names if they collide with your own.
+    | "generate_title" toggles the automatic LLM-generated title.
+    |
+    */
+
+    'conversations' => [
+        'connection' => null,
+        'generate_title' => true,
+        'tables' => [
+            'conversations' => 'agent_conversations',
+            'messages' => 'agent_conversation_messages',
         ],
     ],
 
