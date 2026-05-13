@@ -29,6 +29,8 @@ test('tool result to array returns all properties', function () {
         'arguments' => [],
         'result' => 'raw result',
         'result_id' => null,
+        'successful' => true,
+        'error' => null,
     ]);
 });
 
