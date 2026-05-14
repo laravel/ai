@@ -266,6 +266,56 @@ test('user messages with no attachments are returned as plain Message', function
         ->and($messages[0])->not->toBeInstanceOf(UserMessage::class);
 });
 
+test('malformed stored attachment JSON fails loudly', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Malformed attachment conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'user',
+        'content' => 'Describe this image.',
+        'attachments' => json_encode(['type' => 'remote-image', 'url' => 'https://example.com/photo.jpg']),
+        'tool_calls' => '[]',
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    expect(fn () => $store->getLatestConversationMessages($conversationId, 10))
+        ->toThrow(InvalidArgumentException::class, 'Stored conversation attachments must be a JSON array.');
+});
+
+test('malformed known stored attachments fail loudly', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Malformed attachment conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'user',
+        'content' => 'Describe this image.',
+        'attachments' => json_encode([
+            ['type' => 'remote-image', 'mime' => 'image/jpeg'],
+        ]),
+        'tool_calls' => '[]',
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    expect(fn () => $store->getLatestConversationMessages($conversationId, 10))
+        ->toThrow(InvalidArgumentException::class, 'Cannot reconstruct [remote-image] attachment because [url] is missing or invalid.');
+});
+
 function createConversationSchema(?string $connection = null): void
 {
     $schema = Schema::connection($connection);

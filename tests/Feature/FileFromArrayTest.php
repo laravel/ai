@@ -33,6 +33,23 @@ dataset('attachment types', [
     'remote-audio' => [fn () => (new RemoteAudio('https://x/y.mp3', 'audio/mpeg'))->as('y.mp3'), RemoteAudio::class, ['url' => 'https://x/y.mp3', 'mime' => 'audio/mpeg']],
 ]);
 
+dataset('malformed attachment types', [
+    'base64-image' => [['type' => 'base64-image'], 'base64'],
+    'local-image' => [['type' => 'local-image'], 'path'],
+    'stored-image' => [['type' => 'stored-image'], 'path'],
+    'remote-image' => [['type' => 'remote-image'], 'url'],
+    'provider-image' => [['type' => 'provider-image'], 'id'],
+    'base64-document' => [['type' => 'base64-document'], 'base64'],
+    'local-document' => [['type' => 'local-document'], 'path'],
+    'stored-document' => [['type' => 'stored-document'], 'path'],
+    'remote-document' => [['type' => 'remote-document'], 'url'],
+    'provider-document' => [['type' => 'provider-document'], 'id'],
+    'base64-audio' => [['type' => 'base64-audio'], 'base64'],
+    'local-audio' => [['type' => 'local-audio'], 'path'],
+    'stored-audio' => [['type' => 'stored-audio'], 'path'],
+    'remote-audio' => [['type' => 'remote-audio'], 'url'],
+]);
+
 test('File::fromArray round-trips attachment types', function (Closure $factory, string $class, array $properties) {
     $original = $factory();
 
@@ -50,6 +67,11 @@ test('File::fromArray returns null for an unknown type', function () {
     expect(File::fromArray(['type' => 'video']))->toBeNull()
         ->and(File::fromArray([]))->toBeNull();
 });
+
+test('File::fromArray throws for malformed known attachment types', function (array $data, string $field) {
+    expect(fn () => File::fromArray($data))
+        ->toThrow(InvalidArgumentException::class, "[{$field}] is missing or invalid");
+})->with('malformed attachment types');
 
 test('File::fromArray restores the name even when toArray emits null', function () {
     $rehydrated = File::fromArray([

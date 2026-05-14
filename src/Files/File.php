@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Files;
 
+use InvalidArgumentException;
 use Laravel\Ai\Contracts\Files\HasName;
 
 abstract class File implements HasName
@@ -15,29 +16,44 @@ abstract class File implements HasName
      */
     public static function fromArray(array $data): ?File
     {
-        $file = match ($data['type'] ?? null) {
-            'base64-image' => new Base64Image($data['base64'] ?? '', $data['mime'] ?? null),
-            'local-image' => new LocalImage($data['path'] ?? '', $data['mime'] ?? null),
-            'stored-image' => new StoredImage($data['path'] ?? '', $data['disk'] ?? null),
-            'remote-image' => new RemoteImage($data['url'] ?? '', $data['mime'] ?? null),
-            'provider-image' => new ProviderImage($data['id'] ?? ''),
-            'base64-document' => new Base64Document($data['base64'] ?? '', $data['mime'] ?? null),
-            'local-document' => new LocalDocument($data['path'] ?? '', $data['mime'] ?? null),
-            'stored-document' => new StoredDocument($data['path'] ?? '', $data['disk'] ?? null),
-            'remote-document' => new RemoteDocument($data['url'] ?? '', $data['mime'] ?? null),
-            'provider-document' => new ProviderDocument($data['id'] ?? ''),
-            'base64-audio' => new Base64Audio($data['base64'] ?? '', $data['mime'] ?? null),
-            'local-audio' => new LocalAudio($data['path'] ?? '', $data['mime'] ?? null),
-            'stored-audio' => new StoredAudio($data['path'] ?? '', $data['disk'] ?? null),
-            'remote-audio' => new RemoteAudio($data['url'] ?? '', $data['mime'] ?? null),
+        $type = $data['type'] ?? null;
+
+        if (! is_string($type)) {
+            return null;
+        }
+
+        $file = match ($type) {
+            'base64-image' => new Base64Image(self::value($data, 'base64', $type), $data['mime'] ?? null),
+            'local-image' => new LocalImage(self::value($data, 'path', $type), $data['mime'] ?? null),
+            'stored-image' => new StoredImage(self::value($data, 'path', $type), $data['disk'] ?? null),
+            'remote-image' => new RemoteImage(self::value($data, 'url', $type), $data['mime'] ?? null),
+            'provider-image' => new ProviderImage(self::value($data, 'id', $type)),
+            'base64-document' => new Base64Document(self::value($data, 'base64', $type), $data['mime'] ?? null),
+            'local-document' => new LocalDocument(self::value($data, 'path', $type), $data['mime'] ?? null),
+            'stored-document' => new StoredDocument(self::value($data, 'path', $type), $data['disk'] ?? null),
+            'remote-document' => new RemoteDocument(self::value($data, 'url', $type), $data['mime'] ?? null),
+            'provider-document' => new ProviderDocument(self::value($data, 'id', $type)),
+            'base64-audio' => new Base64Audio(self::value($data, 'base64', $type), $data['mime'] ?? null),
+            'local-audio' => new LocalAudio(self::value($data, 'path', $type), $data['mime'] ?? null),
+            'stored-audio' => new StoredAudio(self::value($data, 'path', $type), $data['disk'] ?? null),
+            'remote-audio' => new RemoteAudio(self::value($data, 'url', $type), $data['mime'] ?? null),
             default => null,
         };
 
-        if ($file !== null && isset($data['name'])) {
+        if ($file !== null && array_key_exists('name', $data)) {
             $file->as($data['name']);
         }
 
         return $file;
+    }
+
+    protected static function value(array $data, string $key, string $type): string
+    {
+        if (! isset($data[$key])) {
+            throw new InvalidArgumentException("Cannot reconstruct [{$type}] attachment because [{$key}] is missing or invalid.");
+        }
+
+        return $data[$key];
     }
 
     /**
