@@ -55,6 +55,10 @@ class PendingImageGeneration
      */
     public function size(string $size): self
     {
+        if (blank($size)) {
+            throw new InvalidArgumentException('Image size cannot be blank.');
+        }
+
         $this->size = $size;
 
         return $this;
@@ -97,6 +101,10 @@ class PendingImageGeneration
      */
     public function quality(string $quality): self
     {
+        if (blank($quality)) {
+            throw new InvalidArgumentException('Image quality cannot be blank.');
+        }
+
         $this->quality = $quality;
 
         return $this;

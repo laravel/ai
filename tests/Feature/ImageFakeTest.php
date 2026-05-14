@@ -22,6 +22,24 @@ test('image rejects whitespace-only prompt', function () {
     Image::of('   ')->generate();
 })->throws(InvalidArgumentException::class, 'A prompt is required to generate an image.');
 
+test('image rejects blank custom size', function () {
+    Image::fake();
+
+    Image::of('A sunset')->size('')->generate();
+})->throws(InvalidArgumentException::class, 'Image size cannot be blank.');
+
+test('image rejects whitespace-only custom size', function () {
+    Image::fake();
+
+    Image::of('A sunset')->size(" \t")->generate();
+})->throws(InvalidArgumentException::class, 'Image size cannot be blank.');
+
+test('image rejects blank quality', function () {
+    Image::fake();
+
+    Image::of('A sunset')->square()->quality('')->generate();
+})->throws(InvalidArgumentException::class, 'Image quality cannot be blank.');
+
 test('images can be faked', function () {
     Image::fake([
         base64_encode('first-image'),
