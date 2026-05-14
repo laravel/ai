@@ -119,7 +119,7 @@ test('image generation throws when attachments are passed', function () {
     Image::of('Add a leaf to the apple')
         ->attachments([new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')])
         ->generate(provider: 'azure', model: 'gpt-image-1');
-})->throws(LogicException::class, 'The Azure OpenAI provider does not support image edits.');
+})->throws(LogicException::class, 'Azure OpenAI does not support image editing.');
 
 test('image generation request omits response_format', function () {
     Http::fake([

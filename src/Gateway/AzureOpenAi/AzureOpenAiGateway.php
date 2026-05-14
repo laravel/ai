@@ -180,7 +180,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
         ?int $timeout = null,
     ): ImageResponse {
         if (filled($attachments)) {
-            throw new LogicException('The Azure OpenAI provider does not support image edits.');
+            throw new LogicException('Azure OpenAI does not support image editing.');
         }
 
         $response = $this->withErrorHandling(
