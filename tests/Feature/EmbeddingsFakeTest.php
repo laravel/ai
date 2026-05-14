@@ -21,19 +21,25 @@ test('embeddings reject blank string inputs', function () {
     Embeddings::fake();
 
     Embeddings::for([''])->generate();
-})->throws(InvalidArgumentException::class, 'Each input to embed must be a non-blank string (index 0).');
+})->throws(InvalidArgumentException::class, 'The input at index 0 must be a non-blank string.');
 
 test('embeddings reject whitespace-only string inputs', function () {
     Embeddings::fake();
 
     Embeddings::for([" \t\n"])->generate();
-})->throws(InvalidArgumentException::class, 'Each input to embed must be a non-blank string (index 0).');
+})->throws(InvalidArgumentException::class, 'The input at index 0 must be a non-blank string.');
 
 test('embeddings reject non-string inputs', function () {
     Embeddings::fake();
 
     Embeddings::for([123])->generate();
-})->throws(InvalidArgumentException::class, 'Each input to embed must be a non-blank string (index 0).');
+})->throws(InvalidArgumentException::class, 'The input at index 0 must be a non-blank string.');
+
+test('embeddings report the offending index for blank inputs', function () {
+    Embeddings::fake();
+
+    Embeddings::for(['valid', 'also valid', ''])->generate();
+})->throws(InvalidArgumentException::class, 'The input at index 2 must be a non-blank string.');
 
 describe('generating embeddings', function () {
     test('can fake embeddings', function () {

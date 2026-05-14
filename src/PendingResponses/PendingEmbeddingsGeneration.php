@@ -37,6 +37,8 @@ class PendingEmbeddingsGeneration
      * Create a new pending embeddings generation instance.
      *
      * @param  string[]  $inputs
+     *
+     * @throws InvalidArgumentException
      */
     public function __construct(protected array $inputs)
     {
@@ -50,7 +52,7 @@ class PendingEmbeddingsGeneration
 
         foreach ($inputs as $index => $input) {
             if (! is_string($input) || blank($input)) {
-                throw new InvalidArgumentException("Each input to embed must be a non-blank string (index {$index}).");
+                throw new InvalidArgumentException("The input at index {$index} must be a non-blank string.");
             }
         }
     }
