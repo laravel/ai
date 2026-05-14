@@ -7,20 +7,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\ConversationStore;
-use Laravel\Ai\Files\Base64Audio;
-use Laravel\Ai\Files\Base64Document;
-use Laravel\Ai\Files\Base64Image;
-use Laravel\Ai\Files\LocalAudio;
-use Laravel\Ai\Files\LocalDocument;
-use Laravel\Ai\Files\LocalImage;
-use Laravel\Ai\Files\ProviderDocument;
-use Laravel\Ai\Files\ProviderImage;
-use Laravel\Ai\Files\RemoteAudio;
-use Laravel\Ai\Files\RemoteDocument;
-use Laravel\Ai\Files\RemoteImage;
-use Laravel\Ai\Files\StoredAudio;
-use Laravel\Ai\Files\StoredDocument;
-use Laravel\Ai\Files\StoredImage;
+use Laravel\Ai\Files\File;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
@@ -141,7 +128,7 @@ class DatabaseConversationStore implements ConversationStore
 
                 if ($record->role === 'user') {
                     $attachments = collect(json_decode($record->attachments, true))
-                        ->map(fn (array $a) => $this->deserializeAttachment($a))
+                        ->map(fn (array $attachment) => File::fromArray($attachment))
                         ->filter()
                         ->values();
 
@@ -184,30 +171,6 @@ class DatabaseConversationStore implements ConversationStore
 
                 return [new AssistantMessage($record->content)];
             });
-    }
-
-    /**
-     * Reconstruct an attachment object from its serialized array representation.
-     */
-    protected function deserializeAttachment(array $attachment): mixed
-    {
-        return match ($attachment['type'] ?? '') {
-            'base64-image' => new Base64Image($attachment['base64'], $attachment['mime'] ?? null),
-            'local-image' => new LocalImage($attachment['path'], $attachment['mime'] ?? null),
-            'stored-image' => new StoredImage($attachment['path'], $attachment['disk'] ?? null),
-            'remote-image' => new RemoteImage($attachment['url'], $attachment['mime'] ?? null),
-            'provider-image' => new ProviderImage($attachment['id']),
-            'base64-document' => new Base64Document($attachment['base64'], $attachment['mime'] ?? null),
-            'local-document' => new LocalDocument($attachment['path'], $attachment['mime'] ?? null),
-            'stored-document' => new StoredDocument($attachment['path'], $attachment['disk'] ?? null),
-            'remote-document' => new RemoteDocument($attachment['url'], $attachment['mime'] ?? null),
-            'provider-document' => new ProviderDocument($attachment['id']),
-            'base64-audio' => new Base64Audio($attachment['base64'], $attachment['mime'] ?? null),
-            'local-audio' => new LocalAudio($attachment['path'], $attachment['mime'] ?? null),
-            'stored-audio' => new StoredAudio($attachment['path'], $attachment['disk'] ?? null),
-            'remote-audio' => new RemoteAudio($attachment['url'], $attachment['mime'] ?? null),
-            default => null,
-        };
     }
 
     /**
