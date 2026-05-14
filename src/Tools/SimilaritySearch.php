@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
+use InvalidArgumentException;
 use Laravel\Ai\Contracts\Tool;
 
 class SimilaritySearch implements Tool
@@ -32,6 +33,14 @@ class SimilaritySearch implements Tool
         int $limit = 15,
         ?Closure $query = null): self
     {
+        if (blank($model)) {
+            throw new InvalidArgumentException('A model class name is required for similarity search.');
+        }
+
+        if (blank($column)) {
+            throw new InvalidArgumentException('A vector column name is required for similarity search.');
+        }
+
         return new self(function (string $queryString) use ($model, $column, $minSimilarity, $limit, $query) {
             $pendingQuery = $model::query()->whereVectorSimilarTo($column, $queryString, $minSimilarity);
 
