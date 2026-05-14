@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\DeepSeek\Concerns;
 
 use Generator;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Providers\Provider;
@@ -10,6 +11,9 @@ use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\Error;
+use Laravel\Ai\Streaming\Events\ReasoningDelta;
+use Laravel\Ai\Streaming\Events\ReasoningEnd;
+use Laravel\Ai\Streaming\Events\ReasoningStart;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
@@ -41,6 +45,9 @@ trait HandlesTextStreaming
         $maxSteps ??= $options?->maxSteps;
 
         $messageId = $this->generateEventId();
+        $reasoningId = '';
+        $inReasoning = false;
+        $currentReasoning = '';
         $streamStartEmitted = false;
         $textStartEmitted = false;
         $currentText = '';
@@ -80,6 +87,40 @@ trait HandlesTextStreaming
                     $this->generateEventId(),
                     $provider->name(),
                     $data['model'] ?? $model,
+                    time(),
+                ))->withInvocationId($invocationId);
+            }
+
+            if ($inReasoning && ((isset($delta['content']) && $delta['content'] !== '') || isset($delta['tool_calls']))) {
+                $inReasoning = false;
+
+                yield (new ReasoningEnd(
+                    $this->generateEventId(),
+                    $reasoningId,
+                    time(),
+                ))->withInvocationId($invocationId);
+
+                $reasoningId = '';
+            }
+
+            if (isset($delta['reasoning_content']) && $delta['reasoning_content'] !== '') {
+                if (! $inReasoning) {
+                    $inReasoning = true;
+                    $reasoningId = $this->generateEventId();
+
+                    yield (new ReasoningStart(
+                        $this->generateEventId(),
+                        $reasoningId,
+                        time(),
+                    ))->withInvocationId($invocationId);
+                }
+
+                $currentReasoning .= $delta['reasoning_content'];
+
+                yield (new ReasoningDelta(
+                    $this->generateEventId(),
+                    $reasoningId,
+                    $delta['reasoning_content'],
                     time(),
                 ))->withInvocationId($invocationId);
             }
@@ -132,6 +173,14 @@ trait HandlesTextStreaming
             }
         }
 
+        if ($inReasoning) {
+            yield (new ReasoningEnd(
+                $this->generateEventId(),
+                $reasoningId,
+                time(),
+            ))->withInvocationId($invocationId);
+        }
+
         if ($textStartEmitted) {
             yield (new TextEnd(
                 $this->generateEventId(),
@@ -166,6 +215,7 @@ trait HandlesTextStreaming
                 $maxSteps,
                 $priorChatMessages,
                 $timeout,
+                $currentReasoning,
             );
 
             return;
@@ -197,6 +247,7 @@ trait HandlesTextStreaming
         ?int $maxSteps,
         array $priorChatMessages,
         ?int $timeout = null,
+        string $currentReasoning = '',
     ): Generator {
         $toolResults = [];
 
@@ -233,6 +284,10 @@ trait HandlesTextStreaming
 
             if (filled($currentText)) {
                 $assistantMsg['content'] = $currentText;
+            }
+
+            if (filled($currentReasoning)) {
+                $assistantMsg['reasoning_content'] = $currentReasoning;
             }
 
             $assistantMsg['tool_calls'] = array_map(
@@ -283,9 +338,10 @@ trait HandlesTextStreaming
                 $body['max_completion_tokens'] = $options->maxTokens;
             }
 
-            if (! is_null($options?->temperature)) {
-                $body['temperature'] = $options->temperature;
-            }
+            $body = array_merge($body, Arr::whereNotNull([
+                'temperature' => $options?->temperature,
+                'top_p' => $options?->topP,
+            ]));
 
             $providerOptions = $options?->providerOptions($provider->driver());
 

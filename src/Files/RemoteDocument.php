@@ -12,8 +12,6 @@ class RemoteDocument extends Document implements Arrayable, JsonSerializable, St
 {
     use CanBeUploadedToProvider, HasRemoteContent;
 
-    public ?string $mime = null;
-
     public function __construct(public string $url, ?string $mimeType = null)
     {
         $this->mime = $mimeType;

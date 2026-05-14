@@ -9,6 +9,18 @@ use Laravel\Ai\Providers\ElevenLabsProvider;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\Meta;
 
+test('audio rejects empty text', function () {
+    Audio::fake();
+
+    Audio::of('')->generate();
+})->throws(InvalidArgumentException::class, 'Text content is required to generate audio.');
+
+test('audio rejects whitespace-only text', function () {
+    Audio::fake();
+
+    Audio::of(" \t\n")->generate();
+})->throws(InvalidArgumentException::class, 'Text content is required to generate audio.');
+
 test('audio can be faked', function () {
     Audio::fake([
         base64_encode('first-audio'),

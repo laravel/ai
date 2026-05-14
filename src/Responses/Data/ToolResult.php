@@ -11,7 +11,7 @@ class ToolResult implements Arrayable, JsonSerializable
         public string $id,
         public string $name,
         public array $arguments,
-        public $result,
+        public mixed $result,
         public ?string $resultId = null,
     ) {}
 

@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\PendingResponses;
 
+use Closure;
 use Illuminate\Support\Traits\Conditionable;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
@@ -16,6 +17,7 @@ use Laravel\Ai\Prompts\QueuedTranscriptionPrompt;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\QueuedTranscriptionResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
+use Laravel\SerializableClosure\SerializableClosure;
 use LogicException;
 
 class PendingTranscriptionGeneration
@@ -27,6 +29,9 @@ class PendingTranscriptionGeneration
     protected bool $diarize = false;
 
     protected int $timeout = 30;
+
+    /** @var array<string, mixed>|SerializableClosure */
+    protected array|SerializableClosure $providerOptions = [];
 
     public function __construct(
         protected TranscribableAudio $audio,
@@ -63,6 +68,34 @@ class PendingTranscriptionGeneration
     }
 
     /**
+     * Specify provider-specific options for transcription generation.
+     *
+     * @param  array<string, mixed>|Closure(Provider): ?array<string, mixed>  $options
+     */
+    public function providerOptions(array|Closure $options): self
+    {
+        $this->providerOptions = $options instanceof Closure
+            ? new SerializableClosure($options)
+            : $options;
+
+        return $this;
+    }
+
+    /**
+     * Resolve provider options for the given provider.
+     *
+     * @return array<string, mixed>
+     */
+    protected function resolveProviderOptions(Provider $provider): array
+    {
+        if ($this->providerOptions instanceof SerializableClosure) {
+            return ($this->providerOptions)($provider) ?: [];
+        }
+
+        return $this->providerOptions;
+    }
+
+    /**
      * Generate the transcription.
      */
     public function generate(Lab|array|string|null $provider = null, ?string $model = null): TranscriptionResponse
@@ -78,8 +111,10 @@ class PendingTranscriptionGeneration
 
             $model ??= $provider->defaultTranscriptionModel();
 
+            $providerOptions = $this->resolveProviderOptions($provider);
+
             try {
-                return $provider->transcribe($this->audio, $this->language, $this->diarize, $model, $this->timeout);
+                return $provider->transcribe($this->audio, $this->language, $this->diarize, $model, $this->timeout, $providerOptions);
             } catch (FailoverableException $e) {
                 $lastException = $e;
 
@@ -109,7 +144,8 @@ class PendingTranscriptionGeneration
                     $this->language,
                     $this->diarize,
                     $provider,
-                    $model
+                    $model,
+                    is_array($this->providerOptions) ? $this->providerOptions : [],
                 )
             );
 

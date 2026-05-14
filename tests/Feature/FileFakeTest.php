@@ -124,6 +124,32 @@ test('can override the filename when storing files from a storage disk', functio
     Files::assertStored(fn (StorableFile $file) => $file->name() === 'from-storage.txt');
 });
 
+test('can override the mime type when storing files from each source', function () {
+    Files::fake();
+
+    Storage::fake('docs');
+    Storage::disk('docs')->put('original.txt', 'contents');
+
+    Files::put(Document::fromPath(__DIR__.'/../Fixtures/document.txt'), mimeType: 'application/x-local');
+    Files::putFromPath(__DIR__.'/../Fixtures/document.txt', mimeType: 'application/x-path');
+    Files::put(Document::fromStorage('original.txt', 'docs'), mimeType: 'application/x-storage');
+
+    Files::assertStored(fn (StorableFile $file) => $file->mimeType() === 'application/x-local');
+    Files::assertStored(fn (StorableFile $file) => $file->mimeType() === 'application/x-path');
+    Files::assertStored(fn (StorableFile $file) => $file->mimeType() === 'application/x-storage');
+    Files::assertNotStored(fn (StorableFile $file) => $file->mimeType() === 'text/plain');
+});
+
+test('can override the name and mime type when storing an existing storable file', function () {
+    Files::fake();
+
+    Files::put(Document::fromPath(__DIR__.'/../Fixtures/document.txt'), mimeType: 'application/json', name: 'renamed.txt');
+
+    Files::assertStored(fn (StorableFile $file) => $file->name() === 'renamed.txt');
+    Files::assertStored(fn (StorableFile $file) => $file->mimeType() === 'application/json');
+    Files::assertNotStored(fn (StorableFile $file) => $file->mimeType() === 'text/plain');
+});
+
 test('can assert file was deleted', function () {
     Files::fake();
 

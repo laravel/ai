@@ -53,9 +53,10 @@ trait BuildsTextRequests
             $body['max_completion_tokens'] = $options->maxTokens;
         }
 
-        if (! is_null($options?->temperature)) {
-            $body['temperature'] = $options->temperature;
-        }
+        $body = array_merge($body, Arr::whereNotNull([
+            'temperature' => $options?->temperature,
+            'top_p' => $options?->topP,
+        ]));
 
         $providerOptions = $options?->providerOptions($provider->driver());
 

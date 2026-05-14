@@ -281,5 +281,7 @@ test('streaming finish reason maps correctly', function (string $doneReason, $ex
     expect($streamEnd->reason)->toBe($expected->value);
 })->with([
     'stop maps to Stop' => ['stop', FinishReason::Stop],
+    'tool_calls maps to ToolCalls' => ['tool_calls', FinishReason::ToolCalls],
     'length maps to Length' => ['length', FinishReason::Length],
+    'unknown maps to Unknown' => ['unknown_reason', FinishReason::Unknown],
 ]);

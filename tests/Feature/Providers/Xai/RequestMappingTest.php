@@ -203,6 +203,98 @@ test('structured response is correctly parsed', function () {
     expect($response->structured['symbol'])->toBe('Au');
 });
 
+test('citations preserve every annotation with span indices', function () {
+    Http::fake(['*' => Http::response([
+        'id' => 'resp_123',
+        'object' => 'response',
+        'status' => 'completed',
+        'model' => 'grok-4-1-fast-reasoning',
+        'output' => [[
+            'type' => 'message',
+            'status' => 'completed',
+            'role' => 'assistant',
+            'content' => [[
+                'type' => 'output_text',
+                'text' => 'Here are sources',
+                'annotations' => [
+                    [
+                        'type' => 'url_citation',
+                        'url' => 'https://example.com/one',
+                        'title' => 'Same Title',
+                        'start_index' => 0,
+                        'end_index' => 10,
+                    ],
+                    [
+                        'type' => 'url_citation',
+                        'url' => 'https://example.com/two',
+                        'title' => 'Same Title',
+                        'start_index' => 11,
+                        'end_index' => 25,
+                    ],
+                    [
+                        'type' => 'url_citation',
+                        'url' => 'https://example.com/one',
+                        'title' => 'Same Title',
+                        'start_index' => 26,
+                        'end_index' => 40,
+                    ],
+                ],
+            ]],
+        ]],
+        'usage' => [
+            'input_tokens' => 10,
+            'output_tokens' => 5,
+        ],
+    ])]);
+
+    $response = agent()->prompt('Give me sources', provider: 'xai');
+
+    expect($response->meta->citations)->toHaveCount(3)
+        ->and($response->meta->citations[0]->url)->toBe('https://example.com/one')
+        ->and($response->meta->citations[0]->startIndex)->toBe(0)
+        ->and($response->meta->citations[0]->endIndex)->toBe(10)
+        ->and($response->meta->citations[1]->url)->toBe('https://example.com/two')
+        ->and($response->meta->citations[1]->startIndex)->toBe(11)
+        ->and($response->meta->citations[2]->url)->toBe('https://example.com/one')
+        ->and($response->meta->citations[2]->startIndex)->toBe(26);
+});
+
+test('citations omit span indices when not provided by the api', function () {
+    Http::fake(['*' => Http::response([
+        'id' => 'resp_123',
+        'object' => 'response',
+        'status' => 'completed',
+        'model' => 'grok-4-1-fast-reasoning',
+        'output' => [[
+            'type' => 'message',
+            'status' => 'completed',
+            'role' => 'assistant',
+            'content' => [[
+                'type' => 'output_text',
+                'text' => 'Sources',
+                'annotations' => [
+                    [
+                        'type' => 'url_citation',
+                        'url' => 'https://example.com/a',
+                        'title' => 'A',
+                    ],
+                ],
+            ]],
+        ]],
+        'usage' => [
+            'input_tokens' => 10,
+            'output_tokens' => 5,
+        ],
+    ])]);
+
+    $response = agent()->prompt('Give me sources', provider: 'xai');
+
+    expect($response->meta->citations)->toHaveCount(1)
+        ->and($response->meta->citations[0]->url)->toBe('https://example.com/a')
+        ->and($response->meta->citations[0]->startIndex)->toBeNull()
+        ->and($response->meta->citations[0]->endIndex)->toBeNull();
+});
+
 function fakeXaiRequestMappingResponse(string $text): PromiseInterface
 {
     return Http::response([

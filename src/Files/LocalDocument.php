@@ -13,8 +13,6 @@ class LocalDocument extends Document implements Arrayable, JsonSerializable, Sto
 {
     use CanBeUploadedToProvider;
 
-    public ?string $mime = null;
-
     public function __construct(public string $path, ?string $mimeType = null)
     {
         $this->mime = $mimeType;
@@ -48,16 +46,6 @@ class LocalDocument extends Document implements Arrayable, JsonSerializable, Sto
     public function mimeType(): ?string
     {
         return $this->mime ?? (new Filesystem)->mimeType($this->path);
-    }
-
-    /**
-     * Set the document's MIME type.
-     */
-    public function withMimeType(string $mimeType): static
-    {
-        $this->mime = $mimeType;
-
-        return $this;
     }
 
     /**

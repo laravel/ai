@@ -5,6 +5,42 @@ use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Prompts\EmbeddingsPrompt;
 use Laravel\Ai\Prompts\QueuedEmbeddingsPrompt;
 
+test('embeddings reject empty input list', function () {
+    Embeddings::fake();
+
+    Embeddings::for([])->generate();
+})->throws(InvalidArgumentException::class, 'At least one input is required to generate embeddings.');
+
+test('embeddings reject associative input array', function () {
+    Embeddings::fake();
+
+    Embeddings::for(['first' => 'Hello world'])->generate();
+})->throws(InvalidArgumentException::class, 'Inputs to embed must be a list, not an associative array.');
+
+test('embeddings reject blank string inputs', function () {
+    Embeddings::fake();
+
+    Embeddings::for([''])->generate();
+})->throws(InvalidArgumentException::class, 'The input at index 0 must be a non-blank string.');
+
+test('embeddings reject whitespace-only string inputs', function () {
+    Embeddings::fake();
+
+    Embeddings::for([" \t\n"])->generate();
+})->throws(InvalidArgumentException::class, 'The input at index 0 must be a non-blank string.');
+
+test('embeddings reject non-string inputs', function () {
+    Embeddings::fake();
+
+    Embeddings::for([123])->generate();
+})->throws(InvalidArgumentException::class, 'The input at index 0 must be a non-blank string.');
+
+test('embeddings report the offending index for blank inputs', function () {
+    Embeddings::fake();
+
+    Embeddings::for(['valid', 'also valid', ''])->generate();
+})->throws(InvalidArgumentException::class, 'The input at index 2 must be a non-blank string.');
+
 describe('generating embeddings', function () {
     test('can fake embeddings', function () {
         Embeddings::fake();
@@ -77,6 +113,30 @@ describe('generating embeddings', function () {
         });
 
         Embeddings::for(['Hello world'])->timeout(45)->generate();
+    });
+
+    test('fake embeddings prompt carries provider options', function () {
+        Embeddings::fake();
+
+        Embeddings::for(['Hello'])
+            ->providerOptions(['input_type' => 'search_query'])
+            ->generate();
+
+        Embeddings::assertGenerated(
+            fn (EmbeddingsPrompt $prompt) => $prompt->providerOptions === ['input_type' => 'search_query'],
+        );
+    });
+
+    test('fake queued embeddings prompt carries provider options', function () {
+        Embeddings::fake();
+
+        Embeddings::for(['Hello'])
+            ->providerOptions(['input_type' => 'search_query'])
+            ->queue();
+
+        Embeddings::assertQueued(
+            fn (QueuedEmbeddingsPrompt $prompt) => $prompt->providerOptions === ['input_type' => 'search_query'],
+        );
     });
 
     test('fake embeddings are normalized', function () {

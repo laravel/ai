@@ -4,6 +4,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
+use Tests\Fixtures\Tools\NamedTool;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
 
 use function Laravel\Ai\agent;
@@ -59,6 +60,19 @@ test('provider tools throw runtime exception', function () {
         tools: [new FileSearch(['store_1'])],
     )->prompt('Search for something', provider: 'mistral');
 })->throws(RuntimeException::class, 'Mistral does not support');
+
+test('tool with a name() method emits the declared name', function () {
+    Http::fake(['*' => $this->fakeTextResponse('ok')]);
+
+    agent(tools: [new NamedTool('my_custom_tool')])->prompt('Hi', provider: 'mistral');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $names = collect(data_get($body, 'tools'))->pluck('function.name')->all();
+
+        return in_array('my_custom_tool', $names, true);
+    });
+});
 
 test('tool parameters are not wrapped in schema definition', function () {
     Http::fake(['*' => $this->fakeTextResponse('done')]);

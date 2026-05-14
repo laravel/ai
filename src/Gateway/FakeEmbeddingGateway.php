@@ -26,6 +26,7 @@ class FakeEmbeddingGateway implements EmbeddingGateway
      * Generate embedding vectors representing the given inputs.
      *
      * @param  string[]  $inputs
+     * @param  array<string, mixed>  $providerOptions
      */
     public function generateEmbeddings(
         EmbeddingProvider $provider,
@@ -33,8 +34,9 @@ class FakeEmbeddingGateway implements EmbeddingGateway
         array $inputs,
         int $dimensions,
         int $timeout = 30,
+        array $providerOptions = [],
     ): EmbeddingsResponse {
-        $prompt = new EmbeddingsPrompt($inputs, $dimensions, $provider, $model, $timeout);
+        $prompt = new EmbeddingsPrompt($inputs, $dimensions, $provider, $model, $timeout, $providerOptions);
 
         return $this->nextResponse($provider, $model, $prompt);
     }

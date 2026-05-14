@@ -4,6 +4,7 @@ namespace Laravel\Ai;
 
 use Closure;
 use Illuminate\Http\UploadedFile;
+use InvalidArgumentException;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Files\Base64Audio;
 use Laravel\Ai\Files\LocalAudio;
@@ -15,6 +16,8 @@ class Transcription
 {
     /**
      * Generate a transcription of the given audio.
+     *
+     * @throws InvalidArgumentException if the given base64 audio string is empty.
      */
     public static function of(TranscribableAudio|UploadedFile|string $audio): PendingTranscriptionGeneration
     {
@@ -29,6 +32,8 @@ class Transcription
 
     /**
      * Generate a transcription of the given audio.
+     *
+     * @throws InvalidArgumentException if the given base64 audio string is empty.
      */
     public static function fromBase64(string $base64, ?string $mimeType = null): PendingTranscriptionGeneration
     {

@@ -3,7 +3,7 @@
 namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
 use Illuminate\Support\Arr;
-use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
@@ -32,22 +32,21 @@ trait BuildsTextRequests
         }
 
         if (filled($schema)) {
-            $body['text'] = $this->buildSchemaFormat($schema);
+            $body['text'] = $this->buildSchemaFormat($schema, Strict::isAppliedTo($options?->agent));
         }
 
         if (! is_null($options?->maxTokens)) {
             $body['max_output_tokens'] = $options->maxTokens;
         }
 
-        if (! is_null($options?->temperature)) {
-            $body['temperature'] = $options->temperature;
-        }
+        $body = array_merge($body, Arr::whereNotNull([
+            'temperature' => $options?->temperature,
+            'top_p' => $options?->topP,
+        ]));
 
-        $providerOptions = $options?->providerOptions(
-            Lab::tryFrom($provider->driver()) ?? $provider->driver()
-        );
+        $providerOptions = $options?->providerOptions($provider->driver());
 
-        if (! is_null($providerOptions)) {
+        if (filled($providerOptions)) {
             $body = array_merge($body, $providerOptions);
         }
 
@@ -57,18 +56,16 @@ trait BuildsTextRequests
     /**
      * Build the text format options for structured output.
      */
-    protected function buildSchemaFormat(array $schema): array
+    protected function buildSchemaFormat(array $schema, bool $strict): array
     {
-        $objectSchema = new ObjectSchema($schema);
-
-        $schemaArray = $objectSchema->toSchema();
+        $schemaArray = (new ObjectSchema($schema, strict: $strict))->toSchema();
 
         return [
             'format' => [
                 'type' => 'json_schema',
                 'name' => $schemaArray['name'] ?? 'schema_definition',
                 'schema' => Arr::except($schemaArray, ['name']),
-                'strict' => true,
+                'strict' => $strict,
             ],
         ];
     }

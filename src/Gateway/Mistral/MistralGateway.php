@@ -143,13 +143,14 @@ class MistralGateway implements EmbeddingGateway, TextGateway, TranscriptionGate
         array $inputs,
         int $dimensions,
         int $timeout = 30,
+        array $providerOptions = [],
     ): EmbeddingsResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('embeddings', [
+            fn () => $this->client($provider, $timeout)->post('embeddings', array_merge($providerOptions, [
                 'model' => $model,
                 'input' => $inputs,
-            ]),
+            ])),
         );
 
         $data = $response->json();
@@ -171,17 +172,18 @@ class MistralGateway implements EmbeddingGateway, TextGateway, TranscriptionGate
         ?string $language = null,
         bool $diarize = false,
         int $timeout = 30,
+        array $providerOptions = [],
     ): TranscriptionResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)
                 ->attach('file', $audio->content(), $this->audioFilename($audio), ['Content-Type' => $audio->mimeType()])
-                ->post('audio/transcriptions', array_filter([
+                ->post('audio/transcriptions', array_merge($providerOptions, array_filter([
                     'model' => $model,
                     'language' => $diarize ? null : $language,
                     'diarize' => $diarize,
                     'timestamp_granularities' => $diarize ? ['segment'] : null,
-                ])),
+                ]))),
         );
 
         $data = $response->json();

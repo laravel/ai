@@ -3,6 +3,7 @@
 namespace Laravel\Ai\PendingResponses;
 
 use Illuminate\Support\Traits\Conditionable;
+use InvalidArgumentException;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
@@ -23,7 +24,21 @@ class PendingReranking
      */
     public function __construct(
         protected array $documents,
-    ) {}
+    ) {
+        if (! array_is_list($documents)) {
+            throw new InvalidArgumentException('Documents to rerank must be a list, not an associative array.');
+        }
+
+        if (blank($documents)) {
+            throw new InvalidArgumentException('At least one document is required to rerank.');
+        }
+
+        foreach ($documents as $index => $document) {
+            if (! is_string($document) || blank($document)) {
+                throw new InvalidArgumentException("Each document to rerank must be a non-blank string (index {$index}).");
+            }
+        }
+    }
 
     /**
      * Limit the number of results to return.

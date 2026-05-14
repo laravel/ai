@@ -3,8 +3,9 @@
 namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
 use Generator;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
-use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -372,22 +373,18 @@ trait HandlesTextStreaming
             }
 
             if (filled($schema)) {
-                $body['text'] = $this->buildSchemaFormat($schema);
+                $body['text'] = $this->buildSchemaFormat($schema, Strict::isAppliedTo($options?->agent));
             }
 
-            if (! is_null($options?->temperature)) {
-                $body['temperature'] = $options->temperature;
-            }
+            $body = array_merge($body, Arr::whereNotNull([
+                'temperature' => $options?->temperature,
+                'top_p' => $options?->topP,
+                'max_output_tokens' => $options?->maxTokens,
+            ]));
 
-            if (! is_null($options?->maxTokens)) {
-                $body['max_output_tokens'] = $options->maxTokens;
-            }
+            $providerOptions = $options?->providerOptions($provider->driver());
 
-            $providerOptions = $options?->providerOptions(
-                Lab::tryFrom($provider->driver()) ?? $provider->driver()
-            );
-
-            if (! is_null($providerOptions)) {
+            if (filled($providerOptions)) {
                 $body = array_merge($body, $providerOptions);
             }
 

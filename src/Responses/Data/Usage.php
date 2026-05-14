@@ -121,10 +121,17 @@ class Usage implements Arrayable, JsonSerializable
     public function toArray(): array
     {
         return [
+            // New modality-indexed structure
             'input_tokens' => $this->includeTotals($this->inputTokens),
             'output_tokens' => $this->includeTotals($this->outputTokens),
             'cached_tokens' => $this->includeTotals($this->cachedTokens),
             'tools_tokens' => $this->includeTotals($this->toolsTokens),
+            // Backward compatibility - legacy scalar field names
+            'prompt_tokens' => $this->promptTokens,
+            'completion_tokens' => $this->completionTokens,
+            'cache_write_input_tokens' => $this->cacheWriteInputTokens,
+            'cache_read_input_tokens' => $this->cacheReadInputTokens,
+            'reasoning_tokens' => $this->reasoningTokens,
         ];
     }
 

@@ -3,8 +3,8 @@
 namespace Laravel\Ai\Gateway\Xai\Concerns;
 
 use Generator;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
-use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -365,17 +365,13 @@ trait HandlesTextStreaming
                 $body['text'] = $this->buildSchemaFormat($schema);
             }
 
-            if (! is_null($options?->temperature)) {
-                $body['temperature'] = $options->temperature;
-            }
+            $body = array_merge($body, Arr::whereNotNull([
+                'temperature' => $options?->temperature,
+                'top_p' => $options?->topP,
+                'max_output_tokens' => $options?->maxTokens,
+            ]));
 
-            if (! is_null($options?->maxTokens)) {
-                $body['max_output_tokens'] = $options->maxTokens;
-            }
-
-            $providerOptions = $options?->providerOptions(
-                Lab::tryFrom($provider->driver()) ?? $provider->driver()
-            );
+            $providerOptions = $options?->providerOptions($provider->driver());
 
             if (filled($providerOptions)) {
                 $body = array_merge($body, $providerOptions);

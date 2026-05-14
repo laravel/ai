@@ -37,10 +37,14 @@ class Files
         };
 
         if ($name !== null) {
-            $file->as($name);
+            $file = $file->as($name);
         }
 
-        return Ai::fakeableFileProvider($provider)->putFile($file, $mimeType, $name);
+        if ($mimeType !== null) {
+            $file = $file->withMimeType($mimeType);
+        }
+
+        return Ai::fakeableFileProvider($provider)->putFile($file);
     }
 
     /**

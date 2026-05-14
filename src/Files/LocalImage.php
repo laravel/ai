@@ -4,6 +4,7 @@ namespace Laravel\Ai\Files;
 
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Filesystem\Filesystem;
+use InvalidArgumentException;
 use JsonSerializable;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
@@ -13,10 +14,12 @@ class LocalImage extends Image implements Arrayable, JsonSerializable, StorableF
 {
     use CanBeUploadedToProvider;
 
-    public ?string $mime = null;
-
     public function __construct(public string $path, ?string $mimeType = null)
     {
+        if (blank($path)) {
+            throw new InvalidArgumentException('Image file path cannot be empty.');
+        }
+
         $this->mime = $mimeType;
     }
 
@@ -48,18 +51,6 @@ class LocalImage extends Image implements Arrayable, JsonSerializable, StorableF
     public function mimeType(): ?string
     {
         return $this->mime ?? ((new Filesystem)->mimeType($this->path) ?: null);
-    }
-
-    /**
-     * Set the image's MIME type.
-     *
-     * @return $this
-     */
-    public function withMimeType(string $mimeType): static
-    {
-        $this->mime = $mimeType;
-
-        return $this;
     }
 
     /**

@@ -16,6 +16,7 @@ use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Files\File;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\StoredImage;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
@@ -31,6 +32,7 @@ use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
+use LogicException;
 
 class OpenAiGateway implements Gateway
 {
@@ -123,9 +125,9 @@ class OpenAiGateway implements Gateway
     /**
      * Generate an image.
      *
-     * @param  array<ImageFile>  $attachments
-     * @param  '3:2'|'2:3'|'1:1'  $size
-     * @param  'low'|'medium'|'high'  $quality
+     * @param  array<Image>  $attachments
+     * @param  '3:2'|'2:3'|'1:1'|null  $size
+     * @param  'low'|'medium'|'high'|null  $quality
      */
     public function generateImage(
         ImageProvider $provider,
@@ -172,7 +174,9 @@ class OpenAiGateway implements Gateway
             'model' => $model,
             'prompt' => $prompt,
             ...$provider->defaultImageOptions($size, $quality),
-            ...(str_starts_with($model, 'gpt-image') ? ['moderation' => 'low'] : []),
+            ...(str_starts_with($model, 'gpt-image')
+                ? ['moderation' => 'low']
+                : ['response_format' => 'b64_json']),
         ]);
     }
 
@@ -190,6 +194,9 @@ class OpenAiGateway implements Gateway
     ) {
         $request = $this->client($provider, $timeout ?? 120);
 
+        $isGptImage = str_starts_with($model, 'gpt-image');
+        $field = $isGptImage ? 'image[]' : 'image';
+
         foreach ($attachments as $attachment) {
             if (! $attachment instanceof File && ! $attachment instanceof UploadedFile) {
                 throw new InvalidArgumentException(
@@ -204,14 +211,16 @@ class OpenAiGateway implements Gateway
                 default => throw new InvalidArgumentException('Unsupported image attachment type ['.get_class($attachment).']'),
             };
 
-            $request = $request->attach('image[]', $content, 'image.png');
+            $request = $request->attach($field, $content, 'image.png');
         }
 
         return $request->post('images/edits', array_filter([
             'model' => $model,
             'prompt' => $prompt,
             ...$provider->defaultImageOptions($size, $quality),
-            ...(str_starts_with($model, 'gpt-image') ? ['moderation' => 'low'] : []),
+            ...($isGptImage
+                ? ['moderation' => 'low']
+                : ['response_format' => 'b64_json']),
         ]));
     }
 
@@ -253,6 +262,8 @@ class OpenAiGateway implements Gateway
 
     /**
      * Generate text from the given audio.
+     *
+     * @param  array<string, mixed>  $providerOptions
      */
     public function generateTranscription(
         TranscriptionProvider $provider,
@@ -261,7 +272,12 @@ class OpenAiGateway implements Gateway
         ?string $language = null,
         bool $diarize = false,
         int $timeout = 30,
+        array $providerOptions = [],
     ): TranscriptionResponse {
+        if ($diarize && filled($providerOptions['prompt'] ?? null)) {
+            throw new LogicException('OpenAI does not support the `prompt` option for diarized transcriptions.');
+        }
+
         if ($provider->driver() === 'openai' && ! $diarize) {
             $model = str_replace('-diarize', '', $model);
         }
@@ -270,12 +286,11 @@ class OpenAiGateway implements Gateway
             $provider->name(),
             fn () => $this->client($provider, $timeout)
                 ->attach('file', $audio->content(), $this->audioFilename($audio), ['Content-Type' => $audio->mimeType()])
-                ->post('audio/transcriptions', array_filter([
+                ->post('audio/transcriptions', array_merge($providerOptions, array_filter([
                     'model' => $model,
                     'language' => $language,
                     'response_format' => $diarize ? 'diarized_json' : 'json',
-                    'chunking_strategy' => $diarize ? 'auto' : null,
-                ])),
+                ]))),
         );
 
         $data = $response->json();
@@ -325,14 +340,15 @@ class OpenAiGateway implements Gateway
         array $inputs,
         int $dimensions,
         int $timeout = 30,
+        array $providerOptions = [],
     ): EmbeddingsResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('embeddings', [
+            fn () => $this->client($provider, $timeout)->post('embeddings', array_merge($providerOptions, [
                 'model' => $model,
                 'input' => $inputs,
                 'dimensions' => $dimensions,
-            ]),
+            ])),
         );
 
         $data = $response->json();

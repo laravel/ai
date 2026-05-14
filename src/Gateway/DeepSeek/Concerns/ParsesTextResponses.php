@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway\DeepSeek\Concerns;
 
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\AiException;
@@ -69,9 +70,9 @@ trait ParsesTextResponses
     /**
      * Process a single response, handling tool loops recursively.
      *
-     * Note: deepseek-reasoner responses include a `reasoning_content` field on
-     * each choice's message; it's intentionally ignored here — we only expose
-     * the final `content` text.
+     * DeepSeek thinking-mode responses can include `reasoning_content` on each
+     * choice's message. We capture it into `providerContentBlocks`; the message
+     * mapper only replays it for assistant messages that include tool calls.
      */
     protected function processResponse(
         array $data,
@@ -115,7 +116,12 @@ trait ParsesTextResponses
 
         $steps->push($step);
 
-        $assistantMessage = new AssistantMessage($text, collect($mappedToolCalls));
+        $providerContentBlocks = [];
+        if (filled($message['reasoning_content'] ?? null)) {
+            $providerContentBlocks['reasoning_content'] = $message['reasoning_content'];
+        }
+
+        $assistantMessage = new AssistantMessage($text, collect($mappedToolCalls), $providerContentBlocks);
 
         $messages->push($assistantMessage);
 
@@ -236,29 +242,11 @@ trait ParsesTextResponses
         );
 
         foreach ($messages as $msg) {
-            if ($msg instanceof AssistantMessage) {
-                $mapped = ['role' => 'assistant'];
-
-                if (filled($msg->content)) {
-                    $mapped['content'] = $msg->content;
-                }
-
-                if ($msg->toolCalls->isNotEmpty()) {
-                    $mapped['tool_calls'] = $msg->toolCalls->map(
-                        fn (ToolCall $toolCall) => $this->serializeToolCallToChat($toolCall)
-                    )->all();
-                }
-
-                $chatMessages[] = $mapped;
-            } elseif ($msg instanceof ToolResultMessage) {
-                foreach ($msg->toolResults as $toolResult) {
-                    $chatMessages[] = [
-                        'role' => 'tool',
-                        'tool_call_id' => $toolResult->resultId ?? $toolResult->id,
-                        'content' => $this->serializeToolResultOutput($toolResult->result),
-                    ];
-                }
-            }
+            match (true) {
+                $msg instanceof AssistantMessage => $this->mapAssistantMessage($msg, $chatMessages),
+                $msg instanceof ToolResultMessage => $this->mapToolResultMessage($msg, $chatMessages),
+                default => null,
+            };
         }
 
         $body = [
@@ -283,9 +271,10 @@ trait ParsesTextResponses
             $body['max_completion_tokens'] = $options->maxTokens;
         }
 
-        if (! is_null($options?->temperature)) {
-            $body['temperature'] = $options->temperature;
-        }
+        $body = array_merge($body, Arr::whereNotNull([
+            'temperature' => $options?->temperature,
+            'top_p' => $options?->topP,
+        ]));
 
         $providerOptions = $options?->providerOptions($provider->driver());
 

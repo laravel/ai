@@ -24,6 +24,7 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
      * Generate embedding vectors representing the given inputs.
      *
      * @param  string[]  $inputs
+     * @param  array<string, mixed>  $providerOptions
      */
     public function generateEmbeddings(
         EmbeddingProvider $provider,
@@ -31,15 +32,19 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
         array $inputs,
         int $dimensions,
         int $timeout = 30,
+        array $providerOptions = [],
     ): EmbeddingsResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('/embeddings', [
-                'model' => $model,
-                'input' => array_map(fn (string $text) => ['text' => $text], $inputs),
-                'dimensions' => $dimensions,
-                'task' => 'retrieval.passage',
-            ]),
+            fn () => $this->client($provider, $timeout)->post('/embeddings', array_merge(
+                ['task' => 'retrieval.passage'],
+                $providerOptions,
+                [
+                    'model' => $model,
+                    'input' => array_map(fn (string $text) => ['text' => $text], $inputs),
+                    'dimensions' => $dimensions,
+                ],
+            )),
         );
 
         $data = $response->json();
@@ -94,12 +99,20 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
      */
     protected function client(EmbeddingProvider|RerankingProvider $provider, int $timeout = 30): PendingRequest
     {
-        return Http::baseUrl('https://api.jina.ai/v1')
+        return Http::baseUrl($this->baseUrl($provider))
             ->withHeaders([
                 'Authorization' => 'Bearer '.$provider->providerCredentials()['key'],
                 'Content-Type' => 'application/json',
             ])
             ->timeout($timeout)
             ->throw();
+    }
+
+    /**
+     * Get the base URL for the Jina API.
+     */
+    protected function baseUrl(EmbeddingProvider|RerankingProvider $provider): string
+    {
+        return rtrim($provider->additionalConfiguration()['url'] ?? 'https://api.jina.ai/v1', '/');
     }
 }

@@ -26,6 +26,8 @@ class FakeTranscriptionGateway implements TranscriptionGateway
 
     /**
      * Generate text from the given audio.
+     *
+     * @param  array<string, mixed>  $providerOptions
      */
     public function generateTranscription(
         TranscriptionProvider $provider,
@@ -33,9 +35,10 @@ class FakeTranscriptionGateway implements TranscriptionGateway
         TranscribableAudio $audio,
         ?string $language = null,
         bool $diarize = false,
-        int $timeout = 30
+        int $timeout = 30,
+        array $providerOptions = [],
     ): TranscriptionResponse {
-        $transcriptionPrompt = new TranscriptionPrompt($audio, $language, $diarize, $provider, $model);
+        $transcriptionPrompt = new TranscriptionPrompt($audio, $language, $diarize, $provider, $model, $timeout, $providerOptions);
 
         return $this->nextResponse($provider, $model, $transcriptionPrompt);
     }

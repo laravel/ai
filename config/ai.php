@@ -63,6 +63,7 @@ return [
             'api_version' => env('AZURE_OPENAI_API_VERSION', '2025-04-01-preview'),
             'deployment' => env('AZURE_OPENAI_DEPLOYMENT', 'gpt-4o'),
             'embedding_deployment' => env('AZURE_OPENAI_EMBEDDING_DEPLOYMENT', 'text-embedding-3-small'),
+            'image_deployment' => env('AZURE_OPENAI_IMAGE_DEPLOYMENT', 'gpt-image-1'),
         ],
 
         'bedrock' => [
@@ -83,7 +84,6 @@ return [
         'deepseek' => [
             'driver' => 'deepseek',
             'key' => env('DEEPSEEK_API_KEY'),
-            'url' => env('DEEPSEEK_URL', 'https://api.deepseek.com'),
         ],
 
         'eleven' => [
@@ -94,12 +94,12 @@ return [
         'gemini' => [
             'driver' => 'gemini',
             'key' => env('GEMINI_API_KEY'),
+            'url' => env('GEMINI_URL', 'https://generativelanguage.googleapis.com/v1beta/'),
         ],
 
         'groq' => [
             'driver' => 'groq',
             'key' => env('GROQ_API_KEY'),
-            'url' => env('GROQ_URL', 'https://api.groq.com/openai/v1'),
         ],
 
         'jina' => [
@@ -110,7 +110,6 @@ return [
         'mistral' => [
             'driver' => 'mistral',
             'key' => env('MISTRAL_API_KEY'),
-            'url' => env('MISTRAL_URL', 'https://api.mistral.ai/v1'),
         ],
 
         'ollama' => [
@@ -128,19 +127,16 @@ return [
         'openrouter' => [
             'driver' => 'openrouter',
             'key' => env('OPENROUTER_API_KEY'),
-            'url' => env('OPENROUTER_URL', 'https://openrouter.ai/api/v1'),
         ],
 
         'voyageai' => [
             'driver' => 'voyageai',
             'key' => env('VOYAGEAI_API_KEY'),
-            'url' => env('VOYAGEAI_URL', 'https://api.voyageai.com/v1'),
         ],
 
         'xai' => [
             'driver' => 'xai',
             'key' => env('XAI_API_KEY'),
-            'url' => env('XAI_URL', 'https://api.x.ai/v1'),
         ],
     ],
 
