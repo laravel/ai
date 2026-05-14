@@ -18,6 +18,24 @@ test('rerank rejects empty collection of documents', function () {
     Reranking::of(collect([]))->rerank('What is Laravel?');
 })->throws(InvalidArgumentException::class, 'At least one document is required to rerank.');
 
+test('rerank rejects blank document strings', function () {
+    Reranking::fake();
+
+    Reranking::of([''])->rerank('What is Laravel?');
+})->throws(InvalidArgumentException::class, 'Each document to rerank must be a non-blank string (index 0).');
+
+test('rerank rejects whitespace-only document strings', function () {
+    Reranking::fake();
+
+    Reranking::of([" \t\n"])->rerank('What is Laravel?');
+})->throws(InvalidArgumentException::class, 'Each document to rerank must be a non-blank string (index 0).');
+
+test('rerank rejects non-string documents', function () {
+    Reranking::fake();
+
+    Reranking::of([123])->rerank('What is Laravel?');
+})->throws(InvalidArgumentException::class, 'Each document to rerank must be a non-blank string (index 0).');
+
 test('can fake reranking', function () {
     Reranking::fake();
 

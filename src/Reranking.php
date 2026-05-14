@@ -15,7 +15,7 @@ class Reranking
      *
      * @param  Collection<int, string>|array<int, string>  $documents
      *
-     * @throws InvalidArgumentException if the given documents are not a list or are empty.
+     * @throws InvalidArgumentException if the given documents are not a list, are empty, are not strings, or contain only blank strings.
      */
     public static function of(Collection|array $documents): PendingReranking
     {

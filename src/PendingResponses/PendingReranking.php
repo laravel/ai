@@ -32,6 +32,12 @@ class PendingReranking
         if (blank($documents)) {
             throw new InvalidArgumentException('At least one document is required to rerank.');
         }
+
+        foreach ($documents as $index => $document) {
+            if (! is_string($document) || blank($document)) {
+                throw new InvalidArgumentException("Each document to rerank must be a non-blank string (index {$index}).");
+            }
+        }
     }
 
     /**
