@@ -4,6 +4,7 @@ namespace Laravel\Ai\PendingResponses;
 
 use Closure;
 use Illuminate\Support\Traits\Conditionable;
+use InvalidArgumentException;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Enums\Lab;
@@ -42,6 +43,10 @@ class PendingTranscriptionGeneration
      */
     public function language(string $language): self
     {
+        if (blank($language)) {
+            throw new InvalidArgumentException('Transcription language cannot be blank.');
+        }
+
         $this->language = $language;
 
         return $this;

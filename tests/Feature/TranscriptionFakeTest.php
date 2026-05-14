@@ -22,6 +22,18 @@ test('transcription rejects empty base64 audio', function () {
     Transcription::fromBase64('')->generate();
 })->throws(InvalidArgumentException::class, 'Base64 audio content cannot be empty.');
 
+test('transcription rejects blank language', function () {
+    Transcription::fake();
+
+    Transcription::of(base64_encode('fake-audio'))->language('')->generate();
+})->throws(InvalidArgumentException::class, 'Transcription language cannot be blank.');
+
+test('transcription rejects whitespace-only language', function () {
+    Transcription::fake();
+
+    Transcription::of(base64_encode('fake-audio'))->language(" \t")->generate();
+})->throws(InvalidArgumentException::class, 'Transcription language cannot be blank.');
+
 test('transcriptions can be faked', function () {
     Transcription::fake([
         'First transcription',
