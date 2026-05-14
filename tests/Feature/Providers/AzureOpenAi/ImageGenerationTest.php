@@ -2,7 +2,10 @@
 
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Image;
 
@@ -205,3 +208,49 @@ test('default image model falls back to gpt-image-1', function () {
         return $body['model'] === 'gpt-image-1';
     });
 });
+
+test('image rate limit response throws rate limited exception', function () {
+    Http::fake([
+        'test-resource.openai.azure.com/*' => Http::response([
+            'error' => [
+                'code' => '429',
+                'message' => 'Requests to the Generations_Create Operation under Azure OpenAI API have exceeded call rate limit of your current OpenAI S0 pricing tier.',
+            ],
+        ], 429),
+    ]);
+
+    Image::of('A red apple')->generate(provider: 'azure', model: 'gpt-image-1');
+})->throws(RateLimitedException::class);
+
+test('image overloaded response throws provider overloaded exception', function () {
+    Http::fake([
+        'test-resource.openai.azure.com/*' => Http::response([
+            'error' => [
+                'code' => 'ServiceUnavailable',
+                'message' => 'The server is currently overloaded. Please try again later.',
+            ],
+        ], 503),
+    ]);
+
+    Image::of('A red apple')->generate(provider: 'azure', model: 'gpt-image-1');
+})->throws(ProviderOverloadedException::class);
+
+test('image http error response throws request exception', function () {
+    Http::fake([
+        'test-resource.openai.azure.com/*' => Http::response([
+            'error' => [
+                'code' => 'contentFilter',
+                'message' => 'Your task failed as a result of our safety system. Image generations failure reason: The generated image was filtered as a result of our content policy.',
+                'innererror' => [
+                    'code' => 'ResponsibleAIPolicyViolation',
+                    'content_filter_result' => [
+                        'sexual' => ['filtered' => false, 'severity' => 'safe'],
+                        'violence' => ['filtered' => true, 'severity' => 'medium'],
+                    ],
+                ],
+            ],
+        ], 400),
+    ]);
+
+    Image::of('A red apple')->generate(provider: 'azure', model: 'gpt-image-1');
+})->throws(RequestException::class);

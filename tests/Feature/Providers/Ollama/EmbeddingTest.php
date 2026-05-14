@@ -109,6 +109,22 @@ test('embeddings http error response throws request exception', function () {
     Embeddings::for(['Hello'])->generate(provider: 'ollama', model: 'nomic-embed-text');
 })->throws(RequestException::class);
 
+test('embeddings request includes provider options in the request body', function () {
+    Http::fake(['*' => fakeOllamaEmbeddingsResponse()]);
+
+    Embeddings::for(['Hello'])
+        ->providerOptions(['truncate' => false, 'keep_alive' => '5m'])
+        ->generate(provider: 'ollama', model: 'nomic-embed-text');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return $body['truncate'] === false
+            && $body['keep_alive'] === '5m'
+            && $body['model'] === 'nomic-embed-text';
+    });
+});
+
 function fakeOllamaEmbeddingsResponse()
 {
     return Http::response([

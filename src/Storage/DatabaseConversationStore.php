@@ -63,6 +63,8 @@ class DatabaseConversationStore implements ConversationStore
     {
         $messageId = (string) Str::uuid7();
 
+        $now = now();
+
         $this->table($this->messagesTable())->insert([
             'id' => $messageId,
             'conversation_id' => $conversationId,
@@ -75,9 +77,11 @@ class DatabaseConversationStore implements ConversationStore
             'tool_results' => '[]',
             'usage' => '[]',
             'meta' => '[]',
-            'created_at' => now(),
-            'updated_at' => now(),
+            'created_at' => $now,
+            'updated_at' => $now,
         ]);
+
+        $this->touchConversation($conversationId, $now);
 
         return $messageId;
     }
@@ -88,6 +92,8 @@ class DatabaseConversationStore implements ConversationStore
     public function storeAssistantMessage(string $conversationId, string|int|null $userId, AgentPrompt $prompt, AgentResponse $response): string
     {
         $messageId = (string) Str::uuid7();
+
+        $now = now();
 
         $this->table($this->messagesTable())->insert([
             'id' => $messageId,
@@ -101,11 +107,23 @@ class DatabaseConversationStore implements ConversationStore
             'tool_results' => json_encode($response->toolResults->values()),
             'usage' => json_encode($response->usage),
             'meta' => json_encode($response->meta),
-            'created_at' => now(),
-            'updated_at' => now(),
+            'created_at' => $now,
+            'updated_at' => $now,
         ]);
 
+        $this->touchConversation($conversationId, $now);
+
         return $messageId;
+    }
+
+    /**
+     * Update the conversation's activity timestamp.
+     */
+    protected function touchConversation(string $conversationId, mixed $timestamp): void
+    {
+        $this->table($this->conversationsTable())
+            ->where('id', $conversationId)
+            ->update(['updated_at' => $timestamp]);
     }
 
     /**

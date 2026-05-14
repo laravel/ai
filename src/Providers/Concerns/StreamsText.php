@@ -24,7 +24,7 @@ trait StreamsText
      */
     public function stream(AgentPrompt $prompt): StreamableAgentResponse
     {
-        $invocationId = (string) Str::uuid7();
+        $invocationId = $prompt->invocationId ?? (string) Str::uuid7();
 
         $processedPrompt = null;
 

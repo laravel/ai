@@ -3,6 +3,7 @@
 namespace Laravel\Ai;
 
 use Closure;
+use InvalidArgumentException;
 use Laravel\Ai\Gateway\FakeAudioGateway;
 use Laravel\Ai\PendingResponses\PendingAudioGeneration;
 
@@ -10,6 +11,8 @@ class Audio
 {
     /**
      * Generate audio from the given text.
+     *
+     * @throws InvalidArgumentException if the given text is empty or whitespace-only.
      */
     public static function of(string $text): PendingAudioGeneration
     {

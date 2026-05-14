@@ -12,9 +12,11 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
+use Laravel\Ai\Gateway\Concerns\WrapsPcmAudio;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
@@ -29,12 +31,6 @@ use RuntimeException;
 
 class GeminiGateway implements Gateway
 {
-    protected const GEMINI_TTS_BITS_PER_SAMPLE = 16;
-
-    protected const GEMINI_TTS_CHANNELS = 1;
-
-    protected const GEMINI_TTS_SAMPLE_RATE = 24000;
-
     use Concerns\BuildsTextRequests;
     use Concerns\CreatesGeminiClient;
     use Concerns\HandlesTextStreaming;
@@ -45,6 +41,7 @@ class GeminiGateway implements Gateway
     use HandlesFailoverErrors;
     use InvokesTools;
     use ParsesServerSentEvents;
+    use WrapsPcmAudio;
 
     public function __construct(protected Dispatcher $events)
     {
@@ -135,9 +132,9 @@ class GeminiGateway implements Gateway
     /**
      * Generate an image.
      *
-     * @param  array<ImageFile>  $attachments
-     * @param  '3:2'|'2:3'|'1:1'  $size
-     * @param  'low'|'medium'|'high'  $quality
+     * @param  array<Image>  $attachments
+     * @param  '3:2'|'2:3'|'1:1'|null  $size
+     * @param  'low'|'medium'|'high'|null  $quality
      */
     public function generateImage(
         ImageProvider $provider,
@@ -197,12 +194,13 @@ class GeminiGateway implements Gateway
         array $inputs,
         int $dimensions,
         int $timeout = 30,
+        array $providerOptions = [],
     ): EmbeddingsResponse {
-        $requests = array_map(fn (string $input) => [
+        $requests = array_map(fn (string $input) => array_merge($providerOptions, [
             'model' => "models/{$model}",
             'content' => ['parts' => [['text' => $input]]],
             'output_dimensionality' => $dimensions,
-        ], $inputs);
+        ]), $inputs);
 
         $response = $this->withErrorHandling(
             $provider->name(),
@@ -282,6 +280,8 @@ class GeminiGateway implements Gateway
 
     /**
      * Generate text from the given audio.
+     *
+     * @param  array<string, mixed>  $providerOptions
      */
     public function generateTranscription(
         TranscriptionProvider $provider,
@@ -290,6 +290,7 @@ class GeminiGateway implements Gateway
         ?string $language = null,
         bool $diarize = false,
         int $timeout = 30,
+        array $providerOptions = [],
     ): TranscriptionResponse {
         $inlineData = ['inlineData' => [
             'mimeType' => $audio->mimeType() ?? 'audio/mp3',
@@ -303,7 +304,7 @@ class GeminiGateway implements Gateway
 
             $response = $this->withErrorHandling(
                 $provider->name(),
-                fn () => $this->client($provider, $timeout)->post("models/{$model}:generateContent", [
+                fn () => $this->client($provider, $timeout)->post("models/{$model}:generateContent", array_merge($providerOptions, [
                     'contents' => [[
                         'parts' => [['text' => $prompt], $inlineData],
                     ]],
@@ -329,7 +330,7 @@ class GeminiGateway implements Gateway
                             'required' => ['transcript', 'segments'],
                         ],
                     ],
-                ]),
+                ])),
             );
 
             $data = json_decode($response->json('candidates.0.content.parts.0.text') ?? '{}', true);
@@ -349,11 +350,11 @@ class GeminiGateway implements Gateway
 
             $response = $this->withErrorHandling(
                 $provider->name(),
-                fn () => $this->client($provider, $timeout)->post("models/{$model}:generateContent", [
+                fn () => $this->client($provider, $timeout)->post("models/{$model}:generateContent", array_merge($providerOptions, [
                     'contents' => [[
                         'parts' => [['text' => $prompt], $inlineData],
                     ]],
-                ]),
+                ])),
             );
 
             $text = $response->json('candidates.0.content.parts.0.text') ?? '';
@@ -395,24 +396,5 @@ class GeminiGateway implements Gateway
         return (float) $parts[0]
             + ((float) ($parts[1] ?? 0)) * 60
             + ((float) ($parts[2] ?? 0)) * 3600;
-    }
-
-    /**
-     * Wrap raw PCM audio in a WAV container.
-     */
-    protected function pcmToWav(string $pcm): string
-    {
-        $dataSize = strlen($pcm);
-        $byteRate = intdiv(self::GEMINI_TTS_SAMPLE_RATE * self::GEMINI_TTS_CHANNELS * self::GEMINI_TTS_BITS_PER_SAMPLE, 8);
-        $blockAlign = intdiv(self::GEMINI_TTS_CHANNELS * self::GEMINI_TTS_BITS_PER_SAMPLE, 8);
-
-        return 'RIFF'
-            .pack('V', 36 + $dataSize)
-            .'WAVE'
-            .'fmt '
-            .pack('VvvVVvv', 16, 1, self::GEMINI_TTS_CHANNELS, self::GEMINI_TTS_SAMPLE_RATE, $byteRate, $blockAlign, self::GEMINI_TTS_BITS_PER_SAMPLE)
-            .'data'
-            .pack('V', $dataSize)
-            .$pcm;
     }
 }

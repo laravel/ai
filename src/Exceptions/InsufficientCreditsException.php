@@ -8,7 +8,7 @@ class InsufficientCreditsException extends AiException implements FailoverableEx
 {
     public static function forProvider(string $provider, int $code = 0, ?Throwable $previous = null): self
     {
-        return new static(
+        return new self(
             'AI provider ['.$provider.'] has insufficient credits or quota.',
             $code,
             $previous

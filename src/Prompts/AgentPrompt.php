@@ -15,19 +15,23 @@ class AgentPrompt extends Prompt
 
     public readonly ?int $timeout;
 
+    public readonly ?string $invocationId;
+
     public function __construct(
         Agent $agent,
         string $prompt,
         Collection|array $attachments,
         TextProvider $provider,
         string $model,
-        ?int $timeout = null
+        ?int $timeout = null,
+        ?string $invocationId = null,
     ) {
         parent::__construct($prompt, $provider, $model);
 
         $this->agent = $agent;
         $this->attachments = Collection::make($attachments);
         $this->timeout = $timeout;
+        $this->invocationId = $invocationId;
     }
 
     /**
@@ -63,13 +67,14 @@ class AgentPrompt extends Prompt
             $attachments = new Collection($attachments);
         }
 
-        return new static(
+        return new self(
             $this->agent,
             $prompt,
             $attachments ?? $this->attachments,
             $this->provider,
             $this->model,
             $this->timeout,
+            $this->invocationId,
         );
     }
 

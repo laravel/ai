@@ -4,6 +4,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeAgent;
+use Tests\Fixtures\Agents\NestedStructuredAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
 
@@ -113,6 +114,20 @@ test('structured output includes json schema text format', function () {
             && isset($format['name'])
             && isset($format['schema'])
             && $format['strict'] === true;
+    });
+});
+
+test('structured agent without Strict attribute sends strict false in text format', function () {
+    Http::fake(['*' => fakeOpenAiResponse('{"elements": []}')]);
+
+    (new NestedStructuredAgent)->prompt('List elements.', provider: 'openai');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $format = data_get($body, 'text.format');
+
+        return $format['type'] === 'json_schema'
+            && $format['strict'] === false;
     });
 });
 
