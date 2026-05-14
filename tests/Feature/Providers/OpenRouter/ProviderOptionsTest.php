@@ -2,6 +2,10 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasProviderOptions;
+use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Promptable;
 use Tests\Fixtures\Agents\ProviderOptionsAgent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 
@@ -37,6 +41,36 @@ test('request body does not contain provider options when agent does not impleme
 
         return ! array_key_exists('frequency_penalty', $body)
             && ! array_key_exists('presence_penalty', $body);
+    });
+});
+
+test('agents using the docs idiom (no Lab::tryFrom workaround) have provider options reach the openrouter body', function () {
+    Http::fake(['*' => fakeOpenRouterResponse('Hello')]);
+
+    $agent = new class implements Agent, HasProviderOptions
+    {
+        use Promptable;
+
+        public function instructions(): string
+        {
+            return 'You are a helpful assistant.';
+        }
+
+        public function providerOptions(Lab|string $provider): array
+        {
+            return match ($provider) {
+                Lab::OpenRouter => ['reasoning' => ['effort' => 'medium']],
+                default => [],
+            };
+        }
+    };
+
+    $agent->prompt('Hello', provider: 'openrouter');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return data_get($body, 'reasoning.effort') === 'medium';
     });
 });
 
