@@ -17,6 +17,8 @@ class StoredDocument extends Document implements Arrayable, JsonSerializable, St
 
     /**
      * Get the raw representation of the file.
+     *
+     * @throws RuntimeException if the file does not exist on the configured disk.
      */
     public function content(): string
     {
