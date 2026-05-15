@@ -207,9 +207,16 @@ class DatabaseConversationStore implements ConversationStore
                     throw new InvalidArgumentException('Stored conversation attachment entries must be objects.');
                 }
 
-                return File::fromArray($attachment);
+                $file = File::fromArray($attachment);
+
+                if ($file === null) {
+                    $type = $attachment['type'] ?? 'unknown';
+
+                    throw new InvalidArgumentException("Cannot reconstruct stored conversation attachment because [{$type}] is unknown or invalid.");
+                }
+
+                return $file;
             })
-            ->filter()
             ->values();
     }
 

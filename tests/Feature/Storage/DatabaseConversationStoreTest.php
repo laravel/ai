@@ -290,6 +290,32 @@ test('malformed stored attachment JSON fails loudly', function () {
         ->toThrow(InvalidArgumentException::class, 'Stored conversation attachments must be a JSON array.');
 });
 
+test('unknown stored attachment type fails loudly', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Unknown attachment conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'user',
+        'content' => 'Describe this video.',
+        'attachments' => json_encode([
+            ['type' => 'video', 'url' => 'https://example.com/clip.mp4'],
+        ]),
+        'tool_calls' => '[]',
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    expect(fn () => $store->getLatestConversationMessages($conversationId, 10))
+        ->toThrow(InvalidArgumentException::class, 'Cannot reconstruct stored conversation attachment because [video] is unknown or invalid.');
+});
+
 test('malformed known stored attachments fail loudly', function () {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Malformed attachment conversation');
