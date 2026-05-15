@@ -4,6 +4,7 @@ namespace Laravel\Ai\Files;
 
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Filesystem\Filesystem;
+use InvalidArgumentException;
 use JsonSerializable;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
@@ -15,6 +16,10 @@ class LocalDocument extends Document implements Arrayable, JsonSerializable, Sto
 
     public function __construct(public string $path, ?string $mimeType = null)
     {
+        if (blank($path)) {
+            throw new InvalidArgumentException('Document file path cannot be empty.');
+        }
+
         $this->mime = $mimeType;
     }
 
