@@ -169,7 +169,7 @@ class OpenRouterGateway implements Gateway
                 ->post('chat/completions', array_filter([
                     'model' => $model,
                     'messages' => $this->buildImageMessages($prompt, $attachments),
-                    'modalities' => ['image', 'text'],
+                    'modalities' => ['image'],
                     'image_config' => $imageConfig ?: null,
                 ]))
         );
