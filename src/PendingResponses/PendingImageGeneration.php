@@ -111,16 +111,16 @@ class PendingImageGeneration
     /**
      * Generate the image.
      */
-    public function generate(Lab|array|string|null $provider = null, ?string $model = null): ImageResponse
+    public function generate(Lab|array|string|Provider|null $provider = null, ?string $model = null): ImageResponse
     {
-        $providers = Provider::formatProviderAndModelList(
+        $providers = Provider::normalizeSpecifiers(
             $provider ?? config('ai.default_for_images'), $model
         );
 
         $lastException = null;
 
-        foreach ($providers as $provider => $model) {
-            $provider = Ai::fakeableImageProvider($provider);
+        foreach ($providers as [$specifier, $model]) {
+            $provider = Ai::fakeableImageProvider($specifier);
 
             $model ??= $provider->defaultImageModel();
 
@@ -143,7 +143,7 @@ class PendingImageGeneration
     /**
      * Queue the generation of an image.
      */
-    public function queue(Lab|array|string|null $provider = null, ?string $model = null): QueuedImageResponse
+    public function queue(Lab|array|string|Provider|null $provider = null, ?string $model = null): QueuedImageResponse
     {
         $this->ensureAttachmentsAreQueueable();
 

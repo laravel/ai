@@ -6,6 +6,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\PendingResponses\PendingImageGeneration;
+use Laravel\Ai\Providers\Provider;
 
 class GenerateImage implements ShouldQueue
 {
@@ -16,7 +17,7 @@ class GenerateImage implements ShouldQueue
      */
     public function __construct(
         public PendingImageGeneration $pendingImage,
-        public Lab|array|string|null $provider = null,
+        public Lab|array|string|Provider|null $provider = null,
         public ?string $model = null) {}
 
     /**

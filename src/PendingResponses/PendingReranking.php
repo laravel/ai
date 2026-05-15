@@ -38,16 +38,16 @@ class PendingReranking
     /**
      * Rerank the documents based on their relevance to the query.
      */
-    public function rerank(string $query, Lab|array|string|null $provider = null, ?string $model = null): RerankingResponse
+    public function rerank(string $query, Lab|array|string|Provider|null $provider = null, ?string $model = null): RerankingResponse
     {
-        $providers = Provider::formatProviderAndModelList(
+        $providers = Provider::normalizeSpecifiers(
             $provider ?? config('ai.default_for_reranking'), $model
         );
 
         $lastException = null;
 
-        foreach ($providers as $provider => $model) {
-            $provider = Ai::fakeableRerankingProvider($provider);
+        foreach ($providers as [$specifier, $model]) {
+            $provider = Ai::fakeableRerankingProvider($specifier);
 
             $model ??= $provider->defaultRerankingModel();
 

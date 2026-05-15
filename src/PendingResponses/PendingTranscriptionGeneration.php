@@ -65,16 +65,16 @@ class PendingTranscriptionGeneration
     /**
      * Generate the transcription.
      */
-    public function generate(Lab|array|string|null $provider = null, ?string $model = null): TranscriptionResponse
+    public function generate(Lab|array|string|Provider|null $provider = null, ?string $model = null): TranscriptionResponse
     {
-        $providers = Provider::formatProviderAndModelList(
+        $providers = Provider::normalizeSpecifiers(
             $provider ?? config('ai.default_for_transcription'), $model
         );
 
         $lastException = null;
 
-        foreach ($providers as $provider => $model) {
-            $provider = Ai::fakeableTranscriptionProvider($provider);
+        foreach ($providers as [$specifier, $model]) {
+            $provider = Ai::fakeableTranscriptionProvider($specifier);
 
             $model ??= $provider->defaultTranscriptionModel();
 
@@ -95,7 +95,7 @@ class PendingTranscriptionGeneration
     /**
      * Queue the generation of the transcription.
      */
-    public function queue(Lab|array|string|null $provider = null, ?string $model = null): QueuedTranscriptionResponse
+    public function queue(Lab|array|string|Provider|null $provider = null, ?string $model = null): QueuedTranscriptionResponse
     {
         if (! $this->audio instanceof StoredAudio &&
             ! $this->audio instanceof LocalAudio) {

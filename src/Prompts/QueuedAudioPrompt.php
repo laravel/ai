@@ -4,6 +4,7 @@ namespace Laravel\Ai\Prompts;
 
 use Illuminate\Support\Str;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Providers\Provider;
 
 class QueuedAudioPrompt
 {
@@ -11,7 +12,7 @@ class QueuedAudioPrompt
         public readonly string $text,
         public readonly string $voice,
         public readonly ?string $instructions,
-        public readonly Lab|array|string|null $provider,
+        public readonly Lab|array|string|Provider|null $provider,
         public readonly ?string $model,
         public readonly int $timeout = 30,
     ) {}

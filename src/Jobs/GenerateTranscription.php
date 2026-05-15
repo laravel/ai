@@ -6,6 +6,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\PendingResponses\PendingTranscriptionGeneration;
+use Laravel\Ai\Providers\Provider;
 
 class GenerateTranscription implements ShouldQueue
 {
@@ -16,7 +17,7 @@ class GenerateTranscription implements ShouldQueue
      */
     public function __construct(
         public PendingTranscriptionGeneration $pendingTranscription,
-        public Lab|array|string|null $provider = null,
+        public Lab|array|string|Provider|null $provider = null,
         public ?string $model = null) {}
 
     /**

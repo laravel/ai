@@ -270,45 +270,7 @@ trait Promptable
             throw new InvalidArgumentException('The "ai.default" config value must be a string provider name or a Lab enum, not an array.');
         }
 
-        return $this->normalizeProviderSpecifiers($resolved, $model);
-    }
-
-    /**
-     * Normalize the provider input into a list of [specifier, ?model] tuples for failover iteration.
-     */
-    private function normalizeProviderSpecifiers(Lab|array|string|Provider $providers, ?string $model): array
-    {
-        if ($providers instanceof Provider) {
-            return [[$providers, $model]];
-        }
-
-        if ($providers instanceof Lab) {
-            return [[$providers->value, $model]];
-        }
-
-        if (is_string($providers)) {
-            return [[$providers, $model]];
-        }
-
-        $tuples = [];
-
-        foreach ($providers as $key => $value) {
-            if ($value instanceof Provider) {
-                $tuples[] = [$value, null];
-
-                continue;
-            }
-
-            if (is_int($key)) {
-                $name = $value instanceof Lab ? $value->value : $value;
-                $tuples[] = [$name, null];
-            } else {
-                $name = $key instanceof Lab ? $key->value : $key;
-                $tuples[] = [$name, $value];
-            }
-        }
-
-        return $tuples;
+        return Provider::normalizeSpecifiers($resolved, $model);
     }
 
     /**

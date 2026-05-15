@@ -69,6 +69,46 @@ abstract class Provider
     }
 
     /**
+     * Normalize the provider input into a list of [specifier, ?model] tuples for failover iteration.
+     *
+     * @return array<int, array{0: self|string, 1: ?string}>
+     */
+    public static function normalizeSpecifiers(Lab|array|string|self $providers, ?string $model = null): array
+    {
+        if (! is_array($providers)) {
+            return [[static::unwrapLab($providers), $model]];
+        }
+
+        $tuples = [];
+
+        foreach ($providers as $key => $value) {
+            if ($value instanceof self) {
+                $tuples[] = [$value, null];
+
+                continue;
+            }
+
+            if (is_int($key)) {
+                $tuples[] = [static::unwrapLab($value), null];
+
+                continue;
+            }
+
+            $tuples[] = [static::unwrapLab($key), $value];
+        }
+
+        return $tuples;
+    }
+
+    /**
+     * Unwrap a Lab enum into its string value, leaving providers and strings untouched.
+     */
+    private static function unwrapLab(Lab|self|string $specifier): self|string
+    {
+        return $specifier instanceof Lab ? $specifier->value : $specifier;
+    }
+
+    /**
      * Convert the provider to its string representation.
      */
     public function __toString(): string

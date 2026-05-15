@@ -6,13 +6,14 @@ use Closure;
 use DateInterval;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Gateway\FakeStoreGateway;
+use Laravel\Ai\Providers\Provider;
 
 class Stores
 {
     /**
      * Get a vector store by its ID.
      */
-    public static function get(string $storeId, ?string $provider = null): Store
+    public static function get(string $storeId, Provider|string|null $provider = null): Store
     {
         return Ai::fakeableStoreProvider($provider)->getStore($storeId);
     }
@@ -25,7 +26,7 @@ class Stores
         ?string $description = null,
         Collection|array $fileIds = [],
         ?DateInterval $expiresWhenIdleFor = null,
-        ?string $provider = null): Store
+        Provider|string|null $provider = null): Store
     {
         return Ai::fakeableStoreProvider($provider)->createStore(
             $name, $description, Collection::make($fileIds), $expiresWhenIdleFor
@@ -35,7 +36,7 @@ class Stores
     /**
      * Delete a vector store.
      */
-    public static function delete(string $storeId, ?string $provider = null): bool
+    public static function delete(string $storeId, Provider|string|null $provider = null): bool
     {
         return Ai::fakeableStoreProvider($provider)->deleteStore($storeId);
     }

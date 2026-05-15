@@ -99,16 +99,16 @@ class PendingEmbeddingsGeneration
     /**
      * Generate the embeddings.
      */
-    public function generate(Lab|array|string|null $provider = null, ?string $model = null): EmbeddingsResponse
+    public function generate(Lab|array|string|Provider|null $provider = null, ?string $model = null): EmbeddingsResponse
     {
-        $providers = Provider::formatProviderAndModelList(
+        $providers = Provider::normalizeSpecifiers(
             $provider ?? config('ai.default_for_embeddings'), $model
         );
 
         $lastException = null;
 
-        foreach ($providers as $provider => $model) {
-            $provider = Ai::fakeableEmbeddingProvider($provider);
+        foreach ($providers as [$specifier, $model]) {
+            $provider = Ai::fakeableEmbeddingProvider($specifier);
 
             $model ??= $provider->defaultEmbeddingsModel();
 
@@ -230,7 +230,7 @@ class PendingEmbeddingsGeneration
     /**
      * Queue the generation of the embeddings.
      */
-    public function queue(Lab|array|string|null $provider = null, ?string $model = null): QueuedEmbeddingsResponse
+    public function queue(Lab|array|string|Provider|null $provider = null, ?string $model = null): QueuedEmbeddingsResponse
     {
         if (Ai::embeddingsAreFaked()) {
             Ai::recordEmbeddingsGeneration(

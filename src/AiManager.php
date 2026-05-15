@@ -74,9 +74,13 @@ class AiManager extends MultipleInstanceManager
      *
      * @throws LogicException
      */
-    public function fakeableAudioProvider(?string $name = null): AudioProvider
+    public function fakeableAudioProvider(Provider|string|null $name = null): AudioProvider
     {
-        $provider = $this->audioProvider($name);
+        $provider = $name instanceof Provider ? $name : $this->instance($name);
+
+        if (! $provider instanceof AudioProvider) {
+            throw new LogicException('Provider ['.$provider::class.'] does not support audio generation.');
+        }
 
         return $this->audioIsFaked()
             ? (clone $provider)->useAudioGateway($this->fakeAudioGateway())
@@ -102,9 +106,13 @@ class AiManager extends MultipleInstanceManager
      *
      * @throws LogicException
      */
-    public function fakeableEmbeddingProvider(?string $name = null): EmbeddingProvider
+    public function fakeableEmbeddingProvider(Provider|string|null $name = null): EmbeddingProvider
     {
-        $provider = $this->embeddingProvider($name);
+        $provider = $name instanceof Provider ? $name : $this->instance($name);
+
+        if (! $provider instanceof EmbeddingProvider) {
+            throw new LogicException('Provider ['.$provider::class.'] does not support embedding generation.');
+        }
 
         return $this->embeddingsAreFaked()
             ? (clone $provider)->useEmbeddingGateway($this->fakeEmbeddingGateway())
@@ -130,9 +138,13 @@ class AiManager extends MultipleInstanceManager
      *
      * @throws LogicException
      */
-    public function fakeableRerankingProvider(?string $name = null): RerankingProvider
+    public function fakeableRerankingProvider(Provider|string|null $name = null): RerankingProvider
     {
-        $provider = $this->rerankingProvider($name);
+        $provider = $name instanceof Provider ? $name : $this->instance($name);
+
+        if (! $provider instanceof RerankingProvider) {
+            throw new LogicException('Provider ['.$provider::class.'] does not support reranking.');
+        }
 
         return $this->rerankingIsFaked()
             ? (clone $provider)->useRerankingGateway($this->fakeRerankingGateway())
@@ -158,9 +170,13 @@ class AiManager extends MultipleInstanceManager
      *
      * @throws LogicException
      */
-    public function fakeableImageProvider(?string $name = null): ImageProvider
+    public function fakeableImageProvider(Provider|string|null $name = null): ImageProvider
     {
-        $provider = $this->imageProvider($name);
+        $provider = $name instanceof Provider ? $name : $this->instance($name);
+
+        if (! $provider instanceof ImageProvider) {
+            throw new LogicException('Provider ['.$provider::class.'] does not support image generation.');
+        }
 
         return $this->imagesAreFaked()
             ? (clone $provider)->useImageGateway($this->fakeImageGateway())
@@ -254,9 +270,13 @@ class AiManager extends MultipleInstanceManager
      *
      * @throws LogicException
      */
-    public function fakeableTranscriptionProvider(?string $name = null): TranscriptionProvider
+    public function fakeableTranscriptionProvider(Provider|string|null $name = null): TranscriptionProvider
     {
-        $provider = $this->transcriptionProvider($name);
+        $provider = $name instanceof Provider ? $name : $this->instance($name);
+
+        if (! $provider instanceof TranscriptionProvider) {
+            throw new LogicException('Provider ['.$provider::class.'] does not support transcription generation.');
+        }
 
         return $this->transcriptionsAreFaked()
             ? (clone $provider)->useTranscriptionGateway($this->fakeTranscriptionGateway())
@@ -282,9 +302,13 @@ class AiManager extends MultipleInstanceManager
      *
      * @throws LogicException
      */
-    public function fakeableFileProvider(?string $name = null): FileProvider
+    public function fakeableFileProvider(Provider|string|null $name = null): FileProvider
     {
-        $provider = $this->fileProvider($name);
+        $provider = $name instanceof Provider ? $name : $this->instance($name);
+
+        if (! $provider instanceof FileProvider) {
+            throw new LogicException('Provider ['.$provider::class.'] does not support file management.');
+        }
 
         return $this->filesAreFaked()
             ? (clone $provider)->useFileGateway($this->fakeFileGateway())
@@ -310,9 +334,13 @@ class AiManager extends MultipleInstanceManager
      *
      * @throws LogicException
      */
-    public function fakeableStoreProvider(?string $name = null): StoreProvider
+    public function fakeableStoreProvider(Provider|string|null $name = null): StoreProvider
     {
-        $provider = $this->storeProvider($name);
+        $provider = $name instanceof Provider ? $name : $this->instance($name);
+
+        if (! $provider instanceof StoreProvider) {
+            throw new LogicException('Provider ['.$provider::class.'] does not support store management.');
+        }
 
         return $this->storesAreFaked()
             ? (clone $provider)->useStoreGateway($this->fakeStoreGateway())
