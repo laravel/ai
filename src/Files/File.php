@@ -79,6 +79,10 @@ abstract class File implements HasName
      */
     public function withMimeType(string $mimeType): static
     {
+        if (blank($mimeType)) {
+            throw new InvalidArgumentException('MIME type cannot be blank.');
+        }
+
         $this->mime = $mimeType;
 
         return $this;
