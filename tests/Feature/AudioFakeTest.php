@@ -21,6 +21,30 @@ test('audio rejects whitespace-only text', function () {
     Audio::of(" \t\n")->generate();
 })->throws(InvalidArgumentException::class, 'Text content is required to generate audio.');
 
+test('audio voice rejects blank value', function () {
+    Audio::fake();
+
+    Audio::of('Hello world')->voice('');
+})->throws(InvalidArgumentException::class, 'Audio voice cannot be blank.');
+
+test('audio voice rejects whitespace-only value', function () {
+    Audio::fake();
+
+    Audio::of('Hello world')->voice(" \t\n");
+})->throws(InvalidArgumentException::class, 'Audio voice cannot be blank.');
+
+test('audio instructions rejects blank value', function () {
+    Audio::fake();
+
+    Audio::of('Hello world')->instructions('');
+})->throws(InvalidArgumentException::class, 'Audio instructions cannot be blank.');
+
+test('audio instructions rejects whitespace-only value', function () {
+    Audio::fake();
+
+    Audio::of('Hello world')->instructions(" \t\n");
+})->throws(InvalidArgumentException::class, 'Audio instructions cannot be blank.');
+
 test('audio can be faked', function () {
     Audio::fake([
         base64_encode('first-audio'),

@@ -39,7 +39,13 @@ class PendingAudioGeneration
      */
     public function voice(BackedEnum|string $voice): self
     {
-        $this->voice = $voice instanceof BackedEnum ? (string) $voice->value : $voice;
+        $resolved = $voice instanceof BackedEnum ? (string) $voice->value : $voice;
+
+        if (blank($resolved)) {
+            throw new InvalidArgumentException('Audio voice cannot be blank.');
+        }
+
+        $this->voice = $resolved;
 
         return $this;
     }
@@ -69,6 +75,10 @@ class PendingAudioGeneration
      */
     public function instructions(string $instructions): self
     {
+        if (blank($instructions)) {
+            throw new InvalidArgumentException('Audio instructions cannot be blank.');
+        }
+
         $this->instructions = $instructions;
 
         return $this;
