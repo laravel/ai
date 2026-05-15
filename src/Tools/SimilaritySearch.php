@@ -100,6 +100,10 @@ class SimilaritySearch implements Tool
      */
     public function withDescription(string $description): self
     {
+        if (blank($description)) {
+            throw new InvalidArgumentException('A description is required for similarity search.');
+        }
+
         $this->description = $description;
 
         return $this;

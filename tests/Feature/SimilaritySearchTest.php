@@ -35,6 +35,14 @@ test('using model rejects blank column name', function () {
     SimilaritySearch::usingModel(FakeVectorModel::class, '  ');
 })->throws(InvalidArgumentException::class, 'A vector column name is required for similarity search.');
 
+test('with description rejects blank value', function () {
+    SimilaritySearch::usingModel(FakeVectorModel::class, 'embedding')->withDescription('');
+})->throws(InvalidArgumentException::class, 'A description is required for similarity search.');
+
+test('with description rejects whitespace-only value', function () {
+    SimilaritySearch::usingModel(FakeVectorModel::class, 'embedding')->withDescription("  \t\n");
+})->throws(InvalidArgumentException::class, 'A description is required for similarity search.');
+
 test('using model creates similarity search', function () {
     $search = SimilaritySearch::usingModel(
         FakeVectorModel::class,
