@@ -5,7 +5,12 @@ use Illuminate\Broadcasting\Channel;
 use Illuminate\Support\Facades\Event;
 use Laravel\Ai\Jobs\BroadcastAgent;
 use Laravel\Ai\Responses\StreamedAgentResponse;
+use Laravel\Ai\Streaming\BroadcastStreamEventFilter;
+use Laravel\Ai\Streaming\Events\StreamStart;
+use Laravel\Ai\Streaming\Events\TextDelta;
+use Laravel\Ai\Streaming\Events\TextStart;
 use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\BroadcastFilteringAgent;
 
 test('then callback receives streamed agent response', function () {
     Event::fake();
@@ -126,6 +131,47 @@ test('failed event shares the invocation id with broadcasts from handle', functi
     });
 
     expect(array_values(array_unique($broadcastIds)))->toBe([$invocationId]);
+});
+
+test('broadcast agent skips excluded stream event classes', function () {
+    Event::fake();
+    BroadcastFilteringAgent::fake(['Hello world']);
+
+    $job = new BroadcastAgent(
+        agent: new BroadcastFilteringAgent,
+        prompt: 'Say hello',
+        channels: new Channel('test-channel'),
+    );
+
+    $job->handle();
+
+    Event::assertDispatched(AnonymousEvent::class, fn (AnonymousEvent $event) => $event->broadcastAs() === 'stream_start');
+    Event::assertDispatched(AnonymousEvent::class, fn (AnonymousEvent $event) => $event->broadcastAs() === 'stream_end');
+    Event::assertNotDispatched(AnonymousEvent::class, fn (AnonymousEvent $event) => $event->broadcastAs() === 'text_delta');
+});
+
+test('broadcast skips excluded stream event classes when streaming synchronously', function () {
+    Event::fake();
+    BroadcastFilteringAgent::fake(['Hello world']);
+
+    (new BroadcastFilteringAgent)->broadcastNow('Say hello', new Channel('test-channel'));
+
+    Event::assertDispatched(AnonymousEvent::class, fn (AnonymousEvent $event) => $event->broadcastAs() === 'stream_end');
+    Event::assertNotDispatched(AnonymousEvent::class, fn (AnonymousEvent $event) => $event->broadcastAs() === 'text_delta');
+});
+
+test('broadcast stream event filter allows all events by default', function () {
+    $agent = new AssistantAgent;
+
+    expect(BroadcastStreamEventFilter::shouldBroadcast($agent, new StreamStart('id', 'openai', 'gpt-4', time())))->toBeTrue()
+        ->and(BroadcastStreamEventFilter::shouldBroadcast($agent, new TextDelta('id', 'msg', 'Hi', time())))->toBeTrue();
+});
+
+test('broadcast stream event filter respects excluded classes', function () {
+    $agent = new BroadcastFilteringAgent;
+
+    expect(BroadcastStreamEventFilter::shouldBroadcast($agent, new TextStart('id', 'msg', time())))->toBeTrue()
+        ->and(BroadcastStreamEventFilter::shouldBroadcast($agent, new TextDelta('id', 'msg', 'Hi', time())))->toBeFalse();
 });
 
 test('streamed response passed to then is fully resolved', function () {

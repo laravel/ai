@@ -26,6 +26,7 @@ use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\QueuedAgentResponse;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
+use Laravel\Ai\Streaming\BroadcastStreamEventFilter;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use ReflectionClass;
 use RuntimeException;
@@ -149,12 +150,26 @@ trait Promptable
     }
 
     /**
+     * The stream event classes that should not be broadcast.
+     *
+     * @return list<class-string<StreamEvent>>
+     */
+    public function exceptBroadcastStreamEvents(): array
+    {
+        return [];
+    }
+
+    /**
      * Invoke the agent with a given prompt and broadcast the streamed events.
      */
     public function broadcast(string $prompt, Channel|array $channels, array $attachments = [], bool $now = false, Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
     {
         return $this->stream($prompt, $attachments, $provider, $model)
             ->each(function (StreamEvent $event) use ($channels, $now) {
+                if (! BroadcastStreamEventFilter::shouldBroadcast($this, $event)) {
+                    return;
+                }
+
                 $event->{$now ? 'broadcastNow' : 'broadcast'}($channels);
             });
     }
