@@ -8,8 +8,6 @@ use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Tests\Fixtures\Agents\AssistantAgent;
 
-use function Laravel\Ai\agent;
-
 beforeEach(function () {
     config(['ai.providers.openrouter' => [
         ...config('ai.providers.openrouter'),
