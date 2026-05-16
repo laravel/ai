@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Facade;
 
 /**
  * @see AiManager
+ *
  * @mixin AiManager
  */
 class Ai extends Facade
