@@ -351,6 +351,17 @@ class OpenRouterGateway implements Gateway
     }
 
     /**
+     * {@inheritdoc}
+     */
+    protected function insufficientCreditPatterns(): array
+    {
+        return [
+            'insufficient credits',
+            'credit balance',
+        ];
+    }
+
+    /**
      * Map an audio MIME type to OpenRouter's input_audio.format value.
      */
     protected function audioFormat(string $mimeType): string

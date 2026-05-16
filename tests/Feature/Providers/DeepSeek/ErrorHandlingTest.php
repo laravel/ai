@@ -3,6 +3,7 @@
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Exceptions\InsufficientCreditsException;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Tests\Fixtures\Agents\AssistantAgent;
@@ -61,6 +62,25 @@ test('overloaded response throws provider overloaded exception', function () {
         provider: 'deepseek',
     );
 })->throws(ProviderOverloadedException::class);
+
+test('insufficient credit response throws insufficient credits exception', function (string $message) {
+    Http::fake([
+        'api.deepseek.com/*' => Http::response([
+            'error' => [
+                'type' => 'insufficient_balance_error',
+                'message' => $message,
+                'code' => 'insufficient_balance',
+            ],
+        ], 402),
+    ]);
+
+    (new AssistantAgent)->prompt(
+        'Hi',
+        provider: 'deepseek',
+    );
+})->with([
+    'insufficient balance' => ['Insufficient Balance'],
+])->throws(InsufficientCreditsException::class);
 
 test('error in 200 response throws ai exception', function () {
     Http::fake([
