@@ -205,6 +205,29 @@ class MistralGateway implements EmbeddingGateway, TextGateway, TranscriptionGate
     }
 
     /**
+     * {@inheritdoc}
+     *
+     * Mistral errors use a flat format: {"object":"error","message":"...","type":"..."},
+     * so the message lives at the root "message" key, not nested under "error".
+     */
+    protected function insufficientCreditMessagePath(): string
+    {
+        return 'message';
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    protected function insufficientCreditPatterns(): array
+    {
+        return [
+            'insufficient credits',
+            'credit balance',
+            'billing',
+        ];
+    }
+
+    /**
      * Determine the appropriate filename for the audio file based on its MIME type.
      */
     protected function audioFilename(TranscribableAudio $audio): string

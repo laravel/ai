@@ -39,7 +39,7 @@ trait HandlesFailoverErrors
                 }
 
                 if ($patterns = $this->insufficientCreditPatterns()) {
-                    $message = strtolower($e->response->json('error.message', ''));
+                    $message = strtolower($e->response->json($this->insufficientCreditMessagePath(), ''));
 
                     foreach ($patterns as $pattern) {
                         if (str_contains($message, $pattern)) {
@@ -73,5 +73,13 @@ trait HandlesFailoverErrors
     protected function insufficientCreditPatterns(): array
     {
         return [];
+    }
+
+    /**
+     * The JSON path used to extract the error message for credit pattern matching.
+     */
+    protected function insufficientCreditMessagePath(): string
+    {
+        return 'error.message';
     }
 }

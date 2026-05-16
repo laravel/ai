@@ -3,6 +3,7 @@
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Exceptions\InsufficientCreditsException;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Tests\Fixtures\Agents\AssistantAgent;
@@ -49,6 +50,22 @@ test('overloaded response throws provider overloaded exception', function () {
 
     (new AssistantAgent)->prompt('Hi', provider: 'mistral');
 })->throws(ProviderOverloadedException::class);
+
+test('insufficient credit response throws insufficient credits exception', function (string $message) {
+    Http::fake([
+        'api.mistral.ai/*' => Http::response([
+            'object' => 'error',
+            'message' => $message,
+            'type' => 'billing_error',
+        ], 402),
+    ]);
+
+    (new AssistantAgent)->prompt('Hi', provider: 'mistral');
+})->with([
+    'insufficient credits' => ['You have insufficient credits to process this request.'],
+    'credit balance' => ['Your credit balance has been exhausted.'],
+    'billing' => ['There is a billing issue with your account.'],
+])->throws(InsufficientCreditsException::class);
 
 test('error in 200 response throws ai exception', function () {
     Http::fake([
