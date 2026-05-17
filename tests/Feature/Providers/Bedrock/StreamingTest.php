@@ -1,5 +1,7 @@
 <?php
 
+use Aws\MockHandler;
+use Aws\Result;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
 use Laravel\Ai\Streaming\Events\ReasoningStart;
@@ -76,5 +78,54 @@ describe('text streaming', function () {
         $streamStarts = array_filter($events, fn ($e) => $e instanceof StreamStart);
 
         expect($streamStarts)->toHaveCount(2);
+    });
+
+    test('streaming round-trips reasoning block on follow-up tool step', function () {
+        $mock = new MockHandler([
+            new Result(['stream' => [
+                $this->contentBlockStart(0),
+                $this->contentBlockDelta(0, ['reasoningContent' => ['text' => 'I should call the tool']]),
+                $this->contentBlockDelta(0, ['reasoningContent' => ['signature' => 'sig-xyz']]),
+                $this->contentBlockStop(0),
+                $this->contentBlockStart(1, ['toolUse' => ['toolUseId' => 't1', 'name' => 'FixedNumberGenerator']]),
+                $this->contentBlockDelta(1, ['toolUse' => ['input' => '{}']]),
+                $this->contentBlockStop(1),
+                $this->messageStop('tool_use'),
+            ]]),
+            new Result(['stream' => [
+                $this->contentBlockStart(0),
+                $this->contentBlockDelta(0, ['text' => 'Done']),
+                $this->contentBlockStop(0),
+                $this->messageStop('end_turn'),
+            ]]),
+        ]);
+
+        $gateway = $this->gatewayWithClient($this->bedrockClient($mock));
+
+        iterator_to_array(
+            $gateway->streamText(
+                'inv-1',
+                $this->bedrockProvider(),
+                'anthropic.claude-opus-4-7-v1:0',
+                null,
+                tools: [new FixedNumberGenerator],
+            ),
+            preserve_keys: false,
+        );
+
+        $secondCall = $mock->getLastCommand()->toArray();
+        $assistantTurn = $secondCall['messages'][0];
+
+        expect($assistantTurn['role'])->toBe('assistant')
+            ->and($assistantTurn['content'][0])->toBe([
+                'reasoningContent' => [
+                    'reasoningText' => [
+                        'text' => 'I should call the tool',
+                        'signature' => 'sig-xyz',
+                    ],
+                ],
+            ])
+            ->and($assistantTurn['content'][1]['toolUse']['toolUseId'])->toBe('t1')
+            ->and($assistantTurn['content'][1]['toolUse']['name'])->toBe('FixedNumberGenerator');
     });
 });
