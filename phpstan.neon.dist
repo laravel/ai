@@ -1,7 +1,12 @@
+includes:
+  - vendor/larastan/larastan/extension.neon
+
 parameters:
   paths:
     - config
     - src
     - database
 
-  level: 1
+  level: 2
+
+  noEnvCallsOutsideOfConfig: false

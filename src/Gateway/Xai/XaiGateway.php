@@ -88,7 +88,7 @@ class XaiGateway implements TextGateway
 
         yield from $this->processTextStream(
             $invocationId, $provider, $model, $tools, $schema, $options,
-            $response->getBody(),
+            $response->toPsrResponse()->getBody(),
             timeout: $timeout,
         );
     }

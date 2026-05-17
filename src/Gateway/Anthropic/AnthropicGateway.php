@@ -124,7 +124,7 @@ class AnthropicGateway implements Gateway
             $tools,
             $schema,
             $options,
-            $response->getBody(),
+            $response->toPsrResponse()->getBody(),
             $body,
             0,
             null,

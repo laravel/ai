@@ -402,7 +402,7 @@ trait HandlesTextStreaming
                 $tools,
                 $schema,
                 $options,
-                $response->getBody(),
+                $response->toPsrResponse()->getBody(),
                 $depth + 1,
                 $maxSteps,
                 $timeout,

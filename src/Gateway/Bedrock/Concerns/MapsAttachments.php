@@ -6,6 +6,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
+use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Files\Document;
@@ -54,7 +55,7 @@ trait MapsAttachments
     /**
      * Build a Bedrock document content block.
      */
-    protected function buildDocumentBlock(Document $document): array
+    protected function buildDocumentBlock(Document&StorableFile $document): array
     {
         return [
             'document' => [
@@ -70,7 +71,7 @@ trait MapsAttachments
     /**
      * Build a Bedrock image content block.
      */
-    protected function buildImageBlock(Image $image, string $bytes): array
+    protected function buildImageBlock(Image&StorableFile $image, string $bytes): array
     {
         return [
             'image' => [
@@ -85,7 +86,7 @@ trait MapsAttachments
     /**
      * Map a Document's MIME type to a Bedrock document format.
      */
-    protected function getDocumentFormat(Document $document): string
+    protected function getDocumentFormat(Document&StorableFile $document): string
     {
         $mime = strtolower(trim(strtok($document->mimeType() ?? 'text/plain', ';')));
 
@@ -124,7 +125,7 @@ trait MapsAttachments
      *
      * @throws InvalidArgumentException if the MIME type cannot be determined or is unsupported.
      */
-    protected function getImageFormat(Image $image): string
+    protected function getImageFormat(Image&StorableFile $image): string
     {
         $mime = $image->mimeType();
 

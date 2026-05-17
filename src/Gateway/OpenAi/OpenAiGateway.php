@@ -115,7 +115,7 @@ class OpenAiGateway implements Gateway
             $tools,
             $schema,
             $options,
-            $response->getBody(),
+            $response->toPsrResponse()->getBody(),
             0,
             null,
             $timeout,

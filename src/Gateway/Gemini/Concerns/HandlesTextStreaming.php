@@ -287,7 +287,7 @@ trait HandlesTextStreaming
                 $tools,
                 $schema,
                 $options,
-                $response->getBody(),
+                $response->toPsrResponse()->getBody(),
                 $contents,
                 $instructions,
                 $depth + 1,

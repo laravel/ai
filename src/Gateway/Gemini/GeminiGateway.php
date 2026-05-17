@@ -120,7 +120,7 @@ class GeminiGateway implements Gateway
             $tools,
             $schema,
             $options,
-            $response->getBody(),
+            $response->toPsrResponse()->getBody(),
             $contents,
             $instructions,
             0,

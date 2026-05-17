@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Contracts\RemembersConversation;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Throwable;
@@ -27,6 +28,10 @@ class RememberConversation
     {
         return $next($prompt)->then(function ($response) use ($prompt) {
             $agent = $prompt->agent;
+
+            if (! $agent instanceof RemembersConversation) {
+                return;
+            }
 
             // Create conversation if necessary...
             if (! $agent->currentConversation()) {

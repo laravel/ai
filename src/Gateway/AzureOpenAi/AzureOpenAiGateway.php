@@ -127,7 +127,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
             $tools,
             $schema,
             $options,
-            $response->getBody(),
+            $response->toPsrResponse()->getBody(),
             0,
             null,
             $timeout,

@@ -57,9 +57,7 @@ class FakeTextGateway implements TextGateway
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): TextResponse {
-        $message = (new Collection($messages))->last(function ($message) {
-            return $message instanceof UserMessage;
-        });
+        $message = $this->lastUserMessageOrFail($messages);
 
         $response = $this->nextResponse(
             $provider, $model, $message->content, $message->attachments, $schema
@@ -135,9 +133,7 @@ class FakeTextGateway implements TextGateway
         yield new StreamStart(ulid(), $provider->name(), $model, time());
         yield new TextStart(ulid(), $messageId, time());
 
-        $message = (new Collection($messages))->last(function ($message) {
-            return $message instanceof UserMessage;
-        });
+        $message = $this->lastUserMessageOrFail($messages);
 
         $fakeResponse = $this->nextResponse(
             $provider, $model, $message->content, $message->attachments, $schema
@@ -160,6 +156,22 @@ class FakeTextGateway implements TextGateway
         // Fake the stream and text ending...
         yield new TextEnd(ulid(), $messageId, time());
         yield new StreamEnd(ulid(), 'stop', new Usage, time());
+    }
+
+    /**
+     * Get the most recent user message in the conversation.
+     *
+     * @param  array<int, mixed>  $messages
+     */
+    protected function lastUserMessageOrFail(array $messages): UserMessage
+    {
+        $message = (new Collection($messages))->last(fn ($message) => $message instanceof UserMessage);
+
+        if (! $message instanceof UserMessage) {
+            throw new RuntimeException('A user message is required to fake a text response.');
+        }
+
+        return $message;
     }
 
     /**

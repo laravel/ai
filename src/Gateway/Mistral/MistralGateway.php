@@ -127,7 +127,7 @@ class MistralGateway implements EmbeddingGateway, TextGateway, TranscriptionGate
             $tools,
             $schema,
             $options,
-            $response->getBody(),
+            $response->toPsrResponse()->getBody(),
             $instructions,
             $messages,
             timeout: $timeout,

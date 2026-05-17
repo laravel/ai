@@ -2,8 +2,8 @@
 
 namespace Laravel\Ai\Events;
 
+use Laravel\Ai\Contracts\Providers\Provider;
 use Laravel\Ai\Exceptions\FailoverableException;
-use Laravel\Ai\Providers\Provider;
 
 class ProviderFailedOver
 {

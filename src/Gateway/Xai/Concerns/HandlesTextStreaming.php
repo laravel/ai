@@ -386,7 +386,7 @@ trait HandlesTextStreaming
 
             yield from $this->processTextStream(
                 $invocationId, $provider, $model, $tools, $schema, $options,
-                $response->getBody(), $depth + 1, $maxSteps, $timeout,
+                $response->toPsrResponse()->getBody(), $depth + 1, $maxSteps, $timeout,
             );
         } else {
             yield (new StreamEnd(

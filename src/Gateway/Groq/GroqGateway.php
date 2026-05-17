@@ -116,7 +116,7 @@ class GroqGateway implements TextGateway
             $tools,
             $schema,
             $options,
-            $response->getBody(),
+            $response->toPsrResponse()->getBody(),
             $instructions,
             $messages,
             0,

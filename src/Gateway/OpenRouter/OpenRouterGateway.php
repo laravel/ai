@@ -134,7 +134,7 @@ class OpenRouterGateway implements Gateway
             $tools,
             $schema,
             $options,
-            $response->getBody(),
+            $response->toPsrResponse()->getBody(),
             $instructions,
             $messages,
             0,
