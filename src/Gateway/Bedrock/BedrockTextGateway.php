@@ -169,7 +169,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             }
 
             $allToolCalls = array_merge($allToolCalls, $toolCalls);
-            $conversationMessages[] = $this->buildAssistantConversationMessage($output, $toolCalls);
+            $conversationMessages[] = $this->buildAssistantConversationMessage($output, $toolCalls, $providerContentBlocks);
 
             $toolResults = $this->executeToolCalls($tools, $toolCalls);
             $allToolResults = array_merge($allToolResults, $toolResults);
@@ -441,7 +441,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                 break;
             }
 
-            $conversationMessages[] = $this->buildAssistantConversationMessage($assistantText, $toolCalls);
+            $conversationMessages[] = $this->buildAssistantConversationMessage($assistantText, $toolCalls, array_values($responseContent));
 
             foreach ($toolCalls as $toolCall) {
                 yield (new ToolCallEvent(
@@ -673,9 +673,17 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
      * Build the assistant conversation message block combining text and tool calls.
      *
      * @param  array<ToolCall>  $toolCalls
+     * @param  array<int, array<string, mixed>>  $providerContentBlocks
      */
-    protected function buildAssistantConversationMessage(string $text, array $toolCalls): array
+    protected function buildAssistantConversationMessage(string $text, array $toolCalls, array $providerContentBlocks = []): array
     {
+        if (filled($providerContentBlocks)) {
+            return [
+                'role' => 'assistant',
+                'content' => $this->ensureToolInputIsObject($providerContentBlocks),
+            ];
+        }
+
         return [
             'role' => 'assistant',
             'content' => array_merge(
@@ -689,6 +697,23 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                 ], $toolCalls),
             ),
         ];
+    }
+
+    /**
+     * Cast empty toolUse.input arrays to objects so the Converse API doesn't reject them.
+     *
+     * @param  array<int, array<string, mixed>>  $content
+     * @return array<int, array<string, mixed>>
+     */
+    protected function ensureToolInputIsObject(array $content): array
+    {
+        return array_map(function (array $block) {
+            if (isset($block['toolUse'])) {
+                $block['toolUse']['input'] = (object) ($block['toolUse']['input'] ?? []);
+            }
+
+            return $block;
+        }, $content);
     }
 
     /**
@@ -774,6 +799,13 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
      */
     protected function formatAssistantMessage(AssistantMessage $message): array
     {
+        if (filled($message->providerContentBlocks)) {
+            return [
+                'role' => 'assistant',
+                'content' => $this->ensureToolInputIsObject($message->providerContentBlocks),
+            ];
+        }
+
         $content = [];
 
         if (! empty($message->content)) {
