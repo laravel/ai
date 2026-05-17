@@ -40,21 +40,18 @@ test('overloaded response throws provider overloaded exception', function () {
     (new AssistantAgent)->prompt('Hello', provider: 'openrouter');
 })->throws(ProviderOverloadedException::class);
 
-test('insufficient credit response throws insufficient credits exception', function (string $message) {
+test('402 response throws insufficient credits exception', function () {
     Http::fake([
         'openrouter.ai/*' => Http::response([
             'error' => [
-                'type' => 'payment_required',
-                'message' => $message,
+                'code' => 402,
+                'message' => 'Insufficient credits. Add more credits at https://openrouter.ai/credits',
             ],
         ], 402),
     ]);
 
     (new AssistantAgent)->prompt('Hello', provider: 'openrouter');
-})->with([
-    'insufficient credits' => ['Insufficient credits. Add more credits at https://openrouter.ai/credits'],
-    'credit balance' => ['Your credit balance is too low to complete this request.'],
-])->throws(InsufficientCreditsException::class);
+})->throws(InsufficientCreditsException::class);
 
 test('error in 200 response throws ai exception', function () {
     Http::fake(['openrouter.ai/*' => Http::response([

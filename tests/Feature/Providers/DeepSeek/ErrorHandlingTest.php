@@ -63,12 +63,13 @@ test('overloaded response throws provider overloaded exception', function () {
     );
 })->throws(ProviderOverloadedException::class);
 
-test('insufficient credit response throws insufficient credits exception', function (string $message) {
+test('402 response throws insufficient credits exception', function () {
     Http::fake([
         'api.deepseek.com/*' => Http::response([
             'error' => [
+                'message' => 'Insufficient Balance',
                 'type' => 'insufficient_balance_error',
-                'message' => $message,
+                'param' => null,
                 'code' => 'insufficient_balance',
             ],
         ], 402),
@@ -78,9 +79,7 @@ test('insufficient credit response throws insufficient credits exception', funct
         'Hi',
         provider: 'deepseek',
     );
-})->with([
-    'insufficient balance' => ['Insufficient Balance'],
-])->throws(InsufficientCreditsException::class);
+})->throws(InsufficientCreditsException::class);
 
 test('error in 200 response throws ai exception', function () {
     Http::fake([
