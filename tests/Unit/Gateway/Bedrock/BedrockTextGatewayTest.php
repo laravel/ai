@@ -20,6 +20,7 @@ use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Tools\Request;
+use Tests\Fixtures\Agents\ProviderOptionsAgent;
 use Tests\Fixtures\Tools\NamedTool;
 
 function textGateway(): object
@@ -511,4 +512,47 @@ test('build converse parameters includes tool config and inference config when p
     expect($params)->not->toHaveKey('system')
         ->and($params['toolConfig'])->toEqual(['tools' => $formattedTools])
         ->and($params['inferenceConfig'])->toEqual(['maxTokens' => 100]);
+});
+
+test('build converse parameters flat-merges agent provider options for bedrock', function () {
+    $options = TextGenerationOptions::forAgent(new ProviderOptionsAgent);
+
+    $params = textGateway()->callBuildConverseParameters(
+        'claude-sonnet',
+        null,
+        [['role' => 'user', 'content' => [['text' => 'hi']]]],
+        null,
+        null,
+        true,
+        $options,
+        false,
+    );
+
+    expect($params['additionalModelRequestFields'])->toEqual([
+        'thinking' => [
+            'type' => 'adaptive',
+        ],
+        'output_config' => [
+            'effort' => 'high',
+        ],
+    ])->and($params['guardrailConfig'])->toEqual([
+        'guardrailIdentifier' => 'gr-1',
+        'guardrailVersion' => '1',
+    ]);
+});
+
+test('build converse parameters omits provider options when agent has none', function () {
+    $params = textGateway()->callBuildConverseParameters(
+        'claude-sonnet',
+        null,
+        [['role' => 'user', 'content' => [['text' => 'hi']]]],
+        null,
+        null,
+        true,
+        null,
+        false,
+    );
+
+    expect($params)->not->toHaveKey('additionalModelRequestFields')
+        ->and($params)->not->toHaveKey('guardrailConfig');
 });
