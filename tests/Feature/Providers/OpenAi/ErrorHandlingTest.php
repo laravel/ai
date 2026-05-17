@@ -3,6 +3,7 @@
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Exceptions\InsufficientCreditsException;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Tests\Fixtures\Agents\AssistantAgent;
@@ -61,6 +62,22 @@ test('overloaded response throws provider overloaded exception', function () {
         provider: 'openai',
     );
 })->throws(ProviderOverloadedException::class);
+
+test('402 response throws insufficient credits exception', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::response([
+            'error' => [
+                'type' => 'insufficient_quota',
+                'message' => 'You exceeded your current quota, please check your plan and billing details.',
+            ],
+        ], 402),
+    ]);
+
+    (new AssistantAgent)->prompt(
+        'Hi',
+        provider: 'openai',
+    );
+})->throws(InsufficientCreditsException::class);
 
 test('error in 200 response throws ai exception', function () {
     Http::fake([
