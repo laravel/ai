@@ -181,6 +181,29 @@ test('assistant message with empty tool input is formatted as a json object', fu
         ->and(json_encode($input))->toBe('{}');
 });
 
+test('assistant message with providerContentBlocks is formatted verbatim', function () {
+    $message = new AssistantMessage(
+        'Hello',
+        new Collection([new ToolCall('tool-1', 'doIt', [])]),
+        providerContentBlocks: [
+            ['reasoningContent' => ['reasoningText' => ['text' => 'think', 'signature' => 'sig']]],
+            ['text' => 'Hello'],
+            ['toolUse' => ['toolUseId' => 'tool-1', 'name' => 'doIt', 'input' => []]],
+        ],
+    );
+
+    $formatted = textGateway()->callFormatMessages([$message]);
+    $content = $formatted[0]['content'];
+
+    expect($formatted[0]['role'])->toBe('assistant')
+        ->and($content[0])->toBe(['reasoningContent' => ['reasoningText' => ['text' => 'think', 'signature' => 'sig']]])
+        ->and($content[1])->toBe(['text' => 'Hello'])
+        ->and($content[2]['toolUse']['toolUseId'])->toBe('tool-1')
+        ->and($content[2]['toolUse']['name'])->toBe('doIt')
+        ->and($content[2]['toolUse']['input'])->toBeInstanceOf(stdClass::class)
+        ->and(json_encode($content[2]['toolUse']['input']))->toBe('{}');
+});
+
 test('tool result message is formatted with tool result blocks', function () {
     $message = new ToolResultMessage(new Collection([
         new ToolResult('tool-1', 'RandomGenerator', [], 'the result'),
