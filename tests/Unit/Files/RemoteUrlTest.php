@@ -1,0 +1,29 @@
+<?php
+
+use Laravel\Ai\Files\RemoteAudio;
+use Laravel\Ai\Files\RemoteDocument;
+use Laravel\Ai\Files\RemoteImage;
+
+test('remote document rejects empty url', function () {
+    new RemoteDocument('');
+})->throws(InvalidArgumentException::class, 'Remote document URL cannot be empty.');
+
+test('remote document rejects whitespace-only url', function () {
+    new RemoteDocument("  \t\n");
+})->throws(InvalidArgumentException::class, 'Remote document URL cannot be empty.');
+
+test('remote image rejects empty url', function () {
+    new RemoteImage('');
+})->throws(InvalidArgumentException::class, 'Remote image URL cannot be empty.');
+
+test('remote image rejects whitespace-only url', function () {
+    new RemoteImage("  \t\n");
+})->throws(InvalidArgumentException::class, 'Remote image URL cannot be empty.');
+
+test('remote audio rejects empty url', function () {
+    new RemoteAudio('');
+})->throws(InvalidArgumentException::class, 'Remote audio URL cannot be empty.');
+
+test('remote audio rejects whitespace-only url', function () {
+    new RemoteAudio("  \t\n");
+})->throws(InvalidArgumentException::class, 'Remote audio URL cannot be empty.');
