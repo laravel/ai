@@ -120,8 +120,11 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
 
             $output = '';
             $toolCalls = [];
+            $providerContentBlocks = [];
 
             foreach ($result['output']['message']['content'] ?? [] as $block) {
+                $providerContentBlocks[] = $block;
+
                 if (isset($block['text'])) {
                     $output .= $block['text'];
 
@@ -153,7 +156,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             $stepUsage = new Usage($stepInputTokens, $stepOutputTokens);
             $finishReason = $this->extractFinishReason($result);
 
-            $responseMessages->push(new AssistantMessage($output, new Collection($toolCalls)));
+            $responseMessages->push(new AssistantMessage($output, new Collection($toolCalls), $providerContentBlocks));
 
             if (empty($toolCalls)) {
                 if ($schemaTools && $finishReason === FinishReason::ToolCalls) {
