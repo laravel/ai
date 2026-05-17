@@ -203,6 +203,33 @@ test('response usage is correctly parsed', function () {
         ->and($response->usage->completionTokens)->toBe(5);
 });
 
+test('response usage includes reasoning tokens', function () {
+    Http::fake(['*' => Http::response([
+        'id' => 'chatcmpl-r1-1',
+        'object' => 'chat.completion',
+        'model' => 'deepseek-r1-distill-llama-70b',
+        'choices' => [[
+            'index' => 0,
+            'message' => ['role' => 'assistant', 'content' => 'The answer is 4.'],
+            'finish_reason' => 'stop',
+        ]],
+        'usage' => [
+            'prompt_tokens' => 100,
+            'completion_tokens' => 50,
+            'total_tokens' => 150,
+            'completion_tokens_details' => [
+                'reasoning_tokens' => 20,
+            ],
+        ],
+    ])]);
+
+    $response = agent()->prompt('What is 2+2?', provider: 'groq', model: 'deepseek-r1-distill-llama-70b');
+
+    expect($response->usage->promptTokens)->toBe(100)
+        ->and($response->usage->completionTokens)->toBe(50)
+        ->and($response->usage->reasoningTokens)->toBe(20);
+});
+
 test('structured response is correctly parsed', function () {
     Http::fake(['*' => fakeGroqResponse('{"symbol": "Au"}')]);
 

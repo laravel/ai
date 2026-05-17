@@ -66,10 +66,7 @@ trait HandlesTextStreaming
 
             if (! $choice) {
                 if (isset($data['usage'])) {
-                    $usage = new Usage(
-                        $data['usage']['prompt_tokens'] ?? 0,
-                        $data['usage']['completion_tokens'] ?? 0,
-                    );
+                    $usage = $this->extractUsage($data);
                 }
 
                 continue;
@@ -132,10 +129,7 @@ trait HandlesTextStreaming
             }
 
             if (isset($data['usage'])) {
-                $usage = new Usage(
-                    $data['usage']['prompt_tokens'] ?? 0,
-                    $data['usage']['completion_tokens'] ?? 0,
-                );
+                $usage = $this->extractUsage($data);
             }
         }
 
