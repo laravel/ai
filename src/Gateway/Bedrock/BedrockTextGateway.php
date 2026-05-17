@@ -12,6 +12,7 @@ use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Bedrock\Concerns\CreatesBedrockClient;
 use Laravel\Ai\Gateway\Bedrock\Concerns\MapsAttachments;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
@@ -522,6 +523,12 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
 
         if (! empty($inferenceConfig)) {
             $parameters['inferenceConfig'] = $inferenceConfig;
+        }
+
+        $providerOptions = $options?->providerOptions(Lab::Bedrock);
+
+        if (! empty($providerOptions)) {
+            $parameters = array_merge($parameters, $providerOptions);
         }
 
         return $parameters;
