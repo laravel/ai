@@ -230,6 +230,33 @@ test('response usage includes reasoning tokens', function () {
         ->and($response->usage->reasoningTokens)->toBe(20);
 });
 
+test('response usage includes cached prompt tokens', function () {
+    Http::fake(['*' => Http::response([
+        'id' => 'chatcmpl-cache-1',
+        'object' => 'chat.completion',
+        'model' => 'llama-3.3-70b-versatile',
+        'choices' => [[
+            'index' => 0,
+            'message' => ['role' => 'assistant', 'content' => 'Hello.'],
+            'finish_reason' => 'stop',
+        ]],
+        'usage' => [
+            'prompt_tokens' => 4641,
+            'completion_tokens' => 1817,
+            'total_tokens' => 6458,
+            'prompt_tokens_details' => [
+                'cached_tokens' => 4608,
+            ],
+        ],
+    ])]);
+
+    $response = agent()->prompt('Hello', provider: 'groq');
+
+    expect($response->usage->promptTokens)->toBe(4641)
+        ->and($response->usage->completionTokens)->toBe(1817)
+        ->and($response->usage->cacheReadInputTokens)->toBe(4608);
+});
+
 test('structured response is correctly parsed', function () {
     Http::fake(['*' => fakeGroqResponse('{"symbol": "Au"}')]);
 
