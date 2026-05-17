@@ -257,8 +257,10 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
 
             $assistantText = '';
             $pendingToolCalls = [];
+            $toolCalls = [];
+            $structuredOutput = null;
             $currentBlockIndex = null;
-            $currentBlockKind = [];
+            $currentBlockType = '';
             $responseContent = [];
             $reasoningId = '';
             $reasoningStartEmitted = false;
@@ -301,9 +303,9 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                 if (isset($event['contentBlockStart'])) {
                     $currentBlockIndex = $event['contentBlockStart']['contentBlockIndex'] ?? 0;
                     $start = $event['contentBlockStart']['start'] ?? [];
+                    $currentBlockType = isset($start['toolUse']) ? 'toolUse' : '';
 
                     if (isset($start['toolUse'])) {
-                        $currentBlockKind[$currentBlockIndex] = 'toolUse';
                         $pendingToolCalls[$currentBlockIndex] = [
                             'id' => $start['toolUse']['toolUseId'] ?? '',
                             'name' => $start['toolUse']['name'] ?? '',
@@ -319,7 +321,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                     $delta = $event['contentBlockDelta']['delta'] ?? [];
 
                     if (isset($delta['text'])) {
-                        $currentBlockKind[$index] ??= 'text';
+                        $currentBlockType = 'text';
 
                         if ($emittedEvent = $emitTextStart()) {
                             yield $emittedEvent;
@@ -335,7 +337,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                             $timestamp,
                         ))->withInvocationId($invocationId);
                     } elseif (isset($delta['reasoningContent']['text'])) {
-                        $currentBlockKind[$index] ??= 'reasoning';
+                        $currentBlockType = 'reasoning';
 
                         if ($emittedEvent = $emitReasoningStart()) {
                             yield $emittedEvent;
@@ -362,18 +364,20 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
 
                 if (isset($event['contentBlockStop'])) {
                     $index = $event['contentBlockStop']['contentBlockIndex'] ?? $currentBlockIndex;
-                    $kind = $currentBlockKind[$index] ?? null;
 
-                    if ($kind === 'reasoning') {
+                    if ($currentBlockType === 'reasoning') {
                         $responseContent[$index] = [
-                            'reasoningContent' => array_filter([
-                                'reasoningText' => array_filter([
-                                    'text' => $currentReasoningText !== '' ? $currentReasoningText : null,
-                                    'signature' => $currentReasoningSignature !== '' ? $currentReasoningSignature : null,
-                                ]) ?: null,
-                                'redactedContent' => $currentReasoningRedacted !== '' ? $currentReasoningRedacted : null,
-                            ]),
+                            'reasoningContent' => [
+                                'reasoningText' => [
+                                    'text' => $currentReasoningText,
+                                    'signature' => $currentReasoningSignature,
+                                ],
+                            ],
                         ];
+
+                        if ($currentReasoningRedacted !== '') {
+                            $responseContent[$index]['reasoningContent']['redactedContent'] = $currentReasoningRedacted;
+                        }
 
                         yield (new ReasoningEnd(
                             (string) Str::uuid(),
@@ -386,7 +390,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                         $currentReasoningRedacted = '';
                         $reasoningStartEmitted = false;
                         $reasoningId = '';
-                    } elseif ($kind === 'text' && $textStartEmitted) {
+                    } elseif ($currentBlockType === 'text' && $textStartEmitted) {
                         yield (new TextEnd(
                             (string) Str::uuid(),
                             $messageId,
@@ -394,7 +398,34 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                         ))->withInvocationId($invocationId);
 
                         $textStartEmitted = false;
+                    } elseif ($currentBlockType === 'toolUse' && isset($pendingToolCalls[$index])) {
+                        $pending = $pendingToolCalls[$index];
+                        $arguments = json_decode($pending['input'] !== '' ? $pending['input'] : '{}', true) ?? [];
+
+                        if ($schemaTools && $pending['name'] === self::STRUCTURED_OUTPUT_TOOL) {
+                            $structuredOutput = json_encode($arguments);
+                        } else {
+                            $toolCall = new ToolCall($pending['id'], $pending['name'], $arguments);
+                            $toolCalls[] = $toolCall;
+                            $responseContent[$index] = [
+                                'toolUse' => [
+                                    'toolUseId' => $toolCall->id,
+                                    'name' => $toolCall->name,
+                                    'input' => $arguments,
+                                ],
+                            ];
+
+                            yield (new ToolCallEvent(
+                                (string) Str::uuid(),
+                                $toolCall,
+                                $timestamp,
+                            ))->withInvocationId($invocationId);
+                        }
+
+                        unset($pendingToolCalls[$index]);
                     }
+
+                    $currentBlockType = '';
 
                     continue;
                 }
@@ -409,21 +440,6 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                     $totalInputTokens += $event['metadata']['usage']['inputTokens'] ?? 0;
                     $totalOutputTokens += $event['metadata']['usage']['outputTokens'] ?? 0;
                 }
-            }
-
-            $toolCalls = [];
-            $structuredOutput = null;
-
-            foreach ($pendingToolCalls as $pending) {
-                $arguments = json_decode($pending['input'] !== '' ? $pending['input'] : '{}', true) ?? [];
-
-                if ($schemaTools && $pending['name'] === self::STRUCTURED_OUTPUT_TOOL) {
-                    $structuredOutput = json_encode($arguments);
-
-                    continue;
-                }
-
-                $toolCalls[] = new ToolCall($pending['id'], $pending['name'], $arguments);
             }
 
             $step++;
@@ -442,14 +458,6 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             }
 
             $conversationMessages[] = $this->buildAssistantConversationMessage($assistantText, $toolCalls, array_values($responseContent));
-
-            foreach ($toolCalls as $toolCall) {
-                yield (new ToolCallEvent(
-                    (string) Str::uuid(),
-                    $toolCall,
-                    $timestamp,
-                ))->withInvocationId($invocationId);
-            }
 
             $toolResults = $this->executeToolCalls($tools, $toolCalls);
 

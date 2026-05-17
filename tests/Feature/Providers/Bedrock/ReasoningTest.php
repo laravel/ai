@@ -3,7 +3,7 @@
 use Laravel\Ai\Messages\AssistantMessage;
 
 describe('reasoning capture', function () {
-    test('generateText captures all content blocks into providerContentBlocks', function () {
+    test('captures reasoning content into providerContentBlocks', function () {
         $client = $this->fakeBedrockConverse([
             'output' => [
                 'message' => [

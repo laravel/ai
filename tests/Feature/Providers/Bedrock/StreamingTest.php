@@ -11,7 +11,7 @@ use Laravel\Ai\Streaming\Events\TextStart;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 describe('text streaming', function () {
-    test('streaming emits structural events around reasoning and text blocks', function () {
+    test('streaming handles reasoning and text blocks', function () {
         $client = $this->fakeBedrockStream([
             $this->contentBlockStart(0),
             $this->contentBlockDelta(0, ['reasoningContent' => ['text' => 'Let me think']]),
@@ -44,7 +44,7 @@ describe('text streaming', function () {
             ->and($events[9])->toBeInstanceOf(StreamEnd::class);
     });
 
-    test('streaming emits one stream_start per converse step', function () {
+    test('streaming emits stream_start per step', function () {
         $client = $this->fakeBedrockStreamSequence([
             [
                 $this->contentBlockStart(0, ['toolUse' => ['toolUseId' => 't1', 'name' => 'FixedNumberGenerator']]),
