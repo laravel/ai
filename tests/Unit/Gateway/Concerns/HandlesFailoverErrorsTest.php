@@ -3,6 +3,7 @@
 use GuzzleHttp\Psr7\Response as Psr7Response;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
+use Laravel\Ai\Exceptions\InsufficientCreditsException;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
@@ -52,6 +53,22 @@ test('429 takes precedence over insufficient credit pattern matching', function 
             'error' => ['message' => 'Your credit balance is too low.'],
         ]),
     ))->toThrow(RateLimitedException::class);
+});
+
+test('402 throws InsufficientCreditsException without requiring patterns', function () {
+    $gateway = new class
+    {
+        use HandlesFailoverErrors {
+            withErrorHandling as public;
+        }
+    };
+
+    expect(fn () => $gateway->withErrorHandling(
+        'deepseek',
+        fn () => throw failoverableException(402, [
+            'error' => ['message' => 'Insufficient Balance'],
+        ]),
+    ))->toThrow(InsufficientCreditsException::class);
 });
 
 test('non-matching message is rethrown as the original RequestException', function () {

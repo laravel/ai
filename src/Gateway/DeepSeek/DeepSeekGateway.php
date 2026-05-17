@@ -78,16 +78,6 @@ class DeepSeekGateway implements TextGateway
     /**
      * {@inheritdoc}
      */
-    protected function insufficientCreditPatterns(): array
-    {
-        return [
-            'insufficient balance',
-        ];
-    }
-
-    /**
-     * {@inheritdoc}
-     */
     public function streamText(
         string $invocationId,
         TextProvider $provider,
