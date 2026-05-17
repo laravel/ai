@@ -33,8 +33,14 @@ use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
+use Laravel\Ai\Streaming\Events\ReasoningDelta;
+use Laravel\Ai\Streaming\Events\ReasoningEnd;
+use Laravel\Ai\Streaming\Events\ReasoningStart;
 use Laravel\Ai\Streaming\Events\StreamEnd;
+use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
+use Laravel\Ai\Streaming\Events\TextEnd;
+use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Laravel\Ai\Tools\ToolNameResolver;
@@ -239,10 +245,54 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                 throw BedrockException::toAiException($e, $provider->name(), $model);
             }
 
+            yield (new StreamStart(
+                (string) Str::uuid(),
+                $provider->name(),
+                $model,
+                $timestamp,
+            ))->withInvocationId($invocationId);
+
             $assistantText = '';
             $pendingToolCalls = [];
             $currentBlockIndex = null;
+            $currentBlockKind = [];
+            $responseContent = [];
+            $reasoningId = '';
+            $reasoningStartEmitted = false;
+            $textStartEmitted = false;
+            $currentReasoningText = '';
+            $currentReasoningSignature = '';
+            $currentReasoningRedacted = '';
             $stopReason = 'stop';
+
+            $emitTextStart = function () use (&$textStartEmitted, $messageId, $invocationId, $timestamp) {
+                if ($textStartEmitted) {
+                    return null;
+                }
+
+                $textStartEmitted = true;
+
+                return (new TextStart(
+                    (string) Str::uuid(),
+                    $messageId,
+                    $timestamp,
+                ))->withInvocationId($invocationId);
+            };
+
+            $emitReasoningStart = function () use (&$reasoningStartEmitted, &$reasoningId, $invocationId, $timestamp) {
+                if ($reasoningStartEmitted) {
+                    return null;
+                }
+
+                $reasoningStartEmitted = true;
+                $reasoningId = (string) Str::uuid();
+
+                return (new ReasoningStart(
+                    (string) Str::uuid(),
+                    $reasoningId,
+                    $timestamp,
+                ))->withInvocationId($invocationId);
+            };
 
             foreach ($response['stream'] as $event) {
                 if (isset($event['contentBlockStart'])) {
@@ -250,6 +300,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                     $start = $event['contentBlockStart']['start'] ?? [];
 
                     if (isset($start['toolUse'])) {
+                        $currentBlockKind[$currentBlockIndex] = 'toolUse';
                         $pendingToolCalls[$currentBlockIndex] = [
                             'id' => $start['toolUse']['toolUseId'] ?? '',
                             'name' => $start['toolUse']['name'] ?? '',
@@ -265,7 +316,14 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                     $delta = $event['contentBlockDelta']['delta'] ?? [];
 
                     if (isset($delta['text'])) {
+                        $currentBlockKind[$index] ??= 'text';
+
+                        if ($emittedEvent = $emitTextStart()) {
+                            yield $emittedEvent;
+                        }
+
                         $assistantText .= $delta['text'];
+                        $responseContent[$index]['text'] = ($responseContent[$index]['text'] ?? '').$delta['text'];
 
                         yield (new TextDelta(
                             (string) Str::uuid(),
@@ -273,8 +331,66 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                             $delta['text'],
                             $timestamp,
                         ))->withInvocationId($invocationId);
+                    } elseif (isset($delta['reasoningContent']['text'])) {
+                        $currentBlockKind[$index] ??= 'reasoning';
+
+                        if ($emittedEvent = $emitReasoningStart()) {
+                            yield $emittedEvent;
+                        }
+
+                        $currentReasoningText .= $delta['reasoningContent']['text'];
+
+                        yield (new ReasoningDelta(
+                            (string) Str::uuid(),
+                            $reasoningId,
+                            $delta['reasoningContent']['text'],
+                            $timestamp,
+                        ))->withInvocationId($invocationId);
+                    } elseif (isset($delta['reasoningContent']['signature'])) {
+                        $currentReasoningSignature .= $delta['reasoningContent']['signature'];
+                    } elseif (isset($delta['reasoningContent']['redactedContent'])) {
+                        $currentReasoningRedacted .= $delta['reasoningContent']['redactedContent'];
                     } elseif (isset($delta['toolUse']['input'], $pendingToolCalls[$index])) {
                         $pendingToolCalls[$index]['input'] .= $delta['toolUse']['input'];
+                    }
+
+                    continue;
+                }
+
+                if (isset($event['contentBlockStop'])) {
+                    $index = $event['contentBlockStop']['contentBlockIndex'] ?? $currentBlockIndex;
+                    $kind = $currentBlockKind[$index] ?? null;
+
+                    if ($kind === 'reasoning') {
+                        $responseContent[$index] = [
+                            'reasoningContent' => array_filter([
+                                'reasoningText' => array_filter([
+                                    'text' => $currentReasoningText !== '' ? $currentReasoningText : null,
+                                    'signature' => $currentReasoningSignature !== '' ? $currentReasoningSignature : null,
+                                ]) ?: null,
+                                'redactedContent' => $currentReasoningRedacted !== '' ? $currentReasoningRedacted : null,
+                            ]),
+                        ];
+
+                        yield (new ReasoningEnd(
+                            (string) Str::uuid(),
+                            $reasoningId,
+                            $timestamp,
+                        ))->withInvocationId($invocationId);
+
+                        $currentReasoningText = '';
+                        $currentReasoningSignature = '';
+                        $currentReasoningRedacted = '';
+                        $reasoningStartEmitted = false;
+                        $reasoningId = '';
+                    } elseif ($kind === 'text' && $textStartEmitted) {
+                        yield (new TextEnd(
+                            (string) Str::uuid(),
+                            $messageId,
+                            $timestamp,
+                        ))->withInvocationId($invocationId);
+
+                        $textStartEmitted = false;
                     }
 
                     continue;
