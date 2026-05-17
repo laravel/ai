@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Providers\Bedrock;
 
-use ArrayIterator;
 use Aws\BedrockRuntime\BedrockRuntimeClient;
 use Aws\MockHandler;
 use Aws\Result;
@@ -20,14 +19,14 @@ trait BedrockHelpers
     protected function fakeBedrockStream(array $events): BedrockRuntimeClient
     {
         return $this->bedrockClient(new MockHandler([
-            new Result(['stream' => new ArrayIterator($events)]),
+            new Result(['stream' => $events]),
         ]));
     }
 
     protected function fakeBedrockStreamSequence(array $eventLists): BedrockRuntimeClient
     {
         return $this->bedrockClient(new MockHandler(array_map(
-            fn (array $events) => new Result(['stream' => new ArrayIterator($events)]),
+            fn (array $events) => new Result(['stream' => $events]),
             $eventLists,
         )));
     }
