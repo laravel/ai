@@ -392,6 +392,7 @@ trait ParsesTextResponses
     protected function extractUsage(array $data): Usage
     {
         $usage = $data['usageMetadata'] ?? [];
+
         return new Usage(
             inputTokens: [
                 'text' => $this->extractModalityCost($usage['promptTokensDetails'] ?? [], 'TEXT') ?? (($usage['promptTokenCount'] ?? 0) - ($usage['cachedContentTokenCount'] ?? 0)),
@@ -460,7 +461,7 @@ trait ParsesTextResponses
     {
         return $steps->reduce(
             fn (Usage $carry, Step $step) => $carry->add($step->usage),
-            new Usage()
+            new Usage
         );
     }
 

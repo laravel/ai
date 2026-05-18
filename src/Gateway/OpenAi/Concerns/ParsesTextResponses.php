@@ -351,6 +351,7 @@ trait ParsesTextResponses
     protected function extractUsage(array $data): Usage
     {
         $usage = $data['usage'] ?? [];
+
         return new Usage(
             inputTokens: [
                 'text' => $usage['input_tokens_details']['text_tokens'] ?? $usage['input_tokens'] ?? 0,
@@ -433,7 +434,7 @@ trait ParsesTextResponses
     {
         return $steps->reduce(
             fn (Usage $carry, Step $step) => $carry->add($step->usage),
-            new Usage()
+            new Usage
         );
     }
 }

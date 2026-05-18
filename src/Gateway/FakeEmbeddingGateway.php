@@ -85,7 +85,7 @@ class FakeEmbeddingGateway implements EmbeddingGateway
         if (is_array($response) && isset($response[0]) && is_array($response[0])) {
             return new EmbeddingsResponse(
                 $response,
-                new Usage(),
+                new Usage,
                 new Meta($provider->name(), $model),
             );
         }
