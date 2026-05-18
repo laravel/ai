@@ -100,7 +100,7 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function cheapestTextModel(): string
     {
-        return $this->config['models']['text']['cheapest'] ?? 'gemini-3.1-flash-lite-preview';
+        return $this->config['models']['text']['cheapest'] ?? 'gemini-3.1-flash-lite';
     }
 
     /**
