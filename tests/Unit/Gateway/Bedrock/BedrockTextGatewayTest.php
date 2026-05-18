@@ -1,8 +1,10 @@
 <?php
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Events\Dispatcher;
 use Illuminate\Http\Testing\File as TestingFile;
 use Illuminate\Support\Collection;
+use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Base64Image;
@@ -13,6 +15,7 @@ use Laravel\Ai\Files\ProviderImage;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Gateway\Bedrock\BedrockTextGateway;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Providers\BedrockProvider;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
@@ -22,6 +25,14 @@ use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Tools\Request;
 use Tests\Fixtures\Agents\ProviderOptionsAgent;
 use Tests\Fixtures\Tools\NamedTool;
+
+function bedrockTextProvider(): BedrockProvider
+{
+    return new BedrockProvider(
+        config: ['name' => 'bedrock', 'driver' => 'bedrock'],
+        events: new Dispatcher,
+    );
+}
 
 function textGateway(): object
 {
@@ -68,6 +79,7 @@ function textGateway(): object
         }
 
         public function callBuildConverseParameters(
+            TextProvider $provider,
             string $model,
             ?string $instructions,
             array $conversationMessages,
@@ -78,6 +90,7 @@ function textGateway(): object
             bool $isFinalStep,
         ): array {
             return $this->buildConverseParameters(
+                $provider,
                 $model,
                 $instructions,
                 $conversationMessages,
@@ -500,6 +513,7 @@ test('resolve max steps falls back to tool count times one and a half', function
 
 test('build converse parameters attaches system instructions', function () {
     $params = textGateway()->callBuildConverseParameters(
+        bedrockTextProvider(),
         'claude-sonnet',
         'you are helpful',
         [['role' => 'user', 'content' => [['text' => 'hi']]]],
@@ -522,6 +536,7 @@ test('build converse parameters includes tool config and inference config when p
     $options = new TextGenerationOptions(maxTokens: 100);
 
     $params = textGateway()->callBuildConverseParameters(
+        bedrockTextProvider(),
         'claude-sonnet',
         null,
         [],
@@ -541,6 +556,7 @@ test('build converse parameters flat-merges agent provider options for bedrock',
     $options = TextGenerationOptions::forAgent(new ProviderOptionsAgent);
 
     $params = textGateway()->callBuildConverseParameters(
+        bedrockTextProvider(),
         'claude-sonnet',
         null,
         [['role' => 'user', 'content' => [['text' => 'hi']]]],
@@ -566,6 +582,7 @@ test('build converse parameters flat-merges agent provider options for bedrock',
 
 test('build converse parameters omits provider options when agent has none', function () {
     $params = textGateway()->callBuildConverseParameters(
+        bedrockTextProvider(),
         'claude-sonnet',
         null,
         [['role' => 'user', 'content' => [['text' => 'hi']]]],

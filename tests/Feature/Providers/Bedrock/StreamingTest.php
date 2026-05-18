@@ -128,4 +128,50 @@ describe('text streaming', function () {
             ->and($assistantTurn['content'][1]['toolUse']['toolUseId'])->toBe('t1')
             ->and($assistantTurn['content'][1]['toolUse']['name'])->toBe('FixedNumberGenerator');
     });
+
+    test('streaming round-trips redacted reasoning block', function () {
+        $mock = new MockHandler([
+            new Result(['stream' => [
+                $this->contentBlockStart(0),
+                $this->contentBlockDelta(0, ['reasoningContent' => ['redactedContent' => 'redacted-bytes']]),
+                $this->contentBlockStop(0),
+                $this->contentBlockStart(1, ['toolUse' => ['toolUseId' => 't1', 'name' => 'FixedNumberGenerator']]),
+                $this->contentBlockDelta(1, ['toolUse' => ['input' => '{}']]),
+                $this->contentBlockStop(1),
+                $this->messageStop('tool_use'),
+            ]]),
+            new Result(['stream' => [
+                $this->contentBlockStart(0),
+                $this->contentBlockDelta(0, ['text' => 'Done']),
+                $this->contentBlockStop(0),
+                $this->messageStop('end_turn'),
+            ]]),
+        ]);
+
+        $gateway = $this->gatewayWithClient($this->bedrockClient($mock));
+
+        $events = iterator_to_array(
+            $gateway->streamText(
+                'inv-1',
+                $this->bedrockProvider(),
+                'anthropic.claude-opus-4-7-v1:0',
+                null,
+                tools: [new FixedNumberGenerator],
+            ),
+            preserve_keys: false,
+        );
+
+        $reasoningStarts = array_filter($events, fn ($e) => $e instanceof ReasoningStart);
+        $reasoningEnds = array_filter($events, fn ($e) => $e instanceof ReasoningEnd);
+
+        expect($reasoningStarts)->toHaveCount(1)
+            ->and($reasoningEnds)->toHaveCount(1);
+
+        $secondCall = $mock->getLastCommand()->toArray();
+        $assistantTurn = $secondCall['messages'][0];
+
+        expect($assistantTurn['content'][0])->toBe([
+            'reasoningContent' => ['redactedContent' => 'redacted-bytes'],
+        ]);
+    });
 });

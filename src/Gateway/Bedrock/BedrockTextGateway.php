@@ -12,7 +12,6 @@ use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Bedrock\Concerns\CreatesBedrockClient;
 use Laravel\Ai\Gateway\Bedrock\Concerns\MapsAttachments;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
@@ -92,6 +91,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
 
         while ($step < $maxSteps) {
             $parameters = $this->buildConverseParameters(
+                $provider,
                 $model,
                 $instructions,
                 $conversationMessages,
@@ -229,6 +229,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
 
         while ($step < $maxSteps) {
             $parameters = $this->buildConverseParameters(
+                $provider,
                 $model,
                 $instructions,
                 $conversationMessages,
@@ -352,8 +353,20 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                             $timestamp,
                         ))->withInvocationId($invocationId);
                     } elseif (isset($delta['reasoningContent']['signature'])) {
+                        $currentBlockType = 'reasoning';
+
+                        if ($emittedEvent = $emitReasoningStart()) {
+                            yield $emittedEvent;
+                        }
+
                         $currentReasoningSignature .= $delta['reasoningContent']['signature'];
                     } elseif (isset($delta['reasoningContent']['redactedContent'])) {
+                        $currentBlockType = 'reasoning';
+
+                        if ($emittedEvent = $emitReasoningStart()) {
+                            yield $emittedEvent;
+                        }
+
                         $currentReasoningRedacted .= $delta['reasoningContent']['redactedContent'];
                     } elseif (isset($delta['toolUse']['input'], $pendingToolCalls[$index])) {
                         $pendingToolCalls[$index]['input'] .= $delta['toolUse']['input'];
@@ -366,17 +379,21 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                     $index = $event['contentBlockStop']['contentBlockIndex'] ?? $currentBlockIndex;
 
                     if ($currentBlockType === 'reasoning') {
-                        $responseContent[$index] = [
-                            'reasoningContent' => [
-                                'reasoningText' => [
-                                    'text' => $currentReasoningText,
-                                    'signature' => $currentReasoningSignature,
-                                ],
-                            ],
-                        ];
-
                         if ($currentReasoningRedacted !== '') {
-                            $responseContent[$index]['reasoningContent']['redactedContent'] = $currentReasoningRedacted;
+                            $responseContent[$index] = [
+                                'reasoningContent' => [
+                                    'redactedContent' => $currentReasoningRedacted,
+                                ],
+                            ];
+                        } else {
+                            $responseContent[$index] = [
+                                'reasoningContent' => [
+                                    'reasoningText' => [
+                                        'text' => $currentReasoningText,
+                                        'signature' => $currentReasoningSignature,
+                                    ],
+                                ],
+                            ];
                         }
 
                         yield (new ReasoningEnd(
@@ -622,6 +639,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
      * @param  bool  $toolsEmpty  Whether the caller passed any real tools at all.
      */
     protected function buildConverseParameters(
+        TextProvider $provider,
         string $model,
         ?string $instructions,
         array $conversationMessages,
@@ -652,7 +670,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             $parameters['inferenceConfig'] = $inferenceConfig;
         }
 
-        $providerOptions = $options?->providerOptions(Lab::Bedrock);
+        $providerOptions = $options?->providerOptions($provider->driver());
 
         if (! empty($providerOptions)) {
             $parameters = array_merge($parameters, $providerOptions);
