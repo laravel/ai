@@ -1,6 +1,8 @@
 # Release Notes
 
-## [Unreleased](https://github.com/laravel/ai/compare/v0.6.8...0.x)
+## [Unreleased](https://github.com/laravel/ai/compare/v0.6.9...0.x)
+
+## [v0.6.9](https://github.com/laravel/ai/compare/v0.6.8...v0.6.9) - 2026-05-18
 
 ## [v0.6.8](https://github.com/laravel/ai/compare/v0.6.7...v0.6.8) - 2026-05-11
 
