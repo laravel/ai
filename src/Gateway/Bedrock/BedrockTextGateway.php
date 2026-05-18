@@ -263,33 +263,32 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             $currentBlockType = '';
             $responseContent = [];
             $reasoningId = '';
-            $reasoningStartEmitted = false;
-            $textStartEmitted = false;
+            $textId = '';
+            $currentText = '';
             $currentReasoningText = '';
             $currentReasoningSignature = '';
             $currentReasoningRedacted = '';
             $stopReason = 'stop';
 
-            $emitTextStart = function () use (&$textStartEmitted, $messageId, $invocationId, $timestamp) {
-                if ($textStartEmitted) {
+            $emitTextStart = function () use (&$textId, $invocationId, $timestamp) {
+                if ($textId !== '') {
                     return null;
                 }
 
-                $textStartEmitted = true;
+                $textId = (string) Str::uuid();
 
                 return (new TextStart(
                     (string) Str::uuid(),
-                    $messageId,
+                    $textId,
                     $timestamp,
                 ))->withInvocationId($invocationId);
             };
 
-            $emitReasoningStart = function () use (&$reasoningStartEmitted, &$reasoningId, $invocationId, $timestamp) {
-                if ($reasoningStartEmitted) {
+            $emitReasoningStart = function () use (&$reasoningId, $invocationId, $timestamp) {
+                if ($reasoningId !== '') {
                     return null;
                 }
 
-                $reasoningStartEmitted = true;
                 $reasoningId = (string) Str::uuid();
 
                 return (new ReasoningStart(
@@ -328,11 +327,11 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                         }
 
                         $assistantText .= $delta['text'];
-                        $responseContent[$index]['text'] = ($responseContent[$index]['text'] ?? '').$delta['text'];
+                        $currentText .= $delta['text'];
 
                         yield (new TextDelta(
                             (string) Str::uuid(),
-                            $messageId,
+                            $textId,
                             $delta['text'],
                             $timestamp,
                         ))->withInvocationId($invocationId);
@@ -404,16 +403,18 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                         $currentReasoningText = '';
                         $currentReasoningSignature = '';
                         $currentReasoningRedacted = '';
-                        $reasoningStartEmitted = false;
                         $reasoningId = '';
-                    } elseif ($currentBlockType === 'text' && $textStartEmitted) {
+                    } elseif ($currentBlockType === 'text' && $textId !== '') {
+                        $responseContent[$index] = ['text' => $currentText];
+
                         yield (new TextEnd(
                             (string) Str::uuid(),
-                            $messageId,
+                            $textId,
                             $timestamp,
                         ))->withInvocationId($invocationId);
 
-                        $textStartEmitted = false;
+                        $currentText = '';
+                        $textId = '';
                     } elseif ($currentBlockType === 'toolUse' && isset($pendingToolCalls[$index])) {
                         $pending = $pendingToolCalls[$index];
                         $arguments = json_decode($pending['input'] !== '' ? $pending['input'] : '{}', true) ?? [];
@@ -701,26 +702,9 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
      */
     protected function buildAssistantConversationMessage(string $text, array $toolCalls, array $providerContentBlocks = []): array
     {
-        if (filled($providerContentBlocks)) {
-            return [
-                'role' => 'assistant',
-                'content' => $this->ensureToolInputIsObject($providerContentBlocks),
-            ];
-        }
-
-        return [
-            'role' => 'assistant',
-            'content' => array_merge(
-                $text !== '' ? [['text' => $text]] : [],
-                array_map(fn (ToolCall $toolCall) => [
-                    'toolUse' => [
-                        'toolUseId' => $toolCall->id,
-                        'name' => $toolCall->name,
-                        'input' => $toolCall->arguments ?: new stdClass,
-                    ],
-                ], $toolCalls),
-            ),
-        ];
+        return $this->formatAssistantMessage(
+            new AssistantMessage($text, new Collection($toolCalls), $providerContentBlocks)
+        );
     }
 
     /**

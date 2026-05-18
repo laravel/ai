@@ -46,6 +46,30 @@ describe('text streaming', function () {
             ->and($events[9])->toBeInstanceOf(StreamEnd::class);
     });
 
+    test('each text block in a stream gets a distinct message id', function () {
+        $client = $this->fakeBedrockStream([
+            $this->contentBlockStart(0),
+            $this->contentBlockDelta(0, ['text' => 'first']),
+            $this->contentBlockStop(0),
+            $this->contentBlockStart(1),
+            $this->contentBlockDelta(1, ['text' => 'second']),
+            $this->contentBlockStop(1),
+            $this->messageStop('end_turn'),
+        ]);
+
+        $gateway = $this->gatewayWithClient($client);
+
+        $events = iterator_to_array(
+            $gateway->streamText('inv-1', $this->bedrockProvider(), 'anthropic.claude-opus-4-7-v1:0', null),
+            preserve_keys: false,
+        );
+
+        $textStarts = array_values(array_filter($events, fn ($e) => $e instanceof TextStart));
+
+        expect($textStarts)->toHaveCount(2)
+            ->and($textStarts[0]->messageId)->not->toBe($textStarts[1]->messageId);
+    });
+
     test('streaming round-trips reasoning block on follow-up tool step', function () {
         $mock = new MockHandler([
             new Result(['stream' => [

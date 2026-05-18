@@ -80,12 +80,13 @@ trait BedrockHelpers
 
     protected function contentBlockStart(int $index, array $start = []): array
     {
-        return [
-            'contentBlockStart' => array_filter([
-                'contentBlockIndex' => $index,
-                'start' => $start ?: null,
-            ]),
-        ];
+        $payload = ['contentBlockIndex' => $index];
+
+        if ($start) {
+            $payload['start'] = $start;
+        }
+
+        return ['contentBlockStart' => $payload];
     }
 
     protected function contentBlockDelta(int $index, array $delta): array
