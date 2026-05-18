@@ -42,11 +42,13 @@ class ConversationMessage extends Model
     ];
 
     /**
-     * Get the database connection for the model.
+     * Get the conversation that owns the message.
+     *
+     * @return BelongsTo<Conversation, $this>
      */
-    public function getConnectionName(): ?string
+    public function conversation(): BelongsTo
     {
-        return config('ai.conversations.connection');
+        return $this->belongsTo(Conversation::class, 'conversation_id');
     }
 
     /**
@@ -58,12 +60,10 @@ class ConversationMessage extends Model
     }
 
     /**
-     * Get the conversation that owns the message.
-     *
-     * @return BelongsTo<Conversation, $this>
+     * Get the database connection for the model.
      */
-    public function conversation(): BelongsTo
+    public function getConnectionName(): ?string
     {
-        return $this->belongsTo(Conversation::class, 'conversation_id');
+        return config('ai.conversations.connection');
     }
 }

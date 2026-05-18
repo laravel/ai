@@ -23,6 +23,8 @@ class StoredImage extends Image implements Arrayable, JsonSerializable, Storable
 
     /**
      * Get the raw representation of the file.
+     *
+     * @throws RuntimeException if the file does not exist on the configured disk.
      */
     public function content(): string
     {

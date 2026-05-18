@@ -176,7 +176,7 @@ class OpenAiGateway implements Gateway
             ...$provider->defaultImageOptions($size, $quality),
             ...(str_starts_with($model, 'gpt-image')
                 ? ['moderation' => 'low']
-                : ['response_format' => 'b64_json']),
+                : []),
         ]);
     }
 
@@ -220,7 +220,7 @@ class OpenAiGateway implements Gateway
             ...$provider->defaultImageOptions($size, $quality),
             ...($isGptImage
                 ? ['moderation' => 'low']
-                : ['response_format' => 'b64_json']),
+                : []),
         ]));
     }
 

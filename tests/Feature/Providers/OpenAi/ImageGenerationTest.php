@@ -170,7 +170,7 @@ test('image response defaults to zero usage when not returned by dalle', functio
         ->and($response->usage->completionTokens)->toBe(0);
 });
 
-test('image generation request adds response_format b64_json for dall-e models', function () {
+test('image generation request omits response_format for dall-e models', function () {
     Http::fake([
         '*' => fakeOpenAiImageResponse(),
     ]);
@@ -180,7 +180,7 @@ test('image generation request adds response_format b64_json for dall-e models',
     Http::assertSent(function (Request $request) {
         $body = json_decode($request->body(), true);
 
-        return ($body['response_format'] ?? null) === 'b64_json';
+        return ! array_key_exists('response_format', $body);
     });
 });
 

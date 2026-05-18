@@ -32,6 +32,12 @@ trait HandlesFailoverErrors
                     );
                 }
 
+                if ($status === 402) {
+                    throw InsufficientCreditsException::forProvider(
+                        $providerName, $e->getCode(), $e
+                    );
+                }
+
                 if (in_array($status, $this->overloadedStatusCodes())) {
                     throw ProviderOverloadedException::forProvider(
                         $providerName, $e->getCode(), $e

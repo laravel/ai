@@ -23,7 +23,7 @@ class TranscriptionResponse
         Meta $meta,
     ) {
         $this->text = $text;
-        $this->segments = $segments ?? new Collection;
+        $this->segments = $segments;
         $this->usage = $usage;
         $this->meta = $meta;
     }
