@@ -177,7 +177,7 @@ class PendingEmbeddingsGeneration
         if (! is_null($response)) {
             $response = json_decode($response, true);
 
-            return new EmbeddingsResponse($response['embeddings'], new Usage(), new Meta(
+            return new EmbeddingsResponse($response['embeddings'], new Usage, new Meta(
                 provider: $response['meta']['provider'],
                 model: $response['meta']['model'],
             ));

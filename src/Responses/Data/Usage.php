@@ -89,13 +89,16 @@ class Usage implements Arrayable, JsonSerializable
         );
     }
 
-    /** 
+    /**
      * Accumulates elements from two collections.
      */
     private function accumulate(array $a1, array $a2): array
     {
         $result = [];
-        foreach (array_keys($a1 + $a2) as $key) $result[$key] = ($a1[$key] ?? 0) + ($a2[$key] ?? 0);
+        foreach (array_keys($a1 + $a2) as $key) {
+            $result[$key] = ($a1[$key] ?? 0) + ($a2[$key] ?? 0);
+        }
+
         return $result;
     }
 
@@ -146,7 +149,6 @@ class Usage implements Arrayable, JsonSerializable
         ];
     }
 
-
     /**
      * Get the JSON serializable representation of the instance.
      */
@@ -154,5 +156,4 @@ class Usage implements Arrayable, JsonSerializable
     {
         return $this->toArray();
     }
-
 }

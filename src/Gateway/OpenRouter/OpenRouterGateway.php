@@ -397,7 +397,7 @@ class OpenRouterGateway implements Gateway
 
         return new EmbeddingsResponse(
             (new Collection($data['data'] ?? []))->pluck('embedding')->all(),
-                new Usage($data['usage']['prompt_tokens'] ?? 0, 0),
+            new Usage($data['usage']['prompt_tokens'] ?? 0, 0),
             new Meta($provider->name(), $model),
         );
     }
