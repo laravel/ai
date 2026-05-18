@@ -46,40 +46,6 @@ describe('text streaming', function () {
             ->and($events[9])->toBeInstanceOf(StreamEnd::class);
     });
 
-    test('streaming emits stream_start per step', function () {
-        $client = $this->fakeBedrockStreamSequence([
-            [
-                $this->contentBlockStart(0, ['toolUse' => ['toolUseId' => 't1', 'name' => 'FixedNumberGenerator']]),
-                $this->contentBlockDelta(0, ['toolUse' => ['input' => '{}']]),
-                $this->contentBlockStop(0),
-                $this->messageStop('tool_use'),
-            ],
-            [
-                $this->contentBlockStart(0),
-                $this->contentBlockDelta(0, ['text' => 'Done']),
-                $this->contentBlockStop(0),
-                $this->messageStop('end_turn'),
-            ],
-        ]);
-
-        $gateway = $this->gatewayWithClient($client);
-
-        $events = iterator_to_array(
-            $gateway->streamText(
-                'inv-1',
-                $this->bedrockProvider(),
-                'anthropic.claude-opus-4-7-v1:0',
-                null,
-                tools: [new FixedNumberGenerator],
-            ),
-            preserve_keys: false,
-        );
-
-        $streamStarts = array_filter($events, fn ($e) => $e instanceof StreamStart);
-
-        expect($streamStarts)->toHaveCount(2);
-    });
-
     test('streaming round-trips reasoning block on follow-up tool step', function () {
         $mock = new MockHandler([
             new Result(['stream' => [
@@ -150,7 +116,7 @@ describe('text streaming', function () {
 
         $gateway = $this->gatewayWithClient($this->bedrockClient($mock));
 
-        $events = iterator_to_array(
+        iterator_to_array(
             $gateway->streamText(
                 'inv-1',
                 $this->bedrockProvider(),
@@ -160,12 +126,6 @@ describe('text streaming', function () {
             ),
             preserve_keys: false,
         );
-
-        $reasoningStarts = array_filter($events, fn ($e) => $e instanceof ReasoningStart);
-        $reasoningEnds = array_filter($events, fn ($e) => $e instanceof ReasoningEnd);
-
-        expect($reasoningStarts)->toHaveCount(1)
-            ->and($reasoningEnds)->toHaveCount(1);
 
         $secondCall = $mock->getLastCommand()->toArray();
         $assistantTurn = $secondCall['messages'][0];

@@ -12,6 +12,7 @@ use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Bedrock\Concerns\CreatesBedrockClient;
 use Laravel\Ai\Gateway\Bedrock\Concerns\MapsAttachments;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
@@ -91,7 +92,6 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
 
         while ($step < $maxSteps) {
             $parameters = $this->buildConverseParameters(
-                $provider,
                 $model,
                 $instructions,
                 $conversationMessages,
@@ -229,7 +229,6 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
 
         while ($step < $maxSteps) {
             $parameters = $this->buildConverseParameters(
-                $provider,
                 $model,
                 $instructions,
                 $conversationMessages,
@@ -639,7 +638,6 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
      * @param  bool  $toolsEmpty  Whether the caller passed any real tools at all.
      */
     protected function buildConverseParameters(
-        TextProvider $provider,
         string $model,
         ?string $instructions,
         array $conversationMessages,
@@ -670,7 +668,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             $parameters['inferenceConfig'] = $inferenceConfig;
         }
 
-        $providerOptions = $options?->providerOptions($provider->driver());
+        $providerOptions = $options?->providerOptions(Lab::Bedrock);
 
         if (! empty($providerOptions)) {
             $parameters = array_merge($parameters, $providerOptions);
