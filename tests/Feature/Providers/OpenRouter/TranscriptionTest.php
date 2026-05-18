@@ -177,7 +177,7 @@ test('transcription usage is correctly parsed', function () {
     $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'openrouter');
 
     expect($response->usage->promptTokens)->toBe(100)
-        ->and($response->usage->completionTokens)->toBe(150);
+        ->and($response->usage->completionTokens)->toBe(50);
 });
 
 test('transcription request sends bearer token', function () {

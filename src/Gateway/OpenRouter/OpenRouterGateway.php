@@ -14,6 +14,7 @@ use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Files\Image;
+use Laravel\Ai\Gateway\Concerns\ExtractsTranscriptionUsage;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
@@ -38,6 +39,7 @@ class OpenRouterGateway implements Gateway
     use Concerns\MapsMessages;
     use Concerns\MapsTools;
     use Concerns\ParsesTextResponses;
+    use ExtractsTranscriptionUsage;
     use HandlesFailoverErrors;
     use InvokesTools;
     use ParsesServerSentEvents;
@@ -342,10 +344,7 @@ class OpenRouterGateway implements Gateway
         return new TranscriptionResponse(
             $data['text'] ?? '',
             collect(),
-            new Usage(
-                $data['usage']['input_tokens'] ?? 0,
-                $data['usage']['total_tokens'] ?? 0,
-            ),
+            $this->transcriptionUsage($data),
             new Meta($provider->name(), $model),
         );
     }

@@ -95,7 +95,24 @@ test('transcription usage is correctly parsed', function () {
         ->generate(provider: 'openai');
 
     expect($response->usage->promptTokens)->toBe(100)
-        ->and($response->usage->completionTokens)->toBe(150);
+        ->and($response->usage->completionTokens)->toBe(50);
+});
+
+test('transcription usage prefers output_tokens when provided', function () {
+    Http::fake(['*' => Http::response([
+        'text' => 'Hello',
+        'usage' => [
+            'input_tokens' => 100,
+            'output_tokens' => 40,
+            'total_tokens' => 150,
+        ],
+    ])]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->generate(provider: 'openai');
+
+    expect($response->usage->promptTokens)->toBe(100)
+        ->and($response->usage->completionTokens)->toBe(40);
 });
 
 test('transcription sends language when provided', function () {
