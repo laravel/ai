@@ -63,7 +63,34 @@ trait BuildsTextRequests
             'top_p' => $options?->topP,
         ]));
 
+        if (! empty($providerOptions['cache'])) {
+            $body = $this->withCacheControl($body, $providerOptions['cache']);
+            unset($providerOptions['cache']);
+        }
+
         return array_merge($body, $providerOptions);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $cache
+     */
+    protected function withCacheControl(array $body, array $cache): array
+    {
+        foreach ($cache as $entry) {
+            if (($entry['target'] ?? null) !== 'system' || ! isset($body['system'])) {
+                continue;
+            }
+
+            $system = is_string($body['system'])
+                ? [['type' => 'text', 'text' => $body['system']]]
+                : $body['system'];
+
+            $system[array_key_last($system)]['cache_control'] = ['type' => 'ephemeral'];
+
+            $body['system'] = $system;
+        }
+
+        return $body;
     }
 
     /**

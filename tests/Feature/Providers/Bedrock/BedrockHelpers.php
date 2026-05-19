@@ -3,8 +3,10 @@
 namespace Tests\Feature\Providers\Bedrock;
 
 use Aws\BedrockRuntime\BedrockRuntimeClient;
+use Aws\CommandInterface;
 use Aws\MockHandler;
 use Aws\Result;
+use GuzzleHttp\Promise\FulfilledPromise;
 use Laravel\Ai\Gateway\Bedrock\BedrockTextGateway;
 use Laravel\Ai\Providers\BedrockProvider;
 use Laravel\Ai\Providers\Provider;
@@ -46,6 +48,24 @@ trait BedrockHelpers
             'version' => '2023-09-30',
             'credentials' => false,
             'handler' => $mock,
+        ]);
+    }
+
+    protected function capturingBedrockClient(?array &$captured): BedrockRuntimeClient
+    {
+        return new BedrockRuntimeClient([
+            'region' => 'us-east-1',
+            'version' => '2023-09-30',
+            'credentials' => false,
+            'handler' => function (CommandInterface $command) use (&$captured) {
+                $captured = $command->toArray();
+
+                return new FulfilledPromise(new Result([
+                    'output' => ['message' => ['content' => [['text' => 'Hi']]]],
+                    'usage' => ['inputTokens' => 1, 'outputTokens' => 1],
+                    'stopReason' => 'end_turn',
+                ]));
+            },
         ]);
     }
 
