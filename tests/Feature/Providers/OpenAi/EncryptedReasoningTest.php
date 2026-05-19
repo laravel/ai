@@ -182,6 +182,14 @@ test('default encrypted reasoning off preserves previous response id behaviour',
         ->and($followUp['previous_response_id'])->toBe('resp_tool_1')
         ->and($followUp)->not->toHaveKey('store')
         ->and($followUp)->not->toHaveKey('include');
+
+    $input = collect($followUp['input']);
+
+    expect($input)->toHaveCount(1)
+        ->and($input->first()['type'] ?? null)->toBe('function_call_output')
+        ->and($input->first()['call_id'] ?? null)->toBe('call_1')
+        ->and($input->contains(fn ($i) => ($i['role'] ?? null) === 'user'))->toBeFalse()
+        ->and($input->contains(fn ($i) => ($i['type'] ?? null) === 'reasoning'))->toBeFalse();
 });
 
 function fakeOpenAiToolCallResponseWithEncryptedReasoning(string $reasoningId, string $encryptedContent, string $functionCallId, string $callId): PromiseInterface
