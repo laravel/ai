@@ -14,6 +14,7 @@ class ToolCall implements Arrayable, JsonSerializable
         public ?string $resultId = null,
         public ?string $reasoningId = null,
         public ?array $reasoningSummary = null,
+        public ?string $reasoningEncryptedContent = null,
     ) {}
 
     /**
@@ -28,6 +29,7 @@ class ToolCall implements Arrayable, JsonSerializable
             'result_id' => $this->resultId,
             'reasoning_id' => $this->reasoningId,
             'reasoning_summary' => $this->reasoningSummary,
+            'reasoning_encrypted_content' => $this->reasoningEncryptedContent,
         ];
     }
 

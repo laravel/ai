@@ -78,7 +78,17 @@ class OpenAiGateway implements Gateway
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, filled($schema), $tools, $schema, $options, $timeout);
+        return $this->parseTextResponse(
+            $data,
+            $provider,
+            filled($schema),
+            $tools,
+            $schema,
+            $options,
+            $timeout,
+            $instructions,
+            collect($messages),
+        );
     }
 
     /**
@@ -119,6 +129,8 @@ class OpenAiGateway implements Gateway
             0,
             null,
             $timeout,
+            $instructions,
+            collect($messages),
         );
     }
 

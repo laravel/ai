@@ -60,6 +60,8 @@ trait ParsesTextResponses
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
+        ?string $instructions = null,
+        Collection $messages = new Collection,
     ): TextResponse {
         return $this->processResponse(
             $data,
@@ -68,10 +70,11 @@ trait ParsesTextResponses
             $tools,
             $schema,
             new Collection,
-            new Collection,
+            $messages,
             maxSteps: $options?->maxSteps,
             options: $options,
             timeout: $timeout,
+            instructions: $instructions,
         );
     }
 
@@ -90,6 +93,7 @@ trait ParsesTextResponses
         ?int $maxSteps = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
+        ?string $instructions = null,
     ): TextResponse {
         $responseId = $data['id'] ?? '';
         $output = $data['output'] ?? [];
@@ -155,6 +159,7 @@ trait ParsesTextResponses
                 $maxSteps,
                 $options,
                 $timeout,
+                $instructions,
             );
         }
 
@@ -231,12 +236,24 @@ trait ParsesTextResponses
         ?int $maxSteps,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
+        ?string $instructions = null,
     ): TextResponse {
-        $body = [
-            'model' => $model,
-            'previous_response_id' => $responseId,
-            'input' => $this->buildToolResultsInput($toolResults),
-        ];
+        $encryptedReasoning = $provider->additionalConfiguration()['encrypted_reasoning'] ?? false;
+
+        if ($encryptedReasoning) {
+            $body = [
+                'model' => $model,
+                'input' => $this->mapMessagesToInput($messages->all(), $instructions),
+                'store' => false,
+                'include' => ['reasoning.encrypted_content'],
+            ];
+        } else {
+            $body = [
+                'model' => $model,
+                'previous_response_id' => $responseId,
+                'input' => $this->buildToolResultsInput($toolResults),
+            ];
+        }
 
         if (filled($tools)) {
             $body['tools'] = $this->mapTools($tools, $provider);
@@ -267,7 +284,7 @@ trait ParsesTextResponses
 
         $this->validateTextResponse($data);
 
-        return $this->processResponse($data, $provider, $structured, $tools, $schema, $steps, $messages, $depth, $maxSteps, $options, $timeout);
+        return $this->processResponse($data, $provider, $structured, $tools, $schema, $steps, $messages, $depth, $maxSteps, $options, $timeout, $instructions);
     }
 
     /**
@@ -411,6 +428,7 @@ trait ParsesTextResponses
                     $item['call_id'] ?? null,
                     $latestReasoning ? ($latestReasoning['id'] ?? null) : null,
                     $latestReasoning ? ($latestReasoning['summary'] ?? null) : null,
+                    $latestReasoning ? ($latestReasoning['encrypted_content'] ?? null) : null,
                 );
             }
         }

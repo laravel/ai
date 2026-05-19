@@ -50,6 +50,14 @@ trait BuildsTextRequests
             $body = array_merge($body, $providerOptions);
         }
 
+        if ($provider->additionalConfiguration()['encrypted_reasoning'] ?? false) {
+            $body['store'] = false;
+            $body['include'] = array_values(array_unique([
+                ...($body['include'] ?? []),
+                'reasoning.encrypted_content',
+            ]));
+        }
+
         return $body;
     }
 

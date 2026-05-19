@@ -65,11 +65,19 @@ trait MapsMessages
             $reasoningBlocks = $message->toolCalls
                 ->whereNotNull('reasoningId')
                 ->unique('reasoningId')
-                ->map(fn ($toolCall) => [
-                    'type' => 'reasoning',
-                    'id' => $toolCall->reasoningId,
-                    'summary' => $toolCall->reasoningSummary ?? [],
-                ])
+                ->map(function ($toolCall) {
+                    $block = [
+                        'type' => 'reasoning',
+                        'id' => $toolCall->reasoningId,
+                        'summary' => $toolCall->reasoningSummary ?? [],
+                    ];
+
+                    if ($toolCall->reasoningEncryptedContent !== null) {
+                        $block['encrypted_content'] = $toolCall->reasoningEncryptedContent;
+                    }
+
+                    return $block;
+                })
                 ->values()
                 ->all();
 
