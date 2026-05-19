@@ -336,12 +336,12 @@ function createConversationSchema(?string $connection = null): void
         $table->foreignId('user_id')->nullable();
         $table->string('agent');
         $table->string('role', 25);
-        $table->text('content');
-        $table->text('attachments');
-        $table->text('tool_calls');
-        $table->text('tool_results');
-        $table->text('usage');
-        $table->text('meta');
+        $table->longText('content');
+        $table->longText('attachments');
+        $table->longText('tool_calls');
+        $table->longText('tool_results');
+        $table->longText('usage');
+        $table->longText('meta');
         $table->timestamps();
     });
 }
