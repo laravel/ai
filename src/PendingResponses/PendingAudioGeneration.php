@@ -86,6 +86,8 @@ class PendingAudioGeneration
 
     /**
      * Generate the audio.
+     *
+     * @throws FailoverableException if every configured provider fails to generate the audio.
      */
     public function generate(Lab|array|string|null $provider = null, ?string $model = null): AudioResponse
     {

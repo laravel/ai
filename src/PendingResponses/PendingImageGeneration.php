@@ -114,6 +114,8 @@ class PendingImageGeneration
 
     /**
      * Generate the image.
+     *
+     * @throws FailoverableException if every configured provider fails to generate the image.
      */
     public function generate(Lab|array|string|null $provider = null, ?string $model = null): ImageResponse
     {

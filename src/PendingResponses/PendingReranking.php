@@ -52,6 +52,8 @@ class PendingReranking
 
     /**
      * Rerank the documents based on their relevance to the query.
+     *
+     * @throws FailoverableException if every configured provider fails to rerank the documents.
      */
     public function rerank(string $query, Lab|array|string|null $provider = null, ?string $model = null): RerankingResponse
     {

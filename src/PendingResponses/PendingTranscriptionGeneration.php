@@ -97,6 +97,8 @@ class PendingTranscriptionGeneration
 
     /**
      * Generate the transcription.
+     *
+     * @throws FailoverableException if every configured provider fails to generate the transcription.
      */
     public function generate(Lab|array|string|null $provider = null, ?string $model = null): TranscriptionResponse
     {
