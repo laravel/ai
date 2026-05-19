@@ -379,20 +379,17 @@ trait HandlesTextStreaming
                     new AssistantMessage($currentText, collect($mappedToolCalls)),
                     new ToolResultMessage(collect($toolResults)),
                 ];
-
-                $body = [
-                    'model' => $model,
-                    'input' => $this->mapMessagesToInput($nextPriorMessages, $instructions),
-                    'stream' => true,
-                ];
-            } else {
-                $body = [
-                    'model' => $model,
-                    'previous_response_id' => $responseId,
-                    'input' => $this->buildToolResultsInput($toolResults),
-                    'stream' => true,
-                ];
             }
+
+            $body = $this->buildToolFollowUpBody(
+                $model,
+                $responseId,
+                $zeroDataRetention,
+                $toolResults,
+                is_array($nextPriorMessages) ? $nextPriorMessages : [],
+                $instructions,
+            );
+            $body['stream'] = true;
 
             if (filled($tools)) {
                 $body['tools'] = $this->mapTools($tools, $provider);

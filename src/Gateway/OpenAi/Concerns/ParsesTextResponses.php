@@ -244,16 +244,14 @@ trait ParsesTextResponses
     ): TextResponse {
         $zeroDataRetention = $provider->additionalConfiguration()['zero_data_retention'] ?? false;
 
-        $body = $zeroDataRetention
-            ? [
-                'model' => $model,
-                'input' => $this->mapMessagesToInput([...(is_array($priorMessages) ? $priorMessages : []), ...$messages->all()], $instructions),
-            ]
-            : [
-                'model' => $model,
-                'previous_response_id' => $responseId,
-                'input' => $this->buildToolResultsInput($toolResults),
-            ];
+        $body = $this->buildToolFollowUpBody(
+            $model,
+            $responseId,
+            $zeroDataRetention,
+            $toolResults,
+            [...(is_array($priorMessages) ? $priorMessages : []), ...$messages->all()],
+            $instructions,
+        );
 
         if (filled($tools)) {
             $body['tools'] = $this->mapTools($tools, $provider);

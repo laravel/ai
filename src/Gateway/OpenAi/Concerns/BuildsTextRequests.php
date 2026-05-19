@@ -54,6 +54,34 @@ trait BuildsTextRequests
     }
 
     /**
+     * Build the request body for a tool-result follow-up request.
+     *
+     * Zero Data Retention accounts reject `previous_response_id`, so the
+     * full conversation is sent inline instead of relying on server-side chaining.
+     */
+    protected function buildToolFollowUpBody(
+        string $model,
+        string $responseId,
+        bool $zeroDataRetention,
+        array $toolResults,
+        array $messages = [],
+        ?string $instructions = null,
+    ): array {
+        if ($zeroDataRetention) {
+            return [
+                'model' => $model,
+                'input' => $this->mapMessagesToInput($messages, $instructions),
+            ];
+        }
+
+        return [
+            'model' => $model,
+            'previous_response_id' => $responseId,
+            'input' => $this->buildToolResultsInput($toolResults),
+        ];
+    }
+
+    /**
      * Build the text format options for structured output.
      */
     protected function buildSchemaFormat(array $schema, bool $strict): array
