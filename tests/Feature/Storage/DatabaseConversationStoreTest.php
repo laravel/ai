@@ -141,6 +141,27 @@ test('it stores sparse keyed tool calls and results as JSON arrays', function ()
         ->and(array_is_list(json_decode($record->tool_results, true)))->toBeTrue();
 });
 
+test('assistant message JSON serialization fails loudly', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Tool conversation');
+
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        'Check my order status.',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $response = new AgentResponse('invocation-id', 'The order has shipped.', new Usage, new Meta);
+    $response->toolResults = collect([
+        new ToolResult('call-1', 'lookup_order', ['id' => 1], ["Invalid \xB1 UTF-8"]),
+    ]);
+
+    expect(fn () => $store->storeAssistantMessage($conversationId, 1, $prompt, $response))
+        ->toThrow(JsonException::class);
+});
+
 test('it reloads legacy sparse keyed tool calls and results as lists', function () {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Tool conversation');
@@ -288,6 +309,80 @@ test('malformed stored attachment JSON fails loudly', function () {
 
     expect(fn () => $store->getLatestConversationMessages($conversationId, 10))
         ->toThrow(InvalidArgumentException::class, 'Stored conversation attachments must be a JSON array.');
+});
+
+test('invalid stored tool call JSON fails loudly', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Malformed tool call conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => '',
+        'attachments' => '[]',
+        'tool_calls' => '[{"id":"call-1","name":"lookup_order","arguments":{"id":1}}',
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    expect(fn () => $store->getLatestConversationMessages($conversationId, 10))
+        ->toThrow(InvalidArgumentException::class, 'Stored conversation tool calls must be valid JSON.');
+});
+
+test('invalid stored tool result JSON fails loudly', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Malformed tool result conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => '',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call-1', 'name' => 'lookup_order', 'arguments' => ['id' => 1]],
+        ]),
+        'tool_results' => '[{"id":"call-1","name":"lookup_order","arguments":{"id":1},"result":{"status":"shipped"}}',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    expect(fn () => $store->getLatestConversationMessages($conversationId, 10))
+        ->toThrow(InvalidArgumentException::class, 'Stored conversation tool results must be valid JSON.');
+});
+
+test('stored tool call JSON must be an array', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Malformed tool call conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => '',
+        'attachments' => '[]',
+        'tool_calls' => json_encode(['id' => 'call-1', 'name' => 'lookup_order', 'arguments' => ['id' => 1]]),
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    expect(fn () => $store->getLatestConversationMessages($conversationId, 10))
+        ->toThrow(InvalidArgumentException::class, 'Stored conversation tool calls must be a JSON array.');
 });
 
 test('malformed known stored attachments fail loudly', function () {

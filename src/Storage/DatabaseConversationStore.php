@@ -7,6 +7,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use JsonException;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -73,7 +74,7 @@ class DatabaseConversationStore implements ConversationStore
             'agent' => $prompt->agent::class,
             'role' => 'user',
             'content' => $prompt->prompt,
-            'attachments' => $prompt->attachments->toJson(),
+            'attachments' => $this->encodeJson($prompt->attachments->values()),
             'tool_calls' => '[]',
             'tool_results' => '[]',
             'usage' => '[]',
@@ -104,10 +105,10 @@ class DatabaseConversationStore implements ConversationStore
             'role' => 'assistant',
             'content' => $response->text,
             'attachments' => '[]',
-            'tool_calls' => json_encode($response->toolCalls->values()),
-            'tool_results' => json_encode($response->toolResults->values()),
-            'usage' => json_encode($response->usage),
-            'meta' => json_encode($response->meta),
+            'tool_calls' => $this->encodeJson($response->toolCalls->values()),
+            'tool_results' => $this->encodeJson($response->toolResults->values()),
+            'usage' => $this->encodeJson($response->usage),
+            'meta' => $this->encodeJson($response->meta),
             'created_at' => $now,
             'updated_at' => $now,
         ]);
@@ -142,8 +143,8 @@ class DatabaseConversationStore implements ConversationStore
             ->reverse()
             ->values()
             ->flatMap(function ($record) {
-                $toolCalls = collect(json_decode($record->tool_calls, true))->values();
-                $toolResults = collect(json_decode($record->tool_results, true))->values();
+                $toolCalls = collect($this->decodeJsonArray($record->tool_calls, 'tool calls', allowSparseNumericKeys: true))->values();
+                $toolResults = collect($this->decodeJsonArray($record->tool_results, 'tool results', allowSparseNumericKeys: true))->values();
 
                 if ($record->role === 'user') {
                     $attachments = $this->rehydrateAttachments($record->attachments);
@@ -191,11 +192,7 @@ class DatabaseConversationStore implements ConversationStore
 
     protected function rehydrateAttachments(string $attachments): Collection
     {
-        $decoded = json_decode($attachments, true);
-
-        if (! is_array($decoded) || ! array_is_list($decoded)) {
-            throw new InvalidArgumentException('Stored conversation attachments must be a JSON array.');
-        }
+        $decoded = $this->decodeJsonArray($attachments, 'attachments');
 
         if ($decoded === []) {
             return collect();
@@ -211,6 +208,41 @@ class DatabaseConversationStore implements ConversationStore
             })
             ->filter()
             ->values();
+    }
+
+    protected function encodeJson(mixed $value): string
+    {
+        return json_encode($value, JSON_THROW_ON_ERROR);
+    }
+
+    protected function decodeJsonArray(string $json, string $name, bool $allowSparseNumericKeys = false): array
+    {
+        try {
+            $decoded = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException $exception) {
+            throw new InvalidArgumentException("Stored conversation {$name} must be valid JSON.", previous: $exception);
+        }
+
+        if (! is_array($decoded)) {
+            throw new InvalidArgumentException("Stored conversation {$name} must be a JSON array.");
+        }
+
+        if (! array_is_list($decoded) && (! $allowSparseNumericKeys || ! $this->hasOnlyNumericKeys($decoded))) {
+            throw new InvalidArgumentException("Stored conversation {$name} must be a JSON array.");
+        }
+
+        return $decoded;
+    }
+
+    protected function hasOnlyNumericKeys(array $array): bool
+    {
+        foreach (array_keys($array) as $key) {
+            if (! is_int($key) && ! ctype_digit((string) $key)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
