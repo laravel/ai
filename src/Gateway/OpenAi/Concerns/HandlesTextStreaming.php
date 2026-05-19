@@ -7,6 +7,8 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Messages\AssistantMessage;
+use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
@@ -40,6 +42,8 @@ trait HandlesTextStreaming
         int $depth = 0,
         ?int $maxSteps = null,
         ?int $timeout = null,
+        ?string $instructions = null,
+        array $priorMessages = [],
     ): Generator {
         $maxSteps ??= $options?->maxSteps;
 
@@ -297,6 +301,8 @@ trait HandlesTextStreaming
                 $depth,
                 $maxSteps,
                 $timeout,
+                $instructions,
+                $priorMessages,
             );
 
             return;
@@ -327,6 +333,8 @@ trait HandlesTextStreaming
         int $depth,
         ?int $maxSteps,
         ?int $timeout = null,
+        ?string $instructions = null,
+        array $priorMessages = [],
     ): Generator {
         $mappedToolCalls = $this->mapStreamToolCalls($pendingToolCalls);
 
@@ -361,12 +369,30 @@ trait HandlesTextStreaming
         }
 
         if ($depth + 1 < ($maxSteps ?? round(count($tools) * 1.5))) {
-            $body = [
-                'model' => $model,
-                'previous_response_id' => $responseId,
-                'input' => $this->buildToolResultsInput($toolResults),
-                'stream' => true,
-            ];
+            $zeroDataRetention = $provider->additionalConfiguration()['zero_data_retention'] ?? false;
+
+            $nextPriorMessages = $priorMessages;
+
+            if ($zeroDataRetention) {
+                $nextPriorMessages = [
+                    ...$priorMessages,
+                    new AssistantMessage($currentText, collect($mappedToolCalls)),
+                    new ToolResultMessage(collect($toolResults)),
+                ];
+
+                $body = [
+                    'model' => $model,
+                    'input' => $this->mapMessagesToInput($nextPriorMessages, $instructions),
+                    'stream' => true,
+                ];
+            } else {
+                $body = [
+                    'model' => $model,
+                    'previous_response_id' => $responseId,
+                    'input' => $this->buildToolResultsInput($toolResults),
+                    'stream' => true,
+                ];
+            }
 
             if (filled($tools)) {
                 $body['tools'] = $this->mapTools($tools, $provider);
@@ -406,6 +432,8 @@ trait HandlesTextStreaming
                 $depth + 1,
                 $maxSteps,
                 $timeout,
+                $instructions,
+                $nextPriorMessages,
             );
         } else {
             yield (new StreamEnd(

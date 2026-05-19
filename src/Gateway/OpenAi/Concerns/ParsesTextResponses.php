@@ -60,6 +60,8 @@ trait ParsesTextResponses
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
+        ?string $instructions = null,
+        array $priorMessages = [],
     ): TextResponse {
         return $this->processResponse(
             $data,
@@ -72,6 +74,8 @@ trait ParsesTextResponses
             maxSteps: $options?->maxSteps,
             options: $options,
             timeout: $timeout,
+            instructions: $instructions,
+            priorMessages: $priorMessages,
         );
     }
 
@@ -90,6 +94,8 @@ trait ParsesTextResponses
         ?int $maxSteps = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
+        ?string $instructions = null,
+        array $priorMessages = [],
     ): TextResponse {
         $responseId = $data['id'] ?? '';
         $output = $data['output'] ?? [];
@@ -155,6 +161,8 @@ trait ParsesTextResponses
                 $maxSteps,
                 $options,
                 $timeout,
+                $instructions,
+                $priorMessages,
             );
         }
 
@@ -231,12 +239,21 @@ trait ParsesTextResponses
         ?int $maxSteps,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
+        ?string $instructions = null,
+        array $priorMessages = [],
     ): TextResponse {
-        $body = [
-            'model' => $model,
-            'previous_response_id' => $responseId,
-            'input' => $this->buildToolResultsInput($toolResults),
-        ];
+        $zeroDataRetention = $provider->additionalConfiguration()['zero_data_retention'] ?? false;
+
+        $body = $zeroDataRetention
+            ? [
+                'model' => $model,
+                'input' => $this->mapMessagesToInput([...$priorMessages, ...$messages->all()], $instructions),
+            ]
+            : [
+                'model' => $model,
+                'previous_response_id' => $responseId,
+                'input' => $this->buildToolResultsInput($toolResults),
+            ];
 
         if (filled($tools)) {
             $body['tools'] = $this->mapTools($tools, $provider);
@@ -267,7 +284,7 @@ trait ParsesTextResponses
 
         $this->validateTextResponse($data);
 
-        return $this->processResponse($data, $provider, $structured, $tools, $schema, $steps, $messages, $depth, $maxSteps, $options, $timeout);
+        return $this->processResponse($data, $provider, $structured, $tools, $schema, $steps, $messages, $depth, $maxSteps, $options, $timeout, $instructions, $priorMessages);
     }
 
     /**
