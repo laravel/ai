@@ -121,6 +121,8 @@ class PendingEmbeddingsGeneration
 
     /**
      * Generate the embeddings.
+     *
+     * @throws FailoverableException if every configured provider fails to generate the embeddings.
      */
     public function generate(Lab|array|string|null $provider = null, ?string $model = null): EmbeddingsResponse
     {

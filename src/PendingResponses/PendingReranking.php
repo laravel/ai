@@ -21,6 +21,8 @@ class PendingReranking
      * Create a new pending reranking instance.
      *
      * @param  array<int, string>  $documents
+     *
+     * @throws InvalidArgumentException if the documents are not a list, are empty, or contain non-string or blank entries.
      */
     public function __construct(
         protected array $documents,
@@ -52,6 +54,8 @@ class PendingReranking
 
     /**
      * Rerank the documents based on their relevance to the query.
+     *
+     * @throws FailoverableException if every configured provider fails to rerank the documents.
      */
     public function rerank(string $query, Lab|array|string|null $provider = null, ?string $model = null): RerankingResponse
     {

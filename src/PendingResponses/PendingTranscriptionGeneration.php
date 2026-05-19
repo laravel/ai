@@ -97,6 +97,8 @@ class PendingTranscriptionGeneration
 
     /**
      * Generate the transcription.
+     *
+     * @throws FailoverableException if every configured provider fails to generate the transcription.
      */
     public function generate(Lab|array|string|null $provider = null, ?string $model = null): TranscriptionResponse
     {
@@ -129,6 +131,8 @@ class PendingTranscriptionGeneration
 
     /**
      * Queue the generation of the transcription.
+     *
+     * @throws LogicException if the audio attachment is not a local audio or an audio file stored on a filesystem disk.
      */
     public function queue(Lab|array|string|null $provider = null, ?string $model = null): QueuedTranscriptionResponse
     {

@@ -220,6 +220,8 @@ class GeminiGateway implements Gateway
 
     /**
      * Generate audio from the given text.
+     *
+     * @throws RuntimeException if Gemini returns no audio data or invalid base64 audio.
      */
     public function generateAudio(
         AudioProvider $provider,
