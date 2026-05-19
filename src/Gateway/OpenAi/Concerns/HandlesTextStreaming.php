@@ -43,7 +43,7 @@ trait HandlesTextStreaming
         ?int $maxSteps = null,
         ?int $timeout = null,
         ?string $instructions = null,
-        array $priorMessages = [],
+        ?array $priorMessages = null,
     ): Generator {
         $maxSteps ??= $options?->maxSteps;
 
@@ -334,7 +334,7 @@ trait HandlesTextStreaming
         ?int $maxSteps,
         ?int $timeout = null,
         ?string $instructions = null,
-        array $priorMessages = [],
+        ?array $priorMessages = null,
     ): Generator {
         $mappedToolCalls = $this->mapStreamToolCalls($pendingToolCalls);
 
@@ -375,7 +375,7 @@ trait HandlesTextStreaming
 
             if ($zeroDataRetention) {
                 $nextPriorMessages = [
-                    ...$priorMessages,
+                    ...(is_array($priorMessages) ? $priorMessages : []),
                     new AssistantMessage($currentText, collect($mappedToolCalls)),
                     new ToolResultMessage(collect($toolResults)),
                 ];

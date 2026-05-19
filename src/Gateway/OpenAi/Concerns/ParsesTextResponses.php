@@ -61,7 +61,7 @@ trait ParsesTextResponses
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
         ?string $instructions = null,
-        array $priorMessages = [],
+        ?array $priorMessages = null,
     ): TextResponse {
         return $this->processResponse(
             $data,
@@ -95,7 +95,7 @@ trait ParsesTextResponses
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
         ?string $instructions = null,
-        array $priorMessages = [],
+        ?array $priorMessages = null,
     ): TextResponse {
         $responseId = $data['id'] ?? '';
         $output = $data['output'] ?? [];
@@ -240,14 +240,14 @@ trait ParsesTextResponses
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
         ?string $instructions = null,
-        array $priorMessages = [],
+        ?array $priorMessages = null,
     ): TextResponse {
         $zeroDataRetention = $provider->additionalConfiguration()['zero_data_retention'] ?? false;
 
         $body = $zeroDataRetention
             ? [
                 'model' => $model,
-                'input' => $this->mapMessagesToInput([...$priorMessages, ...$messages->all()], $instructions),
+                'input' => $this->mapMessagesToInput([...(is_array($priorMessages) ? $priorMessages : []), ...$messages->all()], $instructions),
             ]
             : [
                 'model' => $model,
