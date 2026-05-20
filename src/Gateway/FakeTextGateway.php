@@ -145,12 +145,12 @@ class FakeTextGateway implements TextGateway
 
         $events = Str::of($fakeResponse->text)
             ->explode(' ')
-            ->map(fn ($word, $index) => new TextDelta(
+            ->map(fn ($word, $index) => (new TextDelta(
                 ulid(),
                 $messageId,
                 $index > 0 ? ' '.$word : $word,
                 time(),
-            )->withInvocationId($invocationId))->all();
+            ))->withInvocationId($invocationId))->all();
 
         // Fake the text delta events...
         foreach ($events as $event) {
