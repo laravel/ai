@@ -129,6 +129,12 @@ return [
             'key' => env('OPENROUTER_API_KEY'),
         ],
 
+        'vercel' => [
+            'driver' => 'vercel',
+            'key' => env('AI_GATEWAY_API_KEY'),
+            'url' => env('VERCEL_AI_GATEWAY_URL', 'https://ai-gateway.vercel.sh/v1'),
+        ],
+
         'voyageai' => [
             'driver' => 'voyageai',
             'key' => env('VOYAGEAI_API_KEY'),

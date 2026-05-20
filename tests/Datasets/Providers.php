@@ -17,6 +17,7 @@ dataset('providers-with-urls', [
 
 dataset('embedding-providers', [
     'openai' => ['openai', 'OPENAI_API_KEY', 1536],
+    'vercel' => ['vercel', 'AI_GATEWAY_API_KEY', 1536],
     'voyageai' => ['voyageai', 'VOYAGEAI_API_KEY', 1024],
 ]);
 
@@ -51,6 +52,7 @@ dataset('agent-providers', [
     'mistral' => ['mistral', 'MISTRAL_API_KEY', 'mistral-small-latest'],
     'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4-nano'],
     'openrouter' => ['openrouter', 'OPENROUTER_API_KEY', 'anthropic/claude-haiku-4.5'],
+    'vercel' => ['vercel', 'AI_GATEWAY_API_KEY', 'anthropic/claude-haiku-4.5'],
     'xai' => ['xai', 'XAI_API_KEY', 'grok-4-1-fast-reasoning'],
 ]);
 

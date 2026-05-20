@@ -5,9 +5,14 @@ use Illuminate\Support\Facades\Facade;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Gateway\OpenAi\OpenAiGateway;
 use Laravel\Ai\Providers\OpenAiProvider;
+use Laravel\Ai\Providers\VercelProvider;
 
 test('can get an openai provider instance', function () {
     expect(Ai::textProvider('openai'))->toBeInstanceOf(OpenAiProvider::class);
+});
+
+test('can get a vercel provider instance', function () {
+    expect(Ai::textProvider('vercel'))->toBeInstanceOf(VercelProvider::class);
 });
 
 test('provider type is ensured', function () {
