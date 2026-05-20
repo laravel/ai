@@ -22,4 +22,3 @@ test('Lab enum provider list uses passed model as default', function () {
     expect(Provider::formatProviderAndModelList([Lab::Anthropic, Lab::OpenAI], 'claude-3-5-sonnet'))
         ->toBe(['anthropic' => 'claude-3-5-sonnet', 'openai' => 'claude-3-5-sonnet']);
 });
-
