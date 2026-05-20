@@ -61,9 +61,9 @@ abstract class Provider
             return [$providers => $model];
         }
 
-        return (new Collection($providers))->mapWithKeys(function ($value, $key) {
+        return (new Collection($providers))->mapWithKeys(function ($value, $key) use ($model) {
             return is_numeric($key)
-                ? [($value instanceof Lab ? $value->value : $value) => null]
+                ? [($value instanceof Lab ? $value->value : $value) => $model]
                 : [($key instanceof Lab ? $key->value : $key) => $value];
         })->all();
     }

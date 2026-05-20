@@ -254,7 +254,7 @@ trait Promptable
             }
         }
 
-        if (! is_array($provider) && is_null($model)) {
+        if (is_null($model)) {
             if (method_exists($this, 'model')) {
                 $model = $this->model();
             } else {
