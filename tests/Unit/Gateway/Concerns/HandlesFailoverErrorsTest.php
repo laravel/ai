@@ -79,3 +79,50 @@ test('non-matching message is rethrown as the original RequestException', functi
         ]),
     ))->toThrow(RequestException::class);
 });
+
+test('402 takes precedence over an overloaded status code', function () {
+    $gateway = new class
+    {
+        use HandlesFailoverErrors {
+            withErrorHandling as public;
+        }
+
+        protected function overloadedStatusCodes(): array
+        {
+            return [402, 503];
+        }
+    };
+
+    expect(fn () => $gateway->withErrorHandling(
+        'custom',
+        fn () => throw failoverableException(402, [
+            'error' => ['message' => 'Insufficient Balance'],
+        ]),
+    ))->toThrow(InsufficientCreditsException::class);
+});
+
+test('402 takes precedence over a matching insufficient credit pattern', function () {
+    expect(function () {
+        try {
+            $this->gateway->withErrorHandling(
+                'anthropic',
+                fn () => throw failoverableException(402, [
+                    'error' => ['message' => 'Your credit balance is too low.'],
+                ]),
+            );
+        } catch (InsufficientCreditsException $e) {
+            expect($e->getCode())->toBe(402);
+
+            throw $e;
+        }
+    })->toThrow(InsufficientCreditsException::class);
+});
+
+test('overloaded status takes precedence over a matching insufficient credit pattern', function () {
+    expect(fn () => $this->gateway->withErrorHandling(
+        'anthropic',
+        fn () => throw failoverableException(529, [
+            'error' => ['message' => 'Your credit balance is too low.'],
+        ]),
+    ))->toThrow(ProviderOverloadedException::class);
+});
