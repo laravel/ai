@@ -83,8 +83,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
         $allToolCalls = [];
         $allToolResults = [];
         $finalOutput = '';
-        $totalInputTokens = 0;
-        $totalOutputTokens = 0;
+        $totalUsage = new Usage;
         $step = 0;
         $responseMessages = new Collection;
         $steps = new Collection;
@@ -113,10 +112,13 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                 throw BedrockException::toAiException($e, $provider->name(), $model);
             }
 
-            $stepInputTokens = $result['usage']['inputTokens'] ?? 0;
-            $stepOutputTokens = $result['usage']['outputTokens'] ?? 0;
-            $totalInputTokens += $stepInputTokens;
-            $totalOutputTokens += $stepOutputTokens;
+            $stepUsage = new Usage(
+                promptTokens: $result['usage']['inputTokens'] ?? 0,
+                completionTokens: $result['usage']['outputTokens'] ?? 0,
+                cacheWriteInputTokens: $result['usage']['cacheWriteInputTokens'] ?? 0,
+                cacheReadInputTokens: $result['usage']['cacheReadInputTokens'] ?? 0,
+            );
+            $totalUsage = $totalUsage->add($stepUsage);
 
             $output = '';
             $toolCalls = [];
@@ -153,7 +155,6 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             }
 
             $step++;
-            $stepUsage = new Usage($stepInputTokens, $stepOutputTokens);
             $finishReason = $this->extractFinishReason($result);
 
             $responseMessages->push(new AssistantMessage($output, new Collection($toolCalls), $providerContentBlocks));
@@ -182,8 +183,6 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             }
         }
 
-        $usage = new Usage($totalInputTokens, $totalOutputTokens);
-
         if ($schema) {
             $structured = json_decode($finalOutput, true);
 
@@ -191,12 +190,12 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                 $structured = [];
             }
 
-            return (new StructuredTextResponse($structured, $finalOutput, $usage, $meta))
+            return (new StructuredTextResponse($structured, $finalOutput, $totalUsage, $meta))
                 ->withToolCallsAndResults(new Collection($allToolCalls), new Collection($allToolResults))
                 ->withSteps($steps);
         }
 
-        return (new TextResponse($finalOutput, $usage, $meta))
+        return (new TextResponse($finalOutput, $totalUsage, $meta))
             ->withMessages($responseMessages)
             ->withSteps($steps);
     }
@@ -223,8 +222,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
 
         $messageId = (string) Str::uuid();
         $timestamp = time();
-        $totalInputTokens = 0;
-        $totalOutputTokens = 0;
+        $totalUsage = new Usage;
         $step = 0;
 
         while ($step < $maxSteps) {
@@ -454,8 +452,12 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                 }
 
                 if (isset($event['metadata']['usage'])) {
-                    $totalInputTokens += $event['metadata']['usage']['inputTokens'] ?? 0;
-                    $totalOutputTokens += $event['metadata']['usage']['outputTokens'] ?? 0;
+                    $totalUsage = $totalUsage->add(new Usage(
+                        promptTokens: $event['metadata']['usage']['inputTokens'] ?? 0,
+                        completionTokens: $event['metadata']['usage']['outputTokens'] ?? 0,
+                        cacheWriteInputTokens: $event['metadata']['usage']['cacheWriteInputTokens'] ?? 0,
+                        cacheReadInputTokens: $event['metadata']['usage']['cacheReadInputTokens'] ?? 0,
+                    ));
                 }
             }
 
@@ -500,7 +502,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
         yield (new StreamEnd(
             $messageId,
             'stop',
-            new Usage($totalInputTokens, $totalOutputTokens),
+            $totalUsage,
             $timestamp,
         ))->withInvocationId($invocationId);
     }
