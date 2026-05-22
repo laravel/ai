@@ -2,7 +2,6 @@
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Gateway\Concerns\ComposesSchemaInstructions;
-use Laravel\Ai\ObjectSchema;
 
 beforeEach(function () {
     $this->trait = new class
