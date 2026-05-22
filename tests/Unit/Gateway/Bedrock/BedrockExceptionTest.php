@@ -118,6 +118,27 @@ test('non-bedrock exception with quota exceeded message maps to insufficient cre
     expect($aiException)->toBeInstanceOf(InsufficientCreditsException::class);
 });
 
+test('non-bedrock exception message is matched against every configured credit pattern', function (string $message) {
+    $generic = new RuntimeException($message);
+
+    $aiException = BedrockException::toAiException($generic, 'bedrock', 'claude-sonnet');
+
+    expect($aiException)->toBeInstanceOf(InsufficientCreditsException::class);
+})->with([
+    'insufficient' => ['You have insufficient funds remaining.'],
+    'quota exceeded' => ['Your monthly quota exceeded the limit.'],
+    'billing' => ['There is a billing issue on your account; please update payment method.'],
+    'service quota' => ['Service quota for this model has been reached.'],
+]);
+
+test('pattern match is case-insensitive across the entire message', function () {
+    $generic = new RuntimeException('REQUEST DENIED: INSUFFICIENT FUNDS FOR THIS OPERATION');
+
+    $aiException = BedrockException::toAiException($generic, 'bedrock', 'claude-sonnet');
+
+    expect($aiException)->toBeInstanceOf(InsufficientCreditsException::class);
+});
+
 test('non-bedrock generic exception wraps as ai exception', function () {
     $generic = new RuntimeException('Some network failure', 500);
 
