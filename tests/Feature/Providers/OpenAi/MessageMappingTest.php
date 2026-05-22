@@ -79,6 +79,50 @@ test('tool result follow up uses previous response id', function () {
     expect($hasFunctionCallOutput)->toBeTrue();
 });
 
+test('tool loop steps retain all assistant text parts from a message', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::sequence([
+            Http::response([
+                'id' => 'resp_tool_parts_123',
+                'status' => 'completed',
+                'model' => 'gpt-5.4',
+                'output' => [
+                    [
+                        'type' => 'message',
+                        'status' => 'completed',
+                        'role' => 'assistant',
+                        'content' => [
+                            ['type' => 'output_text', 'text' => 'Looking up the number. '],
+                            ['type' => 'output_text', 'text' => 'Calling the tool now.'],
+                        ],
+                    ],
+                    [
+                        'type' => 'function_call',
+                        'id' => 'fc_123',
+                        'call_id' => 'call_123',
+                        'name' => 'FixedNumberGenerator',
+                        'arguments' => '{}',
+                        'status' => 'completed',
+                    ],
+                ],
+                'usage' => [
+                    'input_tokens' => 10,
+                    'output_tokens' => 5,
+                ],
+            ]),
+            fakeOpenAiResponse('The number is 72019'),
+        ]),
+    ]);
+
+    $response = (new ToolUsingAgent(fixed: true))->prompt(
+        'Generate a number',
+        provider: 'openai',
+    );
+
+    expect($response->steps)->toHaveCount(2)
+        ->and($response->steps->first()->text)->toBe('Looking up the number. Calling the tool now.');
+});
+
 test('base64 pdf document maps to input file', function () {
     Http::fake([
         'api.openai.com/*' => fakeOpenAiResponse('I see a PDF'),

@@ -307,13 +307,21 @@ trait ParsesTextResponses
      */
     protected function extractText(array $output): string
     {
-        $lastOutput = last($output);
+        $textParts = [];
 
-        if (is_array($lastOutput)) {
-            return $lastOutput['content'][0]['text'] ?? '';
+        foreach ($output as $item) {
+            if (($item['type'] ?? '') !== 'message') {
+                continue;
+            }
+
+            foreach ($item['content'] ?? [] as $content) {
+                if (($content['type'] ?? '') === 'output_text' && isset($content['text'])) {
+                    $textParts[] = $content['text'];
+                }
+            }
         }
 
-        return '';
+        return implode('', $textParts);
     }
 
     /**
