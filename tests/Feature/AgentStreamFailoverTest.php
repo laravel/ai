@@ -8,6 +8,7 @@ use Laravel\Ai\AiManager;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Events\AgentStreamed;
+use Laravel\Ai\Events\StreamingAgent;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\StreamableAgentResponse;
@@ -49,6 +50,39 @@ test('stream fails over to next provider when primary is rate limited', function
     Event::assertDispatched(AgentFailedOver::class);
 
     Event::assertDispatched(AgentStreamed::class, fn (AgentStreamed $event) => $event->invocationId === $response->invocationId);
+});
+
+test('stream failover uses explicit model for each provider attempt', function () {
+    Event::fake();
+
+    config([
+        'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
+        'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
+    ]);
+
+    Http::preventStrayRequests();
+
+    Http::fakeSequence()
+        ->push(status: 429)
+        ->push(fakeGroqStreamBodyForStreamFailover(), 200);
+
+    $response = (new AssistantAgent)->stream(
+        'Hello',
+        provider: ['primary', 'backup'],
+        model: 'llama-3.3-70b-versatile',
+    );
+
+    $response->each(fn () => true);
+
+    Event::assertDispatched(StreamingAgent::class, function (StreamingAgent $event) {
+        return $event->prompt->provider->name() === 'primary'
+            && $event->prompt->model === 'llama-3.3-70b-versatile';
+    });
+
+    Event::assertDispatched(StreamingAgent::class, function (StreamingAgent $event) {
+        return $event->prompt->provider->name() === 'backup'
+            && $event->prompt->model === 'llama-3.3-70b-versatile';
+    });
 });
 
 test('stream throws last exception when all providers fail', function () {
