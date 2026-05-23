@@ -71,6 +71,20 @@ class TextGenerationLoop
                 $stepContext,
             );
 
+            if ($lastResult->finishReason === FinishReason::Continue) {
+                $steps->push($this->buildStep($lastResult));
+
+                $allMessages[] = new AssistantMessage(
+                    $lastResult->text,
+                    collect($lastResult->toolCalls),
+                    $lastResult->providerContentBlocks,
+                );
+
+                $continuationToken = $lastResult->continuationToken;
+
+                continue;
+            }
+
             $toolResults = $this->continuationToolResults(
                 $lastResult->finishReason,
                 $lastResult->toolCalls,
@@ -155,6 +169,18 @@ class TextGenerationLoop
             if ($result !== null) {
                 $accumulatedUsage = $accumulatedUsage->add($result->usage);
                 $finalReason = $result->finishReason;
+            }
+
+            if ($result?->finishReason === FinishReason::Continue) {
+                $allMessages[] = new AssistantMessage(
+                    $result->text,
+                    collect($result->toolCalls),
+                    $result->providerContentBlocks,
+                );
+
+                $continuationToken = $result->continuationToken;
+
+                continue;
             }
 
             $toolResults = $result !== null

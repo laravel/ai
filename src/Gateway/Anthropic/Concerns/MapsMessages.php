@@ -132,4 +132,31 @@ trait MapsMessages
             'content' => $content,
         ];
     }
+
+    /**
+     * Ensure tool_use and server_tool_use content blocks have their input cast to
+     * object so that empty inputs are encoded as `{}` rather than `[]` for replay.
+     */
+    protected function ensureToolInputIsObject(array $content): array
+    {
+        return array_map(function (array $block) {
+            if (in_array($block['type'] ?? '', ['tool_use', 'server_tool_use'], true)) {
+                $block['input'] = (object) ($block['input'] ?? []);
+            }
+
+            return $block;
+        }, $content);
+    }
+
+    /**
+     * Serialize a tool result output value to a string.
+     */
+    protected function serializeToolResultOutput(mixed $output): string
+    {
+        return match (true) {
+            is_string($output) => $output,
+            is_array($output) => json_encode($output),
+            default => strval($output),
+        };
+    }
 }
