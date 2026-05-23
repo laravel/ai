@@ -12,6 +12,8 @@ class StreamEnd extends StreamEvent
         public string $reason,
         public Usage $usage,
         public int $timestamp,
+        public ?string $responseId = null,
+        public array $providerContentBlocks = [],
     ) {
         //
     }
@@ -44,6 +46,7 @@ class StreamEnd extends StreamEvent
                 ? $this->usage->toArray()
                 : null,
             'timestamp' => $this->timestamp,
+            'response_id' => $this->responseId,
         ];
     }
 

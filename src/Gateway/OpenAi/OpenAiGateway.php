@@ -10,6 +10,7 @@ use InvalidArgumentException;
 use Laravel\Ai\Contracts\Files\HasName;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\Gateway;
+use Laravel\Ai\Contracts\Gateway\SingleTurnTextGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
@@ -22,6 +23,9 @@ use Laravel\Ai\Files\StoredImage;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
+use Laravel\Ai\Gateway\SingleTurnResponse;
+use Laravel\Ai\Gateway\StepContext;
+use Laravel\Ai\Gateway\StepLoop;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
@@ -34,7 +38,7 @@ use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
 use LogicException;
 
-class OpenAiGateway implements Gateway
+class OpenAiGateway implements Gateway, SingleTurnTextGateway
 {
     use Concerns\BuildsTextRequests;
     use Concerns\CreatesOpenAiClient;
@@ -65,20 +69,9 @@ class OpenAiGateway implements Gateway
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): TextResponse {
-        $body = $this->buildTextRequestBody(
-            $provider, $model, $instructions, $messages, $tools, $schema, $options,
+        return $this->buildStepLoop()->generate(
+            $provider, $model, $instructions, $messages, $tools, $schema, $options, $timeout,
         );
-
-        $response = $this->withErrorHandling(
-            $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('responses', $body),
-        );
-
-        $data = $response->json();
-
-        $this->validateTextResponse($data);
-
-        return $this->parseTextResponse($data, $provider, filled($schema), $tools, $schema, $options, $timeout);
     }
 
     /**
@@ -95,9 +88,59 @@ class OpenAiGateway implements Gateway
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): Generator {
-        $body = $this->buildTextRequestBody(
-            $provider, $model, $instructions, $messages, $tools, $schema, $options,
+        yield from $this->buildStepLoop()->stream(
+            $invocationId, $provider, $model, $instructions, $messages, $tools, $schema, $options, $timeout,
         );
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function generateSingleTurn(
+        TextProvider $provider,
+        string $model,
+        ?string $instructions,
+        array $messages,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options,
+        ?int $timeout,
+        StepContext $stepContext,
+    ): SingleTurnResponse {
+        $body = $stepContext->previousResponseId
+            ? $this->buildContinuationBody($stepContext->previousResponseId, $model, $messages, $tools, $provider, $schema, $options)
+            : $this->buildTextRequestBody($provider, $model, $instructions, $messages, $tools, $schema, $options);
+
+        $response = $this->withErrorHandling(
+            $provider->name(),
+            fn () => $this->client($provider, $timeout)->post('responses', $body),
+        );
+
+        $data = $response->json();
+
+        $this->validateTextResponse($data);
+
+        return $this->parseTextResponse($data, $provider, filled($schema));
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function streamSingleTurn(
+        string $invocationId,
+        TextProvider $provider,
+        string $model,
+        ?string $instructions,
+        array $messages,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options,
+        ?int $timeout,
+        StepContext $stepContext,
+    ): Generator {
+        $body = $stepContext->previousResponseId
+            ? $this->buildContinuationBody($stepContext->previousResponseId, $model, $messages, $tools, $provider, $schema, $options)
+            : $this->buildTextRequestBody($provider, $model, $instructions, $messages, $tools, $schema, $options);
 
         $body['stream'] = true;
 
@@ -108,18 +151,19 @@ class OpenAiGateway implements Gateway
                 ->post('responses', $body),
         );
 
-        yield from $this->processTextStream(
-            $invocationId,
-            $provider,
-            $model,
-            $tools,
-            $schema,
-            $options,
-            $response->getBody(),
-            0,
-            null,
-            $timeout,
-        );
+        yield from $this->processTextStream($invocationId, $provider, $model, $response->getBody());
+    }
+
+    /**
+     * Build a StepLoop that routes back into this gateway's single-turn methods,
+     * forwarding any tool invocation callbacks the provider has registered.
+     */
+    protected function buildStepLoop(): StepLoop
+    {
+        $this->initializeToolCallbacks();
+
+        return (new StepLoop($this, $this->events))
+            ->onToolInvocation($this->invokingToolCallback, $this->toolInvokedCallback);
     }
 
     /**

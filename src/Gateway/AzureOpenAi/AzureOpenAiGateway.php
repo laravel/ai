@@ -7,6 +7,7 @@ use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
+use Laravel\Ai\Contracts\Gateway\SingleTurnTextGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
@@ -23,6 +24,9 @@ use Laravel\Ai\Gateway\OpenAi\Concerns\MapsAttachments;
 use Laravel\Ai\Gateway\OpenAi\Concerns\MapsMessages;
 use Laravel\Ai\Gateway\OpenAi\Concerns\MapsTools;
 use Laravel\Ai\Gateway\OpenAi\Concerns\ParsesTextResponses;
+use Laravel\Ai\Gateway\SingleTurnResponse;
+use Laravel\Ai\Gateway\StepContext;
+use Laravel\Ai\Gateway\StepLoop;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Responses\Data\GeneratedImage;
@@ -34,7 +38,7 @@ use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Tools\ToolNameResolver;
 use LogicException;
 
-class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
+class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, SingleTurnTextGateway, TextGateway
 {
     use BuildsTextRequests;
     use CreatesAzureOpenAiClient;
@@ -65,26 +69,9 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): TextResponse {
-        $body = $this->buildTextRequestBody(
-            $provider,
-            $model,
-            $instructions,
-            $messages,
-            $tools,
-            $schema,
-            $options,
+        return $this->buildStepLoop()->generate(
+            $provider, $model, $instructions, $messages, $tools, $schema, $options, $timeout,
         );
-
-        $response = $this->withErrorHandling(
-            $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('responses', $body),
-        );
-
-        $data = $response->json();
-
-        $this->validateTextResponse($data);
-
-        return $this->parseTextResponse($data, $provider, filled($schema), $tools, $schema, $options, $timeout);
     }
 
     /**
@@ -101,15 +88,59 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): Generator {
-        $body = $this->buildTextRequestBody(
-            $provider,
-            $model,
-            $instructions,
-            $messages,
-            $tools,
-            $schema,
-            $options,
+        yield from $this->buildStepLoop()->stream(
+            $invocationId, $provider, $model, $instructions, $messages, $tools, $schema, $options, $timeout,
         );
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function generateSingleTurn(
+        TextProvider $provider,
+        string $model,
+        ?string $instructions,
+        array $messages,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options,
+        ?int $timeout,
+        StepContext $stepContext,
+    ): SingleTurnResponse {
+        $body = $stepContext->previousResponseId
+            ? $this->buildContinuationBody($stepContext->previousResponseId, $model, $messages, $tools, $provider, $schema, $options)
+            : $this->buildTextRequestBody($provider, $model, $instructions, $messages, $tools, $schema, $options);
+
+        $response = $this->withErrorHandling(
+            $provider->name(),
+            fn () => $this->client($provider, $timeout)->post('responses', $body),
+        );
+
+        $data = $response->json();
+
+        $this->validateTextResponse($data);
+
+        return $this->parseTextResponse($data, $provider, filled($schema));
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function streamSingleTurn(
+        string $invocationId,
+        TextProvider $provider,
+        string $model,
+        ?string $instructions,
+        array $messages,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options,
+        ?int $timeout,
+        StepContext $stepContext,
+    ): Generator {
+        $body = $stepContext->previousResponseId
+            ? $this->buildContinuationBody($stepContext->previousResponseId, $model, $messages, $tools, $provider, $schema, $options)
+            : $this->buildTextRequestBody($provider, $model, $instructions, $messages, $tools, $schema, $options);
 
         $body['stream'] = true;
 
@@ -120,18 +151,18 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
                 ->post('responses', $body),
         );
 
-        yield from $this->processTextStream(
-            $invocationId,
-            $provider,
-            $model,
-            $tools,
-            $schema,
-            $options,
-            $response->getBody(),
-            0,
-            null,
-            $timeout,
-        );
+        yield from $this->processTextStream($invocationId, $provider, $model, $response->getBody());
+    }
+
+    /**
+     * Build a StepLoop that routes back into this gateway's single-turn methods.
+     */
+    protected function buildStepLoop(): StepLoop
+    {
+        $this->initializeToolCallbacks();
+
+        return (new StepLoop($this, $this->events))
+            ->onToolInvocation($this->invokingToolCallback, $this->toolInvokedCallback);
     }
 
     /**
