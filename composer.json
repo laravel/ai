@@ -32,6 +32,9 @@
         "pestphp/pest-plugin-laravel": "^3.0|^4.0",
         "phpstan/phpstan": "^2.1"
     },
+    "suggest": {
+        "laravel/mcp": "Required to return MCP client tools from Laravel AI agents."
+    },
     "minimum-stability": "dev",
     "prefer-stable": true,
     "autoload": {
