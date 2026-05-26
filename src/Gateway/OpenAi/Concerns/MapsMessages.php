@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
+use Illuminate\Support\Arr;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\MessageRole;
@@ -65,19 +66,12 @@ trait MapsMessages
             $reasoningBlocks = $message->toolCalls
                 ->whereNotNull('reasoningId')
                 ->unique('reasoningId')
-                ->map(function ($toolCall) {
-                    $block = [
-                        'type' => 'reasoning',
-                        'id' => $toolCall->reasoningId,
-                        'summary' => $toolCall->reasoningSummary ?? [],
-                    ];
-
-                    if ($toolCall->reasoningEncryptedContent !== null) {
-                        $block['encrypted_content'] = $toolCall->reasoningEncryptedContent;
-                    }
-
-                    return $block;
-                })
+                ->map(fn ($toolCall) => Arr::whereNotNull([
+                    'type' => 'reasoning',
+                    'id' => $toolCall->reasoningId,
+                    'summary' => $toolCall->reasoningSummary ?? [],
+                    'encrypted_content' => $toolCall->reasoningEncryptedContent,
+                ]))
                 ->values()
                 ->all();
 

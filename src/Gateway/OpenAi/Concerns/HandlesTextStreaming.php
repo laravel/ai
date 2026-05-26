@@ -3,10 +3,7 @@
 namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
 use Generator;
-use Illuminate\Support\Arr;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
-use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\ToolResultMessage;
@@ -29,9 +26,6 @@ use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 
 trait HandlesTextStreaming
 {
-    /**
-     * Process an OpenAI streaming response and yield Laravel stream events.
-     */
     protected function processTextStream(
         string $invocationId,
         Provider $provider,
@@ -40,11 +34,10 @@ trait HandlesTextStreaming
         ?array $schema,
         ?TextGenerationOptions $options,
         $streamBody,
+        array $requestBody = [],
         int $depth = 0,
         ?int $maxSteps = null,
         ?int $timeout = null,
-        ?string $instructions = null,
-        Collection $messages = new Collection,
     ): Generator {
         $maxSteps ??= $options?->maxSteps;
 
@@ -299,14 +292,12 @@ trait HandlesTextStreaming
                 $tools,
                 $schema,
                 $options,
+                $requestBody,
                 $pendingToolCalls,
                 $currentText,
-                $reasoningItems,
                 $depth,
                 $maxSteps,
                 $timeout,
-                $instructions,
-                $messages,
             );
 
             return;
@@ -331,14 +322,12 @@ trait HandlesTextStreaming
         array $tools,
         ?array $schema,
         ?TextGenerationOptions $options,
+        array $requestBody,
         array $pendingToolCalls,
         string $currentText,
-        array $reasoningItems,
         int $depth,
         ?int $maxSteps,
         ?int $timeout = null,
-        ?string $instructions = null,
-        Collection $messages = new Collection,
     ): Generator {
         $mappedToolCalls = $this->mapStreamToolCalls($pendingToolCalls);
 
@@ -373,53 +362,25 @@ trait HandlesTextStreaming
         }
 
         if ($depth + 1 < ($maxSteps ?? round(count($tools) * 1.5))) {
-            $encryptedReasoning = $provider->additionalConfiguration()['encrypted_reasoning'] ?? false;
-
-            if ($encryptedReasoning) {
-                $messages->push(new AssistantMessage($currentText, collect($mappedToolCalls)));
-                $messages->push(new ToolResultMessage(collect($toolResults)));
-
-                $body = [
-                    'model' => $model,
-                    'input' => $this->mapMessagesToInput($messages->all(), $instructions),
-                    'store' => false,
-                    'include' => ['reasoning.encrypted_content'],
-                    'stream' => true,
-                ];
+            if ($this->isStateless($provider)) {
+                $this->mapAssistantMessage(
+                    new AssistantMessage($currentText, collect($mappedToolCalls)),
+                    $requestBody['input'],
+                );
+                $this->mapToolResultMessage(
+                    new ToolResultMessage(collect($toolResults)),
+                    $requestBody['input'],
+                );
             } else {
-                $body = [
-                    'model' => $model,
-                    'previous_response_id' => $responseId,
-                    'input' => $this->buildToolResultsInput($toolResults),
-                    'stream' => true,
-                ];
-            }
-
-            if (filled($tools)) {
-                $body['tools'] = $this->mapTools($tools, $provider);
-            }
-
-            if (filled($schema)) {
-                $body['text'] = $this->buildSchemaFormat($schema, Strict::isAppliedTo($options?->agent));
-            }
-
-            $body = array_merge($body, Arr::whereNotNull([
-                'temperature' => $options?->temperature,
-                'top_p' => $options?->topP,
-                'max_output_tokens' => $options?->maxTokens,
-            ]));
-
-            $providerOptions = $options?->providerOptions($provider->driver());
-
-            if (filled($providerOptions)) {
-                $body = array_merge($body, $providerOptions);
+                $requestBody['previous_response_id'] = $responseId;
+                $requestBody['input'] = $this->buildToolResultsInput($toolResults);
             }
 
             $response = $this->withErrorHandling(
                 $provider->name(),
                 fn () => $this->client($provider, $timeout)
                     ->withOptions(['stream' => true])
-                    ->post('responses', $body),
+                    ->post('responses', $requestBody),
             );
 
             yield from $this->processTextStream(
@@ -430,11 +391,10 @@ trait HandlesTextStreaming
                 $schema,
                 $options,
                 $response->getBody(),
+                $requestBody,
                 $depth + 1,
                 $maxSteps,
                 $timeout,
-                $instructions,
-                $messages,
             );
         } else {
             yield (new StreamEnd(

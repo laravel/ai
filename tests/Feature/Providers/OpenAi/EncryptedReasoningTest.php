@@ -11,7 +11,7 @@ beforeEach(function () {
     config(['ai.providers.openai' => [
         ...config('ai.providers.openai'),
         'key' => 'test-key',
-        'encrypted_reasoning' => true,
+        'store' => false,
     ]]);
 });
 
@@ -160,10 +160,53 @@ test('streaming tool follow up echoes encrypted reasoning back inline', function
         ->toBeTrue('streamed tool result included');
 });
 
-test('default encrypted reasoning off preserves previous response id behaviour', function () {
+test('non-reasoning model omits reasoning.encrypted_content include even with store false', function (string $model) {
+    Http::fake(['api.openai.com/*' => fakeOpenAiResponse()]);
+
+    (new OpenAiAgent)->prompt('Hi', model: $model);
+
+    Http::assertSent(function ($request) {
+        $body = json_decode($request->body(), true);
+
+        return ($body['store'] ?? null) === false
+            && ! in_array('reasoning.encrypted_content', $body['include'] ?? [], true);
+    });
+})->with([
+    'gpt-4.1',
+    'gpt-4o',
+    'gpt-5-chat-latest',
+]);
+
+test('store accepts env-style string values', function (mixed $storeValue, bool $shouldBeStateless) {
     config(['ai.providers.openai' => [
         ...config('ai.providers.openai'),
-        'encrypted_reasoning' => false,
+        'store' => $storeValue,
+    ]]);
+
+    Http::fake(['api.openai.com/*' => fakeOpenAiResponse()]);
+
+    (new OpenAiAgent)->prompt('Hi');
+
+    Http::assertSent(function ($request) use ($shouldBeStateless) {
+        $body = json_decode($request->body(), true);
+        $isStateless = ($body['store'] ?? null) === false;
+
+        return $isStateless === $shouldBeStateless;
+    });
+})->with([
+    'bool false' => [false, true],
+    'string "false"' => ['false', true],
+    'string "0"' => ['0', true],
+    'string "no"' => ['no', true],
+    'bool true' => [true, false],
+    'string "true"' => ['true', false],
+    'unrecognized string' => ['maybe', false],
+]);
+
+test('default store true preserves previous response id behaviour', function () {
+    config(['ai.providers.openai' => [
+        ...config('ai.providers.openai'),
+        'store' => true,
     ]]);
 
     Http::fake([

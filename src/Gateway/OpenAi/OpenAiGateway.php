@@ -85,9 +85,8 @@ class OpenAiGateway implements Gateway
             $tools,
             $schema,
             $options,
+            $body,
             $timeout,
-            $instructions,
-            collect($messages),
         );
     }
 
@@ -126,11 +125,10 @@ class OpenAiGateway implements Gateway
             $schema,
             $options,
             $response->getBody(),
+            $body,
             0,
             null,
             $timeout,
-            $instructions,
-            collect($messages),
         );
     }
 

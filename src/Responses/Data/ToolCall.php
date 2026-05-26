@@ -18,6 +18,22 @@ class ToolCall implements Arrayable, JsonSerializable
     ) {}
 
     /**
+     * Reconstruct an instance from a previously serialized toArray() payload.
+     */
+    public static function fromArray(array $data): self
+    {
+        return new self(
+            id: $data['id'],
+            name: $data['name'],
+            arguments: $data['arguments'],
+            resultId: $data['result_id'] ?? null,
+            reasoningId: $data['reasoning_id'] ?? null,
+            reasoningSummary: $data['reasoning_summary'] ?? null,
+            reasoningEncryptedContent: $data['reasoning_encrypted_content'] ?? null,
+        );
+    }
+
+    /**
      * Get the instance as an array.
      */
     public function toArray(): array
