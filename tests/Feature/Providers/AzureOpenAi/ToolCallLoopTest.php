@@ -32,7 +32,7 @@ test('tool calls trigger follow up request', function () {
 
     $followUpBody = json_decode($recorded[1][0]->body(), true);
 
-    expect($followUpBody)->toHaveKey('previous_response_id');
+    expect($followUpBody)->not->toHaveKey('previous_response_id');
 
     $hasFunctionCallOutput = false;
 

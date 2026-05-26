@@ -3,10 +3,10 @@
 namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
 use Generator;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
-use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Messages\AssistantMessage;
+use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
@@ -37,6 +37,7 @@ trait HandlesTextStreaming
         ?array $schema,
         ?TextGenerationOptions $options,
         $streamBody,
+        array $requestBody = [],
         int $depth = 0,
         ?int $maxSteps = null,
         ?int $timeout = null,
@@ -44,7 +45,6 @@ trait HandlesTextStreaming
         $maxSteps ??= $options?->maxSteps;
 
         $messageId = $this->generateEventId();
-        $responseId = '';
         $reasoningId = '';
         $streamStartEmitted = false;
         $textStartEmitted = false;
@@ -71,7 +71,6 @@ trait HandlesTextStreaming
 
             if ($type === 'response.created' && ! $streamStartEmitted) {
                 $streamStartEmitted = true;
-                $responseId = $data['response']['id'] ?? '';
 
                 yield (new StreamStart(
                     $this->generateEventId(),
@@ -149,6 +148,7 @@ trait HandlesTextStreaming
                 $reasoningItems[] = [
                     'id' => $data['item']['id'] ?? null,
                     'summary' => $data['item']['summary'] ?? [],
+                    'encrypted_content' => $data['item']['encrypted_content'] ?? null,
                 ];
 
                 if ($reasoningId !== '') {
@@ -213,6 +213,7 @@ trait HandlesTextStreaming
 
                     $toolCall['reasoning_id'] = $latestReasoning['id'];
                     $toolCall['reasoning_summary'] = $latestReasoning['summary'] ?? [];
+                    $toolCall['reasoning_encrypted_content'] = $latestReasoning['encrypted_content'] ?? null;
                 }
 
                 $pendingToolCalls[$index] = $toolCall;
@@ -253,6 +254,7 @@ trait HandlesTextStreaming
                                 $call['call_id'] ?? null,
                                 $call['reasoning_id'] ?? null,
                                 $call['reasoning_summary'] ?? null,
+                                $call['reasoning_encrypted_content'] ?? null,
                             ),
                             time(),
                         ))->withInvocationId($invocationId);
@@ -269,7 +271,6 @@ trait HandlesTextStreaming
             if ($type === 'response.completed') {
                 $response = $data['response'] ?? [];
                 $responseData = $response;
-                $responseId = $response['id'] ?? $responseId;
                 $responseUsage = $response['usage'] ?? [];
 
                 $usage = new Usage(
@@ -285,15 +286,14 @@ trait HandlesTextStreaming
         if (filled($pendingToolCalls)) {
             yield from $this->handleStreamingToolCalls(
                 $invocationId,
-                $responseId,
                 $provider,
                 $model,
                 $tools,
                 $schema,
                 $options,
+                $requestBody,
                 $pendingToolCalls,
                 $currentText,
-                $reasoningItems,
                 $depth,
                 $maxSteps,
                 $timeout,
@@ -310,20 +310,16 @@ trait HandlesTextStreaming
         ))->withInvocationId($invocationId);
     }
 
-    /**
-     * Handle tool calls detected during streaming.
-     */
     protected function handleStreamingToolCalls(
         string $invocationId,
-        string $responseId,
         Provider $provider,
         string $model,
         array $tools,
         ?array $schema,
         ?TextGenerationOptions $options,
+        array $requestBody,
         array $pendingToolCalls,
         string $currentText,
-        array $reasoningItems,
         int $depth,
         ?int $maxSteps,
         ?int $timeout = null,
@@ -361,38 +357,20 @@ trait HandlesTextStreaming
         }
 
         if ($depth + 1 < ($maxSteps ?? round(count($tools) * 1.5))) {
-            $body = [
-                'model' => $model,
-                'previous_response_id' => $responseId,
-                'input' => $this->buildToolResultsInput($toolResults),
-                'stream' => true,
-            ];
-
-            if (filled($tools)) {
-                $body['tools'] = $this->mapTools($tools, $provider);
-            }
-
-            if (filled($schema)) {
-                $body['text'] = $this->buildSchemaFormat($schema, Strict::isAppliedTo($options?->agent));
-            }
-
-            $body = array_merge($body, Arr::whereNotNull([
-                'temperature' => $options?->temperature,
-                'top_p' => $options?->topP,
-                'max_output_tokens' => $options?->maxTokens,
-            ]));
-
-            $providerOptions = $options?->providerOptions($provider->driver());
-
-            if (filled($providerOptions)) {
-                $body = array_merge($body, $providerOptions);
-            }
+            $this->mapAssistantMessage(
+                new AssistantMessage($currentText, collect($mappedToolCalls)),
+                $requestBody['input'],
+            );
+            $this->mapToolResultMessage(
+                new ToolResultMessage(collect($toolResults)),
+                $requestBody['input'],
+            );
 
             $response = $this->withErrorHandling(
                 $provider->name(),
                 fn () => $this->client($provider, $timeout)
                     ->withOptions(['stream' => true])
-                    ->post('responses', $body),
+                    ->post('responses', $requestBody),
             );
 
             yield from $this->processTextStream(
@@ -403,6 +381,7 @@ trait HandlesTextStreaming
                 $schema,
                 $options,
                 $response->getBody(),
+                $requestBody,
                 $depth + 1,
                 $maxSteps,
                 $timeout,
@@ -431,6 +410,7 @@ trait HandlesTextStreaming
             $tc['call_id'] ?? null,
             $tc['reasoning_id'] ?? null,
             $tc['reasoning_summary'] ?? null,
+            $tc['reasoning_encrypted_content'] ?? null,
         ), array_values($toolCalls));
     }
 

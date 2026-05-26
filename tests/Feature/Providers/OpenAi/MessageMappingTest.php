@@ -44,7 +44,7 @@ test('user message maps to openai format', function () {
     });
 });
 
-test('tool result follow up uses previous response id', function () {
+test('tool result follow up inlines the full conversation without previous_response_id', function () {
     Http::fake([
         'api.openai.com/*' => Http::sequence([
             fakeOpenAiToolCallResponse(),
@@ -52,31 +52,21 @@ test('tool result follow up uses previous response id', function () {
         ]),
     ]);
 
-    (new ToolUsingAgent(fixed: true))->prompt(
-        'Generate a number',
-        provider: 'openai',
-    );
+    (new ToolUsingAgent(fixed: true))->prompt('Generate a number', provider: 'openai');
 
-    $recorded = Http::recorded();
+    $followUpBody = json_decode(Http::recorded()[1][0]->body(), true);
 
-    expect($recorded)->toHaveCount(2);
-
-    $followUpBody = json_decode($recorded[1][0]->body(), true);
-
-    expect($followUpBody)->toHaveKey('previous_response_id')
-        ->and($followUpBody['previous_response_id'])->toBe('resp_tool_123');
-
-    $hasFunctionCallOutput = false;
-
-    foreach ($followUpBody['input'] as $item) {
-        if (($item['type'] ?? '') === 'function_call_output') {
-            $hasFunctionCallOutput = true;
-            expect($item['call_id'])->toBe('call_123')
-                ->and($item['output'])->not->toBeEmpty();
-        }
-    }
-
-    expect($hasFunctionCallOutput)->toBeTrue();
+    expect($followUpBody)->not->toHaveKey('previous_response_id')
+        ->and($followUpBody['input'])->sequence(
+            fn ($item) => $item->role->toBe('system'),
+            fn ($item) => $item->toMatchArray([
+                'role' => 'user',
+                'content' => [['type' => 'input_text', 'text' => 'Generate a number']],
+            ]),
+            fn ($item) => $item->toMatchArray(['type' => 'function_call', 'call_id' => 'call_123']),
+            fn ($item) => $item->toMatchArray(['type' => 'function_call_output', 'call_id' => 'call_123'])
+                ->output->not->toBeEmpty(),
+        );
 });
 
 test('base64 pdf document maps to input file', function () {
@@ -337,4 +327,74 @@ test('system instructions are in input array as system role', function () {
         return $systemMsg !== null
             && str_contains($systemMsg['content'], 'helpful assistant');
     });
+});
+
+test('reasoning model requests auto-include reasoning.encrypted_content', function () {
+    Http::fake(['api.openai.com/*' => fakeOpenAiResponse()]);
+
+    (new AssistantAgent)->prompt('Hi', provider: 'openai');
+
+    Http::assertSent(fn (Request $request) => expect(json_decode($request->body(), true))
+        ->include->toContain('reasoning.encrypted_content')
+    );
+});
+
+test('non-reasoning model requests omit reasoning.encrypted_content include', function (string $model) {
+    Http::fake(['api.openai.com/*' => fakeOpenAiResponse()]);
+
+    (new AssistantAgent)->prompt('Hi', provider: 'openai', model: $model);
+
+    Http::assertSent(fn (Request $request) => expect(json_decode($request->body(), true)['include'] ?? [])
+        ->not->toContain('reasoning.encrypted_content')
+    );
+})->with([
+    'gpt-4.1',
+    'gpt-4o',
+    'gpt-5-chat-latest',
+]);
+
+test('store is not set so OpenAI defaults to its server-side behavior', function () {
+    Http::fake(['api.openai.com/*' => fakeOpenAiResponse()]);
+
+    (new AssistantAgent)->prompt('Hi', provider: 'openai');
+
+    Http::assertSent(fn (Request $request) => expect(json_decode($request->body(), true))
+        ->not->toHaveKey('store')
+    );
+});
+
+test('encrypted reasoning blobs round-trip through tool follow-up', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::sequence([
+            Http::response([
+                'id' => 'resp_rs',
+                'status' => 'completed',
+                'model' => 'gpt-5.4',
+                'output' => [
+                    ['type' => 'reasoning', 'id' => 'rs_1', 'summary' => [], 'encrypted_content' => 'enc-blob-1'],
+                    [
+                        'type' => 'function_call',
+                        'id' => 'fc_1',
+                        'call_id' => 'call_1',
+                        'name' => 'FixedNumberGenerator',
+                        'arguments' => '{}',
+                        'status' => 'completed',
+                    ],
+                ],
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+            fakeOpenAiResponse('Done'),
+        ]),
+    ]);
+
+    (new ToolUsingAgent(fixed: true))->prompt('Generate a number', provider: 'openai');
+
+    $followUpBody = json_decode(Http::recorded()[1][0]->body(), true);
+    $reasoningBlock = collect($followUpBody['input'])->firstWhere('type', 'reasoning');
+
+    expect($reasoningBlock)->toMatchArray([
+        'type' => 'reasoning',
+        'id' => 'rs_1',
+        'encrypted_content' => 'enc-blob-1',
+    ]);
 });

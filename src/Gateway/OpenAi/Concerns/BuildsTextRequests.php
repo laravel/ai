@@ -50,7 +50,30 @@ trait BuildsTextRequests
             $body = array_merge($body, $providerOptions);
         }
 
+        if ($this->isReasoningModel($model)) {
+            $body['include'] = array_values(array_unique([
+                ...($body['include'] ?? []),
+                'reasoning.encrypted_content',
+            ]));
+        }
+
         return $body;
+    }
+
+    /**
+     * Reasoning models return encrypted_content blobs that must round-trip
+     * across tool follow-ups so the model retains chain-of-thought.
+     * gpt-5-chat* is the non-reasoning chat variant.
+     *
+     * Keep this allowlist in sync with the Vercel AI SDK:
+     * https://github.com/vercel/ai/blob/main/packages/openai/src/openai-language-model-capabilities.ts
+     */
+    protected function isReasoningModel(string $model): bool
+    {
+        return (str_starts_with($model, 'gpt-5') && ! str_starts_with($model, 'gpt-5-chat'))
+            || str_starts_with($model, 'o4-mini')
+            || str_starts_with($model, 'o3')
+            || str_starts_with($model, 'o1');
     }
 
     /**

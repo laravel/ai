@@ -39,39 +39,29 @@ test('user message maps to azure format', function () {
     });
 });
 
-test('tool result follow up uses previous response id', function () {
+test('tool result follow up inlines the full conversation without previous_response_id', function () {
     Http::fake([
         'my-resource.cognitiveservices.azure.com/*' => Http::sequence([
-            fakeAzureToolCallResponse(),
+            fakeOpenAiToolCallResponse('resp_azure_tool_123', 'gpt-4o'),
             fakeAzureResponse('The number is 72019'),
         ]),
     ]);
 
-    (new ToolUsingAgent(fixed: true))->prompt(
-        'Generate a number',
-        provider: 'azure',
-    );
+    (new ToolUsingAgent(fixed: true))->prompt('Generate a number', provider: 'azure');
 
-    $recorded = Http::recorded();
+    $followUpBody = json_decode(Http::recorded()[1][0]->body(), true);
 
-    expect($recorded)->toHaveCount(2);
-
-    $followUpBody = json_decode($recorded[1][0]->body(), true);
-
-    expect($followUpBody)->toHaveKey('previous_response_id')
-        ->and($followUpBody['previous_response_id'])->toBe('resp_azure_tool_123');
-
-    $hasFunctionCallOutput = false;
-
-    foreach ($followUpBody['input'] as $item) {
-        if (($item['type'] ?? '') === 'function_call_output') {
-            $hasFunctionCallOutput = true;
-            expect($item['call_id'])->toBe('call_123')
-                ->and($item['output'])->not->toBeEmpty();
-        }
-    }
-
-    expect($hasFunctionCallOutput)->toBeTrue();
+    expect($followUpBody)->not->toHaveKey('previous_response_id')
+        ->and($followUpBody['input'])->sequence(
+            fn ($item) => $item->role->toBe('system'),
+            fn ($item) => $item->toMatchArray([
+                'role' => 'user',
+                'content' => [['type' => 'input_text', 'text' => 'Generate a number']],
+            ]),
+            fn ($item) => $item->toMatchArray(['type' => 'function_call', 'call_id' => 'call_123']),
+            fn ($item) => $item->toMatchArray(['type' => 'function_call_output', 'call_id' => 'call_123'])
+                ->output->not->toBeEmpty(),
+        );
 });
 
 test('image attachment maps to input_image content block', function () {
@@ -124,24 +114,3 @@ test('document attachment maps to input_file content block', function () {
             && str_contains($fileBlock['file_data'], 'application/pdf');
     });
 });
-
-function fakeAzureToolCallResponse()
-{
-    return Http::response([
-        'id' => 'resp_azure_tool_123',
-        'status' => 'completed',
-        'model' => 'gpt-4o',
-        'output' => [[
-            'type' => 'function_call',
-            'id' => 'fc_123',
-            'call_id' => 'call_123',
-            'name' => 'FixedNumberGenerator',
-            'arguments' => '{}',
-            'status' => 'completed',
-        ]],
-        'usage' => [
-            'input_tokens' => 10,
-            'output_tokens' => 5,
-        ],
-    ]);
-}

@@ -131,7 +131,7 @@ test('openai temperature and max tokens are preserved in tool call follow up', f
             && $request['max_output_tokens'] === 1024,
         fn (Request $request) => $request['temperature'] === 0.2
             && $request['max_output_tokens'] === 1024
-            && isset($request['previous_response_id']),
+            && ! isset($request['previous_response_id']),
     ]);
 });
 
