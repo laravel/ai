@@ -23,17 +23,17 @@ trait BuildsTextRequests
         ?array $schema,
         ?TextGenerationOptions $options,
     ): array {
-        $input = $this->mapMessagesToInput($messages, $instructions);
-
-        $body = ['model' => $model, 'input' => $input];
+        $body = [
+            'model' => $model,
+            'input' => $this->mapMessagesToInput($messages, $instructions),
+        ];
 
         return $this->mergeSharedResponsesRequestOptions($body, $tools, $schema, $options, $provider);
     }
 
     /**
-     * Build a lightweight continuation body using previous_response_id.
-     *
-     * Only sends tool results as input instead of replaying the full conversation.
+     * Build a continuation body using `previous_response_id`, so only the new
+     * tool results need to be sent instead of replaying the conversation.
      */
     protected function buildContinuationBody(
         string $previousResponseId,
@@ -53,9 +53,6 @@ trait BuildsTextRequests
         return $this->mergeSharedResponsesRequestOptions($body, $tools, $schema, $options, $provider);
     }
 
-    /**
-     * Apply options shared by initial and continuation requests.
-     */
     protected function mergeSharedResponsesRequestOptions(
         array $body,
         array $tools,
@@ -72,7 +69,7 @@ trait BuildsTextRequests
             $body['text'] = $this->buildSchemaFormat($schema, Strict::isAppliedTo($options?->agent));
         }
 
-        if (! is_null($options?->maxTokens)) {
+        if ($options?->maxTokens !== null) {
             $body['max_output_tokens'] = $options->maxTokens;
         }
 
@@ -90,26 +87,21 @@ trait BuildsTextRequests
         return $body;
     }
 
-    /**
-     * Extract tool result items from the trailing messages for a continuation request.
-     */
     protected function extractToolResultsInput(array $messages): array
     {
-        $input = [];
-
         $lastMessage = end($messages);
 
-        if ($lastMessage instanceof ToolResultMessage) {
-            foreach ($lastMessage->toolResults as $toolResult) {
-                $input[] = [
-                    'type' => 'function_call_output',
-                    'call_id' => $toolResult->resultId,
-                    'output' => $this->serializeToolResultOutput($toolResult->result),
-                ];
-            }
+        if (! $lastMessage instanceof ToolResultMessage) {
+            return [];
         }
 
-        return $input;
+        return collect($lastMessage->toolResults)
+            ->map(fn ($toolResult) => [
+                'type' => 'function_call_output',
+                'call_id' => $toolResult->resultId,
+                'output' => $this->serializeToolResultOutput($toolResult->result),
+            ])
+            ->all();
     }
 
     /**

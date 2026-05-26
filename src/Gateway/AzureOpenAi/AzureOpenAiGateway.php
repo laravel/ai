@@ -26,7 +26,7 @@ use Laravel\Ai\Gateway\OpenAi\Concerns\MapsTools;
 use Laravel\Ai\Gateway\OpenAi\Concerns\ParsesTextResponses;
 use Laravel\Ai\Gateway\SingleTurnResponse;
 use Laravel\Ai\Gateway\StepContext;
-use Laravel\Ai\Gateway\StepLoop;
+use Laravel\Ai\Gateway\TextGenerationLoop;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Responses\Data\GeneratedImage;
@@ -56,9 +56,6 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, SingleTurnTe
         $this->initializeToolCallbacks();
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function generateText(
         TextProvider $provider,
         string $model,
@@ -69,14 +66,11 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, SingleTurnTe
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): TextResponse {
-        return $this->buildStepLoop()->generate(
+        return $this->buildTextGenerationLoop()->generate(
             $provider, $model, $instructions, $messages, $tools, $schema, $options, $timeout,
         );
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function streamText(
         string $invocationId,
         TextProvider $provider,
@@ -88,14 +82,11 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, SingleTurnTe
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): Generator {
-        yield from $this->buildStepLoop()->stream(
+        yield from $this->buildTextGenerationLoop()->stream(
             $invocationId, $provider, $model, $instructions, $messages, $tools, $schema, $options, $timeout,
         );
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function generateSingleTurn(
         TextProvider $provider,
         string $model,
@@ -107,9 +98,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, SingleTurnTe
         ?int $timeout,
         StepContext $stepContext,
     ): SingleTurnResponse {
-        $body = $stepContext->previousResponseId
-            ? $this->buildContinuationBody($stepContext->previousResponseId, $model, $messages, $tools, $provider, $schema, $options)
-            : $this->buildTextRequestBody($provider, $model, $instructions, $messages, $tools, $schema, $options);
+        $body = $this->buildSingleTurnBody($provider, $model, $instructions, $messages, $tools, $schema, $options, $stepContext);
 
         $response = $this->withErrorHandling(
             $provider->name(),
@@ -123,9 +112,6 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, SingleTurnTe
         return $this->parseTextResponse($data, $provider, filled($schema));
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function streamSingleTurn(
         string $invocationId,
         TextProvider $provider,
@@ -138,10 +124,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, SingleTurnTe
         ?int $timeout,
         StepContext $stepContext,
     ): Generator {
-        $body = $stepContext->previousResponseId
-            ? $this->buildContinuationBody($stepContext->previousResponseId, $model, $messages, $tools, $provider, $schema, $options)
-            : $this->buildTextRequestBody($provider, $model, $instructions, $messages, $tools, $schema, $options);
-
+        $body = $this->buildSingleTurnBody($provider, $model, $instructions, $messages, $tools, $schema, $options, $stepContext);
         $body['stream'] = true;
 
         $response = $this->withErrorHandling(
@@ -154,20 +137,29 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, SingleTurnTe
         yield from $this->processTextStream($invocationId, $provider, $model, $response->getBody());
     }
 
-    /**
-     * Build a StepLoop that routes back into this gateway's single-turn methods.
-     */
-    protected function buildStepLoop(): StepLoop
+    protected function buildSingleTurnBody(
+        TextProvider $provider,
+        string $model,
+        ?string $instructions,
+        array $messages,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options,
+        StepContext $stepContext,
+    ): array {
+        return $stepContext->previousResponseId
+            ? $this->buildContinuationBody($stepContext->previousResponseId, $model, $messages, $tools, $provider, $schema, $options)
+            : $this->buildTextRequestBody($provider, $model, $instructions, $messages, $tools, $schema, $options);
+    }
+
+    protected function buildTextGenerationLoop(): TextGenerationLoop
     {
         $this->initializeToolCallbacks();
 
-        return (new StepLoop($this, $this->events))
+        return (new TextGenerationLoop($this, $this->events))
             ->onToolInvocation($this->invokingToolCallback, $this->toolInvokedCallback);
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function generateEmbeddings(
         EmbeddingProvider $provider,
         string $model,
@@ -238,9 +230,6 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, SingleTurnTe
         );
     }
 
-    /**
-     * Extract usage from an Azure OpenAI image response.
-     */
     protected function extractImageUsage(array $data): Usage
     {
         $usage = $data['usage'] ?? [];
@@ -254,9 +243,6 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, SingleTurnTe
         );
     }
 
-    /**
-     * {@inheritdoc}
-     */
     protected function mapTool(Tool $tool): array
     {
         $schema = $tool->schema(new JsonSchemaTypeFactory);

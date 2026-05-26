@@ -40,32 +40,22 @@ trait ParsesTextResponses
         }
     }
 
-    /**
-     * Parse one provider turn into a SingleTurnResponse.
-     */
     protected function parseTextResponse(
         array $data,
         Provider $provider,
         bool $structured,
     ): SingleTurnResponse {
-        $responseId = $data['id'] ?? '';
         $output = $data['output'] ?? [];
-        $model = $data['model'] ?? '';
-
         $text = $this->extractText($output);
-        $citations = $this->extractCitations($output);
-        $usage = $this->extractUsage($data);
-        $finishReason = $this->extractFinishReason($data);
-        $toolCalls = $this->mapToolCallsWithReasoning($output);
 
         return new SingleTurnResponse(
             text: $text,
-            toolCalls: $toolCalls,
-            finishReason: $finishReason,
-            usage: $usage,
-            meta: new Meta($provider->name(), $model, $citations),
+            toolCalls: $this->mapToolCallsWithReasoning($output),
+            finishReason: $this->extractFinishReason($data),
+            usage: $this->extractUsage($data),
+            meta: new Meta($provider->name(), $data['model'] ?? '', $this->extractCitations($output)),
             structured: $structured ? (json_decode($text, true) ?? []) : null,
-            responseId: $responseId,
+            responseId: $data['id'] ?? '',
         );
     }
 
@@ -74,11 +64,11 @@ trait ParsesTextResponses
      */
     protected function serializeToolResultOutput(mixed $output): string
     {
-        if (is_string($output)) {
-            return $output;
-        }
-
-        return is_array($output) ? json_encode($output) : strval($output);
+        return match (true) {
+            is_string($output) => $output,
+            is_array($output) => (string) json_encode($output),
+            default => (string) $output,
+        };
     }
 
     /**
@@ -88,11 +78,7 @@ trait ParsesTextResponses
     {
         $lastOutput = last($output);
 
-        if (is_array($lastOutput)) {
-            return $lastOutput['content'][0]['text'] ?? '';
-        }
-
-        return '';
+        return is_array($lastOutput) ? ($lastOutput['content'][0]['text'] ?? '') : '';
     }
 
     /**
@@ -109,14 +95,16 @@ trait ParsesTextResponses
 
             foreach ($item['content'] ?? [] as $content) {
                 foreach ($content['annotations'] ?? [] as $annotation) {
-                    if (($annotation['type'] ?? '') === 'url_citation') {
-                        $citations->push(new UrlCitation(
-                            $annotation['url'] ?? '',
-                            $annotation['title'] ?? null,
-                            isset($annotation['start_index']) ? (int) $annotation['start_index'] : null,
-                            isset($annotation['end_index']) ? (int) $annotation['end_index'] : null,
-                        ));
+                    if (($annotation['type'] ?? '') !== 'url_citation') {
+                        continue;
                     }
+
+                    $citations->push(new UrlCitation(
+                        $annotation['url'] ?? '',
+                        $annotation['title'] ?? null,
+                        isset($annotation['start_index']) ? (int) $annotation['start_index'] : null,
+                        isset($annotation['end_index']) ? (int) $annotation['end_index'] : null,
+                    ));
                 }
             }
         }

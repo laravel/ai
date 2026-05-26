@@ -10,20 +10,16 @@ use Laravel\Ai\Gateway\SingleTurnResponse;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\Message;
+use Laravel\Ai\Streaming\Events\StreamEvent;
 
 /**
- * A gateway that exposes a single provider turn at a time, leaving the
- * multi-step tool loop to the orchestrator (StepLoop).
- *
- * Gateways that implement this also implement {@see TextGateway}; the
- * TextGateway methods are expected to delegate to StepLoop, which calls
- * back into the single-turn methods defined here.
+ * A gateway that exposes one provider turn at a time, leaving the multi-step
+ * tool loop to {@see TextGenerationLoop}. Implementations also implement
+ * {@see TextGateway} and delegate those methods to the loop.
  */
 interface SingleTurnTextGateway
 {
     /**
-     * Execute a single provider turn and return its raw outcome.
-     *
      * @param  Message[]  $messages
      * @param  Tool[]  $tools
      * @param  array<string, Type>|null  $schema
@@ -41,12 +37,10 @@ interface SingleTurnTextGateway
     ): SingleTurnResponse;
 
     /**
-     * Stream a single provider turn, yielding events and concluding with a StreamEnd
-     * that carries the turn's finish reason, response id, and any provider content blocks.
-     *
      * @param  Message[]  $messages
      * @param  Tool[]  $tools
      * @param  array<string, Type>|null  $schema
+     * @return Generator<int, StreamEvent>
      */
     public function streamSingleTurn(
         string $invocationId,

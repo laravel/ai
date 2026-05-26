@@ -26,12 +26,8 @@ use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 
 /**
  * Orchestrates a multi-step tool loop on top of a single-turn gateway.
- *
- * Each iteration calls into the gateway for one provider turn, dispatches any
- * tool calls, and feeds the results back as conversation messages until either
- * the model stops emitting tool calls or maxSteps is reached.
  */
-class StepLoop
+class TextGenerationLoop
 {
     use InvokesTools;
 
@@ -43,8 +39,6 @@ class StepLoop
     }
 
     /**
-     * Run the multi-step tool loop, returning a fully resolved TextResponse.
-     *
      * @param  Tool[]  $tools
      * @param  array<string, mixed>|null  $schema
      */
@@ -60,7 +54,7 @@ class StepLoop
     ): TextResponse {
         $steps = new Collection;
         $allMessages = $messages;
-        $maxSteps = $options?->maxSteps ?? (count($tools) > 0 ? (int) round(count($tools) * 1.5) : 5);
+        $maxSteps = $this->resolveMaxSteps($options, $tools);
         $previousResponseId = null;
         $lastResult = null;
 
@@ -75,41 +69,34 @@ class StepLoop
                 $provider, $model, $instructions, $allMessages, $tools, $schema, $options, $timeout, $stepContext,
             );
 
-            if ($lastResult->finishReason !== FinishReason::ToolCalls || empty($lastResult->toolCalls)) {
-                $steps->push($this->buildStep($lastResult));
+            $hasToolCalls = $lastResult->finishReason === FinishReason::ToolCalls && filled($lastResult->toolCalls);
+            $shouldContinue = $hasToolCalls && ! $stepContext->isFinalStep;
 
-                $allMessages[] = new AssistantMessage(
-                    $lastResult->text,
-                    new Collection($lastResult->toolCalls),
-                    $lastResult->providerContentBlocks,
-                );
-
-                break;
-            }
-
-            $toolResults = $this->executeToolCalls($lastResult->toolCalls, $tools);
+            $toolResults = $shouldContinue
+                ? $this->executeToolCalls($lastResult->toolCalls, $tools)
+                : [];
 
             $steps->push($this->buildStep($lastResult, $toolResults));
 
             $allMessages[] = new AssistantMessage(
                 $lastResult->text,
-                new Collection($lastResult->toolCalls),
+                collect($lastResult->toolCalls),
                 $lastResult->providerContentBlocks,
             );
 
-            $allMessages[] = new ToolResultMessage(new Collection($toolResults));
+            if (! $shouldContinue) {
+                break;
+            }
+
+            $allMessages[] = new ToolResultMessage(collect($toolResults));
 
             $previousResponseId = $lastResult->responseId;
         }
 
-        return $this->buildFinalResponse(
-            $steps, $allMessages, count($messages), $lastResult,
-        );
+        return $this->buildFinalResponse($steps, $allMessages, count($messages), $lastResult);
     }
 
     /**
-     * Stream the multi-step tool loop, yielding events for each turn.
-     *
      * @param  Tool[]  $tools
      * @param  array<string, mixed>|null  $schema
      */
@@ -125,14 +112,14 @@ class StepLoop
         ?int $timeout,
     ): Generator {
         $allMessages = $messages;
-        $maxSteps = $options?->maxSteps ?? (count($tools) > 0 ? (int) round(count($tools) * 1.5) : 5);
+        $maxSteps = $this->resolveMaxSteps($options, $tools);
         $previousResponseId = null;
+        $finalStreamEnd = null;
 
         for ($step = 0; $step < $maxSteps; $step++) {
             $pendingToolCalls = [];
             $currentText = '';
-            $streamResponseId = null;
-            $streamProviderContentBlocks = [];
+            $streamEnd = null;
 
             $stepContext = new StepContext(
                 stepNumber: $step,
@@ -140,25 +127,30 @@ class StepLoop
                 previousResponseId: $previousResponseId,
             );
 
-            foreach ($this->gateway->streamSingleTurn($invocationId, $provider, $model, $instructions, $allMessages, $tools, $schema, $options, $timeout, $stepContext) as $event) {
+            $turn = $this->gateway->streamSingleTurn(
+                $invocationId, $provider, $model, $instructions, $allMessages, $tools, $schema, $options, $timeout, $stepContext,
+            );
+
+            foreach ($turn as $event) {
+                if ($event instanceof StreamEnd) {
+                    $streamEnd = $finalStreamEnd = $event;
+                    break;
+                }
+
                 yield $event;
 
                 if ($event instanceof ToolCallEvent) {
                     $pendingToolCalls[] = $event->toolCall;
-                }
-
-                if ($event instanceof TextDelta) {
+                } elseif ($event instanceof TextDelta) {
                     $currentText .= $event->delta;
-                }
-
-                if ($event instanceof StreamEnd) {
-                    $streamResponseId = $event->responseId;
-                    $streamProviderContentBlocks = $event->providerContentBlocks;
-                    break;
                 }
             }
 
             if (empty($pendingToolCalls)) {
+                break;
+            }
+
+            if ($stepContext->isFinalStep) {
                 break;
             }
 
@@ -176,19 +168,33 @@ class StepLoop
 
             $allMessages[] = new AssistantMessage(
                 $currentText,
-                new Collection($pendingToolCalls),
-                $streamProviderContentBlocks,
+                collect($pendingToolCalls),
+                $streamEnd?->providerContentBlocks ?? [],
             );
 
-            $allMessages[] = new ToolResultMessage(new Collection($toolResults));
+            $allMessages[] = new ToolResultMessage(collect($toolResults));
 
-            $previousResponseId = $streamResponseId;
+            $previousResponseId = $streamEnd?->responseId;
+        }
+
+        if ($finalStreamEnd !== null) {
+            yield $finalStreamEnd;
         }
     }
 
     /**
-     * Execute tool calls against the tool registry.
-     *
+     * @param  Tool[]  $tools
+     */
+    protected function resolveMaxSteps(?TextGenerationOptions $options, array $tools): int
+    {
+        if ($options?->maxSteps !== null) {
+            return $options->maxSteps;
+        }
+
+        return count($tools) > 0 ? (int) round(count($tools) * 1.5) : 5;
+    }
+
+    /**
      * @param  ToolCall[]  $toolCalls
      * @param  Tool[]  $tools
      * @return ToolResult[]
@@ -204,13 +210,11 @@ class StepLoop
                 continue;
             }
 
-            $result = $this->executeTool($tool, $toolCall->arguments);
-
             $results[] = new ToolResult(
                 $toolCall->id,
                 $toolCall->name,
                 $toolCall->arguments,
-                $result,
+                $this->executeTool($tool, $toolCall->arguments),
                 $toolCall->resultId,
             );
         }
@@ -219,8 +223,6 @@ class StepLoop
     }
 
     /**
-     * Build a Step from a single-turn response.
-     *
      * @param  ToolResult[]  $toolResults
      */
     protected function buildStep(SingleTurnResponse $result, array $toolResults = []): Step
@@ -235,9 +237,6 @@ class StepLoop
         );
     }
 
-    /**
-     * Build the final TextResponse from accumulated steps and messages.
-     */
     protected function buildFinalResponse(
         Collection $steps,
         array $allMessages,
@@ -251,7 +250,7 @@ class StepLoop
             new Usage,
         );
 
-        $newMessages = (new Collection(array_slice($allMessages, $originalMessageCount)))->values();
+        $newMessages = collect(array_slice($allMessages, $originalMessageCount))->values();
 
         if ($lastResult?->structured !== null && $finalStep instanceof Step) {
             return (new StructuredTextResponse(

@@ -3,13 +3,9 @@
 namespace Laravel\Ai\Gateway;
 
 /**
- * Per-call context passed from the orchestrator (StepLoop) to the gateway.
- *
- * Lets the orchestrator hint provider-specific behavior the gateway alone can't infer —
- * e.g. that this is the final step in a tool loop, so a provider with synthetic
- * structured-output tooling can force its toolChoice on this turn — and carries
- * any stateful-continuation handle (e.g. OpenAI's previous_response_id) the gateway
- * returned on a prior turn so it can be threaded into the next request.
+ * Per-turn context {@see TextGenerationLoop} passes into the gateway: which step this
+ * is, whether it's the last one, and any stateful-continuation handle the
+ * gateway returned from a prior turn.
  */
 final class StepContext
 {

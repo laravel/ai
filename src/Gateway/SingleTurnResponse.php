@@ -10,16 +10,16 @@ use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
 
 /**
- * The outcome of a single provider turn, before the StepLoop decides whether
+ * The outcome of a single provider turn, before {@see TextGenerationLoop} decides whether
  * to continue, dispatch tool calls, or terminate.
  */
 class SingleTurnResponse implements Arrayable, JsonSerializable
 {
     /**
      * @param  ToolCall[]  $toolCalls
-     * @param  array<string, mixed>|null  $structured  Parsed structured output from the provider, when a schema was requested.
-     * @param  string|null  $responseId  Provider-specific response ID for stateful continuation (e.g. OpenAI previous_response_id).
-     * @param  array<int, array<string, mixed>>  $providerContentBlocks  Raw provider content blocks for verbatim replay (e.g. Anthropic server_tool_use, Bedrock reasoningContent).
+     * @param  array<string, mixed>|null  $structured
+     * @param  string|null  $responseId  Provider handle for stateful continuation (e.g. OpenAI's `previous_response_id`).
+     * @param  array<int, array<string, mixed>>  $providerContentBlocks  Raw provider content blocks for verbatim replay.
      */
     public function __construct(
         public string $text,

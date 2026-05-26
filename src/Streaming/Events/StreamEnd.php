@@ -7,6 +7,9 @@ use Laravel\Ai\Responses\Data\Usage;
 
 class StreamEnd extends StreamEvent
 {
+    /**
+     * @param  array<int, array<string, mixed>>  $providerContentBlocks  Raw provider content blocks for verbatim replay.
+     */
     public function __construct(
         public string $id,
         public string $reason,
@@ -14,9 +17,7 @@ class StreamEnd extends StreamEvent
         public int $timestamp,
         public ?string $responseId = null,
         public array $providerContentBlocks = [],
-    ) {
-        //
-    }
+    ) {}
 
     /**
      * Combine the stream end usages in the given collection of events into a single usage instance.

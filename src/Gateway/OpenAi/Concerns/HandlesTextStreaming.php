@@ -22,10 +22,7 @@ use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 trait HandlesTextStreaming
 {
     /**
-     * Process a single OpenAI streaming turn and yield Laravel stream events.
-     *
-     * Emits a single StreamEnd at the end of the turn carrying the response id,
-     * leaving the multi-step loop to the orchestrator.
+     * Process a single OpenAI streaming turn and yield Laravel AI stream events.
      */
     protected function processTextStream(
         string $invocationId,
