@@ -165,6 +165,32 @@ test('only inlineData parts are returned when response contains mixed text and i
         ->and($response->images->first()->mime)->toBe('image/png');
 });
 
+test('firstImage works when response leads with a text part before the inlineData', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'candidates' => [[
+                'content' => [
+                    'parts' => [
+                        ['text' => 'Here is your image:'],
+                        [
+                            'inlineData' => [
+                                'mimeType' => 'image/png',
+                                'data' => base64_encode('fake-image'),
+                            ],
+                        ],
+                    ],
+                ],
+            ]],
+        ]),
+    ]);
+
+    $response = Image::of('A red apple')->generate(provider: 'gemini', model: 'gemini-3.1-flash-image-preview');
+
+    expect($response->firstImage()->mime)->toBe('image/png')
+        ->and($response->firstImage()->image)->toBe(base64_encode('fake-image'))
+        ->and((string) $response)->toBe('fake-image');
+});
+
 test('image response is correctly parsed', function () {
     Http::fake([
         'generativelanguage.googleapis.com/*' => fakeGeminiImageResponse('image/png'),

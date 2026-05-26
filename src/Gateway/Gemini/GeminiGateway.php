@@ -173,6 +173,7 @@ class GeminiGateway implements Gateway
 
         $images = (new Collection($data['candidates'][0]['content']['parts'] ?? []))
             ->filter(fn ($part) => isset($part['inlineData']))
+            ->values()
             ->map(fn ($part) => new GeneratedImage(
                 $part['inlineData']['data'],
                 $part['inlineData']['mimeType'],
