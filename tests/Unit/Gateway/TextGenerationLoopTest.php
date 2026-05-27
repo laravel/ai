@@ -7,6 +7,7 @@ use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Gateway\SingleTurnResponse;
+use Laravel\Ai\Gateway\SingleTurnStreamEnd;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\TextGenerationLoop;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -62,11 +63,11 @@ test('it holds stream end until the streamed tool loop is complete', function ()
     $gateway = new TextGenerationLoopFakeGateway(streams: [
         [
             new ToolCallEvent('tool-call-event', $firstToolCall, time()),
-            new StreamEnd('first-end', FinishReason::ToolCalls->value, new Usage(10, 1), time(), responseId: 'response-1'),
+            new SingleTurnStreamEnd(FinishReason::ToolCalls, new Usage(10, 1), responseId: 'response-1'),
         ],
         [
             new TextDelta('text-delta', 'message-1', 'Done', time()),
-            new StreamEnd('final-end', FinishReason::Stop->value, new Usage(5, 2), time(), responseId: 'response-2'),
+            new SingleTurnStreamEnd(FinishReason::Stop, new Usage(5, 2), responseId: 'response-2'),
         ],
     ]);
 
@@ -88,7 +89,9 @@ test('it holds stream end until the streamed tool loop is complete', function ()
     expect($tool->calls)->toBe(1)
         ->and($gateway->streamCalls)->toBe(2)
         ->and($streamEndEvents)->toHaveCount(1)
-        ->and($streamEndEvents[0]->id)->toBe('final-end')
+        ->and($streamEndEvents[0]->reason)->toBe(FinishReason::Stop->value)
+        ->and($streamEndEvents[0]->usage->promptTokens)->toBe(15)
+        ->and($streamEndEvents[0]->usage->completionTokens)->toBe(3)
         ->and($toolResultEvents)->toHaveCount(1);
 });
 
@@ -96,7 +99,7 @@ test('it does not execute streamed tool calls on the final step', function () {
     $tool = new TextGenerationLoopCountingTool;
     $gateway = new TextGenerationLoopFakeGateway(streams: [[
         new ToolCallEvent('tool-call-event', new ToolCall('call-1', TextGenerationLoopCountingTool::class, [], 'call-1'), time()),
-        new StreamEnd('final-end', FinishReason::ToolCalls->value, new Usage(10, 1), time(), responseId: 'response-1'),
+        new SingleTurnStreamEnd(FinishReason::ToolCalls, new Usage(10, 1), responseId: 'response-1'),
     ]]);
 
     $events = iterator_to_array((new TextGenerationLoop($gateway, new Dispatcher))->stream(
@@ -115,6 +118,68 @@ test('it does not execute streamed tool calls on the final step', function () {
         ->and($gateway->streamCalls)->toBe(1)
         ->and(array_filter($events, fn ($event) => $event instanceof ToolResultEvent))->toHaveCount(0)
         ->and(array_filter($events, fn ($event) => $event instanceof StreamEnd))->toHaveCount(1);
+});
+
+test('it clamps non-positive maxSteps to at least one turn', function (int $maxSteps) {
+    $gateway = new TextGenerationLoopFakeGateway([
+        new SingleTurnResponse(
+            text: 'hi',
+            toolCalls: [],
+            finishReason: FinishReason::Stop,
+            usage: new Usage(1, 1),
+            meta: new Meta('fake', 'model'),
+        ),
+    ]);
+
+    $response = (new TextGenerationLoop($gateway, new Dispatcher))->generate(
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [],
+        [],
+        null,
+        new TextGenerationOptions(maxSteps: $maxSteps),
+        null,
+    );
+
+    expect($gateway->generateCalls)->toBe(1)
+        ->and($response->text)->toBe('hi');
+})->with([
+    'zero' => 0,
+    'negative' => -3,
+]);
+
+test('it accumulates streamed usage across multi-step turns', function () {
+    $tool = new TextGenerationLoopCountingTool;
+    $gateway = new TextGenerationLoopFakeGateway(streams: [
+        [
+            new ToolCallEvent('tool-call', new ToolCall('call-1', TextGenerationLoopCountingTool::class, [], 'call-1'), time()),
+            new SingleTurnStreamEnd(FinishReason::ToolCalls, new Usage(10, 1)),
+        ],
+        [
+            new TextDelta('delta', 'msg-1', 'done', time()),
+            new SingleTurnStreamEnd(FinishReason::Stop, new Usage(5, 2)),
+        ],
+    ]);
+
+    $events = iterator_to_array((new TextGenerationLoop($gateway, new Dispatcher))->stream(
+        'invocation-1',
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [],
+        [$tool],
+        null,
+        new TextGenerationOptions(maxSteps: 2),
+        null,
+    ));
+
+    $streamEnd = collect($events)->whereInstanceOf(StreamEnd::class)->first();
+
+    expect($streamEnd)->not->toBeNull()
+        ->and($streamEnd->usage->promptTokens)->toBe(15)
+        ->and($streamEnd->usage->completionTokens)->toBe(3)
+        ->and($streamEnd->reason)->toBe(FinishReason::Stop->value);
 });
 
 function textGenerationLoopProvider(): TextProvider

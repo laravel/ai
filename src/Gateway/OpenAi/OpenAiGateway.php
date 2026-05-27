@@ -20,12 +20,11 @@ use Laravel\Ai\Files\File;
 use Laravel\Ai\Files\Image;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\StoredImage;
+use Laravel\Ai\Gateway\Concerns\DelegatesToTextGenerationLoop;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
-use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\SingleTurnResponse;
 use Laravel\Ai\Gateway\StepContext;
-use Laravel\Ai\Gateway\TextGenerationLoop;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
@@ -34,7 +33,6 @@ use Laravel\Ai\Responses\Data\TranscriptionSegment;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
-use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
 use LogicException;
 
@@ -47,45 +45,11 @@ class OpenAiGateway implements Gateway, SingleTurnTextGateway
     use Concerns\MapsMessages;
     use Concerns\MapsTools;
     use Concerns\ParsesTextResponses;
+    use DelegatesToTextGenerationLoop;
     use HandlesFailoverErrors;
-    use InvokesTools;
     use ParsesServerSentEvents;
 
-    public function __construct(protected Dispatcher $events)
-    {
-        $this->initializeToolCallbacks();
-    }
-
-    public function generateText(
-        TextProvider $provider,
-        string $model,
-        ?string $instructions,
-        array $messages = [],
-        array $tools = [],
-        ?array $schema = null,
-        ?TextGenerationOptions $options = null,
-        ?int $timeout = null,
-    ): TextResponse {
-        return $this->buildTextGenerationLoop()->generate(
-            $provider, $model, $instructions, $messages, $tools, $schema, $options, $timeout,
-        );
-    }
-
-    public function streamText(
-        string $invocationId,
-        TextProvider $provider,
-        string $model,
-        ?string $instructions,
-        array $messages = [],
-        array $tools = [],
-        ?array $schema = null,
-        ?TextGenerationOptions $options = null,
-        ?int $timeout = null,
-    ): Generator {
-        yield from $this->buildTextGenerationLoop()->stream(
-            $invocationId, $provider, $model, $instructions, $messages, $tools, $schema, $options, $timeout,
-        );
-    }
+    public function __construct(protected Dispatcher $events) {}
 
     public function generateSingleTurn(
         TextProvider $provider,
@@ -150,14 +114,6 @@ class OpenAiGateway implements Gateway, SingleTurnTextGateway
         return $stepContext->previousResponseId
             ? $this->buildContinuationBody($stepContext->previousResponseId, $model, $messages, $tools, $provider, $schema, $options)
             : $this->buildTextRequestBody($provider, $model, $instructions, $messages, $tools, $schema, $options);
-    }
-
-    protected function buildTextGenerationLoop(): TextGenerationLoop
-    {
-        $this->initializeToolCallbacks();
-
-        return (new TextGenerationLoop($this, $this->events))
-            ->onToolInvocation($this->invokingToolCallback, $this->toolInvokedCallback);
     }
 
     /**

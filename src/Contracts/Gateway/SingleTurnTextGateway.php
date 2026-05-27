@@ -12,11 +12,7 @@ use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 
-/**
- * A gateway that exposes one provider turn at a time, leaving the multi-step
- * tool loop to {@see TextGenerationLoop}. Implementations also implement
- * {@see TextGateway} and delegate those methods to the loop.
- */
+/** @internal */
 interface SingleTurnTextGateway
 {
     /**

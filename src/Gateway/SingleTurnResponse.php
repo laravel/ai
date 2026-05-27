@@ -4,22 +4,21 @@ namespace Laravel\Ai\Gateway;
 
 use Illuminate\Contracts\Support\Arrayable;
 use JsonSerializable;
+use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
 
-/**
- * The outcome of a single provider turn, before {@see TextGenerationLoop} decides whether
- * to continue, dispatch tool calls, or terminate.
- */
 class SingleTurnResponse implements Arrayable, JsonSerializable
 {
     /**
      * @param  ToolCall[]  $toolCalls
      * @param  array<string, mixed>|null  $structured
      * @param  string|null  $responseId  Provider handle for stateful continuation (e.g. OpenAI's `previous_response_id`).
-     * @param  array<int, array<string, mixed>>  $providerContentBlocks  Raw provider content blocks for verbatim replay.
+     * @param  array<int, array<string, mixed>>  $providerContentBlocks  Opaque provider-shaped blocks the loop replays
+     *                                                                   on the next assistant message (e.g. Anthropic signed thinking, Bedrock reasoning blocks). The loop never
+     *                                                                   inspects the shape; it just ferries the array back into the next {@see AssistantMessage}.
      */
     public function __construct(
         public string $text,

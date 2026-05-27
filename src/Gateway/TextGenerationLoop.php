@@ -24,9 +24,6 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 
-/**
- * Orchestrates a multi-step tool loop on top of a single-turn gateway.
- */
 class TextGenerationLoop
 {
     use InvokesTools;
@@ -114,12 +111,13 @@ class TextGenerationLoop
         $allMessages = $messages;
         $maxSteps = $this->resolveMaxSteps($options, $tools);
         $previousResponseId = null;
-        $finalStreamEnd = null;
+        $accumulatedUsage = new Usage;
+        $finalReason = null;
 
         for ($step = 0; $step < $maxSteps; $step++) {
             $pendingToolCalls = [];
             $currentText = '';
-            $streamEnd = null;
+            $turnEnd = null;
 
             $stepContext = new StepContext(
                 stepNumber: $step,
@@ -132,8 +130,8 @@ class TextGenerationLoop
             );
 
             foreach ($turn as $event) {
-                if ($event instanceof StreamEnd) {
-                    $streamEnd = $finalStreamEnd = $event;
+                if ($event instanceof SingleTurnStreamEnd) {
+                    $turnEnd = $event;
                     break;
                 }
 
@@ -146,11 +144,12 @@ class TextGenerationLoop
                 }
             }
 
-            if (empty($pendingToolCalls)) {
-                break;
+            if ($turnEnd !== null) {
+                $accumulatedUsage = $accumulatedUsage->add($turnEnd->usage);
+                $finalReason = $turnEnd->reason;
             }
 
-            if ($stepContext->isFinalStep) {
+            if (empty($pendingToolCalls) || $stepContext->isFinalStep) {
                 break;
             }
 
@@ -169,26 +168,37 @@ class TextGenerationLoop
             $allMessages[] = new AssistantMessage(
                 $currentText,
                 collect($pendingToolCalls),
-                $streamEnd?->providerContentBlocks ?? [],
+                $turnEnd?->providerContentBlocks ?? [],
             );
 
             $allMessages[] = new ToolResultMessage(collect($toolResults));
 
-            $previousResponseId = $streamEnd?->responseId;
+            $previousResponseId = $turnEnd?->responseId;
         }
 
-        if ($finalStreamEnd !== null) {
-            yield $finalStreamEnd;
+        if ($finalReason === null) {
+            return;
         }
+
+        yield (new StreamEnd(
+            strtolower((string) Str::uuid7()),
+            $finalReason->value,
+            $accumulatedUsage,
+            time(),
+        ))->withInvocationId($invocationId);
     }
 
     /**
+     * Tools that delegate to other tools may need more than one round per tool, hence the
+     * 1.5x multiplier. The floor of 5 covers tool-less chats that still need a step budget
+     * for reasoning or follow-ups. Explicit `maxSteps` via {@see TextGenerationOptions} wins.
+     *
      * @param  Tool[]  $tools
      */
     protected function resolveMaxSteps(?TextGenerationOptions $options, array $tools): int
     {
         if ($options?->maxSteps !== null) {
-            return $options->maxSteps;
+            return max(1, $options->maxSteps);
         }
 
         return count($tools) > 0 ? (int) round(count($tools) * 1.5) : 5;
@@ -222,9 +232,7 @@ class TextGenerationLoop
         return $results;
     }
 
-    /**
-     * @param  ToolResult[]  $toolResults
-     */
+    /** @param  ToolResult[]  $toolResults */
     protected function buildStep(SingleTurnResponse $result, array $toolResults = []): Step
     {
         return new Step(

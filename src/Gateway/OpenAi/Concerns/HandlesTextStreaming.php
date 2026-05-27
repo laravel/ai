@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
 use Generator;
 use Illuminate\Support\Str;
+use Laravel\Ai\Gateway\SingleTurnStreamEnd;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
@@ -12,7 +13,6 @@ use Laravel\Ai\Streaming\Events\ProviderToolEvent;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
 use Laravel\Ai\Streaming\Events\ReasoningStart;
-use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
@@ -21,9 +21,6 @@ use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 
 trait HandlesTextStreaming
 {
-    /**
-     * Process a single OpenAI streaming turn and yield Laravel AI stream events.
-     */
     protected function processTextStream(
         string $invocationId,
         Provider $provider,
@@ -266,18 +263,13 @@ trait HandlesTextStreaming
             }
         }
 
-        yield (new StreamEnd(
-            $this->generateEventId(),
-            $this->extractFinishReason($responseData)->value,
-            $usage ?? new Usage(0, 0),
-            time(),
+        yield new SingleTurnStreamEnd(
+            reason: $this->extractFinishReason($responseData),
+            usage: $usage ?? new Usage(0, 0),
             responseId: $responseId,
-        ))->withInvocationId($invocationId);
+        );
     }
 
-    /**
-     * Generate a lowercase UUID v7 for use as a stream event ID.
-     */
     protected function generateEventId(): string
     {
         return strtolower((string) Str::uuid7());

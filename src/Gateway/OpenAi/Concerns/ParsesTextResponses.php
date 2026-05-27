@@ -14,11 +14,7 @@ use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
 {
-    /**
-     * Validate the OpenAI response data.
-     *
-     * @throws AiException
-     */
+    /** @throws AiException */
     protected function validateTextResponse(array $data): void
     {
         if (! $data || isset($data['error'])) {
@@ -59,9 +55,6 @@ trait ParsesTextResponses
         );
     }
 
-    /**
-     * Serialize a tool result output value to a string.
-     */
     protected function serializeToolResultOutput(mixed $output): string
     {
         return match (true) {
@@ -71,9 +64,6 @@ trait ParsesTextResponses
         };
     }
 
-    /**
-     * Extract the text content from the output array.
-     */
     protected function extractText(array $output): string
     {
         $lastOutput = last($output);
@@ -81,9 +71,6 @@ trait ParsesTextResponses
         return is_array($lastOutput) ? ($lastOutput['content'][0]['text'] ?? '') : '';
     }
 
-    /**
-     * Extract citations from the output array.
-     */
     protected function extractCitations(array $output): Collection
     {
         $citations = new Collection;
@@ -112,9 +99,6 @@ trait ParsesTextResponses
         return $citations->values();
     }
 
-    /**
-     * Extract usage data from the response.
-     */
     protected function extractUsage(array $data): Usage
     {
         $usage = $data['usage'] ?? [];
@@ -130,9 +114,6 @@ trait ParsesTextResponses
         );
     }
 
-    /**
-     * Extract and map the finish reason from the OpenAI response.
-     */
     protected function extractFinishReason(array $data): FinishReason
     {
         $lastOutput = last($data['output'] ?? []);
@@ -151,11 +132,7 @@ trait ParsesTextResponses
         };
     }
 
-    /**
-     * Map tool calls with their associated reasoning blocks.
-     *
-     * @return array<ToolCall>
-     */
+    /** @return array<ToolCall> */
     protected function mapToolCallsWithReasoning(array $output): array
     {
         $toolCalls = [];

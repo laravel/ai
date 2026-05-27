@@ -7,21 +7,13 @@ use Laravel\Ai\Responses\Data\Usage;
 
 class StreamEnd extends StreamEvent
 {
-    /**
-     * @param  array<int, array<string, mixed>>  $providerContentBlocks  Raw provider content blocks for verbatim replay.
-     */
     public function __construct(
         public string $id,
         public string $reason,
         public Usage $usage,
         public int $timestamp,
-        public ?string $responseId = null,
-        public array $providerContentBlocks = [],
     ) {}
 
-    /**
-     * Combine the stream end usages in the given collection of events into a single usage instance.
-     */
     public static function combineUsage(Collection|array $events): Usage
     {
         $events = is_array($events) ? new Collection($events) : $events;
@@ -33,9 +25,7 @@ class StreamEnd extends StreamEvent
             ->reduce(fn ($a, $b) => $a->add($b), new Usage);
     }
 
-    /**
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     public function toArray(): array
     {
         return [
@@ -47,13 +37,9 @@ class StreamEnd extends StreamEvent
                 ? $this->usage->toArray()
                 : null,
             'timestamp' => $this->timestamp,
-            'response_id' => $this->responseId,
         ];
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function toVercelProtocolArray(): ?array
     {
         return [
