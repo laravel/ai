@@ -13,6 +13,8 @@ class WebSearch extends ProviderTool
     public function __construct(
         public ?int $maxSearches = null,
         public array $allowedDomains = [],
+        public array $blockedDomains = [],
+        public bool $offlineMode = false,
     ) {}
 
     /**
@@ -31,6 +33,23 @@ class WebSearch extends ProviderTool
     public function allow(array $domains): self
     {
         $this->allowedDomains = $domains;
+
+        return $this;
+    }
+
+    /**
+     * Set the allowed domains.
+     */
+    public function block(array $domains): self
+    {
+        $this->blockedDomains = $domains;
+
+        return $this;
+    }
+
+    public function offline(bool $offline = true): self
+    {
+        $this->offlineMode = $offline;
 
         return $this;
     }

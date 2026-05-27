@@ -62,10 +62,18 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function webSearchToolOptions(WebSearch $search): array
     {
+        $filters = [];
+
+        if (filled($search->allowedDomains)) {
+            $filters['allowed_domains'] = collect($search->allowedDomains)->take(100);
+        }
+
+        if (filled($search->blockedDomains)) {
+            $filters['blocked_domains'] = collect($search->blockedDomains)->take(100);
+        }
+
         return array_filter([
-            'filters' => filled($search->allowedDomains)
-                ? ['allowed_domains' => $search->allowedDomains]
-                : null,
+            'filters' => filled($filters) ? $filters : null,
             'user_location' => $search->hasLocation()
                 ? array_filter([
                     'type' => 'approximate',
@@ -74,7 +82,9 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
                     'country' => $search->country,
                 ])
                 : null,
-        ]);
+        ]) + [
+            'external_web_access' => ! $search->offlineMode,
+        ];
     }
 
     /**

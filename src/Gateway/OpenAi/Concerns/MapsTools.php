@@ -99,7 +99,7 @@ trait MapsTools
         }
 
         return [
-            'type' => 'web_search_preview',
+            'type' => 'web_search',
             ...$provider->webSearchToolOptions($tool),
         ];
     }
