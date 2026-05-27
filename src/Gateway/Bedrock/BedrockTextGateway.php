@@ -673,6 +673,16 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
 
         $providerOptions = $options?->providerOptions(Lab::Bedrock);
 
+        if (! empty($providerOptions['cache'])) {
+            foreach ($providerOptions['cache'] as $entry) {
+                if (($entry['target'] ?? null) === 'system' && ! empty($parameters['system'])) {
+                    $parameters['system'][] = ['cachePoint' => ['type' => 'default']];
+                }
+            }
+
+            unset($providerOptions['cache']);
+        }
+
         if (! empty($providerOptions)) {
             $parameters = array_merge($parameters, $providerOptions);
         }
