@@ -14,6 +14,7 @@ use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\OpenAi\OpenAiFileGateway;
 use Laravel\Ai\Gateway\OpenAi\OpenAiStoreGateway;
 use Laravel\Ai\Providers\Tools\FileSearch;
@@ -62,15 +63,14 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function webSearchToolOptions(WebSearch $search): array
     {
-        $filters = [];
+        $options = $search->providerOptions(Lab::OpenAI);
 
-        if (filled($search->allowedDomains)) {
-            $filters['allowed_domains'] = collect($search->allowedDomains)->take(100);
-        }
+        $filters = array_merge(
+            filled($search->allowedDomains) ? ['allowed_domains' => $search->allowedDomains] : [],
+            $options['filters'] ?? [],
+        );
 
-        if (filled($search->blockedDomains)) {
-            $filters['blocked_domains'] = collect($search->blockedDomains)->take(100);
-        }
+        unset($options['filters']);
 
         return array_filter([
             'filters' => filled($filters) ? $filters : null,
@@ -82,9 +82,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
                     'country' => $search->country,
                 ])
                 : null,
-        ]) + [
-            'external_web_access' => ! $search->offlineMode,
-        ];
+        ]) + $options;
     }
 
     /**

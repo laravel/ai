@@ -120,7 +120,7 @@ test('web search tool sends type web_search', function () {
     });
 });
 
-test('web search tool sends external_web_access true by default', function () {
+test('web search tool omits openai-specific options by default', function () {
     Http::fake([
         '*' => fakeOpenAiResponse('result'),
     ]);
@@ -131,22 +131,45 @@ test('web search tool sends external_web_access true by default', function () {
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
 
-        return data_get($tool, 'external_web_access') === true;
+        return ! array_key_exists('external_web_access', $tool);
     });
 });
 
-test('web search tool in offline mode sends external_web_access false', function () {
+test('web search tool forwards openai provider options into the tool payload', function () {
     Http::fake([
         '*' => fakeOpenAiResponse('result'),
     ]);
 
-    agent(tools: [(new WebSearch)->offline()])->prompt('Search', provider: 'openai');
+    agent(tools: [
+        (new WebSearch)->withProviderOptions('openai', [
+            'external_web_access' => false,
+            'search_context_size' => 'high',
+        ]),
+    ])->prompt('Search', provider: 'openai');
 
     Http::assertSent(function (Request $request) {
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
 
-        return data_get($tool, 'external_web_access') === false;
+        return data_get($tool, 'external_web_access') === false
+            && data_get($tool, 'search_context_size') === 'high';
+    });
+});
+
+test('web search tool ignores provider options keyed to another provider', function () {
+    Http::fake([
+        '*' => fakeOpenAiResponse('result'),
+    ]);
+
+    agent(tools: [
+        (new WebSearch)->withProviderOptions('anthropic', ['external_web_access' => false]),
+    ])->prompt('Search', provider: 'openai');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
+
+        return ! array_key_exists('external_web_access', $tool);
     });
 });
 
@@ -166,13 +189,16 @@ test('web search tool sends allowed_domains filter', function () {
     });
 });
 
-test('web search tool sends blocked_domains filter', function () {
+test('web search tool sends blocked_domains via provider options', function () {
     Http::fake([
         '*' => fakeOpenAiResponse('result'),
     ]);
 
-    agent(tools: [(new WebSearch)->block(['spam.com', 'ads.example.com'])])
-        ->prompt('Search', provider: 'openai');
+    agent(tools: [
+        (new WebSearch)->withProviderOptions('openai', [
+            'filters' => ['blocked_domains' => ['spam.com', 'ads.example.com']],
+        ]),
+    ])->prompt('Search', provider: 'openai');
 
     Http::assertSent(function (Request $request) {
         $body = json_decode($request->body(), true);
@@ -182,13 +208,16 @@ test('web search tool sends blocked_domains filter', function () {
     });
 });
 
-test('web search tool sends both allowed and blocked domains', function () {
+test('web search tool merges allow() with blocked_domains provider option', function () {
     Http::fake([
         '*' => fakeOpenAiResponse('result'),
     ]);
 
-    agent(tools: [(new WebSearch)->allow(['good.com'])->block(['bad.com'])])
-        ->prompt('Search', provider: 'openai');
+    agent(tools: [
+        (new WebSearch)
+            ->allow(['good.com'])
+            ->withProviderOptions('openai', ['filters' => ['blocked_domains' => ['bad.com']]]),
+    ])->prompt('Search', provider: 'openai');
 
     Http::assertSent(function (Request $request) {
         $body = json_decode($request->body(), true);
