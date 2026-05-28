@@ -9,6 +9,7 @@ use Tests\Feature\Providers\Mistral\MistralHelpers;
 use Tests\Feature\Providers\Ollama\OllamaHelpers;
 use Tests\Feature\Providers\OpenAi\OpenAiHelpers;
 use Tests\Feature\Providers\OpenRouter\OpenRouterHelpers;
+use Tests\Feature\Providers\Qianfan\QianfanHelpers;
 use Tests\Feature\Providers\Xai\XaiHelpers;
 use Tests\TestCase;
 
@@ -26,6 +27,7 @@ pest()->use(GroqHelpers::class)->group('provider-groq')->in('Feature/Providers/G
 pest()->use(MistralHelpers::class)->group('provider-mistral')->in('Feature/Providers/Mistral');
 pest()->use(OllamaHelpers::class)->group('provider-ollama')->in('Feature/Providers/Ollama');
 pest()->use(OpenAiHelpers::class)->group('provider-openai')->in('Feature/Providers/OpenAi');
+pest()->use(QianfanHelpers::class)->group('provider-qianfan')->in('Feature/Providers/Qianfan');
 pest()->use(XaiHelpers::class)->group('provider-xai')->in('Feature/Providers/Xai');
 
 pest()->use(OpenRouterHelpers::class)->group('provider-openrouter')->in('Feature/Providers/OpenRouter');

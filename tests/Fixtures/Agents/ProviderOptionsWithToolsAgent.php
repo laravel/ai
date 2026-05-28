@@ -68,6 +68,9 @@ class ProviderOptionsWithToolsAgent implements Agent, HasProviderOptions, HasToo
             Lab::DeepSeek => [
                 'frequency_penalty' => 0.5,
             ],
+            Lab::Qianfan => [
+                'frequency_penalty' => 0.5,
+            ],
             default => [],
         };
     }

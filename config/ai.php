@@ -129,6 +129,12 @@ return [
             'key' => env('OPENROUTER_API_KEY'),
         ],
 
+        'qianfan' => [
+            'driver' => 'qianfan',
+            'key' => env('QIANFAN_API_KEY'),
+            'url' => env('QIANFAN_URL', 'https://api.baiduqianfan.ai/v1'),
+        ],
+
         'voyageai' => [
             'driver' => 'voyageai',
             'key' => env('VOYAGEAI_API_KEY'),

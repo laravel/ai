@@ -238,6 +238,24 @@ describe('provider enum support', function () {
             return $prompt->prompt === 'Enum stream';
         });
     });
+
+    test('prompt accepts qianfan ai provider enum', function () {
+        config(['ai.providers.qianfan' => [
+            'driver' => 'qianfan',
+            'key' => 'test-key',
+        ]]);
+
+        AssistantAgent::fake(['Laravel']);
+
+        $response = (new AssistantAgent)->prompt('Enum prompt', provider: Lab::Qianfan);
+
+        expect($response->text)->toBe('Laravel');
+
+        AssistantAgent::assertPrompted(function (AgentPrompt $prompt) {
+            return $prompt->prompt === 'Enum prompt'
+                && $prompt->provider()->name() === 'qianfan';
+        });
+    });
 });
 
 describe('timeout handling', function () {

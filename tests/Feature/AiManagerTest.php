@@ -5,9 +5,19 @@ use Illuminate\Support\Facades\Facade;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Gateway\OpenAi\OpenAiGateway;
 use Laravel\Ai\Providers\OpenAiProvider;
+use Laravel\Ai\Providers\QianfanProvider;
 
 test('can get an openai provider instance', function () {
     expect(Ai::textProvider('openai'))->toBeInstanceOf(OpenAiProvider::class);
+});
+
+test('can get a qianfan provider instance', function () {
+    config(['ai.providers.qianfan' => [
+        'driver' => 'qianfan',
+        'key' => 'test-key',
+    ]]);
+
+    expect(Ai::textProvider('qianfan'))->toBeInstanceOf(QianfanProvider::class);
 });
 
 test('provider type is ensured', function () {

@@ -14,9 +14,9 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Transcription;
 use Tests\Fixtures\Agents\AssistantAgent;
 
-beforeEach(fn () => requiresApiKey('GROQ_API_KEY', 'OPENAI_API_KEY'));
-
 test('agent prompt accepts ai provider enum', function () {
+    requiresApiKey('GROQ_API_KEY');
+
     Event::fake();
 
     $response = (new AssistantAgent)->prompt(
@@ -32,6 +32,8 @@ test('agent prompt accepts ai provider enum', function () {
 });
 
 test('agent stream accepts ai provider enum', function () {
+    requiresApiKey('GROQ_API_KEY');
+
     Event::fake();
 
     $response = (new AssistantAgent)->stream(
@@ -53,6 +55,8 @@ test('agent stream accepts ai provider enum', function () {
 });
 
 test('agent queue accepts ai provider enum', function () {
+    requiresApiKey('GROQ_API_KEY');
+
     (new AssistantAgent)->queue(
         'What is the name of the PHP framework created by Taylor Otwell?',
         provider: Lab::Groq,
@@ -69,6 +73,8 @@ test('agent queue accepts ai provider enum', function () {
 });
 
 test('agent prompt accepts array of ai provider enum values for failover', function () {
+    requiresApiKey('GROQ_API_KEY');
+
     $response = (new AssistantAgent)->prompt(
         'What is the name of the PHP framework created by Taylor Otwell?',
         provider: [Lab::Groq],
@@ -79,7 +85,27 @@ test('agent prompt accepts array of ai provider enum values for failover', funct
         ->and($response->meta->provider)->toEqual('groq');
 });
 
+test('agent prompt accepts qianfan ai provider enum with fake gateway', function () {
+    config(['ai.providers.qianfan' => [
+        'driver' => 'qianfan',
+        'key' => 'test-key',
+    ]]);
+
+    AssistantAgent::fake(['Laravel']);
+
+    $response = (new AssistantAgent)->prompt(
+        'What is the name of the PHP framework created by Taylor Otwell?',
+        provider: Lab::Qianfan,
+        model: 'ernie-4.5-turbo-128k',
+    );
+
+    expect($response->text)->toBe('Laravel')
+        ->and($response->meta->provider)->toEqual('qianfan');
+});
+
 test('embeddings generate accepts ai provider enum', function () {
+    requiresApiKey('OPENAI_API_KEY');
+
     Event::fake();
 
     $response = Embeddings::for(['I love to watch Star Trek.'])
@@ -94,6 +120,8 @@ test('embeddings generate accepts ai provider enum', function () {
 });
 
 test('audio generate accepts ai provider enum', function () {
+    requiresApiKey('OPENAI_API_KEY');
+
     $response = Audio::of('Hello there! How are you today?')
         ->generate(provider: Lab::OpenAI);
 
@@ -101,6 +129,8 @@ test('audio generate accepts ai provider enum', function () {
 });
 
 test('transcription generate accepts ai provider enum', function () {
+    requiresApiKey('OPENAI_API_KEY');
+
     $audio = Audio::of('Hello there! How are you today?')->generate();
 
     $transcription = Transcription::of($audio->audio)

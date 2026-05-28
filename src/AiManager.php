@@ -32,6 +32,7 @@ use Laravel\Ai\Providers\OllamaProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Providers\OpenRouterProvider;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Providers\QianfanProvider;
 use Laravel\Ai\Providers\VoyageAiProvider;
 use Laravel\Ai\Providers\XaiProvider;
 use LogicException;
@@ -419,6 +420,17 @@ class AiManager extends MultipleInstanceManager
     public function createOpenrouterDriver(array $config): OpenRouterProvider
     {
         return new OpenRouterProvider(
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create a Qianfan powered instance.
+     */
+    public function createQianfanDriver(array $config): QianfanProvider
+    {
+        return new QianfanProvider(
             $config,
             $this->app->make(Dispatcher::class)
         );
