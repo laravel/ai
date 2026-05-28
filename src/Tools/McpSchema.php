@@ -267,31 +267,33 @@ class McpSchema
     protected function normalizeComposition(array $schema, string $key): array
     {
         $schemas = $schema[$key];
-        $nullable = false;
 
         if (! is_array($schemas)) {
             return [$schema, false];
         }
 
-        foreach ($schemas as $candidate) {
-            if (! is_array($candidate)) {
+        $nullable = false;
+        $candidate = null;
+
+        foreach ($schemas as $entry) {
+            if (! is_array($entry)) {
                 continue;
             }
 
-            if (($candidate['type'] ?? null) === 'null') {
+            if (($entry['type'] ?? null) === 'null') {
                 $nullable = true;
 
                 continue;
             }
 
-            unset($schema[$key]);
-
-            return [array_replace($candidate, $schema), $nullable];
+            $candidate ??= $entry;
         }
 
         unset($schema[$key]);
 
-        return [$schema, $nullable];
+        return $candidate !== null
+            ? [array_replace($candidate, $schema), $nullable]
+            : [$schema, $nullable];
     }
 
     /**

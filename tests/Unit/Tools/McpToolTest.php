@@ -117,6 +117,38 @@ test('it translates mcp input schemas to laravel tool schemas', function () {
     ]);
 });
 
+test('it marks fields nullable when anyOf or oneOf lists null after the typed branch', function () {
+    $tool = new McpTool(mcpTool(new FakeMcpClient, inputSchema: [
+        'type' => 'object',
+        'properties' => [
+            'nickname' => [
+                'anyOf' => [
+                    ['type' => 'string', 'minLength' => 1],
+                    ['type' => 'null'],
+                ],
+            ],
+            'count' => [
+                'oneOf' => [
+                    ['type' => 'integer', 'minimum' => 0],
+                    ['type' => 'null'],
+                ],
+            ],
+        ],
+    ]));
+
+    $schema = (new ObjectSchema($tool->schema(new JsonSchemaTypeFactory)))->toSchema();
+
+    expect($schema['properties']['nickname'])->toMatchArray([
+        'type' => ['string', 'null'],
+        'minLength' => 1,
+    ]);
+
+    expect($schema['properties']['count'])->toMatchArray([
+        'type' => ['integer', 'null'],
+        'minimum' => 0,
+    ]);
+});
+
 test('it keeps a null enum member while marking the type nullable', function () {
     $tool = new McpTool(mcpTool(new FakeMcpClient, inputSchema: [
         'type' => 'object',
