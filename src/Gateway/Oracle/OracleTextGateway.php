@@ -65,6 +65,16 @@ class OracleTextGateway implements EmbeddingGateway, TextGateway
      */
     protected const EMBED_BATCH_SIZE = 96;
 
+    /**
+     * The structural chat-request keys that agent provider options may not override.
+     *
+     * @var list<string>
+     */
+    protected const RESERVED_REQUEST_KEYS = [
+        'apiFormat', 'messages', 'message', 'chatHistory', 'preambleOverride',
+        'tools', 'toolChoice', 'toolResults', 'isForceSingleStep', 'isStream', 'streamOptions',
+    ];
+
     public function __construct()
     {
         $this->initializeToolCallbacks();
@@ -516,16 +526,6 @@ class OracleTextGateway implements EmbeddingGateway, TextGateway
             'topP' => $options->topP,
         ]);
     }
-
-    /**
-     * The structural chat-request keys that agent provider options may not override.
-     *
-     * @var list<string>
-     */
-    protected const RESERVED_REQUEST_KEYS = [
-        'apiFormat', 'messages', 'message', 'chatHistory', 'preambleOverride',
-        'tools', 'toolChoice', 'toolResults', 'isForceSingleStep', 'isStream', 'streamOptions',
-    ];
 
     /**
      * Merge the agent's Oracle provider options into the chat request.
