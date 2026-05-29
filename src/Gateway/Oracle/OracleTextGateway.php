@@ -58,7 +58,10 @@ class OracleTextGateway implements EmbeddingGateway, TextGateway
     protected const API_VERSION = '20231130';
 
     /**
-     * The maximum number of inputs OCI accepts per embedText call.
+     * The number of inputs sent per embedText call.
+     *
+     * The API constraint is per-input token length rather than a fixed array bound, but the
+     * OCI console caps batches at 96 inputs; we mirror that as a safe client-side batch size.
      */
     protected const EMBED_BATCH_SIZE = 96;
 
@@ -394,14 +397,15 @@ class OracleTextGateway implements EmbeddingGateway, TextGateway
         if ($schemaTools !== null) {
             $request['tools'] = $schemaTools;
             $request['toolChoice'] = ($isFinalStep || $toolsEmpty)
-                ? ['type' => 'FUNCTION', 'function' => ['name' => self::STRUCTURED_OUTPUT_TOOL]]
-                : 'AUTO';
+                ? ['type' => 'FUNCTION', 'name' => self::STRUCTURED_OUTPUT_TOOL]
+                : ['type' => 'AUTO'];
         } elseif ($formattedTools !== null) {
             $request['tools'] = $formattedTools;
         }
 
         if ($isStream) {
             $request['isStream'] = true;
+            $request['streamOptions'] = ['isIncludeUsage' => true];
         }
 
         return $this->mergeProviderOptions($request, $options);
@@ -450,6 +454,7 @@ class OracleTextGateway implements EmbeddingGateway, TextGateway
 
         if ($isStream) {
             $request['isStream'] = true;
+            $request['streamOptions'] = ['isIncludeUsage' => true];
         }
 
         return $this->mergeProviderOptions($request, $options);

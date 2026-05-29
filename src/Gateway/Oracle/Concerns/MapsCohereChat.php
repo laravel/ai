@@ -129,8 +129,11 @@ trait MapsCohereChat
     /**
      * Convert a JSON schema object into Cohere parameterDefinitions.
      *
-     * TODO: nested object/array property types are flattened to their JSON type; deep schemas
-     * may need richer mapping once exercised against a live tenancy.
+     * Cohere parameter types must be Python type names (str/int/float/bool/List/Dict),
+     * not JSON-schema types, so each property type is mapped accordingly.
+     *
+     * TODO: nested object/array property types are flattened to their scalar Python type;
+     * deep schemas may need richer mapping once exercised against a live tenancy.
      *
      * @param  array<string, mixed>  $jsonSchema
      * @return array<string, array<string, mixed>>
@@ -145,12 +148,32 @@ trait MapsCohereChat
         foreach ($properties as $name => $definition) {
             $definitions[$name] = [
                 'description' => (string) ($definition['description'] ?? ''),
-                'type' => $definition['type'] ?? 'string',
+                'type' => $this->cohereParameterType($definition['type'] ?? 'string'),
                 'isRequired' => in_array($name, $required, true),
             ];
         }
 
         return $definitions;
+    }
+
+    /**
+     * Map a JSON schema type to the Cohere/Python parameter type name.
+     *
+     * @param  string|array<int, string>  $type
+     */
+    protected function cohereParameterType(string|array $type): string
+    {
+        $type = is_array($type) ? ($type[0] ?? 'string') : $type;
+
+        return match ($type) {
+            'string' => 'str',
+            'integer' => 'int',
+            'number' => 'float',
+            'boolean' => 'bool',
+            'array' => 'List',
+            'object' => 'Dict',
+            default => $type,
+        };
     }
 
     /**

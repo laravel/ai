@@ -70,6 +70,6 @@ test('generic structured output forces the structured tool choice', function () 
 
     Http::assertSent(fn ($request) => $request->data()['chatRequest']['toolChoice'] === [
         'type' => 'FUNCTION',
-        'function' => ['name' => 'structured_output'],
+        'name' => 'structured_output',
     ]);
 });

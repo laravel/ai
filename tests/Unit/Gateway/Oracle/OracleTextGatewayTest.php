@@ -174,7 +174,7 @@ test('format cohere tools produces parameter definitions', function () {
         ->and($tools[0]['name'])->toBe('OracleSampleTool')
         ->and($tools[0]['parameterDefinitions']['city'])->toEqual([
             'description' => 'The city',
-            'type' => 'string',
+            'type' => 'str',
             'isRequired' => true,
         ]);
 });
@@ -197,7 +197,7 @@ test('generic chat request forces the structured tool on the final schema step',
     $request = oracleGateway()->callBuildGenericChatRequest([], $schemaTools, null, true, null, true);
 
     expect($request['tools'])->toBe($schemaTools)
-        ->and($request['toolChoice'])->toEqual(['type' => 'FUNCTION', 'function' => ['name' => 'structured_output']]);
+        ->and($request['toolChoice'])->toEqual(['type' => 'FUNCTION', 'name' => 'structured_output']);
 });
 
 test('generic chat request uses auto tool choice on non-final schema steps', function () {
@@ -205,7 +205,7 @@ test('generic chat request uses auto tool choice on non-final schema steps', fun
 
     $request = oracleGateway()->callBuildGenericChatRequest([], $schemaTools, null, false, null, false);
 
-    expect($request['toolChoice'])->toBe('AUTO');
+    expect($request['toolChoice'])->toEqual(['type' => 'AUTO']);
 });
 
 test('cohere chat request maps message, preamble, history, and force single step for schemas', function () {
@@ -308,8 +308,8 @@ test('schema is converted to cohere parameter definitions', function () {
     ]);
 
     expect($definitions)->toEqual([
-        'name' => ['description' => 'A name', 'type' => 'string', 'isRequired' => true],
-        'age' => ['description' => '', 'type' => 'integer', 'isRequired' => false],
+        'name' => ['description' => 'A name', 'type' => 'str', 'isRequired' => true],
+        'age' => ['description' => '', 'type' => 'int', 'isRequired' => false],
     ]);
 });
 
