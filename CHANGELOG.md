@@ -2,6 +2,10 @@
 
 ## [Unreleased](https://github.com/laravel/ai/compare/v0.7.2...0.x)
 
+### What's Changed
+
+* Add Oracle (OCI Generative AI) provider with text generation, streaming, tool calling, structured output, and embeddings (Cohere + Generic model families).
+
 ## [v0.7.2](https://github.com/laravel/ai/compare/v0.7.1...v0.7.2) - 2026-05-28
 
 ### What's Changed

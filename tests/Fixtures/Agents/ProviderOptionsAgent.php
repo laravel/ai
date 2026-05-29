@@ -81,6 +81,10 @@ class ProviderOptionsAgent implements Agent, HasProviderOptions
                     'guardrailVersion' => '1',
                 ],
             ],
+            Lab::Oracle => [
+                'frequencyPenalty' => 0.5,
+                'presencePenalty' => 0.3,
+            ],
             default => [],
         };
     }

@@ -31,6 +31,7 @@ use Laravel\Ai\Providers\MistralProvider;
 use Laravel\Ai\Providers\OllamaProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Providers\OpenRouterProvider;
+use Laravel\Ai\Providers\OracleProvider;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\VoyageAiProvider;
 use Laravel\Ai\Providers\XaiProvider;
@@ -419,6 +420,17 @@ class AiManager extends MultipleInstanceManager
     public function createOpenrouterDriver(array $config): OpenRouterProvider
     {
         return new OpenRouterProvider(
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create an Oracle (OCI Generative AI) powered instance.
+     */
+    public function createOracleDriver(array $config): OracleProvider
+    {
+        return new OracleProvider(
             $config,
             $this->app->make(Dispatcher::class)
         );

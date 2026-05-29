@@ -129,6 +129,21 @@ return [
             'key' => env('OPENROUTER_API_KEY'),
         ],
 
+        'oracle' => [
+            'driver' => 'oracle',
+            'region' => env('OCI_GENAI_REGION', 'us-chicago-1'),
+            'compartment_id' => env('OCI_COMPARTMENT_ID'),
+            'tenancy_id' => env('OCI_TENANCY_ID'),
+            'user_id' => env('OCI_USER_ID'),
+            'fingerprint' => env('OCI_KEY_FINGERPRINT'),
+            'private_key' => env('OCI_PRIVATE_KEY'),
+            'private_key_path' => env('OCI_PRIVATE_KEY_PATH'),
+            'passphrase' => env('OCI_PRIVATE_KEY_PASSPHRASE'),
+            'serving_type' => env('OCI_SERVING_TYPE', 'ON_DEMAND'),
+            'endpoint_id' => env('OCI_ENDPOINT_ID'),
+            'url' => env('OCI_GENAI_URL'),
+        ],
+
         'voyageai' => [
             'driver' => 'voyageai',
             'key' => env('VOYAGEAI_API_KEY'),

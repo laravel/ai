@@ -9,6 +9,7 @@ use Tests\Feature\Providers\Mistral\MistralHelpers;
 use Tests\Feature\Providers\Ollama\OllamaHelpers;
 use Tests\Feature\Providers\OpenAi\OpenAiHelpers;
 use Tests\Feature\Providers\OpenRouter\OpenRouterHelpers;
+use Tests\Feature\Providers\Oracle\OracleHelpers;
 use Tests\Feature\Providers\Xai\XaiHelpers;
 use Tests\TestCase;
 
@@ -29,6 +30,7 @@ pest()->use(OpenAiHelpers::class)->group('provider-openai')->in('Feature/Provide
 pest()->use(XaiHelpers::class)->group('provider-xai')->in('Feature/Providers/Xai');
 
 pest()->use(OpenRouterHelpers::class)->group('provider-openrouter')->in('Feature/Providers/OpenRouter');
+pest()->use(OracleHelpers::class)->group('provider-oracle')->in('Feature/Providers/Oracle');
 uses()->group('providers')->in('Feature/Providers');
 
 uses()->group('integration')->in('Integration');
