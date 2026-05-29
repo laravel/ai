@@ -46,7 +46,7 @@ class OracleException
                 ),
                 default => new AiException(
                     'OCI Generative AI error for provider ['.$provider.']: '.$e->getMessage(),
-                    code: $e->getCode(),
+                    code: $status,
                     previous: $e,
                 ),
             };

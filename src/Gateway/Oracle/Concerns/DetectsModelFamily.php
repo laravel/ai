@@ -22,4 +22,15 @@ trait DetectsModelFamily
     {
         return $this->isCohereModel($model) ? 'COHERE' : 'GENERIC';
     }
+
+    /**
+     * Determine whether the embedding model accepts a configurable output dimension.
+     *
+     * Cohere embed v3 models emit a fixed-size vector; only the v4 family supports the
+     * outputDimensions field, so the requested dimension is forwarded for it alone.
+     */
+    protected function supportsOutputDimensions(string $model): bool
+    {
+        return str_contains($model, 'embed-v4') || str_contains($model, 'embed-4');
+    }
 }

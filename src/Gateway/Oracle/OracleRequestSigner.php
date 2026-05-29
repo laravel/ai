@@ -66,7 +66,10 @@ class OracleRequestSigner
 
         if ($hasBody) {
             $body = (string) $request->getBody();
-            $request->getBody()->rewind();
+
+            if ($request->getBody()->isSeekable()) {
+                $request->getBody()->rewind();
+            }
 
             $contentType = $request->getHeaderLine('content-type') ?: 'application/json';
 

@@ -345,11 +345,17 @@ class OracleTextGateway implements EmbeddingGateway, TextGateway
         $embeddings = [];
         $totalTokens = 0;
 
+        // Cohere embed v3 models have a fixed output dimension, so the requested dimension is
+        // only forwarded for model families that accept the configurable outputDimensions field.
+        $dimensionPayload = $this->supportsOutputDimensions($model)
+            ? ['outputDimensions' => $dimensions]
+            : [];
+
         foreach (array_chunk(array_values($inputs), self::EMBED_BATCH_SIZE) as $batch) {
             $payload = array_merge([
                 'inputType' => 'SEARCH_DOCUMENT',
                 'truncate' => 'END',
-            ], $providerOptions, [
+            ], $dimensionPayload, $providerOptions, [
                 ...$this->servingPayload($provider, $model),
                 'inputs' => $batch,
             ]);
