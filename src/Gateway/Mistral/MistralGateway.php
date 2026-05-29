@@ -174,16 +174,23 @@ class MistralGateway implements EmbeddingGateway, TextGateway, TranscriptionGate
         int $timeout = 30,
         array $providerOptions = [],
     ): TranscriptionResponse {
+        $params = ['model' => $model];
+
+        if ($diarize) {
+            $params['diarize'] = true;
+            $params[] = [
+                'name' => 'timestamp_granularities',
+                'contents' => 'segment',
+            ];
+        } elseif ($language) {
+            $params['language'] = $language;
+        }
+
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)
                 ->attach('file', $audio->content(), $this->audioFilename($audio), ['Content-Type' => $audio->mimeType()])
-                ->post('audio/transcriptions', array_merge($providerOptions, array_filter([
-                    'model' => $model,
-                    'language' => $diarize ? null : $language,
-                    'diarize' => $diarize,
-                    'timestamp_granularities' => $diarize ? ['segment'] : null,
-                ]))),
+                ->post('audio/transcriptions', array_merge($providerOptions, $params)),
         );
 
         $data = $response->json();
