@@ -289,10 +289,11 @@ class OracleTextGateway implements EmbeddingGateway, TextGateway
             throw OracleException::toAiException($e, $provider->name(), $model);
         }
 
+        $streamId = (string) Str::uuid();
         $messageId = (string) Str::uuid();
         $timestamp = time();
 
-        yield (new StreamStart((string) Str::uuid(), $provider->name(), $model, $timestamp))
+        yield (new StreamStart($streamId, $provider->name(), $model, $timestamp))
             ->withInvocationId($invocationId);
 
         $textStarted = false;
@@ -338,7 +339,7 @@ class OracleTextGateway implements EmbeddingGateway, TextGateway
             }
         }
 
-        yield (new StreamEnd($messageId, $finishReason, $usage, $timestamp))->withInvocationId($invocationId);
+        yield (new StreamEnd($streamId, $finishReason, $usage, $timestamp))->withInvocationId($invocationId);
     }
 
     /**
@@ -768,7 +769,7 @@ class OracleTextGateway implements EmbeddingGateway, TextGateway
      */
     protected function isCohereFinishReason(string $reason): bool
     {
-        return in_array(strtoupper($reason), ['COMPLETE', 'MAX_TOKENS', 'ERROR_TOXIC', 'ERROR_LIMIT', 'USER_CANCEL'], true);
+        return in_array(strtoupper($reason), ['COMPLETE', 'MAX_TOKENS', 'ERROR', 'ERROR_TOXIC', 'ERROR_LIMIT', 'USER_CANCEL'], true);
     }
 
     /**

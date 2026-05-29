@@ -56,6 +56,38 @@ test('generic streaming emits text events from content part deltas', function ()
         ->and($events[count($events) - 1])->toBeInstanceOf(StreamEnd::class);
 });
 
+test('stream start and end share the same id', function () {
+    Http::fake([
+        'inference.generativeai.us-chicago-1.oci.oraclecloud.com/*' => Http::response(
+            body: $this->ssePayload([['text' => 'Hi'], ['finishReason' => 'COMPLETE']]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents(model: 'cohere.command-a-03-2025');
+
+    $start = array_values(array_filter($events, fn ($e) => $e instanceof StreamStart))[0];
+    $end = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+
+    expect($end->id)->toBe($start->id);
+});
+
+test('cohere ERROR finish reason maps to the error reason on stream end', function () {
+    Http::fake([
+        'inference.generativeai.us-chicago-1.oci.oraclecloud.com/*' => Http::response(
+            body: $this->ssePayload([['text' => 'partial'], ['finishReason' => 'ERROR']]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents(model: 'cohere.command-a-03-2025');
+
+    expect($events[count($events) - 1])->toBeInstanceOf(StreamEnd::class)
+        ->and($events[count($events) - 1]->reason)->toBe('error');
+});
+
 test('streaming requests set isStream on the chat request', function () {
     Http::fake([
         'inference.generativeai.us-chicago-1.oci.oraclecloud.com/*' => Http::response(

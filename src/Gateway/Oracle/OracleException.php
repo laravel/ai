@@ -44,6 +44,7 @@ class OracleException
                     code: $status,
                     previous: $e,
                 ),
+                static::indicatesInsufficientCredits($e->getMessage().' '.$e->response->body()) => InsufficientCreditsException::forProvider($provider, $status, $e),
                 default => new AiException(
                     'OCI Generative AI error for provider ['.$provider.']: '.$e->getMessage(),
                     code: $status,
@@ -68,6 +69,14 @@ class OracleException
      */
     protected static function isInsufficientCreditsError(Throwable $e): bool
     {
-        return Str::contains(strtolower($e->getMessage()), static::$insufficientCreditPatterns);
+        return static::indicatesInsufficientCredits($e->getMessage());
+    }
+
+    /**
+     * Determine if the given text contains an insufficient credits or quota signal.
+     */
+    protected static function indicatesInsufficientCredits(string $text): bool
+    {
+        return Str::contains(strtolower($text), static::$insufficientCreditPatterns);
     }
 }
