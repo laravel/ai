@@ -21,6 +21,7 @@ use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Tools\Request;
+use Tests\Fixtures\Agents\CachePointsAgent;
 use Tests\Fixtures\Agents\ProviderOptionsAgent;
 use Tests\Fixtures\Tools\NamedTool;
 
@@ -88,6 +89,11 @@ function textGateway(): object
                 $options,
                 $isFinalStep,
             );
+        }
+
+        public function callApplyCachePoints(array $parameters, array|string|null $locations): array
+        {
+            return $this->applyCachePoints($parameters, $locations);
         }
 
         public function callResolveMaxSteps(array $tools, ?TextGenerationOptions $options): int
@@ -619,4 +625,67 @@ test('build converse parameters omits provider options when agent has none', fun
 
     expect($params)->not->toHaveKey('additionalModelRequestFields')
         ->and($params)->not->toHaveKey('guardrailConfig');
+});
+
+test('apply cache points appends markers to the requested locations', function () {
+    $parameters = [
+        'system' => [['text' => 'you are helpful']],
+        'toolConfig' => ['tools' => [['toolSpec' => ['name' => 'X']]]],
+    ];
+
+    $result = textGateway()->callApplyCachePoints($parameters, ['system', 'tools']);
+
+    expect($result['system'])->toEqual([
+        ['text' => 'you are helpful'],
+        ['cachePoint' => ['type' => 'default']],
+    ])->and($result['toolConfig']['tools'])->toEqual([
+        ['toolSpec' => ['name' => 'X']],
+        ['cachePoint' => ['type' => 'default']],
+    ]);
+});
+
+test('apply cache points only touches the locations asked for', function () {
+    $parameters = [
+        'system' => [['text' => 'you are helpful']],
+        'toolConfig' => ['tools' => [['toolSpec' => ['name' => 'X']]]],
+    ];
+
+    $result = textGateway()->callApplyCachePoints($parameters, 'system');
+
+    expect($result['system'])->toEqual([
+        ['text' => 'you are helpful'],
+        ['cachePoint' => ['type' => 'default']],
+    ])->and($result['toolConfig']['tools'])->toEqual([['toolSpec' => ['name' => 'X']]]);
+});
+
+test('apply cache points is a no-op when nothing is requested or the target is absent', function () {
+    $parameters = ['system' => [['text' => 'hi']]];
+
+    expect(textGateway()->callApplyCachePoints($parameters, null))->toEqual($parameters)
+        ->and(textGateway()->callApplyCachePoints($parameters, []))->toEqual($parameters)
+        ->and(textGateway()->callApplyCachePoints(['messages' => []], ['system', 'tools']))
+        ->toEqual(['messages' => []]);
+});
+
+test('build converse parameters applies cache points without flat-merging the directive', function () {
+    $options = TextGenerationOptions::forAgent(new CachePointsAgent);
+
+    $params = textGateway()->callBuildConverseParameters(
+        'claude-sonnet',
+        'you are helpful',
+        [['role' => 'user', 'content' => [['text' => 'hi']]]],
+        null,
+        [['toolSpec' => ['name' => 'X']]],
+        false,
+        $options,
+        false,
+    );
+
+    expect($params['system'])->toEqual([
+        ['text' => 'you are helpful'],
+        ['cachePoint' => ['type' => 'default']],
+    ])->and($params['toolConfig']['tools'])->toEqual([
+        ['toolSpec' => ['name' => 'X']],
+        ['cachePoint' => ['type' => 'default']],
+    ])->and($params)->not->toHaveKey('cachePoints');
 });

@@ -655,7 +655,43 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
         $providerOptions = $options?->providerOptions(Lab::Bedrock);
 
         if (! empty($providerOptions)) {
+            $parameters = $this->applyCachePoints($parameters, Arr::pull($providerOptions, 'cachePoints'));
+
             return array_merge($parameters, $providerOptions);
+        }
+
+        return $parameters;
+    }
+
+    /**
+     * Insert Bedrock Converse prompt-caching markers at the requested locations.
+     *
+     * Bedrock caching is opt-in per request: a `{cachePoint: {type: 'default'}}`
+     * marker appended to the system block and/or the tools list tells Bedrock to
+     * cache everything up to that point, so a stable system prompt and tool set are
+     * billed at the cache-read rate on subsequent calls. Request it via the reserved
+     * `cachePoints` provider option, e.g. `['cachePoints' => ['system', 'tools']]`.
+     *
+     * @param  array<string, mixed>  $parameters
+     * @param  array<int, string>|string|null  $locations
+     * @return array<string, mixed>
+     */
+    protected function applyCachePoints(array $parameters, array|string|null $locations): array
+    {
+        $locations = array_filter((array) $locations);
+
+        if ($locations === []) {
+            return $parameters;
+        }
+
+        $cachePoint = ['cachePoint' => ['type' => 'default']];
+
+        if (in_array('system', $locations, true) && ! empty($parameters['system'])) {
+            $parameters['system'][] = $cachePoint;
+        }
+
+        if (in_array('tools', $locations, true) && ! empty($parameters['toolConfig']['tools'])) {
+            $parameters['toolConfig']['tools'][] = $cachePoint;
         }
 
         return $parameters;
