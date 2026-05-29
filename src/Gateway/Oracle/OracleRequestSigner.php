@@ -106,7 +106,7 @@ class OracleRequestSigner
 
         foreach ($headers as $header) {
             if ($header === '(request-target)') {
-                $target = $request->getUri()->getPath();
+                $target = $request->getUri()->getPath() ?: '/';
 
                 if ($query = $request->getUri()->getQuery()) {
                     $target .= '?'.$query;

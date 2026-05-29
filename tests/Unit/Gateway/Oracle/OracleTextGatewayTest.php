@@ -1,11 +1,15 @@
 <?php
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Oracle\OracleTextGateway;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\UserMessage;
+use Laravel\Ai\Promptable;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Tools\Request;
 use Tests\Fixtures\Agents\ProviderOptionsAgent;
@@ -98,7 +102,30 @@ function oracleGateway(): object
         {
             return $this->streamTextDelta($event);
         }
+
+        public function callFinalizeStreamToolCalls(array $event): array
+        {
+            $pending = [];
+            $this->accumulateStreamToolCalls($event, $pending);
+
+            return $this->finalizeStreamToolCalls($pending);
+        }
     };
+}
+
+class OracleReservedOptionsAgent implements Agent, HasProviderOptions
+{
+    use Promptable;
+
+    public function instructions(): string
+    {
+        return 'reserved';
+    }
+
+    public function providerOptions(Lab|string $provider): array
+    {
+        return ['apiFormat' => 'HACKED', 'messages' => [], 'frequencyPenalty' => 0.5];
+    }
 }
 
 class OracleSampleTool implements Tool
@@ -282,6 +309,39 @@ test('parse cohere response extracts text, tool calls, finish reason, and usage'
         ->and($parsed['toolCalls'][0]->arguments)->toEqual(['a' => 1])
         ->and($parsed['finishReason'])->toBe(FinishReason::Stop)
         ->and($parsed['usage']->promptTokens)->toBe(3);
+});
+
+test('parse cohere response normalizes object tool parameters to an array', function () {
+    $parsed = oracleGateway()->callParseCohereResponse([
+        'text' => '',
+        'finishReason' => 'COMPLETE',
+        'toolCalls' => [['name' => 'X', 'parameters' => (object) ['city' => 'Cairo']]],
+    ]);
+
+    expect($parsed['toolCalls'][0]->arguments)->toBe(['city' => 'Cairo']);
+});
+
+test('streamed object tool parameters are encoded and finalized into tool calls', function () {
+    $toolCalls = oracleGateway()->callFinalizeStreamToolCalls([
+        'toolCalls' => [['name' => 'X', 'parameters' => (object) ['city' => 'Cairo']]],
+    ]);
+
+    expect($toolCalls)->toHaveCount(1)
+        ->and($toolCalls[0]->name)->toBe('X')
+        ->and($toolCalls[0]->arguments)->toBe(['city' => 'Cairo']);
+});
+
+test('provider options cannot override structural request fields', function () {
+    $options = TextGenerationOptions::forAgent(new OracleReservedOptionsAgent);
+
+    $request = oracleGateway()->callBuildGenericChatRequest(
+        [['role' => 'USER', 'content' => [['type' => 'TEXT', 'text' => 'hi']]]],
+        null, null, true, $options, false,
+    );
+
+    expect($request['apiFormat'])->toBe('GENERIC')
+        ->and($request['messages'])->toEqual([['role' => 'USER', 'content' => [['type' => 'TEXT', 'text' => 'hi']]]])
+        ->and($request['frequencyPenalty'])->toBe(0.5);
 });
 
 test('finish reasons are mapped per family', function () {

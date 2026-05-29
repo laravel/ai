@@ -53,6 +53,14 @@ test('post request signing string includes the body headers in order', function 
     ]));
 });
 
+test('request target defaults an empty path to a slash', function () {
+    [$signer] = oracleSignerFixture();
+
+    $signingString = $signer->buildSigningString(new Request('GET', 'https://host.example.com'), ['(request-target)']);
+
+    expect($signingString)->toBe('(request-target): get /');
+});
+
 test('request target includes the query string', function () {
     [$signer] = oracleSignerFixture();
 

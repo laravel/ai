@@ -209,7 +209,7 @@ trait MapsCohereChat
             $toolCalls[] = new ToolCall(
                 $call['id'] ?? (string) Str::uuid(),
                 $call['name'] ?? '',
-                $call['parameters'] ?? [],
+                $this->decodeArguments($call['parameters'] ?? []),
             );
         }
 

@@ -220,6 +220,10 @@ trait MapsGenericChat
      */
     protected function decodeArguments(mixed $arguments): array
     {
+        if (is_object($arguments)) {
+            $arguments = json_decode((string) json_encode($arguments), true);
+        }
+
         if (is_array($arguments)) {
             return $arguments;
         }

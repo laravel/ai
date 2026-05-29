@@ -518,7 +518,20 @@ class OracleTextGateway implements EmbeddingGateway, TextGateway
     }
 
     /**
+     * The structural chat-request keys that agent provider options may not override.
+     *
+     * @var list<string>
+     */
+    protected const RESERVED_REQUEST_KEYS = [
+        'apiFormat', 'messages', 'message', 'chatHistory', 'preambleOverride',
+        'tools', 'toolChoice', 'toolResults', 'isForceSingleStep', 'isStream', 'streamOptions',
+    ];
+
+    /**
      * Merge the agent's Oracle provider options into the chat request.
+     *
+     * Reserved structural keys are stripped first so provider options can only tune inference
+     * parameters (penalties, seed, etc.) and never break request invariants.
      *
      * @param  array<string, mixed>  $request
      * @return array<string, mixed>
@@ -527,7 +540,13 @@ class OracleTextGateway implements EmbeddingGateway, TextGateway
     {
         $providerOptions = $options?->providerOptions(Lab::Oracle);
 
-        return empty($providerOptions) ? $request : array_merge($request, $providerOptions);
+        if (empty($providerOptions)) {
+            return $request;
+        }
+
+        $providerOptions = array_diff_key($providerOptions, array_flip(self::RESERVED_REQUEST_KEYS));
+
+        return array_merge($request, $providerOptions);
     }
 
     /**
@@ -676,8 +695,8 @@ class OracleTextGateway implements EmbeddingGateway, TextGateway
 
             $arguments = $call['arguments'] ?? $call['parameters'] ?? null;
 
-            if (is_array($arguments)) {
-                $pending[$index]['arguments'] = json_encode($arguments);
+            if (is_array($arguments) || is_object($arguments)) {
+                $pending[$index]['arguments'] = (string) json_encode($arguments);
             } elseif (is_string($arguments)) {
                 $pending[$index]['arguments'] .= $arguments;
             }
