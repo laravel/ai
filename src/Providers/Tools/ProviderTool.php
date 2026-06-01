@@ -15,7 +15,7 @@ abstract class ProviderTool implements HasProviderOptions
     protected array $providerOptions = [];
 
     /**
-     * Attach provider-specific options that the matching gateway will merge into the tool payload.
+     * Attach provider-specific options to the tool payload.
      */
     public function withProviderOptions(Lab|string $provider, array $options): static
     {
@@ -34,6 +34,9 @@ abstract class ProviderTool implements HasProviderOptions
         return $this->providerOptions[$this->normalizeProvider($provider)] ?? [];
     }
 
+    /**
+     * Normalize the provider / lab value to a string.
+     */
     protected function normalizeProvider(Lab|string $provider): string
     {
         return $provider instanceof Lab ? $provider->value : $provider;
