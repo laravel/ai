@@ -64,7 +64,7 @@ class ImageResponse implements Countable, Htmlable
     {
         return sprintf(
             '<img src="data:%s;base64,%s" alt="%s" />',
-            $this->images[0]->mime,
+            $this->images[0]->mime ?: 'image/png',
             $this->images[0]->image,
             e($alt),
         );
