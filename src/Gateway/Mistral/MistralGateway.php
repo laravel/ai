@@ -178,10 +178,7 @@ class MistralGateway implements EmbeddingGateway, TextGateway, TranscriptionGate
 
         if ($diarize) {
             $params['diarize'] = true;
-            $params[] = [
-                'name' => 'timestamp_granularities',
-                'contents' => 'segment',
-            ];
+            $params['timestamp_granularities'] = ['segment'];
         } elseif ($language) {
             $params['language'] = $language;
         }
@@ -190,7 +187,7 @@ class MistralGateway implements EmbeddingGateway, TextGateway, TranscriptionGate
             $provider->name(),
             fn () => $this->client($provider, $timeout)
                 ->attach('file', $audio->content(), $this->audioFilename($audio), ['Content-Type' => $audio->mimeType()])
-                ->post('audio/transcriptions', array_merge($providerOptions, $params)),
+                ->post('audio/transcriptions', $this->multipartParams(array_merge($providerOptions, $params))),
         );
 
         $data = $response->json();
@@ -209,6 +206,25 @@ class MistralGateway implements EmbeddingGateway, TextGateway, TranscriptionGate
             ),
             new Meta($provider->name(), $model),
         );
+    }
+
+    /**
+     * Convert request parameters into multipart parts, expanding array values.
+     *
+     * @param  array<string, mixed>  $params
+     * @return array<int, array{name: string, contents: scalar}>
+     */
+    protected function multipartParams(array $params): array
+    {
+        $parts = [];
+
+        foreach ($params as $name => $value) {
+            foreach (is_array($value) ? array_values($value) : [$value] as $item) {
+                $parts[] = ['name' => $name, 'contents' => $item];
+            }
+        }
+
+        return $parts;
     }
 
     /**

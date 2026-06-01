@@ -71,6 +71,23 @@ test('transcription sends context bias from provider options', function () {
     });
 });
 
+test('transcription sends context bias array as repeated parts', function () {
+    Http::fake(['*' => fakeTranscriptionResponse()]);
+
+    Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->providerOptions(['context_bias' => ['Laravel', 'Forge', 'Vapor']])
+        ->generate(provider: 'mistral');
+
+    Http::assertSent(function (Request $request) {
+        $body = $request->body();
+
+        return substr_count($body, 'name="context_bias"') === 3
+            && str_contains($body, 'Laravel')
+            && str_contains($body, 'Forge')
+            && str_contains($body, 'Vapor');
+    });
+});
+
 test('transcription sends bearer token', function () {
     Http::fake(['*' => fakeTranscriptionResponse()]);
 
@@ -107,9 +124,13 @@ test('transcription omits language and sends diarize flag when diarizing', funct
         ->generate(provider: 'mistral');
 
     Http::assertSent(function (Request $request) {
-        return str_contains($request->body(), 'diarize')
-            && str_contains($request->body(), 'segment')
-            && ! str_contains($request->body(), 'language');
+        $body = $request->body();
+
+        return str_contains($body, 'diarize')
+            && str_contains($body, 'name="timestamp_granularities"')
+            && ! str_contains($body, 'timestamp_granularities[')
+            && str_contains($body, 'segment')
+            && ! str_contains($body, 'language');
     });
 });
 
