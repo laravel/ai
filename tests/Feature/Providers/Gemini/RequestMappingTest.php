@@ -17,11 +17,11 @@ describe('request structure', function () {
         (new AssistantAgent)->prompt(
             'What is Laravel?',
             provider: 'gemini',
-            model: 'gemini-3-flash-preview',
+            model: 'gemini-3.5-flash',
         );
 
         Http::assertSent(function ($request) {
-            return str_contains($request->url(), 'models/gemini-3-flash-preview:generateContent')
+            return str_contains($request->url(), 'models/gemini-3.5-flash:generateContent')
                 && $request->data()['contents'][0]['role'] === 'user'
                 && $request->data()['contents'][0]['parts'][0]['text'] === 'What is Laravel?';
         });

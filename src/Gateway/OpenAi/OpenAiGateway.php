@@ -264,6 +264,8 @@ class OpenAiGateway implements Gateway
      * Generate text from the given audio.
      *
      * @param  array<string, mixed>  $providerOptions
+     *
+     * @throws LogicException if diarization is requested together with the `prompt` provider option.
      */
     public function generateTranscription(
         TranscriptionProvider $provider,

@@ -20,6 +20,7 @@ use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Tools\Request;
+use Tests\Fixtures\Agents\ProviderOptionsAgent;
 use Tests\Fixtures\Tools\NamedTool;
 
 function textGateway(): object
@@ -178,6 +179,29 @@ test('assistant message with empty tool input is formatted as a json object', fu
 
     expect($input)->toBeInstanceOf(stdClass::class)
         ->and(json_encode($input))->toBe('{}');
+});
+
+test('assistant message with providerContentBlocks is formatted verbatim', function () {
+    $message = new AssistantMessage(
+        'Hello',
+        new Collection([new ToolCall('tool-1', 'doIt', [])]),
+        providerContentBlocks: [
+            ['reasoningContent' => ['reasoningText' => ['text' => 'think', 'signature' => 'sig']]],
+            ['text' => 'Hello'],
+            ['toolUse' => ['toolUseId' => 'tool-1', 'name' => 'doIt', 'input' => []]],
+        ],
+    );
+
+    $formatted = textGateway()->callFormatMessages([$message]);
+    $content = $formatted[0]['content'];
+
+    expect($formatted[0]['role'])->toBe('assistant')
+        ->and($content[0])->toBe(['reasoningContent' => ['reasoningText' => ['text' => 'think', 'signature' => 'sig']]])
+        ->and($content[1])->toBe(['text' => 'Hello'])
+        ->and($content[2]['toolUse']['toolUseId'])->toBe('tool-1')
+        ->and($content[2]['toolUse']['name'])->toBe('doIt')
+        ->and($content[2]['toolUse']['input'])->toBeInstanceOf(stdClass::class)
+        ->and(json_encode($content[2]['toolUse']['input']))->toBe('{}');
 });
 
 test('tool result message is formatted with tool result blocks', function () {
@@ -511,4 +535,47 @@ test('build converse parameters includes tool config and inference config when p
     expect($params)->not->toHaveKey('system')
         ->and($params['toolConfig'])->toEqual(['tools' => $formattedTools])
         ->and($params['inferenceConfig'])->toEqual(['maxTokens' => 100]);
+});
+
+test('build converse parameters flat-merges agent provider options for bedrock', function () {
+    $options = TextGenerationOptions::forAgent(new ProviderOptionsAgent);
+
+    $params = textGateway()->callBuildConverseParameters(
+        'claude-sonnet',
+        null,
+        [['role' => 'user', 'content' => [['text' => 'hi']]]],
+        null,
+        null,
+        true,
+        $options,
+        false,
+    );
+
+    expect($params['additionalModelRequestFields'])->toEqual([
+        'thinking' => [
+            'type' => 'adaptive',
+        ],
+        'output_config' => [
+            'effort' => 'high',
+        ],
+    ])->and($params['guardrailConfig'])->toEqual([
+        'guardrailIdentifier' => 'gr-1',
+        'guardrailVersion' => '1',
+    ]);
+});
+
+test('build converse parameters omits provider options when agent has none', function () {
+    $params = textGateway()->callBuildConverseParameters(
+        'claude-sonnet',
+        null,
+        [['role' => 'user', 'content' => [['text' => 'hi']]]],
+        null,
+        null,
+        true,
+        null,
+        false,
+    );
+
+    expect($params)->not->toHaveKey('additionalModelRequestFields')
+        ->and($params)->not->toHaveKey('guardrailConfig');
 });

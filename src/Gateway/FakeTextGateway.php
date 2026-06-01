@@ -132,8 +132,8 @@ class FakeTextGateway implements TextGateway
         $messageId = ulid();
 
         // Fake the stream and text starting...
-        yield new StreamStart(ulid(), $provider->name(), $model, time());
-        yield new TextStart(ulid(), $messageId, time());
+        yield (new StreamStart(ulid(), $provider->name(), $model, time()))->withInvocationId($invocationId);
+        yield (new TextStart(ulid(), $messageId, time()))->withInvocationId($invocationId);
 
         $message = (new Collection($messages))->last(function ($message) {
             return $message instanceof UserMessage;
@@ -145,12 +145,12 @@ class FakeTextGateway implements TextGateway
 
         $events = Str::of($fakeResponse->text)
             ->explode(' ')
-            ->map(fn ($word, $index) => new TextDelta(
+            ->map(fn ($word, $index) => (new TextDelta(
                 ulid(),
                 $messageId,
                 $index > 0 ? ' '.$word : $word,
                 time(),
-            ))->all();
+            ))->withInvocationId($invocationId))->all();
 
         // Fake the text delta events...
         foreach ($events as $event) {
@@ -158,8 +158,8 @@ class FakeTextGateway implements TextGateway
         }
 
         // Fake the stream and text ending...
-        yield new TextEnd(ulid(), $messageId, time());
-        yield new StreamEnd(ulid(), 'stop', new Usage, time());
+        yield (new TextEnd(ulid(), $messageId, time()))->withInvocationId($invocationId);
+        yield (new StreamEnd(ulid(), 'stop', new Usage, time()))->withInvocationId($invocationId);
     }
 
     /**

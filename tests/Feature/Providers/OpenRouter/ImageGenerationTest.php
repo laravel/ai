@@ -47,7 +47,7 @@ test('image request includes model, messages, and modalities', function () {
 
         return str_contains($request->url(), 'chat/completions')
             && $body['model'] === 'google/gemini-2.5-flash-image'
-            && $body['modalities'] === ['image', 'text']
+            && $body['modalities'] === ['image']
             && $body['messages'][0]['role'] === 'user'
             && $body['messages'][0]['content'] === 'A blue circle';
     });

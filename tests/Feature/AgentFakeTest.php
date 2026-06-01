@@ -149,6 +149,17 @@ describe('stream responses', function () {
         expect($response->text)->toEqual('Third response')
             ->and($response->events)->toHaveCount(6);
     });
+
+    test('faked stream events share the response invocation id', function () {
+        AssistantAgent::fake(['Hello world']);
+
+        $response = (new AssistantAgent)->stream('First prompt');
+
+        $response->each(fn () => true);
+
+        expect($response->events)
+            ->each(fn ($event) => $event->invocationId->toBe($response->invocationId));
+    });
 });
 
 describe('queue responses', function () {

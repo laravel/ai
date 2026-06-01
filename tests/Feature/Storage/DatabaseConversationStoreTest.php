@@ -78,7 +78,7 @@ test('it persists tool calls and results from a remembered agent prompt', functi
                     'finishReason' => 'STOP',
                 ]],
                 'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5, 'totalTokenCount' => 15],
-                'modelVersion' => 'gemini-3-flash-preview',
+                'modelVersion' => 'gemini-3.5-flash',
             ]),
             Http::response([
                 'candidates' => [[
@@ -89,7 +89,7 @@ test('it persists tool calls and results from a remembered agent prompt', functi
                     'finishReason' => 'STOP',
                 ]],
                 'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5, 'totalTokenCount' => 15],
-                'modelVersion' => 'gemini-3-flash-preview',
+                'modelVersion' => 'gemini-3.5-flash',
             ]),
         ]),
     ]);

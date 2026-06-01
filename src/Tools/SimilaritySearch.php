@@ -25,6 +25,8 @@ class SimilaritySearch implements Tool
 
     /**
      * Create a new similarity search tool instance.
+     *
+     * @throws InvalidArgumentException if the given model class name or vector column name is blank.
      */
     public static function usingModel(
         string $model,

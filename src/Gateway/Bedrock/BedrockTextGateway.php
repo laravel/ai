@@ -12,6 +12,7 @@ use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Bedrock\Concerns\CreatesBedrockClient;
 use Laravel\Ai\Gateway\Bedrock\Concerns\MapsAttachments;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
@@ -32,8 +33,14 @@ use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
+use Laravel\Ai\Streaming\Events\ReasoningDelta;
+use Laravel\Ai\Streaming\Events\ReasoningEnd;
+use Laravel\Ai\Streaming\Events\ReasoningStart;
 use Laravel\Ai\Streaming\Events\StreamEnd;
+use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
+use Laravel\Ai\Streaming\Events\TextEnd;
+use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Laravel\Ai\Tools\ToolNameResolver;
@@ -76,8 +83,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
         $allToolCalls = [];
         $allToolResults = [];
         $finalOutput = '';
-        $totalInputTokens = 0;
-        $totalOutputTokens = 0;
+        $totalUsage = new Usage;
         $step = 0;
         $responseMessages = new Collection;
         $steps = new Collection;
@@ -106,15 +112,22 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                 throw BedrockException::toAiException($e, $provider->name(), $model);
             }
 
-            $stepInputTokens = $result['usage']['inputTokens'] ?? 0;
-            $stepOutputTokens = $result['usage']['outputTokens'] ?? 0;
-            $totalInputTokens += $stepInputTokens;
-            $totalOutputTokens += $stepOutputTokens;
+            $stepUsage = new Usage(
+                promptTokens: $result['usage']['inputTokens'] ?? 0,
+                completionTokens: $result['usage']['outputTokens'] ?? 0,
+                cacheWriteInputTokens: $result['usage']['cacheWriteInputTokens'] ?? 0,
+                cacheReadInputTokens: $result['usage']['cacheReadInputTokens'] ?? 0,
+            );
+
+            $totalUsage = $totalUsage->add($stepUsage);
 
             $output = '';
             $toolCalls = [];
+            $providerContentBlocks = [];
 
             foreach ($result['output']['message']['content'] ?? [] as $block) {
+                $providerContentBlocks[] = $block;
+
                 if (isset($block['text'])) {
                     $output .= $block['text'];
 
@@ -143,10 +156,9 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             }
 
             $step++;
-            $stepUsage = new Usage($stepInputTokens, $stepOutputTokens);
             $finishReason = $this->extractFinishReason($result);
 
-            $responseMessages->push(new AssistantMessage($output, new Collection($toolCalls)));
+            $responseMessages->push(new AssistantMessage($output, new Collection($toolCalls), $providerContentBlocks));
 
             if (empty($toolCalls)) {
                 if ($schemaTools && $finishReason === FinishReason::ToolCalls) {
@@ -159,7 +171,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             }
 
             $allToolCalls = array_merge($allToolCalls, $toolCalls);
-            $conversationMessages[] = $this->buildAssistantConversationMessage($output, $toolCalls);
+            $conversationMessages[] = $this->buildAssistantConversationMessage($output, $toolCalls, $providerContentBlocks);
 
             $toolResults = $this->executeToolCalls($tools, $toolCalls);
             $allToolResults = array_merge($allToolResults, $toolResults);
@@ -172,8 +184,6 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             }
         }
 
-        $usage = new Usage($totalInputTokens, $totalOutputTokens);
-
         if ($schema) {
             $structured = json_decode($finalOutput, true);
 
@@ -181,12 +191,12 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                 $structured = [];
             }
 
-            return (new StructuredTextResponse($structured, $finalOutput, $usage, $meta))
+            return (new StructuredTextResponse($structured, $finalOutput, $totalUsage, $meta))
                 ->withToolCallsAndResults(new Collection($allToolCalls), new Collection($allToolResults))
                 ->withSteps($steps);
         }
 
-        return (new TextResponse($finalOutput, $usage, $meta))
+        return (new TextResponse($finalOutput, $totalUsage, $meta))
             ->withMessages($responseMessages)
             ->withSteps($steps);
     }
@@ -213,8 +223,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
 
         $messageId = (string) Str::uuid();
         $timestamp = time();
-        $totalInputTokens = 0;
-        $totalOutputTokens = 0;
+        $totalUsage = new Usage;
         $step = 0;
 
         while ($step < $maxSteps) {
@@ -238,15 +247,61 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                 throw BedrockException::toAiException($e, $provider->name(), $model);
             }
 
+            yield (new StreamStart(
+                (string) Str::uuid(),
+                $provider->name(),
+                $model,
+                $timestamp,
+            ))->withInvocationId($invocationId);
+
             $assistantText = '';
             $pendingToolCalls = [];
+            $toolCalls = [];
+            $structuredOutput = null;
             $currentBlockIndex = null;
+            $currentBlockType = '';
+            $responseContent = [];
+            $reasoningId = '';
+            $textId = '';
+            $currentText = '';
+            $currentReasoningText = '';
+            $currentReasoningSignature = '';
+            $currentReasoningRedacted = '';
             $stopReason = 'stop';
+
+            $emitTextStart = function () use (&$textId, $invocationId, $timestamp) {
+                if ($textId !== '') {
+                    return null;
+                }
+
+                $textId = (string) Str::uuid();
+
+                return (new TextStart(
+                    (string) Str::uuid(),
+                    $textId,
+                    $timestamp,
+                ))->withInvocationId($invocationId);
+            };
+
+            $emitReasoningStart = function () use (&$reasoningId, $invocationId, $timestamp) {
+                if ($reasoningId !== '') {
+                    return null;
+                }
+
+                $reasoningId = (string) Str::uuid();
+
+                return (new ReasoningStart(
+                    (string) Str::uuid(),
+                    $reasoningId,
+                    $timestamp,
+                ))->withInvocationId($invocationId);
+            };
 
             foreach ($response['stream'] as $event) {
                 if (isset($event['contentBlockStart'])) {
                     $currentBlockIndex = $event['contentBlockStart']['contentBlockIndex'] ?? 0;
                     $start = $event['contentBlockStart']['start'] ?? [];
+                    $currentBlockType = isset($start['toolUse']) ? 'toolUse' : '';
 
                     if (isset($start['toolUse'])) {
                         $pendingToolCalls[$currentBlockIndex] = [
@@ -264,17 +319,129 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                     $delta = $event['contentBlockDelta']['delta'] ?? [];
 
                     if (isset($delta['text'])) {
+                        $currentBlockType = 'text';
+
+                        if ($emittedEvent = $emitTextStart()) {
+                            yield $emittedEvent;
+                        }
+
                         $assistantText .= $delta['text'];
+                        $currentText .= $delta['text'];
 
                         yield (new TextDelta(
                             (string) Str::uuid(),
-                            $messageId,
+                            $textId,
                             $delta['text'],
                             $timestamp,
                         ))->withInvocationId($invocationId);
+                    } elseif (isset($delta['reasoningContent']['text'])) {
+                        $currentBlockType = 'reasoning';
+
+                        if ($emittedEvent = $emitReasoningStart()) {
+                            yield $emittedEvent;
+                        }
+
+                        $currentReasoningText .= $delta['reasoningContent']['text'];
+
+                        yield (new ReasoningDelta(
+                            (string) Str::uuid(),
+                            $reasoningId,
+                            $delta['reasoningContent']['text'],
+                            $timestamp,
+                        ))->withInvocationId($invocationId);
+                    } elseif (isset($delta['reasoningContent']['signature'])) {
+                        $currentBlockType = 'reasoning';
+
+                        if ($emittedEvent = $emitReasoningStart()) {
+                            yield $emittedEvent;
+                        }
+
+                        $currentReasoningSignature .= $delta['reasoningContent']['signature'];
+                    } elseif (isset($delta['reasoningContent']['redactedContent'])) {
+                        $currentBlockType = 'reasoning';
+
+                        if ($emittedEvent = $emitReasoningStart()) {
+                            yield $emittedEvent;
+                        }
+
+                        $currentReasoningRedacted .= $delta['reasoningContent']['redactedContent'];
                     } elseif (isset($delta['toolUse']['input'], $pendingToolCalls[$index])) {
                         $pendingToolCalls[$index]['input'] .= $delta['toolUse']['input'];
                     }
+
+                    continue;
+                }
+
+                if (isset($event['contentBlockStop'])) {
+                    $index = $event['contentBlockStop']['contentBlockIndex'] ?? $currentBlockIndex;
+
+                    if ($currentBlockType === 'reasoning') {
+                        if ($currentReasoningRedacted !== '') {
+                            $responseContent[$index] = [
+                                'reasoningContent' => [
+                                    'redactedContent' => $currentReasoningRedacted,
+                                ],
+                            ];
+                        } else {
+                            $responseContent[$index] = [
+                                'reasoningContent' => [
+                                    'reasoningText' => [
+                                        'text' => $currentReasoningText,
+                                        'signature' => $currentReasoningSignature,
+                                    ],
+                                ],
+                            ];
+                        }
+
+                        yield (new ReasoningEnd(
+                            (string) Str::uuid(),
+                            $reasoningId,
+                            $timestamp,
+                        ))->withInvocationId($invocationId);
+
+                        $currentReasoningText = '';
+                        $currentReasoningSignature = '';
+                        $currentReasoningRedacted = '';
+                        $reasoningId = '';
+                    } elseif ($currentBlockType === 'text' && $textId !== '') {
+                        $responseContent[$index] = ['text' => $currentText];
+
+                        yield (new TextEnd(
+                            (string) Str::uuid(),
+                            $textId,
+                            $timestamp,
+                        ))->withInvocationId($invocationId);
+
+                        $currentText = '';
+                        $textId = '';
+                    } elseif ($currentBlockType === 'toolUse' && isset($pendingToolCalls[$index])) {
+                        $pending = $pendingToolCalls[$index];
+                        $arguments = json_decode($pending['input'] !== '' ? $pending['input'] : '{}', true) ?? [];
+
+                        if ($schemaTools && $pending['name'] === self::STRUCTURED_OUTPUT_TOOL) {
+                            $structuredOutput = json_encode($arguments);
+                        } else {
+                            $toolCall = new ToolCall($pending['id'], $pending['name'], $arguments);
+                            $toolCalls[] = $toolCall;
+                            $responseContent[$index] = [
+                                'toolUse' => [
+                                    'toolUseId' => $toolCall->id,
+                                    'name' => $toolCall->name,
+                                    'input' => $arguments,
+                                ],
+                            ];
+
+                            yield (new ToolCallEvent(
+                                (string) Str::uuid(),
+                                $toolCall,
+                                $timestamp,
+                            ))->withInvocationId($invocationId);
+                        }
+
+                        unset($pendingToolCalls[$index]);
+                    }
+
+                    $currentBlockType = '';
 
                     continue;
                 }
@@ -286,24 +453,13 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                 }
 
                 if (isset($event['metadata']['usage'])) {
-                    $totalInputTokens += $event['metadata']['usage']['inputTokens'] ?? 0;
-                    $totalOutputTokens += $event['metadata']['usage']['outputTokens'] ?? 0;
+                    $totalUsage = $totalUsage->add(new Usage(
+                        promptTokens: $event['metadata']['usage']['inputTokens'] ?? 0,
+                        completionTokens: $event['metadata']['usage']['outputTokens'] ?? 0,
+                        cacheWriteInputTokens: $event['metadata']['usage']['cacheWriteInputTokens'] ?? 0,
+                        cacheReadInputTokens: $event['metadata']['usage']['cacheReadInputTokens'] ?? 0,
+                    ));
                 }
-            }
-
-            $toolCalls = [];
-            $structuredOutput = null;
-
-            foreach ($pendingToolCalls as $pending) {
-                $arguments = json_decode($pending['input'] !== '' ? $pending['input'] : '{}', true) ?? [];
-
-                if ($schemaTools && $pending['name'] === self::STRUCTURED_OUTPUT_TOOL) {
-                    $structuredOutput = json_encode($arguments);
-
-                    continue;
-                }
-
-                $toolCalls[] = new ToolCall($pending['id'], $pending['name'], $arguments);
             }
 
             $step++;
@@ -321,15 +477,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                 break;
             }
 
-            $conversationMessages[] = $this->buildAssistantConversationMessage($assistantText, $toolCalls);
-
-            foreach ($toolCalls as $toolCall) {
-                yield (new ToolCallEvent(
-                    (string) Str::uuid(),
-                    $toolCall,
-                    $timestamp,
-                ))->withInvocationId($invocationId);
-            }
+            $conversationMessages[] = $this->buildAssistantConversationMessage($assistantText, $toolCalls, array_values($responseContent));
 
             $toolResults = $this->executeToolCalls($tools, $toolCalls);
 
@@ -355,7 +503,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
         yield (new StreamEnd(
             $messageId,
             'stop',
-            new Usage($totalInputTokens, $totalOutputTokens),
+            $totalUsage,
             $timestamp,
         ))->withInvocationId($invocationId);
     }
@@ -524,6 +672,12 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             $parameters['inferenceConfig'] = $inferenceConfig;
         }
 
+        $providerOptions = $options?->providerOptions(Lab::Bedrock);
+
+        if (! empty($providerOptions)) {
+            $parameters = array_merge($parameters, $providerOptions);
+        }
+
         return $parameters;
     }
 
@@ -547,22 +701,30 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
      * Build the assistant conversation message block combining text and tool calls.
      *
      * @param  array<ToolCall>  $toolCalls
+     * @param  array<int, array<string, mixed>>  $providerContentBlocks
      */
-    protected function buildAssistantConversationMessage(string $text, array $toolCalls): array
+    protected function buildAssistantConversationMessage(string $text, array $toolCalls, array $providerContentBlocks = []): array
     {
-        return [
-            'role' => 'assistant',
-            'content' => array_merge(
-                $text !== '' ? [['text' => $text]] : [],
-                array_map(fn (ToolCall $toolCall) => [
-                    'toolUse' => [
-                        'toolUseId' => $toolCall->id,
-                        'name' => $toolCall->name,
-                        'input' => $toolCall->arguments ?: new stdClass,
-                    ],
-                ], $toolCalls),
-            ),
-        ];
+        return $this->formatAssistantMessage(
+            new AssistantMessage($text, new Collection($toolCalls), $providerContentBlocks)
+        );
+    }
+
+    /**
+     * Cast empty toolUse.input arrays to objects so the Converse API doesn't reject them.
+     *
+     * @param  array<int, array<string, mixed>>  $content
+     * @return array<int, array<string, mixed>>
+     */
+    protected function ensureToolInputIsObject(array $content): array
+    {
+        return array_map(function (array $block) {
+            if (isset($block['toolUse'])) {
+                $block['toolUse']['input'] = (object) ($block['toolUse']['input'] ?? []);
+            }
+
+            return $block;
+        }, $content);
     }
 
     /**
@@ -648,6 +810,13 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
      */
     protected function formatAssistantMessage(AssistantMessage $message): array
     {
+        if (filled($message->providerContentBlocks)) {
+            return [
+                'role' => 'assistant',
+                'content' => $this->ensureToolInputIsObject($message->providerContentBlocks),
+            ];
+        }
+
         $content = [];
 
         if (! empty($message->content)) {

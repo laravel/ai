@@ -92,7 +92,7 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function defaultTextModel(): string
     {
-        return $this->config['models']['text']['default'] ?? 'gemini-3-flash-preview';
+        return $this->config['models']['text']['default'] ?? 'gemini-3.5-flash';
     }
 
     /**
@@ -108,7 +108,7 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function smartestTextModel(): string
     {
-        return $this->config['models']['text']['smartest'] ?? 'gemini-3.1-pro-preview';
+        return $this->config['models']['text']['smartest'] ?? 'gemini-3.5-flash';
     }
 
     /**
@@ -157,7 +157,7 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function defaultTranscriptionModel(): string
     {
-        return $this->config['models']['transcription']['default'] ?? 'gemini-3-flash-preview';
+        return $this->config['models']['transcription']['default'] ?? 'gemini-3.5-flash';
     }
 
     /**
