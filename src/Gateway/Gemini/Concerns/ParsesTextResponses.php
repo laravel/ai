@@ -142,8 +142,8 @@ trait ParsesTextResponses
         if ($structured) {
             $structuredData = $this->decodeStructuredPayload($text, $schema);
 
-            if ($structuredData === [] && count($schema ?? []) === 1 && $allToolResults->isNotEmpty()) {
-                $property = array_key_first($schema ?? []);
+            if ($structuredData === [] && count($schema) === 1 && $allToolResults->isNotEmpty()) {
+                $property = array_key_first($schema);
                 $lastResult = $allToolResults->last()?->result;
 
                 if (is_numeric($lastResult)) {

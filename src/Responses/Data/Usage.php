@@ -67,13 +67,38 @@ class Usage implements Arrayable, JsonSerializable
     public function __get(string $name): mixed
     {
         return match ($name) {
-            'promptTokens' => array_sum($this->inputTokens),
-            'completionTokens' => array_sum(array_diff_key($this->outputTokens, ['reasoning' => true])),
-            'reasoningTokens' => $this->outputTokens['reasoning'] ?? 0,
-            'cacheWriteInputTokens' => $this->cachedTokens['write'] ?? 0,
-            'cacheReadInputTokens' => $this->cachedTokens['read'] ?? array_sum($this->cachedTokens),
+            'promptTokens' => $this->promptTokens(),
+            'completionTokens' => $this->completionTokens(),
+            'reasoningTokens' => $this->reasoningTokens(),
+            'cacheWriteInputTokens' => $this->cacheWriteInputTokens(),
+            'cacheReadInputTokens' => $this->cacheReadInputTokens(),
             default => null,
         };
+    }
+
+    public function promptTokens(): int
+    {
+        return array_sum($this->inputTokens);
+    }
+
+    public function completionTokens(): int
+    {
+        return array_sum(array_diff_key($this->outputTokens, ['reasoning' => true]));
+    }
+
+    public function reasoningTokens(): int
+    {
+        return $this->outputTokens['reasoning'] ?? 0;
+    }
+
+    public function cacheWriteInputTokens(): int
+    {
+        return $this->cachedTokens['write'] ?? 0;
+    }
+
+    public function cacheReadInputTokens(): int
+    {
+        return $this->cachedTokens['read'] ?? array_sum($this->cachedTokens);
     }
 
     /**
@@ -130,11 +155,11 @@ class Usage implements Arrayable, JsonSerializable
             'cached_tokens' => $this->includeTotals($this->cachedTokens),
             'tools_tokens' => $this->includeTotals($this->toolsTokens),
             // Backward compatibility - legacy scalar field names
-            'prompt_tokens' => $this->promptTokens,
-            'completion_tokens' => $this->completionTokens,
-            'cache_write_input_tokens' => $this->cacheWriteInputTokens,
-            'cache_read_input_tokens' => $this->cacheReadInputTokens,
-            'reasoning_tokens' => $this->reasoningTokens,
+            'prompt_tokens' => $this->promptTokens(),
+            'completion_tokens' => $this->completionTokens(),
+            'cache_write_input_tokens' => $this->cacheWriteInputTokens(),
+            'cache_read_input_tokens' => $this->cacheReadInputTokens(),
+            'reasoning_tokens' => $this->reasoningTokens(),
         ];
     }
 
