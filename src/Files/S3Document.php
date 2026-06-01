@@ -8,22 +8,15 @@ use JsonSerializable;
 
 class S3Document extends Document implements Arrayable, JsonSerializable
 {
+    /**
+     * Create a new S3Document instance.
+     */
     public function __construct(
         public string $url,
         public ?string $bucketOwner = null,
         ?string $mimeType = null,
     ) {
         $this->mime = $mimeType;
-    }
-
-    /**
-     * @throws InvalidArgumentException
-     */
-    public function content(): string
-    {
-        throw new InvalidArgumentException(
-            'S3Document cannot be read directly. It is only supported by providers that accept S3 location references. Use StoredDocument or RemoteDocument instead if you need to send the file contents inline.'
-        );
     }
 
     /**
@@ -34,6 +27,16 @@ class S3Document extends Document implements Arrayable, JsonSerializable
         $path = parse_url($this->url, PHP_URL_PATH);
 
         return $this->name ?? basename(is_string($path) ? $path : '');
+    }
+
+    /**
+     * @throws InvalidArgumentException
+     */
+    public function content(): string
+    {
+        throw new InvalidArgumentException(
+            'S3Document cannot be read directly. It is only supported by providers that accept S3 location references. Use StoredDocument or RemoteDocument instead if you need to send the file contents inline.'
+        );
     }
 
     /**

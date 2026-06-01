@@ -15,21 +15,21 @@ class ProviderDocument extends Document implements Arrayable, HasProviderId, Jso
     public function __construct(public string $id) {}
 
     /**
-     * @throws InvalidArgumentException
-     */
-    public function content(): string
-    {
-        throw new InvalidArgumentException(
-            'ProviderDocument cannot be read directly. It is a reference to a file stored with the provider.'
-        );
-    }
-
-    /**
      * Get the provider ID for the stored file.
      */
     public function id(): string
     {
         return $this->id;
+    }
+
+    /**
+     * @throws InvalidArgumentException
+     */
+    public function content(): string
+    {
+        throw new InvalidArgumentException(
+            'ProviderDocument cannot be read directly. It is a reference to a file stored on an external provider.'
+        );
     }
 
     /**
