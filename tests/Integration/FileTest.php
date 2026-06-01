@@ -8,17 +8,13 @@ use Laravel\Ai\Events\FileStored;
 use Laravel\Ai\Events\StoringFile;
 use Laravel\Ai\Files\Document;
 
-beforeEach(function () {
-    requiresApiKey('ANTHROPIC_API_KEY');
+test('can store files', function (string $provider, string $apiKey) {
+    requiresApiKey($apiKey);
 
-    $this->provider = 'anthropic';
-});
-
-test('can store files', function () {
     Event::fake();
 
     $response = Document::fromString('Hello, World!', 'text/plain')->put(
-        name: 'hello.txt', provider: $this->provider
+        name: 'hello.txt', provider: $provider
     );
 
     expect($response->id)->not->toBeEmpty();
@@ -26,74 +22,93 @@ test('can store files', function () {
     Event::assertDispatched(StoringFile::class);
     Event::assertDispatched(FileStored::class);
 
-    Document::fromId($response->id)->delete(provider: $this->provider);
+    Document::fromId($response->id)->delete(provider: $provider);
 
     Event::assertDispatched(FileDeleted::class);
-});
+})->with('file-providers');
 
-test('can store files from local paths', function () {
+test('can store files from local paths', function (string $provider, string $apiKey) {
+    requiresApiKey($apiKey);
+
     $response = Document::fromPath(__DIR__.'/../Fixtures/document.txt')->put(
-        name: 'document.txt', provider: $this->provider,
+        name: 'document.txt', provider: $provider,
     );
 
     expect($response->id)->not->toBeEmpty();
 
-    Document::fromId($response->id)->delete(provider: $this->provider);
-});
+    Document::fromId($response->id)->delete(provider: $provider);
+})->with('file-providers');
 
-test('can store files from storage paths', function () {
+test('can store files from storage paths', function (string $provider, string $apiKey) {
+    requiresApiKey($apiKey);
+
     Storage::disk('local')->put('document.txt', 'Hello, World!');
 
     $response = Document::fromStorage('document.txt', disk: 'local')->put(
-        provider: $this->provider,
+        provider: $provider,
     );
 
     expect($response->id)->not->toBeEmpty();
 
-    Document::fromId($response->id)->delete(provider: $this->provider);
-});
+    Document::fromId($response->id)->delete(provider: $provider);
+})->with('file-providers');
 
-test('can store files from remote paths', function () {
+test('can store files from remote paths', function (string $provider, string $apiKey) {
+    requiresApiKey($apiKey);
+
     $stored = Document::fromUrl(
         'https://raw.githubusercontent.com/laravel/laravel/refs/heads/12.x/README.md'
     )->put(
-        provider: $this->provider,
+        provider: $provider,
     );
 
     expect($stored->id)->not->toBeEmpty();
 
-    $response = Document::fromId($stored->id)->get(provider: $this->provider);
+    $response = Document::fromId($stored->id)->get(provider: $provider);
 
-    expect($response->mime)->toEqual('text/plain');
+    // Not every provider returns the MIME type when fetching a file.
+    if ($response->mime !== null) {
+        expect($response->mime)->toEqual('text/plain');
+    }
 
-    Document::fromId($response->id)->delete(provider: $this->provider);
-});
+    Document::fromId($response->id)->delete(provider: $provider);
+})->with('file-providers');
 
-test('exception is thrown if stored file does not exist', function () {
-    $response = Document::fromStorage('missing-document.pdf', disk: 'local')->put(
-        provider: $this->provider,
+test('exception is thrown if stored file does not exist', function (string $provider, string $apiKey) {
+    requiresApiKey($apiKey);
+
+    Document::fromStorage('missing-document.pdf', disk: 'local')->put(
+        provider: $provider,
     );
-})->throws(RuntimeException::class);
+})->with('file-providers')->throws(RuntimeException::class);
 
-test('can get files', function () {
+test('can get files', function (string $provider, string $apiKey) {
+    requiresApiKey($apiKey);
+
     $stored = Document::fromString('Hello, World!', 'text/plain')->put(
-        name: 'hello.txt', provider: $this->provider
+        name: 'hello.txt', provider: $provider
     );
 
-    $response = Document::fromId($stored->id)->get(provider: $this->provider);
+    $response = Document::fromId($stored->id)->get(provider: $provider);
 
-    expect($response->id)->toEqual($stored->id)
-        ->and($response->mime)->toEqual('text/plain');
+    expect($response->id)->toEqual($stored->id);
 
-    Document::fromId($response->id)->delete(provider: $this->provider);
-});
+    // Not every provider returns the MIME type when fetching a file.
+    if ($response->mime !== null) {
+        expect($response->mime)->toEqual('text/plain');
+    }
 
-test('can delete files', function () {
+    Document::fromId($response->id)->delete(provider: $provider);
+})->with('file-providers');
+
+test('can delete files', function (string $provider, string $apiKey) {
+    requiresApiKey($apiKey);
+
     $stored = Document::fromString('Hello, World!', 'text/plain')->put(
-        name: 'hello.txt', provider: $this->provider
+        name: 'hello.txt', provider: $provider
     );
 
-    Document::fromId($stored->id)->delete(provider: $this->provider);
+    Document::fromId($stored->id)->delete(provider: $provider);
 
-    Document::fromId($stored->id)->get(provider: $this->provider);
-})->throws(RequestException::class);
+    Document::fromId($stored->id)->get(provider: $provider);
+})->with('file-providers')->throws(RequestException::class);

@@ -12,57 +12,57 @@ use Laravel\Ai\Stores;
 use function Illuminate\Support\days;
 use function Laravel\Ai\agent;
 
-beforeEach(function () {
-    requiresApiKey('OPENAI_API_KEY');
+test('can create get and delete store', function (string $provider, string $apiKey) {
+    requiresApiKey($apiKey);
 
-    $this->provider = 'openai';
-});
-
-test('can create get and delete store', function () {
     Event::fake();
 
-    $created = Stores::create('Test Store', provider: $this->provider);
+    $created = Stores::create('Test Store', provider: $provider);
 
     expect($created->id)->not->toBeEmpty();
 
     Event::assertDispatched(CreatingStore::class);
     Event::assertDispatched(StoreCreated::class);
 
-    $retrieved = Stores::get($created->id, provider: $this->provider);
+    $retrieved = Stores::get($created->id, provider: $provider);
 
     expect($retrieved->id)->toEqual($created->id)
         ->and($retrieved->name)->toEqual('Test Store')
         ->and($retrieved->fileCounts->completed)->toEqual(0)
         ->and($retrieved->ready)->toBeBool();
 
-    $deleted = Stores::delete($created->id, provider: $this->provider);
+    $deleted = Stores::delete($created->id, provider: $provider);
 
     expect($deleted)->toBeTrue();
 
     Event::assertDispatched(StoreDeleted::class);
-});
+})->with('store-providers');
 
-test('can create store with expiration', function () {
+test('can create store with expiration', function (string $provider, string $apiKey) {
+    requiresApiKey($apiKey);
+
     $created = Stores::create(
         name: 'Expiring Store',
         description: 'A store that expires after 7 days of inactivity.',
         expiresWhenIdleFor: days(7),
-        provider: $this->provider,
+        provider: $provider,
     );
 
     expect($created->id)->not->toBeEmpty();
 
-    Stores::delete($created->id, provider: $this->provider);
-});
+    Stores::delete($created->id, provider: $provider);
+})->with('store-providers');
 
-test('can add and remove file from store', function () {
+test('can add and remove file from store', function (string $provider, string $apiKey) {
+    requiresApiKey($apiKey);
+
     // Create a store...
-    $store = Stores::create('File Test Store', provider: $this->provider);
+    $store = Stores::create('File Test Store', provider: $provider);
 
     // Upload a file to the provider...
     $file = Files::put(
         Document::fromString('This is test content for the vector store.', 'text/plain')->as('test.txt'),
-        provider: $this->provider,
+        provider: $provider,
     );
 
     // Add the file to the store...
@@ -82,11 +82,13 @@ test('can add and remove file from store', function () {
 
     // Clean up...
     $store->delete();
-});
+})->with('store-providers');
 
 describe('file search', function () {
     beforeEach(function () {
         requiresApiKey('OPENAI_API_KEY');
+
+        $this->provider = 'openai';
 
         $this->fileSearchStore = Stores::create(
             'Laravel AI SDK Integration Test Store',
