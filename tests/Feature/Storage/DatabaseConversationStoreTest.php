@@ -290,6 +290,99 @@ test('malformed stored attachment JSON fails loudly', function () {
         ->toThrow(InvalidArgumentException::class, 'Stored conversation attachments must be a JSON array.');
 });
 
+test('orphan tool calls without matching tool results are filtered on rehydration', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Orphan tool call conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => '',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call_a', 'name' => 'lookup', 'arguments' => ['q' => 'one']],
+            ['id' => 'call_b', 'name' => 'lookup', 'arguments' => ['q' => 'two']],
+        ]),
+        'tool_results' => json_encode([
+            ['id' => 'call_a', 'name' => 'lookup', 'arguments' => ['q' => 'one'], 'result' => 'first result'],
+        ]),
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toHaveCount(2)
+        ->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[0]->toolCalls)->toHaveCount(1)
+        ->and($messages[0]->toolCalls[0]->id)->toBe('call_a')
+        ->and($messages[1])->toBeInstanceOf(ToolResultMessage::class)
+        ->and($messages[1]->toolResults)->toHaveCount(1)
+        ->and($messages[1]->toolResults[0]->id)->toBe('call_a');
+});
+
+test('assistant turn with only orphan tool calls and content keeps the content', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'maxSteps interrupted conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => 'Let me look that up.',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call_unexecuted', 'name' => 'lookup', 'arguments' => []],
+        ]),
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toHaveCount(1)
+        ->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[0]->content)->toBe('Let me look that up.')
+        ->and($messages[0]->toolCalls)->toHaveCount(0);
+});
+
+test('assistant turn with only orphan tool calls and no content emits no message', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'fully interrupted conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => '',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call_unexecuted', 'name' => 'lookup', 'arguments' => []],
+        ]),
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toHaveCount(0);
+});
+
 test('malformed known stored attachments fail loudly', function () {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Malformed attachment conversation');

@@ -156,19 +156,30 @@ class DatabaseConversationStore implements ConversationStore
                 }
 
                 if ($toolCalls->isNotEmpty()) {
+                    $resultIds = $toolResults->pluck('id')->filter()->all();
+
+                    $matchedToolCalls = $toolCalls->filter(
+                        fn ($toolCall) => isset($toolCall['id'])
+                            && in_array($toolCall['id'], $resultIds, true)
+                    )->values();
+
                     $messages = [];
 
-                    $messages[] = new AssistantMessage(
-                        $record->content ?: '',
-                        $toolCalls->map(fn ($toolCall) => new ToolCall(
-                            id: $toolCall['id'],
-                            name: $toolCall['name'],
-                            arguments: $toolCall['arguments'],
-                            resultId: $toolCall['result_id'] ?? null,
-                            reasoningId: $toolCall['reasoning_id'] ?? null,
-                            reasoningSummary: $toolCall['reasoning_summary'] ?? null,
-                        ))
-                    );
+                    if ($matchedToolCalls->isNotEmpty()) {
+                        $messages[] = new AssistantMessage(
+                            $record->content ?: '',
+                            $matchedToolCalls->map(fn ($toolCall) => new ToolCall(
+                                id: $toolCall['id'],
+                                name: $toolCall['name'],
+                                arguments: $toolCall['arguments'],
+                                resultId: $toolCall['result_id'] ?? null,
+                                reasoningId: $toolCall['reasoning_id'] ?? null,
+                                reasoningSummary: $toolCall['reasoning_summary'] ?? null,
+                            ))
+                        );
+                    } elseif ($record->content) {
+                        $messages[] = new AssistantMessage($record->content);
+                    }
 
                     if ($toolResults->isNotEmpty()) {
                         $messages[] = new ToolResultMessage(
