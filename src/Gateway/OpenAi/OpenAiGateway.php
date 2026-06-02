@@ -73,12 +73,12 @@ class OpenAiGateway implements Gateway
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post('responses', $body),
         );
-
+        
         $data = $response->json();
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, filled($schema), $tools, $schema, $options, $timeout);
+        return $this->parseTextResponse($data, $provider, filled($schema), $tools, $schema, $options, $timeout , $model);
     }
 
     /**

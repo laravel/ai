@@ -60,6 +60,7 @@ trait ParsesTextResponses
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
+        string $model
     ): TextResponse {
         return $this->processResponse(
             $data,
@@ -67,6 +68,7 @@ trait ParsesTextResponses
             $structured,
             $tools,
             $schema,
+            $model,
             new Collection,
             new Collection,
             maxSteps: $options?->maxSteps,
@@ -84,6 +86,7 @@ trait ParsesTextResponses
         bool $structured,
         array $tools,
         ?array $schema,
+        string $model,
         Collection $steps,
         Collection $messages,
         int $depth = 0,
@@ -93,7 +96,7 @@ trait ParsesTextResponses
     ): TextResponse {
         $responseId = $data['id'] ?? '';
         $output = $data['output'] ?? [];
-        $model = $data['model'] ?? '';
+        $model = $model ?? '';
 
         $text = $this->extractText($output);
         $citations = $this->extractCitations($output);
@@ -267,7 +270,7 @@ trait ParsesTextResponses
 
         $this->validateTextResponse($data);
 
-        return $this->processResponse($data, $provider, $structured, $tools, $schema, $steps, $messages, $depth, $maxSteps, $options, $timeout);
+        return $this->processResponse($data, $provider, $structured, $tools, $schema, $model , $steps, $messages, $depth, $maxSteps, $options, $timeout);
     }
 
     /**
