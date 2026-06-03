@@ -95,11 +95,12 @@ trait ParsesTextResponses
         $text = $this->extractText($parts);
         $rawToolCalls = $this->extractRawToolCalls($parts);
         $citations = $this->extractCitations($data);
+        $searchQueries = $this->extractSearchQueries($data);
         $usage = $this->extractUsage($data);
         $finishReason = $this->extractFinishReason($data, $rawToolCalls);
 
         $mappedToolCalls = $this->mapToolCalls($rawToolCalls);
-        $meta = new Meta($provider->name(), $model, $citations);
+        $meta = new Meta($provider->name(), $model, $citations, $searchQueries);
         $toolResults = [];
 
         $assistantMessage = new AssistantMessage($text, collect($mappedToolCalls));
@@ -373,6 +374,17 @@ trait ParsesTextResponses
         }
 
         return $citations->unique('url')->values();
+    }
+
+    /**
+     * Extract Google Search grounding queries from the response data.
+     */
+    protected function extractSearchQueries(array $data): Collection
+    {
+        return collect(data_get($data, 'candidates.0.groundingMetadata.webSearchQueries', []))
+            ->filter(fn (mixed $query): bool => is_string($query) && $query !== '')
+            ->unique()
+            ->values();
     }
 
     /**

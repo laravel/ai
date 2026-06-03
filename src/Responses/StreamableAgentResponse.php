@@ -95,6 +95,7 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
             $this->meta->provider = $response->meta->provider;
             $this->meta->model = $response->meta->model;
             $this->meta->citations = $response->meta->citations;
+            $this->meta->searchQueries = $response->meta->searchQueries;
         }
 
         if ($response->conversationId !== null) {

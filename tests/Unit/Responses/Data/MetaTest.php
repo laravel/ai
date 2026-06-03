@@ -19,17 +19,19 @@ test('meta accepts null provider and model', function () {
 test('meta returns empty citations when not provided', function () {
     $meta = new Meta('openai', 'gpt-4o');
 
-    expect($meta->citations)->toBeEmpty();
+    expect($meta->citations)->toBeEmpty()
+        ->and($meta->searchQueries)->toBeEmpty();
 });
 
-test('meta to array includes provider model and citations', function () {
+test('meta to array includes provider model citations and search queries', function () {
     $meta = new Meta('openai', 'gpt-4o');
 
     $array = $meta->toArray();
 
     expect($array['provider'])->toBe('openai')
         ->and($array['model'])->toBe('gpt-4o')
-        ->and($array['citations'])->toBe([]);
+        ->and($array['citations'])->toBe([])
+        ->and($array['search_queries'])->toBe([]);
 });
 
 test('meta json serialize returns to array', function () {

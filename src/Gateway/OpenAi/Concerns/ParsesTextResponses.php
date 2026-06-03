@@ -97,8 +97,10 @@ trait ParsesTextResponses
 
         $text = $this->extractText($output);
         $citations = $this->extractCitations($output);
+        $searchQueries = $this->extractSearchQueries($output);
         $usage = $this->extractUsage($data);
         $finishReason = $this->extractFinishReason($data);
+        $meta = new Meta($provider->name(), $model, $citations, $searchQueries);
 
         // Associate reasoning with tool calls...
         $mappedToolCalls = $this->mapToolCallsWithReasoning($output);
@@ -109,7 +111,7 @@ trait ParsesTextResponses
             [],
             $finishReason,
             $usage,
-            new Meta($provider->name(), $model, $citations),
+            $meta,
         );
 
         $steps->push($step);
@@ -134,7 +136,7 @@ trait ParsesTextResponses
                 $toolResults,
                 $finishReason,
                 $usage,
-                new Meta($provider->name(), $model, $citations),
+                $meta,
             ));
 
             $toolResultMessage = new ToolResultMessage(collect($toolResults));
@@ -168,7 +170,7 @@ trait ParsesTextResponses
                 $structuredData,
                 $text,
                 $this->combineUsage($steps),
-                new Meta($provider->name(), $model, $citations),
+                $meta,
             ))->withToolCallsAndResults(
                 toolCalls: $allToolCalls,
                 toolResults: $allToolResults,
@@ -178,7 +180,7 @@ trait ParsesTextResponses
         return (new TextResponse(
             $text,
             $this->combineUsage($steps),
-            new Meta($provider->name(), $model, $citations),
+            $meta,
         ))->withMessages($messages)->withSteps($steps);
     }
 
@@ -343,6 +345,26 @@ trait ParsesTextResponses
         }
 
         return $citations->values();
+    }
+
+    /**
+     * Extract web search queries from OpenAI provider tool calls.
+     */
+    protected function extractSearchQueries(array $output): Collection
+    {
+        return collect($output)
+            ->filter(fn (array $item): bool => ($item['type'] ?? null) === 'web_search_call')
+            ->filter(fn (array $item): bool => data_get($item, 'action.type') === 'search')
+            ->flatMap(function (array $item): array {
+                return collect([
+                    ...Arr::wrap(data_get($item, 'action.queries')),
+                    data_get($item, 'action.query'),
+                ])
+                    ->filter(fn (mixed $query): bool => is_string($query) && $query !== '')
+                    ->all();
+            })
+            ->unique()
+            ->values();
     }
 
     /**

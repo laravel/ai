@@ -281,3 +281,51 @@ test('citations omit span indices when not provided by the api', function () {
         ->and($response->meta->citations[0]->startIndex)->toBeNull()
         ->and($response->meta->citations[0]->endIndex)->toBeNull();
 });
+
+test('web search queries are extracted from provider tool calls', function () {
+    Http::fake(['*' => Http::response([
+        'id' => 'resp_123',
+        'status' => 'completed',
+        'model' => 'gpt-5.4',
+        'output' => [
+            [
+                'id' => 'ws_1',
+                'type' => 'web_search_call',
+                'status' => 'completed',
+                'action' => [
+                    'type' => 'search',
+                    'query' => 'laravel ai search',
+                    'queries' => ['laravel ai search', 'openai responses web search'],
+                ],
+            ],
+            [
+                'id' => 'ws_2',
+                'type' => 'web_search_call',
+                'status' => 'completed',
+                'action' => [
+                    'type' => 'open_page',
+                    'url' => 'https://example.com',
+                ],
+            ],
+            [
+                'type' => 'message',
+                'status' => 'completed',
+                'content' => [[
+                    'type' => 'output_text',
+                    'text' => 'Found it',
+                ]],
+            ],
+        ],
+        'usage' => [
+            'input_tokens' => 10,
+            'output_tokens' => 5,
+        ],
+    ])]);
+
+    $response = agent()->prompt('Search the web', provider: 'openai');
+
+    expect($response->meta->searchQueries->all())->toBe([
+        'laravel ai search',
+        'openai responses web search',
+    ]);
+});

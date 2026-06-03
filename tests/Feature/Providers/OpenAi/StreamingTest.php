@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Responses\Data\FinishReason;
+use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
@@ -12,6 +13,7 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
+use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 
 beforeEach(function () {
@@ -156,6 +158,49 @@ test('streaming captures usage from response completed', function () {
     expect($streamEnd->usage->promptTokens)->toBe(37)
         ->and($streamEnd->usage->completionTokens)->toBe(10)
         ->and($streamEnd->usage->cacheReadInputTokens)->toBe(5);
+});
+
+test('streamed responses collect web search queries from provider tool events', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::response(
+            body: $this->ssePayload([
+                $this->responseCreated(),
+                [
+                    'type' => 'response.output_item.done',
+                    'item' => [
+                        'id' => 'ws_1',
+                        'type' => 'web_search_call',
+                        'status' => 'completed',
+                        'action' => [
+                            'type' => 'search',
+                            'query' => 'laravel ai search',
+                            'queries' => ['laravel ai search', 'openai responses web search'],
+                        ],
+                    ],
+                ],
+                $this->responseCompleted(10, 5),
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $streamedResponse = null;
+
+    $response = (new AssistantAgent)->stream('Search the web', provider: 'openai');
+    $response->then(function (StreamedAgentResponse $response) use (&$streamedResponse) {
+        $streamedResponse = $response;
+    });
+
+    foreach ($response as $_) {
+        //
+    }
+
+    expect($streamedResponse)->toBeInstanceOf(StreamedAgentResponse::class)
+        ->and($streamedResponse->meta->searchQueries->all())->toBe([
+            'laravel ai search',
+            'openai responses web search',
+        ]);
 });
 
 test('streaming finish reason maps correctly', function (string $status, string $type, $expected) {

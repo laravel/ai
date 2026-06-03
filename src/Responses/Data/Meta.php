@@ -10,12 +10,16 @@ class Meta implements Arrayable, JsonSerializable
 {
     public Collection $citations;
 
+    public Collection $searchQueries;
+
     public function __construct(
         public ?string $provider = null,
         public ?string $model = null,
         ?Collection $citations = null,
+        ?Collection $searchQueries = null,
     ) {
         $this->citations = $citations ?? new Collection;
+        $this->searchQueries = $searchQueries ?? new Collection;
     }
 
     /**
@@ -28,6 +32,9 @@ class Meta implements Arrayable, JsonSerializable
             'model' => $this->model,
             'citations' => $this->citations
                 ? $this->citations->all()
+                : [],
+            'search_queries' => $this->searchQueries
+                ? $this->searchQueries->all()
                 : [],
         ];
     }

@@ -327,7 +327,8 @@ describe('citations', function () {
 
         expect($response->meta->citations)->toHaveCount(2)
             ->and($response->meta->citations[0]->url)->toBe('https://example.com/euro')
-            ->and($response->meta->citations[1]->url)->toBe('https://example.com/spain');
+            ->and($response->meta->citations[1]->url)->toBe('https://example.com/spain')
+            ->and($response->meta->searchQueries->all())->toBe(['who won euro 2024']);
     });
 
     test('legacy citation metadata is also extracted', function () {
