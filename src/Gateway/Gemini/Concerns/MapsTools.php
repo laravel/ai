@@ -67,14 +67,13 @@ trait MapsTools
         if (filled($schema)) {
             $schemaArray = (new ObjectSchema($schema))->toSchema();
 
-            $definition['parameters'] = Arr::except(
-                $this->convertNullableTypes([
-                    'type' => 'object',
-                    'properties' => $schemaArray['properties'] ?? [],
-                    'required' => $schemaArray['required'] ?? [],
-                ]),
-                ['additionalProperties'],
-            );
+            $convertedNullableTypes = $this->convertNullableTypes([
+                'type' => 'object',
+                'properties' => $schemaArray['properties'] ?? [],
+                'required' => $schemaArray['required'] ?? [],
+            ]);
+
+            $definition['parameters'] = $this->removeAdditionalProperties($convertedNullableTypes);
         }
 
         return $definition;
@@ -106,6 +105,25 @@ trait MapsTools
 
         if (isset($schema['items']) && is_array($schema['items'])) {
             $schema['items'] = $this->convertNullableTypes($schema['items']);
+        }
+
+        return $schema;
+    }
+
+    /**
+     * Recursively remove additinalProperties from nested objects.
+     * 
+     * @param  array<string, mixed> $schema
+     * @return array<string, mixed>
+     */
+    protected function removeAdditionalProperties(array $schema): array
+    {
+        foreach ($schema as $key => &$value) {
+            if ($key === 'additionalProperties') {
+                $schema = Arr::except($schema, ['additionalProperties']);
+            } elseif (is_array($value)) {
+                $value = $this->removeAdditionalProperties($value);
+            }
         }
 
         return $schema;
