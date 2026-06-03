@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Responses;
 
+use Illuminate\Http\Client\Response as HttpResponse;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\ToolResultMessage;
@@ -17,6 +18,8 @@ class TextResponse
     public Collection $toolResults;
 
     public Collection $steps;
+
+    public ?HttpResponse $raw = null;
 
     public function __construct(public string $text, public Usage $usage, public Meta $meta)
     {
@@ -68,6 +71,16 @@ class TextResponse
     public function withSteps(Collection $steps): self
     {
         $this->steps = $steps;
+
+        return $this;
+    }
+
+    /**
+     * Set the raw HTTP response.
+     */
+    public function withRaw(?HttpResponse $response): static
+    {
+        $this->raw = $response;
 
         return $this;
     }
