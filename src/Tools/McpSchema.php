@@ -10,9 +10,17 @@ use Illuminate\JsonSchema\Types\NumberType;
 use Illuminate\JsonSchema\Types\ObjectType;
 use Illuminate\JsonSchema\Types\StringType;
 use Illuminate\JsonSchema\Types\Type;
+use InvalidArgumentException;
 
 class McpSchema
 {
+    /**
+     * The reusable definitions referenced via $ref.
+     *
+     * @var array<string, mixed>
+     */
+    protected array $defs = [];
+
     public function __construct(protected JsonSchema $schema) {}
 
     /**
@@ -21,6 +29,8 @@ class McpSchema
      */
     public function properties(array $schema): array
     {
+        $this->defs = $this->collectDefs($schema);
+
         $properties = $schema['properties'] ?? [];
 
         if (! is_array($properties)) {
@@ -47,6 +57,8 @@ class McpSchema
      */
     protected function type(array $schema, bool $required = false): Type
     {
+        $schema = $this->resolveRef($schema);
+
         [$schema, $nullable] = $this->normalizeNullableSchema($schema);
 
         $type = match ($this->typeName($schema)) {
@@ -68,8 +80,8 @@ class McpSchema
     {
         $type = $this->schema->array();
 
-        if (isset($schema['items']) && is_array($schema['items']) && ! array_is_list($schema['items'])) {
-            $type->items($this->type($schema['items']));
+        if (($items = $this->itemsSchema($schema)) !== null) {
+            $type->items($this->type($items));
         }
 
         if (isset($schema['minItems']) && is_int($schema['minItems'])) {
@@ -297,6 +309,93 @@ class McpSchema
     }
 
     /**
+     * Collect the schema's reusable definitions ($defs / definitions).
+     *
+     * @param  array<string, mixed>  $schema
+     * @return array<string, mixed>
+     */
+    protected function collectDefs(array $schema): array
+    {
+        $defs = [];
+
+        foreach (['$defs', 'definitions'] as $key) {
+            if (isset($schema[$key]) && is_array($schema[$key])) {
+                $defs = array_merge($defs, $schema[$key]);
+            }
+        }
+
+        return $defs;
+    }
+
+    /**
+     * Resolve a local $ref against the collected definitions, merging sibling keys.
+     *
+     * @param  array<string, mixed>  $schema
+     * @return array<string, mixed>
+     */
+    protected function resolveRef(array $schema, int $depth = 0): array
+    {
+        $ref = $schema['$ref'] ?? null;
+
+        if (! is_string($ref)) {
+            return $schema;
+        }
+
+        if ($depth >= 32) {
+            throw new InvalidArgumentException("Maximum \$ref depth exceeded while resolving [{$ref}].");
+        }
+
+        $resolved = $this->lookupRef($ref);
+
+        if ($resolved === null) {
+            throw new InvalidArgumentException("Unable to resolve MCP schema \$ref [{$ref}].");
+        }
+
+        unset($schema['$ref']);
+
+        return $this->resolveRef(array_replace($resolved, $schema), $depth + 1);
+    }
+
+    /**
+     * Look up a local JSON pointer ref in the collected definitions.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function lookupRef(string $ref): ?array
+    {
+        foreach (['#/$defs/', '#/definitions/'] as $prefix) {
+            if (str_starts_with($ref, $prefix)) {
+                $def = $this->defs[substr($ref, strlen($prefix))] ?? null;
+
+                return is_array($def) ? $def : null;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolve the schema describing an array's items, including draft tuple form.
+     *
+     * @param  array<string, mixed>  $schema
+     * @return array<string, mixed>|null
+     */
+    protected function itemsSchema(array $schema): ?array
+    {
+        $items = $schema['items'] ?? $schema['prefixItems'] ?? null;
+
+        if (! is_array($items)) {
+            return null;
+        }
+
+        if (array_is_list($items)) {
+            $items = $items[0] ?? null;
+        }
+
+        return is_array($items) ? $items : null;
+    }
+
+    /**
      * @param  array<string, mixed>  $schema
      */
     protected function typeName(array $schema): string
@@ -311,7 +410,8 @@ class McpSchema
             return 'object';
         }
 
-        if (isset($schema['items']) && is_array($schema['items'])) {
+        if ((isset($schema['items']) && is_array($schema['items']))
+            || (isset($schema['prefixItems']) && is_array($schema['prefixItems']))) {
             return 'array';
         }
 

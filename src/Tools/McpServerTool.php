@@ -7,9 +7,12 @@ use Illuminate\Container\Container;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Tools\Concerns\NormalizesMcpResult;
 
 class McpServerTool implements Tool
 {
+    use NormalizesMcpResult;
+
     protected const MCP_SERVER_TOOL = 'Laravel\\Mcp\\Server\\Tool';
 
     protected const MCP_REQUEST = 'Laravel\\Mcp\\Request';
@@ -39,12 +42,18 @@ class McpServerTool implements Tool
     {
         $container = Container::getInstance();
 
+        $previous = $container->bound(self::MCP_REQUEST)
+            ? $container->make(self::MCP_REQUEST)
+            : null;
+
         $container->instance(self::MCP_REQUEST, new (self::MCP_REQUEST)($request->toArray()));
 
         try {
             $response = $container->call([$this->tool, 'handle']);
         } finally {
-            $container->forgetInstance(self::MCP_REQUEST);
+            $previous !== null
+                ? $container->instance(self::MCP_REQUEST, $previous)
+                : $container->forgetInstance(self::MCP_REQUEST);
         }
 
         return $this->convertResponse($response);
@@ -109,18 +118,8 @@ class McpServerTool implements Tool
 
         $text = (string) $final->content();
 
-        return match (true) {
-            ! $final->isError() => $text,
-            $text === '' => 'MCP tool error.',
-            default => 'MCP tool error: '.$text,
-        };
-    }
-
-    /**
-     * @param  array<string, mixed>  $content
-     */
-    protected function json(array $content): string
-    {
-        return json_encode($content, JSON_UNESCAPED_UNICODE) ?: '';
+        return $final->isError()
+            ? $this->errorMessage($text)
+            : $text;
     }
 }

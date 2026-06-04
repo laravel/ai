@@ -5,10 +5,15 @@ namespace Laravel\Ai\Tools;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Tools\Concerns\NormalizesMcpResult;
 
 class McpTool implements Tool
 {
+    use NormalizesMcpResult;
+
     protected const MCP_CLIENT_TOOL = 'Laravel\\Mcp\\Client\\Primitives\\Tool';
+
+    protected const NAME_PREFIX = 'mcp_tools_';
 
     public function __construct(protected object $tool) {}
 
@@ -25,7 +30,7 @@ class McpTool implements Tool
      */
     public function name(): string
     {
-        return $this->tool->name;
+        return self::NAME_PREFIX.$this->tool->name;
     }
 
     /**
@@ -75,9 +80,7 @@ class McpTool implements Tool
             $text = $this->json($result->structuredContent);
         }
 
-        return $text === ''
-            ? 'MCP tool error.'
-            : 'MCP tool error: '.$text;
+        return $this->errorMessage($text);
     }
 
     protected function text(object $result): string
@@ -85,13 +88,5 @@ class McpTool implements Tool
         return is_callable([$result, 'text'])
             ? $result->text()
             : (string) $result;
-    }
-
-    /**
-     * @param  array<string, mixed>  $content
-     */
-    protected function json(array $content): string
-    {
-        return json_encode($content, JSON_UNESCAPED_UNICODE) ?: '';
     }
 }

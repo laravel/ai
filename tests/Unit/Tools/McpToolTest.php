@@ -117,6 +117,72 @@ test('it translates mcp input schemas to laravel tool schemas', function () {
     ]);
 });
 
+test('it resolves $ref against $defs and merges sibling keys', function () {
+    $tool = new McpTool(mcpTool(new FakeMcpClient, inputSchema: [
+        'type' => 'object',
+        'properties' => [
+            'address' => [
+                '$ref' => '#/$defs/Address',
+                'description' => 'Shipping address.',
+            ],
+        ],
+        'required' => ['address'],
+        '$defs' => [
+            'Address' => [
+                'type' => 'object',
+                'properties' => [
+                    'city' => ['type' => 'string'],
+                ],
+                'required' => ['city'],
+            ],
+        ],
+    ]));
+
+    $schema = (new ObjectSchema($tool->schema(new JsonSchemaTypeFactory)))->toSchema();
+
+    expect($schema['properties']['address'])->toMatchArray([
+        'type' => 'object',
+        'description' => 'Shipping address.',
+        'required' => ['city'],
+        'properties' => [
+            'city' => ['type' => 'string'],
+        ],
+    ]);
+});
+
+test('it throws when a $ref cannot be resolved', function () {
+    $tool = new McpTool(mcpTool(new FakeMcpClient, inputSchema: [
+        'type' => 'object',
+        'properties' => [
+            'address' => ['$ref' => '#/$defs/Missing'],
+        ],
+    ]));
+
+    $tool->schema(new JsonSchemaTypeFactory);
+})->throws(InvalidArgumentException::class, 'Unable to resolve MCP schema $ref [#/$defs/Missing].');
+
+test('it uses the first entry for tuple style array items', function () {
+    $tool = new McpTool(mcpTool(new FakeMcpClient, inputSchema: [
+        'type' => 'object',
+        'properties' => [
+            'pair' => [
+                'type' => 'array',
+                'items' => [
+                    ['type' => 'integer'],
+                    ['type' => 'string'],
+                ],
+            ],
+        ],
+    ]));
+
+    $schema = (new ObjectSchema($tool->schema(new JsonSchemaTypeFactory)))->toSchema();
+
+    expect($schema['properties']['pair'])->toMatchArray([
+        'type' => 'array',
+        'items' => ['type' => 'integer'],
+    ]);
+});
+
 test('it marks fields nullable when anyOf or oneOf lists null after the typed branch', function () {
     $tool = new McpTool(mcpTool(new FakeMcpClient, inputSchema: [
         'type' => 'object',

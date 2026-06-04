@@ -48,7 +48,7 @@ test('agents can return mcp client tools directly', function () {
     };
 
     $agent::fake([
-        new ToolCall('call_123', 'search', ['query' => 'laravel']),
+        new ToolCall('call_123', 'mcp_tools_search', ['query' => 'laravel']),
         'Done.',
     ]);
 
