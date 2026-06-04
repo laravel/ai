@@ -53,6 +53,26 @@ class InvocationContext
     }
 
     /**
+     * Run the given callback within a context rehydrated from ids carried
+     * across a boundary (e.g. a queued job). When no parent id is present the
+     * callback runs without establishing a context, so the work behaves as a
+     * fresh top-level invocation.
+     *
+     * @template TReturn
+     *
+     * @param  Closure(): TReturn  $callback
+     * @return TReturn
+     */
+    public static function runRehydrated(?string $parentId, ?string $rootId, Closure $callback): mixed
+    {
+        if ($parentId === null) {
+            return $callback();
+        }
+
+        return static::run(static::rehydrate($parentId, $rootId), $callback);
+    }
+
+    /**
      * Get the currently active invocation context, if any.
      */
     public static function current(): ?self
@@ -93,11 +113,28 @@ class InvocationContext
     }
 
     /**
-     * Deactivate the most recently pushed context.
+     * Deactivate a context.
+     *
+     * With no argument the most recently pushed context is removed. Pass a
+     * specific context to remove that exact entry instead - lazily-consumed
+     * streams can unwind out of order, so the top of the stack is not always
+     * the context that is finishing.
      */
-    public static function pop(): void
+    public static function pop(?self $context = null): void
     {
-        array_pop(static::$active);
+        if ($context === null) {
+            array_pop(static::$active);
+
+            return;
+        }
+
+        for ($i = count(static::$active) - 1; $i >= 0; $i--) {
+            if (static::$active[$i] === $context) {
+                array_splice(static::$active, $i, 1);
+
+                return;
+            }
+        }
     }
 
     /**

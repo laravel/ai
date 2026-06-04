@@ -25,67 +25,70 @@ trait StreamsText
      */
     public function stream(AgentPrompt $prompt): StreamableAgentResponse
     {
-        $context = InvocationContext::for($prompt->invocationId ?? (string) Str::uuid7());
+        // Honor a context established upstream (e.g. a multi-provider stream), else nest beneath the active one...
+        $context = $prompt->invocationContext()
+            ?? InvocationContext::for($prompt->invocationId ?? (string) Str::uuid7());
 
         $prompt = $prompt->withInvocationContext($context);
 
         $processedPrompt = null;
 
-        return pipeline()
-            ->send($prompt)
-            ->through($this->gatherMiddlewareFor($prompt->agent))
-            ->then(function (AgentPrompt $prompt) use ($context, &$processedPrompt) {
-                $processedPrompt = $prompt;
+        // Activate the context around the middleware pipeline so a middleware that invokes a sub-agent nests beneath this invocation...
+        $streamable = InvocationContext::run($context, function () use ($prompt, $context, &$processedPrompt) {
+            return pipeline()
+                ->send($prompt)
+                ->through($this->gatherMiddlewareFor($prompt->agent))
+                ->then(function (AgentPrompt $prompt) use ($context, &$processedPrompt) {
+                    $processedPrompt = $prompt;
 
-                $agent = $prompt->agent;
+                    $agent = $prompt->agent;
 
-                if ($agent instanceof HasStructuredOutput) {
-                    throw new InvalidArgumentException('Streaming structured output is not currently supported.');
-                }
+                    if ($agent instanceof HasStructuredOutput) {
+                        throw new InvalidArgumentException('Streaming structured output is not currently supported.');
+                    }
 
-                $meta = new Meta($this->name(), $prompt->model);
+                    $meta = new Meta($this->name(), $prompt->model);
 
-                return new StreamableAgentResponse(
-                    $context->id,
-                    function () use ($context, $prompt, $agent) {
-                        // The generator runs lazily, after stream() returns, so re-activate the
-                        // context for its lifetime - a sub-agent invoked mid-stream nests beneath
-                        // it. Paired with pop() in finally so the stack unwinds on early exit.
-                        InvocationContext::push($context);
+                    return (new StreamableAgentResponse(
+                        $context->id,
+                        function () use ($context, $prompt, $agent) {
+                            // Re-activate the context for the lazily-consumed generator; pop() this exact context so out-of-order streams unwind correctly...
+                            InvocationContext::push($context);
 
-                        try {
-                            $this->events->dispatch(new StreamingAgent($context->id, $prompt));
+                            try {
+                                $this->events->dispatch(new StreamingAgent($context->id, $prompt));
 
-                            $messages = [
-                                ...($agent instanceof Conversational ? $agent->messages() : []),
-                                new UserMessage($prompt->prompt, $prompt->attachments->all()),
-                            ];
+                                $messages = [
+                                    ...($agent instanceof Conversational ? $agent->messages() : []),
+                                    new UserMessage($prompt->prompt, $prompt->attachments->all()),
+                                ];
 
-                            $this->listenForToolInvocations($context->id, $agent);
+                                $this->listenForToolInvocations($context->id, $agent);
 
-                            yield from $this->textGateway()->streamText(
-                                $context->id,
-                                $this,
-                                $prompt->model,
-                                (string) $agent->instructions(),
-                                $messages,
-                                $this->resolveTools($agent),
-                                null,
-                                TextGenerationOptions::forAgent($agent),
-                                $prompt->timeout,
-                            );
-                        } finally {
-                            InvocationContext::pop();
-                        }
-                    },
-                    $meta,
-                );
-            })->then(function (StreamedAgentResponse $response) use ($context, $prompt, &$processedPrompt) {
-                $response->withInvocationContext($context);
+                                yield from $this->textGateway()->streamText(
+                                    $context->id,
+                                    $this,
+                                    $prompt->model,
+                                    (string) $agent->instructions(),
+                                    $messages,
+                                    $this->resolveTools($agent),
+                                    null,
+                                    TextGenerationOptions::forAgent($agent),
+                                    $prompt->timeout,
+                                );
+                            } finally {
+                                InvocationContext::pop($context);
+                            }
+                        },
+                        $meta,
+                    ))->withInvocationContext($context);
+                });
+        });
 
-                $this->events->dispatch(
-                    new AgentStreamed($context->id, $processedPrompt ?? $prompt, $response)
-                );
-            });
+        return $streamable->then(function (StreamedAgentResponse $response) use ($context, $prompt, &$processedPrompt) {
+            $this->events->dispatch(
+                new AgentStreamed($context->id, $processedPrompt ?? $prompt, $response)
+            );
+        });
     }
 }

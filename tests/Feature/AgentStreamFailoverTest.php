@@ -9,6 +9,7 @@ use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Events\AgentStreamed;
 use Laravel\Ai\Exceptions\RateLimitedException;
+use Laravel\Ai\InvocationContext;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
@@ -261,6 +262,71 @@ test('stream does not fail over when primary throws non failoverable exception',
     expect($backupStreamed)->toBeFalse();
 
     Event::assertNotDispatched(AgentFailedOver::class);
+});
+
+test('failover stream stamps the streamed response as a root invocation', function () {
+    Event::fake();
+
+    config([
+        'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
+        'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
+    ]);
+
+    Http::preventStrayRequests();
+
+    Http::fakeSequence()
+        ->push(status: 429)
+        ->push(fakeGroqStreamBodyForStreamFailover(), 200);
+
+    $response = (new AssistantAgent)->stream('Hello', provider: ['primary', 'backup']);
+
+    $streamed = null;
+    $response->then(function (StreamedAgentResponse $r) use (&$streamed) {
+        $streamed = $r;
+    });
+
+    foreach ($response as $_) {
+    }
+
+    expect($streamed)->toBeInstanceOf(StreamedAgentResponse::class)
+        ->and($streamed->parentInvocationId)->toBeNull()
+        ->and($streamed->rootInvocationId)->toBe($response->invocationId);
+});
+
+test('failover stream nests beneath the active invocation context', function () {
+    Event::fake();
+
+    config([
+        'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
+        'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
+    ]);
+
+    Http::preventStrayRequests();
+
+    Http::fakeSequence()
+        ->push(status: 429)
+        ->push(fakeGroqStreamBodyForStreamFailover(), 200);
+
+    $streamed = null;
+    $invocationId = null;
+
+    InvocationContext::run(InvocationContext::root('parent-inv'), function () use (&$streamed, &$invocationId) {
+        $response = (new AssistantAgent)->stream('Hello', provider: ['primary', 'backup']);
+
+        $invocationId = $response->invocationId;
+
+        $response->then(function (StreamedAgentResponse $r) use (&$streamed) {
+            $streamed = $r;
+        });
+
+        foreach ($response as $_) {
+        }
+    });
+
+    expect($streamed->invocationId)->toBe($invocationId)
+        ->and($streamed->invocationId)->not->toBe('parent-inv')
+        ->and($streamed->parentInvocationId)->toBe('parent-inv')
+        ->and($streamed->rootInvocationId)->toBe('parent-inv');
 });
 
 test('stream conversation state survives failover', function () {

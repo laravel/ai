@@ -8,6 +8,7 @@ use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\InvocationContext;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Throwable;
@@ -32,6 +33,8 @@ class BroadcastAgent implements ShouldQueue
         public array $attachments = [],
         public Lab|array|string|null $provider = null,
         public ?string $model = null,
+        public ?string $parentInvocationId = null,
+        public ?string $rootInvocationId = null,
     ) {
         $this->invocationId = (string) Str::uuid7();
     }
@@ -41,17 +44,24 @@ class BroadcastAgent implements ShouldQueue
      */
     public function handle(): void
     {
-        $streamedResponse = null;
+        // Re-establish the dispatching invocation so the streamed agent nests beneath it...
+        InvocationContext::runRehydrated(
+            $this->parentInvocationId,
+            $this->rootInvocationId,
+            function () {
+                $streamedResponse = null;
 
-        $this->agent->stream($this->prompt, $this->attachments, $this->provider, $this->model)
-            ->each(function (StreamEvent $event) {
-                $event->withInvocationId($this->invocationId)->broadcastNow($this->channels);
-            })
-            ->then(function ($response) use (&$streamedResponse) {
-                $streamedResponse = $response;
-            });
+                $this->agent->stream($this->prompt, $this->attachments, $this->provider, $this->model)
+                    ->each(function (StreamEvent $event) {
+                        $event->withInvocationId($this->invocationId)->broadcastNow($this->channels);
+                    })
+                    ->then(function ($response) use (&$streamedResponse) {
+                        $streamedResponse = $response;
+                    });
 
-        $this->withCallbacks(fn () => $streamedResponse);
+                $this->withCallbacks(fn () => $streamedResponse);
+            },
+        );
     }
 
     /**

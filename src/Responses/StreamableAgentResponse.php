@@ -7,6 +7,7 @@ use Illuminate\Contracts\Support\Responsable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use IteratorAggregate;
+use Laravel\Ai\InvocationContext;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\StreamEnd;
@@ -23,6 +24,10 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     public ?Usage $usage;
 
     public Collection $events;
+
+    public ?string $parentInvocationId = null;
+
+    public ?string $rootInvocationId = null;
 
     public ?string $conversationId = null;
 
@@ -76,6 +81,17 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     }
 
     /**
+     * Set the invocation context carried by this stream.
+     */
+    public function withInvocationContext(InvocationContext $context): self
+    {
+        $this->parentInvocationId = $context->parentId;
+        $this->rootInvocationId = $context->rootId;
+
+        return $this;
+    }
+
+    /**
      * Set the conversation UUID for this response.
      */
     public function withinConversation(?string $conversationId, ?object $conversationUser = null): self
@@ -100,6 +116,9 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
         if ($response->conversationId !== null) {
             $this->withinConversation($response->conversationId, $response->conversationUser);
         }
+
+        $this->parentInvocationId ??= $response->parentInvocationId;
+        $this->rootInvocationId ??= $response->rootInvocationId;
 
         return $this;
     }
@@ -168,6 +187,9 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
             $this->events,
             $this->meta,
         );
+
+        $this->streamedResponse->parentInvocationId = $this->parentInvocationId;
+        $this->streamedResponse->rootInvocationId = $this->rootInvocationId;
 
         if ($this->conversationId !== null) {
             $this->streamedResponse->withinConversation(

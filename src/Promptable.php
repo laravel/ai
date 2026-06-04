@@ -80,11 +80,15 @@ trait Promptable
 
         $invocationId = (string) Str::uuid7();
 
+        // Capture the context now so lazily-resolved multi-provider streams still nest beneath the dispatching invocation...
+        $context = InvocationContext::for($invocationId);
+
         if (count($providers) === 1) {
             [$resolved, $resolvedModel] = $this->iterateProvidersWithFailover($providers)->current();
 
             return $resolved->stream(
-                new AgentPrompt($this, $prompt, $attachments, $resolved, $resolvedModel, $resolvedTimeout, $invocationId)
+                (new AgentPrompt($this, $prompt, $attachments, $resolved, $resolvedModel, $resolvedTimeout, $invocationId))
+                    ->withInvocationContext($context)
             );
         }
 
@@ -93,7 +97,7 @@ trait Promptable
 
         $outer = new StreamableAgentResponse(
             $invocationId,
-            function () use ($providers, $prompt, $attachments, $resolvedTimeout, $invocationId, &$outer) {
+            function () use ($providers, $prompt, $attachments, $resolvedTimeout, $invocationId, $context, &$outer) {
                 $lastException = null;
 
                 foreach ($this->iterateProvidersWithFailover($providers) as [$provider, $model]) {
@@ -101,7 +105,8 @@ trait Promptable
 
                     try {
                         $innerResponse = $provider->stream(
-                            new AgentPrompt($this, $prompt, $attachments, $provider, $model, $resolvedTimeout, $invocationId)
+                            (new AgentPrompt($this, $prompt, $attachments, $provider, $model, $resolvedTimeout, $invocationId))
+                                ->withInvocationContext($context)
                         );
 
                         $innerResponse->then(fn (StreamedAgentResponse $response) => $outer->adoptStateFrom($response));
@@ -126,6 +131,8 @@ trait Promptable
             },
             $meta,
         );
+
+        $outer->withInvocationContext($context);
 
         return $outer;
     }
@@ -186,8 +193,14 @@ trait Promptable
             return new QueuedAgentResponse(new FakePendingDispatch);
         }
 
+        // Carry the active context across the queue boundary so a queued broadcast dispatched within an invocation nests beneath it...
+        $context = InvocationContext::current();
+
         return new QueuedAgentResponse(
-            BroadcastAgent::dispatch($this, $prompt, $channels, $attachments, $provider, $model)
+            BroadcastAgent::dispatch(
+                $this, $prompt, $channels, $attachments, $provider, $model,
+                $context?->id, $context?->rootId,
+            )
         );
     }
 

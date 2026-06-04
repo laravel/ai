@@ -100,6 +100,53 @@ test('push and pop activate and deactivate the context manually', function () {
     expect(InvocationContext::current())->toBeNull();
 });
 
+test('runRehydrated runs the callback with no active context when no parent id is given', function () {
+    $seen = InvocationContext::runRehydrated(null, null, fn () => InvocationContext::current());
+
+    expect($seen)->toBeNull()
+        ->and(InvocationContext::current())->toBeNull();
+});
+
+test('runRehydrated re-establishes the carried context for the callback and restores after', function () {
+    $seen = InvocationContext::runRehydrated('parent-inv', 'root-inv', fn () => InvocationContext::current());
+
+    expect($seen)->toBeInstanceOf(InvocationContext::class)
+        ->and($seen->id)->toBe('parent-inv')
+        ->and($seen->rootId)->toBe('root-inv')
+        ->and(InvocationContext::current())->toBeNull();
+});
+
+test('pop removes a specific context even when it is not on top', function () {
+    $a = InvocationContext::root('a');
+    $b = InvocationContext::root('b');
+
+    InvocationContext::push($a);
+    InvocationContext::push($b);
+
+    // 'a' unwinds before 'b' (e.g. two interleaved streams consumed out of order).
+    InvocationContext::pop($a);
+
+    expect(InvocationContext::current())->toBe($b);
+
+    InvocationContext::pop($b);
+
+    expect(InvocationContext::current())->toBeNull();
+});
+
+test('popping a specific context is a no-op when it is no longer on the stack', function () {
+    $a = InvocationContext::root('a');
+
+    InvocationContext::push($a);
+    InvocationContext::pop($a);
+
+    // Popping again must not remove an unrelated entry.
+    $b = InvocationContext::root('b');
+    InvocationContext::push($b);
+    InvocationContext::pop($a);
+
+    expect(InvocationContext::current())->toBe($b);
+});
+
 test('a failed nested invocation does not leak context to its parent', function () {
     InvocationContext::run(InvocationContext::root('parent'), function () {
         try {

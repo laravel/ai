@@ -98,6 +98,16 @@ class AgentPrompt extends Prompt
     }
 
     /**
+     * Build an invocation context from the ids carried on the prompt, if any.
+     */
+    public function invocationContext(): ?InvocationContext
+    {
+        return $this->invocationId === null
+            ? null
+            : new InvocationContext($this->invocationId, $this->parentInvocationId, $this->rootInvocationId);
+    }
+
+    /**
      * Set the invocation context on the prompt, returning a new prompt instance.
      */
     public function withInvocationContext(InvocationContext $context): AgentPrompt

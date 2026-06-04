@@ -29,26 +29,16 @@ class InvokeAgent implements ShouldQueue
      */
     public function handle(): void
     {
-        $invoke = fn () => $this->withCallbacks(fn () => $this->agent->prompt(
-            $this->prompt,
-            $this->attachments,
-            $this->provider,
-            $this->model,
-        ));
-
-        // No dispatching context to nest beneath - parent and root travel together, set by queue()...
-        $parentId = $this->parentInvocationId;
-
-        if ($parentId === null) {
-            $invoke();
-
-            return;
-        }
-
         // Re-establish the dispatching invocation so the queued agent nests beneath it...
-        InvocationContext::run(
-            InvocationContext::rehydrate($parentId, $this->rootInvocationId),
-            $invoke,
+        InvocationContext::runRehydrated(
+            $this->parentInvocationId,
+            $this->rootInvocationId,
+            fn () => $this->withCallbacks(fn () => $this->agent->prompt(
+                $this->prompt,
+                $this->attachments,
+                $this->provider,
+                $this->model,
+            )),
         );
     }
 

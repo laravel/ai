@@ -3,9 +3,73 @@
 use Illuminate\Broadcasting\AnonymousEvent;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Queue;
+use Laravel\Ai\InvocationContext;
 use Laravel\Ai\Jobs\BroadcastAgent;
+use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Tests\Fixtures\Agents\AssistantAgent;
+
+afterEach(function () {
+    InvocationContext::flush();
+
+    unset($_SERVER['__testing.broadcast-prompt']);
+});
+
+test('broadcastOnQueue forwards the active invocation context to the job', function () {
+    Queue::fake();
+
+    InvocationContext::run(InvocationContext::root('parent-inv'), function () {
+        (new AssistantAgent)->broadcastOnQueue('Do it', new Channel('test-channel'));
+    });
+
+    Queue::assertPushed(BroadcastAgent::class, function (BroadcastAgent $job) {
+        return $job->parentInvocationId === 'parent-inv'
+            && $job->rootInvocationId === 'parent-inv';
+    });
+});
+
+test('broadcastOnQueue outside any invocation forwards no lineage', function () {
+    Queue::fake();
+
+    (new AssistantAgent)->broadcastOnQueue('Do it', new Channel('test-channel'));
+
+    Queue::assertPushed(BroadcastAgent::class, function (BroadcastAgent $job) {
+        return $job->parentInvocationId === null
+            && $job->rootInvocationId === null;
+    });
+});
+
+test('a queued broadcast re-establishes the dispatching context so its stream nests beneath it', function () {
+    Event::fake();
+    AssistantAgent::fake(['Hello world']);
+
+    $agent = (new AssistantAgent)->withMiddleware([new class
+    {
+        public function handle(AgentPrompt $prompt, Closure $next)
+        {
+            $_SERVER['__testing.broadcast-prompt'] = $prompt;
+
+            return $next($prompt);
+        }
+    }]);
+
+    $job = new BroadcastAgent(
+        agent: $agent,
+        prompt: 'Say hello',
+        channels: new Channel('test-channel'),
+        parentInvocationId: 'parent-inv',
+        rootInvocationId: 'root-inv',
+    );
+
+    $job->handle();
+
+    $prompt = $_SERVER['__testing.broadcast-prompt'];
+
+    expect($prompt->invocationId)->not->toBe('parent-inv')
+        ->and($prompt->parentInvocationId)->toBe('parent-inv')
+        ->and($prompt->rootInvocationId)->toBe('root-inv');
+});
 
 test('then callback receives streamed agent response', function () {
     Event::fake();

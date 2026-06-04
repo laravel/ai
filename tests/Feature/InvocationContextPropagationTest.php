@@ -1,5 +1,7 @@
 <?php
 
+use Illuminate\Support\Facades\Event;
+use Laravel\Ai\Events\AgentStreamed;
 use Laravel\Ai\InvocationContext;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -147,6 +149,55 @@ test('a streamed top-level response is stamped as a root invocation', function (
         ->and($streamed)->toBeInstanceOf(StreamedAgentResponse::class)
         ->and($streamed->parentInvocationId)->toBeNull()
         ->and($streamed->rootInvocationId)->toBe($streamed->invocationId);
+});
+
+test('a sub-agent invoked from streaming middleware nests beneath the streaming agent', function () {
+    InvocationContextChildAgent::fake(['Child done']);
+    AssistantAgent::fake(['Streamed']);
+
+    $response = (new AssistantAgent)
+        ->withMiddleware([new class
+        {
+            public function handle(AgentPrompt $prompt, Closure $next)
+            {
+                // A guardrail/classifier middleware delegating to a sub-agent while streaming.
+                (new InvocationContextChildAgent)->prompt('classify during streaming');
+
+                return $next($prompt);
+            }
+        }])
+        ->stream('Hello');
+
+    foreach ($response as $_) {
+    }
+
+    $childPrompt = $_SERVER['__testing.context-child-prompt'] ?? null;
+
+    expect($childPrompt)->toBeInstanceOf(AgentPrompt::class)
+        ->and($childPrompt->parentInvocationId)->toBe($response->invocationId)
+        ->and($childPrompt->rootInvocationId)->toBe($response->invocationId);
+});
+
+test('a streamed completion event carries the middleware-processed prompt', function () {
+    Event::fake();
+    AssistantAgent::fake(['Streamed']);
+
+    $response = (new AssistantAgent)
+        ->withMiddleware([new class
+        {
+            public function handle(AgentPrompt $prompt, Closure $next)
+            {
+                return $next($prompt->append('PROCESSED-MARKER'));
+            }
+        }])
+        ->stream('Hello');
+
+    foreach ($response as $_) {
+    }
+
+    Event::assertDispatched(AgentStreamed::class, function (AgentStreamed $event) {
+        return str_contains($event->prompt->prompt, 'PROCESSED-MARKER');
+    });
 });
 
 test('the invocation context is active while a stream is consumed', function () {

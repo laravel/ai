@@ -3,6 +3,7 @@
 namespace Laravel\Ai;
 
 use Closure;
+use Illuminate\Queue\Events\Looping;
 use Illuminate\Support\Collection;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Stringable;
@@ -39,6 +40,8 @@ class AiServiceProvider extends ServiceProvider
             $this->registerCommands();
             $this->registerPublishing();
         }
+
+        $this->resetInvocationContextBetweenRequests();
 
         // Embeddings macro...
         Stringable::macro('toEmbeddings', function (
@@ -119,6 +122,27 @@ class AiServiceProvider extends ServiceProvider
                 fn ($result) => $this->values()[$result->index]
             );
         });
+    }
+
+    /**
+     * Clear the active invocation-context stack at long-lived process
+     * boundaries so a context leaked by an abandoned stream (whose generator
+     * never finalized) cannot bleed into a subsequent request or queued job.
+     */
+    protected function resetInvocationContextBetweenRequests(): void
+    {
+        $flush = fn () => InvocationContext::flush();
+
+        // Between jobs in a long-running queue worker...
+        $this->app['events']->listen(Looping::class, $flush);
+
+        // At Octane request and task boundaries, listened to by event name so Octane is not a hard dependency
+        $this->app['events']->listen([
+            'Laravel\Octane\Events\RequestReceived',
+            'Laravel\Octane\Events\RequestTerminated',
+            'Laravel\Octane\Events\TaskReceived',
+            'Laravel\Octane\Events\TickReceived',
+        ], $flush);
     }
 
     /**
