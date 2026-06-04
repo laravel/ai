@@ -6,6 +6,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\InvocationContext;
 
 class AgentPrompt extends Prompt
 {
@@ -17,6 +18,10 @@ class AgentPrompt extends Prompt
 
     public readonly ?string $invocationId;
 
+    public readonly ?string $parentInvocationId;
+
+    public readonly ?string $rootInvocationId;
+
     public function __construct(
         Agent $agent,
         string $prompt,
@@ -25,6 +30,8 @@ class AgentPrompt extends Prompt
         string $model,
         ?int $timeout = null,
         ?string $invocationId = null,
+        ?string $parentInvocationId = null,
+        ?string $rootInvocationId = null,
     ) {
         parent::__construct($prompt, $provider, $model);
 
@@ -32,6 +39,8 @@ class AgentPrompt extends Prompt
         $this->attachments = Collection::make($attachments);
         $this->timeout = $timeout;
         $this->invocationId = $invocationId;
+        $this->parentInvocationId = $parentInvocationId;
+        $this->rootInvocationId = $rootInvocationId;
     }
 
     /**
@@ -75,6 +84,8 @@ class AgentPrompt extends Prompt
             $this->model,
             $this->timeout,
             $this->invocationId,
+            $this->parentInvocationId,
+            $this->rootInvocationId,
         );
     }
 
@@ -84,6 +95,24 @@ class AgentPrompt extends Prompt
     public function withAttachments(Collection|array $attachments): AgentPrompt
     {
         return $this->revise($this->prompt, $attachments);
+    }
+
+    /**
+     * Set the invocation context on the prompt, returning a new prompt instance.
+     */
+    public function withInvocationContext(InvocationContext $context): AgentPrompt
+    {
+        return new self(
+            $this->agent,
+            $this->prompt,
+            $this->attachments,
+            $this->provider,
+            $this->model,
+            $this->timeout,
+            $context->id,
+            $context->parentId,
+            $context->rootId,
+        );
     }
 
     /**

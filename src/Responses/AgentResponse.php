@@ -2,12 +2,17 @@
 
 namespace Laravel\Ai\Responses;
 
+use Laravel\Ai\InvocationContext;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
 
 class AgentResponse extends TextResponse
 {
     public string $invocationId;
+
+    public ?string $parentInvocationId = null;
+
+    public ?string $rootInvocationId = null;
 
     public ?string $conversationId = null;
 
@@ -18,6 +23,17 @@ class AgentResponse extends TextResponse
         $this->invocationId = $invocationId;
 
         parent::__construct($text, $usage, $meta);
+    }
+
+    /**
+     * Set the invocation context on the response.
+     */
+    public function withInvocationContext(InvocationContext $context): self
+    {
+        $this->parentInvocationId = $context->parentId;
+        $this->rootInvocationId = $context->rootId;
+
+        return $this;
     }
 
     /**

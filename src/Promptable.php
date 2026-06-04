@@ -143,8 +143,14 @@ trait Promptable
             return new QueuedAgentResponse(new FakePendingDispatch);
         }
 
+        // Carry the active context across the queue boundary so a queued agent dispatched within an invocation nests beneath it...
+        $context = InvocationContext::current();
+
         return new QueuedAgentResponse(
-            InvokeAgent::dispatch($this, $prompt, $attachments, $provider, $model)
+            InvokeAgent::dispatch(
+                $this, $prompt, $attachments, $provider, $model,
+                $context?->id, $context?->rootId,
+            )
         );
     }
 

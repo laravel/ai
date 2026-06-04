@@ -19,6 +19,7 @@ use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\InvocationContext;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Middleware\RememberConversation;
 use Laravel\Ai\Prompts\AgentPrompt;
@@ -37,52 +38,61 @@ trait GeneratesText
      */
     public function prompt(AgentPrompt $prompt): AgentResponse
     {
-        $invocationId = (string) Str::uuid7();
+        $context = InvocationContext::for($prompt->invocationId ?? (string) Str::uuid7());
+
+        $prompt = $prompt->withInvocationContext($context);
 
         $processedPrompt = null;
 
-        $response = pipeline()
-            ->send($prompt)
-            ->through($this->gatherMiddlewareFor($prompt->agent))
-            ->then(function (AgentPrompt $prompt) use ($invocationId, &$processedPrompt) {
-                $processedPrompt = $prompt;
+        $response = InvocationContext::run($context, function () use ($prompt, $context, &$processedPrompt) {
+            return pipeline()
+                ->send($prompt)
+                ->through($this->gatherMiddlewareFor($prompt->agent))
+                ->then(function (AgentPrompt $prompt) use ($context, &$processedPrompt) {
+                    $processedPrompt = $prompt;
 
-                $this->events->dispatch(new PromptingAgent($invocationId, $prompt));
+                    $this->events->dispatch(new PromptingAgent($context->id, $prompt));
 
-                $agent = $prompt->agent;
+                    $agent = $prompt->agent;
 
-                $messages = [
-                    ...($agent instanceof Conversational ? $agent->messages() : []),
-                    new UserMessage($prompt->prompt, $prompt->attachments->all()),
-                ];
+                    $messages = [
+                        ...($agent instanceof Conversational ? $agent->messages() : []),
+                        new UserMessage($prompt->prompt, $prompt->attachments->all()),
+                    ];
 
-                $this->listenForToolInvocations($invocationId, $agent);
+                    $this->listenForToolInvocations($context->id, $agent);
 
-                $schema = $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null;
+                    $schema = $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null;
 
-                $response = $this->textGateway()->generateText(
-                    $this,
-                    $prompt->model,
-                    (string) $agent->instructions(),
-                    $messages,
-                    $this->resolveTools($agent),
-                    $schema,
-                    TextGenerationOptions::forAgent($agent),
-                    $prompt->timeout,
-                );
+                    $response = $this->textGateway()->generateText(
+                        $this,
+                        $prompt->model,
+                        (string) $agent->instructions(),
+                        $messages,
+                        $this->resolveTools($agent),
+                        $schema,
+                        TextGenerationOptions::forAgent($agent),
+                        $prompt->timeout,
+                    );
 
-                return ! empty($schema)
-                    ? (new StructuredAgentResponse($invocationId, $response->structured, $response->text, $response->usage, $response->meta))
-                        ->withToolCallsAndResults($response->toolCalls, $response->toolResults)
-                        ->withSteps($response->steps)
-                    : (new AgentResponse($invocationId, $response->text, $response->usage, $response->meta))
-                        ->withMessages($response->messages)
-                        ->withToolCallsAndResults($response->toolCalls, $response->toolResults)
-                        ->withSteps($response->steps);
-            });
+                    return ! empty($schema)
+                        ? (new StructuredAgentResponse($context->id, $response->structured, $response->text, $response->usage, $response->meta))
+                            ->withToolCallsAndResults($response->toolCalls, $response->toolResults)
+                            ->withSteps($response->steps)
+                        : (new AgentResponse($context->id, $response->text, $response->usage, $response->meta))
+                            ->withMessages($response->messages)
+                            ->withToolCallsAndResults($response->toolCalls, $response->toolResults)
+                            ->withSteps($response->steps);
+                });
+        });
+
+        // Stamp after the pipeline so a short-circuiting middleware's response is covered too...
+        if ($response instanceof AgentResponse) {
+            $response->withInvocationContext($context);
+        }
 
         $this->events->dispatch(
-            new AgentPrompted($invocationId, $processedPrompt ?? $prompt, $response)
+            new AgentPrompted($context->id, $processedPrompt ?? $prompt, $response)
         );
 
         return $response;

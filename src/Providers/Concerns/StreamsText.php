@@ -9,6 +9,7 @@ use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Events\AgentStreamed;
 use Laravel\Ai\Events\StreamingAgent;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\InvocationContext;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\Data\Meta;
@@ -24,14 +25,16 @@ trait StreamsText
      */
     public function stream(AgentPrompt $prompt): StreamableAgentResponse
     {
-        $invocationId = $prompt->invocationId ?? (string) Str::uuid7();
+        $context = InvocationContext::for($prompt->invocationId ?? (string) Str::uuid7());
+
+        $prompt = $prompt->withInvocationContext($context);
 
         $processedPrompt = null;
 
         return pipeline()
             ->send($prompt)
             ->through($this->gatherMiddlewareFor($prompt->agent))
-            ->then(function (AgentPrompt $prompt) use ($invocationId, &$processedPrompt) {
+            ->then(function (AgentPrompt $prompt) use ($context, &$processedPrompt) {
                 $processedPrompt = $prompt;
 
                 $agent = $prompt->agent;
@@ -43,34 +46,45 @@ trait StreamsText
                 $meta = new Meta($this->name(), $prompt->model);
 
                 return new StreamableAgentResponse(
-                    $invocationId,
-                    function () use ($invocationId, $prompt, $agent) {
-                        $this->events->dispatch(new StreamingAgent($invocationId, $prompt));
+                    $context->id,
+                    function () use ($context, $prompt, $agent) {
+                        // The generator runs lazily, after stream() returns, so re-activate the
+                        // context for its lifetime - a sub-agent invoked mid-stream nests beneath
+                        // it. Paired with pop() in finally so the stack unwinds on early exit.
+                        InvocationContext::push($context);
 
-                        $messages = [
-                            ...($agent instanceof Conversational ? $agent->messages() : []),
-                            new UserMessage($prompt->prompt, $prompt->attachments->all()),
-                        ];
+                        try {
+                            $this->events->dispatch(new StreamingAgent($context->id, $prompt));
 
-                        $this->listenForToolInvocations($invocationId, $agent);
+                            $messages = [
+                                ...($agent instanceof Conversational ? $agent->messages() : []),
+                                new UserMessage($prompt->prompt, $prompt->attachments->all()),
+                            ];
 
-                        yield from $this->textGateway()->streamText(
-                            $invocationId,
-                            $this,
-                            $prompt->model,
-                            (string) $agent->instructions(),
-                            $messages,
-                            $this->resolveTools($agent),
-                            null,
-                            TextGenerationOptions::forAgent($agent),
-                            $prompt->timeout,
-                        );
+                            $this->listenForToolInvocations($context->id, $agent);
+
+                            yield from $this->textGateway()->streamText(
+                                $context->id,
+                                $this,
+                                $prompt->model,
+                                (string) $agent->instructions(),
+                                $messages,
+                                $this->resolveTools($agent),
+                                null,
+                                TextGenerationOptions::forAgent($agent),
+                                $prompt->timeout,
+                            );
+                        } finally {
+                            InvocationContext::pop();
+                        }
                     },
                     $meta,
                 );
-            })->then(function (StreamedAgentResponse $response) use ($invocationId, $prompt, &$processedPrompt) {
+            })->then(function (StreamedAgentResponse $response) use ($context, $prompt, &$processedPrompt) {
+                $response->withInvocationContext($context);
+
                 $this->events->dispatch(
-                    new AgentStreamed($invocationId, $processedPrompt ?? $prompt, $response)
+                    new AgentStreamed($context->id, $processedPrompt ?? $prompt, $response)
                 );
             });
     }
