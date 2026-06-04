@@ -2,8 +2,8 @@
 
 namespace Laravel\Ai\Gateway\Groq\Concerns;
 
-use Illuminate\Support\Arr;
 use Illuminate\Http\Client\Response as HttpResponse;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\AiException;
