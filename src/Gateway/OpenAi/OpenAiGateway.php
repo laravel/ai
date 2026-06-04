@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\OpenAi;
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Files\HasName;
@@ -19,7 +20,6 @@ use Laravel\Ai\Files\File;
 use Laravel\Ai\Files\Image;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\StoredImage;
-use Laravel\Ai\Gateway\Concerns\ExtractsTranscriptionUsage;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
@@ -28,6 +28,7 @@ use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
+use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\TextResponse;
@@ -43,7 +44,6 @@ class OpenAiGateway implements Gateway
     use Concerns\MapsMessages;
     use Concerns\MapsTools;
     use Concerns\ParsesTextResponses;
-    use ExtractsTranscriptionUsage;
     use HandlesFailoverErrors;
     use InvokesTools;
     use ParsesServerSentEvents;
@@ -306,7 +306,10 @@ class OpenAiGateway implements Gateway
                 $segment['start'] ?? 0,
                 $segment['end'] ?? 0,
             )),
-            $this->transcriptionUsage($data),
+            new Usage(
+                Arr::get($data, 'usage.input_tokens', 0),
+                Arr::get($data, 'usage.output_tokens', 0),
+            ),
             new Meta($provider->name(), $model),
         );
     }

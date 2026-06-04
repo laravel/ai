@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\OpenRouter;
 
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
@@ -14,7 +15,6 @@ use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Files\Image;
-use Laravel\Ai\Gateway\Concerns\ExtractsTranscriptionUsage;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
@@ -39,7 +39,6 @@ class OpenRouterGateway implements Gateway
     use Concerns\MapsMessages;
     use Concerns\MapsTools;
     use Concerns\ParsesTextResponses;
-    use ExtractsTranscriptionUsage;
     use HandlesFailoverErrors;
     use InvokesTools;
     use ParsesServerSentEvents;
@@ -344,7 +343,10 @@ class OpenRouterGateway implements Gateway
         return new TranscriptionResponse(
             $data['text'] ?? '',
             collect(),
-            $this->transcriptionUsage($data),
+            new Usage(
+                Arr::get($data, 'usage.input_tokens', 0),
+                Arr::get($data, 'usage.output_tokens', 0),
+            ),
             new Meta($provider->name(), $model),
         );
     }
