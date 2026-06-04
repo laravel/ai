@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
+use Illuminate\Http\Client\Response as HttpResponse;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\AiException;
@@ -49,6 +50,7 @@ trait ParsesTextResponses
         ?TextGenerationOptions $options = null,
         array $requestBody = [],
         ?int $timeout = null,
+        ?HttpResponse $httpResponse = null,
     ): TextResponse {
         return $this->processResponse(
             $data,
@@ -61,6 +63,7 @@ trait ParsesTextResponses
             $requestBody,
             maxSteps: $options?->maxSteps,
             timeout: $timeout,
+            httpResponse: $httpResponse,
         );
     }
 
@@ -79,6 +82,7 @@ trait ParsesTextResponses
         int $depth = 0,
         ?int $maxSteps = null,
         ?int $timeout = null,
+        ?HttpResponse $httpResponse = null,
     ): TextResponse {
         $model = $data['model'] ?? '';
         $content = $data['content'] ?? [];
@@ -161,14 +165,14 @@ trait ParsesTextResponses
             ))->withToolCallsAndResults(
                 toolCalls: $steps->flatMap(fn (Step $s) => $s->toolCalls),
                 toolResults: $steps->flatMap(fn (Step $s) => $s->toolResults),
-            )->withSteps($steps);
+            )->withSteps($steps)->withRaw($httpResponse);
         }
 
         return (new TextResponse(
             $text,
             $this->combineUsage($steps),
             $meta,
-        ))->withMessages($messages)->withSteps($steps);
+        ))->withMessages($messages)->withSteps($steps)->withRaw($httpResponse);
     }
 
     /**
@@ -219,6 +223,7 @@ trait ParsesTextResponses
         int $depth,
         ?int $maxSteps,
         ?int $timeout = null,
+        ?HttpResponse $httpResponse = null,
     ): TextResponse {
         $requestBody['messages'][] = [
             'role' => 'assistant',
@@ -263,6 +268,7 @@ trait ParsesTextResponses
             $depth,
             $maxSteps,
             $timeout,
+            $httpResponse
         );
     }
 
@@ -311,6 +317,7 @@ trait ParsesTextResponses
             $depth,
             $maxSteps,
             $timeout,
+            $response,
         );
     }
 

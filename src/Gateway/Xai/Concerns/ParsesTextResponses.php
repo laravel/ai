@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\Xai\Concerns;
 
 use Illuminate\Support\Arr;
+use Illuminate\Http\Client\Response as HttpResponse;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\AiException;
@@ -59,6 +60,7 @@ trait ParsesTextResponses
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
+        ?HttpResponse $httpResponse = null,
     ): TextResponse {
         return $this->processResponse(
             $data,
@@ -71,6 +73,7 @@ trait ParsesTextResponses
             maxSteps: $options?->maxSteps,
             options: $options,
             timeout: $timeout,
+            httpResponse: $httpResponse,
         );
     }
 
@@ -89,6 +92,7 @@ trait ParsesTextResponses
         ?int $maxSteps = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
+        ?HttpResponse $httpResponse = null,
     ): TextResponse {
         $responseId = $data['id'] ?? '';
         $output = $data['output'] ?? [];
@@ -155,14 +159,14 @@ trait ParsesTextResponses
             ))->withToolCallsAndResults(
                 toolCalls: $allToolCalls,
                 toolResults: $allToolResults,
-            )->withSteps($steps);
+            )->withSteps($steps)->withRaw($httpResponse);
         }
 
         return (new TextResponse(
             $text,
             $this->combineUsage($steps),
             new Meta($provider->name(), $model, $citations),
-        ))->withMessages($messages)->withSteps($steps);
+        ))->withMessages($messages)->withSteps($steps)->withRaw($httpResponse);
     }
 
     /**
@@ -250,7 +254,7 @@ trait ParsesTextResponses
 
         $this->validateTextResponse($data);
 
-        return $this->processResponse($data, $provider, $structured, $tools, $schema, $steps, $messages, $depth, $maxSteps, $options, $timeout);
+        return $this->processResponse($data, $provider, $structured, $tools, $schema, $steps, $messages, $depth, $maxSteps, $options, $timeout, $response);
     }
 
     /**

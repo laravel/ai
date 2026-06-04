@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway\Gemini\Concerns;
 
+use Illuminate\Http\Client\Response as HttpResponse;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Tool;
@@ -52,6 +53,7 @@ trait ParsesTextResponses
         array $contents = [],
         ?string $instructions = null,
         ?int $timeout = null,
+        ?HttpResponse $httpResponse = null,
     ): TextResponse {
         return $this->processResponse(
             $data,
@@ -67,6 +69,7 @@ trait ParsesTextResponses
             $options,
             maxSteps: $options?->maxSteps,
             timeout: $timeout,
+            httpResponse: $httpResponse,
         );
     }
 
@@ -88,6 +91,7 @@ trait ParsesTextResponses
         int $depth = 0,
         ?int $maxSteps = null,
         ?int $timeout = null,
+        ?HttpResponse $httpResponse = null,
     ): TextResponse {
         $candidate = $data['candidates'][0] ?? [];
         $parts = $candidate['content']['parts'] ?? [];
@@ -148,14 +152,14 @@ trait ParsesTextResponses
             ))->withToolCallsAndResults(
                 toolCalls: $allToolCalls,
                 toolResults: $allToolResults,
-            )->withSteps($steps);
+            )->withSteps($steps)->withRaw($httpResponse);
         }
 
         return (new TextResponse(
             $text,
             $this->combineUsage($steps),
             $meta,
-        ))->withMessages($messages)->withSteps($steps);
+        ))->withMessages($messages)->withSteps($steps)->withRaw($httpResponse);
     }
 
     /**
@@ -234,6 +238,7 @@ trait ParsesTextResponses
             $depth,
             $maxSteps,
             $timeout,
+            $response,
         );
     }
 

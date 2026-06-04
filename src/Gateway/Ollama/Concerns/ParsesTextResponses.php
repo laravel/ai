@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway\Ollama\Concerns;
 
+use Illuminate\Http\Client\Response as HttpResponse;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Tool;
@@ -49,6 +50,7 @@ trait ParsesTextResponses
         ?string $instructions = null,
         array $originalMessages = [],
         ?int $timeout = null,
+        ?HttpResponse $httpResponse = null,
     ): TextResponse {
         return $this->processResponse(
             $data,
@@ -63,6 +65,7 @@ trait ParsesTextResponses
             maxSteps: $options?->maxSteps,
             options: $options,
             timeout: $timeout,
+            httpResponse: $httpResponse,
         );
     }
 
@@ -83,6 +86,7 @@ trait ParsesTextResponses
         ?int $maxSteps = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
+        ?HttpResponse $httpResponse = null,
     ): TextResponse {
         $message = $data['message'] ?? [];
         $model = $data['model'] ?? '';
@@ -168,14 +172,14 @@ trait ParsesTextResponses
             ))->withToolCallsAndResults(
                 toolCalls: $allToolCalls,
                 toolResults: $allToolResults,
-            )->withSteps($steps);
+            )->withSteps($steps)->withRaw($httpResponse);
         }
 
         return (new TextResponse(
             $text,
             $this->combineUsage($steps),
             new Meta($provider->name(), $model),
-        ))->withMessages($messages)->withSteps($steps);
+        ))->withMessages($messages)->withSteps($steps)->withRaw($httpResponse);
     }
 
     /**
@@ -299,6 +303,7 @@ trait ParsesTextResponses
             $maxSteps,
             $options,
             $timeout,
+            $response,
         );
     }
 

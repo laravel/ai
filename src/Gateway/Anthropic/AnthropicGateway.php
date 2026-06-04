@@ -81,6 +81,7 @@ class AnthropicGateway implements Gateway
             $options,
             $body,
             $timeout,
+            $response,
         );
     }
 

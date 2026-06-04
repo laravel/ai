@@ -75,6 +75,7 @@ class OllamaGateway implements EmbeddingGateway, TextGateway
             $instructions,
             $messages,
             $timeout,
+            $response,
         );
     }
 

@@ -72,6 +72,7 @@ class DeepSeekGateway implements TextGateway
             $instructions,
             $messages,
             $timeout,
+            $response,
         );
     }
 

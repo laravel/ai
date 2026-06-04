@@ -85,6 +85,7 @@ class GeminiGateway implements Gateway
             $contents,
             $instructions,
             $timeout,
+            $response,
         );
     }
 

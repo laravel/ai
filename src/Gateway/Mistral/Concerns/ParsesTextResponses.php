@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway\Mistral\Concerns;
 
+use Illuminate\Http\Client\Response as HttpResponse;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\AiException;
@@ -49,6 +50,7 @@ trait ParsesTextResponses
         ?string $instructions = null,
         array $originalMessages = [],
         ?int $timeout = null,
+        ?HttpResponse $httpResponse = null,
     ): TextResponse {
         return $this->processResponse(
             $data,
@@ -63,6 +65,7 @@ trait ParsesTextResponses
             maxSteps: $options?->maxSteps,
             options: $options,
             timeout: $timeout,
+            httpResponse: $httpResponse,
         );
     }
 
@@ -83,6 +86,7 @@ trait ParsesTextResponses
         ?int $maxSteps = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
+        ?HttpResponse $httpResponse = null,
     ): TextResponse {
         $choice = $data['choices'][0] ?? [];
         $message = $choice['message'] ?? [];
@@ -166,14 +170,14 @@ trait ParsesTextResponses
             ))->withToolCallsAndResults(
                 toolCalls: $allToolCalls,
                 toolResults: $allToolResults,
-            )->withSteps($steps);
+            )->withSteps($steps)->withRaw($httpResponse);
         }
 
         return (new TextResponse(
             $text,
             $this->combineUsage($steps),
             new Meta($provider->name(), $model),
-        ))->withMessages($messages)->withSteps($steps);
+        ))->withMessages($messages)->withSteps($steps)->withRaw($httpResponse);
     }
 
     /**
@@ -282,6 +286,7 @@ trait ParsesTextResponses
             $maxSteps,
             $options,
             $timeout,
+            $response,
         );
     }
 
