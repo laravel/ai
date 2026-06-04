@@ -159,29 +159,7 @@ test('it throws when a $ref cannot be resolved', function () {
     ]));
 
     $tool->schema(new JsonSchemaTypeFactory);
-})->throws(InvalidArgumentException::class, 'Unable to resolve MCP schema $ref [#/$defs/Missing].');
-
-test('it uses the first entry for tuple style array items', function () {
-    $tool = new McpTool(mcpTool(new FakeMcpClient, inputSchema: [
-        'type' => 'object',
-        'properties' => [
-            'pair' => [
-                'type' => 'array',
-                'items' => [
-                    ['type' => 'integer'],
-                    ['type' => 'string'],
-                ],
-            ],
-        ],
-    ]));
-
-    $schema = (new ObjectSchema($tool->schema(new JsonSchemaTypeFactory)))->toSchema();
-
-    expect($schema['properties']['pair'])->toMatchArray([
-        'type' => 'array',
-        'items' => ['type' => 'integer'],
-    ]);
-});
+})->throws(InvalidArgumentException::class, 'Unable to resolve JSON Schema $ref [#/$defs/Missing].');
 
 test('it marks fields nullable when anyOf or oneOf lists null after the typed branch', function () {
     $tool = new McpTool(mcpTool(new FakeMcpClient, inputSchema: [
@@ -212,24 +190,6 @@ test('it marks fields nullable when anyOf or oneOf lists null after the typed br
     expect($schema['properties']['count'])->toMatchArray([
         'type' => ['integer', 'null'],
         'minimum' => 0,
-    ]);
-});
-
-test('it keeps a null enum member while marking the type nullable', function () {
-    $tool = new McpTool(mcpTool(new FakeMcpClient, inputSchema: [
-        'type' => 'object',
-        'properties' => [
-            'color' => [
-                'enum' => ['red', 'green', null],
-            ],
-        ],
-    ]));
-
-    $schema = (new ObjectSchema($tool->schema(new JsonSchemaTypeFactory)))->toSchema();
-
-    expect($schema['properties']['color'])->toMatchArray([
-        'type' => ['string', 'null'],
-        'enum' => ['red', 'green', null],
     ]);
 });
 

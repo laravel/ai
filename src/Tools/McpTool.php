@@ -3,6 +3,8 @@
 namespace Laravel\Ai\Tools;
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\JsonSchema\JsonSchema as JsonSchemaFactory;
+use Illuminate\JsonSchema\Types\ObjectType;
 use Illuminate\JsonSchema\Types\Type;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Concerns\NormalizesMcpResult;
@@ -56,7 +58,17 @@ class McpTool implements Tool
      */
     public function schema(JsonSchema $schema): array
     {
-        return (new McpSchema($schema))->properties($this->tool->inputSchema ?? []);
+        $input = $this->tool->inputSchema ?? [];
+
+        if (! is_array($input) || ($input['type'] ?? 'object') !== 'object') {
+            return [];
+        }
+
+        $type = JsonSchemaFactory::fromArray($input);
+
+        return $type instanceof ObjectType
+            ? (fn (): array => $this->properties)->call($type)
+            : [];
     }
 
     protected function convertResult(object $result): string
