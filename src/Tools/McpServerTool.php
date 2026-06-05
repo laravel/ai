@@ -13,31 +13,58 @@ class McpServerTool implements Tool
 {
     use NormalizesMcpResult;
 
+    /**
+     * The MCP server tool class name.
+     */
     protected const MCP_SERVER_TOOL = 'Laravel\\Mcp\\Server\\Tool';
 
+    /**
+     * The MCP request class name.
+     */
     protected const MCP_REQUEST = 'Laravel\\Mcp\\Request';
 
+    /**
+     * The MCP response class name.
+     */
     protected const MCP_RESPONSE = 'Laravel\\Mcp\\Response';
 
+    /**
+     * The MCP response factory class name.
+     */
     protected const MCP_RESPONSE_FACTORY = 'Laravel\\Mcp\\ResponseFactory';
 
+    /**
+     * Create a new MCP server tool wrapper instance.
+     */
     public function __construct(protected object $tool) {}
 
+    /**
+     * Determine whether the given value is an MCP server tool.
+     */
     public static function supports(mixed $tool): bool
     {
         return is_object($tool) && is_a($tool, self::MCP_SERVER_TOOL);
     }
 
+    /**
+     * Get the name of the tool.
+     */
     public function name(): string
     {
         return $this->tool->name();
     }
 
+    /**
+     * Get the description of the tool's purpose.
+     */
     public function description(): string
     {
         return $this->tool->description();
     }
 
+    /**
+     * Execute the tool.
+     */
     public function handle(Request $request): string
     {
         $container = Container::getInstance();
@@ -60,6 +87,8 @@ class McpServerTool implements Tool
     }
 
     /**
+     * Get the tool's schema definition.
+     *
      * @return array<string, Type>
      */
     public function schema(JsonSchema $schema): array
@@ -67,6 +96,9 @@ class McpServerTool implements Tool
         return $this->tool->schema($schema);
     }
 
+    /**
+     * Convert an MCP server response into tool output.
+     */
     protected function convertResponse(mixed $response): string
     {
         if (is_a($response, self::MCP_RESPONSE_FACTORY)) {

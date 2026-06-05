@@ -13,10 +13,19 @@ class McpTool implements Tool
 {
     use NormalizesMcpResult;
 
+    /**
+     * The MCP client tool primitive class name.
+     */
     protected const MCP_CLIENT_TOOL = 'Laravel\\Mcp\\Client\\Primitives\\Tool';
 
+    /**
+     * The prefix applied to MCP client tool names.
+     */
     protected const NAME_PREFIX = 'mcp_tools_';
 
+    /**
+     * Create a new MCP client tool wrapper instance.
+     */
     public function __construct(protected object $tool) {}
 
     /**
@@ -71,6 +80,9 @@ class McpTool implements Tool
             : [];
     }
 
+    /**
+     * Convert an MCP tool result into tool output.
+     */
     protected function convertResult(object $result): string
     {
         if (($result->isError ?? false) === true) {
@@ -84,6 +96,9 @@ class McpTool implements Tool
         return $this->text($result);
     }
 
+    /**
+     * Convert an MCP error result into tool output.
+     */
     protected function errorResult(object $result): string
     {
         $text = $this->text($result);
@@ -95,6 +110,9 @@ class McpTool implements Tool
         return $this->errorMessage($text);
     }
 
+    /**
+     * Extract the text content from an MCP tool result.
+     */
     protected function text(object $result): string
     {
         return is_callable([$result, 'text'])
