@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +22,10 @@ use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Storage\DatabaseConversationStore;
 use Tests\Fixtures\Agents\RememberingToolUsingAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
+
+afterEach(function () {
+    Relation::morphMap([], false);
+});
 
 test('it writes conversations to the default tables', function () {
     $store = new DatabaseConversationStore;
@@ -139,6 +144,46 @@ test('it stores sparse keyed tool calls and results as JSON arrays', function ()
 
     expect(array_is_list(json_decode($record->tool_calls, true)))->toBeTrue()
         ->and(array_is_list(json_decode($record->tool_results, true)))->toBeTrue();
+});
+
+test('it stores the agent morph alias when one is registered in the morph map', function () {
+    Relation::morphMap(['tool-using-agent' => ToolUsingAgent::class]);
+
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Morph map conversation');
+
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        'Check my order status.',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $store->storeUserMessage($conversationId, 1, $prompt);
+    $store->storeAssistantMessage($conversationId, 1, $prompt, new AgentResponse('invocation-id', 'The order has shipped.', new Usage, new Meta));
+
+    expect(DB::table('agent_conversation_messages')->where('conversation_id', $conversationId)->pluck('agent')->all())
+        ->toBe(['tool-using-agent', 'tool-using-agent']);
+});
+
+test('it stores the agent class name when no morph alias is registered', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Unmapped conversation');
+
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        'Check my order status.',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $store->storeUserMessage($conversationId, 1, $prompt);
+    $store->storeAssistantMessage($conversationId, 1, $prompt, new AgentResponse('invocation-id', 'The order has shipped.', new Usage, new Meta));
+
+    expect(DB::table('agent_conversation_messages')->where('conversation_id', $conversationId)->pluck('agent')->all())
+        ->toBe([ToolUsingAgent::class, ToolUsingAgent::class]);
 });
 
 test('it reloads legacy sparse keyed tool calls and results as lists', function () {

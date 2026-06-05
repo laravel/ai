@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Storage;
 
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -70,7 +71,7 @@ class DatabaseConversationStore implements ConversationStore
             'id' => $messageId,
             'conversation_id' => $conversationId,
             'user_id' => $userId,
-            'agent' => $prompt->agent::class,
+            'agent' => Relation::getMorphAlias($prompt->agent::class),
             'role' => 'user',
             'content' => $prompt->prompt,
             'attachments' => $prompt->attachments->toJson(),
@@ -100,7 +101,7 @@ class DatabaseConversationStore implements ConversationStore
             'id' => $messageId,
             'conversation_id' => $conversationId,
             'user_id' => $userId,
-            'agent' => $prompt->agent::class,
+            'agent' => Relation::getMorphAlias($prompt->agent::class),
             'role' => 'assistant',
             'content' => $response->text,
             'attachments' => '[]',
