@@ -269,7 +269,7 @@ trait HandlesTextStreaming
         yield new SingleTurnStreamEnd(
             reason: $this->extractFinishReason($responseData),
             usage: $usage ?? new Usage(0, 0),
-            responseId: $responseId,
+            continuationToken: $responseId,
         );
     }
 

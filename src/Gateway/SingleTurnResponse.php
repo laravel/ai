@@ -15,7 +15,7 @@ class SingleTurnResponse implements Arrayable, JsonSerializable
     /**
      * @param  ToolCall[]  $toolCalls
      * @param  array<string, mixed>|null  $structured
-     * @param  string|null  $responseId  Provider handle for stateful continuation (e.g. OpenAI's `previous_response_id`).
+     * @param  string|null  $continuationToken  Provider handle for stateful continuation (e.g. OpenAI's response id).
      * @param  array<int, array<string, mixed>>  $providerContentBlocks  Opaque provider-shaped blocks the loop replays
      *                                                                   on the next assistant message (e.g. Anthropic signed thinking, Bedrock reasoning blocks). The loop never
      *                                                                   inspects the shape; it just ferries the array back into the next {@see AssistantMessage}.
@@ -27,7 +27,7 @@ class SingleTurnResponse implements Arrayable, JsonSerializable
         public Usage $usage,
         public Meta $meta,
         public ?array $structured = null,
-        public ?string $responseId = null,
+        public ?string $continuationToken = null,
         public array $providerContentBlocks = [],
     ) {}
 

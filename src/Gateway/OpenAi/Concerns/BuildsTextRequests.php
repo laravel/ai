@@ -36,7 +36,7 @@ trait BuildsTextRequests
      * tool results need to be sent instead of replaying the conversation.
      */
     protected function buildContinuationBody(
-        string $previousResponseId,
+        string $continuationToken,
         string $model,
         array $messages,
         array $tools,
@@ -46,7 +46,7 @@ trait BuildsTextRequests
     ): array {
         $body = [
             'model' => $model,
-            'previous_response_id' => $previousResponseId,
+            'previous_response_id' => $continuationToken,
             'input' => $this->extractToolResultsInput($messages),
         ];
 

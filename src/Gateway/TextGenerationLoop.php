@@ -3,7 +3,6 @@
 namespace Laravel\Ai\Gateway;
 
 use Generator;
-use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Gateway\SingleTurnTextGateway;
@@ -30,7 +29,6 @@ class TextGenerationLoop
 
     public function __construct(
         protected SingleTurnTextGateway $gateway,
-        protected Dispatcher $events,
     ) {
         $this->initializeToolCallbacks();
     }
@@ -52,14 +50,14 @@ class TextGenerationLoop
         $steps = new Collection;
         $allMessages = $messages;
         $maxSteps = $this->resolveMaxSteps($options, $tools);
-        $previousResponseId = null;
+        $continuationToken = null;
         $lastResult = null;
 
         for ($step = 0; $step < $maxSteps; $step++) {
             $stepContext = new StepContext(
                 stepNumber: $step,
                 isFinalStep: $step + 1 >= $maxSteps,
-                previousResponseId: $previousResponseId,
+                continuationToken: $continuationToken,
             );
 
             $lastResult = $this->gateway->generateSingleTurn(
@@ -72,6 +70,8 @@ class TextGenerationLoop
             $toolResults = $shouldContinue
                 ? $this->executeToolCalls($lastResult->toolCalls, $tools)
                 : [];
+
+            $shouldContinue = $shouldContinue && filled($toolResults);
 
             $steps->push($this->buildStep($lastResult, $toolResults));
 
@@ -87,7 +87,7 @@ class TextGenerationLoop
 
             $allMessages[] = new ToolResultMessage(collect($toolResults));
 
-            $previousResponseId = $lastResult->responseId;
+            $continuationToken = $lastResult->continuationToken;
         }
 
         return $this->buildFinalResponse($steps, $allMessages, count($messages), $lastResult);
@@ -110,7 +110,7 @@ class TextGenerationLoop
     ): Generator {
         $allMessages = $messages;
         $maxSteps = $this->resolveMaxSteps($options, $tools);
-        $previousResponseId = null;
+        $continuationToken = null;
         $accumulatedUsage = new Usage;
         $finalReason = null;
 
@@ -122,7 +122,7 @@ class TextGenerationLoop
             $stepContext = new StepContext(
                 stepNumber: $step,
                 isFinalStep: $step + 1 >= $maxSteps,
-                previousResponseId: $previousResponseId,
+                continuationToken: $continuationToken,
             );
 
             $turn = $this->gateway->streamSingleTurn(
@@ -155,6 +155,10 @@ class TextGenerationLoop
 
             $toolResults = $this->executeToolCalls($pendingToolCalls, $tools);
 
+            if (blank($toolResults)) {
+                break;
+            }
+
             foreach ($toolResults as $toolResult) {
                 yield (new ToolResultEvent(
                     strtolower((string) Str::uuid7()),
@@ -173,7 +177,7 @@ class TextGenerationLoop
 
             $allMessages[] = new ToolResultMessage(collect($toolResults));
 
-            $previousResponseId = $turnEnd?->responseId;
+            $continuationToken = $turnEnd?->continuationToken;
         }
 
         if ($finalReason === null) {

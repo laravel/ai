@@ -75,10 +75,14 @@ test('streaming handles tool calls', function () {
     $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
 
     $toolCallEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolCallEvent));
+    $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
 
     expect($toolCallEvents)->not->toBeEmpty()
         ->and($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator')
-        ->and($toolCallEvents[0]->toolCall->resultId)->toBe('call_1');
+        ->and($toolCallEvents[0]->toolCall->resultId)->toBe('call_1')
+        ->and($streamEnd->reason)->toBe(FinishReason::Stop->value)
+        ->and($streamEnd->usage->promptTokens)->toBe(30)
+        ->and($streamEnd->usage->completionTokens)->toBe(15);
 });
 
 test('streaming error event stops stream', function () {

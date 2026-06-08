@@ -12,7 +12,7 @@ final class SingleTurnStreamEnd
     public function __construct(
         public readonly FinishReason $reason,
         public readonly Usage $usage,
-        public readonly ?string $responseId = null,
+        public readonly ?string $continuationToken = null,
         public readonly array $providerContentBlocks = [],
     ) {}
 }

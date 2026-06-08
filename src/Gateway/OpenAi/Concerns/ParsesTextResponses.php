@@ -51,7 +51,7 @@ trait ParsesTextResponses
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $data['model'] ?? '', $this->extractCitations($output)),
             structured: $structured ? (json_decode($text, true) ?? []) : null,
-            responseId: $data['id'] ?? '',
+            continuationToken: $data['id'] ?? '',
         );
     }
 

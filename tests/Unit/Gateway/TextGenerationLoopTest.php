@@ -1,7 +1,6 @@
 <?php
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
-use Illuminate\Events\Dispatcher;
 use Laravel\Ai\Contracts\Gateway\SingleTurnTextGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -33,11 +32,11 @@ test('it does not execute tool calls on the final generation step', function () 
             finishReason: FinishReason::ToolCalls,
             usage: new Usage,
             meta: new Meta('fake', 'model'),
-            responseId: 'response-1',
+            continuationToken: 'response-1',
         ),
     ]);
 
-    $response = (new TextGenerationLoop($gateway, new Dispatcher))->generate(
+    $response = (new TextGenerationLoop($gateway))->generate(
         textGenerationLoopProvider(),
         'model',
         null,
@@ -63,15 +62,15 @@ test('it holds stream end until the streamed tool loop is complete', function ()
     $gateway = new TextGenerationLoopFakeGateway(streams: [
         [
             new ToolCallEvent('tool-call-event', $firstToolCall, time()),
-            new SingleTurnStreamEnd(FinishReason::ToolCalls, new Usage(10, 1), responseId: 'response-1'),
+            new SingleTurnStreamEnd(FinishReason::ToolCalls, new Usage(10, 1), continuationToken: 'response-1'),
         ],
         [
             new TextDelta('text-delta', 'message-1', 'Done', time()),
-            new SingleTurnStreamEnd(FinishReason::Stop, new Usage(5, 2), responseId: 'response-2'),
+            new SingleTurnStreamEnd(FinishReason::Stop, new Usage(5, 2), continuationToken: 'response-2'),
         ],
     ]);
 
-    $events = iterator_to_array((new TextGenerationLoop($gateway, new Dispatcher))->stream(
+    $events = iterator_to_array((new TextGenerationLoop($gateway))->stream(
         'invocation-1',
         textGenerationLoopProvider(),
         'model',
@@ -99,10 +98,10 @@ test('it does not execute streamed tool calls on the final step', function () {
     $tool = new TextGenerationLoopCountingTool;
     $gateway = new TextGenerationLoopFakeGateway(streams: [[
         new ToolCallEvent('tool-call-event', new ToolCall('call-1', TextGenerationLoopCountingTool::class, [], 'call-1'), time()),
-        new SingleTurnStreamEnd(FinishReason::ToolCalls, new Usage(10, 1), responseId: 'response-1'),
+        new SingleTurnStreamEnd(FinishReason::ToolCalls, new Usage(10, 1), continuationToken: 'response-1'),
     ]]);
 
-    $events = iterator_to_array((new TextGenerationLoop($gateway, new Dispatcher))->stream(
+    $events = iterator_to_array((new TextGenerationLoop($gateway))->stream(
         'invocation-1',
         textGenerationLoopProvider(),
         'model',
@@ -131,7 +130,7 @@ test('it clamps non-positive maxSteps to at least one turn', function (int $maxS
         ),
     ]);
 
-    $response = (new TextGenerationLoop($gateway, new Dispatcher))->generate(
+    $response = (new TextGenerationLoop($gateway))->generate(
         textGenerationLoopProvider(),
         'model',
         null,
@@ -162,7 +161,7 @@ test('it accumulates streamed usage across multi-step turns', function () {
         ],
     ]);
 
-    $events = iterator_to_array((new TextGenerationLoop($gateway, new Dispatcher))->stream(
+    $events = iterator_to_array((new TextGenerationLoop($gateway))->stream(
         'invocation-1',
         textGenerationLoopProvider(),
         'model',
@@ -180,6 +179,74 @@ test('it accumulates streamed usage across multi-step turns', function () {
         ->and($streamEnd->usage->promptTokens)->toBe(15)
         ->and($streamEnd->usage->completionTokens)->toBe(3)
         ->and($streamEnd->reason)->toBe(FinishReason::Stop->value);
+});
+
+test('it stops generation when tool calls do not match local tools', function () {
+    $gateway = new TextGenerationLoopFakeGateway([
+        new SingleTurnResponse(
+            text: '',
+            toolCalls: [new ToolCall('call-1', 'MissingTool', [], 'call-1')],
+            finishReason: FinishReason::ToolCalls,
+            usage: new Usage(10, 1),
+            meta: new Meta('fake', 'model'),
+            continuationToken: 'response-1',
+        ),
+        new SingleTurnResponse(
+            text: 'should not be requested',
+            toolCalls: [],
+            finishReason: FinishReason::Stop,
+            usage: new Usage(1, 1),
+            meta: new Meta('fake', 'model'),
+        ),
+    ]);
+
+    $response = (new TextGenerationLoop($gateway))->generate(
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [],
+        [],
+        null,
+        null,
+        null,
+    );
+
+    expect($gateway->generateCalls)->toBe(1)
+        ->and($response->toolCalls)->toHaveCount(1)
+        ->and($response->toolResults)->toHaveCount(0)
+        ->and($response->steps)->toHaveCount(1);
+});
+
+test('it stops streaming when tool calls do not match local tools', function () {
+    $gateway = new TextGenerationLoopFakeGateway(streams: [
+        [
+            new ToolCallEvent('tool-call-event', new ToolCall('call-1', 'MissingTool', [], 'call-1'), time()),
+            new SingleTurnStreamEnd(FinishReason::ToolCalls, new Usage(10, 1), continuationToken: 'response-1'),
+        ],
+        [
+            new TextDelta('text-delta', 'message-1', 'should not be requested', time()),
+            new SingleTurnStreamEnd(FinishReason::Stop, new Usage(1, 1)),
+        ],
+    ]);
+
+    $events = iterator_to_array((new TextGenerationLoop($gateway))->stream(
+        'invocation-1',
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [],
+        [],
+        null,
+        null,
+        null,
+    ));
+
+    $streamEnd = collect($events)->whereInstanceOf(StreamEnd::class)->first();
+
+    expect($gateway->streamCalls)->toBe(1)
+        ->and(collect($events)->whereInstanceOf(ToolResultEvent::class))->toHaveCount(0)
+        ->and($streamEnd)->not->toBeNull()
+        ->and($streamEnd->reason)->toBe(FinishReason::ToolCalls->value);
 });
 
 function textGenerationLoopProvider(): TextProvider
