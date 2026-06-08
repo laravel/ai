@@ -17,6 +17,7 @@ use Laravel\Ai\Files\ProviderDocument;
 use Laravel\Ai\Files\ProviderImage;
 use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Files\RemoteImage;
+use Laravel\Ai\Files\S3Document;
 use Laravel\Ai\Files\StoredDocument;
 use Laravel\Ai\Files\StoredImage;
 
@@ -31,6 +32,7 @@ trait MapsAttachments
             return match (true) {
                 $attachment instanceof Base64Document,
                 $attachment instanceof LocalDocument,
+                $attachment instanceof S3Document,
                 $attachment instanceof StoredDocument => $this->buildDocumentBlock($attachment),
                 $attachment instanceof Base64Image => $this->buildImageBlock($attachment, $attachment->content()),
                 $attachment instanceof LocalImage => $this->buildImageBlock($attachment, file_get_contents($attachment->path)),
@@ -56,14 +58,22 @@ trait MapsAttachments
      */
     protected function buildDocumentBlock(Document $document): array
     {
+        $source = match (true) {
+            $document instanceof S3Document => [
+                's3Location' => array_filter([
+                    'uri' => $document->url,
+                    'bucketOwner' => $document->bucketOwner,
+                ]),
+            ],
+            default => ['bytes' => $document->content()],
+        };
+
         return [
-            'document' => [
+            'document' => array_filter([
                 'format' => $this->getDocumentFormat($document),
                 'name' => $this->getDocumentName($document),
-                'source' => [
-                    'bytes' => $document->content(),
-                ],
-            ],
+                'source' => $source,
+            ]),
         ];
     }
 
@@ -85,9 +95,13 @@ trait MapsAttachments
     /**
      * Map a Document's MIME type to a Bedrock document format.
      */
-    protected function getDocumentFormat(Document $document): string
+    protected function getDocumentFormat(Document $document): ?string
     {
-        $mime = strtolower(trim(strtok($document->mimeType() ?? 'text/plain', ';')));
+        $mime = strtolower(trim(strtok($document->mimeType() ?? '', ';')));
+
+        if (! $mime) {
+            return null;
+        }
 
         return match ($mime) {
             'application/pdf' => 'pdf',
@@ -98,7 +112,8 @@ trait MapsAttachments
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
             'text/html' => 'html',
             'text/markdown', 'text/x-markdown' => 'md',
-            default => 'txt',
+            'text/plain' => 'txt',
+            default => null,
         };
     }
 

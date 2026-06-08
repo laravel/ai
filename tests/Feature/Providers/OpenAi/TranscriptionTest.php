@@ -88,6 +88,7 @@ test('transcription usage is correctly parsed', function () {
         'usage' => [
             'input_tokens' => 100,
             'output_tokens' => 50,
+            'total_tokens' => 150,
         ],
     ])]);
 

@@ -15,11 +15,11 @@ trait CreatesAnthropicClient
     {
         $config = $provider->additionalConfiguration();
 
-        $headers = [
+        $headers = array_filter([
             'x-api-key' => $provider->providerCredentials()['key'],
             'anthropic-version' => $config['version'] ?? '2023-06-01',
             'anthropic-beta' => $config['anthropic_beta'] ?? 'web-fetch-2025-09-10',
-        ];
+        ]);
 
         return Http::baseUrl($this->baseUrl($provider))
             ->withHeaders($headers)

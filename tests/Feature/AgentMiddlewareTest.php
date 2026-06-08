@@ -3,11 +3,15 @@
 use Illuminate\Support\Facades\Event;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Events\AgentPrompted;
+use Laravel\Ai\Events\AgentStreamed;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
+use Laravel\Ai\Streaming\Events\StreamEnd;
+use Laravel\Ai\Streaming\Events\TextDelta;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
 use Tests\Fixtures\FakeConversationStore;
@@ -61,6 +65,27 @@ test('agent prompted event receives prompt when middleware short circuits', func
         ->prompt('Test prompt');
 
     Event::assertDispatched(AgentPrompted::class, function (AgentPrompted $event) {
+        return $event->prompt instanceof AgentPrompt
+            && $event->prompt->prompt === 'Test prompt';
+    });
+});
+
+test('agent streamed event receives prompt when middleware short circuits a stream', function () {
+    Event::fake();
+
+    AssistantAgent::fake([
+        'Fake response',
+    ]);
+
+    $response = (new AssistantAgent)
+        ->withMiddleware([streamingShortCircuitingMiddleware()])
+        ->stream('Test prompt');
+
+    foreach ($response as $event) {
+        // Drain the stream so the post-stream then() callback dispatches AgentStreamed.
+    }
+
+    Event::assertDispatched(AgentStreamed::class, function (AgentStreamed $event) {
         return $event->prompt instanceof AgentPrompt
             && $event->prompt->prompt === 'Test prompt';
     });
@@ -163,6 +188,35 @@ function shortCircuitingMiddleware(): object
                 'test-invocation-id',
                 'Short-circuited response',
                 new Usage,
+                new Meta,
+            );
+        }
+    };
+}
+
+function streamingShortCircuitingMiddleware(): object
+{
+    return new class
+    {
+        public function handle(AgentPrompt $prompt, Closure $next)
+        {
+            return new StreamableAgentResponse(
+                'test-invocation-id',
+                function () {
+                    yield new TextDelta(
+                        id: 'test-0',
+                        messageId: 'test-invocation-id',
+                        delta: 'Short-circuited response',
+                        timestamp: 0,
+                    );
+
+                    yield new StreamEnd(
+                        id: 'test-end',
+                        reason: 'short_circuit',
+                        usage: new Usage,
+                        timestamp: 0,
+                    );
+                },
                 new Meta,
             );
         }

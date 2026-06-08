@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\OpenRouter;
 
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
@@ -343,8 +344,8 @@ class OpenRouterGateway implements Gateway
             $data['text'] ?? '',
             collect(),
             new Usage(
-                $data['usage']['input_tokens'] ?? 0,
-                $data['usage']['total_tokens'] ?? 0,
+                Arr::get($data, 'usage.input_tokens', 0),
+                Arr::get($data, 'usage.output_tokens', 0),
             ),
             new Meta($provider->name(), $model),
         );
