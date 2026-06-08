@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\OpenAi;
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Files\HasName;
@@ -78,7 +79,17 @@ class OpenAiGateway implements Gateway
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, filled($schema), $tools, $schema, $options, $timeout , $model);
+        return $this->parseTextResponse(
+            $data,
+            $provider,
+            filled($schema),
+            $tools,
+            $schema,
+            $options,
+            $body,
+            $timeout,
+            $model,
+        );
     }
 
     /**
@@ -116,6 +127,7 @@ class OpenAiGateway implements Gateway
             $schema,
             $options,
             $response->getBody(),
+            $body,
             0,
             null,
             $timeout,
@@ -287,7 +299,7 @@ class OpenAiGateway implements Gateway
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)
-                ->attach('file', $audio->content(), $this->audioFilename($audio), ['Content-Type' => $audio->mimeType()])
+                ->attach('file', $audio->content(), $this->audioFilename($audio), array_filter(['Content-Type' => $audio->mimeType()]))
                 ->post('audio/transcriptions', array_merge($providerOptions, array_filter([
                     'model' => $model,
                     'language' => $language,
@@ -306,8 +318,8 @@ class OpenAiGateway implements Gateway
                 $segment['end'] ?? 0,
             )),
             new Usage(
-                $data['usage']['input_tokens'] ?? 0,
-                $data['usage']['total_tokens'] ?? 0,
+                Arr::get($data, 'usage.input_tokens', 0),
+                Arr::get($data, 'usage.output_tokens', 0),
             ),
             new Meta($provider->name(), $model),
         );

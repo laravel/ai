@@ -42,7 +42,7 @@ test('user message maps to azure format', function () {
 test('tool result follow up uses previous response id', function () {
     Http::fake([
         'my-resource.cognitiveservices.azure.com/*' => Http::sequence([
-            fakeAzureToolCallResponse(),
+            fakeOpenAiToolCallResponse('resp_azure_tool_123', 'gpt-4o'),
             fakeAzureResponse('The number is 72019'),
         ]),
     ]);
@@ -72,6 +72,30 @@ test('tool result follow up uses previous response id', function () {
     }
 
     expect($hasFunctionCallOutput)->toBeTrue();
+});
+
+test('azure store false enables stateless inline conversation', function () {
+    config(['ai.providers.azure' => [
+        ...config('ai.providers.azure'),
+        'store' => false,
+    ]]);
+
+    Http::fake([
+        'my-resource.cognitiveservices.azure.com/*' => Http::sequence([
+            fakeOpenAiToolCallResponse('resp_azure_tool_123', 'gpt-4o'),
+            fakeAzureResponse('The number is 72019'),
+        ]),
+    ]);
+
+    (new ToolUsingAgent(fixed: true))->prompt('Generate a number', provider: 'azure');
+
+    $recorded = Http::recorded();
+    $initialBody = json_decode($recorded[0][0]->body(), true);
+    $followUpBody = json_decode($recorded[1][0]->body(), true);
+
+    expect($initialBody['store'] ?? null)->toBeFalse()
+        ->and($followUpBody)->not->toHaveKey('previous_response_id')
+        ->and($followUpBody['store'] ?? null)->toBeFalse();
 });
 
 test('image attachment maps to input_image content block', function () {
@@ -124,24 +148,3 @@ test('document attachment maps to input_file content block', function () {
             && str_contains($fileBlock['file_data'], 'application/pdf');
     });
 });
-
-function fakeAzureToolCallResponse()
-{
-    return Http::response([
-        'id' => 'resp_azure_tool_123',
-        'status' => 'completed',
-        'model' => 'gpt-4o',
-        'output' => [[
-            'type' => 'function_call',
-            'id' => 'fc_123',
-            'call_id' => 'call_123',
-            'name' => 'FixedNumberGenerator',
-            'arguments' => '{}',
-            'status' => 'completed',
-        ]],
-        'usage' => [
-            'input_tokens' => 10,
-            'output_tokens' => 5,
-        ],
-    ]);
-}

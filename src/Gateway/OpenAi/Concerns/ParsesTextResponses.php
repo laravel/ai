@@ -2,9 +2,7 @@
 
 namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
-use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
-use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -59,8 +57,9 @@ trait ParsesTextResponses
         array $tools = [],
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
+        array $requestBody = [],
         ?int $timeout = null,
-        string $model
+        string $model = '',
     ): TextResponse {
         return $this->processResponse(
             $data,
@@ -71,15 +70,13 @@ trait ParsesTextResponses
             $model,
             new Collection,
             new Collection,
+            $requestBody,
             maxSteps: $options?->maxSteps,
             options: $options,
             timeout: $timeout,
         );
     }
 
-    /**
-     * Process a single response, handling tool loops recursively.
-     */
     protected function processResponse(
         array $data,
         Provider $provider,
@@ -89,6 +86,7 @@ trait ParsesTextResponses
         string $model,
         Collection $steps,
         Collection $messages,
+        array $requestBody,
         int $depth = 0,
         ?int $maxSteps = null,
         ?TextGenerationOptions $options = null,
@@ -103,7 +101,6 @@ trait ParsesTextResponses
         $usage = $this->extractUsage($data);
         $finishReason = $this->extractFinishReason($data);
 
-        // Associate reasoning with tool calls...
         $mappedToolCalls = $this->mapToolCallsWithReasoning($output);
 
         $step = new Step(
@@ -117,18 +114,15 @@ trait ParsesTextResponses
 
         $steps->push($step);
 
-        // Build assistant message for conversation context...
         $assistantMessage = new AssistantMessage($text, collect($mappedToolCalls));
 
         $messages->push($assistantMessage);
 
-        // Execute tool calls...
         if ($finishReason === FinishReason::ToolCalls &&
             filled($mappedToolCalls) &&
             $steps->count() < ($maxSteps ?? round(count($tools) * 1.5))) {
             $toolResults = $this->executeToolCalls($mappedToolCalls, $tools);
 
-            // Update step with tool results...
             $steps->pop();
 
             $steps->push(new Step(
@@ -145,14 +139,17 @@ trait ParsesTextResponses
             $messages->push($toolResultMessage);
 
             return $this->continueWithToolResults(
-                $responseId,
-                $model,
                 $provider,
                 $structured,
                 $tools,
                 $schema,
+                $model,
                 $steps,
                 $messages,
+                $requestBody,
+                $responseId,
+                $assistantMessage,
+                $toolResultMessage,
                 $toolResults,
                 $depth + 1,
                 $maxSteps,
@@ -186,8 +183,6 @@ trait ParsesTextResponses
     }
 
     /**
-     * Execute tool calls and return tool results.
-     *
      * @param  array<ToolCall>  $toolCalls
      * @param  array<Tool>  $tools
      * @return array<ToolResult>
@@ -218,64 +213,68 @@ trait ParsesTextResponses
     }
 
     /**
-     * Continue the conversation with tool results by making a follow-up request.
+     * The stateful path keeps the original body, swaps input for just the new
+     * tool-result items, and adds previous_response_id so OpenAI loads prior
+     * state server-side. The stateless path appends the prior turn's items to
+     * the running input so OpenAI sees the full conversation each turn. Both
+     * paths inherit tools, schema, temperature, top_p, max_output_tokens, and
+     * providerOptions from the initial body.
+     *
+     * @param  array<ToolResult>  $toolResults
      */
     protected function continueWithToolResults(
-        string $responseId,
-        string $model,
         Provider $provider,
         bool $structured,
         array $tools,
         ?array $schema,
+        string $model,
         Collection $steps,
         Collection $messages,
+        array $requestBody,
+        string $responseId,
+        AssistantMessage $assistantMessage,
+        ToolResultMessage $toolResultMessage,
         array $toolResults,
         int $depth,
         ?int $maxSteps,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): TextResponse {
-        $body = [
-            'model' => $model,
-            'previous_response_id' => $responseId,
-            'input' => $this->buildToolResultsInput($toolResults),
-        ];
-
-        if (filled($tools)) {
-            $body['tools'] = $this->mapTools($tools, $provider);
-        }
-
-        if (filled($schema)) {
-            $body['text'] = $this->buildSchemaFormat($schema, Strict::isAppliedTo($options?->agent));
-        }
-
-        $body = array_merge($body, Arr::whereNotNull([
-            'temperature' => $options?->temperature,
-            'top_p' => $options?->topP,
-            'max_output_tokens' => $options?->maxTokens,
-        ]));
-
-        $providerOptions = $options?->providerOptions($provider->driver());
-
-        if (filled($providerOptions)) {
-            $body = array_merge($body, $providerOptions);
+        if ($this->isStateless($provider)) {
+            $this->mapAssistantMessage($assistantMessage, $requestBody['input']);
+            $this->mapToolResultMessage($toolResultMessage, $requestBody['input']);
+        } else {
+            $requestBody['previous_response_id'] = $responseId;
+            $requestBody['input'] = $this->buildToolResultsInput($toolResults);
         }
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('responses', $body),
+            fn () => $this->client($provider, $timeout)->post('responses', $requestBody),
         );
 
         $data = $response->json();
 
         $this->validateTextResponse($data);
 
-        return $this->processResponse($data, $provider, $structured, $tools, $schema, $model , $steps, $messages, $depth, $maxSteps, $options, $timeout);
+        return $this->processResponse(
+            $data,
+            $provider,
+            $structured,
+            $tools,
+            $schema,
+            $model,
+            $steps,
+            $messages,
+            $requestBody,
+            $depth,
+            $maxSteps,
+            $options,
+            $timeout,
+        );
     }
 
     /**
-     * Build the input array containing only tool results for a follow-up request.
-     *
      * @param  array<ToolResult>  $toolResults
      */
     protected function buildToolResultsInput(array $toolResults): array
@@ -414,6 +413,7 @@ trait ParsesTextResponses
                     $item['call_id'] ?? null,
                     $latestReasoning ? ($latestReasoning['id'] ?? null) : null,
                     $latestReasoning ? ($latestReasoning['summary'] ?? null) : null,
+                    $latestReasoning ? ($latestReasoning['encrypted_content'] ?? null) : null,
                 );
             }
         }
