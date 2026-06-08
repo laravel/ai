@@ -74,7 +74,7 @@ class OpenAiGateway implements Gateway
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post('responses', $body),
         );
-        
+
         $data = $response->json();
 
         $this->validateTextResponse($data);
