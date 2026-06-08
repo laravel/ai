@@ -118,6 +118,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                 cacheWriteInputTokens: $result['usage']['cacheWriteInputTokens'] ?? 0,
                 cacheReadInputTokens: $result['usage']['cacheReadInputTokens'] ?? 0,
             );
+
             $totalUsage = $totalUsage->add($stepUsage);
 
             $output = '';

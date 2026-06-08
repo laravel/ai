@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Providers\Tools\FileSearch;
+use Laravel\Ai\Providers\Tools\WebSearch;
 use Tests\Fixtures\Agents\NamedToolAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
@@ -58,6 +59,37 @@ test('tool with a name() method emits the declared name', function () {
         $names = collect($request->data()['tools'] ?? [])->pluck('name')->all();
 
         return in_array('aliased_tool', $names, true);
+    });
+});
+
+test('web search tool sends allowed_domains', function () {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [(new WebSearch)->allow(['laravel.com', 'php.net'])])
+        ->prompt('Search', provider: 'anthropic');
+
+    Http::assertSent(function ($request) {
+        $tool = collect($request->data()['tools'] ?? [])->firstWhere('name', 'web_search');
+
+        return data_get($tool, 'allowed_domains') === ['laravel.com', 'php.net'];
+    });
+});
+
+test('web search tool forwards anthropic provider options into the tool payload', function () {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [
+        (new WebSearch)->withProviderOptions('anthropic', ['blocked_domains' => ['spam.com']]),
+    ])->prompt('Search', provider: 'anthropic');
+
+    Http::assertSent(function ($request) {
+        $tool = collect($request->data()['tools'] ?? [])->firstWhere('name', 'web_search');
+
+        return data_get($tool, 'blocked_domains') === ['spam.com'];
     });
 });
 

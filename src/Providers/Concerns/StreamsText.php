@@ -68,9 +68,9 @@ trait StreamsText
                     },
                     $meta,
                 );
-            })->then(function (StreamedAgentResponse $response) use ($invocationId, &$processedPrompt) {
+            })->then(function (StreamedAgentResponse $response) use ($invocationId, $prompt, &$processedPrompt) {
                 $this->events->dispatch(
-                    new AgentStreamed($invocationId, $processedPrompt, $response)
+                    new AgentStreamed($invocationId, $processedPrompt ?? $prompt, $response)
                 );
             });
     }

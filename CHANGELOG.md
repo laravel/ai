@@ -1,6 +1,35 @@
 # Release Notes
 
-## [Unreleased](https://github.com/laravel/ai/compare/v0.7.0...0.x)
+## [Unreleased](https://github.com/laravel/ai/compare/v0.7.2...0.x)
+
+## [v0.7.2](https://github.com/laravel/ai/compare/v0.7.1...v0.7.2) - 2026-05-28
+
+### What's Changed
+
+* Revert "Apply model attribute and explicit model to all providers in a failover list" by [@taylorotwell](https://github.com/taylorotwell) in https://github.com/laravel/ai/pull/667
+* Set claude-opus-4-8 as Anthropic's smartest text model by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/670
+
+**Full Changelog**: https://github.com/laravel/ai/compare/v0.7.1...v0.7.2
+
+## [v0.7.1](https://github.com/laravel/ai/compare/v0.7.0...v0.7.1) - 2026-05-26
+
+### What's Changed
+
+* Set gemini-3.5-flash as Gemini's smartest text model by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/640
+* BedrockTextGateway: Add cache usage by [@liambenson](https://github.com/liambenson) in https://github.com/laravel/ai/pull/642
+* Set invocation id on fake stream events by [@Anoop-Kadachi](https://github.com/Anoop-Kadachi) in https://github.com/laravel/ai/pull/635
+* Apply model attribute and explicit model to all providers in a failover list by [@sumaiazaman](https://github.com/sumaiazaman) in https://github.com/laravel/ai/pull/633
+* Add JSON_UNESCAPED_UNICODE to schema instruction encoding by [@sumaiazaman](https://github.com/sumaiazaman) in https://github.com/laravel/ai/pull/644
+* Updates deprecated gemini model to successor by [@nicolasbuch](https://github.com/nicolasbuch) in https://github.com/laravel/ai/pull/657
+* Fix Gemini image generation when text part precedes image data by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/658
+* Update deprecated Gemini default to gemini-3.5-flash by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/661
+
+### New Contributors
+
+* [@liambenson](https://github.com/liambenson) made their first contribution in https://github.com/laravel/ai/pull/642
+* [@nicolasbuch](https://github.com/nicolasbuch) made their first contribution in https://github.com/laravel/ai/pull/657
+
+**Full Changelog**: https://github.com/laravel/ai/compare/v0.7.0...v0.7.1
 
 ## [v0.7.0](https://github.com/laravel/ai/compare/v0.6.8...v0.7.0) - 2026-05-19
 

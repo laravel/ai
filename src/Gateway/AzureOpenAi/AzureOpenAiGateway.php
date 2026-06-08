@@ -111,7 +111,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, SingleTurnTe
         ?TextGenerationOptions $options,
         StepContext $stepContext,
     ): array {
-        return $stepContext->previousResponseId
+        return $stepContext->previousResponseId && ! $this->isStateless($provider)
             ? $this->buildContinuationBody($stepContext->previousResponseId, $model, $messages, $tools, $provider, $schema, $options)
             : $this->buildTextRequestBody($provider, $model, $instructions, $messages, $tools, $schema, $options);
     }

@@ -210,7 +210,7 @@ function timeoutFakeGeminiToolCallResponse(): PromiseInterface
             'candidatesTokenCount' => 5,
             'totalTokenCount' => 15,
         ],
-        'modelVersion' => 'gemini-3-flash-preview',
+        'modelVersion' => 'gemini-3.5-flash',
     ]);
 }
 
@@ -229,7 +229,7 @@ function timeoutFakeGeminiTextResponse(string $text): PromiseInterface
             'candidatesTokenCount' => 5,
             'totalTokenCount' => 15,
         ],
-        'modelVersion' => 'gemini-3-flash-preview',
+        'modelVersion' => 'gemini-3.5-flash',
     ]);
 }
 

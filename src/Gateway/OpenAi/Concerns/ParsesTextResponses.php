@@ -155,6 +155,7 @@ trait ParsesTextResponses
                     $item['call_id'] ?? null,
                     $latestReasoning ? ($latestReasoning['id'] ?? null) : null,
                     $latestReasoning ? ($latestReasoning['summary'] ?? null) : null,
+                    $latestReasoning ? ($latestReasoning['encrypted_content'] ?? null) : null,
                 );
             }
         }

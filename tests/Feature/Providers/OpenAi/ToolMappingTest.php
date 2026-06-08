@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Providers\Tools\WebSearch;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 use Tests\Fixtures\Tools\NamedTool;
 use Tests\Fixtures\Tools\NonStrictTool;
@@ -101,5 +102,176 @@ test('tool with empty schema includes strict compliant parameters', function () 
             && $tool['parameters']['properties'] === []
             && $tool['parameters']['required'] === []
             && $tool['parameters']['additionalProperties'] === false;
+    });
+});
+
+test('web search tool sends type web_search', function () {
+    Http::fake([
+        '*' => fakeOpenAiResponse('result'),
+    ]);
+
+    agent(tools: [new WebSearch])->prompt('Search the web', provider: 'openai');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
+
+        return $tool !== null;
+    });
+});
+
+test('web search tool omits openai-specific options by default', function () {
+    Http::fake([
+        '*' => fakeOpenAiResponse('result'),
+    ]);
+
+    agent(tools: [new WebSearch])->prompt('Search the web', provider: 'openai');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
+
+        return ! array_key_exists('external_web_access', $tool);
+    });
+});
+
+test('web search tool forwards openai provider options into the tool payload', function () {
+    Http::fake([
+        '*' => fakeOpenAiResponse('result'),
+    ]);
+
+    agent(tools: [
+        (new WebSearch)->withProviderOptions('openai', [
+            'external_web_access' => false,
+            'search_context_size' => 'high',
+        ]),
+    ])->prompt('Search', provider: 'openai');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
+
+        return data_get($tool, 'external_web_access') === false
+            && data_get($tool, 'search_context_size') === 'high';
+    });
+});
+
+test('web search tool ignores provider options keyed to another provider', function () {
+    Http::fake([
+        '*' => fakeOpenAiResponse('result'),
+    ]);
+
+    agent(tools: [
+        (new WebSearch)->withProviderOptions('anthropic', ['external_web_access' => false]),
+    ])->prompt('Search', provider: 'openai');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
+
+        return ! array_key_exists('external_web_access', $tool);
+    });
+});
+
+test('web search tool sends allowed_domains filter', function () {
+    Http::fake([
+        '*' => fakeOpenAiResponse('result'),
+    ]);
+
+    agent(tools: [(new WebSearch)->allow(['example.com', 'docs.example.com'])])
+        ->prompt('Search', provider: 'openai');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
+
+        return data_get($tool, 'filters.allowed_domains') === ['example.com', 'docs.example.com'];
+    });
+});
+
+test('web search tool sends blocked_domains via provider options', function () {
+    Http::fake([
+        '*' => fakeOpenAiResponse('result'),
+    ]);
+
+    agent(tools: [
+        (new WebSearch)->withProviderOptions('openai', [
+            'filters' => ['blocked_domains' => ['spam.com', 'ads.example.com']],
+        ]),
+    ])->prompt('Search', provider: 'openai');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
+
+        return data_get($tool, 'filters.blocked_domains') === ['spam.com', 'ads.example.com'];
+    });
+});
+
+test('web search tool merges allow() with blocked_domains provider option', function () {
+    Http::fake([
+        '*' => fakeOpenAiResponse('result'),
+    ]);
+
+    agent(tools: [
+        (new WebSearch)
+            ->allow(['good.com'])
+            ->withProviderOptions('openai', ['filters' => ['blocked_domains' => ['bad.com']]]),
+    ])->prompt('Search', provider: 'openai');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
+
+        return data_get($tool, 'filters.allowed_domains') === ['good.com']
+            && data_get($tool, 'filters.blocked_domains') === ['bad.com'];
+    });
+});
+
+test('web search tool omits filters when no domains configured', function () {
+    Http::fake([
+        '*' => fakeOpenAiResponse('result'),
+    ]);
+
+    agent(tools: [new WebSearch])->prompt('Search', provider: 'openai');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
+
+        return ! array_key_exists('filters', $tool);
+    });
+});
+
+test('web search tool sends user_location when location is set', function () {
+    Http::fake([
+        '*' => fakeOpenAiResponse('result'),
+    ]);
+
+    agent(tools: [(new WebSearch)->location(city: 'Warsaw', country: 'PL')])
+        ->prompt('Search', provider: 'openai');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
+
+        return data_get($tool, 'user_location.type') === 'approximate'
+            && data_get($tool, 'user_location.city') === 'Warsaw'
+            && data_get($tool, 'user_location.country') === 'PL';
+    });
+});
+
+test('web search tool omits user_location when no location set', function () {
+    Http::fake([
+        '*' => fakeOpenAiResponse('result'),
+    ]);
+
+    agent(tools: [new WebSearch])->prompt('Search', provider: 'openai');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
+
+        return ! array_key_exists('user_location', $tool);
     });
 });

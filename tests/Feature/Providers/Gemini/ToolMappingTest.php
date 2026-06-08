@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Tests\Fixtures\Agents\NamedToolAgent;
+use Tests\Fixtures\Agents\NestedObjectToolAgent;
 use Tests\Fixtures\Agents\NullableToolAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
@@ -58,6 +59,42 @@ test('tool parameters exclude additional properties', function () {
         }
 
         return false;
+    });
+});
+
+test('nested object parameters recursively exclude additional properties', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    (new NestedObjectToolAgent)->prompt('Test nested params', provider: 'gemini');
+
+    $hasAdditionalProperties = function ($node) use (&$hasAdditionalProperties) {
+        if (! is_array($node)) {
+            return false;
+        }
+
+        if (array_key_exists('additionalProperties', $node)) {
+            return true;
+        }
+
+        foreach ($node as $value) {
+            if ($hasAdditionalProperties($value)) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+
+    Http::assertSent(function ($request) use ($hasAdditionalProperties) {
+        $params = $request->data()['tools'][0]['function_declarations'][0]['parameters'];
+
+        // The nested object lives under the array's items and must survive the strip.
+        expect($params['properties']['items']['items']['properties'])
+            ->toHaveKeys(['name', 'description']);
+
+        return $hasAdditionalProperties($params) === false;
     });
 });
 

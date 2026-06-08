@@ -130,6 +130,7 @@ trait HandlesTextStreaming
                 $reasoningItems[] = [
                     'id' => $data['item']['id'] ?? null,
                     'summary' => $data['item']['summary'] ?? [],
+                    'encrypted_content' => $data['item']['encrypted_content'] ?? null,
                 ];
 
                 if ($reasoningId !== '') {
@@ -194,6 +195,7 @@ trait HandlesTextStreaming
 
                     $toolCall['reasoning_id'] = $latestReasoning['id'];
                     $toolCall['reasoning_summary'] = $latestReasoning['summary'] ?? [];
+                    $toolCall['reasoning_encrypted_content'] = $latestReasoning['encrypted_content'] ?? null;
                 }
 
                 $pendingToolCalls[$index] = $toolCall;
@@ -234,6 +236,7 @@ trait HandlesTextStreaming
                                 $call['call_id'] ?? null,
                                 $call['reasoning_id'] ?? null,
                                 $call['reasoning_summary'] ?? null,
+                                $call['reasoning_encrypted_content'] ?? null,
                             ),
                             time(),
                         ))->withInvocationId($invocationId);
@@ -270,6 +273,9 @@ trait HandlesTextStreaming
         );
     }
 
+    /**
+     * Generate a lowercase UUID v7 for use as a stream event ID.
+     */
     protected function generateEventId(): string
     {
         return strtolower((string) Str::uuid7());

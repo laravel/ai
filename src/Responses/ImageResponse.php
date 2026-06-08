@@ -8,6 +8,7 @@ use Illuminate\Support\Collection;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
+use RuntimeException;
 
 class ImageResponse implements Countable, Htmlable
 {
@@ -22,7 +23,11 @@ class ImageResponse implements Countable, Htmlable
      */
     public function firstImage(): GeneratedImage
     {
-        return $this->images[0];
+        if ($this->images->isEmpty()) {
+            throw new RuntimeException('The image response does not contain any images.');
+        }
+
+        return $this->images->first();
     }
 
     /**
@@ -62,10 +67,12 @@ class ImageResponse implements Countable, Htmlable
      */
     public function toHtml(string $alt = ''): string
     {
+        $image = $this->firstImage();
+
         return sprintf(
             '<img src="data:%s;base64,%s" alt="%s" />',
-            $this->images[0]->mime,
-            $this->images[0]->image,
+            $image->mime(),
+            $image->image,
             e($alt),
         );
     }
@@ -83,6 +90,6 @@ class ImageResponse implements Countable, Htmlable
      */
     public function __toString(): string
     {
-        return (string) $this->images[0];
+        return (string) $this->firstImage();
     }
 }

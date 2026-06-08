@@ -84,6 +84,17 @@ trait BuildsTextRequests
             $body = array_merge($body, $providerOptions);
         }
 
+        if ($this->isStateless($provider)) {
+            $body['store'] = false;
+
+            if ($this->isReasoningModel($body['model'] ?? '')) {
+                $body['include'] = array_values(array_unique([
+                    ...($body['include'] ?? []),
+                    'reasoning.encrypted_content',
+                ]));
+            }
+        }
+
         return $body;
     }
 
@@ -102,6 +113,23 @@ trait BuildsTextRequests
                 'output' => $this->serializeToolResultOutput($toolResult->result),
             ])
             ->all();
+    }
+
+    protected function isStateless(Provider $provider): bool
+    {
+        return filter_var(
+            $provider->additionalConfiguration()['store'] ?? true,
+            FILTER_VALIDATE_BOOL,
+            FILTER_NULL_ON_FAILURE,
+        ) === false;
+    }
+
+    protected function isReasoningModel(string $model): bool
+    {
+        return (str_starts_with($model, 'gpt-5') && ! str_starts_with($model, 'gpt-5-chat'))
+            || str_starts_with($model, 'o4-mini')
+            || str_starts_with($model, 'o3')
+            || str_starts_with($model, 'o1');
     }
 
     /**

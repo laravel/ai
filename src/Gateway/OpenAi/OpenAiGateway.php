@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\OpenAi;
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Files\HasName;
@@ -111,7 +112,7 @@ class OpenAiGateway implements Gateway, SingleTurnTextGateway
         ?TextGenerationOptions $options,
         StepContext $stepContext,
     ): array {
-        return $stepContext->previousResponseId
+        return $stepContext->previousResponseId && ! $this->isStateless($provider)
             ? $this->buildContinuationBody($stepContext->previousResponseId, $model, $messages, $tools, $provider, $schema, $options)
             : $this->buildTextRequestBody($provider, $model, $instructions, $messages, $tools, $schema, $options);
     }
@@ -281,7 +282,7 @@ class OpenAiGateway implements Gateway, SingleTurnTextGateway
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)
-                ->attach('file', $audio->content(), $this->audioFilename($audio), ['Content-Type' => $audio->mimeType()])
+                ->attach('file', $audio->content(), $this->audioFilename($audio), array_filter(['Content-Type' => $audio->mimeType()]))
                 ->post('audio/transcriptions', array_merge($providerOptions, array_filter([
                     'model' => $model,
                     'language' => $language,
@@ -300,8 +301,8 @@ class OpenAiGateway implements Gateway, SingleTurnTextGateway
                 $segment['end'] ?? 0,
             )),
             new Usage(
-                $data['usage']['input_tokens'] ?? 0,
-                $data['usage']['total_tokens'] ?? 0,
+                Arr::get($data, 'usage.input_tokens', 0),
+                Arr::get($data, 'usage.output_tokens', 0),
             ),
             new Meta($provider->name(), $model),
         );

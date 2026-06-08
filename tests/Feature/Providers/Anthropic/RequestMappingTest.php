@@ -137,6 +137,11 @@ describe('request structure', function () {
     });
 
     test('request sends correct authentication headers', function () {
+        config(['ai.providers.anthropic' => [
+            ...config('ai.providers.anthropic'),
+            'key' => 'test-key',
+        ]]);
+
         Http::fake([
             'api.anthropic.com/*' => $this->fakeTextResponse(),
         ]);
@@ -147,7 +152,23 @@ describe('request structure', function () {
         );
 
         Http::assertSent(function ($request) {
-            return $request->hasHeader('x-api-key')
+            return $request->hasHeader('x-api-key', 'test-key')
+                && $request->hasHeader('anthropic-version', '2023-06-01');
+        });
+    });
+
+    test('request omits the api key header when no key is configured', function () {
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeTextResponse(),
+        ]);
+
+        (new AssistantAgent)->prompt(
+            'Hi',
+            provider: 'anthropic',
+        );
+
+        Http::assertSent(function ($request) {
+            return ! $request->hasHeader('x-api-key')
                 && $request->hasHeader('anthropic-version', '2023-06-01');
         });
     });

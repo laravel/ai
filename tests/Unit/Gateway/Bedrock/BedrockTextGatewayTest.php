@@ -11,6 +11,7 @@ use Laravel\Ai\Files\Image;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\ProviderImage;
 use Laravel\Ai\Files\RemoteImage;
+use Laravel\Ai\Files\S3Document;
 use Laravel\Ai\Gateway\Bedrock\BedrockTextGateway;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -94,7 +95,7 @@ function textGateway(): object
             return $this->resolveMaxSteps($tools, $options);
         }
 
-        public function callGetDocumentFormat(Document $document): string
+        public function callGetDocumentFormat(Document $document): ?string
         {
             return $this->getDocumentFormat($document);
         }
@@ -267,6 +268,46 @@ test('user message with pdf document attachment produces document block', functi
         ->and($formatted['content'][1]['document']['source']['bytes'])->toBe('pdf-bytes');
 });
 
+test('s3 document attachment is sent as s3Location reference', function () {
+    $document = (new S3Document('s3://my-bucket/path/report.pdf', null, 'application/pdf'))->as('report');
+    $user = new UserMessage('summarize this', [$document]);
+
+    $formatted = textGateway()->callFormatUserMessage($user);
+
+    expect($formatted['content'][1]['document']['format'])->toBe('pdf')
+        ->and($formatted['content'][1]['document']['name'])->toBe('report')
+        ->and($formatted['content'][1]['document']['source'])->toEqual([
+            's3Location' => ['uri' => 's3://my-bucket/path/report.pdf'],
+        ]);
+});
+
+test('s3 document attachment includes bucketOwner when set', function () {
+    $document = (new S3Document('s3://my-bucket/path/report.pdf', '123456789012', 'application/pdf'))->as('report');
+    $user = new UserMessage('summarize this', [$document]);
+
+    $formatted = textGateway()->callFormatUserMessage($user);
+
+    expect($formatted['content'][1]['document']['source'])->toEqual([
+        's3Location' => [
+            'uri' => 's3://my-bucket/path/report.pdf',
+            'bucketOwner' => '123456789012',
+        ],
+    ]);
+});
+
+test('s3 document can be created with constructor from s3 url', function () {
+    $document = new S3Document('s3://my-bucket/path/report.pdf');
+
+    expect($document)->toBeInstanceOf(S3Document::class)
+        ->and($document->url)->toBe('s3://my-bucket/path/report.pdf');
+});
+
+test('s3 document content throws unsupported exception', function () {
+    $document = new S3Document('s3://my-bucket/path/report.pdf');
+
+    $document->content();
+})->throws(InvalidArgumentException::class);
+
 test('document format maps common mime types', function () {
     $gateway = textGateway();
 
@@ -280,7 +321,7 @@ test('document format maps common mime types', function () {
     expect($gateway->callGetDocumentFormat(new Base64Document('', 'text/markdown')))->toBe('md');
     expect($gateway->callGetDocumentFormat(new Base64Document('', 'text/x-markdown')))->toBe('md');
     expect($gateway->callGetDocumentFormat(new Base64Document('', 'text/plain; charset=utf-8')))->toBe('txt');
-    expect($gateway->callGetDocumentFormat(new Base64Document('', null)))->toBe('txt');
+    expect($gateway->callGetDocumentFormat(new Base64Document('', null)))->toBeNull();
 });
 
 test('user message with base64 image attachment produces image block', function () {

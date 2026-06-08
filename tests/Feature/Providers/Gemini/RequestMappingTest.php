@@ -17,11 +17,11 @@ describe('request structure', function () {
         (new AssistantAgent)->prompt(
             'What is Laravel?',
             provider: 'gemini',
-            model: 'gemini-3-flash-preview',
+            model: 'gemini-3.5-flash',
         );
 
         Http::assertSent(function ($request) {
-            return str_contains($request->url(), 'models/gemini-3-flash-preview:generateContent')
+            return str_contains($request->url(), 'models/gemini-3.5-flash:generateContent')
                 && $request->data()['contents'][0]['role'] === 'user'
                 && $request->data()['contents'][0]['parts'][0]['text'] === 'What is Laravel?';
         });
@@ -65,6 +65,11 @@ describe('request structure', function () {
     });
 
     test('request sends api key header', function () {
+        config(['ai.providers.gemini' => [
+            ...config('ai.providers.gemini'),
+            'key' => 'test-key',
+        ]]);
+
         Http::fake([
             'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
         ]);
@@ -75,7 +80,22 @@ describe('request structure', function () {
         );
 
         Http::assertSent(function ($request) {
-            return $request->hasHeader('x-goog-api-key');
+            return $request->hasHeader('x-goog-api-key', 'test-key');
+        });
+    });
+
+    test('request omits the api key header when no key is configured', function () {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
+        ]);
+
+        (new AssistantAgent)->prompt(
+            'Hi',
+            provider: 'gemini',
+        );
+
+        Http::assertSent(function ($request) {
+            return ! $request->hasHeader('x-goog-api-key');
         });
     });
 

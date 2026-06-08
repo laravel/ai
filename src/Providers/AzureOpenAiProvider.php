@@ -141,9 +141,10 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, ImagePr
      */
     public function additionalConfiguration(): array
     {
-        return array_filter([
+        return [
             'url' => rtrim($this->config['url'] ?? '', '/'),
             'api_version' => $this->config['api_version'] ?? '2025-04-01-preview',
-        ]);
+            'store' => $this->config['store'] ?? true,
+        ];
     }
 }
