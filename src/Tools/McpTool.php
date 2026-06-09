@@ -9,6 +9,7 @@ use Illuminate\JsonSchema\Types\Type;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Schema\SchemaNormalizer;
 use Laravel\Ai\Tools\Concerns\NormalizesMcpResult;
+use Throwable;
 
 class McpTool implements Tool
 {
@@ -74,7 +75,11 @@ class McpTool implements Tool
             return [];
         }
 
-        $type = JsonSchemaFactory::fromArray(SchemaNormalizer::normalize($input));
+        try {
+            $type = JsonSchemaFactory::fromArray(SchemaNormalizer::normalize($input));
+        } catch (Throwable) {
+            return [];
+        }
 
         return $type instanceof ObjectType
             ? (fn (): array => $this->properties)->call($type)

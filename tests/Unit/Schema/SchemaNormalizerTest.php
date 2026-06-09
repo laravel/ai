@@ -266,6 +266,35 @@ test('it replaces a null-only type with a scalar so it deserializes', function (
     'null-only array' => [['type' => ['null']]],
 ]);
 
+test('it re-infers a type when the declared type is not a known JSON Schema type', function () {
+    $normalized = normalizesWithoutThrowing([
+        'type' => 'object',
+        'properties' => [
+            'a' => ['type' => 'frobnicate'],
+            'b' => ['type' => 'widget', 'properties' => ['x' => ['type' => 'string']]],
+        ],
+    ]);
+
+    expect($normalized['properties']['a']['type'])->toBe('string');
+    expect($normalized['properties']['b']['type'])->toBe('object');
+    expect($normalized['properties']['b']['properties'])->toHaveKey('x');
+});
+
+test('it drops unknown members from a multi-type union but keeps the rest', function () {
+    $normalized = normalizesWithoutThrowing([
+        'type' => 'object',
+        'properties' => [
+            'v' => ['type' => ['string', 'frobnicate', 'integer']],
+            'n' => ['type' => ['string', 'frobnicate', 'null']],
+            'only' => ['type' => ['frobnicate']],
+        ],
+    ]);
+
+    expect($normalized['properties']['v']['type'])->toBe(['string', 'integer']);
+    expect($normalized['properties']['n']['type'])->toBe(['string', 'null']);
+    expect($normalized['properties']['only']['type'])->toBe('string');
+});
+
 test('it produces an ObjectType for a gnarly real-world schema', function () {
     $type = JsonSchemaFactory::fromArray(SchemaNormalizer::normalize([
         '$schema' => 'http://json-schema.org/draft-07/schema#',

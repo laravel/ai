@@ -30,6 +30,11 @@ class SchemaNormalizer
     private const SCALAR_TYPES = ['string', 'integer', 'number', 'boolean'];
 
     /**
+     * The JSON Schema type strings the deserializer understands.
+     */
+    private const TYPES = ['string', 'integer', 'number', 'boolean', 'object', 'array', 'null'];
+
+    /**
      * Rewrite a raw JSON Schema into the subset Illuminate\JsonSchema can deserialize.
      *
      * @param  array<string, mixed>  $schema
@@ -304,18 +309,25 @@ class SchemaNormalizer
         $type = $schema['type'] ?? null;
 
         if (! is_array($type)) {
-            if ($type === 'null') {
+            if ($type === 'null' || ($type !== null && ! in_array($type, self::TYPES, true))) {
                 unset($schema['type']);
             }
 
             return $schema;
         }
 
-        $nonNull = array_values(array_filter($type, fn ($value) => $value !== 'null'));
+        $valid = array_values(array_filter($type, fn ($value) => in_array($value, self::TYPES, true)));
+        $nonNull = array_values(array_filter($valid, fn ($value) => $value !== 'null'));
 
         if ($nonNull === []) {
             unset($schema['type']);
-        } elseif (count($nonNull) > 1) {
+
+            return $schema;
+        }
+
+        $schema['type'] = count($valid) === 1 ? $valid[0] : $valid;
+
+        if (count($nonNull) > 1) {
             foreach (self::TYPE_KEYWORDS as $keyword) {
                 unset($schema[$keyword]);
             }
@@ -431,13 +443,25 @@ class SchemaNormalizer
      */
     private function ensureType(array $schema): array
     {
-        if (isset($schema['type']) || isset($schema['anyOf']) || isset($schema['oneOf']) || isset($schema['allOf'])) {
+        if ($this->usableType($schema['type'] ?? null) || isset($schema['anyOf']) || isset($schema['oneOf']) || isset($schema['allOf'])) {
             return $schema;
         }
+
+        unset($schema['type']);
 
         $schema['type'] = $this->baseType($schema);
 
         return $schema;
+    }
+
+    /**
+     * Determine whether a node's type resolves to a non-null type the deserializer accepts.
+     */
+    private function usableType(mixed $type): bool
+    {
+        $types = array_filter(is_array($type) ? $type : [$type], fn ($value) => $value !== 'null');
+
+        return $types !== [] && array_filter($types, fn ($value) => ! in_array($value, self::TYPES, true)) === [];
     }
 
     /**
