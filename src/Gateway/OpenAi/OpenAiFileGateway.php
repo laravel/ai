@@ -39,14 +39,13 @@ class OpenAiFileGateway implements FileGateway
         FileProvider $provider,
         StorableFile $file,
     ): StoredFileResponse {
-        [$content, $mime, $name] = $this->prepareStorableFile($file);
-
+        [$content, $mime, $name, $purpose] = $this->prepareStorableFile($file);
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider)
                 ->attach('file', $content, $name, ['Content-Type' => $mime])
                 ->post('files', [
-                    'purpose' => 'user_data',
+                    'purpose' => $purpose,
                 ])
         );
 

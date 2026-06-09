@@ -9,7 +9,7 @@ trait PreparesStorableFiles
     /**
      * Prepare file data for upload.
      *
-     * @return array{string, string, string}
+     * @return array{string, string, string, string}
      */
     protected function prepareStorableFile(StorableFile $file): array
     {
@@ -17,6 +17,7 @@ trait PreparesStorableFiles
             $file->content(),
             $file->mimeType() ?? 'application/octet-stream',
             $file->name() ?? 'file',
+            $file->purpose() ?? 'user_data',
         ];
     }
 }

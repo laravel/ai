@@ -4,12 +4,15 @@ namespace Laravel\Ai\Files;
 
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Files\HasName;
+use Laravel\Ai\Contracts\Files\HasPurpose;
 
-abstract class File implements HasName
+abstract class File implements HasName, HasPurpose
 {
     public ?string $name = null;
 
     public ?string $mime = null;
+
+    public ?string $purpose = null;
 
     /**
      * Reconstruct a file instance from its array representation.
@@ -73,6 +76,30 @@ abstract class File implements HasName
 
         return $this;
     }
+
+    /**
+     * Get the purpose of the file.
+     */
+    public function purpose(): ?string
+    {        
+        return $this->purpose;
+    }
+
+    /**
+     * Set the file's purpose to a custom value.
+     */
+    public function for(string $purpose): static
+    {   
+        
+        if(! in_array($purpose, ['assistants', 'batch', 'fine-tune', 'vision', 'user_data', 'evals'])) {
+            throw new InvalidArgumentException("Invalid file purpose [{$purpose}].");
+        }
+
+        $this->purpose = $purpose;
+
+        return $this;
+    }
+
 
     /**
      * Set the file's MIME type.
