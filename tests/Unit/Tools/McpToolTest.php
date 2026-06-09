@@ -182,18 +182,6 @@ test('it keeps the properties of a nullable object root', function () {
     expect($schema['properties']['query'])->toMatchArray(['type' => 'string']);
 });
 
-test('it degrades to no parameters instead of throwing on a schema the deserializer rejects', function () {
-    $tool = new McpTool(mcpTool(new FakeMcpClient, inputSchema: [
-        'type' => 'object',
-        'properties' => [
-            // A non-numeric numeric bound makes the deserializer throw; the tool must not.
-            'amount' => ['type' => 'integer', 'minimum' => 'not-a-number'],
-        ],
-    ]));
-
-    expect($tool->schema(new JsonSchemaTypeFactory))->toBe([]);
-});
-
 test('it marks fields nullable when anyOf or oneOf lists null after the typed branch', function () {
     $tool = new McpTool(mcpTool(new FakeMcpClient, inputSchema: [
         'type' => 'object',

@@ -40,7 +40,7 @@ test('it collapses a nullable anyOf to a nullable single type', function () {
     ]);
 });
 
-test('it collapses a non-nullable multi-branch oneOf to the first branch', function () {
+test('it collapses a non-nullable scalar oneOf to a multi-type union', function () {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => [
@@ -48,7 +48,8 @@ test('it collapses a non-nullable multi-branch oneOf to the first branch', funct
         ],
     ]);
 
-    expect($normalized['properties']['choice'])->toMatchArray(['type' => 'string', 'maxLength' => 5]);
+    expect($normalized['properties']['choice'])->toMatchArray(['type' => ['string', 'integer']]);
+    expect($normalized['properties']['choice'])->not->toHaveKey('maxLength');
 });
 
 test('it strips type-specific keywords from a multi-type union so it deserializes', function () {
@@ -165,7 +166,6 @@ test('it breaks circular $ref without infinite recursion', function () {
     ]);
 
     expect($normalized['properties']['node']['type'])->toBe('object');
-    // The cycle is broken: the self-referential branch drops its $ref and falls back to a scalar.
     expect($normalized['properties']['node']['properties']['child'])->toBe(['type' => 'string']);
 });
 
@@ -281,4 +281,90 @@ test('it produces an ObjectType for a gnarly real-world schema', function () {
     ]));
 
     expect($type)->toBeInstanceOf(ObjectType::class);
+});
+
+test('it terminates on a recursive allOf instead of hanging', function () {
+    $normalized = normalizesWithoutThrowing([
+        'type' => 'object',
+        'properties' => ['node' => ['$ref' => '#/$defs/Node']],
+        '$defs' => [
+            'Node' => [
+                'type' => 'object',
+                'allOf' => [['$ref' => '#/$defs/Node']],
+                'properties' => ['v' => ['type' => 'string']],
+            ],
+        ],
+    ]);
+
+    expect($normalized['properties']['node']['type'])->toBe('object');
+    expect($normalized['properties']['node']['properties'])->toHaveKey('v');
+});
+
+test('it terminates on a nullable recursive union instead of hanging', function () {
+    $normalized = normalizesWithoutThrowing([
+        'type' => 'object',
+        'properties' => ['node' => ['$ref' => '#/$defs/Node']],
+        '$defs' => [
+            'Node' => [
+                'type' => 'object',
+                'properties' => [
+                    'child' => ['anyOf' => [['$ref' => '#/$defs/Node'], ['type' => 'null']]],
+                ],
+            ],
+        ],
+    ]);
+
+    expect($normalized['properties']['node']['properties'])->toHaveKey('child');
+});
+
+test('it resolves arbitrary local JSON pointers, including escaped keys', function () {
+    $normalized = normalizesWithoutThrowing([
+        'type' => 'object',
+        'properties' => [
+            'a' => ['$ref' => '#/$defs/a~1b'],
+            'b' => ['$ref' => '#/properties/a'],
+        ],
+        '$defs' => [
+            'a/b' => ['type' => 'integer', 'minimum' => 1],
+        ],
+    ]);
+
+    expect($normalized['properties']['a'])->toMatchArray(['type' => 'integer', 'minimum' => 1]);
+    expect($normalized['properties']['b'])->toMatchArray(['type' => 'integer', 'minimum' => 1]);
+});
+
+test('it converts const to a single-value enum', function () {
+    $normalized = normalizesWithoutThrowing([
+        'type' => 'object',
+        'properties' => ['mode' => ['const' => 'fast']],
+    ]);
+
+    expect($normalized['properties']['mode'])->toBe(['enum' => ['fast'], 'type' => 'string']);
+});
+
+test('it infers object type from additionalProperties', function (array $raw) {
+    $normalized = normalizesWithoutThrowing([
+        'type' => 'object',
+        'properties' => ['opts' => $raw],
+    ]);
+
+    expect($normalized['properties']['opts']['type'])->toBe('object');
+})->with([
+    'schema form' => [['additionalProperties' => ['type' => 'string']]],
+    'false form' => [['additionalProperties' => false]],
+]);
+
+test('it deep-merges overlapping properties across allOf branches', function () {
+    $normalized = normalizesWithoutThrowing([
+        'allOf' => [
+            ['properties' => ['value' => ['type' => 'string', 'minLength' => 5]]],
+            ['properties' => ['value' => ['type' => 'string', 'maxLength' => 10]]],
+        ],
+    ]);
+
+    expect($normalized['properties']['value'])->toMatchArray([
+        'type' => 'string',
+        'minLength' => 5,
+        'maxLength' => 10,
+    ]);
 });
