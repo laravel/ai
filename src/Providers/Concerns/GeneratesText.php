@@ -27,7 +27,6 @@ use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Tools\AgentTool;
 use Laravel\Ai\Tools\McpServerTool;
 use Laravel\Ai\Tools\McpTool;
-use Throwable;
 
 use function Laravel\Ai\pipeline;
 
@@ -121,25 +120,10 @@ trait GeneratesText
             return [];
         }
 
-        return collect($agent->tools())
-            ->map(fn ($tool) => $this->resolveTool($tool))
-            ->reject(fn ($tool) => $tool instanceof McpTool && ! $this->mcpToolIsUsable($tool))
-            ->values()
-            ->all();
-    }
-
-    /**
-     * Determine whether the given MCP client tool can be prepared for the provider.
-     */
-    protected function mcpToolIsUsable(McpTool $tool): bool
-    {
-        try {
-            $tool->schema(new JsonSchemaTypeFactory);
-
-            return true;
-        } catch (Throwable) {
-            return false;
-        }
+        return array_map(
+            fn ($tool) => $this->resolveTool($tool),
+            [...$agent->tools()],
+        );
     }
 
     /**

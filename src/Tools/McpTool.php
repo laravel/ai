@@ -7,7 +7,9 @@ use Illuminate\JsonSchema\JsonSchema as JsonSchemaFactory;
 use Illuminate\JsonSchema\Types\ObjectType;
 use Illuminate\JsonSchema\Types\Type;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Schema\SchemaNormalizer;
 use Laravel\Ai\Tools\Concerns\NormalizesMcpResult;
+use Throwable;
 
 class McpTool implements Tool
 {
@@ -69,11 +71,17 @@ class McpTool implements Tool
     {
         $input = $this->tool->inputSchema ?? [];
 
-        if (! is_array($input) || ($input['type'] ?? 'object') !== 'object') {
+        if (! is_array($input) || $input === []) {
             return [];
         }
 
-        $type = JsonSchemaFactory::fromArray($input);
+        // Normalization makes the schema deserializable, but a malformed server
+        // schema should degrade to "no parameters" rather than fail the prompt.
+        try {
+            $type = JsonSchemaFactory::fromArray(SchemaNormalizer::normalize($input));
+        } catch (Throwable) {
+            return [];
+        }
 
         return $type instanceof ObjectType
             ? (fn (): array => $this->properties)->call($type)

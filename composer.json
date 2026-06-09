@@ -19,7 +19,7 @@
         "illuminate/contracts": "^12.0|^13.0",
         "illuminate/database": "^12.0|^13.0",
         "illuminate/filesystem": "^12.0|^13.0",
-        "illuminate/json-schema": "^12.61.2|^13.14",
+        "illuminate/json-schema": "^12.62|^13.15",
         "illuminate/support": "^12.0|^13.0",
         "laravel/prompts": "^0.3.6",
         "laravel/serializable-closure": "^2.0"
