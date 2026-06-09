@@ -8,12 +8,6 @@ use Tests\Fixtures\Mcp\FakeMcpClient;
 use Tests\Fixtures\Mcp\FakeMcpTool;
 use Tests\Fixtures\Mcp\FakeMcpToolResult;
 
-beforeAll(function () {
-    if (! class_exists('Laravel\\Mcp\\Client\\Primitives\\Tool')) {
-        class_alias(FakeMcpTool::class, 'Laravel\\Mcp\\Client\\Primitives\\Tool');
-    }
-});
-
 test('it detects mcp client tool primitives', function () {
     expect([
         McpTool::supports(mcpTool(new FakeMcpClient)),

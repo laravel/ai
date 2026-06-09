@@ -9,12 +9,6 @@ use Tests\Fixtures\Mcp\FakeMcpClient;
 use Tests\Fixtures\Mcp\FakeMcpTool;
 use Tests\Fixtures\Mcp\FakeMcpToolResult;
 
-beforeAll(function () {
-    if (! class_exists('Laravel\\Mcp\\Client\\Primitives\\Tool')) {
-        class_alias(FakeMcpTool::class, 'Laravel\\Mcp\\Client\\Primitives\\Tool');
-    }
-});
-
 test('agents can return mcp client tools directly', function () {
     $client = new FakeMcpClient;
     $mcpTool = new FakeMcpTool($client, 'search', null, 'Search records.', [
