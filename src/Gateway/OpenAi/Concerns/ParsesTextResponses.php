@@ -4,7 +4,7 @@ namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
 use Illuminate\Support\Collection;
 use Laravel\Ai\Exceptions\AiException;
-use Laravel\Ai\Gateway\SingleTurnResponse;
+use Laravel\Ai\Gateway\TurnResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
@@ -40,11 +40,11 @@ trait ParsesTextResponses
         array $data,
         Provider $provider,
         bool $structured,
-    ): SingleTurnResponse {
+    ): TurnResponse {
         $output = $data['output'] ?? [];
         $text = $this->extractText($output);
 
-        return new SingleTurnResponse(
+        return new TurnResponse(
             text: $text,
             toolCalls: $this->mapToolCallsWithReasoning($output),
             finishReason: $this->extractFinishReason($data),

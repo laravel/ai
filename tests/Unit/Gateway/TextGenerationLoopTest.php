@@ -1,12 +1,12 @@
 <?php
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
-use Laravel\Ai\Contracts\Gateway\SingleTurnTextGateway;
+use Laravel\Ai\Contracts\Gateway\TurnTextGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\Gateway\SingleTurnResponse;
-use Laravel\Ai\Gateway\SingleTurnStreamEnd;
+use Laravel\Ai\Gateway\TurnResponse;
+use Laravel\Ai\Gateway\TurnStreamEnd;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\TextGenerationLoop;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -26,7 +26,7 @@ use Laravel\Ai\Tools\Request;
 test('it does not execute tool calls on the final generation step', function () {
     $tool = new TextGenerationLoopCountingTool;
     $gateway = new TextGenerationLoopFakeGateway([
-        new SingleTurnResponse(
+        new TurnResponse(
             text: '',
             toolCalls: [new ToolCall('call-1', TextGenerationLoopCountingTool::class, [], 'call-1')],
             finishReason: FinishReason::ToolCalls,
@@ -62,11 +62,11 @@ test('it holds stream end until the streamed tool loop is complete', function ()
     $gateway = new TextGenerationLoopFakeGateway(streams: [
         [
             new ToolCallEvent('tool-call-event', $firstToolCall, time()),
-            new SingleTurnStreamEnd(FinishReason::ToolCalls, new Usage(10, 1), continuationToken: 'response-1'),
+            new TurnStreamEnd(FinishReason::ToolCalls, new Usage(10, 1), continuationToken: 'response-1'),
         ],
         [
             new TextDelta('text-delta', 'message-1', 'Done', time()),
-            new SingleTurnStreamEnd(FinishReason::Stop, new Usage(5, 2), continuationToken: 'response-2'),
+            new TurnStreamEnd(FinishReason::Stop, new Usage(5, 2), continuationToken: 'response-2'),
         ],
     ]);
 
@@ -98,7 +98,7 @@ test('it does not execute streamed tool calls on the final step', function () {
     $tool = new TextGenerationLoopCountingTool;
     $gateway = new TextGenerationLoopFakeGateway(streams: [[
         new ToolCallEvent('tool-call-event', new ToolCall('call-1', TextGenerationLoopCountingTool::class, [], 'call-1'), time()),
-        new SingleTurnStreamEnd(FinishReason::ToolCalls, new Usage(10, 1), continuationToken: 'response-1'),
+        new TurnStreamEnd(FinishReason::ToolCalls, new Usage(10, 1), continuationToken: 'response-1'),
     ]]);
 
     $events = iterator_to_array((new TextGenerationLoop($gateway))->stream(
@@ -121,7 +121,7 @@ test('it does not execute streamed tool calls on the final step', function () {
 
 test('it clamps non-positive maxSteps to at least one turn', function (int $maxSteps) {
     $gateway = new TextGenerationLoopFakeGateway([
-        new SingleTurnResponse(
+        new TurnResponse(
             text: 'hi',
             toolCalls: [],
             finishReason: FinishReason::Stop,
@@ -153,11 +153,11 @@ test('it accumulates streamed usage across multi-step turns', function () {
     $gateway = new TextGenerationLoopFakeGateway(streams: [
         [
             new ToolCallEvent('tool-call', new ToolCall('call-1', TextGenerationLoopCountingTool::class, [], 'call-1'), time()),
-            new SingleTurnStreamEnd(FinishReason::ToolCalls, new Usage(10, 1)),
+            new TurnStreamEnd(FinishReason::ToolCalls, new Usage(10, 1)),
         ],
         [
             new TextDelta('delta', 'msg-1', 'done', time()),
-            new SingleTurnStreamEnd(FinishReason::Stop, new Usage(5, 2)),
+            new TurnStreamEnd(FinishReason::Stop, new Usage(5, 2)),
         ],
     ]);
 
@@ -183,7 +183,7 @@ test('it accumulates streamed usage across multi-step turns', function () {
 
 test('it stops generation when tool calls do not match local tools', function () {
     $gateway = new TextGenerationLoopFakeGateway([
-        new SingleTurnResponse(
+        new TurnResponse(
             text: '',
             toolCalls: [new ToolCall('call-1', 'MissingTool', [], 'call-1')],
             finishReason: FinishReason::ToolCalls,
@@ -191,7 +191,7 @@ test('it stops generation when tool calls do not match local tools', function ()
             meta: new Meta('fake', 'model'),
             continuationToken: 'response-1',
         ),
-        new SingleTurnResponse(
+        new TurnResponse(
             text: 'should not be requested',
             toolCalls: [],
             finishReason: FinishReason::Stop,
@@ -221,11 +221,11 @@ test('it stops streaming when tool calls do not match local tools', function () 
     $gateway = new TextGenerationLoopFakeGateway(streams: [
         [
             new ToolCallEvent('tool-call-event', new ToolCall('call-1', 'MissingTool', [], 'call-1'), time()),
-            new SingleTurnStreamEnd(FinishReason::ToolCalls, new Usage(10, 1), continuationToken: 'response-1'),
+            new TurnStreamEnd(FinishReason::ToolCalls, new Usage(10, 1), continuationToken: 'response-1'),
         ],
         [
             new TextDelta('text-delta', 'message-1', 'should not be requested', time()),
-            new SingleTurnStreamEnd(FinishReason::Stop, new Usage(1, 1)),
+            new TurnStreamEnd(FinishReason::Stop, new Usage(1, 1)),
         ],
     ]);
 
@@ -290,7 +290,7 @@ function textGenerationLoopProvider(): TextProvider
     };
 }
 
-class TextGenerationLoopFakeGateway implements SingleTurnTextGateway
+class TextGenerationLoopFakeGateway implements TurnTextGateway
 {
     public int $generateCalls = 0;
 
@@ -304,7 +304,7 @@ class TextGenerationLoopFakeGateway implements SingleTurnTextGateway
         public array $streams = [],
     ) {}
 
-    public function generateSingleTurn(
+    public function handleTurn(
         TextProvider $provider,
         string $model,
         ?string $instructions,
@@ -314,14 +314,14 @@ class TextGenerationLoopFakeGateway implements SingleTurnTextGateway
         ?TextGenerationOptions $options,
         ?int $timeout,
         StepContext $stepContext,
-    ): SingleTurnResponse {
+    ): TurnResponse {
         $this->generateCalls++;
         $this->contexts[] = $stepContext;
 
         return array_shift($this->turns);
     }
 
-    public function streamSingleTurn(
+    public function streamTurn(
         string $invocationId,
         TextProvider $provider,
         string $model,

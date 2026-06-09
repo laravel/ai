@@ -6,22 +6,22 @@ use Generator;
 use Illuminate\JsonSchema\Types\Type;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\Gateway\SingleTurnResponse;
-use Laravel\Ai\Gateway\SingleTurnStreamEnd;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Gateway\TurnResponse;
+use Laravel\Ai\Gateway\TurnStreamEnd;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 
 /** @internal */
-interface SingleTurnTextGateway
+interface TurnTextGateway
 {
     /**
      * @param  Message[]  $messages
      * @param  Tool[]  $tools
      * @param  array<string, Type>|null  $schema
      */
-    public function generateSingleTurn(
+    public function handleTurn(
         TextProvider $provider,
         string $model,
         ?string $instructions,
@@ -31,15 +31,15 @@ interface SingleTurnTextGateway
         ?TextGenerationOptions $options,
         ?int $timeout,
         StepContext $stepContext,
-    ): SingleTurnResponse;
+    ): TurnResponse;
 
     /**
      * @param  Message[]  $messages
      * @param  Tool[]  $tools
      * @param  array<string, Type>|null  $schema
-     * @return Generator<int, StreamEvent|SingleTurnStreamEnd>
+     * @return Generator<int, StreamEvent|TurnStreamEnd>
      */
-    public function streamSingleTurn(
+    public function streamTurn(
         string $invocationId,
         TextProvider $provider,
         string $model,

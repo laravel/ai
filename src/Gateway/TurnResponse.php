@@ -10,7 +10,7 @@ use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
 
-class SingleTurnResponse implements Arrayable, JsonSerializable
+class TurnResponse implements Arrayable, JsonSerializable
 {
     /**
      * @param  ToolCall[]  $toolCalls

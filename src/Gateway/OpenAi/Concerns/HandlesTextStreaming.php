@@ -4,7 +4,7 @@ namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
 use Generator;
 use Illuminate\Support\Str;
-use Laravel\Ai\Gateway\SingleTurnStreamEnd;
+use Laravel\Ai\Gateway\TurnStreamEnd;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
@@ -266,7 +266,7 @@ trait HandlesTextStreaming
             }
         }
 
-        yield new SingleTurnStreamEnd(
+        yield new TurnStreamEnd(
             reason: $this->extractFinishReason($responseData),
             usage: $usage ?? new Usage(0, 0),
             continuationToken: $responseId,

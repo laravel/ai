@@ -7,7 +7,7 @@ use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
-use Laravel\Ai\Contracts\Gateway\SingleTurnTextGateway;
+use Laravel\Ai\Contracts\Gateway\TurnTextGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
@@ -24,7 +24,7 @@ use Laravel\Ai\Gateway\OpenAi\Concerns\MapsAttachments;
 use Laravel\Ai\Gateway\OpenAi\Concerns\MapsMessages;
 use Laravel\Ai\Gateway\OpenAi\Concerns\MapsTools;
 use Laravel\Ai\Gateway\OpenAi\Concerns\ParsesTextResponses;
-use Laravel\Ai\Gateway\SingleTurnResponse;
+use Laravel\Ai\Gateway\TurnResponse;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
@@ -36,7 +36,7 @@ use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Tools\ToolNameResolver;
 use LogicException;
 
-class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, SingleTurnTextGateway, TextGateway
+class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway, TurnTextGateway
 {
     use BuildsTextRequests;
     use CreatesAzureOpenAiClient;
@@ -51,7 +51,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, SingleTurnTe
 
     public function __construct(protected Dispatcher $events) {}
 
-    public function generateSingleTurn(
+    public function handleTurn(
         TextProvider $provider,
         string $model,
         ?string $instructions,
@@ -61,8 +61,8 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, SingleTurnTe
         ?TextGenerationOptions $options,
         ?int $timeout,
         StepContext $stepContext,
-    ): SingleTurnResponse {
-        $body = $this->buildSingleTurnBody($provider, $model, $instructions, $messages, $tools, $schema, $options, $stepContext);
+    ): TurnResponse {
+        $body = $this->buildTurnBody($provider, $model, $instructions, $messages, $tools, $schema, $options, $stepContext);
 
         $response = $this->withErrorHandling(
             $provider->name(),
@@ -76,7 +76,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, SingleTurnTe
         return $this->parseTextResponse($data, $provider, filled($schema));
     }
 
-    public function streamSingleTurn(
+    public function streamTurn(
         string $invocationId,
         TextProvider $provider,
         string $model,
@@ -88,7 +88,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, SingleTurnTe
         ?int $timeout,
         StepContext $stepContext,
     ): Generator {
-        $body = $this->buildSingleTurnBody($provider, $model, $instructions, $messages, $tools, $schema, $options, $stepContext);
+        $body = $this->buildTurnBody($provider, $model, $instructions, $messages, $tools, $schema, $options, $stepContext);
         $body['stream'] = true;
 
         $response = $this->withErrorHandling(
@@ -101,7 +101,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, SingleTurnTe
         yield from $this->processTextStream($invocationId, $provider, $model, $response->getBody());
     }
 
-    protected function buildSingleTurnBody(
+    protected function buildTurnBody(
         TextProvider $provider,
         string $model,
         ?string $instructions,

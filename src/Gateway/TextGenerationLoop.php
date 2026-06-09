@@ -5,7 +5,7 @@ namespace Laravel\Ai\Gateway;
 use Generator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
-use Laravel\Ai\Contracts\Gateway\SingleTurnTextGateway;
+use Laravel\Ai\Contracts\Gateway\TurnTextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
@@ -28,7 +28,7 @@ class TextGenerationLoop
     use InvokesTools;
 
     public function __construct(
-        protected SingleTurnTextGateway $gateway,
+        protected TurnTextGateway $gateway,
     ) {
         $this->initializeToolCallbacks();
     }
@@ -60,7 +60,7 @@ class TextGenerationLoop
                 continuationToken: $continuationToken,
             );
 
-            $lastResult = $this->gateway->generateSingleTurn(
+            $lastResult = $this->gateway->handleTurn(
                 $provider, $model, $instructions, $allMessages, $tools, $schema, $options, $timeout, $stepContext,
             );
 
@@ -125,12 +125,12 @@ class TextGenerationLoop
                 continuationToken: $continuationToken,
             );
 
-            $turn = $this->gateway->streamSingleTurn(
+            $turn = $this->gateway->streamTurn(
                 $invocationId, $provider, $model, $instructions, $allMessages, $tools, $schema, $options, $timeout, $stepContext,
             );
 
             foreach ($turn as $event) {
-                if ($event instanceof SingleTurnStreamEnd) {
+                if ($event instanceof TurnStreamEnd) {
                     $turnEnd = $event;
                     break;
                 }
@@ -237,7 +237,7 @@ class TextGenerationLoop
     }
 
     /** @param  ToolResult[]  $toolResults */
-    protected function buildStep(SingleTurnResponse $result, array $toolResults = []): Step
+    protected function buildStep(TurnResponse $result, array $toolResults = []): Step
     {
         return new Step(
             $result->text,
@@ -253,7 +253,7 @@ class TextGenerationLoop
         Collection $steps,
         array $allMessages,
         int $originalMessageCount,
-        ?SingleTurnResponse $lastResult,
+        ?TurnResponse $lastResult,
     ): TextResponse {
         $finalStep = $steps->last();
 

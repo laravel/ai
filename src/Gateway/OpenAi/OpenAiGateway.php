@@ -11,7 +11,7 @@ use InvalidArgumentException;
 use Laravel\Ai\Contracts\Files\HasName;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\Gateway;
-use Laravel\Ai\Contracts\Gateway\SingleTurnTextGateway;
+use Laravel\Ai\Contracts\Gateway\TurnTextGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
@@ -24,7 +24,7 @@ use Laravel\Ai\Files\StoredImage;
 use Laravel\Ai\Gateway\Concerns\DelegatesToTextGenerationLoop;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
-use Laravel\Ai\Gateway\SingleTurnResponse;
+use Laravel\Ai\Gateway\TurnResponse;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Responses\AudioResponse;
@@ -37,7 +37,7 @@ use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
 use LogicException;
 
-class OpenAiGateway implements Gateway, SingleTurnTextGateway
+class OpenAiGateway implements Gateway, TurnTextGateway
 {
     use Concerns\BuildsTextRequests;
     use Concerns\CreatesOpenAiClient;
@@ -52,7 +52,7 @@ class OpenAiGateway implements Gateway, SingleTurnTextGateway
 
     public function __construct(protected Dispatcher $events) {}
 
-    public function generateSingleTurn(
+    public function handleTurn(
         TextProvider $provider,
         string $model,
         ?string $instructions,
@@ -62,8 +62,8 @@ class OpenAiGateway implements Gateway, SingleTurnTextGateway
         ?TextGenerationOptions $options,
         ?int $timeout,
         StepContext $stepContext,
-    ): SingleTurnResponse {
-        $body = $this->buildSingleTurnBody($provider, $model, $instructions, $messages, $tools, $schema, $options, $stepContext);
+    ): TurnResponse {
+        $body = $this->buildTurnBody($provider, $model, $instructions, $messages, $tools, $schema, $options, $stepContext);
 
         $response = $this->withErrorHandling(
             $provider->name(),
@@ -77,7 +77,7 @@ class OpenAiGateway implements Gateway, SingleTurnTextGateway
         return $this->parseTextResponse($data, $provider, filled($schema));
     }
 
-    public function streamSingleTurn(
+    public function streamTurn(
         string $invocationId,
         TextProvider $provider,
         string $model,
@@ -89,7 +89,7 @@ class OpenAiGateway implements Gateway, SingleTurnTextGateway
         ?int $timeout,
         StepContext $stepContext,
     ): Generator {
-        $body = $this->buildSingleTurnBody($provider, $model, $instructions, $messages, $tools, $schema, $options, $stepContext);
+        $body = $this->buildTurnBody($provider, $model, $instructions, $messages, $tools, $schema, $options, $stepContext);
         $body['stream'] = true;
 
         $response = $this->withErrorHandling(
@@ -102,7 +102,7 @@ class OpenAiGateway implements Gateway, SingleTurnTextGateway
         yield from $this->processTextStream($invocationId, $provider, $model, $response->getBody());
     }
 
-    protected function buildSingleTurnBody(
+    protected function buildTurnBody(
         TextProvider $provider,
         string $model,
         ?string $instructions,

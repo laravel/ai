@@ -6,7 +6,7 @@ use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Usage;
 
 /** @internal */
-final class SingleTurnStreamEnd
+final class TurnStreamEnd
 {
     /** @param  array<int, array<string, mixed>>  $providerContentBlocks */
     public function __construct(
