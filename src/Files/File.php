@@ -81,7 +81,7 @@ abstract class File implements HasName, HasPurpose
      * Get the purpose of the file.
      */
     public function purpose(): ?string
-    {        
+    {
         return $this->purpose;
     }
 
@@ -89,9 +89,9 @@ abstract class File implements HasName, HasPurpose
      * Set the file's purpose to a custom value.
      */
     public function for(string $purpose): static
-    {   
-        
-        if(! in_array($purpose, ['assistants', 'batch', 'fine-tune', 'vision', 'user_data', 'evals'])) {
+    {
+
+        if (! in_array($purpose, ['assistants', 'batch', 'fine-tune', 'vision', 'user_data', 'evals'])) {
             throw new InvalidArgumentException("Invalid file purpose [{$purpose}].");
         }
 
@@ -99,7 +99,6 @@ abstract class File implements HasName, HasPurpose
 
         return $this;
     }
-
 
     /**
      * Set the file's MIME type.

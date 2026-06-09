@@ -4,7 +4,6 @@ namespace Laravel\Ai\Contracts\Files;
 
 interface HasPurpose
 {
-
     /**
      * Get the purpose of the file.
      */
