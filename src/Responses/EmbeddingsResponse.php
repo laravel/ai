@@ -20,6 +20,8 @@ class EmbeddingsResponse implements Arrayable, Countable, IteratorAggregate, Jso
 
     /**
      * Get the first set of embeddings in the response.
+     *
+     * @return array<float>
      */
     public function first(): array
     {

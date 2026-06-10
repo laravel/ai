@@ -33,6 +33,8 @@ class RerankingResponse implements Arrayable, Countable, IteratorAggregate, Json
 
     /**
      * Get the documents in their reranked order.
+     *
+     * @return Collection<int, string>
      */
     public function documents(): Collection
     {
@@ -49,6 +51,8 @@ class RerankingResponse implements Arrayable, Countable, IteratorAggregate, Json
 
     /**
      * Get the results as a collection.
+     *
+     * @return Collection<int, RankedDocument>
      */
     public function collect(): Collection
     {
