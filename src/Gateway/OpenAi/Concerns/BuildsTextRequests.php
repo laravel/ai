@@ -28,7 +28,7 @@ trait BuildsTextRequests
 
         if (filled($tools)) {
             $body['tool_choice'] = 'auto';
-            $body['tools'] = $this->mapTools($tools, $provider);
+            $body['tools'] = $this->mapTools($tools, $provider, $model, $options);
         }
 
         if (filled($schema)) {

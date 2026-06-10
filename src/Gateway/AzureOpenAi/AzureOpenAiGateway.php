@@ -227,7 +227,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
     /**
      * {@inheritdoc}
      */
-    protected function mapTool(Tool $tool): array
+    protected function mapTool(Tool $tool, bool $defer = false): array
     {
         $schema = $tool->schema(new JsonSchemaTypeFactory);
 
@@ -235,7 +235,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
             ? (new ObjectSchema($schema))->toSchema()
             : [];
 
-        return array_filter([
+        $definition = array_filter([
             'type' => 'function',
             'name' => ToolNameResolver::resolve($tool),
             'description' => (string) $tool->description(),
@@ -245,5 +245,11 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
                 'required' => $schemaArray['required'] ?? [],
             ] : null,
         ]);
+
+        if ($defer) {
+            $definition['defer_loading'] = true;
+        }
+
+        return $definition;
     }
 }

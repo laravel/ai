@@ -3,9 +3,12 @@
 namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Laravel\Ai\Attributes\Deferred;
+use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\ProviderTool;
@@ -20,16 +23,38 @@ trait MapsTools
     /**
      * Map the given tools to Anthropic tool definitions.
      */
-    protected function mapTools(array $tools, Provider $provider): array
+    protected function mapTools(array $tools, Provider $provider, string $model = '', ?TextGenerationOptions $options = null): array
     {
+        $searchActive = $this->toolSearchActive($provider, $model, $options);
+
         $mapped = [];
+        $toolCount = 0;
+        $deferredCount = 0;
 
         foreach ($tools as $tool) {
             if ($tool instanceof ProviderTool) {
                 $mapped[] = $this->mapProviderTool($tool, $provider);
             } elseif ($tool instanceof Tool) {
-                $mapped[] = $this->mapTool($tool);
+                $defer = $searchActive && Deferred::isAppliedTo($tool);
+                $mapped[] = $this->mapTool($tool, $defer);
+                $toolCount++;
+                $deferredCount += $defer ? 1 : 0;
             }
+        }
+
+        if ($searchActive && $deferredCount > 0) {
+            if ($deferredCount === $toolCount) {
+                throw new LogicException(
+                    'Anthropic tool search requires at least one non-deferred tool.'
+                );
+            }
+
+            $strategy = $options?->toolSearchStrategy === 'bm25' ? 'bm25' : 'regex';
+
+            array_unshift($mapped, [
+                'type' => "tool_search_tool_{$strategy}_20251119",
+                'name' => "tool_search_tool_{$strategy}",
+            ]);
         }
 
         return $mapped;
@@ -38,7 +63,7 @@ trait MapsTools
     /**
      * Map a regular tool to an Anthropic tool definition.
      */
-    protected function mapTool(Tool $tool): array
+    protected function mapTool(Tool $tool, bool $defer = false): array
     {
         $schema = $tool->schema(new JsonSchemaTypeFactory);
 
@@ -51,11 +76,27 @@ trait MapsTools
             $inputSchema['required'] = $schemaArray['required'] ?? [];
         }
 
-        return [
+        $definition = [
             'name' => ToolNameResolver::resolve($tool),
             'description' => (string) $tool->description(),
             'input_schema' => $inputSchema,
         ];
+
+        if ($defer) {
+            $definition['defer_loading'] = true;
+        }
+
+        return $definition;
+    }
+
+    /**
+     * Determine whether hosted tool search is active for this request.
+     */
+    protected function toolSearchActive(Provider $provider, string $model, ?TextGenerationOptions $options): bool
+    {
+        return $options?->toolSearchStrategy !== null
+            && $provider instanceof SupportsToolSearch
+            && $provider->supportsToolSearch($model);
     }
 
     /**

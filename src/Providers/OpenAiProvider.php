@@ -11,6 +11,7 @@ use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
+use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
@@ -20,7 +21,7 @@ use Laravel\Ai\Gateway\OpenAi\OpenAiStoreGateway;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 
-class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvider, FileProvider, ImageProvider, StoreProvider, SupportsFileSearch, SupportsWebSearch, TextProvider, TranscriptionProvider
+class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvider, FileProvider, ImageProvider, StoreProvider, SupportsFileSearch, SupportsToolSearch, SupportsWebSearch, TextProvider, TranscriptionProvider
 {
     use Concerns\GeneratesAudio;
     use Concerns\GeneratesEmbeddings;
@@ -37,6 +38,21 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     use Concerns\ManagesFiles;
     use Concerns\ManagesStores;
     use Concerns\StreamsText;
+
+    /**
+     * Determine whether the given model supports hosted tool search.
+     */
+    public function supportsToolSearch(string $model): bool
+    {
+        if (! preg_match('/^gpt-(\d+)(?:\.(\d+))?/', $model, $matches)) {
+            return false;
+        }
+
+        $major = (int) $matches[1];
+        $minor = (int) ($matches[2] ?? 0);
+
+        return $major > 5 || ($major === 5 && $minor >= 4);
+    }
 
     /**
      * Get the file search tool options for the provider.

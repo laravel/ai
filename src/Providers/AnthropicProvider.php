@@ -4,6 +4,7 @@ namespace Laravel\Ai\Providers;
 
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Providers\FileProvider;
+use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -12,13 +13,31 @@ use Laravel\Ai\Gateway\Anthropic\AnthropicFileGateway;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 
-class AnthropicProvider extends Provider implements FileProvider, SupportsWebFetch, SupportsWebSearch, TextProvider
+class AnthropicProvider extends Provider implements FileProvider, SupportsToolSearch, SupportsWebFetch, SupportsWebSearch, TextProvider
 {
     use Concerns\GeneratesText;
     use Concerns\HasFileGateway;
     use Concerns\HasTextGateway;
     use Concerns\ManagesFiles;
     use Concerns\StreamsText;
+
+    /**
+     * Determine whether the given model supports hosted tool search.
+     */
+    public function supportsToolSearch(string $model): bool
+    {
+        if (! preg_match('/claude-(opus|sonnet|haiku)-(\d+)-(\d+)/', $model, $matches)) {
+            return false;
+        }
+
+        $version = (int) $matches[2] + ((int) $matches[3]) / 10;
+
+        return match ($matches[1]) {
+            'opus', 'sonnet' => $version >= 4.0,
+            'haiku' => $version >= 4.5,
+            default => false,
+        };
+    }
 
     /**
      * Get the web fetch tool options for the provider.

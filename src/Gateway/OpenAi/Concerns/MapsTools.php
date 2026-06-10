@@ -3,10 +3,13 @@
 namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Laravel\Ai\Attributes\Deferred;
 use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
+use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\FileSearch;
@@ -20,16 +23,25 @@ trait MapsTools
     /**
      * Map the given tools to OpenAI function definitions.
      */
-    protected function mapTools(array $tools, Provider $provider): array
+    protected function mapTools(array $tools, Provider $provider, string $model = '', ?TextGenerationOptions $options = null): array
     {
+        $searchActive = $this->toolSearchActive($provider, $model, $options);
+
         $mapped = [];
+        $deferredCount = 0;
 
         foreach ($tools as $tool) {
             if ($tool instanceof ProviderTool) {
                 $mapped[] = $this->mapProviderTool($tool, $provider);
             } elseif ($tool instanceof Tool) {
-                $mapped[] = $this->mapTool($tool);
+                $defer = $searchActive && Deferred::isAppliedTo($tool);
+                $mapped[] = $this->mapTool($tool, $defer);
+                $deferredCount += $defer ? 1 : 0;
             }
+        }
+
+        if ($searchActive && $deferredCount > 0) {
+            array_unshift($mapped, ['type' => 'tool_search']);
         }
 
         return $mapped;
@@ -38,7 +50,7 @@ trait MapsTools
     /**
      * Map a regular tool to an OpenAI function definition.
      */
-    protected function mapTool(Tool $tool): array
+    protected function mapTool(Tool $tool, bool $defer = false): array
     {
         $strict = Strict::isAppliedTo($tool);
 
@@ -48,7 +60,7 @@ trait MapsTools
             ? (new ObjectSchema($schema, strict: $strict))->toSchema()
             : [];
 
-        return [
+        $definition = [
             'type' => 'function',
             'name' => ToolNameResolver::resolve($tool),
             'description' => (string) $tool->description(),
@@ -60,6 +72,22 @@ trait MapsTools
                 'additionalProperties' => false,
             ],
         ];
+
+        if ($defer) {
+            $definition['defer_loading'] = true;
+        }
+
+        return $definition;
+    }
+
+    /**
+     * Determine whether hosted tool search is active for this request.
+     */
+    protected function toolSearchActive(Provider $provider, string $model, ?TextGenerationOptions $options): bool
+    {
+        return $options?->toolSearchStrategy !== null
+            && $provider instanceof SupportsToolSearch
+            && $provider->supportsToolSearch($model);
     }
 
     /**
