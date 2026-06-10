@@ -152,6 +152,42 @@ test('streaming captures cache hit and reasoning tokens', function () {
         ->and($streamEnd->usage->reasoningTokens)->toBe(12);
 });
 
+test('streaming sums usage across tool call steps', function () {
+    Http::fake([
+        'api.deepseek.com/*' => Http::sequence([
+            Http::response(
+                body: $this->ssePayload([
+                    $this->chatChunkToolCallStart(0, 'call_1', 'FixedNumberGenerator'),
+                    $this->chatChunkToolCallDelta(0, '{}'),
+                    $this->chatChunkFinish('tool_calls', ['prompt_tokens' => 10, 'completion_tokens' => 5, 'prompt_cache_hit_tokens' => 2]),
+                    '[DONE]',
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+            Http::response(
+                body: $this->ssePayload([
+                    $this->chatChunk(['role' => 'assistant', 'content' => 'The number is 72019']),
+                    $this->chatChunkFinish('stop', ['prompt_tokens' => 20, 'completion_tokens' => 10, 'prompt_cache_hit_tokens' => 8]),
+                    '[DONE]',
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]),
+    ]);
+
+    $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+    $streamEnds = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd));
+
+    expect($streamEnds)->toHaveCount(1)
+        ->and($streamEnds[0]->usage)
+        ->promptTokens->toBe(30)
+        ->completionTokens->toBe(15)
+        ->cacheReadInputTokens->toBe(10);
+});
+
 test('streaming finish reason maps correctly', function (string $apiReason, $expected) {
     Http::fake([
         'api.deepseek.com/*' => Http::response(
