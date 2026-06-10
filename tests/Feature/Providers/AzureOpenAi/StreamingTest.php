@@ -122,6 +122,44 @@ test('streaming captures usage from completed event', function () {
         ->and($streamEnd->usage->completionTokens)->toBe(10);
 });
 
+test('streaming sums usage across tool call steps', function () {
+    Http::fake([
+        'my-resource.cognitiveservices.azure.com/*' => Http::sequence([
+            Http::response(
+                body: $this->ssePayload([
+                    $this->responseCreated(),
+                    $this->outputItemAdded('fc_1', 'call_1', 'FixedNumberGenerator'),
+                    $this->functionCallArgumentsDelta('fc_1', '{}'),
+                    $this->functionCallArgumentsDone('fc_1', '{}'),
+                    $this->responseCompleted(10, 5, cachedTokens: 2),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+            Http::response(
+                body: $this->ssePayload([
+                    $this->responseCreated(),
+                    $this->outputTextDelta('The number is 72019'),
+                    $this->outputTextDone('The number is 72019'),
+                    $this->responseCompleted(20, 10, cachedTokens: 8),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]),
+    ]);
+
+    $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+    $streamEnds = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd));
+
+    expect($streamEnds)->toHaveCount(1)
+        ->and($streamEnds[0]->usage)
+        ->promptTokens->toBe(20)
+        ->completionTokens->toBe(15)
+        ->cacheReadInputTokens->toBe(10);
+});
+
 test('streaming finish reason maps correctly', function (array $output, $expected) {
     Http::fake([
         'my-resource.cognitiveservices.azure.com/*' => Http::response(
