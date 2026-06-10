@@ -13,6 +13,9 @@ use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
+use Tests\Fixtures\Tools\StreamingProgressTool;
+
+use function Laravel\Ai\agent;
 
 describe('text streaming', function () {
     test('streaming emits text events', function () {
@@ -66,7 +69,7 @@ describe('tool calls', function () {
                         $this->geminiChunkWithUsage([[
                             'functionCall' => [
                                 'id' => 'call_1',
-                                'name' => 'FixedNumberGenerator',
+                                'name' => 'StreamingProgressTool',
                                 'args' => (object) [],
                             ],
                         ]], 10, 5),
@@ -76,7 +79,7 @@ describe('tool calls', function () {
                 ),
                 Http::response(
                     body: $this->ssePayload([
-                        $this->geminiChunkWithUsage([['text' => 'The number is 72019']], 20, 10),
+                        $this->geminiChunkWithUsage([['text' => 'Done']], 20, 10),
                     ]),
                     status: 200,
                     headers: ['Content-Type' => 'text/event-stream'],
@@ -84,12 +87,14 @@ describe('tool calls', function () {
             ]),
         ]);
 
-        $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+        $events = $this->collectStreamEvents(agent: agent(tools: [new StreamingProgressTool]));
 
         $toolCallEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolCallEvent));
 
         expect($toolCallEvents)->not->toBeEmpty()
-            ->and($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator');
+            ->and($toolCallEvents[0]->toolCall->name)->toBe('StreamingProgressTool');
+
+        expectNestedStreamingToolDelta($events, 'call_1');
     });
 
     test('streaming thinking parts are excluded from tool call continuation', function () {

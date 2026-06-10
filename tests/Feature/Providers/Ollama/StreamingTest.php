@@ -11,6 +11,9 @@ use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
+use Tests\Fixtures\Tools\StreamingProgressTool;
+
+use function Laravel\Ai\agent;
 
 beforeEach(function () {
     config(['ai.providers.ollama' => [
@@ -68,14 +71,14 @@ test('streaming handles tool calls', function () {
             Http::response(
                 body: $this->ndjsonPayload([
                     $this->chatChunkWithToolCalls([
-                        $this->toolCallChunk('call_1', 'FixedNumberGenerator'),
+                        $this->toolCallChunk('call_1', 'StreamingProgressTool'),
                     ]),
                 ]),
                 status: 200,
             ),
             Http::response(
                 body: $this->ndjsonPayload([
-                    $this->chatChunk('The number is 72019'),
+                    $this->chatChunk('Done'),
                     $this->chatChunk('', true, 'stop', ['prompt_eval_count' => 20, 'eval_count' => 10]),
                 ]),
                 status: 200,
@@ -83,13 +86,15 @@ test('streaming handles tool calls', function () {
         ]),
     ]);
 
-    $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+    $events = $this->collectStreamEvents(agent: agent(tools: [new StreamingProgressTool]));
 
     $toolCallEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolCallEvent));
 
     expect($toolCallEvents)->not->toBeEmpty()
-        ->and($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator')
+        ->and($toolCallEvents[0]->toolCall->name)->toBe('StreamingProgressTool')
         ->and($toolCallEvents[0]->toolCall->id)->toBe('call_1');
+
+    expectNestedStreamingToolDelta($events, 'call_1');
 });
 
 test('streaming error event stops stream with string payload', function () {

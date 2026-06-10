@@ -479,7 +479,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
 
             $conversationMessages[] = $this->buildAssistantConversationMessage($assistantText, $toolCalls, array_values($responseContent));
 
-            $toolResults = $this->executeToolCalls($tools, $toolCalls);
+            $toolResults = yield from $this->executeToolCallsStreaming($tools, $toolCalls, $invocationId);
 
             foreach ($toolResults as $toolResult) {
                 yield (new ToolResultEvent(
@@ -915,6 +915,49 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * Execute the tool calls against the provided tools and collect results.
+     *
+     * @param  array<Tool>  $tools
+     * @param  array<ToolCall>  $toolCalls
+     * @return array<ToolResult>
+     */
+    protected function executeToolCallsStreaming(array $tools, array $toolCalls, string $invocationId): Generator
+    {
+        $results = [];
+
+        foreach ($toolCalls as $toolCall) {
+            $tool = $this->findTool($toolCall->name, $tools);
+
+            if ($tool === null) {
+                $results[] = new ToolResult(
+                    $toolCall->id,
+                    $toolCall->name,
+                    $toolCall->arguments,
+                    'Error: Tool "'.$toolCall->name.'" not found.',
+                );
+
+                continue;
+            }
+
+            $result = yield from $this->executeToolStreamingStamped(
+                $tool,
+                $toolCall->arguments,
+                $invocationId,
+                $toolCall->id,
+            );
+
+            $results[] = new ToolResult(
+                $toolCall->id,
+                $toolCall->name,
+                $toolCall->arguments,
+                $result,
+            );
+        }
+
+        return $results;
     }
 
     /**

@@ -10,7 +10,9 @@ use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Tests\Feature\Providers\DeepSeek\DeepSeekHelpers;
-use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
+use Tests\Fixtures\Tools\StreamingProgressTool;
+
+use function Laravel\Ai\agent;
 
 uses(DeepSeekHelpers::class);
 
@@ -50,7 +52,7 @@ test('streaming handles tool calls', function () {
         'api.deepseek.com/*' => Http::sequence([
             Http::response(
                 body: $this->ssePayload([
-                    $this->chatChunkToolCallStart(0, 'call_1', 'FixedNumberGenerator'),
+                    $this->chatChunkToolCallStart(0, 'call_1', 'StreamingProgressTool'),
                     $this->chatChunkToolCallDelta(0, '{}'),
                     $this->chatChunkFinish('tool_calls', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
                     '[DONE]',
@@ -60,7 +62,7 @@ test('streaming handles tool calls', function () {
             ),
             Http::response(
                 body: $this->ssePayload([
-                    $this->chatChunk(['role' => 'assistant', 'content' => 'The number is 72019']),
+                    $this->chatChunk(['role' => 'assistant', 'content' => 'Done']),
                     $this->chatChunkFinish('stop', ['prompt_tokens' => 20, 'completion_tokens' => 10]),
                     '[DONE]',
                 ]),
@@ -70,13 +72,15 @@ test('streaming handles tool calls', function () {
         ]),
     ]);
 
-    $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+    $events = $this->collectStreamEvents(agent: agent(tools: [new StreamingProgressTool]));
 
     $toolCallEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolCallEvent));
 
     expect($toolCallEvents)->not->toBeEmpty()
-        ->and($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator')
+        ->and($toolCallEvents[0]->toolCall->name)->toBe('StreamingProgressTool')
         ->and($toolCallEvents[0]->toolCall->id)->toBe('call_1');
+
+    expectNestedStreamingToolDelta($events, 'call_1');
 });
 
 test('streaming error event stops stream', function () {

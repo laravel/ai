@@ -11,6 +11,7 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
+use Tests\Fixtures\Tools\StreamingProgressTool;
 
 describe('text streaming', function () {
     test('streaming handles reasoning and text blocks', function () {
@@ -117,6 +118,38 @@ describe('text streaming', function () {
             ])
             ->and($assistantTurn['content'][1]['toolUse']['toolUseId'])->toBe('t1')
             ->and($assistantTurn['content'][1]['toolUse']['name'])->toBe('FixedNumberGenerator');
+    });
+
+    test('streaming emits nested events from streamable tools', function () {
+        $mock = new MockHandler([
+            new Result(['stream' => [
+                $this->contentBlockStart(0, ['toolUse' => ['toolUseId' => 't_stream', 'name' => 'StreamingProgressTool']]),
+                $this->contentBlockDelta(0, ['toolUse' => ['input' => '{}']]),
+                $this->contentBlockStop(0),
+                $this->messageStop('tool_use'),
+            ]]),
+            new Result(['stream' => [
+                $this->contentBlockStart(0),
+                $this->contentBlockDelta(0, ['text' => 'Done']),
+                $this->contentBlockStop(0),
+                $this->messageStop('end_turn'),
+            ]]),
+        ]);
+
+        $gateway = $this->gatewayWithClient($this->bedrockClient($mock));
+
+        $events = iterator_to_array(
+            $gateway->streamText(
+                'inv-1',
+                $this->bedrockProvider(),
+                'anthropic.claude-opus-4-7-v1:0',
+                null,
+                tools: [new StreamingProgressTool],
+            ),
+            preserve_keys: false,
+        );
+
+        expectNestedStreamingToolDelta($events, 't_stream');
     });
 
     test('streaming round-trips redacted reasoning block', function () {

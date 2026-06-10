@@ -10,7 +10,9 @@ use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
-use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
+use Tests\Fixtures\Tools\StreamingProgressTool;
+
+use function Laravel\Ai\agent;
 
 beforeEach(function () {
     config(['ai.providers.mistral' => [
@@ -47,7 +49,7 @@ test('streaming handles tool calls', function () {
         '*' => Http::sequence([
             Http::response(
                 body: $this->ssePayload([
-                    ['id' => 'chatcmpl-123', 'object' => 'chat.completion.chunk', 'model' => 'mistral-medium-latest', 'choices' => [['index' => 0, 'delta' => ['role' => 'assistant', 'tool_calls' => [['index' => 0, 'id' => 'call_1', 'function' => ['name' => 'FixedNumberGenerator', 'arguments' => '']]]], 'finish_reason' => null]]],
+                    ['id' => 'chatcmpl-123', 'object' => 'chat.completion.chunk', 'model' => 'mistral-medium-latest', 'choices' => [['index' => 0, 'delta' => ['role' => 'assistant', 'tool_calls' => [['index' => 0, 'id' => 'call_1', 'function' => ['name' => 'StreamingProgressTool', 'arguments' => '']]]], 'finish_reason' => null]]],
                     ['id' => 'chatcmpl-123', 'object' => 'chat.completion.chunk', 'model' => 'mistral-medium-latest', 'choices' => [['index' => 0, 'delta' => ['tool_calls' => [['index' => 0, 'function' => ['arguments' => '{}']]]], 'finish_reason' => null]]],
                     ['id' => 'chatcmpl-123', 'object' => 'chat.completion.chunk', 'model' => 'mistral-medium-latest', 'choices' => [['index' => 0, 'delta' => [], 'finish_reason' => 'tool_calls']], 'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5]],
                 ]),
@@ -56,7 +58,7 @@ test('streaming handles tool calls', function () {
             ),
             Http::response(
                 body: $this->ssePayload([
-                    ['id' => 'chatcmpl-456', 'object' => 'chat.completion.chunk', 'model' => 'mistral-medium-latest', 'choices' => [['index' => 0, 'delta' => ['role' => 'assistant', 'content' => 'The number is 72019'], 'finish_reason' => null]]],
+                    ['id' => 'chatcmpl-456', 'object' => 'chat.completion.chunk', 'model' => 'mistral-medium-latest', 'choices' => [['index' => 0, 'delta' => ['role' => 'assistant', 'content' => 'Done'], 'finish_reason' => null]]],
                     ['id' => 'chatcmpl-456', 'object' => 'chat.completion.chunk', 'model' => 'mistral-medium-latest', 'choices' => [['index' => 0, 'delta' => [], 'finish_reason' => 'stop']], 'usage' => ['prompt_tokens' => 20, 'completion_tokens' => 10]],
                 ]),
                 status: 200,
@@ -65,14 +67,16 @@ test('streaming handles tool calls', function () {
         ]),
     ]);
 
-    $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+    $events = $this->collectStreamEvents(agent: agent(tools: [new StreamingProgressTool]));
 
     $toolCallEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolCallEvent));
     $toolResultEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolResultEvent));
 
     expect($toolCallEvents)->not->toBeEmpty()
-        ->and($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator')
+        ->and($toolCallEvents[0]->toolCall->name)->toBe('StreamingProgressTool')
         ->and($toolResultEvents)->not->toBeEmpty();
+
+    expectNestedStreamingToolDelta($events, 'call_1');
 });
 
 test('streaming captures usage', function () {

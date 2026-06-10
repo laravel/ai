@@ -13,7 +13,9 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
-use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
+use Tests\Fixtures\Tools\StreamingProgressTool;
+
+use function Laravel\Ai\agent;
 
 describe('text streaming', function () {
     test('streaming emits text events', function () {
@@ -50,7 +52,7 @@ describe('tool calls', function () {
                 Http::response(
                     body: $this->ssePayload([
                         $this->messageStart(),
-                        $this->contentBlockStart(0, ['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'FixedNumberGenerator', 'input' => '']),
+                        $this->contentBlockStart(0, ['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'StreamingProgressTool', 'input' => '']),
                         $this->contentBlockDelta(0, ['type' => 'input_json_delta', 'partial_json' => '{}']),
                         $this->contentBlockStop(0),
                         $this->messageDelta('tool_use', 5),
@@ -63,19 +65,21 @@ describe('tool calls', function () {
                     'type' => 'message',
                     'role' => 'assistant',
                     'model' => 'claude-sonnet-4-6',
-                    'content' => [['type' => 'text', 'text' => 'The number is 72019']],
+                    'content' => [['type' => 'text', 'text' => 'Done']],
                     'stop_reason' => 'end_turn',
                     'usage' => ['input_tokens' => 20, 'output_tokens' => 10],
                 ]),
             ]),
         ]);
 
-        $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+        $events = $this->collectStreamEvents(agent: agent(tools: [new StreamingProgressTool]));
 
         $toolCallEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolCallEvent));
 
         expect($toolCallEvents)->not->toBeEmpty()
-            ->and($toolCallEvents[0]->toolCall)->name->toBe('FixedNumberGenerator')->id->toBe('toolu_1');
+            ->and($toolCallEvents[0]->toolCall)->name->toBe('StreamingProgressTool')->id->toBe('toolu_1');
+
+        expectNestedStreamingToolDelta($events, 'toolu_1');
     });
 });
 

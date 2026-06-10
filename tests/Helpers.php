@@ -2,6 +2,23 @@
 
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Streaming\Events\TextDelta;
+
+function expectNestedStreamingToolDelta(array $events, string $parentToolCallId): void
+{
+    $nestedDeltas = array_values(array_filter(
+        $events,
+        fn ($event) => $event instanceof TextDelta
+            && $event->isNested()
+            && $event->parentToolCallId === $parentToolCallId
+    ));
+
+    expect($nestedDeltas)->toHaveCount(1)
+        ->and($nestedDeltas[0]->delta)->toBe('streaming progress')
+        ->and($nestedDeltas[0]->parentInvocationId)->not->toBeNull()
+        ->and($nestedDeltas[0]->ancestorToolCallIds)->toBe([$parentToolCallId])
+        ->and($nestedDeltas[0]->depth())->toBe(1);
+}
 
 function requiresApiKey(string ...$keys): void
 {

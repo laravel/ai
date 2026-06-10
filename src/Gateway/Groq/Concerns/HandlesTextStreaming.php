@@ -208,7 +208,12 @@ trait HandlesTextStreaming
                 continue;
             }
 
-            $result = $this->executeTool($tool, $toolCall->arguments);
+            $result = yield from $this->executeToolStreamingStamped(
+                $tool,
+                $toolCall->arguments,
+                $invocationId,
+                $toolCall->id,
+            );
 
             $toolResult = new ToolResult(
                 $toolCall->id,
