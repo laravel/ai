@@ -270,6 +270,74 @@ describe('usage tracking', function () {
             ->cacheReadInputTokens->toBe(50);
     });
 
+    test('streaming sums usage across tool call steps', function () {
+        Http::fake([
+            'api.anthropic.com/*' => Http::sequence([
+                Http::response(
+                    body: $this->ssePayload([
+                        [
+                            'type' => 'message_start',
+                            'message' => [
+                                'id' => 'msg_1',
+                                'model' => 'claude-sonnet-4-6',
+                                'role' => 'assistant',
+                                'content' => [],
+                                'usage' => [
+                                    'input_tokens' => 10,
+                                    'output_tokens' => 0,
+                                    'cache_creation_input_tokens' => 3,
+                                    'cache_read_input_tokens' => 2,
+                                ],
+                            ],
+                        ],
+                        $this->contentBlockStart(0, ['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'FixedNumberGenerator', 'input' => '']),
+                        $this->contentBlockDelta(0, ['type' => 'input_json_delta', 'partial_json' => '{}']),
+                        $this->contentBlockStop(0),
+                        $this->messageDelta('tool_use', 5),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+                Http::response(
+                    body: $this->ssePayload([
+                        [
+                            'type' => 'message_start',
+                            'message' => [
+                                'id' => 'msg_2',
+                                'model' => 'claude-sonnet-4-6',
+                                'role' => 'assistant',
+                                'content' => [],
+                                'usage' => [
+                                    'input_tokens' => 20,
+                                    'output_tokens' => 0,
+                                    'cache_creation_input_tokens' => 7,
+                                    'cache_read_input_tokens' => 8,
+                                ],
+                            ],
+                        ],
+                        $this->contentBlockStart(0, ['type' => 'text', 'text' => '']),
+                        $this->contentBlockDelta(0, ['type' => 'text_delta', 'text' => 'The number is 72019']),
+                        $this->contentBlockStop(0),
+                        $this->messageDelta('end_turn', 10),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+            ]),
+        ]);
+
+        $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+        $streamEnds = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd));
+
+        expect($streamEnds)->toHaveCount(1)
+            ->and($streamEnds[0]->usage)
+            ->promptTokens->toBe(30)
+            ->completionTokens->toBe(15)
+            ->cacheWriteInputTokens->toBe(10)
+            ->cacheReadInputTokens->toBe(10);
+    });
+
     test('streaming finish reason maps correctly', function (string $apiReason, $expected) {
         Http::fake([
             'api.anthropic.com/*' => Http::response(
