@@ -38,6 +38,7 @@ trait HandlesTextStreaming
         int $depth = 0,
         ?int $maxSteps = null,
         ?int $timeout = null,
+        ?Usage $carryUsage = null,
     ): Generator {
         $maxSteps ??= $options?->maxSteps;
 
@@ -195,6 +196,7 @@ trait HandlesTextStreaming
                 $depth,
                 $maxSteps,
                 $timeout,
+                ($carryUsage ?? new Usage(0, 0))->add($usage ?? new Usage(0, 0)),
             );
 
             return;
@@ -203,7 +205,7 @@ trait HandlesTextStreaming
         yield (new StreamEnd(
             $this->generateEventId(),
             $this->extractFinishReason($data, $pendingToolCalls)->value,
-            $usage ?? new Usage(0, 0),
+            ($carryUsage ?? new Usage(0, 0))->add($usage ?? new Usage(0, 0)),
             time(),
         ))->withInvocationId($invocationId);
     }
@@ -225,6 +227,7 @@ trait HandlesTextStreaming
         int $depth,
         ?int $maxSteps,
         ?int $timeout = null,
+        ?Usage $carryUsage = null,
     ): Generator {
         $mappedToolCalls = $this->mapToolCalls($pendingToolCalls);
 
@@ -293,12 +296,13 @@ trait HandlesTextStreaming
                 $depth + 1,
                 $maxSteps,
                 $timeout,
+                $carryUsage,
             );
         } else {
             yield (new StreamEnd(
                 $this->generateEventId(),
                 'stop',
-                new Usage(0, 0),
+                $carryUsage ?? new Usage(0, 0),
                 time(),
             ))->withInvocationId($invocationId);
         }

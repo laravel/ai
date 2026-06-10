@@ -202,6 +202,43 @@ describe('usage tracking', function () {
             ->cacheReadInputTokens->toBe(5);
     });
 
+    test('streaming sums usage across tool call steps', function () {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::sequence([
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->geminiChunkWithUsage([[
+                            'functionCall' => [
+                                'id' => 'call_1',
+                                'name' => 'FixedNumberGenerator',
+                                'args' => (object) [],
+                            ],
+                        ]], 10, 5, cachedTokens: 2),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->geminiChunkWithUsage([['text' => 'The number is 72019']], 20, 10, cachedTokens: 8),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+            ]),
+        ]);
+
+        $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+        $streamEnds = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd));
+
+        expect($streamEnds)->toHaveCount(1)
+            ->and($streamEnds[0]->usage)
+            ->promptTokens->toBe(20)
+            ->completionTokens->toBe(15)
+            ->cacheReadInputTokens->toBe(10);
+    });
+
     test('streaming finish reason maps correctly', function (string $geminiReason, $expected) {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::response(
