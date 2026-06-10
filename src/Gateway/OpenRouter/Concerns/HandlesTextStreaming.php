@@ -38,6 +38,7 @@ trait HandlesTextStreaming
         ?int $maxSteps = null,
         array $priorChatMessages = [],
         ?int $timeout = null,
+        ?Usage $carryUsage = null,
     ): Generator {
         $maxSteps ??= $options?->maxSteps;
 
@@ -182,6 +183,7 @@ trait HandlesTextStreaming
                 $maxSteps,
                 $priorChatMessages,
                 $timeout,
+                ($carryUsage ?? new Usage(0, 0))->add($usage ?? new Usage(0, 0)),
             );
 
             return;
@@ -190,7 +192,7 @@ trait HandlesTextStreaming
         yield (new StreamEnd(
             $this->generateEventId(),
             $this->extractFinishReason(['finish_reason' => $finishReason ?? ''])->value,
-            $usage ?? new Usage(0, 0),
+            ($carryUsage ?? new Usage(0, 0))->add($usage ?? new Usage(0, 0)),
             time(),
         ))->withInvocationId($invocationId);
     }
@@ -213,6 +215,7 @@ trait HandlesTextStreaming
         ?int $maxSteps,
         array $priorChatMessages,
         ?int $timeout = null,
+        ?Usage $carryUsage = null,
     ): Generator {
         $toolResults = [];
 
@@ -328,12 +331,13 @@ trait HandlesTextStreaming
                 $maxSteps,
                 $updatedPriorMessages,
                 $timeout,
+                $carryUsage,
             );
         } else {
             yield (new StreamEnd(
                 $this->generateEventId(),
                 'stop',
-                new Usage(0, 0),
+                $carryUsage ?? new Usage(0, 0),
                 time(),
             ))->withInvocationId($invocationId);
         }
