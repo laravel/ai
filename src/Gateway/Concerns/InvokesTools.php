@@ -3,7 +3,10 @@
 namespace Laravel\Ai\Gateway\Concerns;
 
 use Closure;
+use Generator;
+use Laravel\Ai\Contracts\StreamableTool;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Tools\Request;
 use Laravel\Ai\Tools\ToolNameResolver;
 
@@ -46,6 +49,52 @@ trait InvokesTools
         } finally {
             $this->popToolInvocationCallbacks();
         }
+    }
+
+    /**
+     * Execute the given tool, streaming any events it emits.
+     *
+     * @return Generator<int, StreamEvent, mixed, string>
+     */
+    protected function executeToolStreaming(Tool $tool, array $arguments): Generator
+    {
+        $callbacks = $this->pushToolInvocationCallbacks();
+
+        try {
+            call_user_func($callbacks['invoking'], $tool, $arguments);
+
+            $result = $tool instanceof StreamableTool
+                ? yield from $tool->streamHandle(new Request($arguments))
+                : (string) $tool->handle(new Request($arguments));
+
+            call_user_func($callbacks['invoked'], $tool, $arguments, $result);
+
+            return (string) $result;
+        } finally {
+            $this->popToolInvocationCallbacks();
+        }
+    }
+
+    /**
+     * Execute the given tool and stamp streamed events with their parent tool call.
+     *
+     * @param  array<int, string>  $ancestorToolCallIds
+     * @return Generator<int, StreamEvent, mixed, string>
+     */
+    protected function executeToolStreamingStamped(
+        Tool $tool,
+        array $arguments,
+        string $parentInvocationId,
+        string $parentToolCallId,
+        array $ancestorToolCallIds = [],
+    ): Generator {
+        $stream = $this->executeToolStreaming($tool, $arguments);
+
+        foreach ($stream as $event) {
+            yield (clone $event)->withParent($parentInvocationId, $parentToolCallId, $ancestorToolCallIds);
+        }
+
+        return $stream->getReturn();
     }
 
     /**

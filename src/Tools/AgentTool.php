@@ -2,14 +2,17 @@
 
 namespace Laravel\Ai\Tools;
 
+use Generator;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\CanActAsTool;
-use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Contracts\StreamableTool;
+use Laravel\Ai\Contracts\StreamsActivity;
+use Laravel\Ai\Streaming\Events\StreamEvent;
 use Stringable;
 use Throwable;
 
-class AgentTool implements Tool
+class AgentTool implements StreamableTool
 {
     public function __construct(protected Agent $agent)
     {
@@ -46,6 +49,30 @@ class AgentTool implements Tool
     {
         try {
             return $this->agent->prompt((string) $request['task'])->text;
+        } catch (Throwable $e) {
+            return 'Agent failed: '.$e->getMessage();
+        }
+    }
+
+    /**
+     * Execute the tool while streaming opt-in sub-agent activity.
+     *
+     * @return Generator<int, StreamEvent, mixed, string>
+     */
+    public function streamHandle(Request $request): Generator
+    {
+        try {
+            if (! $this->agent instanceof StreamsActivity) {
+                return $this->handle($request);
+            }
+
+            $response = $this->agent->stream((string) $request['task']);
+
+            foreach ($response as $event) {
+                yield $event;
+            }
+
+            return (string) $response->text;
         } catch (Throwable $e) {
             return 'Agent failed: '.$e->getMessage();
         }

@@ -37,6 +37,7 @@ class TextDelta extends StreamEvent
             'message_id' => $this->messageId,
             'delta' => $this->delta,
             'timestamp' => $this->timestamp,
+            ...$this->nestedPayload(),
         ];
     }
 

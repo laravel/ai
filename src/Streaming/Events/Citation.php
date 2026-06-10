@@ -33,6 +33,7 @@ class Citation extends StreamEvent
                 ],
             },
             'timestamp' => $this->timestamp,
+            ...$this->nestedPayload(),
         ];
     }
 

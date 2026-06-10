@@ -28,6 +28,7 @@ class ProviderToolEvent extends StreamEvent
             'data' => $this->data,
             'status' => $this->status,
             'timestamp' => $this->timestamp,
+            ...$this->nestedPayload(),
         ];
     }
 }

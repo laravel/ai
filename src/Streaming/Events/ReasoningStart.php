@@ -23,6 +23,7 @@ class ReasoningStart extends StreamEvent
             'type' => 'reasoning_start',
             'reasoning_id' => $this->reasoningId,
             'timestamp' => $this->timestamp,
+            ...$this->nestedPayload(),
         ];
     }
 

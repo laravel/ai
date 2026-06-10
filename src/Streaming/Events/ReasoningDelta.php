@@ -27,6 +27,7 @@ class ReasoningDelta extends StreamEvent
             'delta' => $this->delta,
             'timestamp' => $this->timestamp,
             'summary' => $this->summary,
+            ...$this->nestedPayload(),
         ];
     }
 

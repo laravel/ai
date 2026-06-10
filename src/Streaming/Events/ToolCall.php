@@ -28,6 +28,7 @@ class ToolCall extends StreamEvent
             'arguments' => $this->toolCall->arguments,
             'reasoning_id' => $this->toolCall->reasoningId,
             'timestamp' => $this->timestamp,
+            ...$this->nestedPayload(),
         ];
     }
 

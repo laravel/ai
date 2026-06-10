@@ -23,6 +23,7 @@ class TextEnd extends StreamEvent
             'type' => 'text_end',
             'message_id' => $this->messageId,
             'timestamp' => $this->timestamp,
+            ...$this->nestedPayload(),
         ];
     }
 

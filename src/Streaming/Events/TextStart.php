@@ -23,6 +23,7 @@ class TextStart extends StreamEvent
             'type' => 'text_start',
             'message_id' => $this->messageId,
             'timestamp' => $this->timestamp,
+            ...$this->nestedPayload(),
         ];
     }
 

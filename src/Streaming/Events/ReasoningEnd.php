@@ -25,6 +25,7 @@ class ReasoningEnd extends StreamEvent
             'reasoning_id' => $this->reasoningId,
             'timestamp' => $this->timestamp,
             'summary' => $this->summary,
+            ...$this->nestedPayload(),
         ];
     }
 

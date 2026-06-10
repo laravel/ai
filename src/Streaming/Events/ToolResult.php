@@ -31,6 +31,7 @@ class ToolResult extends StreamEvent
             'successful' => $this->successful,
             'error' => $this->error,
             'timestamp' => $this->timestamp,
+            ...$this->nestedPayload(),
         ];
     }
 

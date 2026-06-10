@@ -28,6 +28,7 @@ class Error extends StreamEvent
             'recoverable' => $this->recoverable,
             'timestamp' => $this->timestamp,
             'metadata' => $this->metadata,
+            ...$this->nestedPayload(),
         ];
     }
 

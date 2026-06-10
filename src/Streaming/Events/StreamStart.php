@@ -27,6 +27,7 @@ class StreamStart extends StreamEvent
             'model' => $this->model,
             'timestamp' => $this->timestamp,
             'metadata' => $this->metadata,
+            ...$this->nestedPayload(),
         ];
     }
 

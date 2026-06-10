@@ -44,6 +44,7 @@ class StreamEnd extends StreamEvent
                 ? $this->usage->toArray()
                 : null,
             'timestamp' => $this->timestamp,
+            ...$this->nestedPayload(),
         ];
     }
 

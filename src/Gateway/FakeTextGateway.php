@@ -25,6 +25,8 @@ use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
+use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
+use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use RuntimeException;
 
 use function Laravel\Ai\generate_fake_data_for_json_schema_type;
@@ -133,7 +135,6 @@ class FakeTextGateway implements TextGateway
 
         // Fake the stream and text starting...
         yield (new StreamStart(ulid(), $provider->name(), $model, time()))->withInvocationId($invocationId);
-        yield (new TextStart(ulid(), $messageId, time()))->withInvocationId($invocationId);
 
         $message = (new Collection($messages))->last(function ($message) {
             return $message instanceof UserMessage;
@@ -142,6 +143,43 @@ class FakeTextGateway implements TextGateway
         $fakeResponse = $this->nextResponse(
             $provider, $model, $message->content, $message->attachments, $schema
         );
+
+        while ($fakeResponse instanceof ToolCall) {
+            yield (new ToolCallEvent(
+                ulid(),
+                $fakeResponse,
+                time(),
+            ))->withInvocationId($invocationId);
+
+            if ($tool = $this->findTool($fakeResponse->name, $tools)) {
+                $result = yield from $this->executeToolStreamingStamped(
+                    $tool,
+                    $fakeResponse->arguments,
+                    $invocationId,
+                    $fakeResponse->id,
+                );
+
+                yield (new ToolResultEvent(
+                    ulid(),
+                    new ToolResult(
+                        $fakeResponse->id,
+                        $fakeResponse->name,
+                        $fakeResponse->arguments,
+                        $result,
+                        $fakeResponse->resultId,
+                    ),
+                    true,
+                    null,
+                    time(),
+                ))->withInvocationId($invocationId);
+            }
+
+            $fakeResponse = $this->nextResponse(
+                $provider, $model, $message->content, $message->attachments, $schema
+            );
+        }
+
+        yield (new TextStart(ulid(), $messageId, time()))->withInvocationId($invocationId);
 
         $events = Str::of($fakeResponse->text)
             ->explode(' ')
