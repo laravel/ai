@@ -71,6 +71,20 @@ test('create store sends correct request', function () {
     });
 });
 
+test('create store maps description to metadata', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::response(fakeOpenAiStoreResponse()),
+    ]);
+
+    Stores::create('Test Store', description: 'A test store', provider: 'openai');
+
+    Http::assertSent(function (Request $request) {
+        return $request->method() === 'POST'
+            && ! array_key_exists('description', $request->data())
+            && ($request->data()['metadata'] ?? null) === ['description' => 'A test store'];
+    });
+});
+
 test('create store includes file ids in request', function () {
     Http::fake([
         'api.openai.com/*' => Http::response(fakeOpenAiStoreResponse()),
