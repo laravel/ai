@@ -60,9 +60,7 @@ class SchemaNormalizer
         $schema = $this->mergeAllOf($schema, $root, $seen);
         $schema = $this->collapseUnions($schema, $root, $seen);
         $schema = $this->collapseMultiType($schema);
-        $schema = $this->dropUnsupportedKeywords($schema);
-        $schema = $this->rewriteConstAndDefault($schema);
-        $schema = $this->normalizeAdditionalProperties($schema);
+        $schema = $this->normalizeKeywords($schema);
         $schema = $this->normalizeChildren($schema, $root, $seen);
 
         return $this->ensureType($schema);
@@ -161,13 +159,13 @@ class SchemaNormalizer
     private function mergeSchema(array $base, array $overlay): array
     {
         $required = array_values(array_unique(array_merge(
-            $this->arrayValue($base, 'required'),
-            $this->arrayValue($overlay, 'required'),
+            is_array($base['required'] ?? null) ? $base['required'] : [],
+            is_array($overlay['required'] ?? null) ? $overlay['required'] : [],
         )));
 
-        $properties = $this->arrayValue($base, 'properties');
+        $properties = is_array($base['properties'] ?? null) ? $base['properties'] : [];
 
-        foreach ($this->arrayValue($overlay, 'properties') as $key => $value) {
+        foreach (is_array($overlay['properties'] ?? null) ? $overlay['properties'] : [] as $key => $value) {
             $properties[$key] = isset($properties[$key]) && is_array($properties[$key]) && is_array($value)
                 ? $this->mergeSchema($properties[$key], $value)
                 : $value;
@@ -212,8 +210,8 @@ class SchemaNormalizer
     }
 
     /**
-     * Reduce union branches into the node: a scalar multi-type union, or the first
-     * branch (lossy) since the deserializer only accepts a single schema plus null.
+     * Reduce union branches into the node: scalar multi-type union, merged object variants,
+     * or the first branch (lossy fallback) since the deserializer only accepts a single schema plus null.
      *
      * @param  array<string, mixed>  $schema
      * @param  array<int, mixed>  $branches
@@ -247,10 +245,89 @@ class SchemaNormalizer
         }
 
         if ($resolved !== []) {
-            $schema = array_merge($schema, $resolved[0]);
+            $schema = $this->mergeObjectVariants($schema, $resolved) ?? $this->mergeSchema($schema, $resolved[0]);
         }
 
-        return $nullable ? $this->makeNullable($schema) : $schema;
+        if (! $nullable) {
+            return $schema;
+        }
+
+        $type = $schema['type'] ?? $this->baseType($schema);
+        $schema['type'] = array_values(array_unique([...(is_array($type) ? $type : [$type]), 'null']));
+
+        return $schema;
+    }
+
+    /**
+     * Union all plain-object variants' properties; null if any branch is not a plain object.
+     *
+     * @param  array<string, mixed>  $schema
+     * @param  array<int, array<string, mixed>>  $branches
+     * @return array<string, mixed>|null
+     */
+    private function mergeObjectVariants(array $schema, array $branches): ?array
+    {
+        if (count($branches) < 2) {
+            return null;
+        }
+
+        $allProperties = [];
+        $requiredSets = [];
+        $nullable = false;
+
+        foreach ($branches as $branch) {
+            $type = $branch['type'] ?? null;
+
+            if (is_array($type)) {
+                $nonNull = array_values(array_filter($type, fn ($t) => $t !== 'null'));
+
+                if ($nonNull !== ['object']) {
+                    return null;
+                }
+
+                $nullable = true;
+            } elseif ($type !== 'object') {
+                return null;
+            }
+
+            foreach ($branch['properties'] ?? [] as $key => $prop) {
+                if (! isset($allProperties[$key])) {
+                    $allProperties[$key] = $prop;
+                } elseif (isset($allProperties[$key]['enum'], $prop['enum']) && is_array($allProperties[$key]['enum']) && is_array($prop['enum'])) {
+                    $allProperties[$key]['enum'] = array_values(array_unique(
+                        array_merge($allProperties[$key]['enum'], $prop['enum'])
+                    ));
+                }
+            }
+
+            if (is_array($branch['required'] ?? null)) {
+                $requiredSets[] = $branch['required'];
+            }
+        }
+
+        $result = $schema;
+        $result['type'] = $nullable ? ['object', 'null'] : 'object';
+
+        $outerProperties = is_array($schema['properties'] ?? null) ? $schema['properties'] : [];
+        $mergedProperties = array_merge($allProperties, $outerProperties);
+
+        if ($mergedProperties !== []) {
+            $result['properties'] = $mergedProperties;
+        } else {
+            unset($result['properties']);
+        }
+
+        $outerRequired = is_array($schema['required'] ?? null) ? $schema['required'] : [];
+        $branchRequired = count($requiredSets) >= 2 ? array_values(array_intersect(...$requiredSets)) : [];
+        $required = array_values(array_unique(array_merge($outerRequired, $branchRequired)));
+
+        if ($required !== []) {
+            $result['required'] = $required;
+        } else {
+            unset($result['required']);
+        }
+
+        return $result;
     }
 
     /**
@@ -280,22 +357,6 @@ class SchemaNormalizer
         }
 
         return $types;
-    }
-
-    /**
-     * Mark a node nullable in a form the deserializer understands (type + "null").
-     *
-     * @param  array<string, mixed>  $schema
-     * @return array<string, mixed>
-     */
-    private function makeNullable(array $schema): array
-    {
-        $type = $schema['type'] ?? $this->baseType($schema);
-        $type = is_array($type) ? $type : [$type];
-
-        $schema['type'] = array_values(array_unique([...$type, 'null']));
-
-        return $schema;
     }
 
     /**
@@ -337,12 +398,12 @@ class SchemaNormalizer
     }
 
     /**
-     * Drop keywords the deserializer cannot represent, along with definitions.
+     * Drop unsupported keywords, rewrite const to enum, and normalize additionalProperties.
      *
      * @param  array<string, mixed>  $schema
      * @return array<string, mixed>
      */
-    private function dropUnsupportedKeywords(array $schema): array
+    private function normalizeKeywords(array $schema): array
     {
         foreach (self::UNSUPPORTED as $keyword) {
             unset($schema[$keyword]);
@@ -350,20 +411,8 @@ class SchemaNormalizer
 
         unset($schema['$defs'], $schema['definitions']);
 
-        return $schema;
-    }
-
-    /**
-     * Rewrite "const" to a single-value enum and drop an unsupported null default.
-     *
-     * @param  array<string, mixed>  $schema
-     * @return array<string, mixed>
-     */
-    private function rewriteConstAndDefault(array $schema): array
-    {
         if (array_key_exists('const', $schema)) {
             $schema['enum'] = [$schema['const']];
-
             unset($schema['const']);
         }
 
@@ -371,17 +420,6 @@ class SchemaNormalizer
             unset($schema['default']);
         }
 
-        return $schema;
-    }
-
-    /**
-     * Infer an object type from additionalProperties, then drop its permissive forms.
-     *
-     * @param  array<string, mixed>  $schema
-     * @return array<string, mixed>
-     */
-    private function normalizeAdditionalProperties(array $schema): array
-    {
         if (! isset($schema['type']) && array_key_exists('additionalProperties', $schema)) {
             $schema['type'] = 'object';
         }
@@ -443,25 +481,21 @@ class SchemaNormalizer
      */
     private function ensureType(array $schema): array
     {
-        if ($this->usableType($schema['type'] ?? null) || isset($schema['anyOf']) || isset($schema['oneOf']) || isset($schema['allOf'])) {
+        if (isset($schema['anyOf']) || isset($schema['oneOf']) || isset($schema['allOf'])) {
+            return $schema;
+        }
+
+        $type = $schema['type'] ?? null;
+        $nonNull = array_filter(is_array($type) ? $type : [$type], fn ($t) => $t !== 'null');
+
+        if ($nonNull !== [] && array_filter($nonNull, fn ($t) => ! in_array($t, self::TYPES, true)) === []) {
             return $schema;
         }
 
         unset($schema['type']);
-
         $schema['type'] = $this->baseType($schema);
 
         return $schema;
-    }
-
-    /**
-     * Determine whether a node's type resolves to a non-null type the deserializer accepts.
-     */
-    private function usableType(mixed $type): bool
-    {
-        $types = array_filter(is_array($type) ? $type : [$type], fn ($value) => $value !== 'null');
-
-        return $types !== [] && array_filter($types, fn ($value) => ! in_array($value, self::TYPES, true)) === [];
     }
 
     /**
@@ -518,16 +552,5 @@ class SchemaNormalizer
         }
 
         return $resolved ?? 'string';
-    }
-
-    /**
-     * Read an array-typed key, defaulting to an empty array.
-     *
-     * @param  array<string, mixed>  $schema
-     * @return array<mixed>
-     */
-    private function arrayValue(array $schema, string $key): array
-    {
-        return is_array($schema[$key] ?? null) ? $schema[$key] : [];
     }
 }
