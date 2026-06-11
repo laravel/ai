@@ -146,6 +146,10 @@ trait ParsesTextResponses
             );
         }
 
+        if ($finishReason === FinishReason::ToolCalls && filled($realToolCalls)) {
+            $this->dropUnfulfilledToolCalls($steps, $messages);
+        }
+
         if ($structured || $hasStructuredToolCall) {
             $structuredData = $this->extractStructuredOutput($content);
 

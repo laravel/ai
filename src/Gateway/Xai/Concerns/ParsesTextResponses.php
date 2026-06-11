@@ -141,6 +141,10 @@ trait ParsesTextResponses
             );
         }
 
+        if ($finishReason === FinishReason::ToolCalls && filled($mappedToolCalls)) {
+            $this->dropUnfulfilledToolCalls($steps, $messages);
+        }
+
         $allToolCalls = $steps->flatMap(fn (Step $s) => $s->toolCalls);
         $allToolResults = $steps->flatMap(fn (Step $s) => $s->toolResults);
 

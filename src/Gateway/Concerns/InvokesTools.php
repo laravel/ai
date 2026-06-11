@@ -3,7 +3,10 @@
 namespace Laravel\Ai\Gateway\Concerns;
 
 use Closure;
+use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Messages\AssistantMessage;
+use Laravel\Ai\Responses\Data\Step;
 use Laravel\Ai\Tools\Request;
 use Laravel\Ai\Tools\ToolNameResolver;
 
@@ -45,6 +48,34 @@ trait InvokesTools
             );
         } finally {
             $this->popToolInvocationCallbacks();
+        }
+    }
+
+    /**
+     * Drop tool calls the model requested on the final turn but that were never executed because the step limit was reached, keeping persisted tool calls and results balanced.
+     */
+    protected function dropUnfulfilledToolCalls(Collection $steps, Collection $messages): void
+    {
+        $lastStep = $steps->last();
+
+        if (! $lastStep instanceof Step || blank($lastStep->toolCalls) || filled($lastStep->toolResults)) {
+            return;
+        }
+
+        $steps->pop();
+
+        $steps->push(new Step(
+            $lastStep->text, [], [], $lastStep->finishReason, $lastStep->usage, $lastStep->meta,
+        ));
+
+        $lastMessage = $messages->last();
+
+        if ($lastMessage instanceof AssistantMessage && $lastMessage->toolCalls->isNotEmpty()) {
+            $messages->pop();
+
+            $messages->push(new AssistantMessage(
+                $lastMessage->content ?? '', null, $lastMessage->providerContentBlocks,
+            ));
         }
     }
 
