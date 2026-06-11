@@ -69,9 +69,10 @@ test('max steps limits tool call depth', function () {
         }
     };
 
-    $agent->prompt('Keep calling tools', provider: 'openrouter');
+    $response = $agent->prompt('Keep calling tools', provider: 'openrouter');
 
     $requests = Http::recorded(fn (Request $r) => true);
 
-    expect(count($requests))->toBeLessThanOrEqual(3);
+    expect($requests)->toHaveCount(4)
+        ->and($response->text)->toBe('Done');
 });

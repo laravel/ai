@@ -1,7 +1,12 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Attributes\MaxSteps;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Promptable;
 use Tests\Fixtures\Agents\ToolUsingAgent;
+use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 test('tool calls trigger follow up request', function () {
     Http::fake([
@@ -181,12 +186,25 @@ test('max steps limits tool call depth', function () {
         ]),
     ]);
 
-    $response = (new ToolUsingAgent(fixed: true))->prompt(
-        'Generate numbers',
-        provider: 'anthropic',
-    );
+    $agent = new #[MaxSteps(3)] class implements Agent, HasTools
+    {
+        use Promptable;
+
+        public function instructions(): string
+        {
+            return 'You are a helpful assistant.';
+        }
+
+        public function tools(): iterable
+        {
+            return [new FixedNumberGenerator];
+        }
+    };
+
+    $response = $agent->prompt('Keep calling tools', provider: 'anthropic');
 
     $recorded = Http::recorded();
 
-    expect(count($recorded))->toBeLessThanOrEqual(3);
+    expect($recorded)->toHaveCount(4)
+        ->and($response->text)->toBe('Done');
 });
