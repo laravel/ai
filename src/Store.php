@@ -21,6 +21,7 @@ class Store
         public readonly ?string $name,
         public readonly StoreFileCounts $fileCounts,
         public readonly bool $ready,
+        public readonly ?string $description = null,
     ) {}
 
     /**

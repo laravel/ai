@@ -46,13 +46,11 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
             'vector_store_ids' => $search->ids(),
             'filters' => filled($search->filters) ? [
                 'type' => 'and',
-                'filters' => (new Collection($search->filters))->map(fn ($filter) => match ($filter['type']) {
-                    default => [
-                        'type' => $filter['type'],
-                        'key' => $filter['key'],
-                        'value' => $filter['value'],
-                    ],
-                })->all(),
+                'filters' => (new Collection($search->filters))->map(fn ($filter) => [
+                    'type' => $filter['type'],
+                    'key' => $filter['key'],
+                    'value' => $filter['value'],
+                ])->all(),
             ] : null,
         ]);
     }

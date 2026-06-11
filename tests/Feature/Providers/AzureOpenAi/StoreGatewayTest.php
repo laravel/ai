@@ -55,6 +55,19 @@ test('get store sends correct request', function () {
     });
 });
 
+test('get store parses description from metadata', function () {
+    Http::fake([
+        'test-resource.openai.azure.com/*' => Http::response([
+            ...fakeAzureStoreResponse(),
+            'metadata' => ['description' => 'A test store'],
+        ]),
+    ]);
+
+    $store = Stores::get('vs-123', provider: 'azure');
+
+    expect($store->description)->toBe('A test store');
+});
+
 test('create store sends correct request', function () {
     Http::fake([
         'test-resource.openai.azure.com/*' => Http::response(fakeAzureStoreResponse()),

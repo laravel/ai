@@ -51,6 +51,11 @@ dataset('store-providers', [
     'azure' => ['azure', 'AZURE_OPENAI_API_KEY'],
 ]);
 
+dataset('file-search-providers', [
+    'openai' => ['openai', 'OPENAI_API_KEY'],
+    'azure' => ['azure', 'AZURE_OPENAI_API_KEY'],
+]);
+
 dataset('reranking-providers', [
     'cohere' => ['cohere', 'COHERE_API_KEY'],
     'voyageai' => ['voyageai', 'VOYAGEAI_API_KEY'],

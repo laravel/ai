@@ -37,6 +37,7 @@ class OpenAiStoreGateway implements StoreGateway
                 failed: $response->json('file_counts.failed'),
             ),
             ready: $response->json('status') === 'completed',
+            description: $response->json('metadata.description'),
         );
     }
 
