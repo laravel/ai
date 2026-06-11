@@ -145,8 +145,7 @@ describe('file search', function () {
             ],
         )->prompt('Is Valkey mentioned in the sixth month roadmap? Can you quote the section where it is mentioned?', provider: $provider);
 
-        expect(str_contains((string) $response, 'Yes'))->toBeTrue()
-            ->and(str_contains((string) $response, 'Valkey'))->toBeTrue();
+        expect((string) $response)->toContain('Yes')->toContain('Valkey');
     })->with('file-search-providers');
 
     test('can actually prompt an agent with filtered search data', function (string $provider, string $apiKey) {
