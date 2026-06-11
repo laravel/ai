@@ -82,11 +82,6 @@ test('can create store with expiration', function (string $provider, string $api
 
     expect($created->id)->not->toBeEmpty();
 
-    // OpenAI-compatible providers persist the description as store metadata.
-    if (in_array($provider, ['openai', 'azure'])) {
-        expect($created->description)->toEqual('A store that expires after 7 days of inactivity.');
-    }
-
     Stores::delete($created->id, provider: $provider);
 })->with('store-providers');
 

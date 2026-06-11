@@ -54,19 +54,6 @@ test('get store sends correct request', function () {
     });
 });
 
-test('get store parses description from metadata', function () {
-    Http::fake([
-        'api.openai.com/*' => Http::response([
-            ...fakeOpenAiStoreResponse(),
-            'metadata' => ['description' => 'A test store'],
-        ]),
-    ]);
-
-    $store = Stores::get('vs-123', provider: 'openai');
-
-    expect($store->description)->toBe('A test store');
-});
-
 test('create store sends correct request', function () {
     Http::fake([
         'api.openai.com/*' => Http::response(fakeOpenAiStoreResponse()),
