@@ -80,6 +80,8 @@ class RerankingResponse implements Arrayable, Countable, IteratorAggregate, Json
 
     /**
      * Get an iterator for the results.
+     *
+     * @return Traversable<int, RankedDocument>
      */
     public function getIterator(): Traversable
     {

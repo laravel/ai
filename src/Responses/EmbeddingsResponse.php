@@ -58,6 +58,8 @@ class EmbeddingsResponse implements Arrayable, Countable, IteratorAggregate, Jso
 
     /**
      * Get an iterator for the object.
+     *
+     * @return Traversable<int, array<float>>
      */
     public function getIterator(): Traversable
     {
