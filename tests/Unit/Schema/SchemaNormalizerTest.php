@@ -508,9 +508,9 @@ test('it does not promote required fields when only one of multiple branches dec
 test('it unions enum values for overlapping discriminator properties across anyOf variants', function () {
     $normalized = normalizesWithoutThrowing([
         'anyOf' => [
-            ['type' => 'object', 'properties' => ['kind' => ['type' => 'string', 'enum' => ['open']],    'text'    => ['type' => 'string']]],
+            ['type' => 'object', 'properties' => ['kind' => ['type' => 'string', 'enum' => ['open']],    'text' => ['type' => 'string']]],
             ['type' => 'object', 'properties' => ['kind' => ['type' => 'string', 'enum' => ['choice']],  'choices' => ['type' => 'array']]],
-            ['type' => 'object', 'properties' => ['kind' => ['type' => 'string', 'enum' => ['rating']],  'scale'   => ['type' => 'integer']]],
+            ['type' => 'object', 'properties' => ['kind' => ['type' => 'string', 'enum' => ['rating']],  'scale' => ['type' => 'integer']]],
         ],
     ]);
 
