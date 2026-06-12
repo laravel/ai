@@ -2,6 +2,8 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Ai;
+use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Stores;
 
 beforeEach(function () {
@@ -48,4 +50,18 @@ test('create store sends request to the v1 endpoint with the api-key header', fu
     Http::assertSent(fn (Request $request) => $request->method() === 'POST'
         && $request->url() === 'https://test-resource.openai.azure.com/openai/v1/vector_stores'
         && $request->hasHeader('api-key', 'test-key'));
+});
+
+test('file search metadata filters throw an exception', function () {
+    $search = new FileSearch(['vs-123'], where: ['company' => 'laravel']);
+
+    expect(fn () => Ai::storeProvider('azure')->fileSearchToolOptions($search))
+        ->toThrow(InvalidArgumentException::class, 'Azure OpenAI does not support file search metadata filters.');
+});
+
+test('file search without filters returns vector store ids', function () {
+    $search = new FileSearch(['vs-123']);
+
+    expect(Ai::storeProvider('azure')->fileSearchToolOptions($search))
+        ->toBe(['vector_store_ids' => ['vs-123']]);
 });

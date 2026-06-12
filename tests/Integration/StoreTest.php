@@ -143,11 +143,11 @@ describe('file search', function () {
         expect((string) $response)->toContain('Yes')->toContain('Valkey');
     })->with('file-search-providers');
 
-    test('can actually prompt an agent with filtered search data', function (string $provider, string $apiKey) {
-        requiresApiKey($apiKey);
+    test('can actually prompt an agent with filtered search data', function () {
+        requiresApiKey('OPENAI_API_KEY');
 
-        $this->provider = $provider;
-        [$this->fileSearchStore, $this->fileSearchFileIds] = createFileSearchStore($provider);
+        $this->provider = 'openai';
+        [$this->fileSearchStore, $this->fileSearchFileIds] = createFileSearchStore('openai');
 
         $instructions = 'Answer strictly based on the documents returned by the file search tool. '
             .'Do not use prior knowledge. Respond with exactly one word: "Yes" or "No".';
@@ -158,7 +158,7 @@ describe('file search', function () {
             tools: [
                 new FileSearch([$this->fileSearchStore->id], where: ['company' => 'tailwind']),
             ],
-        )->prompt($prompt, provider: $provider);
+        )->prompt($prompt, provider: 'openai');
 
         expect(trim((string) $response))->toStartWith('No');
 
@@ -170,8 +170,8 @@ describe('file search', function () {
                     where: fn ($query) => $query->where('company', 'laravel')
                 ),
             ],
-        )->prompt($prompt, provider: $provider);
+        )->prompt($prompt, provider: 'openai');
 
         expect(trim((string) $response))->toStartWith('Yes');
-    })->with('file-search-providers');
+    });
 });

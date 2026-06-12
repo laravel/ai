@@ -3,7 +3,7 @@
 namespace Laravel\Ai\Providers;
 
 use Illuminate\Contracts\Events\Dispatcher;
-use Illuminate\Support\Collection;
+use InvalidArgumentException;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
@@ -154,16 +154,12 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FilePro
      */
     public function fileSearchToolOptions(FileSearch $search): array
     {
+        if (filled($search->filters)) {
+            throw new InvalidArgumentException('Azure OpenAI does not support file search metadata filters.');
+        }
+
         return array_filter([
             'vector_store_ids' => $search->ids(),
-            'filters' => filled($search->filters) ? [
-                'type' => 'and',
-                'filters' => (new Collection($search->filters))->map(fn ($filter) => [
-                    'type' => $filter['type'],
-                    'key' => $filter['key'],
-                    'value' => $filter['value'],
-                ])->all(),
-            ] : null,
         ]);
     }
 
