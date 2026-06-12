@@ -17,6 +17,7 @@ use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StreamableAgentResponse;
+use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
@@ -247,6 +248,50 @@ test('it stops streaming when tool calls do not match local tools', function () 
         ->and(collect($events)->whereInstanceOf(ToolResultEvent::class))->toHaveCount(0)
         ->and($streamEnd)->not->toBeNull()
         ->and($streamEnd->reason)->toBe(FinishReason::ToolCalls->value);
+});
+
+test('it emits a terminal stream end when a turn yields no stream end or error', function () {
+    $gateway = new TextGenerationLoopFakeGateway(streams: [[
+        new TextDelta('text-delta', 'message-1', 'partial', time()),
+    ]]);
+
+    $events = iterator_to_array((new TextGenerationLoop($gateway))->stream(
+        'invocation-1',
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [],
+        [],
+        null,
+        null,
+        null,
+    ));
+
+    $streamEndEvents = array_values(array_filter($events, fn ($event) => $event instanceof StreamEnd));
+
+    expect($streamEndEvents)->toHaveCount(1)
+        ->and($streamEndEvents[0]->reason)->toBe(FinishReason::Error->value);
+});
+
+test('it does not emit a stream end when a turn errors without a stream end', function () {
+    $gateway = new TextGenerationLoopFakeGateway(streams: [[
+        new Error('error-1', 'server_error', 'Server overloaded', false, time()),
+    ]]);
+
+    $events = iterator_to_array((new TextGenerationLoop($gateway))->stream(
+        'invocation-1',
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [],
+        [],
+        null,
+        null,
+        null,
+    ));
+
+    expect(array_filter($events, fn ($event) => $event instanceof StreamEnd))->toHaveCount(0)
+        ->and(array_filter($events, fn ($event) => $event instanceof Error))->toHaveCount(1);
 });
 
 function textGenerationLoopProvider(): TextProvider

@@ -34,7 +34,7 @@ interface TurnTextGateway
     ): TurnResponse;
 
     /**
-     * Must yield exactly one {@see TurnStreamEnd} as the final item on success; on failure it yields an Error event and returns without one, in which case the loop emits no public StreamEnd.
+     * Must yield exactly one {@see TurnStreamEnd} as the final item on success, or an Error event and no TurnStreamEnd on failure; if it yields neither, the loop emits a terminal StreamEnd with FinishReason::Error so consumers never hang.
      *
      * @param  Message[]  $messages
      * @param  Tool[]  $tools

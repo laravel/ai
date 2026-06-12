@@ -18,6 +18,7 @@ use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
+use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
@@ -113,6 +114,7 @@ class TextGenerationLoop
         $continuationToken = null;
         $accumulatedUsage = new Usage;
         $finalReason = null;
+        $sawError = false;
 
         for ($step = 0; $step < $maxSteps; $step++) {
             $pendingToolCalls = [];
@@ -137,7 +139,9 @@ class TextGenerationLoop
 
                 yield $event;
 
-                if ($event instanceof ToolCallEvent) {
+                if ($event instanceof Error) {
+                    $sawError = true;
+                } elseif ($event instanceof ToolCallEvent) {
                     $pendingToolCalls[] = $event->toolCall;
                 } elseif ($event instanceof TextDelta) {
                     $currentText .= $event->delta;
@@ -185,13 +189,24 @@ class TextGenerationLoop
             $continuationToken = $turnEnd?->continuationToken;
         }
 
-        if ($finalReason === null) {
+        if ($finalReason !== null) {
+            yield (new StreamEnd(
+                strtolower((string) Str::uuid7()),
+                $finalReason->value,
+                $accumulatedUsage,
+                time(),
+            ))->withInvocationId($invocationId);
+
+            return;
+        }
+
+        if ($sawError) {
             return;
         }
 
         yield (new StreamEnd(
             strtolower((string) Str::uuid7()),
-            $finalReason->value,
+            FinishReason::Error->value,
             $accumulatedUsage,
             time(),
         ))->withInvocationId($invocationId);
