@@ -149,24 +149,25 @@ class TextGenerationLoop
                 $finalReason = $turnEnd->reason;
             }
 
-            if (empty($pendingToolCalls) || $stepContext->isFinalStep) {
-                break;
-            }
+            $hasToolCalls = $turnEnd?->reason === FinishReason::ToolCalls && filled($pendingToolCalls);
+            $shouldContinue = $hasToolCalls && ! $stepContext->isFinalStep;
 
-            $toolResults = $this->executeToolCalls($pendingToolCalls, $tools);
+            $toolResults = $shouldContinue
+                ? $this->executeToolCalls($pendingToolCalls, $tools)
+                : [];
 
-            if (blank($toolResults)) {
-                break;
-            }
+            $shouldContinue = $shouldContinue && filled($toolResults);
 
-            foreach ($toolResults as $toolResult) {
-                yield (new ToolResultEvent(
-                    strtolower((string) Str::uuid7()),
-                    $toolResult,
-                    true,
-                    null,
-                    time(),
-                ))->withInvocationId($invocationId);
+            if ($shouldContinue) {
+                foreach ($toolResults as $toolResult) {
+                    yield (new ToolResultEvent(
+                        strtolower((string) Str::uuid7()),
+                        $toolResult,
+                        true,
+                        null,
+                        time(),
+                    ))->withInvocationId($invocationId);
+                }
             }
 
             $allMessages[] = new AssistantMessage(
@@ -174,6 +175,10 @@ class TextGenerationLoop
                 collect($pendingToolCalls),
                 $turnEnd?->providerContentBlocks ?? [],
             );
+
+            if (! $shouldContinue) {
+                break;
+            }
 
             $allMessages[] = new ToolResultMessage(collect($toolResults));
 

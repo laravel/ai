@@ -55,7 +55,9 @@ test('streaming handles tool calls', function () {
                     $this->outputItemAdded('fc_1', 'call_1', 'FixedNumberGenerator'),
                     $this->functionCallArgumentsDelta('fc_1', '{}'),
                     $this->functionCallArgumentsDone('fc_1', '{}'),
-                    $this->responseCompleted(10, 5),
+                    $this->responseCompleted(10, 5, output: [
+                        ['type' => 'function_call', 'status' => 'completed', 'id' => 'fc_1', 'call_id' => 'call_1', 'name' => 'FixedNumberGenerator', 'arguments' => '{}'],
+                    ]),
                 ]),
                 status: 200,
                 headers: ['Content-Type' => 'text/event-stream'],

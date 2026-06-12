@@ -34,6 +34,8 @@ interface TurnTextGateway
     ): TurnResponse;
 
     /**
+     * Must yield exactly one {@see TurnStreamEnd} as the final item on success; on failure it yields an Error event and returns without one, in which case the loop emits no public StreamEnd.
+     *
      * @param  Message[]  $messages
      * @param  Tool[]  $tools
      * @param  array<string, Type>|null  $schema
