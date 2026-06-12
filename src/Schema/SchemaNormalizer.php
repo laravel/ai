@@ -231,6 +231,10 @@ class SchemaNormalizer
 
             [$branch, $branchSeen] = $this->inlineRefs($branch, $root, $seen);
 
+            if ($branch === []) {
+                continue;
+            }
+
             if (in_array($branch['type'] ?? null, ['null', ['null']], true)) {
                 $nullable = true;
             } else {
@@ -245,7 +249,8 @@ class SchemaNormalizer
         }
 
         if ($resolved !== []) {
-            $schema = $this->mergeObjectVariants($schema, $resolved) ?? $this->mergeSchema($schema, $resolved[0]);
+            $schema = $this->mergeObjectVariants($schema, $resolved)
+                ?? $this->mergeSchema($schema, $this->firstObjectBranch($resolved) ?? $resolved[0]);
         }
 
         if (! $nullable) {
@@ -259,7 +264,7 @@ class SchemaNormalizer
     }
 
     /**
-     * Union all plain-object variants' properties; null if any branch is not a plain object.
+     * Union every plain-object variant's properties, ignoring scalar branches; null when fewer than two objects remain.
      *
      * @param  array<string, mixed>  $schema
      * @param  array<int, array<string, mixed>>  $branches
@@ -267,28 +272,20 @@ class SchemaNormalizer
      */
     private function mergeObjectVariants(array $schema, array $branches): ?array
     {
-        if (count($branches) < 2) {
+        $objects = array_values(array_filter($branches, fn ($branch) => $this->isObjectBranch($branch)));
+
+        if (count($objects) < 2) {
             return null;
         }
 
         $allProperties = [];
         $requiredSets = [];
         $nullable = false;
+        $description = null;
+        $closed = true;
 
-        foreach ($branches as $branch) {
-            $type = $branch['type'] ?? null;
-
-            if (is_array($type)) {
-                $nonNull = array_values(array_filter($type, fn ($t) => $t !== 'null'));
-
-                if ($nonNull !== ['object']) {
-                    return null;
-                }
-
-                $nullable = true;
-            } elseif ($type !== 'object') {
-                return null;
-            }
+        foreach ($objects as $branch) {
+            $nullable = $nullable || is_array($branch['type'] ?? null);
 
             foreach ($branch['properties'] ?? [] as $key => $prop) {
                 if (! isset($allProperties[$key])) {
@@ -303,6 +300,12 @@ class SchemaNormalizer
             if (is_array($branch['required'] ?? null)) {
                 $requiredSets[] = $branch['required'];
             }
+
+            if ($description === null && is_string($branch['description'] ?? null)) {
+                $description = $branch['description'];
+            }
+
+            $closed = $closed && (($branch['additionalProperties'] ?? null) === false);
         }
 
         $result = $schema;
@@ -327,7 +330,45 @@ class SchemaNormalizer
             unset($result['required']);
         }
 
+        if ($description !== null && ! isset($result['description'])) {
+            $result['description'] = $description;
+        }
+
+        if ($closed && ! isset($result['additionalProperties'])) {
+            $result['additionalProperties'] = false;
+        }
+
         return $result;
+    }
+
+    /**
+     * Find the first branch whose type resolves to a plain object, used as a structure-preserving fallback.
+     *
+     * @param  array<int, array<string, mixed>>  $branches
+     * @return array<string, mixed>|null
+     */
+    private function firstObjectBranch(array $branches): ?array
+    {
+        foreach ($branches as $branch) {
+            if ($this->isObjectBranch($branch)) {
+                return $branch;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Determine whether a normalized branch's type is a plain object, optionally nullable.
+     *
+     * @param  array<string, mixed>  $branch
+     */
+    private function isObjectBranch(array $branch): bool
+    {
+        $type = $branch['type'] ?? null;
+        $nonNull = array_values(array_filter(is_array($type) ? $type : [$type], fn ($value) => $value !== 'null'));
+
+        return $nonNull === ['object'];
     }
 
     /**

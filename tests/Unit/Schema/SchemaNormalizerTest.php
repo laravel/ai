@@ -537,6 +537,86 @@ test('it does not bleed branch-specific keys like additionalProperties into the 
     expect($normalized['properties']['value'])->not->toHaveKey('additionalProperties');
 });
 
+test('it prefers the object branch over a scalar branch regardless of branch order', function () {
+    $stringFirst = normalizesWithoutThrowing([
+        'anyOf' => [
+            ['type' => 'string'],
+            ['type' => 'object', 'properties' => ['id' => ['type' => 'string']], 'required' => ['id']],
+        ],
+    ]);
+
+    $objectFirst = normalizesWithoutThrowing([
+        'anyOf' => [
+            ['type' => 'object', 'properties' => ['id' => ['type' => 'string']], 'required' => ['id']],
+            ['type' => 'string'],
+        ],
+    ]);
+
+    expect($stringFirst['type'])->toBe('object');
+    expect($stringFirst['properties'])->toHaveKey('id');
+    expect($stringFirst['required'])->toBe(['id']);
+    expect($objectFirst)->toBe($stringFirst);
+});
+
+test('it skips an empty no-opinion branch when intersecting required across object variants', function () {
+    $normalized = normalizesWithoutThrowing([
+        'anyOf' => [
+            ['type' => 'object', 'properties' => ['type' => ['type' => 'string', 'enum' => ['behavioral']], 'key' => ['type' => 'string'], 'value' => ['type' => 'string'], 'event_type' => ['type' => 'string']], 'required' => ['type', 'key', 'value', 'event_type']],
+            ['type' => 'object', 'properties' => ['type' => ['type' => 'string', 'enum' => ['person']], 'key' => ['type' => 'string'], 'value' => ['type' => 'string']], 'required' => ['type', 'key', 'value']],
+            ['type' => 'object', 'properties' => ['type' => ['type' => 'string', 'enum' => ['cohort']], 'key' => ['type' => 'string']], 'required' => ['type', 'key']],
+            [],
+        ],
+    ]);
+
+    expect($normalized['type'])->toBe('object');
+    expect($normalized['required'])->toBe(['type', 'key']);
+    expect($normalized['properties']['type']['enum'])->toBe(['behavioral', 'person', 'cohort']);
+});
+
+test('it skips a leading empty branch instead of degrading the union to a string', function () {
+    $normalized = normalizesWithoutThrowing([
+        'anyOf' => [
+            [],
+            ['type' => 'object', 'properties' => ['a' => ['type' => 'string']], 'required' => ['a']],
+            ['type' => 'object', 'properties' => ['b' => ['type' => 'integer']], 'required' => ['b']],
+        ],
+    ]);
+
+    expect($normalized['type'])->toBe('object');
+    expect($normalized['properties'])->toHaveKeys(['a', 'b']);
+});
+
+test('it carries the first object branch description into the merged result', function () {
+    $normalized = normalizesWithoutThrowing([
+        'anyOf' => [
+            ['type' => 'object', 'description' => 'Variant A', 'properties' => ['a' => ['type' => 'string']]],
+            ['type' => 'object', 'properties' => ['b' => ['type' => 'integer']]],
+        ],
+    ]);
+
+    expect($normalized['description'])->toBe('Variant A');
+    expect($normalized['properties'])->toHaveKeys(['a', 'b']);
+});
+
+test('it keeps additionalProperties false only when every merged object branch agrees', function () {
+    $unanimous = normalizesWithoutThrowing([
+        'anyOf' => [
+            ['type' => 'object', 'properties' => ['a' => ['type' => 'string']], 'additionalProperties' => false],
+            ['type' => 'object', 'properties' => ['b' => ['type' => 'integer']], 'additionalProperties' => false],
+        ],
+    ]);
+
+    $mixed = normalizesWithoutThrowing([
+        'anyOf' => [
+            ['type' => 'object', 'properties' => ['a' => ['type' => 'string']], 'additionalProperties' => false],
+            ['type' => 'object', 'properties' => ['b' => ['type' => 'integer']]],
+        ],
+    ]);
+
+    expect($unanimous['additionalProperties'])->toBeFalse();
+    expect($mixed)->not->toHaveKey('additionalProperties');
+});
+
 test('it deep-merges overlapping properties across allOf branches', function () {
     $normalized = normalizesWithoutThrowing([
         'allOf' => [
