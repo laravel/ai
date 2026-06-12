@@ -14,12 +14,14 @@ class EmbeddingsResponse implements Arrayable, Countable, IteratorAggregate, Jso
     /**
      * Create a new embeddings response instance.
      *
-     * @param  array<int, array<float>>
+     * @param  array<int, array<float>>  $embeddings
      */
     public function __construct(public array $embeddings, public int $tokens, public Meta $meta) {}
 
     /**
      * Get the first set of embeddings in the response.
+     *
+     * @return array<float>
      */
     public function first(): array
     {
@@ -56,6 +58,8 @@ class EmbeddingsResponse implements Arrayable, Countable, IteratorAggregate, Jso
 
     /**
      * Get an iterator for the object.
+     *
+     * @return Traversable<int, array<float>>
      */
     public function getIterator(): Traversable
     {

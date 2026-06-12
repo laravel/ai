@@ -1,11 +1,25 @@
 <?php
 
+use Illuminate\Support\Str;
 use Laravel\Ai\Audio;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Prompts\AudioPrompt;
 use Laravel\Ai\Prompts\QueuedAudioPrompt;
+use Laravel\Ai\Providers\ElevenLabsProvider;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\Meta;
+
+test('audio rejects empty text', function () {
+    Audio::fake();
+
+    Audio::of('')->generate();
+})->throws(InvalidArgumentException::class, 'Text content is required to generate audio.');
+
+test('audio rejects whitespace-only text', function () {
+    Audio::fake();
+
+    Audio::of(" \t\n")->generate();
+})->throws(InvalidArgumentException::class, 'Text content is required to generate audio.');
 
 test('audio can be faked', function () {
     Audio::fake([
@@ -76,6 +90,37 @@ test('fake audio closure receives timeout', function () {
     });
 
     Audio::of('Hello world')->timeout(45)->generate();
+});
+
+test('audio can be generated from stringable macro', function () {
+    Audio::fake();
+
+    $response = Str::of('Hello world')->toAudio();
+
+    expect($response->audio)->toEqual(base64_encode('fake-audio-content'));
+
+    Audio::assertGenerated(fn (AudioPrompt $prompt) => $prompt->text === 'Hello world');
+});
+
+test('stringable audio macro passes through options', function () {
+    Audio::fake();
+
+    Str::of('Hello world')->toAudio(
+        provider: Lab::ElevenLabs,
+        voice: 'alloy',
+        instructions: 'Speak slowly',
+        model: 'custom-model',
+        timeout: 45,
+    );
+
+    Audio::assertGenerated(function (AudioPrompt $prompt) {
+        return $prompt->text === 'Hello world'
+            && $prompt->provider instanceof ElevenLabsProvider
+            && $prompt->voice === 'alloy'
+            && $prompt->instructions === 'Speak slowly'
+            && $prompt->model === 'custom-model'
+            && $prompt->timeout === 45;
+    });
 });
 
 test('audio can prevent stray generations', function () {

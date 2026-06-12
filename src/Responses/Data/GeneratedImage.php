@@ -24,11 +24,19 @@ class GeneratedImage implements Arrayable, JsonSerializable
     }
 
     /**
+     * Get the image's MIME type, falling back to a sensible default.
+     */
+    public function mime(): string
+    {
+        return $this->mime ?: 'image/png';
+    }
+
+    /**
      * Get a default filename for the file.
      */
     protected function randomStorageName(): string
     {
-        return once(fn () => Str::random(40).match ($this->mime) {
+        return once(fn () => Str::random(40).match ($this->mime()) {
             'image/jpeg' => '.jpg',
             'image/png' => '.png',
             'image/webp' => '.webp',

@@ -2,7 +2,7 @@
 
 namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
-use Laravel\Ai\Enums\Lab;
+use Illuminate\Support\Arr;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
@@ -33,7 +33,7 @@ trait BuildsTextRequests
 
         $mappedTools = filled($tools) ? $this->mapTools($tools, $provider) : [];
 
-        $providerOptions = $options?->providerOptions(Lab::Anthropic) ?? [];
+        $providerOptions = $options?->providerOptions($provider->driver()) ?? [];
 
         if (filled($schema) && $this->supportsNativeStructuredOutput($provider)) {
             $body['output_config'] = [
@@ -58,9 +58,10 @@ trait BuildsTextRequests
             }
         }
 
-        if ($options?->temperature !== null) {
-            $body['temperature'] = $options->temperature;
-        }
+        $body = array_merge($body, Arr::whereNotNull([
+            'temperature' => $options?->temperature,
+            'top_p' => $options?->topP,
+        ]));
 
         return array_merge($body, $providerOptions);
     }

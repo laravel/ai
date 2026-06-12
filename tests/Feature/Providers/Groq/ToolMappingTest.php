@@ -3,6 +3,7 @@
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
+use Tests\Fixtures\Tools\NamedTool;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
 
 use function Laravel\Ai\agent;
@@ -52,6 +53,21 @@ test('tool with empty schema includes parameters', function () {
             && $function['parameters']['properties'] === []
             && $function['parameters']['required'] === []
             && $function['parameters']['additionalProperties'] === false;
+    });
+});
+
+test('tool with a name() method emits the declared name', function () {
+    Http::fake([
+        '*' => fakeGroqResponse('ok'),
+    ]);
+
+    agent(tools: [new NamedTool('my_custom_tool')])->prompt('Hi', provider: 'groq');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $names = collect(data_get($body, 'tools'))->pluck('function.name')->all();
+
+        return in_array('my_custom_tool', $names, true);
     });
 });
 

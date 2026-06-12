@@ -1,13 +1,20 @@
 <?php
 
 use Illuminate\Support\Facades\Event;
+use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Events\AgentPrompted;
+use Laravel\Ai\Events\AgentStreamed;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
+use Laravel\Ai\Streaming\Events\StreamEnd;
+use Laravel\Ai\Streaming\Events\TextDelta;
 use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\RememberingAssistantAgent;
+use Tests\Fixtures\FakeConversationStore;
 
 test('agent middleware is invoked', function () {
     AssistantAgent::fake([
@@ -63,6 +70,114 @@ test('agent prompted event receives prompt when middleware short circuits', func
     });
 });
 
+test('agent streamed event receives prompt when middleware short circuits a stream', function () {
+    Event::fake();
+
+    AssistantAgent::fake([
+        'Fake response',
+    ]);
+
+    $response = (new AssistantAgent)
+        ->withMiddleware([streamingShortCircuitingMiddleware()])
+        ->stream('Test prompt');
+
+    foreach ($response as $event) {
+        // Drain the stream so the post-stream then() callback dispatches AgentStreamed.
+    }
+
+    Event::assertDispatched(AgentStreamed::class, function (AgentStreamed $event) {
+        return $event->prompt instanceof AgentPrompt
+            && $event->prompt->prompt === 'Test prompt';
+    });
+});
+
+test('stream response conversation id is available after remembered conversations stream completes', function () {
+    app()->instance(ConversationStore::class, new FakeConversationStore);
+
+    RememberingAssistantAgent::fake([
+        'Fake response',
+    ]);
+
+    $user = new class
+    {
+        public int $id = 1;
+    };
+
+    $response = (new RememberingAssistantAgent)->forUser($user)->stream('Test prompt');
+
+    foreach ($response as $event) {
+        expect($event)->not->toBeNull();
+    }
+
+    expect($response->conversationId)->toBe('conversation-123')
+        ->and($response->conversationUser)->toBe($user);
+});
+
+test('stream response conversation id is available when continuing an existing conversation', function () {
+    app()->instance(ConversationStore::class, new FakeConversationStore);
+
+    RememberingAssistantAgent::fake([
+        'Fake response',
+    ]);
+
+    $user = new class
+    {
+        public int $id = 1;
+    };
+
+    $response = (new RememberingAssistantAgent)
+        ->continue('existing-conversation-id', $user)
+        ->stream('Test prompt');
+
+    foreach ($response as $event) {
+        expect($event)->not->toBeNull();
+    }
+
+    expect($response->conversationId)->toBe('existing-conversation-id')
+        ->and($response->conversationUser)->toBe($user);
+});
+
+test('stream response conversation id syncs after late then callbacks', function () {
+    AssistantAgent::fake([
+        'Fake response',
+    ]);
+
+    $user = new class
+    {
+        public int $id = 1;
+    };
+
+    $response = (new AssistantAgent)->stream('Test prompt');
+
+    foreach ($response as $event) {
+        expect($event)->not->toBeNull();
+    }
+
+    $response->then(function (StreamedAgentResponse $response) use ($user) {
+        $response->withinConversation('late-conversation-id', $user);
+    });
+
+    expect($response->conversationId)->toBe('late-conversation-id')
+        ->and($response->conversationUser)->toBe($user);
+});
+
+test('stream response preserves manually assigned conversation id without a participant', function () {
+    AssistantAgent::fake([
+        'Fake response',
+    ]);
+
+    $response = (new AssistantAgent)
+        ->stream('Test prompt')
+        ->withinConversation('manual-conversation-id');
+
+    foreach ($response as $event) {
+        expect($event)->not->toBeNull();
+    }
+
+    expect($response->conversationId)->toBe('manual-conversation-id')
+        ->and($response->conversationUser)->toBeNull();
+});
+
 function shortCircuitingMiddleware(): object
 {
     return new class
@@ -73,6 +188,35 @@ function shortCircuitingMiddleware(): object
                 'test-invocation-id',
                 'Short-circuited response',
                 new Usage,
+                new Meta,
+            );
+        }
+    };
+}
+
+function streamingShortCircuitingMiddleware(): object
+{
+    return new class
+    {
+        public function handle(AgentPrompt $prompt, Closure $next)
+        {
+            return new StreamableAgentResponse(
+                'test-invocation-id',
+                function () {
+                    yield new TextDelta(
+                        id: 'test-0',
+                        messageId: 'test-invocation-id',
+                        delta: 'Short-circuited response',
+                        timestamp: 0,
+                    );
+
+                    yield new StreamEnd(
+                        id: 'test-end',
+                        reason: 'short_circuit',
+                        usage: new Usage,
+                        timestamp: 0,
+                    );
+                },
                 new Meta,
             );
         }

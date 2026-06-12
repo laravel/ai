@@ -3,6 +3,7 @@
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
+use Tests\Fixtures\Tools\NamedTool;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
 
 use function Laravel\Ai\agent;
@@ -34,6 +35,19 @@ test('tool with parameters includes schema without strict mode', function () {
             && in_array('min', $tool['parameters']['required'])
             && in_array('max', $tool['parameters']['required'])
             && ! array_key_exists('additionalProperties', $tool['parameters']);
+    });
+});
+
+test('tool with a name() method emits the declared name', function () {
+    Http::fake(['*' => fakeAzureResponse('ok')]);
+
+    agent(tools: [new NamedTool('my_custom_tool')])->prompt('Hi', provider: 'azure');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $names = collect(data_get($body, 'tools'))->pluck('name')->all();
+
+        return in_array('my_custom_tool', $names, true);
     });
 });
 

@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\AttributeAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
 use Tests\Fixtures\Agents\StructuredWithThinkingAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
@@ -62,6 +63,42 @@ describe('request structure', function () {
         });
     });
 
+    test('temperature and top_p are included when set via attributes', function () {
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeTextResponse(),
+        ]);
+
+        (new AttributeAgent)->prompt(
+            'Hi',
+            provider: 'anthropic',
+        );
+
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+
+            return $body['temperature'] === 0.7
+                && $body['top_p'] === 0.8;
+        });
+    });
+
+    test('temperature and top_p are excluded when not set', function () {
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeTextResponse(),
+        ]);
+
+        (new AssistantAgent)->prompt(
+            'Hi',
+            provider: 'anthropic',
+        );
+
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+
+            return ! array_key_exists('temperature', $body)
+                && ! array_key_exists('top_p', $body);
+        });
+    });
+
     test('tools with structured output use tool choice any', function () {
         Http::fake([
             'api.anthropic.com/*' => $this->fakeTextResponse('The number is 42'),
@@ -100,6 +137,11 @@ describe('request structure', function () {
     });
 
     test('request sends correct authentication headers', function () {
+        config(['ai.providers.anthropic' => [
+            ...config('ai.providers.anthropic'),
+            'key' => 'test-key',
+        ]]);
+
         Http::fake([
             'api.anthropic.com/*' => $this->fakeTextResponse(),
         ]);
@@ -110,7 +152,23 @@ describe('request structure', function () {
         );
 
         Http::assertSent(function ($request) {
-            return $request->hasHeader('x-api-key')
+            return $request->hasHeader('x-api-key', 'test-key')
+                && $request->hasHeader('anthropic-version', '2023-06-01');
+        });
+    });
+
+    test('request omits the api key header when no key is configured', function () {
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeTextResponse(),
+        ]);
+
+        (new AssistantAgent)->prompt(
+            'Hi',
+            provider: 'anthropic',
+        );
+
+        Http::assertSent(function ($request) {
+            return ! $request->hasHeader('x-api-key')
                 && $request->hasHeader('anthropic-version', '2023-06-01');
         });
     });

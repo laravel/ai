@@ -63,6 +63,24 @@ class ProviderOptionsAgent implements Agent, HasProviderOptions
                     'thinkingBudget' => 10000,
                 ],
             ],
+            Lab::DeepSeek => [
+                'frequency_penalty' => 0.5,
+                'presence_penalty' => 0.3,
+            ],
+            Lab::Bedrock => [
+                'additionalModelRequestFields' => [
+                    'thinking' => [
+                        'type' => 'adaptive',
+                    ],
+                    'output_config' => [
+                        'effort' => 'high',
+                    ],
+                ],
+                'guardrailConfig' => [
+                    'guardrailIdentifier' => 'gr-1',
+                    'guardrailVersion' => '1',
+                ],
+            ],
             default => [],
         };
     }

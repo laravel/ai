@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway\Groq\Concerns;
 
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\AiException;
@@ -279,9 +280,10 @@ trait ParsesTextResponses
             $body['max_completion_tokens'] = $options->maxTokens;
         }
 
-        if (! is_null($options?->temperature)) {
-            $body['temperature'] = $options->temperature;
-        }
+        $body = array_merge($body, Arr::whereNotNull([
+            'temperature' => $options?->temperature,
+            'top_p' => $options?->topP,
+        ]));
 
         $providerOptions = $options?->providerOptions($provider->driver());
 
@@ -321,10 +323,14 @@ trait ParsesTextResponses
     protected function extractUsage(array $data): Usage
     {
         $usage = $data['usage'] ?? [];
+        $promptDetails = $usage['prompt_tokens_details'] ?? [];
+        $completionDetails = $usage['completion_tokens_details'] ?? [];
 
         return new Usage(
-            $usage['prompt_tokens'] ?? 0,
-            $usage['completion_tokens'] ?? 0,
+            promptTokens: $usage['prompt_tokens'] ?? 0,
+            completionTokens: $usage['completion_tokens'] ?? 0,
+            cacheReadInputTokens: $promptDetails['cached_tokens'] ?? 0,
+            reasoningTokens: $completionDetails['reasoning_tokens'] ?? 0,
         );
     }
 

@@ -17,11 +17,11 @@ describe('request structure', function () {
         (new AssistantAgent)->prompt(
             'What is Laravel?',
             provider: 'gemini',
-            model: 'gemini-3-flash-preview',
+            model: 'gemini-3.5-flash',
         );
 
         Http::assertSent(function ($request) {
-            return str_contains($request->url(), 'models/gemini-3-flash-preview:generateContent')
+            return str_contains($request->url(), 'models/gemini-3.5-flash:generateContent')
                 && $request->data()['contents'][0]['role'] === 'user'
                 && $request->data()['contents'][0]['parts'][0]['text'] === 'What is Laravel?';
         });
@@ -65,6 +65,11 @@ describe('request structure', function () {
     });
 
     test('request sends api key header', function () {
+        config(['ai.providers.gemini' => [
+            ...config('ai.providers.gemini'),
+            'key' => 'test-key',
+        ]]);
+
         Http::fake([
             'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
         ]);
@@ -75,11 +80,26 @@ describe('request structure', function () {
         );
 
         Http::assertSent(function ($request) {
-            return $request->hasHeader('x-goog-api-key');
+            return $request->hasHeader('x-goog-api-key', 'test-key');
         });
     });
 
-    test('tools include tool config', function () {
+    test('request omits the api key header when no key is configured', function () {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
+        ]);
+
+        (new AssistantAgent)->prompt(
+            'Hi',
+            provider: 'gemini',
+        );
+
+        Http::assertSent(function ($request) {
+            return ! $request->hasHeader('x-goog-api-key');
+        });
+    });
+
+    test('tool_config is omitted to rely on Gemini default AUTO mode', function () {
         Http::fake([
             'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('The number is 42'),
         ]);
@@ -93,8 +113,7 @@ describe('request structure', function () {
             $body = $request->data();
 
             return isset($body['tools'])
-                && isset($body['tool_config'])
-                && $body['tool_config']['function_calling_config']['mode'] === 'AUTO';
+                && ! isset($body['tool_config']);
         });
     });
 

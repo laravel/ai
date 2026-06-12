@@ -24,6 +24,9 @@ use Laravel\Ai\Middleware\RememberConversation;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StructuredAgentResponse;
+use Laravel\Ai\Tools\AgentTool;
+use Laravel\Ai\Tools\McpServerTool;
+use Laravel\Ai\Tools\McpTool;
 
 use function Laravel\Ai\pipeline;
 
@@ -50,9 +53,10 @@ trait GeneratesText
 
                 $agent = $prompt->agent;
 
-                $messages = $agent instanceof Conversational ? $agent->messages() : [];
-
-                $messages[] = new UserMessage($prompt->prompt, $prompt->attachments->all());
+                $messages = [
+                    ...($agent instanceof Conversational ? $agent->messages() : []),
+                    new UserMessage($prompt->prompt, $prompt->attachments->all()),
+                ];
 
                 $this->listenForToolInvocations($invocationId, $agent);
 
@@ -63,7 +67,7 @@ trait GeneratesText
                     $prompt->model,
                     (string) $agent->instructions(),
                     $messages,
-                    $agent instanceof HasTools ? $agent->tools() : [],
+                    $this->resolveTools($agent),
                     $schema,
                     TextGenerationOptions::forAgent($agent),
                     $prompt->timeout,
@@ -105,6 +109,35 @@ trait GeneratesText
         return $agent instanceof HasMiddleware
             ? [...$middleware, ...$agent->middleware()]
             : $middleware;
+    }
+
+    /**
+     * Resolve the tools for the given agent, wrapping any agent instances as tools.
+     */
+    protected function resolveTools(Agent $agent): array
+    {
+        if (! $agent instanceof HasTools) {
+            return [];
+        }
+
+        return array_map(
+            fn ($tool) => $this->resolveTool($tool),
+            [...$agent->tools()],
+        );
+    }
+
+    /**
+     * Resolve a tool returned by the agent into a native tool instance when needed.
+     */
+    protected function resolveTool(mixed $tool): mixed
+    {
+        return match (true) {
+            $tool instanceof Agent => new AgentTool($tool),
+            $tool instanceof Tool => $tool,
+            McpTool::supports($tool) => new McpTool($tool),
+            McpServerTool::supports($tool) => new McpServerTool($tool),
+            default => $tool,
+        };
     }
 
     /**

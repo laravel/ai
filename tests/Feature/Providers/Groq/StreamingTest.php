@@ -116,6 +116,35 @@ test('streaming captures usage from final chunk', function () {
         ->and($streamEnd->usage->completionTokens)->toBe(10);
 });
 
+test('streaming captures reasoning tokens', function () {
+    Http::fake([
+        'api.groq.com/*' => Http::response(
+            body: $this->ssePayload([
+                $this->chatChunk(['role' => 'assistant', 'content' => 'The answer is 4.']),
+                $this->chatChunkFinish('stop', [
+                    'prompt_tokens' => 100,
+                    'completion_tokens' => 50,
+                    'total_tokens' => 150,
+                    'completion_tokens_details' => [
+                        'reasoning_tokens' => 20,
+                    ],
+                ]),
+                '[DONE]',
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents();
+
+    $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+
+    expect($streamEnd->usage->promptTokens)->toBe(100)
+        ->and($streamEnd->usage->completionTokens)->toBe(50)
+        ->and($streamEnd->usage->reasoningTokens)->toBe(20);
+});
+
 test('streaming finish reason maps correctly', function (string $apiReason, $expected) {
     Http::fake([
         'api.groq.com/*' => Http::response(
@@ -136,6 +165,8 @@ test('streaming finish reason maps correctly', function (string $apiReason, $exp
     expect($streamEnd->reason)->toBe($expected->value);
 })->with([
     'stop maps to Stop' => ['stop', FinishReason::Stop],
+    'tool_calls maps to ToolCalls' => ['tool_calls', FinishReason::ToolCalls],
     'length maps to Length' => ['length', FinishReason::Length],
     'content_filter maps to ContentFilter' => ['content_filter', FinishReason::ContentFilter],
+    'unknown maps to Unknown' => ['unknown_reason', FinishReason::Unknown],
 ]);

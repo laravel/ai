@@ -3,7 +3,6 @@
 namespace Laravel\Ai\Gateway\Xai\Concerns;
 
 use Illuminate\Support\Arr;
-use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
@@ -39,13 +38,12 @@ trait BuildsTextRequests
             $body['max_output_tokens'] = $options->maxTokens;
         }
 
-        if (! is_null($options?->temperature)) {
-            $body['temperature'] = $options->temperature;
-        }
+        $body = array_merge($body, Arr::whereNotNull([
+            'temperature' => $options?->temperature,
+            'top_p' => $options?->topP,
+        ]));
 
-        $providerOptions = $options?->providerOptions(
-            Lab::tryFrom($provider->driver()) ?? $provider->driver()
-        );
+        $providerOptions = $options?->providerOptions($provider->driver());
 
         if (filled($providerOptions)) {
             $body = array_merge($body, $providerOptions);

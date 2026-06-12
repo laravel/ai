@@ -4,6 +4,7 @@ namespace Laravel\Ai\Files;
 
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Support\Facades\Storage;
+use InvalidArgumentException;
 use JsonSerializable;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
@@ -13,10 +14,17 @@ class StoredDocument extends Document implements Arrayable, JsonSerializable, St
 {
     use CanBeUploadedToProvider;
 
-    public function __construct(public string $path, public ?string $disk = null) {}
+    public function __construct(public string $path, public ?string $disk = null)
+    {
+        if (blank($path)) {
+            throw new InvalidArgumentException('Document file path cannot be empty.');
+        }
+    }
 
     /**
      * Get the raw representation of the file.
+     *
+     * @throws RuntimeException if the file does not exist on the configured disk.
      */
     public function content(): string
     {
@@ -37,7 +45,7 @@ class StoredDocument extends Document implements Arrayable, JsonSerializable, St
      */
     public function mimeType(): ?string
     {
-        return Storage::disk($this->disk)->mimeType($this->path);
+        return $this->mime ?? Storage::disk($this->disk)->mimeType($this->path);
     }
 
     /**
@@ -47,7 +55,7 @@ class StoredDocument extends Document implements Arrayable, JsonSerializable, St
     {
         return [
             'type' => 'stored-document',
-            'name' => $this->name,
+            'name' => $this->name(),
             'path' => $this->path,
             'disk' => $this->disk ?? config('filesystems.default'),
         ];

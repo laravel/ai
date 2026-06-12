@@ -14,6 +14,7 @@ use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\ProviderTool;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
+use Laravel\Ai\Tools\ToolNameResolver;
 use RuntimeException;
 
 trait MapsTools
@@ -59,21 +60,18 @@ trait MapsTools
         $schema = $tool->schema(new JsonSchemaTypeFactory);
 
         $definition = [
-            'name' => class_basename($tool),
+            'name' => ToolNameResolver::resolve($tool),
             'description' => (string) $tool->description(),
         ];
 
         if (filled($schema)) {
             $schemaArray = (new ObjectSchema($schema))->toSchema();
 
-            $definition['parameters'] = Arr::except(
-                $this->convertNullableTypes([
-                    'type' => 'object',
-                    'properties' => $schemaArray['properties'] ?? [],
-                    'required' => $schemaArray['required'] ?? [],
-                ]),
-                ['additionalProperties'],
-            );
+            $definition['parameters'] = $this->convertNullableTypes([
+                'type' => 'object',
+                'properties' => $schemaArray['properties'] ?? [],
+                'required' => $schemaArray['required'] ?? [],
+            ]);
         }
 
         return $definition;
@@ -87,6 +85,8 @@ trait MapsTools
      */
     protected function convertNullableTypes(array $schema): array
     {
+        unset($schema['additionalProperties']);
+
         if (is_array($schema['type'] ?? null) && in_array('null', $schema['type'], true)) {
             $remaining = array_values(array_diff($schema['type'], ['null']));
 

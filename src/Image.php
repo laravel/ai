@@ -3,6 +3,7 @@
 namespace Laravel\Ai;
 
 use Closure;
+use InvalidArgumentException;
 use Laravel\Ai\Gateway\FakeImageGateway;
 use Laravel\Ai\PendingResponses\PendingImageGeneration;
 
@@ -10,6 +11,8 @@ class Image
 {
     /**
      * Generate an image.
+     *
+     * @throws InvalidArgumentException if the given prompt is empty or whitespace-only.
      */
     public static function of(string $prompt): PendingImageGeneration
     {

@@ -6,7 +6,6 @@ use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasStructuredOutput;
-use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Events\AgentStreamed;
 use Laravel\Ai\Events\StreamingAgent;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -25,7 +24,7 @@ trait StreamsText
      */
     public function stream(AgentPrompt $prompt): StreamableAgentResponse
     {
-        $invocationId = (string) Str::uuid7();
+        $invocationId = $prompt->invocationId ?? (string) Str::uuid7();
 
         $processedPrompt = null;
 
@@ -48,9 +47,10 @@ trait StreamsText
                     function () use ($invocationId, $prompt, $agent) {
                         $this->events->dispatch(new StreamingAgent($invocationId, $prompt));
 
-                        $messages = $agent instanceof Conversational ? $agent->messages() : [];
-
-                        $messages[] = new UserMessage($prompt->prompt, $prompt->attachments->all());
+                        $messages = [
+                            ...($agent instanceof Conversational ? $agent->messages() : []),
+                            new UserMessage($prompt->prompt, $prompt->attachments->all()),
+                        ];
 
                         $this->listenForToolInvocations($invocationId, $agent);
 
@@ -60,7 +60,7 @@ trait StreamsText
                             $prompt->model,
                             (string) $agent->instructions(),
                             $messages,
-                            $agent instanceof HasTools ? $agent->tools() : [],
+                            $this->resolveTools($agent),
                             null,
                             TextGenerationOptions::forAgent($agent),
                             $prompt->timeout,
@@ -68,9 +68,9 @@ trait StreamsText
                     },
                     $meta,
                 );
-            })->then(function (StreamedAgentResponse $response) use ($invocationId, &$processedPrompt) {
+            })->then(function (StreamedAgentResponse $response) use ($invocationId, $prompt, &$processedPrompt) {
                 $this->events->dispatch(
-                    new AgentStreamed($invocationId, $processedPrompt, $response)
+                    new AgentStreamed($invocationId, $processedPrompt ?? $prompt, $response)
                 );
             });
     }

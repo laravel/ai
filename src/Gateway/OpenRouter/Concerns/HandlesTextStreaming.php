@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\OpenRouter\Concerns;
 
 use Generator;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Providers\Provider;
@@ -65,13 +66,7 @@ trait HandlesTextStreaming
 
             if (! $choice) {
                 if (isset($data['usage'])) {
-                    $usage = new Usage(
-                        $data['usage']['prompt_tokens'] ?? 0,
-                        $data['usage']['completion_tokens'] ?? 0,
-                        cacheWriteInputTokens: $data['usage']['prompt_tokens_details']['cache_write_tokens'] ?? 0,
-                        cacheReadInputTokens: $data['usage']['prompt_tokens_details']['cached_tokens'] ?? 0,
-                        reasoningTokens: $data['usage']['completion_tokens_details']['reasoning_tokens'] ?? 0,
-                    );
+                    $usage = $this->extractUsage($data);
                 }
 
                 continue;
@@ -149,13 +144,7 @@ trait HandlesTextStreaming
             }
 
             if (isset($data['usage'])) {
-                $usage = new Usage(
-                    $data['usage']['prompt_tokens'] ?? 0,
-                    $data['usage']['completion_tokens'] ?? 0,
-                    cacheWriteInputTokens: $data['usage']['prompt_tokens_details']['cache_write_tokens'] ?? 0,
-                    cacheReadInputTokens: $data['usage']['prompt_tokens_details']['cached_tokens'] ?? 0,
-                    reasoningTokens: $data['usage']['completion_tokens_details']['reasoning_tokens'] ?? 0,
-                );
+                $usage = $this->extractUsage($data);
             }
         }
 
@@ -307,9 +296,10 @@ trait HandlesTextStreaming
                 $body['max_tokens'] = $options->maxTokens;
             }
 
-            if (! is_null($options?->temperature)) {
-                $body['temperature'] = $options->temperature;
-            }
+            $body = array_merge($body, Arr::whereNotNull([
+                'temperature' => $options?->temperature,
+                'top_p' => $options?->topP,
+            ]));
 
             $providerOptions = $options?->providerOptions($provider->driver());
 

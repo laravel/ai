@@ -6,6 +6,7 @@ enum Lab: string
 {
     case Anthropic = 'anthropic';
     case Azure = 'azure';
+    case Bedrock = 'bedrock';
     case Cohere = 'cohere';
     case DeepSeek = 'deepseek';
     case ElevenLabs = 'eleven';

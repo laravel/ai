@@ -12,7 +12,7 @@ class ObjectSchema extends Schema
     public function __construct(
         array $schema,
         string $name = 'schema_definition',
-        bool $strict = true
+        bool $strict = false
     ) {
         parent::__construct(
             schema: (new ObjectType($schema))->withoutAdditionalProperties(),

@@ -27,6 +27,14 @@ test('search results are returned', function () {
     expect(str_contains($results, json_encode($data, JSON_PRETTY_PRINT)))->toBeTrue();
 });
 
+test('using model rejects blank model class', function () {
+    SimilaritySearch::usingModel('', 'embedding');
+})->throws(InvalidArgumentException::class, 'A model class name is required for similarity search.');
+
+test('using model rejects blank column name', function () {
+    SimilaritySearch::usingModel(FakeVectorModel::class, '  ');
+})->throws(InvalidArgumentException::class, 'A vector column name is required for similarity search.');
+
 test('using model creates similarity search', function () {
     $search = SimilaritySearch::usingModel(
         FakeVectorModel::class,
