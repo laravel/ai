@@ -222,7 +222,7 @@ test('response usage includes cache hit and reasoning tokens', function () {
     expect($response->usage->promptTokens)->toBe(100)
         ->and($response->usage->completionTokens)->toBe(50)
         ->and($response->usage->cacheReadInputTokens)->toBe(20)
-        ->and($response->usage->cacheWriteInputTokens)->toBe(0)
+        ->and($response->usage->cacheWriteInputTokens)->toBe(80)
         ->and($response->usage->reasoningTokens)->toBe(15);
 });
 

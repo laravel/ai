@@ -148,7 +148,7 @@ test('streaming captures cache hit and reasoning tokens', function () {
     expect($streamEnd->usage->promptTokens)->toBe(100)
         ->and($streamEnd->usage->completionTokens)->toBe(50)
         ->and($streamEnd->usage->cacheReadInputTokens)->toBe(30)
-        ->and($streamEnd->usage->cacheWriteInputTokens)->toBe(0)
+        ->and($streamEnd->usage->cacheWriteInputTokens)->toBe(70)
         ->and($streamEnd->usage->reasoningTokens)->toBe(12);
 });
 
