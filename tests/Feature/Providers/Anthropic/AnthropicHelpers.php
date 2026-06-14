@@ -47,6 +47,22 @@ trait AnthropicHelpers
             'role' => 'assistant',
             'model' => 'claude-sonnet-4-6',
             'content' => [[
+                'type' => 'text',
+                'text' => json_encode($data),
+            ]],
+            'stop_reason' => 'end_turn',
+            'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+        ]);
+    }
+
+    protected function fakeSyntheticStructuredResponse(array $data): PromiseInterface
+    {
+        return Http::response([
+            'id' => 'msg_123',
+            'type' => 'message',
+            'role' => 'assistant',
+            'model' => 'claude-sonnet-4-6',
+            'content' => [[
                 'type' => 'tool_use',
                 'id' => 'toolu_123',
                 'name' => 'output_structured_data',
