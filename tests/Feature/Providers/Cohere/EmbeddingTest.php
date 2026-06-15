@@ -1,9 +1,9 @@
 <?php
 
 use Illuminate\Http\Client\Request;
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
+use Laravel\Ai\Exceptions\ProviderRequestException;
 
 beforeEach(function () {
     config(['ai.providers.cohere' => [
@@ -103,7 +103,7 @@ test('embeddings throw when the API returns an error', function () {
     Http::fake(['*' => Http::response(['message' => 'unauthorized'], 401)]);
 
     Embeddings::for(['Hello'])->generate(provider: 'cohere', model: 'embed-v4.0');
-})->throws(RequestException::class);
+})->throws(ProviderRequestException::class);
 
 function fakeCohereEmbeddingsResponse()
 {

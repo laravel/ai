@@ -1,9 +1,9 @@
 <?php
 
 use Illuminate\Http\Client\Request;
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\ProviderRequestException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Reranking;
 use Laravel\Ai\Responses\Data\RankedDocument;
@@ -100,7 +100,7 @@ test('reranking throws when the API returns an error', function () {
     Http::fake(['*' => Http::response(['detail' => 'unauthorized'], 401)]);
 
     Reranking::of(['Doc A', 'Doc B'])->rerank('query', provider: 'jina', model: 'jina-reranker-v3');
-})->throws(RequestException::class);
+})->throws(ProviderRequestException::class);
 
 test('reranking rate limit response throws rate limited exception', function () {
     Http::fake(['api.jina.ai/*' => Http::response(['detail' => 'rate limit exceeded'], 429)]);

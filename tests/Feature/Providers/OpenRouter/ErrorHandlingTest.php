@@ -1,10 +1,10 @@
 <?php
 
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Exceptions\InsufficientCreditsException;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\ProviderRequestException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Tests\Fixtures\Agents\AssistantAgent;
 
@@ -19,7 +19,7 @@ test('http error response throws request exception', function () {
     Http::fake(['openrouter.ai/*' => Http::response(['error' => ['message' => 'Bad request']], 400)]);
 
     (new AssistantAgent)->prompt('Hello', provider: 'openrouter');
-})->throws(RequestException::class);
+})->throws(ProviderRequestException::class);
 
 test('rate limit response throws rate limited exception', function () {
     Http::fake(['openrouter.ai/*' => Http::response(['error' => ['message' => 'Rate limited']], 429)]);

@@ -30,21 +30,21 @@ trait ParsesTextResponses
     protected function validateTextResponse(array $data): void
     {
         if (! $data || isset($data['error'])) {
-            throw new AiException(sprintf(
+            throw (new AiException(sprintf(
                 'xAI Error: [%s] %s',
                 $data['error']['type'] ?? 'unknown',
                 $data['error']['message'] ?? 'Unknown xAI error.',
-            ));
+            )))->withContext(provider: null, status: 200, errorBody: $data ?: null);
         }
 
         if (($data['status'] ?? '') === 'failed') {
             $error = $data['error'] ?? [];
 
-            throw new AiException(sprintf(
+            throw (new AiException(sprintf(
                 'xAI Error: [%s] %s',
                 $error['code'] ?? 'unknown',
                 $error['message'] ?? 'The response failed without an error message.',
-            ));
+            )))->withContext(provider: null, status: 200, errorBody: $data ?: null);
         }
     }
 

@@ -153,10 +153,10 @@ class OllamaGateway implements EmbeddingGateway, TextGateway
         $data = $response->json();
 
         if (! $data || isset($data['error'])) {
-            throw new AiException(sprintf(
+            throw (new AiException(sprintf(
                 'Ollama Error: %s',
                 $data['error'] ?? 'Unknown Ollama error.',
-            ));
+            )))->withContext(provider: null, status: 200, errorBody: $data ?: null);
         }
 
         return new EmbeddingsResponse(

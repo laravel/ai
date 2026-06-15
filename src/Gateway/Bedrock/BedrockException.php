@@ -32,7 +32,7 @@ class BedrockException
     public static function toAiException(Throwable $e, string $provider, string $model): AiException
     {
         if ($e instanceof BedrockRuntimeException) {
-            return match ($e->getAwsErrorCode()) {
+            return (match ($e->getAwsErrorCode()) {
                 'ThrottlingException' => RateLimitedException::forProvider($provider, $e->getStatusCode(), $e),
                 'ServiceUnavailableException',
                 'ModelNotReadyException',
@@ -49,18 +49,19 @@ class BedrockException
                     code: $e->getCode(),
                     previous: $e,
                 ),
-            };
+            })->withContext($provider, $e->getStatusCode(), null);
         }
 
         if (static::isInsufficientCreditsError($e)) {
-            return InsufficientCreditsException::forProvider($provider, $e->getCode(), $e);
+            return InsufficientCreditsException::forProvider($provider, $e->getCode(), $e)
+                ->withContext($provider, null, null);
         }
 
-        return new AiException(
+        return (new AiException(
             $e->getMessage(),
             code: $e->getCode(),
             previous: $e,
-        );
+        ))->withContext($provider, null, null);
     }
 
     /**

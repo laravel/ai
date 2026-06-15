@@ -2,9 +2,9 @@
 
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\ProviderRequestException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Files\RemoteImage;
@@ -235,4 +235,4 @@ test('image http error response throws request exception', function () {
     ]);
 
     Image::of('A blue circle')->generate(provider: 'openrouter', model: 'google/gemini-2.5-flash-image');
-})->throws(RequestException::class);
+})->throws(ProviderRequestException::class);

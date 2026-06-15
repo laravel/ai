@@ -1,8 +1,8 @@
 <?php
 
 use Illuminate\Http\Client\Request;
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Exceptions\ProviderRequestException;
 use Laravel\Ai\Transcription;
 
 beforeEach(function () {
@@ -109,7 +109,7 @@ test('transcription throws when the API returns an error', function () {
     Http::fake(['*' => Http::response(['detail' => 'unauthorized'], 401)]);
 
     Transcription::of(base64_encode('fake-audio'))->generate(provider: 'eleven', model: 'scribe_v2');
-})->throws(RequestException::class);
+})->throws(ProviderRequestException::class);
 
 function fakeElevenTranscriptionResponse(bool $diarized = false)
 {

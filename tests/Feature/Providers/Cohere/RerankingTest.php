@@ -1,9 +1,9 @@
 <?php
 
 use Illuminate\Http\Client\Request;
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\ProviderRequestException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Reranking;
 use Laravel\Ai\Responses\Data\RankedDocument;
@@ -98,7 +98,7 @@ test('reranking throws when the API returns an error', function () {
     Http::fake(['*' => Http::response(['message' => 'unauthorized'], 401)]);
 
     Reranking::of(['Doc A', 'Doc B'])->rerank('query', provider: 'cohere', model: 'rerank-v3.5');
-})->throws(RequestException::class);
+})->throws(ProviderRequestException::class);
 
 test('reranking rate limit response throws rate limited exception', function () {
     Http::fake(['api.cohere.com/*' => Http::response(['message' => 'rate limit exceeded'], 429)]);

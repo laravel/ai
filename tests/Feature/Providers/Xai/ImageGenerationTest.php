@@ -2,9 +2,9 @@
 
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\ProviderRequestException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Image;
 
@@ -132,4 +132,4 @@ test('image http error response throws request exception', function () {
     ]);
 
     Image::of('A red apple')->generate(provider: 'xai', model: 'grok-imagine-image');
-})->throws(RequestException::class);
+})->throws(ProviderRequestException::class);

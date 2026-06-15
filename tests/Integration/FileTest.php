@@ -1,11 +1,11 @@
 <?php
 
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Ai\Events\FileDeleted;
 use Laravel\Ai\Events\FileStored;
 use Laravel\Ai\Events\StoringFile;
+use Laravel\Ai\Exceptions\ProviderRequestException;
 use Laravel\Ai\Files\Document;
 
 beforeEach(function () {
@@ -96,4 +96,4 @@ test('can delete files', function () {
     Document::fromId($stored->id)->delete(provider: $this->provider);
 
     Document::fromId($stored->id)->get(provider: $this->provider);
-})->throws(RequestException::class);
+})->throws(ProviderRequestException::class);

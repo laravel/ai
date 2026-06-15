@@ -1,9 +1,9 @@
 <?php
 
 use Illuminate\Http\Client\Request;
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
+use Laravel\Ai\Exceptions\ProviderRequestException;
 
 beforeEach(function () {
     config(['ai.providers.jina' => [
@@ -60,7 +60,7 @@ test('embeddings throw when the API returns an error', function () {
     Http::fake(['*' => Http::response(['detail' => 'unauthorized'], 401)]);
 
     Embeddings::for(['Hello'])->generate(provider: 'jina', model: 'jina-embeddings-v4');
-})->throws(RequestException::class);
+})->throws(ProviderRequestException::class);
 
 test('multiple inputs return multiple embeddings', function () {
     Http::fake(['*' => Http::response([

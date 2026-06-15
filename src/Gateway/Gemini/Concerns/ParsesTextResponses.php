@@ -30,11 +30,11 @@ trait ParsesTextResponses
     protected function validateTextResponse(array $data): void
     {
         if (! $data || isset($data['error'])) {
-            throw new AiException(sprintf(
+            throw (new AiException(sprintf(
                 'Gemini Error: [%s] %s',
                 $data['error']['code'] ?? 'unknown',
                 $data['error']['message'] ?? 'Unknown Gemini error.',
-            ));
+            )))->withContext(provider: null, status: 200, errorBody: $data ?: null);
         }
     }
 

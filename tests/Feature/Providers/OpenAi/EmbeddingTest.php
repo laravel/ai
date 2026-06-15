@@ -2,10 +2,10 @@
 
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\ProviderRequestException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 
 beforeEach(function () {
@@ -162,4 +162,4 @@ test('embeddings http error response throws request exception', function () {
     ]);
 
     Embeddings::for(['Hello'])->generate(provider: 'openai', model: 'text-embedding-3-small');
-})->throws(RequestException::class);
+})->throws(ProviderRequestException::class);

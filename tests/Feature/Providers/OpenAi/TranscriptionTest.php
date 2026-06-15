@@ -1,9 +1,9 @@
 <?php
 
 use Illuminate\Http\Client\Request;
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\ProviderRequestException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Transcription;
 
@@ -163,7 +163,7 @@ test('transcription http error response throws request exception', function () {
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
         ->generate(provider: 'openai', model: 'gpt-4o-transcribe');
-})->throws(RequestException::class);
+})->throws(ProviderRequestException::class);
 
 function fakeOpenAiTranscriptionResponse(string $text = 'Hello, world!')
 {

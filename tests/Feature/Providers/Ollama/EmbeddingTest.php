@@ -1,10 +1,10 @@
 <?php
 
 use Illuminate\Http\Client\Request;
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\ProviderRequestException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 
 beforeEach(function () {
@@ -107,7 +107,7 @@ test('embeddings http error response throws request exception', function () {
     ]);
 
     Embeddings::for(['Hello'])->generate(provider: 'ollama', model: 'nomic-embed-text');
-})->throws(RequestException::class);
+})->throws(ProviderRequestException::class);
 
 test('embeddings request includes provider options in the request body', function () {
     Http::fake(['*' => fakeOllamaEmbeddingsResponse()]);

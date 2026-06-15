@@ -1,8 +1,8 @@
 <?php
 
 use Illuminate\Http\Client\Request;
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Exceptions\ProviderRequestException;
 use Laravel\Ai\Transcription;
 
 beforeEach(function () {
@@ -161,7 +161,7 @@ test('transcription throws when the API returns an error', function () {
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
         ->generate(provider: 'mistral');
-})->throws(RequestException::class);
+})->throws(ProviderRequestException::class);
 
 function fakeTranscriptionResponse(string $text = 'Hello, world!')
 {

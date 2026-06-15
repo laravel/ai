@@ -2,10 +2,10 @@
 
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\ProviderRequestException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 
 beforeEach(function () {
@@ -160,7 +160,7 @@ test('http error response throws request exception', function () {
     ]);
 
     Embeddings::for(['Hello'])->generate(provider: 'gemini', model: 'gemini-embedding-001');
-})->throws(RequestException::class);
+})->throws(ProviderRequestException::class);
 
 test('request sends x-goog-api-key header', function () {
     Http::fake([

@@ -1,9 +1,9 @@
 <?php
 
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\ProviderRequestException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Reranking;
 
@@ -36,7 +36,7 @@ test('embeddings http error response throws request exception', function () {
     ]);
 
     Embeddings::for(['Hello'])->generate(provider: 'cohere', model: 'embed-v4.0');
-})->throws(RequestException::class);
+})->throws(ProviderRequestException::class);
 
 test('reranking rate limit response throws rate limited exception', function () {
     Http::fake([
@@ -60,4 +60,4 @@ test('reranking http error response throws request exception', function () {
     ]);
 
     Reranking::of(['doc1'])->rerank('What is AI?', provider: 'cohere', model: 'rerank-v3.5');
-})->throws(RequestException::class);
+})->throws(ProviderRequestException::class);

@@ -29,11 +29,11 @@ trait ParsesTextResponses
     protected function validateTextResponse(array $data): void
     {
         if (! $data || isset($data['error'])) {
-            throw new AiException(sprintf(
+            throw (new AiException(sprintf(
                 'DeepSeek Error: [%s] %s',
                 $data['error']['type'] ?? 'unknown',
                 $data['error']['message'] ?? 'Unknown DeepSeek error.',
-            ));
+            )))->withContext(provider: null, status: 200, errorBody: $data ?: null);
         }
     }
 

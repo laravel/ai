@@ -1,9 +1,9 @@
 <?php
 
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\ProviderRequestException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Tests\Fixtures\Agents\AssistantAgent;
 
@@ -28,7 +28,7 @@ test('http error response throws request exception', function () {
         'Hi',
         provider: 'openai',
     );
-})->throws(RequestException::class);
+})->throws(ProviderRequestException::class);
 
 test('rate limit response throws rate limited exception', function () {
     Http::fake([

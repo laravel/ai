@@ -28,11 +28,11 @@ trait ParsesTextResponses
     protected function validateTextResponse(array $data): void
     {
         if (! $data || isset($data['error']) || ($data['object'] ?? null) === 'error') {
-            throw new AiException(sprintf(
+            throw (new AiException(sprintf(
                 'Mistral Error: [%s] %s',
                 $data['error']['type'] ?? 'unknown',
                 $data['error']['message'] ?? 'Unknown Mistral error.',
-            ));
+            )))->withContext(provider: null, status: 200, errorBody: $data ?: null);
         }
     }
 
