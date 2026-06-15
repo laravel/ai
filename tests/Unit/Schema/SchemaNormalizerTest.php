@@ -9,6 +9,11 @@ function illuminateSupportsAnyOf(): bool
     return class_exists('Illuminate\\JsonSchema\\Types\\AnyOfType');
 }
 
+function fallbackCompositionKeyword(): string
+{
+    return illuminateSupportsAnyOf() ? 'oneOf' : 'anyOf';
+}
+
 /**
  * Assert that a raw schema normalizes into something the deserializer accepts.
  */
@@ -435,6 +440,360 @@ test('it infers object type from additionalProperties', function (array $raw) {
     'schema form' => [['additionalProperties' => ['type' => 'string']]],
     'false form' => [['additionalProperties' => false]],
 ]);
+
+test('it merges all object variants from anyOf instead of discarding all but the first', function () {
+    $normalized = normalizesWithoutThrowing([
+        'type' => 'object',
+        'properties' => [
+            'questions' => [
+                'type' => 'array',
+                'items' => [
+                    fallbackCompositionKeyword() => [
+                        [
+                            'type' => 'object',
+                            'properties' => ['type' => ['type' => 'string', 'enum' => ['open']], 'text' => ['type' => 'string']],
+                            'required' => ['type', 'text'],
+                        ],
+                        [
+                            'type' => 'object',
+                            'properties' => ['type' => ['type' => 'string', 'enum' => ['multiple_choice']], 'choices' => ['type' => 'array']],
+                            'required' => ['type', 'choices'],
+                        ],
+                        [
+                            'type' => 'object',
+                            'properties' => ['type' => ['type' => 'string', 'enum' => ['rating']], 'scale' => ['type' => 'integer']],
+                            'required' => ['type'],
+                        ],
+                    ],
+                ],
+            ],
+        ],
+    ]);
+
+    $item = $normalized['properties']['questions']['items'];
+
+    expect($item['type'])->toBe('object');
+    expect($item['properties'])->toHaveKeys(['type', 'text', 'choices', 'scale']);
+    expect($item['required'])->toBe(['type']);
+});
+
+test('it falls back to the single object branch when fewer than two object variants are present', function () {
+    $normalized = normalizesWithoutThrowing([
+        'type' => 'object',
+        'properties' => [
+            'value' => [
+                fallbackCompositionKeyword() => [
+                    ['type' => 'object', 'properties' => ['x' => ['type' => 'string']]],
+                    ['type' => 'string'],
+                ],
+            ],
+        ],
+    ]);
+
+    expect($normalized['properties']['value']['type'])->toBe('object');
+    expect($normalized['properties']['value']['properties'])->toHaveKey('x');
+    expect($normalized['properties']['value']['properties'])->not->toHaveKey('y');
+});
+
+test('it merges the object variants and ignores scalar branches when two or more objects are present', function () {
+    $normalized = normalizesWithoutThrowing([
+        'type' => 'object',
+        'properties' => [
+            'value' => [
+                fallbackCompositionKeyword() => [
+                    ['type' => 'object', 'properties' => ['x' => ['type' => 'string']]],
+                    ['type' => 'object', 'properties' => ['y' => ['type' => 'integer']]],
+                    ['type' => 'string'],
+                ],
+            ],
+        ],
+    ]);
+
+    expect($normalized['properties']['value']['type'])->toBe('object');
+    expect($normalized['properties']['value']['properties'])->toHaveKeys(['x', 'y']);
+});
+
+test('it recursively merges branch refinements into a generic outer property', function () {
+    $normalized = normalizesWithoutThrowing([
+        'type' => 'object',
+        'properties' => ['kind' => ['type' => 'string']],
+        fallbackCompositionKeyword() => [
+            ['type' => 'object', 'properties' => ['kind' => ['const' => 'a']]],
+            ['type' => 'object', 'properties' => ['kind' => ['const' => 'b']]],
+        ],
+    ]);
+
+    expect($normalized['properties']['kind']['enum'])->toBe(['a', 'b']);
+});
+
+test('it recursively merges duplicate nested object properties across object variants', function () {
+    $normalized = normalizesWithoutThrowing([
+        'type' => 'object',
+        'properties' => [
+            'item' => [
+                fallbackCompositionKeyword() => [
+                    ['type' => 'object', 'properties' => ['payload' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]]]],
+                    ['type' => 'object', 'properties' => ['payload' => ['type' => 'object', 'properties' => ['b' => ['type' => 'string']]]]],
+                ],
+            ],
+        ],
+    ]);
+
+    expect($normalized['properties']['item']['properties']['payload']['properties'])->toHaveKeys(['a', 'b']);
+});
+
+test('it ignores a no-opinion variant when intersecting required on a nested object property', function () {
+    $normalized = normalizesWithoutThrowing([
+        fallbackCompositionKeyword() => [
+            ['type' => 'object', 'properties' => ['payload' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string'], 'b' => ['type' => 'string']], 'required' => ['a']]]],
+            ['type' => 'object', 'properties' => ['payload' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string'], 'c' => ['type' => 'string']], 'required' => ['a']]]],
+            ['type' => 'object', 'properties' => ['payload' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string'], 'd' => ['type' => 'string']]]]],
+        ],
+    ]);
+
+    expect($normalized['properties']['payload']['required'])->toBe(['a']);
+});
+
+test('it keeps a nested object property open unless every variant closes it', function () {
+    $normalized = normalizesWithoutThrowing([
+        fallbackCompositionKeyword() => [
+            ['type' => 'object', 'properties' => ['payload' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']], 'additionalProperties' => false]]],
+            ['type' => 'object', 'properties' => ['payload' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]]]],
+        ],
+    ]);
+
+    expect($normalized['properties']['payload'])->not->toHaveKey('additionalProperties');
+});
+
+test('it closes a nested object property only when every variant closes it', function () {
+    $normalized = normalizesWithoutThrowing([
+        fallbackCompositionKeyword() => [
+            ['type' => 'object', 'properties' => ['payload' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']], 'additionalProperties' => false]]],
+            ['type' => 'object', 'properties' => ['payload' => ['type' => 'object', 'properties' => ['b' => ['type' => 'string']], 'additionalProperties' => false]]],
+        ],
+    ]);
+
+    expect($normalized['properties']['payload']['additionalProperties'])->toBeFalse();
+});
+
+test('it unions scalar property types when the same key differs across object variants', function () {
+    $normalized = normalizesWithoutThrowing([
+        fallbackCompositionKeyword() => [
+            ['type' => 'object', 'properties' => ['id' => ['type' => 'string']]],
+            ['type' => 'object', 'properties' => ['id' => ['type' => 'integer']]],
+        ],
+    ]);
+
+    expect($normalized['properties']['id']['type'])->toBe(['string', 'integer']);
+});
+
+test('it keeps the nested object shape when one variant types a property as an object', function () {
+    $normalized = normalizesWithoutThrowing([
+        fallbackCompositionKeyword() => [
+            ['type' => 'object', 'properties' => ['id' => ['type' => 'object', 'properties' => ['n' => ['type' => 'string']]]]],
+            ['type' => 'object', 'properties' => ['id' => ['type' => 'string']]],
+        ],
+    ]);
+
+    expect($normalized['properties']['id']['type'])->toBe('object');
+    expect($normalized['properties']['id']['properties'])->toHaveKey('n');
+});
+
+test('it does not throw when an object variant has a malformed scalar properties value', function () {
+    $normalized = normalizesWithoutThrowing([
+        'type' => 'object',
+        'properties' => [
+            'item' => [
+                fallbackCompositionKeyword() => [
+                    ['type' => 'object', 'properties' => 'malformed-scalar'],
+                    ['type' => 'object', 'properties' => ['b' => ['type' => 'string']]],
+                ],
+            ],
+        ],
+    ]);
+
+    expect($normalized['properties']['item']['properties'])->toHaveKey('b');
+});
+
+test('it preserves outer schema properties and required when merging anyOf object variants', function () {
+    $normalized = normalizesWithoutThrowing([
+        'type' => 'object',
+        'properties' => ['kind' => ['type' => 'string']],
+        'required' => ['kind'],
+        fallbackCompositionKeyword() => [
+            ['type' => 'object', 'properties' => ['name' => ['type' => 'string']], 'required' => ['name']],
+            ['type' => 'object', 'properties' => ['age' => ['type' => 'integer']], 'required' => ['age']],
+        ],
+    ]);
+
+    expect($normalized['properties'])->toHaveKeys(['kind', 'name', 'age']);
+    expect($normalized['required'])->toContain('kind');
+});
+
+test('it treats a branch with no required key as no-opinion rather than zero-required', function () {
+    $normalized = normalizesWithoutThrowing([
+        'type' => 'object',
+        'properties' => [
+            'questions' => [
+                'type' => 'array',
+                'items' => [
+                    fallbackCompositionKeyword() => [
+                        ['type' => 'object', 'properties' => ['type' => ['type' => 'string'], 'text' => ['type' => 'string']], 'required' => ['type', 'text']],
+                        ['type' => 'object', 'properties' => ['type' => ['type' => 'string'], 'choices' => ['type' => 'array']], 'required' => ['type']],
+                        ['type' => 'object', 'properties' => ['type' => ['type' => 'string'], 'scale' => ['type' => 'integer']]],
+                    ],
+                ],
+            ],
+        ],
+    ]);
+
+    $item = $normalized['properties']['questions']['items'];
+
+    expect($item['type'])->toBe('object');
+    expect($item['properties'])->toHaveKeys(['type', 'text', 'choices', 'scale']);
+    expect($item['required'])->toBe(['type']);
+});
+
+test('it merges nullable object variants and marks result nullable', function () {
+    $normalized = normalizesWithoutThrowing([
+        'type' => 'object',
+        'properties' => [
+            'payload' => [
+                fallbackCompositionKeyword() => [
+                    ['type' => ['object', 'null'], 'properties' => ['x' => ['type' => 'string']]],
+                    ['type' => 'object', 'properties' => ['y' => ['type' => 'integer']]],
+                ],
+            ],
+        ],
+    ]);
+
+    expect($normalized['properties']['payload']['type'])->toBe(['object', 'null']);
+    expect($normalized['properties']['payload']['properties'])->toHaveKeys(['x', 'y']);
+});
+
+test('it does not promote required fields when only one of multiple branches declares required', function () {
+    $normalized = normalizesWithoutThrowing([
+        fallbackCompositionKeyword() => [
+            ['type' => 'object', 'properties' => ['id' => ['type' => 'string'], 'name' => ['type' => 'string']], 'required' => ['id']],
+            ['type' => 'object', 'properties' => ['code' => ['type' => 'string']]],
+        ],
+    ]);
+
+    expect($normalized)->not->toHaveKey('required');
+    expect($normalized['properties'])->toHaveKeys(['id', 'name', 'code']);
+});
+
+test('it unions enum values for overlapping discriminator properties across anyOf variants', function () {
+    $normalized = normalizesWithoutThrowing([
+        fallbackCompositionKeyword() => [
+            ['type' => 'object', 'properties' => ['kind' => ['type' => 'string', 'enum' => ['open']],    'text' => ['type' => 'string']]],
+            ['type' => 'object', 'properties' => ['kind' => ['type' => 'string', 'enum' => ['choice']],  'choices' => ['type' => 'array']]],
+            ['type' => 'object', 'properties' => ['kind' => ['type' => 'string', 'enum' => ['rating']],  'scale' => ['type' => 'integer']]],
+        ],
+    ]);
+
+    expect($normalized['properties']['kind']['enum'])->toContain('open')
+        ->toContain('choice')
+        ->toContain('rating');
+    expect($normalized['properties'])->toHaveKeys(['kind', 'text', 'choices', 'scale']);
+});
+
+test('it does not bleed branch-specific keys like additionalProperties into the merged result', function () {
+    $normalized = normalizesWithoutThrowing([
+        'type' => 'object',
+        'properties' => [
+            'value' => [
+                fallbackCompositionKeyword() => [
+                    ['type' => 'object', 'properties' => ['x' => ['type' => 'string']], 'additionalProperties' => false],
+                    ['type' => 'object', 'properties' => ['y' => ['type' => 'integer']]],
+                ],
+            ],
+        ],
+    ]);
+
+    expect($normalized['properties']['value']['properties'])->toHaveKeys(['x', 'y']);
+    expect($normalized['properties']['value'])->not->toHaveKey('additionalProperties');
+});
+
+test('it prefers the object branch over a scalar branch regardless of branch order', function () {
+    $stringFirst = normalizesWithoutThrowing([
+        fallbackCompositionKeyword() => [
+            ['type' => 'string'],
+            ['type' => 'object', 'properties' => ['id' => ['type' => 'string']], 'required' => ['id']],
+        ],
+    ]);
+
+    $objectFirst = normalizesWithoutThrowing([
+        fallbackCompositionKeyword() => [
+            ['type' => 'object', 'properties' => ['id' => ['type' => 'string']], 'required' => ['id']],
+            ['type' => 'string'],
+        ],
+    ]);
+
+    expect($stringFirst['type'])->toBe('object');
+    expect($stringFirst['properties'])->toHaveKey('id');
+    expect($stringFirst['required'])->toBe(['id']);
+    expect($objectFirst)->toBe($stringFirst);
+});
+
+test('it skips an empty no-opinion branch when intersecting required across object variants', function () {
+    $normalized = normalizesWithoutThrowing([
+        fallbackCompositionKeyword() => [
+            ['type' => 'object', 'properties' => ['type' => ['type' => 'string', 'enum' => ['behavioral']], 'key' => ['type' => 'string'], 'value' => ['type' => 'string'], 'event_type' => ['type' => 'string']], 'required' => ['type', 'key', 'value', 'event_type']],
+            ['type' => 'object', 'properties' => ['type' => ['type' => 'string', 'enum' => ['person']], 'key' => ['type' => 'string'], 'value' => ['type' => 'string']], 'required' => ['type', 'key', 'value']],
+            ['type' => 'object', 'properties' => ['type' => ['type' => 'string', 'enum' => ['cohort']], 'key' => ['type' => 'string']], 'required' => ['type', 'key']],
+            [],
+        ],
+    ]);
+
+    expect($normalized['type'])->toBe('object');
+    expect($normalized['required'])->toBe(['type', 'key']);
+    expect($normalized['properties']['type']['enum'])->toBe(['behavioral', 'person', 'cohort']);
+});
+
+test('it skips a leading empty branch instead of degrading the union to a string', function () {
+    $normalized = normalizesWithoutThrowing([
+        fallbackCompositionKeyword() => [
+            [],
+            ['type' => 'object', 'properties' => ['a' => ['type' => 'string']], 'required' => ['a']],
+            ['type' => 'object', 'properties' => ['b' => ['type' => 'integer']], 'required' => ['b']],
+        ],
+    ]);
+
+    expect($normalized['type'])->toBe('object');
+    expect($normalized['properties'])->toHaveKeys(['a', 'b']);
+});
+
+test('it carries the first object branch description into the merged result', function () {
+    $normalized = normalizesWithoutThrowing([
+        fallbackCompositionKeyword() => [
+            ['type' => 'object', 'description' => 'Variant A', 'properties' => ['a' => ['type' => 'string']]],
+            ['type' => 'object', 'properties' => ['b' => ['type' => 'integer']]],
+        ],
+    ]);
+
+    expect($normalized['description'])->toBe('Variant A');
+    expect($normalized['properties'])->toHaveKeys(['a', 'b']);
+});
+
+test('it keeps additionalProperties false only when every merged object branch agrees', function () {
+    $unanimous = normalizesWithoutThrowing([
+        fallbackCompositionKeyword() => [
+            ['type' => 'object', 'properties' => ['a' => ['type' => 'string']], 'additionalProperties' => false],
+            ['type' => 'object', 'properties' => ['b' => ['type' => 'integer']], 'additionalProperties' => false],
+        ],
+    ]);
+
+    $mixed = normalizesWithoutThrowing([
+        fallbackCompositionKeyword() => [
+            ['type' => 'object', 'properties' => ['a' => ['type' => 'string']], 'additionalProperties' => false],
+            ['type' => 'object', 'properties' => ['b' => ['type' => 'integer']]],
+        ],
+    ]);
+
+    expect($unanimous['additionalProperties'])->toBeFalse();
+    expect($mixed)->not->toHaveKey('additionalProperties');
+});
 
 test('it deep-merges overlapping properties across allOf branches', function () {
     $normalized = normalizesWithoutThrowing([
