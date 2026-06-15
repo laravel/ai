@@ -4,6 +4,11 @@ use Illuminate\JsonSchema\JsonSchema as JsonSchemaFactory;
 use Illuminate\JsonSchema\Types\ObjectType;
 use Laravel\Ai\Schema\SchemaNormalizer;
 
+function illuminateSupportsAnyOf(): bool
+{
+    return class_exists('Illuminate\\JsonSchema\\Types\\AnyOfType');
+}
+
 /**
  * Assert that a raw schema normalizes into something the deserializer accepts.
  */
@@ -33,6 +38,17 @@ test('it collapses a nullable anyOf to a nullable single type', function () {
             'nickname' => ['anyOf' => [['type' => 'string', 'minLength' => 1], ['type' => 'null']]],
         ],
     ]);
+
+    if (illuminateSupportsAnyOf()) {
+        expect($normalized['properties']['nickname'])->toMatchArray([
+            'anyOf' => [
+                ['type' => 'string', 'minLength' => 1],
+                ['type' => 'null'],
+            ],
+        ]);
+
+        return;
+    }
 
     expect($normalized['properties']['nickname'])->toMatchArray([
         'type' => ['string', 'null'],
@@ -237,8 +253,45 @@ test('it preserves object shape for a nullable object branch', function () {
         ],
     ]);
 
+    if (illuminateSupportsAnyOf()) {
+        expect($normalized['properties']['addr']['anyOf'][0]['type'])->toBe('object');
+        expect($normalized['properties']['addr']['anyOf'][0]['properties'])->toHaveKey('city');
+
+        return;
+    }
+
     expect($normalized['properties']['addr']['type'])->toBe(['object', 'null']);
     expect($normalized['properties']['addr']['properties'])->toHaveKey('city');
+});
+
+test('it preserves anyOf compositions when the framework deserializer supports them', function () {
+    if (! illuminateSupportsAnyOf()) {
+        $this->markTestSkipped('The installed Illuminate JSON schema package does not support anyOf.');
+    }
+
+    $normalized = normalizesWithoutThrowing([
+        'type' => 'object',
+        'properties' => [
+            'content' => ['anyOf' => [
+                [
+                    'type' => 'object',
+                    'properties' => ['type' => ['const' => 'article'], 'title' => ['type' => 'string']],
+                    'required' => ['type', 'title'],
+                ],
+                [
+                    'type' => 'object',
+                    'properties' => ['type' => ['const' => 'image'], 'url' => ['type' => 'string']],
+                    'required' => ['type', 'url'],
+                ],
+            ]],
+        ],
+    ]);
+
+    expect($normalized['properties']['content']['anyOf'])->toHaveCount(2);
+    expect($normalized['properties']['content']['anyOf'][0]['properties']['type'])->toBe([
+        'enum' => ['article'],
+        'type' => 'string',
+    ]);
 });
 
 test('it types heterogeneous, empty, and homogeneous enums without throwing', function (array $enum, $expected) {

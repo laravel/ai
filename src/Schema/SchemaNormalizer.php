@@ -58,6 +58,7 @@ class SchemaNormalizer
         [$schema, $seen] = $this->inlineRefs($schema, $root, $seen);
 
         $schema = $this->mergeAllOf($schema, $root, $seen);
+        $schema = $this->preserveAnyOf($schema, $root, $seen);
         $schema = $this->collapseUnions($schema, $root, $seen);
         $schema = $this->collapseMultiType($schema);
         $schema = $this->dropUnsupportedKeywords($schema);
@@ -201,12 +202,55 @@ class SchemaNormalizer
                 continue;
             }
 
+            if ($key === 'anyOf' && $this->supportsAnyOf()) {
+                continue;
+            }
+
             $branches = $schema[$key];
 
             unset($schema[$key]);
 
             $schema = $this->mergeUnion($schema, $branches, $root, $seen);
         }
+
+        return $schema;
+    }
+
+    /**
+     * Keep anyOf compositions intact when the installed deserializer supports them.
+     *
+     * @param  array<string, mixed>  $schema
+     * @param  array<string, mixed>  $root
+     * @param  array<string, true>  $seen
+     * @return array<string, mixed>
+     */
+    private function preserveAnyOf(array $schema, array $root, array $seen): array
+    {
+        if (! $this->supportsAnyOf() || ! is_array($schema['anyOf'] ?? null)) {
+            return $schema;
+        }
+
+        $branches = [];
+
+        foreach ($schema['anyOf'] as $branch) {
+            if (! is_array($branch)) {
+                continue;
+            }
+
+            [$branch, $branchSeen] = $this->inlineRefs($branch, $root, $seen);
+
+            $branches[] = $this->isNullBranch($branch)
+                ? ['type' => 'null']
+                : $this->node($branch, $root, $branchSeen);
+        }
+
+        if ($branches === []) {
+            unset($schema['anyOf']);
+
+            return $schema;
+        }
+
+        $schema['anyOf'] = $branches;
 
         return $schema;
     }
@@ -233,7 +277,7 @@ class SchemaNormalizer
 
             [$branch, $branchSeen] = $this->inlineRefs($branch, $root, $seen);
 
-            if (in_array($branch['type'] ?? null, ['null', ['null']], true)) {
+            if ($this->isNullBranch($branch)) {
                 $nullable = true;
             } else {
                 $resolved[] = $this->node($branch, $root, $branchSeen);
@@ -251,6 +295,24 @@ class SchemaNormalizer
         }
 
         return $nullable ? $this->makeNullable($schema) : $schema;
+    }
+
+    /**
+     * Determine if the installed Illuminate JSON schema package supports anyOf.
+     */
+    private function supportsAnyOf(): bool
+    {
+        return class_exists('Illuminate\\JsonSchema\\Types\\AnyOfType');
+    }
+
+    /**
+     * Determine whether the branch only represents null.
+     *
+     * @param  array<string, mixed>  $schema
+     */
+    private function isNullBranch(array $schema): bool
+    {
+        return in_array($schema['type'] ?? null, ['null', ['null']], true);
     }
 
     /**
