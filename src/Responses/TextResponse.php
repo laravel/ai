@@ -4,18 +4,26 @@ namespace Laravel\Ai\Responses;
 
 use Illuminate\Support\Collection;
 use Laravel\Ai\Messages\AssistantMessage;
+use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Step;
+use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\Data\Usage;
 
 class TextResponse
 {
+    /** @var Collection<int, Message> */
     public Collection $messages;
 
+    /** @var Collection<int, ToolCall> */
     public Collection $toolCalls;
 
+    /** @var Collection<int, ToolResult> */
     public Collection $toolResults;
 
+    /** @var Collection<int, Step> */
     public Collection $steps;
 
     public function __construct(public string $text, public Usage $usage, public Meta $meta)
