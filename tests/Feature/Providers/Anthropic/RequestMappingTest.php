@@ -102,7 +102,7 @@ describe('request structure', function () {
     test('tools with structured output use tool choice any when native structured output is disabled', function () {
         config(['ai.providers.anthropic' => [
             ...config('ai.providers.anthropic'),
-            'native_structured_output' => false,
+            'use_native_structured_output' => false,
         ]]);
 
         Http::fake([
@@ -209,7 +209,7 @@ describe('structured output', function () {
     test('structured output falls back to the synthetic tool when native structured output is disabled', function () {
         config(['ai.providers.anthropic' => [
             ...config('ai.providers.anthropic'),
-            'native_structured_output' => false,
+            'use_native_structured_output' => false,
         ]]);
 
         Http::fake([
@@ -241,7 +241,7 @@ describe('structured output', function () {
     test('structured output with thinking uses auto tool choice when native structured output is disabled', function () {
         config(['ai.providers.anthropic' => [
             ...config('ai.providers.anthropic'),
-            'native_structured_output' => false,
+            'use_native_structured_output' => false,
         ]]);
 
         Http::fake([
@@ -285,7 +285,7 @@ describe('structured output', function () {
     test('synthetic tool structured response is correctly parsed when native structured output is disabled', function () {
         config(['ai.providers.anthropic' => [
             ...config('ai.providers.anthropic'),
-            'native_structured_output' => false,
+            'use_native_structured_output' => false,
         ]]);
 
         Http::fake([

@@ -84,20 +84,12 @@ trait BuildsTextRequests
             : ['type' => 'tool', 'name' => 'output_structured_data'];
     }
 
-    /**
-     * Determine if the provider should use native structured output via output_config.
-     *
-     * Structured outputs are generally available, so they are used by default.
-     * Callers targeting models that don't support them can opt out by setting the
-     * `native_structured_output` configuration flag to false, which falls back to
-     * the synthetic tool approach.
-     */
     protected function supportsNativeStructuredOutput(Provider $provider): bool
     {
         $config = $provider->additionalConfiguration();
 
-        if (array_key_exists('native_structured_output', $config)) {
-            return (bool) $config['native_structured_output'];
+        if (array_key_exists('use_native_structured_output', $config)) {
+            return (bool) $config['use_native_structured_output'];
         }
 
         return true;
