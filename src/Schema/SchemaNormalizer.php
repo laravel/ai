@@ -278,49 +278,64 @@ class SchemaNormalizer
             return null;
         }
 
-        $allProperties = [];
+        return $this->reduceObjectGroup($objects, $schema);
+    }
+
+    /**
+     * Merge a group of object variants into one object, layering an optional conjunctive outer schema on top.
+     *
+     * @param  array<int, array<string, mixed>>  $variants
+     * @param  array<string, mixed>  $outer
+     * @return array<string, mixed>
+     */
+    private function reduceObjectGroup(array $variants, array $outer = []): array
+    {
+        $propertyLists = [];
         $requiredSets = [];
         $nullable = false;
         $description = null;
         $closed = true;
 
-        foreach ($objects as $branch) {
-            $nullable = $nullable || is_array($branch['type'] ?? null);
+        foreach ($variants as $variant) {
+            $nullable = $nullable || is_array($variant['type'] ?? null);
 
-            foreach ($branch['properties'] ?? [] as $key => $prop) {
-                if (! isset($allProperties[$key])) {
-                    $allProperties[$key] = $prop;
-                } elseif (isset($allProperties[$key]['enum'], $prop['enum']) && is_array($allProperties[$key]['enum']) && is_array($prop['enum'])) {
-                    $allProperties[$key]['enum'] = array_values(array_unique(
-                        array_merge($allProperties[$key]['enum'], $prop['enum'])
-                    ));
-                }
+            foreach (is_array($variant['properties'] ?? null) ? $variant['properties'] : [] as $key => $prop) {
+                $propertyLists[$key][] = $prop;
             }
 
-            if (is_array($branch['required'] ?? null)) {
-                $requiredSets[] = $branch['required'];
+            if (is_array($variant['required'] ?? null)) {
+                $requiredSets[] = $variant['required'];
             }
 
-            if ($description === null && is_string($branch['description'] ?? null)) {
-                $description = $branch['description'];
+            if ($description === null && is_string($variant['description'] ?? null)) {
+                $description = $variant['description'];
             }
 
-            $closed = $closed && (($branch['additionalProperties'] ?? null) === false);
+            $closed = $closed && (($variant['additionalProperties'] ?? null) === false);
         }
 
-        $result = $schema;
+        $properties = [];
+
+        foreach ($propertyLists as $key => $list) {
+            $properties[$key] = $this->mergeVariantValues($list);
+        }
+
+        foreach (is_array($outer['properties'] ?? null) ? $outer['properties'] : [] as $key => $prop) {
+            $properties[$key] = isset($properties[$key]) && is_array($properties[$key]) && is_array($prop)
+                ? $this->mergeVariantValues([$properties[$key], $prop])
+                : $prop;
+        }
+
+        $result = $outer;
         $result['type'] = $nullable ? ['object', 'null'] : 'object';
 
-        $outerProperties = is_array($schema['properties'] ?? null) ? $schema['properties'] : [];
-        $mergedProperties = array_merge($allProperties, $outerProperties);
-
-        if ($mergedProperties !== []) {
-            $result['properties'] = $mergedProperties;
+        if ($properties !== []) {
+            $result['properties'] = $properties;
         } else {
             unset($result['properties']);
         }
 
-        $outerRequired = is_array($schema['required'] ?? null) ? $schema['required'] : [];
+        $outerRequired = is_array($outer['required'] ?? null) ? $outer['required'] : [];
         $branchRequired = count($requiredSets) >= 2 ? array_values(array_intersect(...$requiredSets)) : [];
         $required = array_values(array_unique(array_merge($outerRequired, $branchRequired)));
 
@@ -339,6 +354,77 @@ class SchemaNormalizer
         }
 
         return $result;
+    }
+
+    /**
+     * Reduce the schemas a single property takes across variants into one schema, recursing on object variants.
+     *
+     * @param  array<int, mixed>  $list
+     * @return array<string, mixed>
+     */
+    private function mergeVariantValues(array $list): array
+    {
+        $list = array_values(array_filter($list, 'is_array'));
+
+        if (count($list) <= 1) {
+            return $list[0] ?? [];
+        }
+
+        $objects = array_values(array_filter($list, fn ($value) => $this->isObjectBranch($value)));
+
+        if (count($objects) >= 2) {
+            return $this->reduceObjectGroup($objects);
+        }
+
+        if (count($objects) === 1) {
+            return $objects[0];
+        }
+
+        return $this->unionScalarValues($list);
+    }
+
+    /**
+     * Union a property's scalar variants, combining their type and enum constraints.
+     *
+     * @param  array<int, array<string, mixed>>  $list
+     * @return array<string, mixed>
+     */
+    private function unionScalarValues(array $list): array
+    {
+        $merged = [];
+        $types = [];
+        $enums = [];
+
+        foreach ($list as $value) {
+            $merged = array_merge($merged, $value);
+            $types = [...$types, ...$this->typeList($value['type'] ?? null)];
+
+            if (is_array($value['enum'] ?? null)) {
+                $enums = [...$enums, ...$value['enum']];
+            }
+        }
+
+        $types = array_values(array_unique(array_filter($types, fn ($type) => $type !== null)));
+
+        if (! isset($merged['items']) && $types !== []) {
+            $merged['type'] = count($types) === 1 ? $types[0] : $types;
+        }
+
+        if ($enums !== []) {
+            $merged['enum'] = array_values(array_unique($enums));
+        }
+
+        return $merged;
+    }
+
+    /**
+     * Normalize a "type" declaration into a list of type strings.
+     *
+     * @return array<int, mixed>
+     */
+    private function typeList(mixed $type): array
+    {
+        return is_array($type) ? $type : [$type];
     }
 
     /**

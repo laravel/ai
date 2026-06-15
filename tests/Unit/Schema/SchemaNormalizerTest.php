@@ -419,7 +419,7 @@ test('it merges all object variants from anyOf instead of discarding all but the
     expect($item['required'])->toBe(['type']);
 });
 
-test('it falls back to the first branch when anyOf branches are not all plain objects', function () {
+test('it falls back to the single object branch when fewer than two object variants are present', function () {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => [
@@ -435,6 +435,126 @@ test('it falls back to the first branch when anyOf branches are not all plain ob
     expect($normalized['properties']['value']['type'])->toBe('object');
     expect($normalized['properties']['value']['properties'])->toHaveKey('x');
     expect($normalized['properties']['value']['properties'])->not->toHaveKey('y');
+});
+
+test('it merges the object variants and ignores scalar branches when two or more objects are present', function () {
+    $normalized = normalizesWithoutThrowing([
+        'type' => 'object',
+        'properties' => [
+            'value' => [
+                'anyOf' => [
+                    ['type' => 'object', 'properties' => ['x' => ['type' => 'string']]],
+                    ['type' => 'object', 'properties' => ['y' => ['type' => 'integer']]],
+                    ['type' => 'string'],
+                ],
+            ],
+        ],
+    ]);
+
+    expect($normalized['properties']['value']['type'])->toBe('object');
+    expect($normalized['properties']['value']['properties'])->toHaveKeys(['x', 'y']);
+});
+
+test('it recursively merges branch refinements into a generic outer property', function () {
+    $normalized = normalizesWithoutThrowing([
+        'type' => 'object',
+        'properties' => ['kind' => ['type' => 'string']],
+        'anyOf' => [
+            ['type' => 'object', 'properties' => ['kind' => ['const' => 'a']]],
+            ['type' => 'object', 'properties' => ['kind' => ['const' => 'b']]],
+        ],
+    ]);
+
+    expect($normalized['properties']['kind']['enum'])->toBe(['a', 'b']);
+});
+
+test('it recursively merges duplicate nested object properties across object variants', function () {
+    $normalized = normalizesWithoutThrowing([
+        'type' => 'object',
+        'properties' => [
+            'item' => [
+                'anyOf' => [
+                    ['type' => 'object', 'properties' => ['payload' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]]]],
+                    ['type' => 'object', 'properties' => ['payload' => ['type' => 'object', 'properties' => ['b' => ['type' => 'string']]]]],
+                ],
+            ],
+        ],
+    ]);
+
+    expect($normalized['properties']['item']['properties']['payload']['properties'])->toHaveKeys(['a', 'b']);
+});
+
+test('it ignores a no-opinion variant when intersecting required on a nested object property', function () {
+    $normalized = normalizesWithoutThrowing([
+        'anyOf' => [
+            ['type' => 'object', 'properties' => ['payload' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string'], 'b' => ['type' => 'string']], 'required' => ['a']]]],
+            ['type' => 'object', 'properties' => ['payload' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string'], 'c' => ['type' => 'string']], 'required' => ['a']]]],
+            ['type' => 'object', 'properties' => ['payload' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string'], 'd' => ['type' => 'string']]]]],
+        ],
+    ]);
+
+    expect($normalized['properties']['payload']['required'])->toBe(['a']);
+});
+
+test('it keeps a nested object property open unless every variant closes it', function () {
+    $normalized = normalizesWithoutThrowing([
+        'anyOf' => [
+            ['type' => 'object', 'properties' => ['payload' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']], 'additionalProperties' => false]]],
+            ['type' => 'object', 'properties' => ['payload' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]]]],
+        ],
+    ]);
+
+    expect($normalized['properties']['payload'])->not->toHaveKey('additionalProperties');
+});
+
+test('it closes a nested object property only when every variant closes it', function () {
+    $normalized = normalizesWithoutThrowing([
+        'anyOf' => [
+            ['type' => 'object', 'properties' => ['payload' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']], 'additionalProperties' => false]]],
+            ['type' => 'object', 'properties' => ['payload' => ['type' => 'object', 'properties' => ['b' => ['type' => 'string']], 'additionalProperties' => false]]],
+        ],
+    ]);
+
+    expect($normalized['properties']['payload']['additionalProperties'])->toBeFalse();
+});
+
+test('it unions scalar property types when the same key differs across object variants', function () {
+    $normalized = normalizesWithoutThrowing([
+        'anyOf' => [
+            ['type' => 'object', 'properties' => ['id' => ['type' => 'string']]],
+            ['type' => 'object', 'properties' => ['id' => ['type' => 'integer']]],
+        ],
+    ]);
+
+    expect($normalized['properties']['id']['type'])->toBe(['string', 'integer']);
+});
+
+test('it keeps the nested object shape when one variant types a property as an object', function () {
+    $normalized = normalizesWithoutThrowing([
+        'anyOf' => [
+            ['type' => 'object', 'properties' => ['id' => ['type' => 'object', 'properties' => ['n' => ['type' => 'string']]]]],
+            ['type' => 'object', 'properties' => ['id' => ['type' => 'string']]],
+        ],
+    ]);
+
+    expect($normalized['properties']['id']['type'])->toBe('object');
+    expect($normalized['properties']['id']['properties'])->toHaveKey('n');
+});
+
+test('it does not throw when an object variant has a malformed scalar properties value', function () {
+    $normalized = normalizesWithoutThrowing([
+        'type' => 'object',
+        'properties' => [
+            'item' => [
+                'anyOf' => [
+                    ['type' => 'object', 'properties' => 'malformed-scalar'],
+                    ['type' => 'object', 'properties' => ['b' => ['type' => 'string']]],
+                ],
+            ],
+        ],
+    ]);
+
+    expect($normalized['properties']['item']['properties'])->toHaveKey('b');
 });
 
 test('it preserves outer schema properties and required when merging anyOf object variants', function () {
