@@ -25,6 +25,7 @@ use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Tools\AgentTool;
+use Laravel\Ai\Tools\McpServer;
 use Laravel\Ai\Tools\McpServerTool;
 use Laravel\Ai\Tools\McpTool;
 
@@ -120,23 +121,26 @@ trait GeneratesText
             return [];
         }
 
-        return array_map(
-            fn ($tool) => $this->resolveTool($tool),
-            [...$agent->tools()],
-        );
+        return collect($agent->tools())
+            ->flatMap(fn ($tool) => $this->resolveTool($tool))
+            ->all();
     }
 
     /**
      * Resolve a tool returned by the agent into a native tool instance when needed.
+     *
+     * @return array<int, mixed>
      */
-    protected function resolveTool(mixed $tool): mixed
+    protected function resolveTool(mixed $tool): array
     {
         return match (true) {
-            $tool instanceof Agent => new AgentTool($tool),
-            $tool instanceof Tool => $tool,
-            McpTool::supports($tool) => new McpTool($tool),
-            McpServerTool::supports($tool) => new McpServerTool($tool),
-            default => $tool,
+            $tool instanceof Agent => [new AgentTool($tool)],
+            $tool instanceof Tool => [$tool],
+            McpTool::supports($tool) => [new McpTool($tool)],
+            McpServerTool::supports($tool) => [new McpServerTool($tool)],
+            $tool instanceof McpServer => $tool->tools(),
+            McpServer::supports($tool) => (new McpServer($tool))->tools(),
+            default => [$tool],
         };
     }
 
