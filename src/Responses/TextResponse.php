@@ -36,27 +36,35 @@ class TextResponse
 
     /**
      * Provide the message context for the response.
+     *
+     * @param  Collection<int, Message>  $messages
      */
     public function withMessages(Collection $messages): self
     {
         $this->messages = $messages;
 
-        $this->withToolCallsAndResults(
-            toolCalls: $this->messages
-                ->whereInstanceOf(AssistantMessage::class)
-                ->map(fn ($message) => $message->toolCalls)
-                ->flatten(),
-            toolResults: $this->messages
-                ->whereInstanceOf(ToolResultMessage::class)
-                ->map(fn ($message) => $message->toolResults)
-                ->flatten(),
-        );
+        /** @var Collection<int, ToolCall> $toolCalls */
+        $toolCalls = $this->messages
+            ->whereInstanceOf(AssistantMessage::class)
+            ->map(fn ($message) => $message->toolCalls)
+            ->flatten();
+
+        /** @var Collection<int, ToolResult> $toolResults */
+        $toolResults = $this->messages
+            ->whereInstanceOf(ToolResultMessage::class)
+            ->map(fn ($message) => $message->toolResults)
+            ->flatten();
+
+        $this->withToolCallsAndResults($toolCalls, $toolResults);
 
         return $this;
     }
 
     /**
      * Provide the tool calls and results for the message.
+     *
+     * @param  Collection<int, ToolCall>  $toolCalls
+     * @param  Collection<int, ToolResult>  $toolResults
      */
     public function withToolCallsAndResults(Collection $toolCalls, Collection $toolResults): self
     {
@@ -72,6 +80,8 @@ class TextResponse
 
     /**
      * Provide the steps taken to generate the response.
+     *
+     * @param  Collection<int, Step>  $steps
      */
     public function withSteps(Collection $steps): self
     {
