@@ -261,7 +261,7 @@ trait HandlesTextStreaming
             ))->withInvocationId($invocationId);
         }
 
-        if ($depth + 1 < ($maxSteps ?? round(count($tools) * 1.5))) {
+        if ($depth < ($maxSteps ?? round(count($tools) * 1.5))) {
             $assistantMsg = [
                 'role' => 'assistant',
                 'content' => $currentText,
