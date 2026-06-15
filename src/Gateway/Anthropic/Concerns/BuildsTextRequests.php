@@ -84,6 +84,9 @@ trait BuildsTextRequests
             : ['type' => 'tool', 'name' => 'output_structured_data'];
     }
 
+    /**
+    * Determine if the provider supports native structured output via output_config.
+    */
     protected function supportsNativeStructuredOutput(Provider $provider): bool
     {
         $config = $provider->additionalConfiguration();
