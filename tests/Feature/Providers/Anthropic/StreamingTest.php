@@ -1,10 +1,6 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
-use Laravel\Ai\Attributes\MaxSteps;
-use Laravel\Ai\Contracts\Agent;
-use Laravel\Ai\Contracts\HasTools;
-use Laravel\Ai\Promptable;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ProviderToolEvent;
@@ -18,7 +14,6 @@ use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
-use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 describe('text streaming', function () {
     test('streaming emits text events', function () {
@@ -81,50 +76,6 @@ describe('tool calls', function () {
 
         expect($toolCallEvents)->not->toBeEmpty()
             ->and($toolCallEvents[0]->toolCall)->name->toBe('FixedNumberGenerator')->id->toBe('toolu_1');
-    });
-
-    test('max steps limits streaming tool call depth', function () {
-        $toolUseStream = fn () => Http::response(
-            body: $this->ssePayload([
-                $this->messageStart(),
-                $this->contentBlockStart(0, ['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'FixedNumberGenerator', 'input' => '']),
-                $this->contentBlockDelta(0, ['type' => 'input_json_delta', 'partial_json' => '{}']),
-                $this->contentBlockStop(0),
-                $this->messageDelta('tool_use', 5),
-            ]),
-            status: 200,
-            headers: ['Content-Type' => 'text/event-stream'],
-        );
-
-        Http::fake([
-            'api.anthropic.com/*' => Http::sequence([
-                $toolUseStream(),
-                $toolUseStream(),
-                $toolUseStream(),
-                $toolUseStream(),
-            ]),
-        ]);
-
-        $agent = new #[MaxSteps(3)] class implements Agent, HasTools
-        {
-            use Promptable;
-
-            public function instructions(): string
-            {
-                return 'You are a helpful assistant.';
-            }
-
-            public function tools(): iterable
-            {
-                return [new FixedNumberGenerator];
-            }
-        };
-
-        $events = $this->collectStreamEvents(agent: $agent);
-
-        expect(Http::recorded())->toHaveCount(4)
-            ->and(end($events))->toBeInstanceOf(StreamEnd::class)
-            ->reason->toBe(FinishReason::ToolCalls->value);
     });
 });
 

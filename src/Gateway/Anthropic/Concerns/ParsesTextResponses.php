@@ -98,10 +98,10 @@ trait ParsesTextResponses
 
         $shouldContinue = $finishReason === FinishReason::ToolCalls
             && filled($realToolCalls)
-            && $depth < ($maxSteps ?? round(count($tools) * 1.5));
+            && $depth + 1 < ($maxSteps ?? round(count($tools) * 1.5));
 
         $shouldResumePauseTurn = $stopReason === 'pause_turn'
-            && $depth < ($maxSteps ?? 5);
+            && $depth + 1 < ($maxSteps ?? 5);
 
         if ($shouldContinue) {
             $toolResults = $this->executeToolCalls($realToolCalls, $tools);

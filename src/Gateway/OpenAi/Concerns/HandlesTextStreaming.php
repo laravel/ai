@@ -361,7 +361,7 @@ trait HandlesTextStreaming
             ))->withInvocationId($invocationId);
         }
 
-        if ($depth < ($maxSteps ?? round(count($tools) * 1.5))) {
+        if ($depth + 1 < ($maxSteps ?? round(count($tools) * 1.5))) {
             if ($this->isStateless($provider)) {
                 $this->mapAssistantMessage(
                     new AssistantMessage($currentText, collect($mappedToolCalls)),

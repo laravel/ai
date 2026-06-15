@@ -119,7 +119,7 @@ trait ParsesTextResponses
         $messages->push($assistantMessage);
 
         if (filled($mappedToolCalls) &&
-            $steps->count() <= ($maxSteps ?? round(count($tools) * 1.5))) {
+            $steps->count() < ($maxSteps ?? round(count($tools) * 1.5))) {
             $toolResults = $this->executeToolCalls($mappedToolCalls, $tools);
 
             $steps->pop();

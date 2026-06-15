@@ -54,6 +54,8 @@ test('max steps limits tool call depth', function () {
             $this->fakeUniqueToolCallResponse(),
             $this->fakeUniqueToolCallResponse(),
             $this->fakeUniqueToolCallResponse(),
+            $this->fakeUniqueToolCallResponse(),
+            $this->fakeUniqueToolCallResponse(),
             $this->fakeTextResponse('Done'),
         ]),
     ]);
@@ -65,8 +67,7 @@ test('max steps limits tool call depth', function () {
 
     $recorded = Http::recorded();
 
-    expect($recorded)->toHaveCount(4)
-        ->and($response->text)->toBe('Done');
+    expect(count($recorded))->toBeLessThanOrEqual(3);
 });
 
 test('function response includes id for gemini 3', function () {

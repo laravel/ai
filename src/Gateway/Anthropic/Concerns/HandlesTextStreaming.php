@@ -354,7 +354,7 @@ trait HandlesTextStreaming
             return;
         }
 
-        if ($stopReason === 'pause_turn' && $depth < ($maxSteps ?? 5)) {
+        if ($stopReason === 'pause_turn' && $depth + 1 < ($maxSteps ?? 5)) {
             yield from $this->resumeFromPauseTurn(
                 $invocationId,
                 $provider,
@@ -429,7 +429,7 @@ trait HandlesTextStreaming
             ))->withInvocationId($invocationId);
         }
 
-        if ($depth >= ($maxSteps ?? round(count($tools) * 1.5))) {
+        if ($depth + 1 >= ($maxSteps ?? round(count($tools) * 1.5))) {
             yield (new StreamEnd(
                 $this->generateEventId(),
                 FinishReason::ToolCalls->value,
