@@ -1,9 +1,11 @@
 <?php
 
+use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Anthropic\Concerns\MapsTools;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\ToolSearch;
+use Laravel\Ai\Providers\Tools\WebSearch;
 use Tests\Fixtures\Tools\DeferredTool;
 use Tests\Fixtures\Tools\NonStrictTool;
 
@@ -113,3 +115,33 @@ test('throws when no non-deferred tool accompanies the ToolSearch tool because A
         anthropicProvider(),
     );
 })->throws(LogicException::class, 'at least one non-deferred tool');
+
+test('counts a server tool as non-deferred so a ToolSearch alongside web search is allowed', function () {
+    $provider = new class extends Provider implements SupportsWebSearch
+    {
+        public function __construct() {}
+
+        public function webSearchToolOptions(WebSearch $search): array
+        {
+            return [];
+        }
+    };
+
+    $mapped = anthropicToolSearchMapper()->map(
+        [new WebSearch, new ToolSearch(tools: [new DeferredTool])],
+        $provider,
+    );
+
+    expect(collect($mapped)->firstWhere('type', 'tool_search_tool_regex_20251119'))->not->toBeNull()
+        ->and(collect($mapped)->firstWhere('type', 'web_search_20250305'))->not->toBeNull();
+});
+
+test('skips an empty ToolSearch tool without emitting a search entry', function () {
+    $mapped = anthropicToolSearchMapper()->map(
+        [new NonStrictTool, new ToolSearch],
+        anthropicProvider(),
+    );
+
+    expect($mapped)->toHaveCount(1)
+        ->and(collect($mapped)->contains(fn ($t) => str_starts_with($t['type'] ?? '', 'tool_search')))->toBeFalse();
+});

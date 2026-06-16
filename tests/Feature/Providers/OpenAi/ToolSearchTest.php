@@ -2,6 +2,10 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Promptable;
+use Laravel\Ai\Providers\Tools\ToolSearch;
 use Tests\Fixtures\Agents\OpenAiToolSearchAgent;
 
 beforeEach(function () {
@@ -27,5 +31,35 @@ test('an agent with a ToolSearch tool emits a tool_search entry and defers its n
         return $tools->contains(fn ($t) => ($t['type'] ?? null) === 'tool_search')
             && ($deferred['defer_loading'] ?? false) === true
             && ! isset($plain['defer_loading']);
+    });
+});
+
+test('an agent whose only tool is an empty ToolSearch omits the tool fields', function () {
+    Http::fake([
+        '*' => fakeOpenAiResponse('ok'),
+    ]);
+
+    $agent = new class implements Agent, HasTools
+    {
+        use Promptable;
+
+        public function instructions(): string
+        {
+            return 'You are a helpful assistant.';
+        }
+
+        public function tools(): iterable
+        {
+            return [new ToolSearch];
+        }
+    };
+
+    $agent->prompt('Hi', provider: 'openai', model: 'gpt-5.4');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return ! array_key_exists('tools', $body)
+            && ! array_key_exists('tool_choice', $body);
     });
 });

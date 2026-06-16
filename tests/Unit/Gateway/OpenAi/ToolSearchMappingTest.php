@@ -59,6 +59,16 @@ test('forwards provider options onto the tool_search entry', function () {
         ->toBe(['type' => 'tool_search', 'foo' => 'bar']);
 });
 
+test('skips an empty ToolSearch tool without emitting a tool_search entry', function () {
+    $mapped = openAiToolSearchMapper()->map(
+        [new NonStrictTool, new ToolSearch],
+        openAiProvider(),
+    );
+
+    expect($mapped)->toHaveCount(1)
+        ->and(collect($mapped)->pluck('type'))->not->toContain('tool_search');
+});
+
 test('does not emit a tool_search entry when no ToolSearch tool is present', function () {
     $mapped = openAiToolSearchMapper()->map(
         [new NonStrictTool, new DeferredTool],

@@ -30,6 +30,10 @@ trait MapsTools
 
         foreach ($tools as $tool) {
             if ($tool instanceof ToolSearch) {
+                if (blank($tool->tools)) {
+                    continue;
+                }
+
                 $hasToolSearch = true;
                 $options = $tool->providerOptions(Lab::Anthropic);
                 $strategy = ($options['strategy'] ?? 'regex') === 'bm25' ? 'bm25' : 'regex';
@@ -46,6 +50,7 @@ trait MapsTools
                 }
             } elseif ($tool instanceof ProviderTool) {
                 $mapped[] = $this->mapProviderTool($tool, $provider);
+                $nonDeferredCount++;
             } elseif ($tool instanceof Tool) {
                 $mapped[] = $this->mapTool($tool);
                 $nonDeferredCount++;

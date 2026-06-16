@@ -28,6 +28,10 @@ trait MapsTools
 
         foreach ($tools as $tool) {
             if ($tool instanceof ToolSearch) {
+                if (blank($tool->tools)) {
+                    continue;
+                }
+
                 $mapped[] = ['type' => 'tool_search', ...$tool->providerOptions(Lab::OpenAI)];
 
                 foreach ($tool->tools as $deferred) {

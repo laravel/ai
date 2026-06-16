@@ -27,8 +27,12 @@ trait BuildsTextRequests
         $body = ['model' => $model, 'input' => $input];
 
         if (filled($tools)) {
-            $body['tool_choice'] = 'auto';
-            $body['tools'] = $this->mapTools($tools, $provider);
+            $mappedTools = $this->mapTools($tools, $provider);
+
+            if (filled($mappedTools)) {
+                $body['tool_choice'] = 'auto';
+                $body['tools'] = $mappedTools;
+            }
         }
 
         if (filled($schema)) {
