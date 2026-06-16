@@ -273,6 +273,27 @@ describe('usage parsing', function () {
             ->completionTokens->toBe(50);
     });
 
+    test('response meta exposes the provider native response id', function () {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [[
+                    'content' => ['parts' => [['text' => 'Hi']], 'role' => 'model'],
+                    'finishReason' => 'STOP',
+                ]],
+                'usageMetadata' => [
+                    'promptTokenCount' => 10,
+                    'candidatesTokenCount' => 5,
+                ],
+                'responseId' => 'gemini-resp-123',
+            ]),
+        ]);
+
+        $response = (new AssistantAgent)->prompt('Hi', provider: 'gemini');
+
+        expect($response->meta->responseId)->toBe('gemini-resp-123')
+            ->and($response->steps->first()->meta->responseId)->toBe('gemini-resp-123');
+    });
+
     test('thinking response parts are separated from text', function () {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::response([

@@ -88,6 +88,7 @@ trait ParsesTextResponses
         $choice = $data['choices'][0] ?? [];
         $message = $choice['message'] ?? [];
         $model = $data['model'] ?? '';
+        $responseId = $data['id'] ?? null;
 
         $text = $message['content'] ?? '';
         $rawToolCalls = $message['tool_calls'] ?? [];
@@ -107,7 +108,7 @@ trait ParsesTextResponses
             [],
             $finishReason,
             $usage,
-            new Meta($provider->name(), $model),
+            new Meta($provider->name(), $model, responseId: $responseId),
         );
 
         $steps->push($step);
@@ -129,7 +130,7 @@ trait ParsesTextResponses
                 $toolResults,
                 $finishReason,
                 $usage,
-                new Meta($provider->name(), $model),
+                new Meta($provider->name(), $model, responseId: $responseId),
             ));
 
             $toolResultMessage = new ToolResultMessage(collect($toolResults));
@@ -163,7 +164,7 @@ trait ParsesTextResponses
                 $structuredData,
                 $text,
                 $this->combineUsage($steps),
-                new Meta($provider->name(), $model),
+                new Meta($provider->name(), $model, responseId: $responseId),
             ))->withToolCallsAndResults(
                 toolCalls: $allToolCalls,
                 toolResults: $allToolResults,
@@ -173,7 +174,7 @@ trait ParsesTextResponses
         return (new TextResponse(
             $text,
             $this->combineUsage($steps),
-            new Meta($provider->name(), $model),
+            new Meta($provider->name(), $model, responseId: $responseId),
         ))->withMessages($messages)->withSteps($steps);
     }
 

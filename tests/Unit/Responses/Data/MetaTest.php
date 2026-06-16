@@ -40,3 +40,36 @@ test('meta json serialize returns to array', function () {
     expect($json['provider'])->toBe('anthropic')
         ->and($json['model'])->toBe('claude-3-opus');
 });
+
+test('meta defaults response id to null', function () {
+    $meta = new Meta('openai', 'gpt-4o');
+
+    expect($meta->responseId)->toBeNull();
+});
+
+test('meta stores response id passed as the last argument', function () {
+    $meta = new Meta('openai', 'gpt-4o', null, 'resp_123');
+
+    expect($meta->responseId)->toBe('resp_123');
+});
+
+test('meta to array includes response id', function () {
+    $meta = new Meta('openai', 'gpt-4o', null, 'resp_123');
+
+    $array = $meta->toArray();
+
+    expect($array)->toHaveKey('response_id')
+        ->and($array['response_id'])->toBe('resp_123');
+});
+
+test('meta to array response id is null when not provided', function () {
+    $meta = new Meta('openai', 'gpt-4o');
+
+    expect($meta->toArray()['response_id'])->toBeNull();
+});
+
+test('meta json serialize includes response id', function () {
+    $meta = new Meta('openai', 'gpt-4o', null, 'resp_123');
+
+    expect($meta->jsonSerialize()['response_id'])->toBe('resp_123');
+});

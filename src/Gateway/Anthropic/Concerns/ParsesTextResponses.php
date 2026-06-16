@@ -88,7 +88,8 @@ trait ParsesTextResponses
         $citations = $this->extractCitations($content);
         $usage = $this->extractUsage($data);
         $finishReason = $this->extractFinishReason($data);
-        $meta = new Meta($provider->name(), $model, $citations);
+        $responseId = $data['id'] ?? null;
+        $meta = new Meta($provider->name(), $model, $citations, $responseId);
 
         $realToolCalls = array_filter($toolCalls, fn (ToolCall $tc) => $tc->name !== 'output_structured_data');
         $hasStructuredToolCall = count($realToolCalls) < count($toolCalls);

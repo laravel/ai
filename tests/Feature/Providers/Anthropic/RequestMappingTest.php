@@ -314,6 +314,20 @@ describe('response parsing', function () {
         expect($response->text)->toBe('Laravel is a PHP framework');
     });
 
+    test('response meta exposes the provider native response id', function () {
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeTextResponse('Laravel is a PHP framework'),
+        ]);
+
+        $response = (new AssistantAgent)->prompt(
+            'What is Laravel?',
+            provider: 'anthropic',
+        );
+
+        expect($response->meta->responseId)->toBe('msg_123')
+            ->and($response->steps->first()->meta->responseId)->toBe('msg_123');
+    });
+
     test('response usage is correctly parsed', function () {
         Http::fake([
             'api.anthropic.com/*' => Http::response([

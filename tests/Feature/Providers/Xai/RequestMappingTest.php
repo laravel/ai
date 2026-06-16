@@ -167,6 +167,15 @@ test('response text is correctly parsed', function () {
         ->and($response->meta->provider)->toBe('xai');
 });
 
+test('response meta exposes the provider native response id', function () {
+    Http::fake(['*' => fakeXaiRequestMappingResponse('Laravel is great')]);
+
+    $response = agent()->prompt('Tell me about Laravel', provider: 'xai');
+
+    expect($response->meta->responseId)->toBe('resp_123')
+        ->and($response->steps->first()->meta->responseId)->toBe('resp_123');
+});
+
 test('response usage is correctly parsed', function () {
     Http::fake(['*' => Http::response([
         'id' => 'resp_123',

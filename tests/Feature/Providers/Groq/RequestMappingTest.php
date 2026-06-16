@@ -181,6 +181,15 @@ test('response text is correctly parsed', function () {
         ->and($response->meta->provider)->toBe('groq');
 });
 
+test('response meta exposes the provider native response id', function () {
+    Http::fake(['*' => fakeGroqResponse('Laravel is great')]);
+
+    $response = agent()->prompt('Tell me about Laravel', provider: 'groq');
+
+    expect($response->meta->responseId)->toBe('chatcmpl-123')
+        ->and($response->steps->first()->meta->responseId)->toBe('chatcmpl-123');
+});
+
 test('response usage is correctly parsed', function () {
     Http::fake(['*' => Http::response([
         'id' => 'chatcmpl-123',

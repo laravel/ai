@@ -107,7 +107,7 @@ trait ParsesTextResponses
             [],
             $finishReason,
             $usage,
-            new Meta($provider->name(), $model, $citations),
+            new Meta($provider->name(), $model, $citations, $responseId ?: null),
         );
 
         $steps->push($step);
@@ -129,7 +129,7 @@ trait ParsesTextResponses
                 $toolResults,
                 $finishReason,
                 $usage,
-                new Meta($provider->name(), $model, $citations),
+                new Meta($provider->name(), $model, $citations, $responseId ?: null),
             ));
 
             $toolResultMessage = new ToolResultMessage(collect($toolResults));
@@ -151,7 +151,7 @@ trait ParsesTextResponses
                 $structuredData,
                 $text,
                 $this->combineUsage($steps),
-                new Meta($provider->name(), $model, $citations),
+                new Meta($provider->name(), $model, $citations, $responseId ?: null),
             ))->withToolCallsAndResults(
                 toolCalls: $allToolCalls,
                 toolResults: $allToolResults,
@@ -161,7 +161,7 @@ trait ParsesTextResponses
         return (new TextResponse(
             $text,
             $this->combineUsage($steps),
-            new Meta($provider->name(), $model, $citations),
+            new Meta($provider->name(), $model, $citations, $responseId ?: null),
         ))->withMessages($messages)->withSteps($steps);
     }
 

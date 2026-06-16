@@ -99,7 +99,8 @@ trait ParsesTextResponses
         $finishReason = $this->extractFinishReason($data, $rawToolCalls);
 
         $mappedToolCalls = $this->mapToolCalls($rawToolCalls);
-        $meta = new Meta($provider->name(), $model, $citations);
+        $responseId = $data['responseId'] ?? null;
+        $meta = new Meta($provider->name(), $model, $citations, $responseId);
         $toolResults = [];
 
         $assistantMessage = new AssistantMessage($text, collect($mappedToolCalls));
