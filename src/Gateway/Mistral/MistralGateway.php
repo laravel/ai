@@ -187,7 +187,7 @@ class MistralGateway implements EmbeddingGateway, TextGateway, TranscriptionGate
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)
-                ->attach('file', $audio->content(), $this->audioFilename($audio), ['Content-Type' => $audio->mimeType()])
+                ->attach('file', $audio->content(), $this->audioFilename($audio), array_filter(['Content-Type' => $audio->mimeType()]))
                 ->post('audio/transcriptions', $this->multipartParams(array_merge($providerOptions, $params))),
         );
 

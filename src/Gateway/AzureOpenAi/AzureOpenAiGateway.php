@@ -84,7 +84,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, filled($schema), $tools, $schema, $options, $timeout, $response);
+        return $this->parseTextResponse($data, $provider, filled($schema), $tools, $schema, $options, $body, $timeout, $response);
     }
 
     /**
@@ -128,6 +128,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway
             $schema,
             $options,
             $response->getBody(),
+            $body,
             0,
             null,
             $timeout,

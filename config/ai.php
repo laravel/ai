@@ -64,6 +64,7 @@ return [
             'deployment' => env('AZURE_OPENAI_DEPLOYMENT', 'gpt-4o'),
             'embedding_deployment' => env('AZURE_OPENAI_EMBEDDING_DEPLOYMENT', 'text-embedding-3-small'),
             'image_deployment' => env('AZURE_OPENAI_IMAGE_DEPLOYMENT', 'gpt-image-1'),
+            'store' => env('AZURE_OPENAI_STORE', true),
         ],
 
         'bedrock' => [
@@ -122,6 +123,7 @@ return [
             'driver' => 'openai',
             'key' => env('OPENAI_API_KEY'),
             'url' => env('OPENAI_URL', 'https://api.openai.com/v1'),
+            'store' => env('OPENAI_STORE', true),
         ],
 
         'openrouter' => [

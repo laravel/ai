@@ -1,6 +1,42 @@
 # Release Notes
 
-## [Unreleased](https://github.com/laravel/ai/compare/v0.7.2...0.x)
+## [Unreleased](https://github.com/laravel/ai/compare/v0.8.1...0.x)
+
+## [v0.8.1](https://github.com/laravel/ai/compare/v0.8.0...v0.8.1) - 2026-06-10
+
+### What's Changed
+
+* Normalize MCP tool schemas into the deserializable JSON Schema subset by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/696
+
+**Full Changelog**: https://github.com/laravel/ai/compare/v0.8.0...v0.8.1
+
+## [v0.8.0](https://github.com/laravel/ai/compare/v0.7.2...v0.8.0) - 2026-06-08
+
+### What's Changed
+
+* Fix Mistral transcription requests by [@NoelDeMartin](https://github.com/NoelDeMartin) in https://github.com/laravel/ai/pull/671
+* Bedrock support for remote s3 document  by [@dumbbellcode](https://github.com/dumbbellcode) in https://github.com/laravel/ai/pull/476
+* Migrate OpenAI web_search_preview to web_search with provider options by [@SergiiKhrystenko](https://github.com/SergiiKhrystenko) in https://github.com/laravel/ai/pull/662
+* Add Dependabot cooldown of 5 days by [@nunomaduro](https://github.com/nunomaduro) in https://github.com/laravel/ai/pull/685
+* Enable Dependabot auto-merge by [@nunomaduro](https://github.com/nunomaduro) in https://github.com/laravel/ai/pull/687
+* Add `contains` method to `QueuedAgentPrompt` by [@balboacodes](https://github.com/balboacodes) in https://github.com/laravel/ai/pull/678
+* Recursively remove additionalProperties for Gemini tools by [@Edward144](https://github.com/Edward144) in https://github.com/laravel/ai/pull/682
+* Fix transcription usage mapping for output tokens by [@Anoop-Kadachi](https://github.com/Anoop-Kadachi) in https://github.com/laravel/ai/pull/637
+* Fix ImageResponse::toHtml() data URI when image mime is null by [@Anoop-Kadachi](https://github.com/Anoop-Kadachi) in https://github.com/laravel/ai/pull/677
+* Pass the original prompt to AgentStreamed when a stream is short-circuited by [@FayazK](https://github.com/FayazK) in https://github.com/laravel/ai/pull/684
+* Omit null header and multipart values for Laravel 13 compatibility by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/688
+* Add MCP client and server tool support by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/655
+* Bump actions/checkout from 6.0.2 to 6.0.3 in the github-actions group by [@dependabot](https://github.com/dependabot)[bot] in https://github.com/laravel/ai/pull/692
+* Support OpenAI Zero Data Retention via encrypted reasoning by [@Junveloper](https://github.com/Junveloper) in https://github.com/laravel/ai/pull/622
+
+### New Contributors
+
+* [@SergiiKhrystenko](https://github.com/SergiiKhrystenko) made their first contribution in https://github.com/laravel/ai/pull/662
+* [@balboacodes](https://github.com/balboacodes) made their first contribution in https://github.com/laravel/ai/pull/678
+* [@Edward144](https://github.com/Edward144) made their first contribution in https://github.com/laravel/ai/pull/682
+* [@FayazK](https://github.com/FayazK) made their first contribution in https://github.com/laravel/ai/pull/684
+
+**Full Changelog**: https://github.com/laravel/ai/compare/v0.7.2...v0.8.0
 
 ## [v0.7.2](https://github.com/laravel/ai/compare/v0.7.1...v0.7.2) - 2026-05-28
 

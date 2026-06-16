@@ -81,7 +81,7 @@ class FakeImageGateway implements ImageGateway
 
         if (is_string($response)) {
             return new ImageResponse(
-                new Collection([new GeneratedImage($response)]),
+                new Collection([new GeneratedImage($response, 'image/png')]),
                 new Usage,
                 new Meta($provider->name(), $model),
             );

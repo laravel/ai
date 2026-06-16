@@ -99,7 +99,12 @@ describe('request structure', function () {
         });
     });
 
-    test('tools with structured output use tool choice any', function () {
+    test('tools with structured output use tool choice any when native structured output is disabled', function () {
+        config(['ai.providers.anthropic' => [
+            ...config('ai.providers.anthropic'),
+            'use_native_structured_output' => false,
+        ]]);
+
         Http::fake([
             'api.anthropic.com/*' => $this->fakeTextResponse('The number is 42'),
         ]);
@@ -137,6 +142,11 @@ describe('request structure', function () {
     });
 
     test('request sends correct authentication headers', function () {
+        config(['ai.providers.anthropic' => [
+            ...config('ai.providers.anthropic'),
+            'key' => 'test-key',
+        ]]);
+
         Http::fake([
             'api.anthropic.com/*' => $this->fakeTextResponse(),
         ]);
@@ -147,16 +157,63 @@ describe('request structure', function () {
         );
 
         Http::assertSent(function ($request) {
-            return $request->hasHeader('x-api-key')
+            return $request->hasHeader('x-api-key', 'test-key')
+                && $request->hasHeader('anthropic-version', '2023-06-01');
+        });
+    });
+
+    test('request omits the api key header when no key is configured', function () {
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeTextResponse(),
+        ]);
+
+        (new AssistantAgent)->prompt(
+            'Hi',
+            provider: 'anthropic',
+        );
+
+        Http::assertSent(function ($request) {
+            return ! $request->hasHeader('x-api-key')
                 && $request->hasHeader('anthropic-version', '2023-06-01');
         });
     });
 });
 
 describe('structured output', function () {
-    test('structured output uses synthetic tool', function () {
+    test('structured output uses native output_config by default', function () {
         Http::fake([
             'api.anthropic.com/*' => $this->fakeStructuredResponse(['name' => 'Taylor', 'age' => 30]),
+        ]);
+
+        (new StructuredAgent)->prompt(
+            'Tell me about Taylor',
+            provider: 'anthropic',
+        );
+
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+
+            $hasStructuredTool = false;
+
+            foreach ($body['tools'] ?? [] as $tool) {
+                if ($tool['name'] === 'output_structured_data') {
+                    $hasStructuredTool = true;
+                }
+            }
+
+            return $body['output_config']['format']['type'] === 'json_schema'
+                && ! $hasStructuredTool;
+        });
+    });
+
+    test('structured output falls back to the synthetic tool when native structured output is disabled', function () {
+        config(['ai.providers.anthropic' => [
+            ...config('ai.providers.anthropic'),
+            'use_native_structured_output' => false,
+        ]]);
+
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeTextResponse(),
         ]);
 
         (new StructuredAgent)->prompt(
@@ -181,9 +238,14 @@ describe('structured output', function () {
         });
     });
 
-    test('structured output with thinking uses auto tool choice', function () {
+    test('structured output with thinking uses auto tool choice when native structured output is disabled', function () {
+        config(['ai.providers.anthropic' => [
+            ...config('ai.providers.anthropic'),
+            'use_native_structured_output' => false,
+        ]]);
+
         Http::fake([
-            'api.anthropic.com/*' => $this->fakeStructuredResponse(['name' => 'Taylor', 'age' => 30]),
+            'api.anthropic.com/*' => $this->fakeTextResponse(),
         ]);
 
         (new StructuredWithThinkingAgent)->prompt(
@@ -208,9 +270,26 @@ describe('structured output', function () {
         });
     });
 
-    test('structured response is correctly parsed', function () {
+    test('native structured response is correctly parsed', function () {
         Http::fake([
             'api.anthropic.com/*' => $this->fakeStructuredResponse(['name' => 'Taylor', 'age' => 30]),
+        ]);
+
+        $response = (new StructuredAgent)->prompt(
+            'Tell me about Taylor',
+            provider: 'anthropic',
+        );
+        expect($response->structured)->toMatchArray(['name' => 'Taylor', 'age' => 30]);
+    });
+
+    test('synthetic tool structured response is correctly parsed when native structured output is disabled', function () {
+        config(['ai.providers.anthropic' => [
+            ...config('ai.providers.anthropic'),
+            'use_native_structured_output' => false,
+        ]]);
+
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeSyntheticStructuredResponse(['name' => 'Taylor', 'age' => 30]),
         ]);
 
         $response = (new StructuredAgent)->prompt(

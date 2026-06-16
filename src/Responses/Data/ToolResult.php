@@ -16,6 +16,20 @@ class ToolResult implements Arrayable, JsonSerializable
     ) {}
 
     /**
+     * Reconstruct an instance from a previously serialized toArray() payload.
+     */
+    public static function fromArray(array $data): self
+    {
+        return new self(
+            id: $data['id'],
+            name: $data['name'],
+            arguments: $data['arguments'],
+            result: $data['result'],
+            resultId: $data['result_id'] ?? null,
+        );
+    }
+
+    /**
      * Get the instance as an array.
      */
     public function toArray(): array

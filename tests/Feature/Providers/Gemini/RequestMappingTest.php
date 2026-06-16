@@ -65,6 +65,11 @@ describe('request structure', function () {
     });
 
     test('request sends api key header', function () {
+        config(['ai.providers.gemini' => [
+            ...config('ai.providers.gemini'),
+            'key' => 'test-key',
+        ]]);
+
         Http::fake([
             'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
         ]);
@@ -75,7 +80,27 @@ describe('request structure', function () {
         );
 
         Http::assertSent(function ($request) {
-            return $request->hasHeader('x-goog-api-key');
+            return $request->hasHeader('x-goog-api-key', 'test-key');
+        });
+    });
+
+    test('request omits the api key header when no key is configured', function () {
+        config(['ai.providers.gemini' => [
+            ...config('ai.providers.gemini'),
+            'key' => null,
+        ]]);
+
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
+        ]);
+
+        (new AssistantAgent)->prompt(
+            'Hi',
+            provider: 'gemini',
+        );
+
+        Http::assertSent(function ($request) {
+            return ! $request->hasHeader('x-goog-api-key');
         });
     });
 

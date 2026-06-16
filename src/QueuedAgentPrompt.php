@@ -3,6 +3,7 @@
 namespace Laravel\Ai;
 
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Enums\Lab;
 
@@ -15,4 +16,12 @@ class QueuedAgentPrompt
         public Lab|array|string|null $provider,
         public ?string $model
     ) {}
+
+    /**
+     * Determine if the prompt contains the given string.
+     */
+    public function contains(string $string): bool
+    {
+        return Str::contains($this->prompt, $string);
+    }
 }
