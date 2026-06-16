@@ -14,6 +14,6 @@ class FakeMcpServer extends Server
 
     public function __construct()
     {
-        parent::__construct(new FakeTransporter());
+        parent::__construct(new FakeTransporter);
     }
 }
