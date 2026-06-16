@@ -3,10 +3,10 @@
 namespace Laravel\Ai\Gateway\Xai\Concerns;
 
 use Generator;
-use Laravel\Ai\Exceptions\InsufficientCreditsException;
-use Laravel\Ai\Exceptions\RateLimitedException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
+use Laravel\Ai\Exceptions\InsufficientCreditsException;
+use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\ToolCall;
