@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Exceptions\InsufficientCreditsException;
+use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
@@ -122,6 +124,91 @@ test('streaming error event stops stream', function () {
         ->and($events[0])->toBeInstanceOf(Error::class)
         ->and($events[0]->type)->toBe('server_error')
         ->and($events[0]->message)->toBe('Internal server error');
+});
+
+test('streaming rate limit error event throws a rate limited exception', function () {
+    Http::fake([
+        '*' => Http::response(
+            body: $this->ssePayload([
+                ['type' => 'error', 'code' => 'rate_limit_exceeded', 'message' => 'Rate limit reached on tokens per min (TPM).'],
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    try {
+        $this->collectStreamEvents();
+
+        $this->fail('Expected RateLimitedException to be thrown.');
+    } catch (RateLimitedException $e) {
+        expect($e->provider())->toBe('xai')
+            ->and($e->status())->toBe(429);
+    }
+});
+
+test('streaming response.failed with rate limit throws a rate limited exception', function () {
+    Http::fake([
+        '*' => Http::response(
+            body: $this->ssePayload([
+                ['type' => 'response.failed', 'response' => [
+                    'status' => 'failed',
+                    'error' => ['code' => 'rate_limit_exceeded', 'message' => 'Rate limit reached.'],
+                ]],
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    expect(fn () => $this->collectStreamEvents())->toThrow(RateLimitedException::class);
+});
+
+test('streaming response.failed with insufficient quota throws an insufficient credits exception', function () {
+    Http::fake([
+        '*' => Http::response(
+            body: $this->ssePayload([
+                ['type' => 'response.failed', 'response' => [
+                    'status' => 'failed',
+                    'error' => ['code' => 'insufficient_quota', 'message' => 'You exceeded your current quota.'],
+                ]],
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    expect(fn () => $this->collectStreamEvents())->toThrow(InsufficientCreditsException::class);
+});
+
+test('streaming response.incomplete ends the stream with usage instead of emptiness', function () {
+    Http::fake([
+        '*' => Http::response(
+            body: $this->ssePayload([
+                ['type' => 'response.created', 'response' => ['id' => 'resp_1', 'model' => 'grok-4-1-fast-reasoning', 'status' => 'in_progress']],
+                ['type' => 'response.incomplete', 'response' => [
+                    'id' => 'resp_1',
+                    'status' => 'incomplete',
+                    'incomplete_details' => ['reason' => 'max_output_tokens'],
+                    'usage' => [
+                        'input_tokens' => 12,
+                        'output_tokens' => 8,
+                        'input_tokens_details' => ['cached_tokens' => 0],
+                    ],
+                ]],
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents();
+
+    $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+
+    expect($streamEnd->reason)->toBe(FinishReason::Length->value)
+        ->and($streamEnd->usage->promptTokens)->toBe(12)
+        ->and($streamEnd->usage->completionTokens)->toBe(8);
 });
 
 test('streaming finish reason maps correctly', function (string $status, string $type, $expected) {

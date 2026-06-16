@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
@@ -85,7 +86,7 @@ test('streaming error event stops stream', function () {
     Http::fake([
         'my-resource.cognitiveservices.azure.com/*' => Http::response(
             body: $this->ssePayload([
-                ['type' => 'error', 'error' => ['code' => 'rate_limit_exceeded', 'message' => 'Rate limit exceeded']],
+                ['type' => 'error', 'error' => ['code' => 'server_error', 'message' => 'Server overloaded']],
             ]),
             status: 200,
             headers: ['Content-Type' => 'text/event-stream'],
@@ -96,8 +97,22 @@ test('streaming error event stops stream', function () {
 
     expect($events)->toHaveCount(1)
         ->and($events[0])->toBeInstanceOf(Error::class)
-        ->and($events[0]->type)->toBe('rate_limit_exceeded')
-        ->and($events[0]->message)->toBe('Rate limit exceeded');
+        ->and($events[0]->type)->toBe('server_error')
+        ->and($events[0]->message)->toBe('Server overloaded');
+});
+
+test('streaming rate limit error event throws a rate limited exception', function () {
+    Http::fake([
+        'my-resource.cognitiveservices.azure.com/*' => Http::response(
+            body: $this->ssePayload([
+                ['type' => 'error', 'code' => 'rate_limit_exceeded', 'message' => 'Rate limit exceeded'],
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    expect(fn () => $this->collectStreamEvents())->toThrow(RateLimitedException::class);
 });
 
 test('streaming captures usage from completed event', function () {

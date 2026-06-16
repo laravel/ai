@@ -4,6 +4,8 @@ namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
 use Generator;
 use Illuminate\Support\Str;
+use Laravel\Ai\Exceptions\InsufficientCreditsException;
+use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\ToolResultMessage;
@@ -56,15 +58,43 @@ trait HandlesTextStreaming
             $type = $data['type'] ?? '';
 
             if ($type === 'error') {
-                yield (new Error(
-                    $this->generateEventId(),
-                    $data['error']['code'] ?? 'unknown_error',
-                    $data['error']['message'] ?? 'Unknown error',
-                    false,
-                    time(),
-                ))->withInvocationId($invocationId);
+                yield $this->streamErrorEvent(
+                    $provider,
+                    $invocationId,
+                    $data['code'] ?? $data['error']['code'] ?? null,
+                    $data['message'] ?? $data['error']['message'] ?? null,
+                );
 
                 return;
+            }
+
+            if ($type === 'response.failed') {
+                $error = $data['response']['error'] ?? [];
+
+                yield $this->streamErrorEvent(
+                    $provider,
+                    $invocationId,
+                    $error['code'] ?? null,
+                    $error['message'] ?? null,
+                );
+
+                return;
+            }
+
+            if ($type === 'response.incomplete') {
+                $response = $data['response'] ?? [];
+                $responseData = $response;
+                $responseUsage = $response['usage'] ?? [];
+
+                $usage = new Usage(
+                    ($responseUsage['input_tokens'] ?? 0) - ($responseUsage['input_tokens_details']['cached_tokens'] ?? 0),
+                    $responseUsage['output_tokens'] ?? 0,
+                    0,
+                    $responseUsage['input_tokens_details']['cached_tokens'] ?? 0,
+                    $responseUsage['output_tokens_details']['reasoning_tokens'] ?? 0,
+                );
+
+                continue;
             }
 
             if ($type === 'response.created' && ! $streamStartEmitted) {
@@ -422,6 +452,49 @@ trait HandlesTextStreaming
             $tc['reasoning_summary'] ?? null,
             $tc['reasoning_encrypted_content'] ?? null,
         ), array_values($toolCalls));
+    }
+
+    /**
+     * Build a streaming error event, or throw a failoverable exception for
+     * rate-limit and quota errors so the stream surfaces a real error instead
+     * of ending empty. The Responses API opens the stream with HTTP 200 and
+     * only reports these failures via a stream event, so they never reach the
+     * HTTP-level error handling.
+     */
+    protected function streamErrorEvent(
+        Provider $provider,
+        string $invocationId,
+        ?string $code,
+        ?string $message,
+    ): Error {
+        $haystack = strtolower(trim(($code ?? '').' '.($message ?? '')));
+
+        $errorBody = ['error' => array_filter([
+            'code' => $code,
+            'message' => $message,
+        ], fn ($value) => $value !== null)];
+
+        if ($code === 'rate_limit_exceeded' ||
+            str_contains($haystack, 'rate limit') ||
+            str_contains($haystack, 'per min')) {
+            throw RateLimitedException::forProvider($provider->name())
+                ->withContext($provider->name(), 429, $errorBody);
+        }
+
+        if ($code === 'insufficient_quota' ||
+            str_contains($haystack, 'quota') ||
+            str_contains($haystack, 'billing')) {
+            throw InsufficientCreditsException::forProvider($provider->name())
+                ->withContext($provider->name(), 402, $errorBody);
+        }
+
+        return (new Error(
+            $this->generateEventId(),
+            $code ?? 'unknown_error',
+            $message ?? 'Unknown error',
+            false,
+            time(),
+        ))->withInvocationId($invocationId);
     }
 
     /**

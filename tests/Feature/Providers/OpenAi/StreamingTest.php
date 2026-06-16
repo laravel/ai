@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Exceptions\InsufficientCreditsException;
+use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
@@ -133,6 +135,117 @@ test('streaming error event stops stream', function () {
         ->and($events[0])->toBeInstanceOf(Error::class)
         ->and($events[0]->type)->toBe('server_error')
         ->and($events[0]->message)->toBe('Server overloaded');
+});
+
+test('streaming rate limit error event throws a rate limited exception', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::response(
+            body: $this->ssePayload([
+                ['type' => 'error', 'code' => 'rate_limit_exceeded', 'message' => 'Rate limit reached on tokens per min (TPM).'],
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    try {
+        $this->collectStreamEvents();
+
+        $this->fail('Expected RateLimitedException to be thrown.');
+    } catch (RateLimitedException $e) {
+        expect($e->provider())->toBe('openai')
+            ->and($e->status())->toBe(429)
+            ->and($e->errorBody())->toBe(['error' => ['code' => 'rate_limit_exceeded', 'message' => 'Rate limit reached on tokens per min (TPM).']]);
+    }
+});
+
+test('streaming response.failed with rate limit throws a rate limited exception', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::response(
+            body: $this->ssePayload([
+                $this->responseCreated(),
+                ['type' => 'response.failed', 'response' => [
+                    'id' => 'resp_1',
+                    'status' => 'failed',
+                    'error' => ['code' => 'rate_limit_exceeded', 'message' => 'Rate limit reached.'],
+                ]],
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    expect(fn () => $this->collectStreamEvents())->toThrow(RateLimitedException::class);
+});
+
+test('streaming response.failed with insufficient quota throws an insufficient credits exception', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::response(
+            body: $this->ssePayload([
+                ['type' => 'response.failed', 'response' => [
+                    'status' => 'failed',
+                    'error' => ['code' => 'insufficient_quota', 'message' => 'You exceeded your current quota.'],
+                ]],
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    expect(fn () => $this->collectStreamEvents())->toThrow(InsufficientCreditsException::class);
+});
+
+test('streaming response.failed with a generic error yields an error event', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::response(
+            body: $this->ssePayload([
+                ['type' => 'response.failed', 'response' => [
+                    'status' => 'failed',
+                    'error' => ['code' => 'server_error', 'message' => 'Internal error.'],
+                ]],
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents();
+
+    expect($events)->toHaveCount(1)
+        ->and($events[0])->toBeInstanceOf(Error::class)
+        ->and($events[0]->type)->toBe('server_error')
+        ->and($events[0]->message)->toBe('Internal error.');
+});
+
+test('streaming response.incomplete ends the stream with usage instead of emptiness', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::response(
+            body: $this->ssePayload([
+                $this->responseCreated(),
+                $this->outputTextDelta('Partial'),
+                ['type' => 'response.incomplete', 'response' => [
+                    'id' => 'resp_1',
+                    'status' => 'incomplete',
+                    'incomplete_details' => ['reason' => 'max_output_tokens'],
+                    'usage' => [
+                        'input_tokens' => 12,
+                        'output_tokens' => 8,
+                        'input_tokens_details' => ['cached_tokens' => 0],
+                    ],
+                ]],
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents();
+
+    $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+
+    expect($streamEnd->reason)->toBe(FinishReason::Length->value)
+        ->and($streamEnd->usage->promptTokens)->toBe(12)
+        ->and($streamEnd->usage->completionTokens)->toBe(8);
 });
 
 test('streaming captures usage from response completed', function () {
