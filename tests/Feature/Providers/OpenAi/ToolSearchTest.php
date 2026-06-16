@@ -11,7 +11,7 @@ beforeEach(function () {
     ]]);
 });
 
-test('an agent with the ToolSearch attribute emits a tool_search entry and defers marked tools', function () {
+test('an agent with a ToolSearch tool emits a tool_search entry and defers its nested tools', function () {
     Http::fake([
         '*' => fakeOpenAiResponse('ok'),
     ]);

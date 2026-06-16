@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\Concerns;
 
 use Closure;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Tools\Request;
 use Laravel\Ai\Tools\ToolNameResolver;
 
@@ -54,6 +55,14 @@ trait InvokesTools
     protected function findTool(string $name, array $tools): ?Tool
     {
         foreach ($tools as $tool) {
+            if ($tool instanceof ToolSearch) {
+                if ($nested = $this->findTool($name, $tool->tools)) {
+                    return $nested;
+                }
+
+                continue;
+            }
+
             if ($tool instanceof Tool && ToolNameResolver::resolve($tool) === $name) {
                 return $tool;
             }

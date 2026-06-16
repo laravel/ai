@@ -5,7 +5,6 @@ namespace Laravel\Ai\Gateway;
 use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Attributes\MaxTokens;
 use Laravel\Ai\Attributes\Temperature;
-use Laravel\Ai\Attributes\ToolSearch;
 use Laravel\Ai\Attributes\TopP;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasProviderOptions;
@@ -20,7 +19,6 @@ class TextGenerationOptions
         public readonly ?float $temperature = null,
         public readonly ?Agent $agent = null,
         public readonly ?float $topP = null,
-        public readonly ?string $toolSearchStrategy = null,
     ) {
         //
     }
@@ -54,18 +52,7 @@ class TextGenerationOptions
             temperature: self::resolve($agent, $reflection, 'temperature', Temperature::class),
             agent: $agent,
             topP: self::resolve($agent, $reflection, 'topP', TopP::class),
-            toolSearchStrategy: self::resolveToolSearchStrategy($reflection),
         );
-    }
-
-    /**
-     * Resolve the tool search strategy from the agent's ToolSearch attribute.
-     */
-    private static function resolveToolSearchStrategy(ReflectionClass $reflection): ?string
-    {
-        $attributes = $reflection->getAttributes(ToolSearch::class);
-
-        return ! empty($attributes) ? $attributes[0]->newInstance()->strategy : null;
     }
 
     /**

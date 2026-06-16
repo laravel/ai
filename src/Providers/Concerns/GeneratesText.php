@@ -22,6 +22,7 @@ use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Middleware\RememberConversation;
 use Laravel\Ai\Prompts\AgentPrompt;
+use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Tools\AgentTool;
@@ -134,6 +135,9 @@ trait GeneratesText
         return match (true) {
             $tool instanceof Agent => new AgentTool($tool),
             $tool instanceof Tool => $tool,
+            $tool instanceof ToolSearch => $tool->withTools(
+                array_map(fn ($nested) => $this->resolveTool($nested), $tool->tools),
+            ),
             McpTool::supports($tool) => new McpTool($tool),
             McpServerTool::supports($tool) => new McpServerTool($tool),
             default => $tool,

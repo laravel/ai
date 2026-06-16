@@ -4,17 +4,15 @@ namespace Tests\Fixtures\Agents;
 
 use Laravel\Ai\Attributes\Model;
 use Laravel\Ai\Attributes\Provider;
-use Laravel\Ai\Attributes\ToolSearch;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasTools;
-use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Promptable;
+use Laravel\Ai\Providers\Tools\ToolSearch;
 use Tests\Fixtures\Tools\DeferredTool;
 use Tests\Fixtures\Tools\NonStrictTool;
 
 #[Provider('anthropic')]
 #[Model('claude-opus-4-8')]
-#[ToolSearch]
 class AnthropicToolSearchAgent implements Agent, HasTools
 {
     use Promptable;
@@ -24,11 +22,8 @@ class AnthropicToolSearchAgent implements Agent, HasTools
         return 'You are a helpful assistant.';
     }
 
-    /**
-     * @return iterable<Tool>
-     */
     public function tools(): iterable
     {
-        return [new DeferredTool, new NonStrictTool];
+        return [new NonStrictTool, new ToolSearch(tools: [new DeferredTool])];
     }
 }

@@ -1,9 +1,9 @@
 <?php
 
-use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\OpenAi\Concerns\MapsTools;
-use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Providers\Tools\ToolSearch;
 use Tests\Fixtures\Tools\DeferredTool;
 use Tests\Fixtures\Tools\NonStrictTool;
 
@@ -13,30 +13,14 @@ function openAiToolSearchMapper(): object
     {
         use MapsTools;
 
-        public function map(array $tools, Provider $provider, string $model, ?TextGenerationOptions $options): array
+        public function map(array $tools, Provider $provider): array
         {
-            return $this->mapTools($tools, $provider, $model, $options);
+            return $this->mapTools($tools, $provider);
         }
     };
 }
 
-function openAiSupportingProvider(bool $supports = true): Provider
-{
-    return new class($supports) extends Provider implements SupportsToolSearch
-    {
-        public function __construct(private bool $supports)
-        {
-            //
-        }
-
-        public function supportsToolSearch(string $model): bool
-        {
-            return $this->supports;
-        }
-    };
-}
-
-function openAiPlainProvider(): Provider
+function openAiProvider(): Provider
 {
     return new class extends Provider
     {
@@ -47,71 +31,41 @@ function openAiPlainProvider(): Provider
     };
 }
 
-test('deferred tool gets defer_loading and a tool_search entry is prepended when search is active', function () {
+test('emits the tool_search entry and defers the tools nested in the ToolSearch tool', function () {
     $mapped = openAiToolSearchMapper()->map(
-        [new DeferredTool, new NonStrictTool],
-        openAiSupportingProvider(),
-        'gpt-5.4',
-        new TextGenerationOptions(toolSearchStrategy: 'regex'),
+        [new NonStrictTool, new ToolSearch(tools: [new DeferredTool])],
+        openAiProvider(),
     );
 
-    expect($mapped[0])->toBe(['type' => 'tool_search']);
+    $search = collect($mapped)->firstWhere('type', 'tool_search');
+    $deferred = collect($mapped)->firstWhere('defer_loading', true);
+    $nonDeferred = collect($mapped)->filter(
+        fn ($t) => ($t['type'] ?? null) === 'function' && ! isset($t['defer_loading'])
+    );
 
-    $tools = array_slice($mapped, 1);
-    $deferred = collect($tools)->firstWhere('defer_loading', true);
-    $nonDeferred = collect($tools)->filter(fn ($t) => ! isset($t['defer_loading']));
-
-    expect($deferred)->not->toBeNull()
+    expect($search)->toBe(['type' => 'tool_search'])
+        ->and($deferred)->not->toBeNull()
         ->and($deferred['description'])->toContain('deferred')
         ->and($nonDeferred)->toHaveCount(1);
 });
 
-test('no tool_search entry or defer_loading when the agent has not opted in', function () {
+test('forwards provider options onto the tool_search entry', function () {
+    $search = (new ToolSearch(tools: [new DeferredTool]))
+        ->withProviderOptions(Lab::OpenAI, ['foo' => 'bar']);
+
+    $mapped = openAiToolSearchMapper()->map([new NonStrictTool, $search], openAiProvider());
+
+    expect(collect($mapped)->firstWhere('type', 'tool_search'))
+        ->toBe(['type' => 'tool_search', 'foo' => 'bar']);
+});
+
+test('does not emit a tool_search entry when no ToolSearch tool is present', function () {
     $mapped = openAiToolSearchMapper()->map(
-        [new DeferredTool, new NonStrictTool],
-        openAiSupportingProvider(),
-        'gpt-5.4',
-        new TextGenerationOptions, // toolSearchStrategy === null
+        [new NonStrictTool, new DeferredTool],
+        openAiProvider(),
     );
 
     expect($mapped)->toHaveCount(2)
         ->and(collect($mapped)->pluck('type'))->not->toContain('tool_search')
         ->and(collect($mapped)->contains(fn ($t) => isset($t['defer_loading'])))->toBeFalse();
-});
-
-test('silently skips deferral when the provider model does not support tool search', function () {
-    $mapped = openAiToolSearchMapper()->map(
-        [new DeferredTool, new NonStrictTool],
-        openAiSupportingProvider(supports: false),
-        'gpt-5.3',
-        new TextGenerationOptions(toolSearchStrategy: 'regex'),
-    );
-
-    expect($mapped)->toHaveCount(2)
-        ->and(collect($mapped)->pluck('type'))->not->toContain('tool_search')
-        ->and(collect($mapped)->contains(fn ($t) => isset($t['defer_loading'])))->toBeFalse();
-});
-
-test('silently skips deferral when the provider does not implement SupportsToolSearch', function () {
-    $mapped = openAiToolSearchMapper()->map(
-        [new DeferredTool, new NonStrictTool],
-        openAiPlainProvider(),
-        'gpt-5.4',
-        new TextGenerationOptions(toolSearchStrategy: 'regex'),
-    );
-
-    expect($mapped)->toHaveCount(2)
-        ->and(collect($mapped)->contains(fn ($t) => isset($t['defer_loading'])))->toBeFalse();
-});
-
-test('no tool_search entry is added when no tools are deferred even if search is active', function () {
-    $mapped = openAiToolSearchMapper()->map(
-        [new NonStrictTool],
-        openAiSupportingProvider(),
-        'gpt-5.4',
-        new TextGenerationOptions(toolSearchStrategy: 'regex'),
-    );
-
-    expect($mapped)->toHaveCount(1)
-        ->and(collect($mapped)->pluck('type'))->not->toContain('tool_search');
 });

@@ -3,15 +3,14 @@
 namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
-use Laravel\Ai\Attributes\Deferred;
-use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\ProviderTool;
+use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Laravel\Ai\Tools\ToolNameResolver;
@@ -23,38 +22,40 @@ trait MapsTools
     /**
      * Map the given tools to Anthropic tool definitions.
      */
-    protected function mapTools(array $tools, Provider $provider, string $model = '', ?TextGenerationOptions $options = null): array
+    protected function mapTools(array $tools, Provider $provider): array
     {
-        $searchActive = $this->toolSearchActive($provider, $model, $options);
-
         $mapped = [];
-        $toolCount = 0;
-        $deferredCount = 0;
+        $nonDeferredCount = 0;
+        $hasToolSearch = false;
 
         foreach ($tools as $tool) {
-            if ($tool instanceof ProviderTool) {
+            if ($tool instanceof ToolSearch) {
+                $hasToolSearch = true;
+                $options = $tool->providerOptions(Lab::Anthropic);
+                $strategy = ($options['strategy'] ?? 'regex') === 'bm25' ? 'bm25' : 'regex';
+                unset($options['strategy']);
+
+                $mapped[] = [
+                    'type' => "tool_search_tool_{$strategy}_20251119",
+                    'name' => "tool_search_tool_{$strategy}",
+                    ...$options,
+                ];
+
+                foreach ($tool->tools as $deferred) {
+                    $mapped[] = $this->mapTool($deferred, defer: true);
+                }
+            } elseif ($tool instanceof ProviderTool) {
                 $mapped[] = $this->mapProviderTool($tool, $provider);
             } elseif ($tool instanceof Tool) {
-                $defer = $searchActive && Deferred::isAppliedTo($tool);
-                $mapped[] = $this->mapTool($tool, $defer);
-                $toolCount++;
-                $deferredCount += $defer ? 1 : 0;
+                $mapped[] = $this->mapTool($tool);
+                $nonDeferredCount++;
             }
         }
 
-        if ($searchActive && $deferredCount > 0) {
-            if ($deferredCount === $toolCount) {
-                throw new LogicException(
-                    'Anthropic tool search requires at least one non-deferred tool.'
-                );
-            }
-
-            $strategy = $options?->toolSearchStrategy === 'bm25' ? 'bm25' : 'regex';
-
-            array_unshift($mapped, [
-                'type' => "tool_search_tool_{$strategy}_20251119",
-                'name' => "tool_search_tool_{$strategy}",
-            ]);
+        if ($hasToolSearch && $nonDeferredCount === 0) {
+            throw new LogicException(
+                'Anthropic tool search requires at least one non-deferred tool.'
+            );
         }
 
         return $mapped;
@@ -87,16 +88,6 @@ trait MapsTools
         }
 
         return $definition;
-    }
-
-    /**
-     * Determine whether hosted tool search is active for this request.
-     */
-    protected function toolSearchActive(Provider $provider, string $model, ?TextGenerationOptions $options): bool
-    {
-        return $options?->toolSearchStrategy !== null
-            && $provider instanceof SupportsToolSearch
-            && $provider->supportsToolSearch($model);
     }
 
     /**

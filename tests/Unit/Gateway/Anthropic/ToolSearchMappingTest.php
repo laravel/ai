@@ -1,9 +1,9 @@
 <?php
 
-use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Anthropic\Concerns\MapsTools;
-use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Providers\Tools\ToolSearch;
 use Tests\Fixtures\Tools\DeferredTool;
 use Tests\Fixtures\Tools\NonStrictTool;
 
@@ -13,96 +13,103 @@ function anthropicToolSearchMapper(): object
     {
         use MapsTools;
 
-        public function map(array $tools, Provider $provider, string $model, ?TextGenerationOptions $options): array
+        public function map(array $tools, Provider $provider): array
         {
-            return $this->mapTools($tools, $provider, $model, $options);
+            return $this->mapTools($tools, $provider);
         }
     };
 }
 
-function anthropicSupportingProvider(bool $supports = true): Provider
+function anthropicProvider(): Provider
 {
-    return new class($supports) extends Provider implements SupportsToolSearch
+    return new class extends Provider
     {
-        public function __construct(private bool $supports)
+        public function __construct()
         {
             //
         }
-
-        public function supportsToolSearch(string $model): bool
-        {
-            return $this->supports;
-        }
     };
 }
 
-test('prepends the regex tool search entry by default and defers marked tools', function () {
+test('emits the regex tool search entry and defers the tools nested in the ToolSearch tool', function () {
     $mapped = anthropicToolSearchMapper()->map(
-        [new DeferredTool, new NonStrictTool],
-        anthropicSupportingProvider(),
-        'claude-opus-4-8',
-        new TextGenerationOptions(toolSearchStrategy: 'regex'),
+        [new NonStrictTool, new ToolSearch(tools: [new DeferredTool])],
+        anthropicProvider(),
     );
 
-    expect($mapped[0])->toBe([
+    $search = collect($mapped)->firstWhere('type', 'tool_search_tool_regex_20251119');
+
+    expect($search)->toBe([
         'type' => 'tool_search_tool_regex_20251119',
         'name' => 'tool_search_tool_regex',
     ]);
-    expect($mapped[0])->not->toHaveKey('defer_loading');
+    expect($search)->not->toHaveKey('defer_loading');
 
-    $tools = array_slice($mapped, 1);
-    $deferred = collect($tools)->firstWhere('defer_loading', true);
-    $nonDeferred = collect($tools)->filter(fn ($t) => ! isset($t['defer_loading']));
+    $deferred = collect($mapped)->firstWhere('defer_loading', true);
+    $nonDeferred = collect($mapped)->filter(
+        fn ($t) => isset($t['input_schema']) && ! isset($t['defer_loading'])
+    );
 
     expect($deferred)->not->toBeNull()
         ->and($deferred['description'])->toContain('deferred')
         ->and($nonDeferred)->toHaveCount(1);
 });
 
-test('prepends the bm25 tool search entry when that strategy is selected', function () {
+test('emits the bm25 tool search entry when that strategy is set via provider options', function () {
+    $search = (new ToolSearch(tools: [new DeferredTool]))
+        ->withProviderOptions(Lab::Anthropic, ['strategy' => 'bm25']);
+
     $mapped = anthropicToolSearchMapper()->map(
-        [new DeferredTool, new NonStrictTool],
-        anthropicSupportingProvider(),
-        'claude-opus-4-8',
-        new TextGenerationOptions(toolSearchStrategy: 'bm25'),
+        [new NonStrictTool, $search],
+        anthropicProvider(),
     );
 
-    expect($mapped[0])->toBe([
+    expect(collect($mapped)->firstWhere('type', 'tool_search_tool_bm25_20251119'))->toBe([
         'type' => 'tool_search_tool_bm25_20251119',
         'name' => 'tool_search_tool_bm25',
     ]);
 });
 
-test('emits tools unchanged when the agent has not opted in', function () {
+test('does not leak the strategy option onto the tool search entry', function () {
+    $search = (new ToolSearch(tools: [new DeferredTool]))
+        ->withProviderOptions(Lab::Anthropic, ['strategy' => 'regex']);
+
     $mapped = anthropicToolSearchMapper()->map(
-        [new DeferredTool, new NonStrictTool],
-        anthropicSupportingProvider(),
-        'claude-opus-4-8',
-        new TextGenerationOptions,
+        [new NonStrictTool, $search],
+        anthropicProvider(),
     );
 
-    expect($mapped)->toHaveCount(2)
-        ->and(collect($mapped)->pluck('type'))->not->toContain('tool_search_tool_regex_20251119')
+    expect(collect($mapped)->firstWhere('type', 'tool_search_tool_regex_20251119'))
+        ->not->toHaveKey('strategy');
+});
+
+test('forwards provider options onto the tool search entry', function () {
+    $search = (new ToolSearch(tools: [new DeferredTool]))
+        ->withProviderOptions(Lab::Anthropic, ['cache_control' => ['type' => 'ephemeral']]);
+
+    $mapped = anthropicToolSearchMapper()->map([new NonStrictTool, $search], anthropicProvider());
+
+    expect(collect($mapped)->firstWhere('type', 'tool_search_tool_regex_20251119'))
+        ->toBe([
+            'type' => 'tool_search_tool_regex_20251119',
+            'name' => 'tool_search_tool_regex',
+            'cache_control' => ['type' => 'ephemeral'],
+        ]);
+});
+
+test('does not emit a tool_search entry when no ToolSearch tool is present', function () {
+    $mapped = anthropicToolSearchMapper()->map(
+        [new NonStrictTool],
+        anthropicProvider(),
+    );
+
+    expect($mapped)->toHaveCount(1)
         ->and(collect($mapped)->contains(fn ($t) => isset($t['defer_loading'])))->toBeFalse();
 });
 
-test('silently skips deferral when the model does not support tool search', function () {
-    $mapped = anthropicToolSearchMapper()->map(
-        [new DeferredTool, new NonStrictTool],
-        anthropicSupportingProvider(supports: false),
-        'claude-haiku-3',
-        new TextGenerationOptions(toolSearchStrategy: 'regex'),
-    );
-
-    expect($mapped)->toHaveCount(2)
-        ->and(collect($mapped)->contains(fn ($t) => isset($t['defer_loading'])))->toBeFalse();
-});
-
-test('throws when every tool is deferred because Anthropic requires a non-deferred tool', function () {
+test('throws when no non-deferred tool accompanies the ToolSearch tool because Anthropic requires one', function () {
     anthropicToolSearchMapper()->map(
-        [new DeferredTool, new DeferredTool],
-        anthropicSupportingProvider(),
-        'claude-opus-4-8',
-        new TextGenerationOptions(toolSearchStrategy: 'regex'),
+        [new ToolSearch(tools: [new DeferredTool, new DeferredTool])],
+        anthropicProvider(),
     );
 })->throws(LogicException::class, 'at least one non-deferred tool');

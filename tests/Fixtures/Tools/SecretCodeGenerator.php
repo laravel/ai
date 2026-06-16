@@ -6,18 +6,27 @@ use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
 
-class DeferredTool implements Tool
+class SecretCodeGenerator implements Tool
 {
+    /**
+     * Get the description of the tool's purpose.
+     */
     public function description(): string
     {
-        return 'A deferred tool whose definition is loaded on demand.';
+        return 'Returns the secret authorization code for the current session.';
     }
 
+    /**
+     * Execute the tool.
+     */
     public function handle(Request $request): string
     {
-        return 'done';
+        return 'ZEBRA-4417';
     }
 
+    /**
+     * Get the tool's schema definition.
+     */
     public function schema(JsonSchema $schema): array
     {
         return [];

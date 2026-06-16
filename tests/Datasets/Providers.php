@@ -55,6 +55,11 @@ dataset('agent-providers', [
     'xai' => ['xai', 'XAI_API_KEY', 'grok-4-1-fast-reasoning'],
 ]);
 
+dataset('tool-search-providers', [
+    'anthropic' => ['anthropic', 'ANTHROPIC_API_KEY', 'claude-haiku-4-5-20251001'],
+    'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4'],
+]);
+
 dataset('agent-document-providers', [
     'anthropic' => ['anthropic', 'ANTHROPIC_API_KEY', 'claude-haiku-4-5-20251001'],
     'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4-nano'],
