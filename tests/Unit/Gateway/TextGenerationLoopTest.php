@@ -79,16 +79,15 @@ test('it holds stream end until the streamed tool loop is complete', function ()
         null,
     ));
 
-    $streamEndEvents = array_values(array_filter($events, fn ($event) => $event instanceof StreamEnd));
-    $toolResultEvents = array_values(array_filter($events, fn ($event) => $event instanceof ToolResultEvent));
+    $streamEnds = collect($events)->whereInstanceOf(StreamEnd::class);
 
     expect($tool->calls)->toBe(1)
         ->and($gateway->streamCalls)->toBe(2)
-        ->and($streamEndEvents)->toHaveCount(1)
-        ->and($streamEndEvents[0]->reason)->toBe(FinishReason::Stop->value)
-        ->and($streamEndEvents[0]->usage->promptTokens)->toBe(15)
-        ->and($streamEndEvents[0]->usage->completionTokens)->toBe(3)
-        ->and($toolResultEvents)->toHaveCount(1);
+        ->and($streamEnds)->toHaveCount(1)
+        ->and(collect($events)->whereInstanceOf(ToolResultEvent::class))->toHaveCount(1)
+        ->and($streamEnds->first()->reason)->toBe(FinishReason::Stop->value)
+        ->and($streamEnds->first()->usage->promptTokens)->toBe(15)
+        ->and($streamEnds->first()->usage->completionTokens)->toBe(3);
 });
 
 test('it does not execute streamed tool calls on the final step', function () {
@@ -115,8 +114,8 @@ test('it does not execute streamed tool calls on the final step', function () {
 
     expect($tool->calls)->toBe(0)
         ->and($gateway->streamCalls)->toBe(1)
-        ->and(array_filter($events, fn ($event) => $event instanceof ToolResultEvent))->toHaveCount(0)
-        ->and(array_filter($events, fn ($event) => $event instanceof StreamEnd))->toHaveCount(1);
+        ->and(collect($events)->whereInstanceOf(ToolResultEvent::class))->toHaveCount(0)
+        ->and(collect($events)->whereInstanceOf(StreamEnd::class))->toHaveCount(1);
 });
 
 test('it clamps non-positive maxSteps to at least one turn', function (int $maxSteps) {
@@ -176,7 +175,7 @@ test('it accumulates streamed usage across multi-step turns', function () {
 
     $streamEnd = collect($events)->whereInstanceOf(StreamEnd::class)->first();
 
-    expect($streamEnd)->not->toBeNull()
+    expect($streamEnd)->toBeInstanceOf(StreamEnd::class)
         ->and($streamEnd->usage->promptTokens)->toBe(15)
         ->and($streamEnd->usage->completionTokens)->toBe(3)
         ->and($streamEnd->reason)->toBe(FinishReason::Stop->value);
@@ -245,10 +244,10 @@ test('it emits a terminal stream end when a turn yields no stream end or error',
         null,
     ));
 
-    $streamEndEvents = array_values(array_filter($events, fn ($event) => $event instanceof StreamEnd));
+    $streamEnds = collect($events)->whereInstanceOf(StreamEnd::class);
 
-    expect($streamEndEvents)->toHaveCount(1)
-        ->and($streamEndEvents[0]->reason)->toBe(FinishReason::Error->value);
+    expect($streamEnds)->toHaveCount(1)
+        ->and($streamEnds->first()->reason)->toBe(FinishReason::Error->value);
 });
 
 test('it does not emit a stream end when a turn errors without a stream end', function () {
@@ -268,8 +267,8 @@ test('it does not emit a stream end when a turn errors without a stream end', fu
         null,
     ));
 
-    expect(array_filter($events, fn ($event) => $event instanceof StreamEnd))->toHaveCount(0)
-        ->and(array_filter($events, fn ($event) => $event instanceof Error))->toHaveCount(1);
+    expect(collect($events)->whereInstanceOf(StreamEnd::class))->toHaveCount(0)
+        ->and(collect($events)->whereInstanceOf(Error::class))->toHaveCount(1);
 });
 
 function textGenerationLoopProvider(): TextProvider
