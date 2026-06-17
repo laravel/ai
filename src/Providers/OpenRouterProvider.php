@@ -14,6 +14,7 @@ use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Laravel\Ai\Gateway\OpenRouter\OpenRouterGateway;
 
@@ -41,7 +42,16 @@ class OpenRouterProvider extends Provider implements AudioProvider, EmbeddingPro
      */
     public function webSearchToolOptions(WebSearch $search): array
     {
-        return [];
+        $options = $search->providerOptions(Lab::OpenRouter);
+
+        $parameters = array_filter([
+            'max_results' => $search->maxSearches,
+            'allowed_domains' => filled($search->allowedDomains) ? $search->allowedDomains : null,
+        ]) + $options;
+
+        return array_filter([
+            'parameters' => filled($parameters) ? $parameters : null,
+        ]);
     }
 
     /**
