@@ -14,6 +14,7 @@ class StepResponse implements Arrayable, JsonSerializable
     /**
      * @param  ToolCall[]  $toolCalls
      * @param  array<string, mixed>|null  $structured
+     * @param  string|null  $continuationToken  Provider handle for stateful continuation; null for stateless providers that replay full history.
      * @param  array<int, array<string, mixed>>  $providerContentBlocks
      */
     public function __construct(

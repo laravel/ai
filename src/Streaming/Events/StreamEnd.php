@@ -12,8 +12,13 @@ class StreamEnd extends StreamEvent
         public string $reason,
         public Usage $usage,
         public int $timestamp,
-    ) {}
+    ) {
+        //
+    }
 
+    /**
+     * Combine the stream end usages in the given collection of events into a single usage instance.
+     */
     public static function combineUsage(Collection|array $events): Usage
     {
         $events = is_array($events) ? new Collection($events) : $events;
@@ -25,7 +30,9 @@ class StreamEnd extends StreamEvent
             ->reduce(fn ($a, $b) => $a->add($b), new Usage);
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * @return array<string, mixed>
+     */
     public function toArray(): array
     {
         return [
@@ -40,6 +47,9 @@ class StreamEnd extends StreamEvent
         ];
     }
 
+    /**
+     * {@inheritdoc}
+     */
     public function toVercelProtocolArray(): ?array
     {
         return [

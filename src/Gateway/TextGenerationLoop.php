@@ -183,7 +183,7 @@ class TextGenerationLoop
     }
 
     /**
-     * Resolve the step budget: explicit `maxSteps` wins, else 1.5x the tool count (room for tools that delegate to tools), or 5 for tool-less chats.
+     * Resolve the step budget: explicit `maxSteps`, else 1.5x tools, else 5.
      *
      * @param  Tool[]  $tools
      */
