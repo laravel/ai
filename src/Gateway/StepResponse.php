@@ -10,14 +10,13 @@ use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
 
-/** @internal */
-class TurnResponse implements Arrayable, JsonSerializable
+class StepResponse implements Arrayable, JsonSerializable
 {
     /**
      * @param  ToolCall[]  $toolCalls
      * @param  array<string, mixed>|null  $structured
-     * @param  string|null  $continuationToken  Provider handle for stateful continuation, e.g. OpenAI's response id; null for stateless providers.
-     * @param  array<int, array<string, mixed>>  $providerContentBlocks  Opaque provider blocks the loop replays verbatim on the next {@see AssistantMessage} (e.g. Anthropic signed thinking, Bedrock reasoning); never inspected.
+     * @param  string|null  $continuationToken
+     * @param  array<int, array<string, mixed>>  $providerContentBlocks
      */
     public function __construct(
         public string $text,

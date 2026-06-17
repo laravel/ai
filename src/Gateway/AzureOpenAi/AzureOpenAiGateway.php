@@ -2,16 +2,14 @@
 
 namespace Laravel\Ai\Gateway\AzureOpenAi;
 
-use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
+use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
-use Laravel\Ai\Contracts\Gateway\TurnTextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
-use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Files\Image;
 use Laravel\Ai\Gateway\AzureOpenAi\Concerns\CreatesAzureOpenAiClient;
@@ -19,14 +17,12 @@ use Laravel\Ai\Gateway\Concerns\DelegatesToTextGenerationLoop;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\OpenAi\Concerns\BuildsTextRequests;
+use Laravel\Ai\Gateway\OpenAi\Concerns\HandlesTextSteps;
 use Laravel\Ai\Gateway\OpenAi\Concerns\HandlesTextStreaming;
 use Laravel\Ai\Gateway\OpenAi\Concerns\MapsAttachments;
 use Laravel\Ai\Gateway\OpenAi\Concerns\MapsMessages;
 use Laravel\Ai\Gateway\OpenAi\Concerns\MapsTools;
 use Laravel\Ai\Gateway\OpenAi\Concerns\ParsesTextResponses;
-use Laravel\Ai\Gateway\StepContext;
-use Laravel\Ai\Gateway\TextGenerationOptions;
-use Laravel\Ai\Gateway\TurnResponse;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
@@ -36,12 +32,13 @@ use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Tools\ToolNameResolver;
 use LogicException;
 
-class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway, TurnTextGateway
+class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, StepTextGateway, TextGateway
 {
     use BuildsTextRequests;
     use CreatesAzureOpenAiClient;
     use DelegatesToTextGenerationLoop;
     use HandlesFailoverErrors;
+    use HandlesTextSteps;
     use HandlesTextStreaming;
     use MapsAttachments;
     use MapsMessages;
@@ -50,71 +47,6 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, TextGateway,
     use ParsesTextResponses;
 
     public function __construct(protected Dispatcher $events) {}
-
-    public function handleTurn(
-        TextProvider $provider,
-        string $model,
-        ?string $instructions,
-        array $messages,
-        array $tools,
-        ?array $schema,
-        ?TextGenerationOptions $options,
-        ?int $timeout,
-        StepContext $stepContext,
-    ): TurnResponse {
-        $body = $this->buildTurnBody($provider, $model, $instructions, $messages, $tools, $schema, $options, $stepContext);
-
-        $response = $this->withErrorHandling(
-            $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('responses', $body),
-        );
-
-        $data = $response->json();
-
-        $this->validateTextResponse($data);
-
-        return $this->parseTextResponse($data, $provider, filled($schema));
-    }
-
-    public function streamTurn(
-        string $invocationId,
-        TextProvider $provider,
-        string $model,
-        ?string $instructions,
-        array $messages,
-        array $tools,
-        ?array $schema,
-        ?TextGenerationOptions $options,
-        ?int $timeout,
-        StepContext $stepContext,
-    ): Generator {
-        $body = $this->buildTurnBody($provider, $model, $instructions, $messages, $tools, $schema, $options, $stepContext);
-        $body['stream'] = true;
-
-        $response = $this->withErrorHandling(
-            $provider->name(),
-            fn () => $this->client($provider, $timeout)
-                ->withOptions(['stream' => true])
-                ->post('responses', $body),
-        );
-
-        yield from $this->processTextStream($invocationId, $provider, $model, $response->getBody());
-    }
-
-    protected function buildTurnBody(
-        TextProvider $provider,
-        string $model,
-        ?string $instructions,
-        array $messages,
-        array $tools,
-        ?array $schema,
-        ?TextGenerationOptions $options,
-        StepContext $stepContext,
-    ): array {
-        return $stepContext->continuationToken && ! $this->isStateless($provider)
-            ? $this->buildContinuationBody($stepContext->continuationToken, $model, $messages, $tools, $provider, $schema, $options)
-            : $this->buildTextRequestBody($provider, $model, $instructions, $messages, $tools, $schema, $options);
-    }
 
     public function generateEmbeddings(
         EmbeddingProvider $provider,

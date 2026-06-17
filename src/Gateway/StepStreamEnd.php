@@ -5,8 +5,7 @@ namespace Laravel\Ai\Gateway;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Usage;
 
-/** @internal */
-class TurnStreamEnd
+class StepStreamEnd
 {
     /** @param  array<int, array<string, mixed>>  $providerContentBlocks */
     public function __construct(

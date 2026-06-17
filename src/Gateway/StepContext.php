@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Gateway;
 
-/** @internal */
 class StepContext
 {
     /** @param  string|null  $continuationToken  Provider handle for stateful continuation; null for stateless providers that replay full history. */

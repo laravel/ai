@@ -11,14 +11,11 @@ use Laravel\Ai\Responses\TextResponse;
 
 trait DelegatesToTextGenerationLoop
 {
-    protected ?Closure $invokingToolCallback = null;
-
-    protected ?Closure $toolInvokedCallback = null;
+    protected ?TextGenerationLoop $textGenerationLoop = null;
 
     public function onToolInvocation(Closure $invoking, Closure $invoked): self
     {
-        $this->invokingToolCallback = $invoking;
-        $this->toolInvokedCallback = $invoked;
+        $this->textGenerationLoop()->onToolInvocation($invoking, $invoked);
 
         return $this;
     }
@@ -33,7 +30,7 @@ trait DelegatesToTextGenerationLoop
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): TextResponse {
-        return $this->buildTextGenerationLoop()->generate(
+        return $this->textGenerationLoop()->generate(
             $provider, $model, $instructions, $messages, $tools, $schema, $options, $timeout,
         );
     }
@@ -49,19 +46,13 @@ trait DelegatesToTextGenerationLoop
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): Generator {
-        yield from $this->buildTextGenerationLoop()->stream(
+        yield from $this->textGenerationLoop()->stream(
             $invocationId, $provider, $model, $instructions, $messages, $tools, $schema, $options, $timeout,
         );
     }
 
-    protected function buildTextGenerationLoop(): TextGenerationLoop
+    protected function textGenerationLoop(): TextGenerationLoop
     {
-        $loop = new TextGenerationLoop($this);
-
-        if ($this->invokingToolCallback !== null && $this->toolInvokedCallback !== null) {
-            $loop->onToolInvocation($this->invokingToolCallback, $this->toolInvokedCallback);
-        }
-
-        return $loop;
+        return $this->textGenerationLoop ??= new TextGenerationLoop($this);
     }
 }

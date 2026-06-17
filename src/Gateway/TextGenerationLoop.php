@@ -5,9 +5,10 @@ namespace Laravel\Ai\Gateway;
 use Generator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
-use Laravel\Ai\Contracts\Gateway\TurnTextGateway;
+use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Exceptions\NoSuchToolError;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\ToolResultMessage;
@@ -24,12 +25,11 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 
-/** @internal */
 class TextGenerationLoop
 {
     use InvokesTools;
 
-    public function __construct(protected TurnTextGateway $gateway)
+    public function __construct(protected StepTextGateway $gateway)
     {
         $this->initializeToolCallbacks();
     }
@@ -61,7 +61,7 @@ class TextGenerationLoop
                 continuationToken: $continuationToken,
             );
 
-            $lastResult = $this->gateway->handleTurn(
+            $lastResult = $this->gateway->handleStep(
                 $provider, $model, $instructions, $allMessages, $tools, $schema, $options, $timeout, $stepContext,
             );
 
@@ -119,7 +119,7 @@ class TextGenerationLoop
         for ($step = 0; $step < $maxSteps; $step++) {
             $pendingToolCalls = [];
             $currentText = '';
-            $turnEnd = null;
+            $stepEnd = null;
 
             $stepContext = new StepContext(
                 stepNumber: $step,
@@ -127,13 +127,13 @@ class TextGenerationLoop
                 continuationToken: $continuationToken,
             );
 
-            $turn = $this->gateway->streamTurn(
+            $stream = $this->gateway->streamStep(
                 $invocationId, $provider, $model, $instructions, $allMessages, $tools, $schema, $options, $timeout, $stepContext,
             );
 
-            foreach ($turn as $event) {
-                if ($event instanceof TurnStreamEnd) {
-                    $turnEnd = $event;
+            foreach ($stream as $event) {
+                if ($event instanceof StepStreamEnd) {
+                    $stepEnd = $event;
                     break;
                 }
 
@@ -148,12 +148,12 @@ class TextGenerationLoop
                 }
             }
 
-            if ($turnEnd !== null) {
-                $accumulatedUsage = $accumulatedUsage->add($turnEnd->usage);
-                $finalReason = $turnEnd->reason;
+            if ($stepEnd !== null) {
+                $accumulatedUsage = $accumulatedUsage->add($stepEnd->usage);
+                $finalReason = $stepEnd->reason;
             }
 
-            $hasToolCalls = $turnEnd?->reason === FinishReason::ToolCalls && filled($pendingToolCalls);
+            $hasToolCalls = $stepEnd?->reason === FinishReason::ToolCalls && filled($pendingToolCalls);
             $shouldContinue = $hasToolCalls && ! $stepContext->isFinalStep;
 
             $toolResults = $shouldContinue
@@ -177,7 +177,7 @@ class TextGenerationLoop
             $allMessages[] = new AssistantMessage(
                 $currentText,
                 collect($pendingToolCalls),
-                $turnEnd?->providerContentBlocks ?? [],
+                $stepEnd?->providerContentBlocks ?? [],
             );
 
             if (! $shouldContinue) {
@@ -186,30 +186,19 @@ class TextGenerationLoop
 
             $allMessages[] = new ToolResultMessage(collect($toolResults));
 
-            $continuationToken = $turnEnd?->continuationToken;
+            $continuationToken = $stepEnd?->continuationToken;
         }
 
-        if ($finalReason !== null) {
+        $reason = $finalReason ?? ($sawError ? null : FinishReason::Error);
+
+        if ($reason !== null) {
             yield (new StreamEnd(
                 strtolower((string) Str::uuid7()),
-                $finalReason->value,
+                $reason->value,
                 $accumulatedUsage,
                 time(),
             ))->withInvocationId($invocationId);
-
-            return;
         }
-
-        if ($sawError) {
-            return;
-        }
-
-        yield (new StreamEnd(
-            strtolower((string) Str::uuid7()),
-            FinishReason::Error->value,
-            $accumulatedUsage,
-            time(),
-        ))->withInvocationId($invocationId);
     }
 
     /**
@@ -233,29 +222,25 @@ class TextGenerationLoop
      */
     protected function executeToolCalls(array $toolCalls, array $tools): array
     {
-        $results = [];
-
-        foreach ($toolCalls as $toolCall) {
+        return array_map(function (ToolCall $toolCall) use ($tools) {
             $tool = $this->findTool($toolCall->name, $tools);
 
             if ($tool === null) {
-                continue;
+                throw new NoSuchToolError($toolCall->name);
             }
 
-            $results[] = new ToolResult(
+            return new ToolResult(
                 $toolCall->id,
                 $toolCall->name,
                 $toolCall->arguments,
                 $this->executeTool($tool, $toolCall->arguments),
                 $toolCall->resultId,
             );
-        }
-
-        return $results;
+        }, $toolCalls);
     }
 
     /** @param  ToolResult[]  $toolResults */
-    protected function buildStep(TurnResponse $result, array $toolResults = []): Step
+    protected function buildStep(StepResponse $result, array $toolResults = []): Step
     {
         return new Step(
             $result->text,
@@ -271,7 +256,7 @@ class TextGenerationLoop
         Collection $steps,
         array $allMessages,
         int $originalMessageCount,
-        ?TurnResponse $lastResult,
+        ?StepResponse $lastResult,
     ): TextResponse {
         $finalStep = $steps->last();
 
@@ -282,7 +267,7 @@ class TextGenerationLoop
 
         $newMessages = collect(array_slice($allMessages, $originalMessageCount))->values();
 
-        if ($lastResult?->structured !== null && $finalStep instanceof Step) {
+        if ($lastResult?->structured !== null) {
             return (new StructuredTextResponse(
                 $lastResult->structured,
                 $finalStep->text,

@@ -31,16 +31,12 @@ trait BuildsTextRequests
         return $this->mergeSharedResponsesRequestOptions($body, $tools, $schema, $options, $provider);
     }
 
-    /**
-     * Build a continuation body using `previous_response_id`, so only the new
-     * tool results need to be sent instead of replaying the conversation.
-     */
     protected function buildContinuationBody(
-        string $continuationToken,
+        Provider $provider,
         string $model,
+        string $continuationToken,
         array $messages,
         array $tools,
-        Provider $provider,
         ?array $schema,
         ?TextGenerationOptions $options = null,
     ): array {

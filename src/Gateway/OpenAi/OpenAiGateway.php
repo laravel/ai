@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Gateway\OpenAi;
 
-use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
@@ -11,11 +10,10 @@ use InvalidArgumentException;
 use Laravel\Ai\Contracts\Files\HasName;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\Gateway;
-use Laravel\Ai\Contracts\Gateway\TurnTextGateway;
+use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
-use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Files\Image;
@@ -24,9 +22,6 @@ use Laravel\Ai\Files\StoredImage;
 use Laravel\Ai\Gateway\Concerns\DelegatesToTextGenerationLoop;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
-use Laravel\Ai\Gateway\StepContext;
-use Laravel\Ai\Gateway\TextGenerationOptions;
-use Laravel\Ai\Gateway\TurnResponse;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
@@ -37,10 +32,11 @@ use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
 use LogicException;
 
-class OpenAiGateway implements Gateway, TurnTextGateway
+class OpenAiGateway implements Gateway, StepTextGateway
 {
     use Concerns\BuildsTextRequests;
     use Concerns\CreatesOpenAiClient;
+    use Concerns\HandlesTextSteps;
     use Concerns\HandlesTextStreaming;
     use Concerns\MapsAttachments;
     use Concerns\MapsMessages;
@@ -51,71 +47,6 @@ class OpenAiGateway implements Gateway, TurnTextGateway
     use ParsesServerSentEvents;
 
     public function __construct(protected Dispatcher $events) {}
-
-    public function handleTurn(
-        TextProvider $provider,
-        string $model,
-        ?string $instructions,
-        array $messages,
-        array $tools,
-        ?array $schema,
-        ?TextGenerationOptions $options,
-        ?int $timeout,
-        StepContext $stepContext,
-    ): TurnResponse {
-        $body = $this->buildTurnBody($provider, $model, $instructions, $messages, $tools, $schema, $options, $stepContext);
-
-        $response = $this->withErrorHandling(
-            $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('responses', $body),
-        );
-
-        $data = $response->json();
-
-        $this->validateTextResponse($data);
-
-        return $this->parseTextResponse($data, $provider, filled($schema));
-    }
-
-    public function streamTurn(
-        string $invocationId,
-        TextProvider $provider,
-        string $model,
-        ?string $instructions,
-        array $messages,
-        array $tools,
-        ?array $schema,
-        ?TextGenerationOptions $options,
-        ?int $timeout,
-        StepContext $stepContext,
-    ): Generator {
-        $body = $this->buildTurnBody($provider, $model, $instructions, $messages, $tools, $schema, $options, $stepContext);
-        $body['stream'] = true;
-
-        $response = $this->withErrorHandling(
-            $provider->name(),
-            fn () => $this->client($provider, $timeout)
-                ->withOptions(['stream' => true])
-                ->post('responses', $body),
-        );
-
-        yield from $this->processTextStream($invocationId, $provider, $model, $response->getBody());
-    }
-
-    protected function buildTurnBody(
-        TextProvider $provider,
-        string $model,
-        ?string $instructions,
-        array $messages,
-        array $tools,
-        ?array $schema,
-        ?TextGenerationOptions $options,
-        StepContext $stepContext,
-    ): array {
-        return $stepContext->continuationToken && ! $this->isStateless($provider)
-            ? $this->buildContinuationBody($stepContext->continuationToken, $model, $messages, $tools, $provider, $schema, $options)
-            : $this->buildTextRequestBody($provider, $model, $instructions, $messages, $tools, $schema, $options);
-    }
 
     /**
      * Generate an image.
