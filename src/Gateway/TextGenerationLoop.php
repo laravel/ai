@@ -59,12 +59,23 @@ class TextGenerationLoop
                 continuationToken: $continuationToken,
             );
 
-            $lastResult = $this->gateway->handleStep(
-                $provider, $model, $instructions, $allMessages, $tools, $schema, $options, $timeout, $stepContext,
+            $lastResult = $this->gateway->generateTextStep(
+                $provider,
+                $model,
+                $instructions,
+                $allMessages,
+                $tools,
+                $schema,
+                $options,
+                $timeout,
+                $stepContext,
             );
 
             $toolResults = $this->continuationToolResults(
-                $lastResult->finishReason, $lastResult->toolCalls, $stepContext->isFinalStep, $tools,
+                $lastResult->finishReason,
+                $lastResult->toolCalls,
+                $stepContext->isFinalStep,
+                $tools
             );
 
             $shouldContinue = filled($toolResults);
@@ -118,8 +129,17 @@ class TextGenerationLoop
                 continuationToken: $continuationToken,
             );
 
-            $stream = $this->gateway->streamStep(
-                $invocationId, $provider, $model, $instructions, $allMessages, $tools, $schema, $options, $timeout, $stepContext,
+            $stream = $this->gateway->generateStreamStep(
+                $invocationId,
+                $provider,
+                $model,
+                $instructions,
+                $allMessages,
+                $tools,
+                $schema,
+                $options,
+                $timeout,
+                $stepContext,
             );
 
             foreach ($stream as $event) {
@@ -234,7 +254,9 @@ class TextGenerationLoop
         }, $toolCalls);
     }
 
-    /** @param  ToolResult[]  $toolResults */
+    /**
+     * @param  ToolResult[]  $toolResults
+     */
     protected function buildStep(StepResponse $result, array $toolResults = []): Step
     {
         return new Step(

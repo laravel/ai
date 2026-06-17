@@ -10,7 +10,7 @@ use Laravel\Ai\Gateway\TextGenerationOptions;
 
 trait HandlesTextSteps
 {
-    public function handleStep(
+    public function generateTextStep(
         TextProvider $provider,
         string $model,
         ?string $instructions,
@@ -35,7 +35,7 @@ trait HandlesTextSteps
         return $this->parseTextResponse($data, $provider, filled($schema));
     }
 
-    public function streamStep(
+    public function generateStreamStep(
         string $invocationId,
         TextProvider $provider,
         string $model,

@@ -21,7 +21,7 @@ use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 
-trait HandlesTextStreaming
+trait HandlesTextGeneration
 {
     /** @return Generator<int, StreamEvent, mixed, StepResponse|null> */
     protected function processTextStream(

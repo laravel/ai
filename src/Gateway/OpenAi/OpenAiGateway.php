@@ -36,8 +36,8 @@ class OpenAiGateway implements Gateway, StepTextGateway
 {
     use Concerns\BuildsTextRequests;
     use Concerns\CreatesOpenAiClient;
+    use Concerns\HandlesTextGeneration;
     use Concerns\HandlesTextSteps;
-    use Concerns\HandlesTextStreaming;
     use Concerns\MapsAttachments;
     use Concerns\MapsMessages;
     use Concerns\MapsTools;
@@ -46,7 +46,10 @@ class OpenAiGateway implements Gateway, StepTextGateway
     use HandlesFailoverErrors;
     use ParsesServerSentEvents;
 
-    public function __construct(protected Dispatcher $events) {}
+    public function __construct(protected Dispatcher $events)
+    {
+        //
+    }
 
     /**
      * Generate an image.

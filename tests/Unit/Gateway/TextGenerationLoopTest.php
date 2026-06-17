@@ -2,7 +2,6 @@
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
-use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\NoSuchToolError;
@@ -10,13 +9,10 @@ use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationLoop;
 use Laravel\Ai\Gateway\TextGenerationOptions;
-use Laravel\Ai\Prompts\AgentPrompt;
-use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
-use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\TextDelta;
@@ -61,14 +57,14 @@ test('it holds stream end until the streamed tool loop is complete', function ()
     $tool = new TextGenerationLoopCountingTool;
     $firstToolCall = new ToolCall('call-1', TextGenerationLoopCountingTool::class, [], 'call-1');
     $gateway = new TextGenerationLoopFakeGateway(streams: [
-        [
-            [new ToolCallEvent('tool-call-event', $firstToolCall, time())],
-            new StepResponse(text: '', toolCalls: [$firstToolCall], finishReason: FinishReason::ToolCalls, usage: new Usage(10, 1), meta: new Meta('fake', 'model'), continuationToken: 'response-1'),
-        ],
-        [
-            [new TextDelta('text-delta', 'message-1', 'Done', time())],
-            new StepResponse(text: 'Done', toolCalls: [], finishReason: FinishReason::Stop, usage: new Usage(5, 2), meta: new Meta('fake', 'model'), continuationToken: 'response-2'),
-        ],
+        textGenerationLoopStreamStep(
+            events: [new ToolCallEvent('tool-call-event', $firstToolCall, time())],
+            returns: new StepResponse(text: '', toolCalls: [$firstToolCall], finishReason: FinishReason::ToolCalls, usage: new Usage(10, 1), meta: new Meta('fake', 'model'), continuationToken: 'response-1'),
+        ),
+        textGenerationLoopStreamStep(
+            events: [new TextDelta('text-delta', 'message-1', 'Done', time())],
+            returns: new StepResponse(text: 'Done', toolCalls: [], finishReason: FinishReason::Stop, usage: new Usage(5, 2), meta: new Meta('fake', 'model'), continuationToken: 'response-2'),
+        ),
     ]);
 
     $events = iterator_to_array((new TextGenerationLoop($gateway))->stream(
@@ -98,10 +94,12 @@ test('it holds stream end until the streamed tool loop is complete', function ()
 test('it does not execute streamed tool calls on the final step', function () {
     $tool = new TextGenerationLoopCountingTool;
     $toolCall = new ToolCall('call-1', TextGenerationLoopCountingTool::class, [], 'call-1');
-    $gateway = new TextGenerationLoopFakeGateway(streams: [[
-        [new ToolCallEvent('tool-call-event', $toolCall, time())],
-        new StepResponse(text: '', toolCalls: [$toolCall], finishReason: FinishReason::ToolCalls, usage: new Usage(10, 1), meta: new Meta('fake', 'model'), continuationToken: 'response-1'),
-    ]]);
+    $gateway = new TextGenerationLoopFakeGateway(streams: [
+        textGenerationLoopStreamStep(
+            events: [new ToolCallEvent('tool-call-event', $toolCall, time())],
+            returns: new StepResponse(text: '', toolCalls: [$toolCall], finishReason: FinishReason::ToolCalls, usage: new Usage(10, 1), meta: new Meta('fake', 'model'), continuationToken: 'response-1'),
+        ),
+    ]);
 
     $events = iterator_to_array((new TextGenerationLoop($gateway))->stream(
         'invocation-1',
@@ -154,14 +152,14 @@ test('it accumulates streamed usage across multi-step turns', function () {
     $tool = new TextGenerationLoopCountingTool;
     $toolCall = new ToolCall('call-1', TextGenerationLoopCountingTool::class, [], 'call-1');
     $gateway = new TextGenerationLoopFakeGateway(streams: [
-        [
-            [new ToolCallEvent('tool-call', $toolCall, time())],
-            new StepResponse(text: '', toolCalls: [$toolCall], finishReason: FinishReason::ToolCalls, usage: new Usage(10, 1), meta: new Meta('fake', 'model')),
-        ],
-        [
-            [new TextDelta('delta', 'msg-1', 'done', time())],
-            new StepResponse(text: 'done', toolCalls: [], finishReason: FinishReason::Stop, usage: new Usage(5, 2), meta: new Meta('fake', 'model')),
-        ],
+        textGenerationLoopStreamStep(
+            events: [new ToolCallEvent('tool-call', $toolCall, time())],
+            returns: new StepResponse(text: '', toolCalls: [$toolCall], finishReason: FinishReason::ToolCalls, usage: new Usage(10, 1), meta: new Meta('fake', 'model')),
+        ),
+        textGenerationLoopStreamStep(
+            events: [new TextDelta('delta', 'msg-1', 'done', time())],
+            returns: new StepResponse(text: 'done', toolCalls: [], finishReason: FinishReason::Stop, usage: new Usage(5, 2), meta: new Meta('fake', 'model')),
+        ),
     ]);
 
     $events = iterator_to_array((new TextGenerationLoop($gateway))->stream(
@@ -211,10 +209,10 @@ test('it throws when generation tool calls do not match local tools', function (
 test('it throws when streaming tool calls do not match local tools', function () {
     $toolCall = new ToolCall('call-1', 'MissingTool', [], 'call-1');
     $gateway = new TextGenerationLoopFakeGateway(streams: [
-        [
-            [new ToolCallEvent('tool-call-event', $toolCall, time())],
-            new StepResponse(text: '', toolCalls: [$toolCall], finishReason: FinishReason::ToolCalls, usage: new Usage(10, 1), meta: new Meta('fake', 'model'), continuationToken: 'response-1'),
-        ],
+        textGenerationLoopStreamStep(
+            events: [new ToolCallEvent('tool-call-event', $toolCall, time())],
+            returns: new StepResponse(text: '', toolCalls: [$toolCall], finishReason: FinishReason::ToolCalls, usage: new Usage(10, 1), meta: new Meta('fake', 'model'), continuationToken: 'response-1'),
+        ),
     ]);
 
     expect(fn () => iterator_to_array((new TextGenerationLoop($gateway))->stream(
@@ -231,10 +229,9 @@ test('it throws when streaming tool calls do not match local tools', function ()
 });
 
 test('it emits a terminal stream end when a turn yields no stream end or error', function () {
-    $gateway = new TextGenerationLoopFakeGateway(streams: [[
-        [new TextDelta('text-delta', 'message-1', 'partial', time())],
-        null,
-    ]]);
+    $gateway = new TextGenerationLoopFakeGateway(streams: [
+        textGenerationLoopStreamStep(events: [new TextDelta('text-delta', 'message-1', 'partial', time())]),
+    ]);
 
     $events = iterator_to_array((new TextGenerationLoop($gateway))->stream(
         'invocation-1',
@@ -255,10 +252,9 @@ test('it emits a terminal stream end when a turn yields no stream end or error',
 });
 
 test('it does not emit a stream end when a turn errors without a stream end', function () {
-    $gateway = new TextGenerationLoopFakeGateway(streams: [[
-        [new Error('error-1', 'server_error', 'Server overloaded', false, time())],
-        null,
-    ]]);
+    $gateway = new TextGenerationLoopFakeGateway(streams: [
+        textGenerationLoopStreamStep(events: [new Error('error-1', 'server_error', 'Server overloaded', false, time())]),
+    ]);
 
     $events = iterator_to_array((new TextGenerationLoop($gateway))->stream(
         'invocation-1',
@@ -278,43 +274,13 @@ test('it does not emit a stream end when a turn errors without a stream end', fu
 
 function textGenerationLoopProvider(): TextProvider
 {
-    return new class implements TextProvider
-    {
-        public function prompt(AgentPrompt $prompt): AgentResponse
-        {
-            throw new LogicException('Not used.');
-        }
+    return Mockery::mock(TextProvider::class);
+}
 
-        public function stream(AgentPrompt $prompt): StreamableAgentResponse
-        {
-            throw new LogicException('Not used.');
-        }
-
-        public function textGateway(): TextGateway
-        {
-            throw new LogicException('Not used.');
-        }
-
-        public function useTextGateway(TextGateway $gateway): self
-        {
-            throw new LogicException('Not used.');
-        }
-
-        public function defaultTextModel(): string
-        {
-            return 'model';
-        }
-
-        public function cheapestTextModel(): string
-        {
-            return 'model';
-        }
-
-        public function smartestTextModel(): string
-        {
-            return 'model';
-        }
-    };
+/** @param  array<int, object>  $events */
+function textGenerationLoopStreamStep(array $events = [], ?StepResponse $returns = null): array
+{
+    return [$events, $returns];
 }
 
 class TextGenerationLoopFakeGateway implements StepTextGateway
@@ -331,7 +297,7 @@ class TextGenerationLoopFakeGateway implements StepTextGateway
         public array $streams = [],
     ) {}
 
-    public function handleStep(
+    public function generateTextStep(
         TextProvider $provider,
         string $model,
         ?string $instructions,
@@ -348,7 +314,7 @@ class TextGenerationLoopFakeGateway implements StepTextGateway
         return array_shift($this->steps);
     }
 
-    public function streamStep(
+    public function generateStreamStep(
         string $invocationId,
         TextProvider $provider,
         string $model,
