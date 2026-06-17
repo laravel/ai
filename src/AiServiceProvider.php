@@ -55,7 +55,9 @@ class AiServiceProvider extends ServiceProvider
                 $request->dimensions($dimensions);
             }
 
-            if ($cache !== false && ! is_null($cache)) {
+            if ($cache === false) {
+                $request->cache(0);
+            } elseif (! is_null($cache)) {
                 $request->cache(is_int($cache) ? $cache : null);
             }
 

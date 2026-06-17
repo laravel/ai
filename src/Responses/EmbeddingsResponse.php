@@ -20,6 +20,8 @@ class EmbeddingsResponse implements Arrayable, Countable, IteratorAggregate, Jso
 
     /**
      * Get the first set of embeddings in the response.
+     *
+     * @return array<float>
      */
     public function first(): array
     {
@@ -56,6 +58,8 @@ class EmbeddingsResponse implements Arrayable, Countable, IteratorAggregate, Jso
 
     /**
      * Get an iterator for the object.
+     *
+     * @return Traversable<int, array<float>>
      */
     public function getIterator(): Traversable
     {

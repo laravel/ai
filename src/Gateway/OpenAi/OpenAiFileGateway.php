@@ -45,7 +45,7 @@ class OpenAiFileGateway implements FileGateway
             fn () => $this->client($provider)
                 ->attach('file', $content, $name, ['Content-Type' => $mime])
                 ->post('files', [
-                    'purpose' => $purpose,
+                    'purpose' => $this->defaultPurpose(),
                 ])
         );
 
@@ -62,5 +62,13 @@ class OpenAiFileGateway implements FileGateway
             fn () => $this->client($provider)
                 ->delete("files/{$fileId}")
         );
+    }
+
+    /**
+     * Get the default purpose to use when a file does not specify one.
+     */
+    protected function defaultPurpose(): string
+    {
+        return 'user_data';
     }
 }

@@ -85,6 +85,11 @@ describe('request structure', function () {
     });
 
     test('request omits the api key header when no key is configured', function () {
+        config(['ai.providers.gemini' => [
+            ...config('ai.providers.gemini'),
+            'key' => null,
+        ]]);
+
         Http::fake([
             'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
         ]);

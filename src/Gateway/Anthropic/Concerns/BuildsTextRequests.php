@@ -89,9 +89,13 @@ trait BuildsTextRequests
      */
     protected function supportsNativeStructuredOutput(Provider $provider): bool
     {
-        $beta = $provider->additionalConfiguration()['anthropic_beta'] ?? '';
+        $config = $provider->additionalConfiguration();
 
-        return str_contains($beta, 'structured-outputs');
+        if (array_key_exists('use_native_structured_output', $config)) {
+            return (bool) $config['use_native_structured_output'];
+        }
+
+        return true;
     }
 
     /**

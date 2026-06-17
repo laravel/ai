@@ -1,6 +1,14 @@
 # Release Notes
 
-## [Unreleased](https://github.com/laravel/ai/compare/v0.8.0...0.x)
+## [Unreleased](https://github.com/laravel/ai/compare/v0.8.1...0.x)
+
+## [v0.8.1](https://github.com/laravel/ai/compare/v0.8.0...v0.8.1) - 2026-06-10
+
+### What's Changed
+
+* Normalize MCP tool schemas into the deserializable JSON Schema subset by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/696
+
+**Full Changelog**: https://github.com/laravel/ai/compare/v0.8.0...v0.8.1
 
 ## [v0.8.0](https://github.com/laravel/ai/compare/v0.7.2...v0.8.0) - 2026-06-08
 
