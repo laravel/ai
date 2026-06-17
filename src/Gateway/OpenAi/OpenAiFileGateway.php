@@ -42,7 +42,7 @@ class OpenAiFileGateway implements FileGateway
     ): StoredFileResponse {
         [$content, $mime, $name] = $this->prepareStorableFile($file);
 
-        $providerOptions = $file->providerOptions(Lab::OpenAI);
+        $providerOptions = $this->resolveProviderOptions($file, $this->providerOptionsKey());
 
         $response = $this->withErrorHandling(
             $provider->name(),
@@ -75,5 +75,13 @@ class OpenAiFileGateway implements FileGateway
     protected function defaultPurpose(): string
     {
         return 'user_data';
+    }
+
+    /**
+     * Get the provider key used to resolve file upload options.
+     */
+    protected function providerOptionsKey(): Lab
+    {
+        return Lab::OpenAI;
     }
 }

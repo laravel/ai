@@ -45,7 +45,7 @@ class AnthropicFileGateway implements FileGateway
     ): StoredFileResponse {
         [$content, $mime, $name] = $this->prepareStorableFile($file);
 
-        $providerOptions = $file->providerOptions(Lab::Anthropic);
+        $providerOptions = $this->resolveProviderOptions($file, Lab::Anthropic);
 
         $response = $this->withErrorHandling(
             $provider->name(),

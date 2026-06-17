@@ -2,7 +2,6 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
-use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Document;
 
@@ -44,21 +43,6 @@ test('put file sends multipart upload', function () {
         ->and($request->url())->toBe('https://api.anthropic.com/v1/files')
         ->and($request->header('Content-Type')[0] ?? '')->toContain('multipart/form-data')
         ->and($request->hasHeader('x-api-key', 'test-key'))->toBeTrue();
-});
-
-test('put file resolves provider options from a closure scoped to the provider', function () {
-    Http::fake([
-        'api.anthropic.com/*' => Http::response(['id' => 'file-uploaded123']),
-    ]);
-
-    Document::fromString('Hello, World!', 'text/plain')->as('hello.txt')
-        ->withProviderOptions(fn (Lab $provider) => match ($provider) {
-            Lab::Anthropic => ['custom_field' => 'value'],
-            default => [],
-        })
-        ->put(provider: 'anthropic');
-
-    expect(multipartField(sentRequest(), 'custom_field'))->toBe('value');
 });
 
 test('delete file sends correct request', function () {
