@@ -1,6 +1,7 @@
 <?php
 
 use GuzzleHttp\Promise\PromiseInterface;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 
 function requiresApiKey(string ...$keys): void
@@ -10,6 +11,18 @@ function requiresApiKey(string ...$keys): void
             test()->markTestSkipped("Missing {$key} — skipping external test.");
         }
     }
+}
+
+function sentRequest(): Request
+{
+    [$request] = Http::recorded()->first();
+
+    return $request;
+}
+
+function multipartField(Request $request, string $name): ?string
+{
+    return collect($request->data())->firstWhere('name', $name)['contents'] ?? null;
 }
 
 function fakeGroqResponse(string $text = 'Hello'): PromiseInterface

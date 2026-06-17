@@ -2,17 +2,19 @@
 
 namespace Laravel\Ai\Files;
 
+use Closure;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Files\HasName;
-use Laravel\Ai\Contracts\Files\HasPurpose;
+use Laravel\Ai\Enums\Lab;
 
-abstract class File implements HasName, HasPurpose
+abstract class File implements HasName
 {
     public ?string $name = null;
 
     public ?string $mime = null;
 
-    public ?string $purpose = null;
+    /** @var array<string, mixed>|Closure(Lab|string): array<string, mixed> */
+    protected array|Closure $providerOptions = [];
 
     /**
      * Reconstruct a file instance from its array representation.
@@ -78,26 +80,29 @@ abstract class File implements HasName, HasPurpose
     }
 
     /**
-     * Get the purpose of the file.
+     * Specify provider-specific options for the file upload.
+     *
+     * @param  array<string, mixed>|Closure(Lab|string): array<string, mixed>  $options
      */
-    public function purpose(): ?string
+    public function withProviderOptions(array|Closure $options): static
     {
-        return $this->purpose;
+        $this->providerOptions = $options;
+
+        return $this;
     }
 
     /**
-     * Set the file's purpose to a custom value.
+     * Get the provider-specific options for the file upload.
+     *
+     * @return array<string, mixed>
      */
-    public function for(string $purpose): static
+    public function providerOptions(Lab|string $provider): array
     {
-
-        if (! in_array($purpose, ['assistants', 'batch', 'fine-tune', 'vision', 'user_data', 'evals'])) {
-            throw new InvalidArgumentException("Invalid file purpose [{$purpose}].");
+        if ($this->providerOptions instanceof Closure) {
+            return ($this->providerOptions)($provider) ?: [];
         }
 
-        $this->purpose = $purpose;
-
-        return $this;
+        return $this->providerOptions;
     }
 
     /**

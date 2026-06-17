@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\OpenAi;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Providers\FileProvider;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\PreparesStorableFiles;
 use Laravel\Ai\Responses\FileResponse;
@@ -39,14 +40,18 @@ class OpenAiFileGateway implements FileGateway
         FileProvider $provider,
         StorableFile $file,
     ): StoredFileResponse {
-        [$content, $mime, $name, $purpose] = $this->prepareStorableFile($file);
+        [$content, $mime, $name] = $this->prepareStorableFile($file);
+
+        $providerOptions = $file->providerOptions(Lab::OpenAI);
+
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider)
                 ->attach('file', $content, $name, ['Content-Type' => $mime])
-                ->post('files', [
-                    'purpose' => $this->defaultPurpose(),
-                ])
+                ->post('files', array_merge(
+                    ['purpose' => $this->defaultPurpose()],
+                    $providerOptions,
+                ))
         );
 
         return new StoredFileResponse($response->json('id'));

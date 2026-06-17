@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Document;
 
@@ -39,13 +40,44 @@ test('put file sends multipart upload with user_data purpose', function () {
 
     expect($response->id)->toBe('file-uploaded123');
 
-    Http::assertSent(function (Request $request) {
-        return $request->method() === 'POST'
-            && $request->url() === 'https://api.openai.com/v1/files'
-            && str_contains($request->header('Content-Type')[0] ?? '', 'multipart/form-data')
-            && collect($request->data())->contains(fn ($field) => ($field['name'] ?? null) === 'purpose' && ($field['contents'] ?? null) === 'user_data')
-            && $request->hasHeader('Authorization', 'Bearer test-key');
-    });
+    $request = sentRequest();
+
+    expect($request->method())->toBe('POST')
+        ->and($request->url())->toBe('https://api.openai.com/v1/files')
+        ->and($request->header('Content-Type')[0] ?? '')->toContain('multipart/form-data')
+        ->and(multipartField($request, 'purpose'))->toBe('user_data')
+        ->and($request->hasHeader('Authorization', 'Bearer test-key'))->toBeTrue();
+});
+
+test('put file allows overriding the purpose via provider options', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::response(['id' => 'file-uploaded123']),
+    ]);
+
+    Document::fromString('Hello, World!', 'text/plain')->as('hello.txt')
+        ->withProviderOptions(['purpose' => 'fine-tune'])
+        ->put(provider: 'openai');
+
+    $request = sentRequest();
+
+    expect($request->method())->toBe('POST')
+        ->and($request->url())->toBe('https://api.openai.com/v1/files')
+        ->and(multipartField($request, 'purpose'))->toBe('fine-tune');
+});
+
+test('put file resolves provider options from a closure scoped to the provider', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::response(['id' => 'file-uploaded123']),
+    ]);
+
+    Document::fromString('Hello, World!', 'text/plain')->as('hello.txt')
+        ->withProviderOptions(fn (Lab $provider) => match ($provider) {
+            Lab::OpenAI => ['purpose' => 'assistants'],
+            default => [],
+        })
+        ->put(provider: 'openai');
+
+    expect(multipartField(sentRequest(), 'purpose'))->toBe('assistants');
 });
 
 test('delete file sends correct request', function () {
