@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 use Tests\Fixtures\Tools\NamedTool;
@@ -68,11 +69,24 @@ test('tool parameters are not wrapped in schema definition', function () {
     });
 });
 
-test('provider tools throw runtime exception', function () {
+test('unsupported provider tools throw runtime exception', function () {
     Http::fake(['*' => fakeOpenRouterResponse('done')]);
 
-    expect(fn () => agent(tools: [new WebSearch])->prompt('Search', provider: 'openrouter'))
-        ->toThrow(RuntimeException::class, 'OpenRouter does not support');
+    expect(fn () => agent(tools: [new WebFetch])->prompt('Search', provider: 'openrouter'))
+        ->toThrow(RuntimeException::class, 'OpenRouter does not support [WebFetch] provider tools.');
+});
+
+test('web search tool is sent as openrouter:web_search type', function () {
+    Http::fake(['*' => fakeOpenRouterResponse('done')]);
+
+    agent(tools: [new WebSearch])->prompt('Search the web', provider: 'openrouter');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'openrouter:web_search');
+
+        return $tool !== null;
+    });
 });
 
 test('tool with a name() method emits the declared name', function () {

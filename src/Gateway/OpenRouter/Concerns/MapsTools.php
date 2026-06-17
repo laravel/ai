@@ -3,9 +3,12 @@
 namespace Laravel\Ai\Gateway\OpenRouter\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\ObjectSchema;
+use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\ProviderTool;
+use Laravel\Ai\Providers\Tools\WebSearch;
 use Laravel\Ai\Tools\ToolNameResolver;
 use RuntimeException;
 
@@ -14,21 +17,36 @@ trait MapsTools
     /**
      * Map the given tools to Chat Completions function definitions.
      */
-    protected function mapTools(array $tools): array
+    protected function mapTools(array $tools, Provider $provider): array
     {
         $mapped = [];
 
         foreach ($tools as $tool) {
-            if ($tool instanceof ProviderTool) {
+            if ($tool instanceof WebSearch) {
+                $mapped[] = $this->mapWebSearchTool($tool, $provider);
+            } elseif ($tool instanceof ProviderTool) {
                 throw new RuntimeException('OpenRouter does not support ['.class_basename($tool).'] provider tools.');
-            }
-
-            if ($tool instanceof Tool) {
+            } elseif ($tool instanceof Tool) {
                 $mapped[] = $this->mapTool($tool);
             }
         }
 
         return $mapped;
+    }
+
+    /**
+     * Map a web search tool to an OpenRouter web search definition.
+     */
+    protected function mapWebSearchTool(WebSearch $tool, Provider $provider): array
+    {
+        if (! $provider instanceof SupportsWebSearch) {
+            throw new RuntimeException('Provider ['.$provider->name().'] does not support web search.');
+        }
+
+        return [
+            'type' => 'openrouter:web_search',
+            ...$provider->webSearchToolOptions($tool),
+        ];
     }
 
     /**

@@ -11,11 +11,13 @@ use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
+use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Providers\Tools\WebSearch;
 use Laravel\Ai\Gateway\OpenRouter\OpenRouterGateway;
 
-class OpenRouterProvider extends Provider implements AudioProvider, EmbeddingProvider, ImageProvider, TextProvider, TranscriptionProvider
+class OpenRouterProvider extends Provider implements AudioProvider, EmbeddingProvider, ImageProvider, SupportsWebSearch, TextProvider, TranscriptionProvider
 {
     use Concerns\GeneratesAudio;
     use Concerns\GeneratesEmbeddings;
@@ -32,6 +34,14 @@ class OpenRouterProvider extends Provider implements AudioProvider, EmbeddingPro
     public function __construct(protected array $config, protected Dispatcher $events)
     {
         //
+    }
+
+    /**
+     * Get the web search tool options for the provider.
+     */
+    public function webSearchToolOptions(WebSearch $search): array
+    {
+        return [];
     }
 
     /**
