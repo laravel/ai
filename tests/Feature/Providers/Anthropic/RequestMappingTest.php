@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeAgent;
+use Tests\Fixtures\Agents\ConstrainedStructuredAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
 use Tests\Fixtures\Agents\StructuredWithThinkingAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
@@ -203,6 +204,33 @@ describe('structured output', function () {
 
             return $body['output_config']['format']['type'] === 'json_schema'
                 && ! $hasStructuredTool;
+        });
+    });
+
+    test('native structured output strips unsupported constraints and folds them into descriptions', function () {
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeStructuredResponse(['score' => 5, 'tags' => ['a']]),
+        ]);
+
+        (new ConstrainedStructuredAgent)->prompt(
+            'Score this',
+            provider: 'anthropic',
+        );
+
+        Http::assertSent(function ($request) {
+            $schema = $request->data()['output_config']['format']['schema'];
+
+            $score = $schema['properties']['score'];
+            $tags = $schema['properties']['tags'];
+
+            return ! isset($score['minimum'])
+                && ! isset($score['maximum'])
+                && str_contains($score['description'], 'Must be at least 1.')
+                && str_contains($score['description'], 'Must be at most 10.')
+                && ! isset($tags['maxItems'])
+                && ! isset($tags['items']['maxLength'])
+                && str_contains($tags['description'], 'Must contain at most 5 items.')
+                && str_contains($tags['items']['description'], 'Must be at most 20 characters.');
         });
     });
 
