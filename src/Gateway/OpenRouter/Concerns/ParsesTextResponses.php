@@ -15,6 +15,7 @@ use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Step;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
+use Laravel\Ai\Responses\Data\UrlCitation;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
@@ -91,6 +92,7 @@ trait ParsesTextResponses
 
         $text = $message['content'] ?? '';
         $rawToolCalls = $message['tool_calls'] ?? [];
+        $citations = $this->extractCitations($message);
         $usage = $this->extractUsage($data);
         $finishReason = $this->extractFinishReason($choice);
 
@@ -107,7 +109,7 @@ trait ParsesTextResponses
             [],
             $finishReason,
             $usage,
-            new Meta($provider->name(), $model),
+            new Meta($provider->name(), $model, $citations),
         );
 
         $steps->push($step);
@@ -129,7 +131,7 @@ trait ParsesTextResponses
                 $toolResults,
                 $finishReason,
                 $usage,
-                new Meta($provider->name(), $model),
+                new Meta($provider->name(), $model, $citations),
             ));
 
             $toolResultMessage = new ToolResultMessage(collect($toolResults));
@@ -163,7 +165,7 @@ trait ParsesTextResponses
                 $structuredData,
                 $text,
                 $this->combineUsage($steps),
-                new Meta($provider->name(), $model),
+                new Meta($provider->name(), $model, $citations),
             ))->withToolCallsAndResults(
                 toolCalls: $allToolCalls,
                 toolResults: $allToolResults,
@@ -173,7 +175,7 @@ trait ParsesTextResponses
         return (new TextResponse(
             $text,
             $this->combineUsage($steps),
-            new Meta($provider->name(), $model),
+            new Meta($provider->name(), $model, $citations),
         ))->withMessages($messages)->withSteps($steps);
     }
 
@@ -312,6 +314,29 @@ trait ParsesTextResponses
             $options,
             $timeout,
         );
+    }
+
+    /**
+     * Extract URL citations from the message annotations array.
+     */
+    protected function extractCitations(array $message): Collection
+    {
+        $citations = new Collection;
+
+        foreach ($message['annotations'] ?? [] as $annotation) {
+            if (($annotation['type'] ?? '') === 'url_citation') {
+                $urlCitation = $annotation['url_citation'] ?? [];
+
+                $citations->push(new UrlCitation(
+                    $urlCitation['url'] ?? '',
+                    $urlCitation['title'] ?? null,
+                    isset($urlCitation['start_index']) ? (int) $urlCitation['start_index'] : null,
+                    isset($urlCitation['end_index']) ? (int) $urlCitation['end_index'] : null,
+                ));
+            }
+        }
+
+        return $citations->values();
     }
 
     /**

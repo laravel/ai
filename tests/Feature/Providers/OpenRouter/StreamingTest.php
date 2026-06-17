@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Responses\Data\FinishReason;
+use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
@@ -154,3 +155,87 @@ test('streaming finish reason maps correctly', function (string $apiReason, $exp
     'content_filter maps to ContentFilter' => ['content_filter', FinishReason::ContentFilter],
     'unknown maps to Unknown' => ['unknown_reason', FinishReason::Unknown],
 ]);
+
+test('streaming emits citation events for web search annotations', function () {
+    Http::fake([
+        '*' => Http::response($this->ssePayload([
+            $this->chatChunk(['role' => 'assistant', 'content' => 'Paris is the capital']),
+            $this->chatChunk(['content' => ' of France.', 'annotations' => [
+                [
+                    'type' => 'url_citation',
+                    'url_citation' => [
+                        'url' => 'https://example.com/paris',
+                        'title' => 'Paris - Wikipedia',
+                        'start_index' => 0,
+                        'end_index' => 30,
+                    ],
+                ],
+            ]]),
+            $this->chatChunkFinish('stop', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
+        ])),
+    ]);
+
+    $events = [];
+    foreach (agent()->stream('What is the capital of France?', provider: 'openrouter') as $event) {
+        $events[] = $event;
+    }
+
+    $citations = array_values(array_filter($events, fn ($e) => $e instanceof CitationEvent));
+
+    expect($citations)->toHaveCount(1)
+        ->and($citations[0]->citation->url)->toBe('https://example.com/paris')
+        ->and($citations[0]->citation->title)->toBe('Paris - Wikipedia')
+        ->and($citations[0]->citation->startIndex)->toBe(0)
+        ->and($citations[0]->citation->endIndex)->toBe(30);
+});
+
+test('streaming emits multiple citation events across chunks', function () {
+    Http::fake([
+        '*' => Http::response($this->ssePayload([
+            $this->chatChunk(['role' => 'assistant', 'content' => 'Answer', 'annotations' => [
+                [
+                    'type' => 'url_citation',
+                    'url_citation' => ['url' => 'https://example.com/one', 'title' => 'One'],
+                ],
+            ]]),
+            $this->chatChunk(['content' => ' more', 'annotations' => [
+                [
+                    'type' => 'url_citation',
+                    'url_citation' => ['url' => 'https://example.com/two', 'title' => 'Two'],
+                ],
+            ]]),
+            $this->chatChunkFinish('stop', ['prompt_tokens' => 5, 'completion_tokens' => 2]),
+        ])),
+    ]);
+
+    $events = [];
+    foreach (agent()->stream('Question', provider: 'openrouter') as $event) {
+        $events[] = $event;
+    }
+
+    $citations = array_values(array_filter($events, fn ($e) => $e instanceof CitationEvent));
+
+    expect($citations)->toHaveCount(2)
+        ->and($citations[0]->citation->url)->toBe('https://example.com/one')
+        ->and($citations[1]->citation->url)->toBe('https://example.com/two');
+});
+
+test('streaming ignores non-url-citation annotation types', function () {
+    Http::fake([
+        '*' => Http::response($this->ssePayload([
+            $this->chatChunk(['role' => 'assistant', 'content' => 'Answer', 'annotations' => [
+                ['type' => 'other_type', 'data' => 'something'],
+            ]]),
+            $this->chatChunkFinish('stop', ['prompt_tokens' => 5, 'completion_tokens' => 2]),
+        ])),
+    ]);
+
+    $events = [];
+    foreach (agent()->stream('Question', provider: 'openrouter') as $event) {
+        $events[] = $event;
+    }
+
+    $citations = array_values(array_filter($events, fn ($e) => $e instanceof CitationEvent));
+
+    expect($citations)->toHaveCount(0);
+});
