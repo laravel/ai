@@ -8,7 +8,6 @@ use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
-use Laravel\Ai\Gateway\StepStreamEnd;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Streaming\Events\StreamEvent;
@@ -33,12 +32,12 @@ interface StepTextGateway
     ): StepResponse;
 
     /**
-     * Must yield exactly one {@see StepStreamEnd} as the final item on success, or an Error event and no StepStreamEnd on failure; if it yields neither, the loop emits a terminal StreamEnd with FinishReason::Error so consumers never hang.
+     * Yields stream events and returns a {@see StepResponse}, or yields an Error event and returns null on failure; a null return without an Error makes the loop emit a terminal StreamEnd(FinishReason::Error).
      *
      * @param  Message[]  $messages
      * @param  Tool[]  $tools
      * @param  array<string, Type>|null  $schema
-     * @return Generator<int, StreamEvent|StepStreamEnd>
+     * @return Generator<int, StreamEvent, mixed, StepResponse|null>
      */
     public function streamStep(
         string $invocationId,

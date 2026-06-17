@@ -57,7 +57,7 @@ trait HandlesTextSteps
                 ->post('responses', $body),
         );
 
-        yield from $this->processTextStream($invocationId, $provider, $model, $response->getBody());
+        return yield from $this->processTextStream($invocationId, $provider, $model, $response->getBody());
     }
 
     protected function buildStepBody(

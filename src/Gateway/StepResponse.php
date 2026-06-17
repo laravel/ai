@@ -4,7 +4,6 @@ namespace Laravel\Ai\Gateway;
 
 use Illuminate\Contracts\Support\Arrayable;
 use JsonSerializable;
-use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -15,7 +14,6 @@ class StepResponse implements Arrayable, JsonSerializable
     /**
      * @param  ToolCall[]  $toolCalls
      * @param  array<string, mixed>|null  $structured
-     * @param  string|null  $continuationToken
      * @param  array<int, array<string, mixed>>  $providerContentBlocks
      */
     public function __construct(

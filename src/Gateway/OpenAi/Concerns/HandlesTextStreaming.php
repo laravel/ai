@@ -4,8 +4,9 @@ namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
 use Generator;
 use Illuminate\Support\Str;
-use Laravel\Ai\Gateway\StepStreamEnd;
+use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\Error;
@@ -13,6 +14,7 @@ use Laravel\Ai\Streaming\Events\ProviderToolEvent;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
 use Laravel\Ai\Streaming\Events\ReasoningStart;
+use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
@@ -21,6 +23,7 @@ use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 
 trait HandlesTextStreaming
 {
+    /** @return Generator<int, StreamEvent, mixed, StepResponse|null> */
     protected function processTextStream(
         string $invocationId,
         Provider $provider,
@@ -32,6 +35,8 @@ trait HandlesTextStreaming
         $reasoningId = '';
         $streamStartEmitted = false;
         $textStartEmitted = false;
+        $currentText = '';
+        $toolCalls = [];
         $pendingToolCalls = [];
         $reasoningItems = [];
         $usage = null;
@@ -68,6 +73,7 @@ trait HandlesTextStreaming
 
             if ($type === 'response.output_text.delta') {
                 $textDelta = (string) ($data['delta'] ?? '');
+                $currentText .= $textDelta;
 
                 if ($textDelta !== '') {
                     if (! $textStartEmitted) {
@@ -227,17 +233,21 @@ trait HandlesTextStreaming
                             $call['arguments'] = $arguments;
                         }
 
+                        $toolCall = new ToolCall(
+                            $call['id'],
+                            $call['name'],
+                            json_decode($call['arguments'] ?? '{}', true) ?? [],
+                            $call['call_id'] ?? null,
+                            $call['reasoning_id'] ?? null,
+                            $call['reasoning_summary'] ?? null,
+                            $call['reasoning_encrypted_content'] ?? null,
+                        );
+
+                        $toolCalls[] = $toolCall;
+
                         yield (new ToolCallEvent(
                             $this->generateEventId(),
-                            new ToolCall(
-                                $call['id'],
-                                $call['name'],
-                                json_decode($call['arguments'] ?? '{}', true) ?? [],
-                                $call['call_id'] ?? null,
-                                $call['reasoning_id'] ?? null,
-                                $call['reasoning_summary'] ?? null,
-                                $call['reasoning_encrypted_content'] ?? null,
-                            ),
+                            $toolCall,
                             time(),
                         ))->withInvocationId($invocationId);
 
@@ -266,9 +276,12 @@ trait HandlesTextStreaming
             }
         }
 
-        yield new StepStreamEnd(
-            reason: $this->extractFinishReason($responseData),
+        return new StepResponse(
+            text: $currentText,
+            toolCalls: $toolCalls,
+            finishReason: $this->extractFinishReason($responseData),
             usage: $usage ?? new Usage(0, 0),
+            meta: new Meta($provider->name(), $responseData['model'] ?? $model),
             continuationToken: $responseId,
         );
     }

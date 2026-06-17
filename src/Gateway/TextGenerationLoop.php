@@ -21,8 +21,6 @@ use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
-use Laravel\Ai\Streaming\Events\TextDelta;
-use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 
 class TextGenerationLoop
@@ -65,14 +63,11 @@ class TextGenerationLoop
                 $provider, $model, $instructions, $allMessages, $tools, $schema, $options, $timeout, $stepContext,
             );
 
-            $hasToolCalls = $lastResult->finishReason === FinishReason::ToolCalls && filled($lastResult->toolCalls);
-            $shouldContinue = $hasToolCalls && ! $stepContext->isFinalStep;
+            $toolResults = $this->continuationToolResults(
+                $lastResult->finishReason, $lastResult->toolCalls, $stepContext->isFinalStep, $tools,
+            );
 
-            $toolResults = $shouldContinue
-                ? $this->executeToolCalls($lastResult->toolCalls, $tools)
-                : [];
-
-            $shouldContinue = $shouldContinue && filled($toolResults);
+            $shouldContinue = filled($toolResults);
 
             $steps->push($this->buildStep($lastResult, $toolResults));
 
@@ -117,10 +112,6 @@ class TextGenerationLoop
         $sawError = false;
 
         for ($step = 0; $step < $maxSteps; $step++) {
-            $pendingToolCalls = [];
-            $currentText = '';
-            $stepEnd = null;
-
             $stepContext = new StepContext(
                 stepNumber: $step,
                 isFinalStep: $step + 1 >= $maxSteps,
@@ -132,35 +123,25 @@ class TextGenerationLoop
             );
 
             foreach ($stream as $event) {
-                if ($event instanceof StepStreamEnd) {
-                    $stepEnd = $event;
-                    break;
-                }
-
                 yield $event;
 
                 if ($event instanceof Error) {
                     $sawError = true;
-                } elseif ($event instanceof ToolCallEvent) {
-                    $pendingToolCalls[] = $event->toolCall;
-                } elseif ($event instanceof TextDelta) {
-                    $currentText .= $event->delta;
                 }
             }
 
-            if ($stepEnd !== null) {
-                $accumulatedUsage = $accumulatedUsage->add($stepEnd->usage);
-                $finalReason = $stepEnd->reason;
+            $result = $stream->getReturn();
+
+            if ($result !== null) {
+                $accumulatedUsage = $accumulatedUsage->add($result->usage);
+                $finalReason = $result->finishReason;
             }
 
-            $hasToolCalls = $stepEnd?->reason === FinishReason::ToolCalls && filled($pendingToolCalls);
-            $shouldContinue = $hasToolCalls && ! $stepContext->isFinalStep;
-
-            $toolResults = $shouldContinue
-                ? $this->executeToolCalls($pendingToolCalls, $tools)
+            $toolResults = $result !== null
+                ? $this->continuationToolResults($result->finishReason, $result->toolCalls, $stepContext->isFinalStep, $tools)
                 : [];
 
-            $shouldContinue = $shouldContinue && filled($toolResults);
+            $shouldContinue = filled($toolResults);
 
             if ($shouldContinue) {
                 foreach ($toolResults as $toolResult) {
@@ -175,9 +156,9 @@ class TextGenerationLoop
             }
 
             $allMessages[] = new AssistantMessage(
-                $currentText,
-                collect($pendingToolCalls),
-                $stepEnd?->providerContentBlocks ?? [],
+                $result?->text ?? '',
+                collect($result?->toolCalls ?? []),
+                $result?->providerContentBlocks ?? [],
             );
 
             if (! $shouldContinue) {
@@ -186,7 +167,7 @@ class TextGenerationLoop
 
             $allMessages[] = new ToolResultMessage(collect($toolResults));
 
-            $continuationToken = $stepEnd?->continuationToken;
+            $continuationToken = $result?->continuationToken;
         }
 
         $reason = $finalReason ?? ($sawError ? null : FinishReason::Error);
@@ -213,6 +194,20 @@ class TextGenerationLoop
         }
 
         return count($tools) > 0 ? (int) round(count($tools) * 1.5) : 5;
+    }
+
+    /**
+     * Tool results to continue the loop with, or [] when this step should be the last.
+     *
+     * @param  ToolCall[]  $toolCalls
+     * @param  Tool[]  $tools
+     * @return ToolResult[]
+     */
+    protected function continuationToolResults(FinishReason $reason, array $toolCalls, bool $isFinalStep, array $tools): array
+    {
+        return $reason === FinishReason::ToolCalls && ! $isFinalStep && filled($toolCalls)
+            ? $this->executeToolCalls($toolCalls, $tools)
+            : [];
     }
 
     /**
