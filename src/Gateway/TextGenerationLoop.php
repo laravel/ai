@@ -24,13 +24,13 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 
+/** @internal */
 class TextGenerationLoop
 {
     use InvokesTools;
 
-    public function __construct(
-        protected TurnTextGateway $gateway,
-    ) {
+    public function __construct(protected TurnTextGateway $gateway)
+    {
         $this->initializeToolCallbacks();
     }
 
@@ -213,9 +213,7 @@ class TextGenerationLoop
     }
 
     /**
-     * Tools that delegate to other tools may need more than one round per tool, hence the
-     * 1.5x multiplier. The floor of 5 covers tool-less chats that still need a step budget
-     * for reasoning or follow-ups. Explicit `maxSteps` via {@see TextGenerationOptions} wins.
+     * Resolve the step budget: explicit `maxSteps` wins, else 1.5x the tool count (room for tools that delegate to tools), or 5 for tool-less chats.
      *
      * @param  Tool[]  $tools
      */
