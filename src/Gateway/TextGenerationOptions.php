@@ -2,8 +2,10 @@
 
 namespace Laravel\Ai\Gateway;
 
+use BackedEnum;
 use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Attributes\MaxTokens;
+use Laravel\Ai\Attributes\ServiceTier;
 use Laravel\Ai\Attributes\Temperature;
 use Laravel\Ai\Attributes\TopP;
 use Laravel\Ai\Contracts\Agent;
@@ -19,6 +21,7 @@ class TextGenerationOptions
         public readonly ?float $temperature = null,
         public readonly ?Agent $agent = null,
         public readonly ?float $topP = null,
+        public readonly ?string $serviceTier = null,
     ) {
         //
     }
@@ -47,20 +50,49 @@ class TextGenerationOptions
         $reflection = new ReflectionClass($agent);
 
         return new self(
-            maxSteps: self::resolve($agent, $reflection, 'maxSteps', MaxSteps::class),
-            maxTokens: self::resolve($agent, $reflection, 'maxTokens', MaxTokens::class),
-            temperature: self::resolve($agent, $reflection, 'temperature', Temperature::class),
+            maxSteps: self::resolveNumeric($agent, $reflection, 'maxSteps', MaxSteps::class),
+            maxTokens: self::resolveNumeric($agent, $reflection, 'maxTokens', MaxTokens::class),
+            temperature: self::resolveNumeric($agent, $reflection, 'temperature', Temperature::class),
             agent: $agent,
-            topP: self::resolve($agent, $reflection, 'topP', TopP::class),
+            topP: self::resolveNumeric($agent, $reflection, 'topP', TopP::class),
+            serviceTier: self::resolveString($agent, $reflection, 'serviceTier', ServiceTier::class),
         );
     }
 
     /**
-     * Resolve an option from the agent's method, falling back to the attribute.
+     * Resolve a numeric option from the agent's method, falling back to the attribute.
      *
      * @param  class-string  $attribute
      */
-    private static function resolve(Agent $agent, ReflectionClass $reflection, string $method, string $attribute): int|float|null
+    private static function resolveNumeric(Agent $agent, ReflectionClass $reflection, string $method, string $attribute): int|float|null
+    {
+        return self::resolveValue($agent, $reflection, $method, $attribute);
+    }
+
+    /**
+     * Resolve a string option from the agent's method, falling back to the attribute.
+     *
+     * The method or attribute may yield a raw string or any backed enum (e.g. a
+     * provider service tier enum); both normalize down to the string value. An
+     * empty string is treated as "unset" so it is never forwarded to a provider.
+     *
+     * @param  class-string  $attribute
+     */
+    private static function resolveString(Agent $agent, ReflectionClass $reflection, string $method, string $attribute): ?string
+    {
+        $value = self::resolveValue($agent, $reflection, $method, $attribute);
+
+        $value = $value instanceof BackedEnum ? (string) $value->value : $value;
+
+        return $value ?: null;
+    }
+
+    /**
+     * Resolve a raw option value from the agent's method, falling back to the attribute.
+     *
+     * @param  class-string  $attribute
+     */
+    private static function resolveValue(Agent $agent, ReflectionClass $reflection, string $method, string $attribute): mixed
     {
         if (method_exists($agent, $method)) {
             try {

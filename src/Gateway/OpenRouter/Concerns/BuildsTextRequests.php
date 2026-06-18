@@ -46,6 +46,7 @@ trait BuildsTextRequests
         $body = array_merge($body, Arr::whereNotNull([
             'temperature' => $options?->temperature,
             'top_p' => $options?->topP,
+            'service_tier' => $options?->serviceTier,
         ]));
 
         $providerOptions = $options?->providerOptions($provider->driver());

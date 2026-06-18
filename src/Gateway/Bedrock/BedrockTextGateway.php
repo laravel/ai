@@ -672,6 +672,10 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             $parameters['inferenceConfig'] = $inferenceConfig;
         }
 
+        if ($options?->serviceTier !== null) {
+            $parameters['serviceTier'] = ['type' => $options->serviceTier];
+        }
+
         $providerOptions = $options?->providerOptions(Lab::Bedrock);
 
         if (! empty($providerOptions)) {
