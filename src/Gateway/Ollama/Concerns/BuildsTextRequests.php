@@ -69,6 +69,17 @@ trait BuildsTextRequests
 
         $providerOptions = $options?->providerOptions($provider->driver()) ?? [];
 
+        // Hoist keys that belong at the top level, as everything else is passed in options.
+        $topLevelKeys = ['format', 'keep_alive', 'think', 'logprobs', 'top_logprobs'];
+
+        foreach ($topLevelKeys as $key) {
+            if (array_key_exists($key, $providerOptions)) {
+                // A schema-driven format already on the body wins.
+                $body[$key] ??= $providerOptions[$key];
+                unset($providerOptions[$key]);
+            }
+        }
+
         $mergedOptions = array_merge($ollamaOptions, $providerOptions);
 
         if (filled($mergedOptions)) {
