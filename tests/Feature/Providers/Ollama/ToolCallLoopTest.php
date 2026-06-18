@@ -11,6 +11,31 @@ beforeEach(function () {
     ]]);
 });
 
+test('tool-loop follow-up uses the original request model, not the response model', function () {
+    Http::fake([
+        '*' => Http::sequence([
+            fakeUniqueOllamaToolCallResponse(),
+            $this->fakeTextResponse('Done'),
+        ]),
+    ]);
+
+    $response = (new ToolUsingAgent(fixed: true))->prompt(
+        'Generate a number',
+        provider: 'ollama',
+        model: 'llama3.1',
+    );
+
+    $recorded = Http::recorded();
+
+    expect($recorded)->toHaveCount(2);
+
+    $followUp = json_decode($recorded[1][0]->body(), true);
+
+    expect($followUp['model'])->toBe('llama3.1')
+        ->and($followUp['model'])->not->toBe('llama3.1:8b')
+        ->and($response->meta->model)->toBe('llama3.1:8b');
+});
+
 test('tool calls trigger follow up request', function () {
     Http::fake([
         '*' => Http::sequence([

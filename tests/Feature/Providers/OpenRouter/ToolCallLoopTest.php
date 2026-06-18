@@ -17,6 +17,31 @@ beforeEach(function () {
     ]]);
 });
 
+test('tool-loop follow-up uses the original request model, not the response model', function () {
+    Http::fake([
+        '*' => Http::sequence([
+            fakeOpenRouterToolCallResponse(),
+            fakeOpenRouterResponse('Done'),
+        ]),
+    ]);
+
+    $response = agent(tools: [new FixedNumberGenerator])->prompt(
+        'Give me a number',
+        provider: 'openrouter',
+        model: 'anthropic/claude-sonnet-4',
+    );
+
+    $recorded = Http::recorded();
+
+    expect($recorded)->toHaveCount(2);
+
+    $followUp = json_decode($recorded[1][0]->body(), true);
+
+    expect($followUp['model'])->toBe('anthropic/claude-sonnet-4')
+        ->and($followUp['model'])->not->toBe('anthropic/claude-sonnet-4.6')
+        ->and($response->meta->model)->toBe('anthropic/claude-sonnet-4.6');
+});
+
 test('tool calls trigger follow up request', function () {
     Http::fake([
         '*' => Http::sequence([

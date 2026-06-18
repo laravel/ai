@@ -11,6 +11,31 @@ beforeEach(function () {
     ]]);
 });
 
+test('tool-loop follow-up uses the original request model, not the response model', function () {
+    Http::fake([
+        'api.deepseek.com/*' => Http::sequence([
+            fakeUniqueDeepSeekToolCallResponse(),
+            fakeDeepSeekResponse('Done'),
+        ]),
+    ]);
+
+    $response = (new ToolUsingAgent(fixed: true))->prompt(
+        'Generate a number',
+        provider: 'deepseek',
+        model: 'deepseek-reasoner',
+    );
+
+    $recorded = Http::recorded();
+
+    expect($recorded)->toHaveCount(2);
+
+    $followUp = json_decode($recorded[1][0]->body(), true);
+
+    expect($followUp['model'])->toBe('deepseek-reasoner')
+        ->and($followUp['model'])->not->toBe('deepseek-chat')
+        ->and($response->meta->model)->toBe('deepseek-chat');
+});
+
 test('tool calls trigger follow up request', function () {
     Http::fake([
         'api.deepseek.com/*' => Http::sequence([

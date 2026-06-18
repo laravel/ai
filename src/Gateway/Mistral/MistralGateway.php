@@ -83,6 +83,7 @@ class MistralGateway implements EmbeddingGateway, TextGateway, TranscriptionGate
             $instructions,
             $messages,
             $timeout,
+            requestModel: $model,
         );
     }
 

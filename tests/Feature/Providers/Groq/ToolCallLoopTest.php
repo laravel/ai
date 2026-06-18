@@ -11,6 +11,31 @@ beforeEach(function () {
     ]]);
 });
 
+test('tool-loop follow-up uses the original request model, not the response model', function () {
+    Http::fake([
+        'api.groq.com/*' => Http::sequence([
+            fakeUniqueGroqToolCallResponse(),
+            fakeGroqResponse('Done'),
+        ]),
+    ]);
+
+    $response = (new ToolUsingAgent(fixed: true))->prompt(
+        'Generate a number',
+        provider: 'groq',
+        model: 'llama-3.3-70b',
+    );
+
+    $recorded = Http::recorded();
+
+    expect($recorded)->toHaveCount(2);
+
+    $followUp = json_decode($recorded[1][0]->body(), true);
+
+    expect($followUp['model'])->toBe('llama-3.3-70b')
+        ->and($followUp['model'])->not->toBe('openai/gpt-oss-20b')
+        ->and($response->meta->model)->toBe('openai/gpt-oss-20b');
+});
+
 test('tool calls trigger follow up request', function () {
     Http::fake([
         'api.groq.com/*' => Http::sequence([

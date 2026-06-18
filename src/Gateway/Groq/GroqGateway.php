@@ -72,6 +72,7 @@ class GroqGateway implements TextGateway
             $instructions,
             $messages,
             $timeout,
+            requestModel: $model,
         );
     }
 

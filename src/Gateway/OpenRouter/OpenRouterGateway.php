@@ -91,6 +91,7 @@ class OpenRouterGateway implements Gateway
             $instructions,
             $messages,
             $timeout,
+            requestModel: $model,
         );
     }
 

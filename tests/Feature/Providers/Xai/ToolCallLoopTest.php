@@ -10,6 +10,31 @@ beforeEach(function () {
     ]]);
 });
 
+test('tool-loop follow-up uses the original request model, not the response model', function () {
+    Http::fake([
+        '*' => Http::sequence([
+            $this->fakeToolCallResponse(),
+            $this->fakeTextResponse('Done'),
+        ]),
+    ]);
+
+    $response = (new ToolUsingAgent(fixed: true))->prompt(
+        'Generate a number',
+        provider: 'xai',
+        model: 'grok-4-1',
+    );
+
+    $recorded = Http::recorded();
+
+    expect($recorded)->toHaveCount(2);
+
+    $followUp = json_decode($recorded[1][0]->body(), true);
+
+    expect($followUp['model'])->toBe('grok-4-1')
+        ->and($followUp['model'])->not->toBe('grok-4-1-fast-reasoning')
+        ->and($response->meta->model)->toBe('grok-4-1-fast-reasoning');
+});
+
 test('tool calls trigger follow up request', function () {
     Http::fake([
         '*' => Http::sequence([
