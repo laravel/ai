@@ -4,6 +4,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeAgent;
+use Tests\Fixtures\Agents\ServiceTierAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
 
@@ -14,6 +15,16 @@ beforeEach(function () {
         ...config('ai.providers.openrouter'),
         'key' => 'test-key',
     ]]);
+});
+
+test('service tier is included in the request body when set', function () {
+    Http::fake(['*' => fakeOpenRouterResponse('Hello')]);
+
+    (new ServiceTierAgent)->prompt('Hello', provider: 'openrouter');
+
+    Http::assertSent(function (Request $request) {
+        return data_get(json_decode($request->body(), true), 'service_tier') === 'flex';
+    });
 });
 
 test('request includes model and messages', function () {

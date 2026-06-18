@@ -1,6 +1,9 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Enums\Anthropic\ServiceTier;
+use Laravel\Ai\Promptable;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
@@ -27,6 +30,31 @@ describe('request structure', function () {
                 && $body['messages'][0]['role'] === 'user'
                 && $body['messages'][0]['content'][0]['text'] === 'What is Laravel?';
         });
+    });
+
+    test('service tier is included in the request body when set', function () {
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeTextResponse(),
+        ]);
+
+        $agent = new class implements Agent
+        {
+            use Promptable;
+
+            public function instructions(): string
+            {
+                return 'test';
+            }
+
+            public function serviceTier(): ServiceTier
+            {
+                return ServiceTier::Auto;
+            }
+        };
+
+        $agent->prompt('Hi', provider: 'anthropic');
+
+        Http::assertSent(fn ($request) => ($request->data()['service_tier'] ?? null) === 'auto');
     });
 
     test('system instructions are sent as top level system field', function () {

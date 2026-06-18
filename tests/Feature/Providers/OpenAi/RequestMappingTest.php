@@ -2,9 +2,15 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasProviderOptions;
+use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Enums\OpenAi\ServiceTier;
+use Laravel\Ai\Promptable;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeAgent;
 use Tests\Fixtures\Agents\NestedStructuredAgent;
+use Tests\Fixtures\Agents\ServiceTierAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
 
@@ -15,6 +21,56 @@ beforeEach(function () {
         ...config('ai.providers.openai'),
         'key' => 'test-key',
     ]]);
+});
+
+test('service tier is included in the request body when set', function () {
+    Http::fake(['*' => fakeOpenAiResponse('Hello')]);
+
+    (new ServiceTierAgent)->prompt('Hello', provider: 'openai');
+
+    Http::assertSent(function (Request $request) {
+        return data_get(json_decode($request->body(), true), 'service_tier') === 'flex';
+    });
+});
+
+test('service tier is excluded when not set', function () {
+    Http::fake(['*' => fakeOpenAiResponse('Hello')]);
+
+    agent()->prompt('Hello', provider: 'openai');
+
+    Http::assertSent(function (Request $request) {
+        return ! array_key_exists('service_tier', json_decode($request->body(), true));
+    });
+});
+
+test('raw provider options override the resolved service tier', function () {
+    Http::fake(['*' => fakeOpenAiResponse('Hello')]);
+
+    $agent = new class implements Agent, HasProviderOptions
+    {
+        use Promptable;
+
+        public function instructions(): string
+        {
+            return 'test';
+        }
+
+        public function serviceTier(): ServiceTier
+        {
+            return ServiceTier::Flex;
+        }
+
+        public function providerOptions(Lab|string $provider): array
+        {
+            return ['service_tier' => 'priority'];
+        }
+    };
+
+    $agent->prompt('Hello', provider: 'openai');
+
+    Http::assertSent(function (Request $request) {
+        return data_get(json_decode($request->body(), true), 'service_tier') === 'priority';
+    });
 });
 
 test('request includes model and input', function () {

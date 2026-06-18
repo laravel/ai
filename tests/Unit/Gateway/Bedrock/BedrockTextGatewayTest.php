@@ -3,7 +3,11 @@
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Http\Testing\File as TestingFile;
 use Illuminate\Support\Collection;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Enums\Bedrock\ServiceTier;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Files\Document;
@@ -18,6 +22,7 @@ use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
+use Laravel\Ai\Promptable;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Tools\Request;
@@ -619,4 +624,71 @@ test('build converse parameters omits provider options when agent has none', fun
 
     expect($params)->not->toHaveKey('additionalModelRequestFields')
         ->and($params)->not->toHaveKey('guardrailConfig');
+});
+
+test('build converse parameters includes the service tier as a typed object when set', function () {
+    $options = new TextGenerationOptions(serviceTier: 'priority');
+
+    $params = textGateway()->callBuildConverseParameters(
+        'claude-sonnet',
+        null,
+        [['role' => 'user', 'content' => [['text' => 'hi']]]],
+        null,
+        null,
+        true,
+        $options,
+        false,
+    );
+
+    expect($params['serviceTier'])->toEqual(['type' => 'priority']);
+});
+
+test('build converse parameters omits the service tier when not set', function () {
+    $params = textGateway()->callBuildConverseParameters(
+        'claude-sonnet',
+        null,
+        [['role' => 'user', 'content' => [['text' => 'hi']]]],
+        null,
+        null,
+        true,
+        new TextGenerationOptions,
+        false,
+    );
+
+    expect($params)->not->toHaveKey('serviceTier');
+});
+
+test('raw provider options win over the resolved service tier for bedrock', function () {
+    $agent = new class implements Agent, HasProviderOptions
+    {
+        use Promptable;
+
+        public function instructions(): string
+        {
+            return 'test';
+        }
+
+        public function serviceTier(): ServiceTier
+        {
+            return ServiceTier::Flex;
+        }
+
+        public function providerOptions(Lab|string $provider): array
+        {
+            return ['serviceTier' => ['type' => 'priority']];
+        }
+    };
+
+    $params = textGateway()->callBuildConverseParameters(
+        'claude-sonnet',
+        null,
+        [['role' => 'user', 'content' => [['text' => 'hi']]]],
+        null,
+        null,
+        true,
+        TextGenerationOptions::forAgent($agent),
+        false,
+    );
+
+    expect($params['serviceTier'])->toEqual(['type' => 'priority']);
 });
