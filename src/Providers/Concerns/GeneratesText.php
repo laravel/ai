@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Attributes\MaxCost;
 use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
@@ -20,13 +21,16 @@ use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\UserMessage;
+use Laravel\Ai\Middleware\EnforceBudget;
 use Laravel\Ai\Middleware\RememberConversation;
+use Laravel\Ai\Pricing\BudgetMeter;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Tools\AgentTool;
 use Laravel\Ai\Tools\McpServerTool;
 use Laravel\Ai\Tools\McpTool;
+use ReflectionClass;
 
 use function Laravel\Ai\pipeline;
 
@@ -104,6 +108,13 @@ trait GeneratesText
         if (in_array(RemembersConversations::class, class_uses_recursive($agent))
             && $agent->hasConversationParticipant()) {
             $middleware[] = new RememberConversation(resolve(ConversationStore::class), $this);
+        }
+
+        if ($budget = (new ReflectionClass($agent))->getAttributes(MaxCost::class)) {
+            array_unshift($middleware, new EnforceBudget(
+                resolve(BudgetMeter::class),
+                (float) $budget[0]->newInstance()->value,
+            ));
         }
 
         return $agent instanceof HasMiddleware

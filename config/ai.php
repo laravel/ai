@@ -40,6 +40,27 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Model Pricing
+    |--------------------------------------------------------------------------
+    |
+    | Per-model token rates, in USD per 1,000,000 tokens, used to compute the
+    | cost of responses via $response->cost(). Values defined here are merged
+    | over the SDK's built-in defaults, so you only need to list models you
+    | want to add or override. Models without pricing simply report an
+    | "unknown" cost rather than throwing.
+    |
+    */
+
+    'pricing' => [
+        'models' => [
+            // 'openai' => [
+            //     'gpt-4o' => ['input' => 2.50, 'output' => 10.00],
+            // ],
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | AI Providers
     |--------------------------------------------------------------------------
     |

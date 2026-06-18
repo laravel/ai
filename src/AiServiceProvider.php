@@ -12,6 +12,9 @@ use Laravel\Ai\Console\Commands\MakeAgentMiddlewareCommand;
 use Laravel\Ai\Console\Commands\MakeToolCommand;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Pricing\BudgetMeter;
+use Laravel\Ai\Pricing\CostCalculator;
+use Laravel\Ai\Pricing\PriceList;
 use Laravel\Ai\Storage\DatabaseConversationStore;
 
 class AiServiceProvider extends ServiceProvider
@@ -26,6 +29,12 @@ class AiServiceProvider extends ServiceProvider
         $this->app->singleton(ConversationStore::class, fn () => new DatabaseConversationStore(
             config('ai.conversations.connection'),
         ));
+
+        $this->app->singleton(PriceList::class, fn () => new PriceList(
+            config('ai.pricing.models', []),
+        ));
+        $this->app->singleton(CostCalculator::class);
+        $this->app->singleton(BudgetMeter::class);
 
         $this->mergeConfigFrom(__DIR__.'/../config/ai.php', 'ai');
     }

@@ -6,6 +6,8 @@ use Illuminate\Support\Collection;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
+use Laravel\Ai\Pricing\CostCalculator;
+use Laravel\Ai\Responses\Data\Cost;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Step;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -88,6 +90,18 @@ class TextResponse
         $this->steps = $steps;
 
         return $this;
+    }
+
+    /**
+     * Get the estimated cost of the response based on its usage and model pricing.
+     */
+    public function cost(): Cost
+    {
+        return app(CostCalculator::class)->calculate(
+            $this->usage,
+            $this->meta->provider,
+            $this->meta->model,
+        );
     }
 
     /**

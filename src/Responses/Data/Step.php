@@ -4,6 +4,7 @@ namespace Laravel\Ai\Responses\Data;
 
 use Illuminate\Contracts\Support\Arrayable;
 use JsonSerializable;
+use Laravel\Ai\Pricing\CostCalculator;
 
 class Step implements Arrayable, JsonSerializable
 {
@@ -19,6 +20,18 @@ class Step implements Arrayable, JsonSerializable
         public Usage $usage,
         public Meta $meta,
     ) {}
+
+    /**
+     * Get the estimated cost of this step based on its usage and model pricing.
+     */
+    public function cost(): Cost
+    {
+        return app(CostCalculator::class)->calculate(
+            $this->usage,
+            $this->meta->provider,
+            $this->meta->model,
+        );
+    }
 
     /**
      * Get the instance as an array.
