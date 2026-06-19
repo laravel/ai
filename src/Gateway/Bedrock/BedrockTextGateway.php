@@ -594,16 +594,42 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             throw BedrockException::toAiException($e, $provider->name(), $model);
         }
 
-        $embeddings = array_values(array_filter(
-            $result['embeddings'] ?? [],
-            fn ($vector) => is_array($vector),
-        ));
+        $embeddings = $this->parseCohereEmbeddings($result);
+
+        // Cohere's Bedrock response body carries no usage; the input token count
+        // is returned in the `x-amzn-bedrock-input-token-count` response header.
+        $tokens = (int) ($response['@metadata']['headers']['x-amzn-bedrock-input-token-count'] ?? 0);
 
         return new EmbeddingsResponse(
             $embeddings,
-            0,
+            $tokens,
             new Meta($provider->name(), $model),
         );
+    }
+
+    /**
+     * Normalize a Cohere Bedrock embeddings response body into a list of vectors.
+     *
+     * Cohere Embed v4 returns `embeddings` as a type-keyed object
+     * (e.g. {"float": [[...]]}); v3 returned a bare list of vectors. Unwrap the
+     * requested type's vectors when the typed v4 shape is present so first()/all()
+     * yield flat vectors for both generations.
+     *
+     * @param  array<string, mixed>  $result
+     * @return array<int, array<int, float>>
+     */
+    protected function parseCohereEmbeddings(array $result): array
+    {
+        $raw = $result['embeddings'] ?? [];
+
+        if (is_array($raw) && isset($raw['float']) && is_array($raw['float'])) {
+            $raw = $raw['float'];
+        }
+
+        return array_values(array_filter(
+            $raw,
+            fn ($vector) => is_array($vector),
+        ));
     }
 
     /**
