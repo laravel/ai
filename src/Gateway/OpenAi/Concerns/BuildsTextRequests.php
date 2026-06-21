@@ -31,6 +31,9 @@ trait BuildsTextRequests
         return $this->mergeSharedResponsesRequestOptions($body, $tools, $schema, $options, $provider);
     }
 
+    /**
+     * Build the request body for a stateful Responses API continuation.
+     */
     protected function buildContinuationBody(
         Provider $provider,
         string $model,
@@ -49,6 +52,9 @@ trait BuildsTextRequests
         return $this->mergeSharedResponsesRequestOptions($body, $tools, $schema, $options, $provider);
     }
 
+    /**
+     * Merge shared Responses API options onto the given request body.
+     */
     protected function mergeSharedResponsesRequestOptions(
         array $body,
         array $tools,
@@ -94,6 +100,9 @@ trait BuildsTextRequests
         return $body;
     }
 
+    /**
+     * Extract the latest tool results for a stateful continuation request.
+     */
     protected function extractToolResultsInput(array $messages): array
     {
         $lastMessage = end($messages);
@@ -111,6 +120,9 @@ trait BuildsTextRequests
             ->all();
     }
 
+    /**
+     * Determine if OpenAI should receive full stateless conversation history.
+     */
     protected function isStateless(Provider $provider): bool
     {
         return filter_var(
@@ -120,6 +132,9 @@ trait BuildsTextRequests
         ) === false;
     }
 
+    /**
+     * Determine if the model supports encrypted reasoning content.
+     */
     protected function isReasoningModel(string $model): bool
     {
         return (str_starts_with($model, 'gpt-5') && ! str_starts_with($model, 'gpt-5-chat'))

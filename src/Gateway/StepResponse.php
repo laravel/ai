@@ -27,6 +27,9 @@ class StepResponse implements Arrayable, JsonSerializable
         public array $providerContentBlocks = [],
     ) {}
 
+    /**
+     * Get the instance as an array.
+     */
     public function toArray(): array
     {
         return [
@@ -41,6 +44,9 @@ class StepResponse implements Arrayable, JsonSerializable
         ];
     }
 
+    /**
+     * Get the JSON serializable representation of the instance.
+     */
     public function jsonSerialize(): mixed
     {
         return $this->toArray();

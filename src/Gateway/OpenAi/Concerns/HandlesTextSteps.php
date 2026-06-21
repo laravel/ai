@@ -10,6 +10,9 @@ use Laravel\Ai\Gateway\TextGenerationOptions;
 
 trait HandlesTextSteps
 {
+    /**
+     * Generate text for a single Responses API step.
+     */
     public function generateTextStep(
         TextProvider $provider,
         string $model,
@@ -35,6 +38,9 @@ trait HandlesTextSteps
         return $this->parseTextResponse($data, $provider, filled($schema));
     }
 
+    /**
+     * Stream text for a single Responses API step.
+     */
     public function generateStreamStep(
         string $invocationId,
         TextProvider $provider,
@@ -60,6 +66,9 @@ trait HandlesTextSteps
         return yield from $this->processTextStream($invocationId, $provider, $model, $response->getBody());
     }
 
+    /**
+     * Build the request body for the current text generation step.
+     */
     protected function buildStepBody(
         TextProvider $provider,
         string $model,

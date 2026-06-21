@@ -269,6 +269,9 @@ class TextGenerationLoop
         );
     }
 
+    /**
+     * Build the final text response from all generated steps.
+     */
     protected function buildFinalResponse(
         Collection $steps,
         array $allMessages,

@@ -13,6 +13,9 @@ trait DelegatesToTextGenerationLoop
 {
     protected ?TextGenerationLoop $textGenerationLoop = null;
 
+    /**
+     * Specify callbacks that should be invoked when tools are invoking / invoked.
+     */
     public function onToolInvocation(Closure $invoking, Closure $invoked): self
     {
         $this->textGenerationLoop()->onToolInvocation($invoking, $invoked);
@@ -20,6 +23,9 @@ trait DelegatesToTextGenerationLoop
         return $this;
     }
 
+    /**
+     * Generate text by delegating multi-step orchestration to the text generation loop.
+     */
     public function generateText(
         TextProvider $provider,
         string $model,
@@ -35,6 +41,9 @@ trait DelegatesToTextGenerationLoop
         );
     }
 
+    /**
+     * Stream text by delegating multi-step orchestration to the text generation loop.
+     */
     public function streamText(
         string $invocationId,
         TextProvider $provider,
@@ -51,6 +60,9 @@ trait DelegatesToTextGenerationLoop
         );
     }
 
+    /**
+     * Get the shared text generation loop instance for this gateway.
+     */
     protected function textGenerationLoop(): TextGenerationLoop
     {
         return $this->textGenerationLoop ??= new TextGenerationLoop($this);
