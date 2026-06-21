@@ -26,9 +26,6 @@ trait HandlesTextStreaming
 {
     /**
      * Process a single Anthropic streaming turn and yield Laravel stream events.
-     *
-     * Emits a single StreamEnd at the end of the turn carrying the raw content
-     * blocks for replay, leaving the multi-step loop to the orchestrator.
      */
     protected function processTextStream(
         string $invocationId,

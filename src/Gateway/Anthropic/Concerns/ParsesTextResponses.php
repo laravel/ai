@@ -31,7 +31,7 @@ trait ParsesTextResponses
     }
 
     /**
-     * Parse one Anthropic response into a SingleTurnResponse.
+     * Parse the Anthropic response data into a single step response.
      */
     protected function parseTextResponse(
         array $data,
