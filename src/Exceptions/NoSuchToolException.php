@@ -2,7 +2,7 @@
 
 namespace Laravel\Ai\Exceptions;
 
-class NoSuchToolError extends AiException
+class NoSuchToolException extends AiException
 {
     public function __construct(public readonly string $toolName)
     {

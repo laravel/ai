@@ -8,7 +8,7 @@ use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\Exceptions\NoSuchToolError;
+use Laravel\Ai\Exceptions\NoSuchToolException;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\ToolResultMessage;
@@ -241,7 +241,7 @@ class TextGenerationLoop
             $tool = $this->findTool($toolCall->name, $tools);
 
             if ($tool === null) {
-                throw new NoSuchToolError($toolCall->name);
+                throw new NoSuchToolException($toolCall->name);
             }
 
             return new ToolResult(

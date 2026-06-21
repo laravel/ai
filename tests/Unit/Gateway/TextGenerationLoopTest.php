@@ -4,7 +4,7 @@ use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\Exceptions\NoSuchToolError;
+use Laravel\Ai\Exceptions\NoSuchToolException;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationLoop;
@@ -202,7 +202,7 @@ test('it throws when generation tool calls do not match local tools', function (
         null,
         null,
         null,
-    ))->toThrow(NoSuchToolError::class, "Model tried to call unavailable tool 'MissingTool'.");
+    ))->toThrow(NoSuchToolException::class, "Model tried to call unavailable tool 'MissingTool'.");
 });
 
 test('it throws when streaming tool calls do not match local tools', function () {
@@ -224,7 +224,7 @@ test('it throws when streaming tool calls do not match local tools', function ()
         null,
         null,
         null,
-    )))->toThrow(NoSuchToolError::class);
+    )))->toThrow(NoSuchToolException::class);
 });
 
 test('it emits a terminal stream end when a turn yields no stream end or error', function () {
