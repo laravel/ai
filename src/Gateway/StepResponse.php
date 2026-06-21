@@ -34,13 +34,13 @@ class StepResponse implements Arrayable, JsonSerializable
     {
         return [
             'text' => $this->text,
+            'structured' => $this->structured,
             'tool_calls' => array_map(fn (ToolCall $tc) => $tc->toArray(), $this->toolCalls),
+            'provider_content_blocks' => $this->providerContentBlocks,
             'finish_reason' => $this->finishReason->value,
             'usage' => $this->usage->toArray(),
             'meta' => $this->meta->toArray(),
-            'structured' => $this->structured,
             'continuation_token' => $this->continuationToken,
-            'provider_content_blocks' => $this->providerContentBlocks,
         ];
     }
 

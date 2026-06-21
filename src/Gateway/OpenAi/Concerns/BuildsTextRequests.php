@@ -53,6 +53,26 @@ trait BuildsTextRequests
     }
 
     /**
+     * Extract the latest tool results for a stateful continuation request.
+     */
+    protected function extractToolResultsInput(array $messages): array
+    {
+        $lastMessage = end($messages);
+
+        if (! $lastMessage instanceof ToolResultMessage) {
+            return [];
+        }
+
+        return collect($lastMessage->toolResults)
+            ->map(fn ($toolResult) => [
+                'type' => 'function_call_output',
+                'call_id' => $toolResult->resultId,
+                'output' => $this->serializeToolResultOutput($toolResult->result),
+            ])
+            ->all();
+    }
+
+    /**
      * Merge shared Responses API options onto the given request body.
      */
     protected function mergeSharedResponsesRequestOptions(
@@ -98,26 +118,6 @@ trait BuildsTextRequests
         }
 
         return $body;
-    }
-
-    /**
-     * Extract the latest tool results for a stateful continuation request.
-     */
-    protected function extractToolResultsInput(array $messages): array
-    {
-        $lastMessage = end($messages);
-
-        if (! $lastMessage instanceof ToolResultMessage) {
-            return [];
-        }
-
-        return collect($lastMessage->toolResults)
-            ->map(fn ($toolResult) => [
-                'type' => 'function_call_output',
-                'call_id' => $toolResult->resultId,
-                'output' => $this->serializeToolResultOutput($toolResult->result),
-            ])
-            ->all();
     }
 
     /**
