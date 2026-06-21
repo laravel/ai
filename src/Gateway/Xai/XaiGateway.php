@@ -53,9 +53,7 @@ class XaiGateway implements Gateway, StepTextGateway
         ?int $timeout,
         StepContext $stepContext,
     ): StepResponse {
-        $body = $stepContext->continuationToken
-            ? $this->buildContinuationBody($stepContext->continuationToken, $model, $messages, $tools, $provider, $schema, $options)
-            : $this->buildTextRequestBody($provider, $model, $instructions, $messages, $tools, $schema, $options);
+        $body = $this->buildStepBody($provider, $model, $instructions, $messages, $tools, $schema, $options, $stepContext);
 
         $response = $this->withErrorHandling(
             $provider->name(),
@@ -84,9 +82,7 @@ class XaiGateway implements Gateway, StepTextGateway
         ?int $timeout,
         StepContext $stepContext,
     ): Generator {
-        $body = $stepContext->continuationToken
-            ? $this->buildContinuationBody($stepContext->continuationToken, $model, $messages, $tools, $provider, $schema, $options)
-            : $this->buildTextRequestBody($provider, $model, $instructions, $messages, $tools, $schema, $options);
+        $body = $this->buildStepBody($provider, $model, $instructions, $messages, $tools, $schema, $options, $stepContext);
 
         $body['stream'] = true;
 

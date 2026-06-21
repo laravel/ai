@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\Xai\Concerns;
 
 use Illuminate\Support\Arr;
+use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\ObjectSchema;
@@ -27,6 +28,24 @@ trait BuildsTextRequests
         $body = ['model' => $model, 'input' => $input];
 
         return $this->mergeSharedResponsesRequestOptions($body, $tools, $schema, $options, $provider);
+    }
+
+    /**
+     * Build the request body for the current text generation step.
+     */
+    protected function buildStepBody(
+        Provider $provider,
+        string $model,
+        ?string $instructions,
+        array $messages,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options,
+        StepContext $stepContext,
+    ): array {
+        return $stepContext->continuationToken
+            ? $this->buildContinuationBody($stepContext->continuationToken, $model, $messages, $tools, $provider, $schema, $options)
+            : $this->buildTextRequestBody($provider, $model, $instructions, $messages, $tools, $schema, $options);
     }
 
     /**
