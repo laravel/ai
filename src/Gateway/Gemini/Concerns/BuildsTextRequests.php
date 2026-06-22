@@ -12,9 +12,6 @@ trait BuildsTextRequests
 {
     /**
      * Build the request body for the Gemini generateContent API.
-     *
-     * Returns a tuple of [request body, contents array] so the contents
-     * can be tracked for tool loop history resending.
      */
     protected function buildTextRequestBody(
         Provider $provider,
@@ -26,20 +23,6 @@ trait BuildsTextRequests
     ): array {
         $contents = $this->mapMessagesToContents($messages);
 
-        return [$this->assembleRequestBody($contents, $instructions, $tools, $schema, $options, $provider), $contents];
-    }
-
-    /**
-     * Rebuild the request body for a tool-loop continuation.
-     */
-    protected function rebuildContinuationBody(
-        array $contents,
-        ?string $instructions,
-        array $tools,
-        ?array $schema,
-        ?TextGenerationOptions $options,
-        Provider $provider,
-    ): array {
         return $this->assembleRequestBody($contents, $instructions, $tools, $schema, $options, $provider);
     }
 
