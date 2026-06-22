@@ -38,6 +38,24 @@ dataset('image-providers', [
     'gemini-2.5-flash-image' => ['gemini', 'GEMINI_API_KEY', 'gemini-2.5-flash-image'],
 ]);
 
+dataset('file-providers', [
+    'anthropic' => ['anthropic', 'ANTHROPIC_API_KEY'],
+    'openai' => ['openai', 'OPENAI_API_KEY'],
+    'gemini' => ['gemini', 'GEMINI_API_KEY'],
+    'azure' => ['azure', 'AZURE_OPENAI_API_KEY'],
+]);
+
+dataset('store-providers', [
+    'openai' => ['openai', 'OPENAI_API_KEY'],
+    'gemini' => ['gemini', 'GEMINI_API_KEY'],
+    'azure' => ['azure', 'AZURE_OPENAI_API_KEY'],
+]);
+
+dataset('file-search-providers', [
+    'openai' => ['openai', 'OPENAI_API_KEY'],
+    'azure' => ['azure', 'AZURE_OPENAI_API_KEY'],
+]);
+
 dataset('reranking-providers', [
     'cohere' => ['cohere', 'COHERE_API_KEY'],
     'voyageai' => ['voyageai', 'VOYAGEAI_API_KEY'],

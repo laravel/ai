@@ -2,7 +2,10 @@
 
 namespace Tests\Fixtures\Mcp;
 
-class FakeMcpTool
+use Laravel\Mcp\Client\Primitives\Tool;
+use Laravel\Mcp\Client\Schema\ToolResult;
+
+class FakeMcpTool extends Tool
 {
     /**
      * @param  array<string, mixed>  $inputSchema
@@ -11,21 +14,23 @@ class FakeMcpTool
      * @param  array<string, mixed>|null  $meta
      */
     public function __construct(
-        protected FakeMcpClient $client,
-        public readonly string $name,
-        public readonly ?string $title,
-        public readonly ?string $description,
-        public readonly array $inputSchema,
-        public readonly ?array $outputSchema = null,
-        public readonly array $annotations = [],
-        public readonly ?array $meta = null,
-    ) {}
+        protected FakeMcpClient $fakeClient,
+        string $name,
+        ?string $title,
+        ?string $description,
+        array $inputSchema,
+        ?array $outputSchema = null,
+        array $annotations = [],
+        ?array $meta = null,
+    ) {
+        parent::__construct(null, $name, $title, $description, $inputSchema, $outputSchema, $annotations, $meta);
+    }
 
     /**
      * @param  array<string, mixed>  $arguments
      */
-    public function call(array $arguments = []): FakeMcpToolResult
+    public function call(array $arguments = []): ToolResult
     {
-        return $this->client->callTool($this->name, $arguments);
+        return $this->fakeClient->callTool($this->name, $arguments);
     }
 }

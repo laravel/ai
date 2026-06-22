@@ -8,12 +8,6 @@ use Tests\Fixtures\Mcp\FakeMcpClient;
 use Tests\Fixtures\Mcp\FakeMcpTool;
 use Tests\Fixtures\Mcp\FakeMcpToolResult;
 
-beforeAll(function () {
-    if (! class_exists('Laravel\\Mcp\\Client\\Primitives\\Tool')) {
-        class_alias(FakeMcpTool::class, 'Laravel\\Mcp\\Client\\Primitives\\Tool');
-    }
-});
-
 test('it detects mcp client tool primitives', function () {
     expect([
         McpTool::supports(mcpTool(new FakeMcpClient)),
@@ -150,16 +144,43 @@ test('it resolves $ref against $defs and merges sibling keys', function () {
     ]);
 });
 
-test('it throws when a $ref cannot be resolved', function () {
+test('it drops an unresolvable $ref instead of failing the whole tool', function () {
     $tool = new McpTool(mcpTool(new FakeMcpClient, inputSchema: [
         'type' => 'object',
         'properties' => [
-            'address' => ['$ref' => '#/$defs/Missing'],
+            'address' => ['$ref' => '#/$defs/Missing', 'description' => 'Shipping address.'],
+            'name' => ['type' => 'string'],
+        ],
+        'required' => ['name'],
+    ]));
+
+    $schema = (new ObjectSchema($tool->schema(new JsonSchemaTypeFactory)))->toSchema();
+
+    expect($schema['properties'])->toHaveKeys(['address', 'name']);
+    expect($schema['properties']['address'])->toMatchArray([
+        'type' => 'string',
+        'description' => 'Shipping address.',
+    ]);
+    expect($schema['properties']['name'])->toMatchArray(['type' => 'string']);
+});
+
+test('it keeps the properties of a nullable object root', function () {
+    $tool = new McpTool(mcpTool(new FakeMcpClient, inputSchema: [
+        'anyOf' => [
+            [
+                'type' => 'object',
+                'properties' => ['query' => ['type' => 'string']],
+                'required' => ['query'],
+            ],
+            ['type' => 'null'],
         ],
     ]));
 
-    $tool->schema(new JsonSchemaTypeFactory);
-})->throws(InvalidArgumentException::class, 'Unable to resolve JSON Schema $ref [#/$defs/Missing].');
+    $schema = (new ObjectSchema($tool->schema(new JsonSchemaTypeFactory)))->toSchema();
+
+    expect($schema['properties'])->toHaveKey('query');
+    expect($schema['properties']['query'])->toMatchArray(['type' => 'string']);
+});
 
 test('it marks fields nullable when anyOf or oneOf lists null after the typed branch', function () {
     $tool = new McpTool(mcpTool(new FakeMcpClient, inputSchema: [

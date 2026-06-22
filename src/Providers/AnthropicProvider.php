@@ -4,6 +4,7 @@ namespace Laravel\Ai\Providers;
 
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Providers\FileProvider;
+use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -12,7 +13,7 @@ use Laravel\Ai\Gateway\Anthropic\AnthropicFileGateway;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 
-class AnthropicProvider extends Provider implements FileProvider, SupportsWebFetch, SupportsWebSearch, TextProvider
+class AnthropicProvider extends Provider implements FileProvider, SupportsToolSearch, SupportsWebFetch, SupportsWebSearch, TextProvider
 {
     use Concerns\GeneratesText;
     use Concerns\HasFileGateway;
@@ -52,6 +53,29 @@ class AnthropicProvider extends Provider implements FileProvider, SupportsWebFet
                 ])
                 : null,
         ]) + $search->providerOptions(Lab::Anthropic);
+    }
+
+    /**
+     * Determine if the provider supports hosted tool search for the given model.
+     */
+    public function supportsToolSearch(string $model): bool
+    {
+        if (preg_match('/claude-(?:sonnet|opus)-(\d+)-\d+/', $model, $matches)) {
+            return (int) $matches[1] >= 4;
+        }
+
+        if (preg_match('/claude-haiku-(\d+)-(\d+)/', $model, $matches)) {
+            $major = (int) $matches[1];
+            $minor = (int) $matches[2];
+
+            return $major > 4 || ($major === 4 && $minor >= 5);
+        }
+
+        if (preg_match('/claude-(?:fable|mythos)-(\d+)/', $model, $matches)) {
+            return (int) $matches[1] >= 5;
+        }
+
+        return false;
     }
 
     /**

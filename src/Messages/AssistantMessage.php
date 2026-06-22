@@ -3,9 +3,11 @@
 namespace Laravel\Ai\Messages;
 
 use Illuminate\Support\Collection;
+use Laravel\Ai\Responses\Data\ToolCall;
 
 class AssistantMessage extends Message
 {
+    /** @var Collection<int, ToolCall> */
     public Collection $toolCalls;
 
     /**
@@ -18,6 +20,7 @@ class AssistantMessage extends Message
     /**
      * Create a new text conversation message instance.
      *
+     * @param  Collection<int, ToolCall>|null  $toolCalls
      * @param  array<int, array<string, mixed>>  $providerContentBlocks
      */
     public function __construct(string $content, ?Collection $toolCalls = null, array $providerContentBlocks = [])

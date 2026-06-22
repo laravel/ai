@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
+use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Enums\Lab;
@@ -22,7 +23,7 @@ trait MapsTools
     /**
      * Map the given tools to OpenAI function definitions.
      */
-    protected function mapTools(array $tools, Provider $provider): array
+    protected function mapTools(array $tools, Provider $provider, string $model = ''): array
     {
         $mapped = [];
 
@@ -31,6 +32,8 @@ trait MapsTools
                 if (blank($tool->tools)) {
                     continue;
                 }
+
+                $this->guardToolSearchSupport($provider, $model);
 
                 $mapped[] = ['type' => 'tool_search', ...$tool->providerOptions(Lab::OpenAI)];
 
@@ -45,6 +48,18 @@ trait MapsTools
         }
 
         return $mapped;
+    }
+
+    /**
+     * Ensure the provider and model support hosted tool search.
+     */
+    protected function guardToolSearchSupport(Provider $provider, string $model): void
+    {
+        if (! $provider instanceof SupportsToolSearch || ! $provider->supportsToolSearch($model)) {
+            throw new RuntimeException(
+                "Provider [{$provider->name()}] does not support tool search for model [{$model}]."
+            );
+        }
     }
 
     /**

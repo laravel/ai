@@ -1,5 +1,6 @@
 <?php
 
+use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\OpenAi\Concerns\MapsTools;
 use Laravel\Ai\Providers\Provider;
@@ -13,20 +14,25 @@ function openAiToolSearchMapper(): object
     {
         use MapsTools;
 
-        public function map(array $tools, Provider $provider): array
+        public function map(array $tools, Provider $provider, string $model = 'gpt-5.4'): array
         {
-            return $this->mapTools($tools, $provider);
+            return $this->mapTools($tools, $provider, $model);
         }
     };
 }
 
-function openAiProvider(): Provider
+function openAiToolSearchProvider(): Provider
 {
-    return new class extends Provider
+    return new class extends Provider implements SupportsToolSearch
     {
         public function __construct()
         {
             //
+        }
+
+        public function supportsToolSearch(string $model): bool
+        {
+            return true;
         }
     };
 }
@@ -34,7 +40,7 @@ function openAiProvider(): Provider
 test('emits the tool_search entry and defers the tools nested in the ToolSearch tool', function () {
     $mapped = openAiToolSearchMapper()->map(
         [new NonStrictTool, new ToolSearch(tools: [new DeferredTool])],
-        openAiProvider(),
+        openAiToolSearchProvider(),
     );
 
     $search = collect($mapped)->firstWhere('type', 'tool_search');
@@ -53,7 +59,7 @@ test('forwards provider options onto the tool_search entry', function () {
     $search = (new ToolSearch(tools: [new DeferredTool]))
         ->withProviderOptions(Lab::OpenAI, ['foo' => 'bar']);
 
-    $mapped = openAiToolSearchMapper()->map([new NonStrictTool, $search], openAiProvider());
+    $mapped = openAiToolSearchMapper()->map([new NonStrictTool, $search], openAiToolSearchProvider());
 
     expect(collect($mapped)->firstWhere('type', 'tool_search'))
         ->toBe(['type' => 'tool_search', 'foo' => 'bar']);
@@ -62,7 +68,7 @@ test('forwards provider options onto the tool_search entry', function () {
 test('skips an empty ToolSearch tool without emitting a tool_search entry', function () {
     $mapped = openAiToolSearchMapper()->map(
         [new NonStrictTool, new ToolSearch],
-        openAiProvider(),
+        openAiToolSearchProvider(),
     );
 
     expect($mapped)->toHaveCount(1)
@@ -72,10 +78,53 @@ test('skips an empty ToolSearch tool without emitting a tool_search entry', func
 test('does not emit a tool_search entry when no ToolSearch tool is present', function () {
     $mapped = openAiToolSearchMapper()->map(
         [new NonStrictTool, new DeferredTool],
-        openAiProvider(),
+        openAiToolSearchProvider(),
     );
 
     expect($mapped)->toHaveCount(2)
         ->and(collect($mapped)->pluck('type'))->not->toContain('tool_search')
         ->and(collect($mapped)->contains(fn ($t) => isset($t['defer_loading'])))->toBeFalse();
 });
+
+test('throws when the provider does not support tool search', function () {
+    $provider = new class extends Provider
+    {
+        public function __construct()
+        {
+            //
+        }
+
+        public function name(): string
+        {
+            return 'openai';
+        }
+    };
+
+    openAiToolSearchMapper()->map([new NonStrictTool, new ToolSearch(tools: [new DeferredTool])], $provider);
+})->throws(RuntimeException::class, 'does not support tool search');
+
+test('throws when the model does not support tool search', function () {
+    $provider = new class extends Provider implements SupportsToolSearch
+    {
+        public function __construct()
+        {
+            //
+        }
+
+        public function name(): string
+        {
+            return 'openai';
+        }
+
+        public function supportsToolSearch(string $model): bool
+        {
+            return false;
+        }
+    };
+
+    openAiToolSearchMapper()->map(
+        [new NonStrictTool, new ToolSearch(tools: [new DeferredTool])],
+        $provider,
+        'gpt-5.1',
+    );
+})->throws(RuntimeException::class, 'gpt-5.1');

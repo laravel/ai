@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Tool;
@@ -22,7 +23,7 @@ trait MapsTools
     /**
      * Map the given tools to Anthropic tool definitions.
      */
-    protected function mapTools(array $tools, Provider $provider): array
+    protected function mapTools(array $tools, Provider $provider, string $model = ''): array
     {
         $mapped = [];
         $nonDeferredCount = 0;
@@ -33,6 +34,8 @@ trait MapsTools
                 if (blank($tool->tools)) {
                     continue;
                 }
+
+                $this->guardToolSearchSupport($provider, $model);
 
                 $hasToolSearch = true;
                 $options = $tool->providerOptions(Lab::Anthropic);
@@ -64,6 +67,18 @@ trait MapsTools
         }
 
         return $mapped;
+    }
+
+    /**
+     * Ensure the provider and model support hosted tool search.
+     */
+    protected function guardToolSearchSupport(Provider $provider, string $model): void
+    {
+        if (! $provider instanceof SupportsToolSearch || ! $provider->supportsToolSearch($model)) {
+            throw new LogicException(
+                "Provider [{$provider->name()}] does not support tool search for model [{$model}]."
+            );
+        }
     }
 
     /**
