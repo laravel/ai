@@ -70,7 +70,7 @@ dataset('agent-providers', [
     'mistral' => ['mistral', 'MISTRAL_API_KEY', 'mistral-small-latest'],
     'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4-nano'],
     'openrouter' => ['openrouter', 'OPENROUTER_API_KEY', 'anthropic/claude-haiku-4.5'],
-    'xai' => ['xai', 'XAI_API_KEY', 'grok-4-1-fast-reasoning'],
+    'xai' => ['xai', 'XAI_API_KEY', 'grok-4.20-non-reasoning'],
 ]);
 
 dataset('agent-document-providers', [
@@ -82,7 +82,7 @@ dataset('agent-document-providers', [
 dataset('agent-image-providers', [
     'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4-nano'],
     'gemini' => ['gemini', 'GEMINI_API_KEY', 'gemini-3.1-flash-lite'],
-    'xai' => ['xai', 'XAI_API_KEY', 'grok-4-1-fast-reasoning'],
+    'xai' => ['xai', 'XAI_API_KEY', 'grok-4.20-non-reasoning'],
 ]);
 
 dataset('tool-replay-providers', [
