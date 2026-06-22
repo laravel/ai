@@ -69,10 +69,15 @@ test('streaming handles tool calls', function () {
 
     $toolCallEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolCallEvent));
     $toolResultEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolResultEvent));
+    $streamEndEvents = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd));
 
     expect($toolCallEvents)->not->toBeEmpty()
         ->and($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator')
-        ->and($toolResultEvents)->not->toBeEmpty();
+        ->and($toolResultEvents)->not->toBeEmpty()
+        ->and($streamEndEvents)->toHaveCount(1)
+        ->and($streamEndEvents[0]->reason)->toBe(FinishReason::Stop->value)
+        ->and($streamEndEvents[0]->usage->promptTokens)->toBe(30)
+        ->and($streamEndEvents[0]->usage->completionTokens)->toBe(15);
 });
 
 test('streaming captures usage', function () {
