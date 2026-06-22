@@ -134,8 +134,7 @@ trait MapsMessages
     }
 
     /**
-     * Ensure tool_use and server_tool_use content blocks have their input cast to
-     * object so that empty inputs are encoded as `{}` rather than `[]` for replay.
+     * Ensure tool_use and server_tool_use content blocks encode empty input as an object for replay.
      */
     protected function ensureToolInputIsObject(array $content): array
     {
