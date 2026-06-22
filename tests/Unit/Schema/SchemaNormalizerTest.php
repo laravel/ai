@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\JsonSchema\JsonSchema as JsonSchemaFactory;
+use Illuminate\JsonSchema\Serializer;
 use Illuminate\JsonSchema\Types\ObjectType;
 use Laravel\Ai\Schema\SchemaNormalizer;
 
@@ -301,6 +302,76 @@ test('it preserves anyOf compositions when the framework deserializer supports t
         'enum' => ['article'],
         'type' => 'string',
     ]);
+})->skip(! supportsNativeAnyOf(), 'The installed Illuminate JSON schema package does not support anyOf.');
+
+test('it folds outer object siblings into each branch so the deserializer keeps them', function () {
+    $normalized = normalizesWithoutThrowing([
+        'type' => 'object',
+        'properties' => ['kind' => ['type' => 'string']],
+        'required' => ['kind'],
+        'anyOf' => [
+            ['type' => 'object', 'properties' => ['name' => ['type' => 'string']], 'required' => ['name']],
+            ['type' => 'object', 'properties' => ['age' => ['type' => 'integer']], 'required' => ['age']],
+        ],
+    ]);
+
+    expect($normalized)->not->toHaveKey('properties');
+    expect($normalized['anyOf'])->toHaveCount(2);
+
+    expect($normalized['anyOf'][0]['properties'])->toHaveKeys(['kind', 'name']);
+    expect($normalized['anyOf'][0]['required'])->toEqualCanonicalizing(['kind', 'name']);
+    expect($normalized['anyOf'][1]['properties'])->toHaveKeys(['kind', 'age']);
+    expect($normalized['anyOf'][1]['required'])->toEqualCanonicalizing(['kind', 'age']);
+})->skip(! supportsNativeAnyOf(), 'The installed Illuminate JSON schema package does not support anyOf.');
+
+test('it keeps the shared base property after round-tripping a sibling anyOf through the deserializer', function () {
+    $type = JsonSchemaFactory::fromArray(SchemaNormalizer::normalize([
+        'type' => 'object',
+        'properties' => ['kind' => ['type' => 'string']],
+        'required' => ['kind'],
+        'anyOf' => [
+            ['type' => 'object', 'properties' => ['name' => ['type' => 'string']], 'required' => ['name']],
+            ['type' => 'object', 'properties' => ['age' => ['type' => 'integer']], 'required' => ['age']],
+        ],
+    ]));
+
+    expect(json_encode((new Serializer)->serialize($type)))->toContain('"kind"');
+})->skip(! supportsNativeAnyOf(), 'The installed Illuminate JSON schema package does not support anyOf.');
+
+test('it keeps the outer description on a preserved anyOf composition', function () {
+    $normalized = normalizesWithoutThrowing([
+        'description' => 'A union.',
+        'anyOf' => [['type' => 'string'], ['type' => 'integer']],
+    ]);
+
+    expect($normalized['description'])->toBe('A union.');
+    expect($normalized['anyOf'])->toHaveCount(2);
+})->skip(! supportsNativeAnyOf(), 'The installed Illuminate JSON schema package does not support anyOf.');
+
+test('it drops empty branches from a preserved anyOf instead of inventing a string branch', function () {
+    $normalized = normalizesWithoutThrowing([
+        'type' => 'object',
+        'properties' => [
+            'v' => ['anyOf' => [[], ['type' => 'string'], ['type' => 'integer']]],
+        ],
+    ]);
+
+    expect($normalized['properties']['v']['anyOf'])->toBe([
+        ['type' => 'string'],
+        ['type' => 'integer'],
+    ]);
+})->skip(! supportsNativeAnyOf(), 'The installed Illuminate JSON schema package does not support anyOf.');
+
+test('it drops a preserved anyOf made up entirely of null branches', function () {
+    $normalized = normalizesWithoutThrowing([
+        'type' => 'object',
+        'properties' => [
+            'v' => ['anyOf' => [['type' => 'null'], ['type' => 'null']]],
+        ],
+    ]);
+
+    expect($normalized['properties']['v'])->not->toHaveKey('anyOf');
+    expect($normalized['properties']['v']['type'])->toBe('string');
 })->skip(! supportsNativeAnyOf(), 'The installed Illuminate JSON schema package does not support anyOf.');
 
 test('it types heterogeneous, empty, and homogeneous enums without throwing', function (array $enum, $expected) {

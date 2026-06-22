@@ -217,6 +217,12 @@ class SchemaNormalizer
     /**
      * Keep anyOf compositions intact when the installed deserializer supports them.
      *
+     * The deserializer builds an anyOf composition from the branches alone and keeps only
+     * the keywords applied to every type (title, description, enum, default); any structural
+     * sibling (type, properties, required, items, constraints) would be silently dropped. To
+     * preserve them we fold the siblings into each branch, which is equivalent since
+     * "base AND (A OR B)" distributes to "(base AND A) OR (base AND B)".
+     *
      * @param  array<string, mixed>  $schema
      * @param  array<string, mixed>  $root
      * @param  array<string, true>  $seen
@@ -228,26 +234,36 @@ class SchemaNormalizer
             return $schema;
         }
 
+        $carry = ['anyOf' => true, 'title' => true, 'description' => true, 'enum' => true, 'default' => true];
+        $base = array_diff_key($schema, $carry);
+
         $branches = [];
+        $resolved = false;
 
         foreach ($schema['anyOf'] as $branch) {
-            if (! is_array($branch)) {
+            if (! is_array($branch) || $branch === []) {
                 continue;
             }
 
             [$branch, $branchSeen] = $this->inlineRefs($branch, $root, $seen);
 
-            $branches[] = $this->isNullBranch($branch)
-                ? ['type' => 'null']
-                : $this->node($branch, $root, $branchSeen);
+            if ($this->isNullBranch($branch)) {
+                $branches[] = ['type' => 'null'];
+
+                continue;
+            }
+
+            $branches[] = $this->node($base === [] ? $branch : $this->mergeSchema($base, $branch), $root, $branchSeen);
+            $resolved = true;
         }
 
-        if ($branches === []) {
+        if (! $resolved) {
             unset($schema['anyOf']);
 
             return $schema;
         }
 
+        $schema = array_intersect_key($schema, $carry);
         $schema['anyOf'] = $branches;
 
         return $schema;
