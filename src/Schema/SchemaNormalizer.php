@@ -217,12 +217,6 @@ class SchemaNormalizer
     /**
      * Keep anyOf compositions intact when the installed deserializer supports them.
      *
-     * The deserializer builds an anyOf composition from the branches alone and keeps only
-     * the keywords applied to every type (title, description, enum, default); any structural
-     * sibling (type, properties, required, items, constraints) would be silently dropped. To
-     * preserve them we fold the siblings into each branch, which is equivalent since
-     * "base AND (A OR B)" distributes to "(base AND A) OR (base AND B)".
-     *
      * @param  array<string, mixed>  $schema
      * @param  array<string, mixed>  $root
      * @param  array<string, true>  $seen
@@ -246,6 +240,10 @@ class SchemaNormalizer
             }
 
             [$branch, $branchSeen] = $this->inlineRefs($branch, $root, $seen);
+
+            if ($branch === []) {
+                continue;
+            }
 
             if ($this->isNullBranch($branch)) {
                 $branches[] = ['type' => 'null'];

@@ -362,6 +362,18 @@ test('it drops empty branches from a preserved anyOf instead of inventing a stri
     ]);
 })->skip(! supportsNativeAnyOf(), 'The installed Illuminate JSON schema package does not support anyOf.');
 
+test('it drops a cyclic anyOf branch instead of inventing a string branch', function () {
+    $normalized = normalizesWithoutThrowing([
+        'type' => 'object',
+        'properties' => ['node' => ['$ref' => '#/$defs/Node']],
+        '$defs' => [
+            'Node' => ['anyOf' => [['$ref' => '#/$defs/Node'], ['type' => 'integer']]],
+        ],
+    ]);
+
+    expect($normalized['properties']['node']['anyOf'])->toBe([['type' => 'integer']]);
+})->skip(! supportsNativeAnyOf(), 'The installed Illuminate JSON schema package does not support anyOf.');
+
 test('it drops a preserved anyOf made up entirely of null branches', function () {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
