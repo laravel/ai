@@ -4,9 +4,7 @@ namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Generator;
 use Illuminate\Support\Str;
-use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
-use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\UrlCitation;
 use Laravel\Ai\Responses\Data\Usage;
@@ -320,13 +318,13 @@ trait HandlesTextStreaming
             }
         }
 
-        return new StepResponse(
-            text: $currentText,
-            toolCalls: $this->extractToolCalls(array_values($responseContent)),
-            finishReason: $this->extractFinishReason(['stop_reason' => $stopReason]),
+        return $this->buildStepResponse(
+            content: array_values($responseContent),
+            provider: $provider,
+            model: $model,
             usage: $usage ?? new Usage(0, 0),
-            meta: new Meta($provider->name(), $model),
-            providerContentBlocks: array_values($responseContent),
+            finishReason: $this->extractFinishReason(['stop_reason' => $stopReason]),
+            structured: false,
         );
     }
 

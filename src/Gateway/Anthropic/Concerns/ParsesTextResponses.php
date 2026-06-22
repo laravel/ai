@@ -38,14 +38,30 @@ trait ParsesTextResponses
         Provider $provider,
         bool $structured,
     ): StepResponse {
-        $model = $data['model'] ?? '';
-        $content = $data['content'] ?? [];
+        return $this->buildStepResponse(
+            $data['content'] ?? [],
+            $provider,
+            $data['model'] ?? '',
+            $this->extractUsage($data),
+            $this->extractFinishReason($data),
+            $structured,
+        );
+    }
 
+    /**
+     * Build a single step response from Anthropic content blocks.
+     */
+    protected function buildStepResponse(
+        array $content,
+        Provider $provider,
+        string $model,
+        Usage $usage,
+        FinishReason $finishReason,
+        bool $structured,
+    ): StepResponse {
         $text = $this->extractText($content);
         $toolCalls = $this->extractToolCalls($content);
         $citations = $this->extractCitations($content);
-        $usage = $this->extractUsage($data);
-        $finishReason = $this->extractFinishReason($data);
 
         $realToolCalls = array_values(array_filter($toolCalls, fn (ToolCall $tc) => $tc->name !== 'output_structured_data'));
         $hasStructuredToolCall = count($realToolCalls) < count($toolCalls);
