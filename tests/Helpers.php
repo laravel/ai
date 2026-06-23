@@ -27,10 +27,22 @@ function multipartField(Request $request, string $name): ?string
 
 function multipartArrayField(Request $request, string $name): ?array
 {
-    return collect($request->data())
+    $field = collect($request->data())
         ->where('name', $name)
         ->pluck('contents')
         ->first(fn ($contents) => is_array($contents));
+
+    if (is_array($field)) {
+        return $field;
+    }
+
+    $fields = collect($request->data())
+        ->filter(fn ($field) => preg_match('/^'.preg_quote($name, '/').'\[([^\]]+)\]$/', $field['name'] ?? '', $matches) === 1)
+        ->mapWithKeys(fn ($field) => [
+            preg_replace('/^'.preg_quote($name, '/').'\[([^\]]+)\]$/', '$1', $field['name']) => $field['contents'] ?? null,
+        ]);
+
+    return $fields->isEmpty() ? null : $fields->all();
 }
 
 function fakeGroqResponse(string $text = 'Hello'): PromiseInterface
