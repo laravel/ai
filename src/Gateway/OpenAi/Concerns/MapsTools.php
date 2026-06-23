@@ -23,7 +23,7 @@ trait MapsTools
     /**
      * Map the given tools to OpenAI function definitions.
      */
-    protected function mapTools(array $tools, Provider $provider, string $model = ''): array
+    protected function mapTools(array $tools, Provider $provider, string $model = '', bool $stateless = false): array
     {
         $mapped = [];
 
@@ -33,7 +33,7 @@ trait MapsTools
                     continue;
                 }
 
-                $this->guardToolSearchSupport($provider, $model);
+                $this->guardToolSearchSupport($provider, $model, $stateless);
 
                 $mapped[] = ['type' => 'tool_search', ...$tool->providerOptions(Lab::OpenAI)];
 
@@ -53,11 +53,17 @@ trait MapsTools
     /**
      * Ensure the provider and model support hosted tool search.
      */
-    protected function guardToolSearchSupport(Provider $provider, string $model): void
+    protected function guardToolSearchSupport(Provider $provider, string $model, bool $stateless = false): void
     {
         if (! $provider instanceof SupportsToolSearch || ! $provider->supportsToolSearch($model)) {
             throw new RuntimeException(
                 "Provider [{$provider->name()}] does not support tool search for model [{$model}]."
+            );
+        }
+
+        if ($stateless) {
+            throw new RuntimeException(
+                "Provider [{$provider->name()}] does not support tool search when response storage is disabled (store=false)."
             );
         }
     }

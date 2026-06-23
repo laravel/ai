@@ -34,48 +34,19 @@ test('an agent with a ToolSearch tool emits a tool_search entry and defers its n
     });
 });
 
-test('store=false replays hosted tool_search items inline on the follow up request', function () {
+test('rejects a ToolSearch tool when response storage is disabled', function () {
     config(['ai.providers.openai' => [
         ...config('ai.providers.openai'),
         'key' => 'test-key',
         'store' => false,
     ]]);
 
-    Http::fake([
-        'api.openai.com/*' => Http::sequence([
-            Http::response([
-                'id' => 'resp_search_1',
-                'status' => 'completed',
-                'model' => 'gpt-5.4',
-                'output' => [
-                    ['type' => 'tool_search_call', 'id' => 'ts_1', 'status' => 'completed', 'queries' => ['secret']],
-                    ['type' => 'tool_search_output', 'id' => 'tso_1', 'tools' => ['DeferredTool']],
-                    ['type' => 'function_call', 'id' => 'fc_1', 'call_id' => 'call_1', 'name' => 'DeferredTool', 'arguments' => '{}', 'status' => 'completed'],
-                ],
-                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
-            ]),
-            fakeOpenAiResponse('All done'),
-        ]),
-    ]);
+    Http::fake(['*' => fakeOpenAiResponse('ok')]);
 
-    (new OpenAiToolSearchAgent)->prompt('Find the secret', provider: 'openai');
+    expect(fn () => (new OpenAiToolSearchAgent)->prompt('Find the secret', provider: 'openai'))
+        ->toThrow(RuntimeException::class, 'store=false');
 
-    $recorded = Http::recorded();
-    expect($recorded)->toHaveCount(2);
-
-    $followUp = json_decode($recorded[1][0]->body(), true);
-    $input = collect($followUp['input']);
-
-    expect($followUp)->not->toHaveKey('previous_response_id')
-        ->and($followUp['store'] ?? null)->toBeFalse()
-        ->and($input->contains(fn ($i) => ($i['type'] ?? null) === 'tool_search_call' && ($i['id'] ?? null) === 'ts_1'))
-        ->toBeTrue('tool_search_call echoed back inline')
-        ->and($input->contains(fn ($i) => ($i['type'] ?? null) === 'tool_search_output' && ($i['id'] ?? null) === 'tso_1'))
-        ->toBeTrue('tool_search_output echoed back inline')
-        ->and($input->contains(fn ($i) => ($i['type'] ?? null) === 'function_call' && ($i['call_id'] ?? null) === 'call_1'))
-        ->toBeTrue('deferred tool function call resent')
-        ->and($input->contains(fn ($i) => ($i['type'] ?? null) === 'function_call_output' && ($i['call_id'] ?? null) === 'call_1'))
-        ->toBeTrue('deferred tool result included');
+    Http::assertNothingSent();
 });
 
 test('rejects a ToolSearch tool on a model older than gpt-5.4', function () {
