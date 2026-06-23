@@ -69,6 +69,36 @@ test('put file sends multipart upload', function () {
     });
 });
 
+test('put file merges flat provider options into the upload body', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response(['file' => ['name' => 'files/uploaded123']]),
+    ]);
+
+    Document::fromString('Hello, World!', 'text/plain')->as('hello.txt')
+        ->withProviderOptions(['mime_type' => 'image/png'])
+        ->put(provider: 'gemini');
+
+    $request = sentRequest();
+    $fileMetadata = collect($request->data())->firstWhere('name', 'file')['contents'] ?? null;
+
+    expect(multipartField($request, 'mime_type'))->toBe('image/png')
+        ->and($fileMetadata)->toBe(['display_name' => 'hello.txt']);
+});
+
+test('put file provider options shallow-merge replaces the file metadata key', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response(['file' => ['name' => 'files/uploaded123']]),
+    ]);
+
+    Document::fromString('Hello, World!', 'text/plain')->as('hello.txt')
+        ->withProviderOptions(['file' => ['display_name' => 'override.txt']])
+        ->put(provider: 'gemini');
+
+    $fileMetadata = collect(sentRequest()->data())->firstWhere('name', 'file')['contents'] ?? null;
+
+    expect($fileMetadata)->toBe(['display_name' => 'override.txt']);
+});
+
 test('delete file sends correct request', function () {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::response([], 200),

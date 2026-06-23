@@ -19,7 +19,7 @@ test('closure provider options resolve per provider', function () {
         ->and($document->providerOptions(Lab::Anthropic))->toBe([]);
 });
 
-test('closure provider options survive serialization for queued attachments', function () {
+test('closure provider options survive php serialization', function () {
     $document = Document::fromString('Hello')->withProviderOptions(fn (Lab $provider) => match ($provider) {
         Lab::OpenAI => ['purpose' => 'assistants'],
         default => [],
