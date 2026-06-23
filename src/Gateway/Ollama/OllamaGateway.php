@@ -20,6 +20,7 @@ class OllamaGateway implements EmbeddingGateway, TextGateway
 {
     use Concerns\BuildsTextRequests;
     use Concerns\CreatesOllamaClient;
+    use Concerns\ExecutesWebTools;
     use Concerns\HandlesTextStreaming;
     use Concerns\MapsAttachments;
     use Concerns\MapsMessages;

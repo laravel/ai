@@ -234,13 +234,17 @@ trait HandlesTextStreaming
         $toolResults = [];
 
         foreach ($mappedToolCalls as $toolCall) {
-            $tool = $this->findTool($toolCall->name, $tools);
+            if ($webTool = $this->findProviderWebTool($toolCall->name, $tools)) {
+                $result = $this->executeWebTool($webTool, $toolCall->arguments, $provider, $timeout);
+            } else {
+                $tool = $this->findTool($toolCall->name, $tools);
 
-            if ($tool === null) {
-                continue;
+                if ($tool === null) {
+                    continue;
+                }
+
+                $result = $this->executeTool($tool, $toolCall->arguments);
             }
-
-            $result = $this->executeTool($tool, $toolCall->arguments);
 
             $toolResult = new ToolResult(
                 $toolCall->id,

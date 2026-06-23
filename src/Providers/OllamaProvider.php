@@ -6,10 +6,14 @@ use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
+use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
+use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Gateway\Ollama\OllamaGateway;
+use Laravel\Ai\Providers\Tools\WebFetch;
+use Laravel\Ai\Providers\Tools\WebSearch;
 
-class OllamaProvider extends Provider implements EmbeddingProvider, TextProvider
+class OllamaProvider extends Provider implements EmbeddingProvider, SupportsWebFetch, SupportsWebSearch, TextProvider
 {
     use Concerns\GeneratesEmbeddings;
     use Concerns\GeneratesText;
@@ -32,6 +36,24 @@ class OllamaProvider extends Provider implements EmbeddingProvider, TextProvider
         return [
             'key' => $this->config['key'] ?? '',
         ];
+    }
+
+    /**
+     * Get the web search tool options for the provider.
+     */
+    public function webSearchToolOptions(WebSearch $search): array
+    {
+        return array_filter([
+            'max_results' => $search->maxSearches,
+        ], fn ($value) => ! is_null($value));
+    }
+
+    /**
+     * Get the web fetch tool options for the provider.
+     */
+    public function webFetchToolOptions(WebFetch $fetch): array
+    {
+        return [];
     }
 
     /**

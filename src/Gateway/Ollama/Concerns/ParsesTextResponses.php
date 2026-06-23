@@ -120,7 +120,7 @@ trait ParsesTextResponses
 
         if (filled($mappedToolCalls) &&
             $steps->count() < ($maxSteps ?? round(count($tools) * 1.5))) {
-            $toolResults = $this->executeToolCalls($mappedToolCalls, $tools);
+            $toolResults = $this->executeToolCalls($mappedToolCalls, $tools, $provider, $timeout);
 
             $steps->pop();
 
@@ -197,18 +197,22 @@ trait ParsesTextResponses
      * @param  array<Tool>  $tools
      * @return array<ToolResult>
      */
-    protected function executeToolCalls(array $toolCalls, array $tools): array
+    protected function executeToolCalls(array $toolCalls, array $tools, Provider $provider, ?int $timeout = null): array
     {
         $results = [];
 
         foreach ($toolCalls as $toolCall) {
-            $tool = $this->findTool($toolCall->name, $tools);
+            if ($webTool = $this->findProviderWebTool($toolCall->name, $tools)) {
+                $result = $this->executeWebTool($webTool, $toolCall->arguments, $provider, $timeout);
+            } else {
+                $tool = $this->findTool($toolCall->name, $tools);
 
-            if ($tool === null) {
-                continue;
+                if ($tool === null) {
+                    continue;
+                }
+
+                $result = $this->executeTool($tool, $toolCall->arguments);
             }
-
-            $result = $this->executeTool($tool, $toolCall->arguments);
 
             $results[] = new ToolResult(
                 $toolCall->id,

@@ -50,7 +50,7 @@ trait BuildsTextRequests
         ];
 
         if (filled($tools)) {
-            $mappedTools = $this->mapTools($tools);
+            $mappedTools = $this->mapTools($tools, $provider);
 
             if (filled($mappedTools)) {
                 $body['tools'] = $mappedTools;
