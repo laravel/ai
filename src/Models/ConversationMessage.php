@@ -4,6 +4,7 @@ namespace Laravel\Ai\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Laravel\Ai\Ai;
 
 class ConversationMessage extends Model
 {
@@ -48,7 +49,7 @@ class ConversationMessage extends Model
      */
     public function conversation(): BelongsTo
     {
-        return $this->belongsTo(Conversation::class, 'conversation_id');
+        return $this->belongsTo(Ai::conversationModel(), 'conversation_id');
     }
 
     /**

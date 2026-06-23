@@ -4,6 +4,7 @@ namespace Laravel\Ai\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Laravel\Ai\Ai;
 
 class Conversation extends Model
 {
@@ -35,7 +36,7 @@ class Conversation extends Model
      */
     public function messages(): HasMany
     {
-        return $this->hasMany(ConversationMessage::class, 'conversation_id');
+        return $this->hasMany(Ai::messageModel(), 'conversation_id');
     }
 
     /**

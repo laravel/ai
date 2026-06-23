@@ -18,6 +18,8 @@ use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Anthropic\AnthropicGateway;
 use Laravel\Ai\Gateway\Gemini\GeminiGateway;
 use Laravel\Ai\Gateway\OpenAi\OpenAiGateway;
+use Laravel\Ai\Models\Conversation;
+use Laravel\Ai\Models\ConversationMessage;
 use Laravel\Ai\Providers\AnthropicProvider;
 use Laravel\Ai\Providers\AzureOpenAiProvider;
 use Laravel\Ai\Providers\BedrockProvider;
@@ -492,5 +494,45 @@ class AiManager extends MultipleInstanceManager
         $config['name'] = $name;
 
         return $config;
+    }
+
+    /**
+     * Set the conversation model class name.
+     *
+     * @param class-string<\Laravel\Ai\Models\Conversation> $conversationModel
+     */
+    public function useConversationModel(string $conversationModel): void
+    {
+        $this->app['config']['ai.conversation_model'] = $conversationModel;
+    }
+
+    /**
+     * Get the conversation model class name.
+     *
+     * @return class-string<\Laravel\Ai\Models\Conversation>
+     */
+    public function conversationModel(): string
+    {
+        return $this->app['config']['ai.conversation_model'] ?? Conversation::class;
+    }
+
+    /**
+     * Set the conversation message model class name.
+     *
+     * @param class-string<\Laravel\Ai\Models\ConversationMessage> $conversationModel
+     */
+    public function useMessageModel(string $model): void
+    {
+        $this->app['config']['ai.message_model'] = $model;
+    }
+
+    /**
+     * Get the conversation message model class name.
+     *
+     * @return class-string<\Laravel\Ai\Models\ConversationMessage>
+     */
+    public function messageModel(): string
+    {
+        return $this->app['config']['ai.message_model'] ?? ConversationMessage::class;
     }
 }
