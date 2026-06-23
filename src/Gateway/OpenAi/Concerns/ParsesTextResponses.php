@@ -64,17 +64,13 @@ trait ParsesTextResponses
     }
 
     /**
-     * Capture hosted-tool output items (e.g. tool search) that must be replayed verbatim during a stateless continuation; reasoning/function_call/message items are reconstructed separately.
+     * Capture the full ordered response output so a stateless (store=false) continuation can replay it verbatim, preserving the reasoning/tool/message ordering the model produced.
      *
      * @return array<int, array<string, mixed>>
      */
     protected function extractReplayBlocks(array $output): array
     {
-        return array_values(array_filter(
-            $output,
-            fn (mixed $item) => is_array($item)
-                && ! in_array($item['type'] ?? '', ['reasoning', 'function_call', 'message'], true),
-        ));
+        return array_values(array_filter($output, 'is_array'));
     }
 
     /**

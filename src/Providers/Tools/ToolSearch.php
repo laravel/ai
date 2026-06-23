@@ -25,4 +25,17 @@ class ToolSearch extends ProviderTool
 
         return $this;
     }
+
+    /**
+     * Count the given tools for step budgeting, expanding each ToolSearch into its deferred tool count.
+     *
+     * @param  array<mixed>  $tools
+     */
+    public static function budget(array $tools): int
+    {
+        return array_sum(array_map(
+            fn ($tool) => $tool instanceof self ? count($tool->tools) : 1,
+            $tools,
+        ));
+    }
 }

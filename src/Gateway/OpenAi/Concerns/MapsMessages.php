@@ -66,6 +66,8 @@ trait MapsMessages
             foreach ($message->providerContentBlocks as $block) {
                 $input[] = $block;
             }
+
+            return;
         }
 
         if ($message instanceof AssistantMessage && $message->toolCalls->isNotEmpty()) {
