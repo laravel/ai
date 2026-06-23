@@ -79,10 +79,9 @@ test('put file merges flat provider options into the upload body', function () {
         ->put(provider: 'gemini');
 
     $request = sentRequest();
-    $fileMetadata = collect($request->data())->firstWhere('name', 'file')['contents'] ?? null;
 
     expect(multipartField($request, 'mime_type'))->toBe('image/png')
-        ->and($fileMetadata)->toBe(['display_name' => 'hello.txt']);
+        ->and(multipartArrayField($request, 'file'))->toBe(['display_name' => 'hello.txt']);
 });
 
 test('put file provider options shallow-merge replaces the file metadata key', function () {
@@ -94,9 +93,7 @@ test('put file provider options shallow-merge replaces the file metadata key', f
         ->withProviderOptions(['file' => ['display_name' => 'override.txt']])
         ->put(provider: 'gemini');
 
-    $fileMetadata = collect(sentRequest()->data())->firstWhere('name', 'file')['contents'] ?? null;
-
-    expect($fileMetadata)->toBe(['display_name' => 'override.txt']);
+    expect(multipartArrayField(sentRequest(), 'file'))->toBe(['display_name' => 'override.txt']);
 });
 
 test('delete file sends correct request', function () {

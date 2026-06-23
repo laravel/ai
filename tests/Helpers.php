@@ -25,6 +25,14 @@ function multipartField(Request $request, string $name): ?string
     return collect($request->data())->firstWhere('name', $name)['contents'] ?? null;
 }
 
+function multipartArrayField(Request $request, string $name): ?array
+{
+    return collect($request->data())
+        ->where('name', $name)
+        ->pluck('contents')
+        ->first(fn ($contents) => is_array($contents));
+}
+
 function fakeGroqResponse(string $text = 'Hello'): PromiseInterface
 {
     return Http::response([
