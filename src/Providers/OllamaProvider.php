@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Providers;
 
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Support\Arr;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
@@ -43,9 +44,9 @@ class OllamaProvider extends Provider implements EmbeddingProvider, SupportsWebF
      */
     public function webSearchToolOptions(WebSearch $search): array
     {
-        return array_filter([
+        return Arr::whereNotNull([
             'max_results' => $search->maxSearches,
-        ], fn ($value) => ! is_null($value));
+        ]);
     }
 
     /**

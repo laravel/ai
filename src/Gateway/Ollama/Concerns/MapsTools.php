@@ -58,6 +58,14 @@ trait MapsTools
             throw new RuntimeException('Provider ['.$provider->name().'] does not support web search.');
         }
 
+        if (filled($tool->allowedDomains)) {
+            throw new RuntimeException('Ollama web search does not support restricting allowed domains.');
+        }
+
+        if ($tool->hasLocation()) {
+            throw new RuntimeException('Ollama web search does not support location-based results.');
+        }
+
         return [
             'type' => 'function',
             'function' => [
@@ -88,6 +96,10 @@ trait MapsTools
     {
         if (! $provider instanceof SupportsWebFetch) {
             throw new RuntimeException('Provider ['.$provider->name().'] does not support web fetch.');
+        }
+
+        if (filled($tool->allowedDomains)) {
+            throw new RuntimeException('Ollama web fetch does not support restricting allowed domains.');
         }
 
         return [

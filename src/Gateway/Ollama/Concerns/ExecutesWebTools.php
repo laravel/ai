@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway\Ollama\Concerns;
 
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Exceptions\AiException;
@@ -9,9 +10,26 @@ use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\ProviderTool;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
+use Laravel\Ai\Responses\Data\ToolCall;
 
 trait ExecutesWebTools
 {
+    /**
+     * Resolve a tool call to its result, or null when no matching tool is registered.
+     */
+    protected function resolveToolResult(ToolCall $toolCall, array $tools, Provider $provider, ?int $timeout): ?string
+    {
+        if ($webTool = $this->findProviderWebTool($toolCall->name, $tools)) {
+            return $this->executeWebTool($webTool, $toolCall->arguments, $provider, $timeout);
+        }
+
+        $tool = $this->findTool($toolCall->name, $tools);
+
+        return $tool === null
+            ? null
+            : $this->executeTool($tool, $toolCall->arguments);
+    }
+
     /**
      * Find a provider web tool matching the given tool call name.
      */
@@ -48,14 +66,16 @@ trait ExecutesWebTools
 
         [$endpoint, $body] = $tool instanceof WebSearch
             ? ['api/web_search', $this->webSearchRequestBody($tool, $arguments, $provider)]
-            : ['api/web_fetch', array_filter(['url' => $arguments['url'] ?? null], fn ($value) => ! is_null($value))];
+            : ['api/web_fetch', $this->webFetchRequestBody($arguments)];
 
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $client->post($endpoint, $body),
         );
 
-        return json_encode($response->json()) ?: '{}';
+        $data = $response->json();
+
+        return $data === null ? '{}' : (json_encode($data) ?: '{}');
     }
 
     /**
@@ -67,10 +87,22 @@ trait ExecutesWebTools
             ? $provider->webSearchToolOptions($tool)
             : [];
 
-        return array_filter([
+        $maxResults = $options['max_results'] ?? $arguments['max_results'] ?? null;
+
+        return Arr::whereNotNull([
             'query' => $arguments['query'] ?? null,
-            'max_results' => $options['max_results'] ?? $arguments['max_results'] ?? null,
-        ], fn ($value) => ! is_null($value));
+            'max_results' => is_null($maxResults) ? null : min((int) $maxResults, 10),
+        ]);
+    }
+
+    /**
+     * Build the request body for an Ollama web fetch call.
+     */
+    protected function webFetchRequestBody(array $arguments): array
+    {
+        return Arr::whereNotNull([
+            'url' => $arguments['url'] ?? null,
+        ]);
     }
 
     /**

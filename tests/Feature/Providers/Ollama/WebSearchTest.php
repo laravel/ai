@@ -117,6 +117,43 @@ test('web search without an API key throws', function () {
         ->toThrow(AiException::class);
 });
 
+test('web search with allowed domains throws', function () {
+    Http::fake(['*' => $this->fakeTextResponse('done')]);
+
+    expect(fn () => agent(tools: [(new WebSearch)->allow(['laravel.com'])])->prompt('Search', provider: 'ollama'))
+        ->toThrow(RuntimeException::class, 'Ollama web search does not support restricting allowed domains.');
+});
+
+test('web search with a location throws', function () {
+    Http::fake(['*' => $this->fakeTextResponse('done')]);
+
+    expect(fn () => agent(tools: [(new WebSearch)->location(city: 'Indore')])->prompt('Search', provider: 'ollama'))
+        ->toThrow(RuntimeException::class, 'Ollama web search does not support location-based results.');
+});
+
+test('web fetch with allowed domains throws', function () {
+    Http::fake(['*' => $this->fakeTextResponse('done')]);
+
+    expect(fn () => agent(tools: [(new WebFetch)->allow(['laravel.com'])])->prompt('Fetch', provider: 'ollama'))
+        ->toThrow(RuntimeException::class, 'Ollama web fetch does not support restricting allowed domains.');
+});
+
+test('web search max results is capped at ten', function () {
+    Http::fake([
+        'https://ollama.com/api/web_search*' => Http::response(['results' => []]),
+        'http://localhost:11434/*' => Http::sequence([
+            fakeOllamaWebSearchToolCall(['query' => 'laravel', 'max_results' => 50]),
+            $this->fakeTextResponse('Done.'),
+        ]),
+    ]);
+
+    agent(tools: [new WebSearch])->prompt('What is Laravel?', provider: 'ollama');
+
+    Http::assertSent(fn (Request $request) => str_contains($request->url(), 'ollama.com/api/web_search')
+        ? $request['max_results'] === 10
+        : true);
+});
+
 test('streaming executes a web search tool call', function () {
     Http::fake([
         'https://ollama.com/api/web_search*' => Http::response([
