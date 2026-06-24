@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\Gemini\Concerns;
 
 use Illuminate\Support\Arr;
+use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
@@ -10,6 +11,22 @@ use Laravel\Ai\Responses\Data\ToolResult;
 
 trait BuildsTextRequests
 {
+    /**
+     * Build the request body for the current text generation step.
+     */
+    protected function buildStepBody(
+        Provider $provider,
+        string $model,
+        ?string $instructions,
+        array $messages,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options,
+        StepContext $stepContext,
+    ): array {
+        return $this->buildTextRequestBody($provider, $instructions, $messages, $tools, $schema, $options);
+    }
+
     /**
      * Build the request body for the Gemini generateContent API.
      */

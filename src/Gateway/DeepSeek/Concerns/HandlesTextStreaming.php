@@ -206,7 +206,6 @@ trait HandlesTextStreaming
             finishReason: $this->extractFinishReason(['finish_reason' => $finishReason ?? '']),
             usage: $usage ?? new Usage(0, 0),
             meta: new Meta($provider->name(), $responseModel),
-            continuationToken: null,
             providerContentBlocks: $providerContentBlocks,
         );
     }

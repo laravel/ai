@@ -67,7 +67,6 @@ trait ParsesTextResponses
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model),
             structured: $structured ? (json_decode($text, true) ?? []) : null,
-            continuationToken: null,
             providerContentBlocks: $providerContentBlocks,
         );
     }
