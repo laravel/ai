@@ -29,6 +29,7 @@ use Laravel\Ai\Providers\GroqProvider;
 use Laravel\Ai\Providers\JinaProvider;
 use Laravel\Ai\Providers\MistralProvider;
 use Laravel\Ai\Providers\OllamaProvider;
+use Laravel\Ai\Providers\OpenAiCompatibleProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Providers\OpenRouterProvider;
 use Laravel\Ai\Providers\Provider;
@@ -408,6 +409,17 @@ class AiManager extends MultipleInstanceManager
     {
         return new OpenAiProvider(
             new OpenAiGateway($this->app['events']),
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create an OpenAI-compatible powered instance.
+     */
+    public function createOpenaicompatibleDriver(array $config): OpenAiCompatibleProvider
+    {
+        return new OpenAiCompatibleProvider(
             $config,
             $this->app->make(Dispatcher::class)
         );

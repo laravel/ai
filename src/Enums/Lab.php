@@ -16,6 +16,7 @@ enum Lab: string
     case Mistral = 'mistral';
     case Ollama = 'ollama';
     case OpenAI = 'openai';
+    case OpenAiCompatible = 'openaicompatible';
     case OpenRouter = 'openrouter';
     case VoyageAI = 'voyageai';
     case xAI = 'xai';

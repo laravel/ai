@@ -1,15 +1,16 @@
 <?php
 
-namespace Laravel\Ai\Gateway\OpenRouter\Concerns;
+namespace Laravel\Ai\Gateway\OpenAiCompatible\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Tools\ProviderTool;
 use Laravel\Ai\Tools\ToolNameResolver;
 use RuntimeException;
 
-trait MapsTools
+trait MapsChatCompletionTools
 {
     /**
      * Map the given tools to Chat Completions function definitions.
@@ -20,7 +21,7 @@ trait MapsTools
 
         foreach ($tools as $tool) {
             if ($tool instanceof ProviderTool) {
-                throw new RuntimeException('OpenRouter does not support ['.class_basename($tool).'] provider tools.');
+                throw new RuntimeException(Str::of(class_basename($this))->before('Gateway').' does not support ['.class_basename($tool).'] provider tools.');
             }
 
             if ($tool instanceof Tool) {

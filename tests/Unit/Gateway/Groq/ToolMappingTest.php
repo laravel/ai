@@ -2,13 +2,13 @@
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\Gateway\Groq\Concerns\MapsTools;
+use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionTools;
 use Laravel\Ai\Tools\Request;
 
 test('tool parameters are not wrapped in schema definition', function () {
     $mapper = new class
     {
-        use MapsTools;
+        use MapsChatCompletionTools;
 
         public function map(array $tools): array
         {
@@ -54,7 +54,7 @@ test('tool parameters are not wrapped in schema definition', function () {
 test('tool with empty schema includes parameters', function () {
     $mapper = new class
     {
-        use MapsTools;
+        use MapsChatCompletionTools;
 
         public function map(array $tools): array
         {
