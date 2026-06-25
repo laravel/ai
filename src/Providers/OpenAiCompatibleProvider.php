@@ -20,6 +20,14 @@ class OpenAiCompatibleProvider extends Provider implements TextProvider
     }
 
     /**
+     * Get the credentials for the underlying AI provider.
+     */
+    public function providerCredentials(): array
+    {
+        return ['key' => $this->config['key'] ?? null];
+    }
+
+    /**
      * Get the provider's text gateway.
      */
     public function textGateway(): TextGateway

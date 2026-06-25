@@ -2,6 +2,10 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasProviderOptions;
+use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Promptable;
 use Tests\Fixtures\Agents\AttributeAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
 
@@ -68,6 +72,20 @@ test('request omits authorization header when no key is configured', function ()
     Http::assertSent(fn (Request $request) => ! $request->hasHeader('Authorization'));
 });
 
+test('request works when the key is absent from the config entirely', function () {
+    config(['ai.providers.openai-compatible' => [
+        'driver' => 'openai-compatible',
+        'url' => 'http://localhost:1234/v1',
+        'models' => ['text' => ['default' => 'local-model']],
+    ]]);
+
+    Http::fake(['*' => fakeOpenAiCompatibleResponse('Hello')]);
+
+    agent()->prompt('Hello', provider: 'openai-compatible');
+
+    Http::assertSent(fn (Request $request) => ! $request->hasHeader('Authorization'));
+});
+
 test('structured output defaults to json schema response format', function () {
     Http::fake(['*' => fakeOpenAiCompatibleResponse('{"symbol": "Au"}')]);
 
@@ -120,6 +138,65 @@ test('response usage is parsed using the openai standard shape', function () {
         ->and($response->usage->reasoningTokens)->toBe(10);
 });
 
+test('streaming omits stream_options by default', function () {
+    Http::fake(['*' => fakeOpenAiCompatibleStream()]);
+
+    foreach (agent()->stream('Hello', provider: 'openai-compatible') as $event) {
+        // drain the stream
+    }
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return $body['stream'] === true
+            && ! array_key_exists('stream_options', $body);
+    });
+});
+
+test('streaming sends stream_options when configured on the instance', function () {
+    config(['ai.providers.openai-compatible' => [
+        ...config('ai.providers.openai-compatible'),
+        'stream_options' => ['include_usage' => true],
+    ]]);
+
+    Http::fake(['*' => fakeOpenAiCompatibleStream()]);
+
+    foreach (agent()->stream('Hello', provider: 'openai-compatible') as $event) {
+        // drain the stream
+    }
+
+    Http::assertSent(function (Request $request) {
+        return data_get(json_decode($request->body(), true), 'stream_options.include_usage') === true;
+    });
+});
+
+test('streaming sends stream_options supplied via provider options', function () {
+    Http::fake(['*' => fakeOpenAiCompatibleStream()]);
+
+    $agent = new class implements Agent, HasProviderOptions
+    {
+        use Promptable;
+
+        public function instructions(): string
+        {
+            return 'You are a helpful assistant.';
+        }
+
+        public function providerOptions(Lab|string $provider): array
+        {
+            return ['stream_options' => ['include_usage' => true]];
+        }
+    };
+
+    foreach ($agent->stream('Hello', provider: 'openai-compatible') as $event) {
+        // drain the stream
+    }
+
+    Http::assertSent(function (Request $request) {
+        return data_get(json_decode($request->body(), true), 'stream_options.include_usage') === true;
+    });
+});
+
 function configureOpenAiCompatible(): void
 {
     config(['ai.providers.openai-compatible' => [
@@ -143,4 +220,22 @@ function fakeOpenAiCompatibleResponse(string $content)
         ]],
         'usage' => ['prompt_tokens' => 1, 'completion_tokens' => 1],
     ]);
+}
+
+function fakeOpenAiCompatibleStream()
+{
+    $chunk = fn (array $delta, ?string $finish = null) => 'data: '.json_encode([
+        'id' => 'chatcmpl-123',
+        'object' => 'chat.completion.chunk',
+        'model' => 'local-model',
+        'choices' => [['index' => 0, 'delta' => $delta, 'finish_reason' => $finish]],
+    ]);
+
+    $body = implode("\n\n", [
+        $chunk(['role' => 'assistant', 'content' => 'Hello']),
+        $chunk([], 'stop'),
+        'data: [DONE]',
+    ])."\n\n";
+
+    return Http::response($body, 200, ['Content-Type' => 'text/event-stream']);
 }

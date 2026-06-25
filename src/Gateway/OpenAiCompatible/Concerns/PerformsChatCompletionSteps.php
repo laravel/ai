@@ -7,6 +7,7 @@ use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Providers\Provider;
 
 trait PerformsChatCompletionSteps
 {
@@ -56,7 +57,10 @@ trait PerformsChatCompletionSteps
         $body = $this->buildStepBody($provider, $model, $instructions, $messages, $tools, $schema, $options, $stepContext);
 
         $body['stream'] = true;
-        $body['stream_options'] = ['include_usage' => true];
+
+        if (filled($streamOptions = $this->streamOptions($provider))) {
+            $body['stream_options'] = $streamOptions;
+        }
 
         $response = $this->withErrorHandling(
             $provider->name(),
@@ -66,5 +70,13 @@ trait PerformsChatCompletionSteps
         );
 
         return yield from $this->processTextStream($invocationId, $provider, $model, $response->getBody());
+    }
+
+    /**
+     * Get the stream options sent with a streaming Chat Completions request.
+     */
+    protected function streamOptions(Provider $provider): ?array
+    {
+        return ['include_usage' => true];
     }
 }
