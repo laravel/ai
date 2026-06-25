@@ -71,10 +71,14 @@ test('streaming handles tool calls', function () {
 
     $toolCallEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolCallEvent));
     $toolResultEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolResultEvent));
+    $streamEndEvents = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd));
 
     expect($toolCallEvents)->toHaveCount(1)
         ->and($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator')
-        ->and($toolResultEvents)->toHaveCount(1);
+        ->and($toolResultEvents)->toHaveCount(1)
+        ->and($streamEndEvents)->toHaveCount(1)
+        ->and($events[count($events) - 1])->toBeInstanceOf(StreamEnd::class)
+        ->and($streamEndEvents[0]->reason)->toBe(FinishReason::Stop->value);
 });
 
 test('streaming error event stops stream', function () {

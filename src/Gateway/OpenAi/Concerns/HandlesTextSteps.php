@@ -1,39 +1,17 @@
 <?php
 
-namespace Laravel\Ai\Gateway\DeepSeek;
+namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
 use Generator;
-use Illuminate\Contracts\Events\Dispatcher;
-use Laravel\Ai\Contracts\Gateway\StepTextGateway;
-use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
-use Laravel\Ai\Gateway\Concerns\DelegatesToTextGenerationLoop;
-use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
-use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 
-class DeepSeekGateway implements StepTextGateway, TextGateway
+trait HandlesTextSteps
 {
-    use Concerns\BuildsTextRequests;
-    use Concerns\CreatesDeepSeekClient;
-    use Concerns\HandlesTextStreaming;
-    use Concerns\MapsAttachments;
-    use Concerns\MapsMessages;
-    use Concerns\MapsTools;
-    use Concerns\ParsesTextResponses;
-    use DelegatesToTextGenerationLoop;
-    use HandlesFailoverErrors;
-    use ParsesServerSentEvents;
-
-    public function __construct(protected Dispatcher $events)
-    {
-        //
-    }
-
     /**
-     * Generate text for a single Chat Completions step.
+     * Generate text for a single Responses API step.
      */
     public function generateTextStep(
         TextProvider $provider,
@@ -50,7 +28,7 @@ class DeepSeekGateway implements StepTextGateway, TextGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('chat/completions', $body),
+            fn () => $this->client($provider, $timeout)->post('responses', $body),
         );
 
         $data = $response->json();
@@ -61,7 +39,7 @@ class DeepSeekGateway implements StepTextGateway, TextGateway
     }
 
     /**
-     * Stream text for a single Chat Completions step.
+     * Stream text for a single Responses API step.
      */
     public function generateStreamStep(
         string $invocationId,
@@ -76,17 +54,33 @@ class DeepSeekGateway implements StepTextGateway, TextGateway
         StepContext $stepContext,
     ): Generator {
         $body = $this->buildStepBody($provider, $model, $instructions, $messages, $tools, $schema, $options, $stepContext);
-
         $body['stream'] = true;
-        $body['stream_options'] = ['include_usage' => true];
 
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)
                 ->withOptions(['stream' => true])
-                ->post('chat/completions', $body),
+                ->post('responses', $body),
         );
 
         return yield from $this->processTextStream($invocationId, $provider, $model, $response->getBody());
+    }
+
+    /**
+     * Build the request body for the current text generation step.
+     */
+    protected function buildStepBody(
+        TextProvider $provider,
+        string $model,
+        ?string $instructions,
+        array $messages,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options,
+        StepContext $stepContext,
+    ): array {
+        return $stepContext->continuationToken && ! $this->isStateless($provider)
+            ? $this->buildContinuationBody($provider, $model, $stepContext->continuationToken, $messages, $tools, $schema, $options)
+            : $this->buildTextRequestBody($provider, $model, $instructions, $messages, $tools, $schema, $options);
     }
 }

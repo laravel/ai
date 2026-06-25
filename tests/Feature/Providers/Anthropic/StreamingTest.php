@@ -294,6 +294,6 @@ describe('usage tracking', function () {
         'end_turn maps to Stop' => ['end_turn', FinishReason::Stop],
         'stop_sequence maps to Stop' => ['stop_sequence', FinishReason::Stop],
         'max_tokens maps to Length' => ['max_tokens', FinishReason::Length],
-        'tool_use maps to ToolCalls without tool blocks (StreamEnd still emitted)' => ['tool_use', FinishReason::ToolCalls],
+        'tool_use without tool blocks normalizes to Stop (StreamEnd still emitted)' => ['tool_use', FinishReason::Stop],
     ]);
 });

@@ -3,12 +3,33 @@
 namespace Laravel\Ai\Gateway\Ollama\Concerns;
 
 use Illuminate\Support\Arr;
+use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Gateway\Concerns\ComposesSchemaInstructions;
+use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 
 trait BuildsTextRequests
 {
+    use ComposesSchemaInstructions;
+
+    /**
+     * Build the request body for the current text generation step.
+     */
+    protected function buildStepBody(
+        TextProvider $provider,
+        string $model,
+        ?string $instructions,
+        array $messages,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options,
+        StepContext $stepContext,
+    ): array {
+        return $this->buildTextRequestBody($provider, $model, $instructions, $messages, $tools, $schema, $options);
+    }
+
     /**
      * Build the request body for the Ollama Chat API.
      */
@@ -24,7 +45,7 @@ trait BuildsTextRequests
         return $this->buildChatRequestBody(
             $provider,
             $model,
-            $this->mapMessagesToChat($messages, $instructions),
+            $this->mapMessagesToChat($messages, $this->composeInstructions($instructions, $schema)),
             $tools,
             $schema,
             $options,

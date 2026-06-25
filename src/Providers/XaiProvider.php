@@ -36,7 +36,7 @@ class XaiProvider extends Provider implements ImageProvider, TextProvider
      */
     public function defaultTextModel(): string
     {
-        return $this->config['models']['text']['default'] ?? 'grok-4-1-fast-reasoning';
+        return $this->config['models']['text']['default'] ?? 'grok-4.20-non-reasoning';
     }
 
     /**
@@ -44,7 +44,7 @@ class XaiProvider extends Provider implements ImageProvider, TextProvider
      */
     public function cheapestTextModel(): string
     {
-        return $this->config['models']['text']['cheapest'] ?? 'grok-4-1-fast-reasoning';
+        return $this->config['models']['text']['cheapest'] ?? 'grok-4.20-non-reasoning';
     }
 
     /**
@@ -52,7 +52,7 @@ class XaiProvider extends Provider implements ImageProvider, TextProvider
      */
     public function smartestTextModel(): string
     {
-        return $this->config['models']['text']['smartest'] ?? 'grok-4-1-fast-reasoning';
+        return $this->config['models']['text']['smartest'] ?? 'grok-4.3';
     }
 
     /**
