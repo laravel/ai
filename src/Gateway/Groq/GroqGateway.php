@@ -5,16 +5,14 @@ namespace Laravel\Ai\Gateway\Groq;
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
-use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
-use Laravel\Ai\Gateway\Concerns\DelegatesToTextGenerationLoop;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 
-class GroqGateway implements StepTextGateway, TextGateway
+class GroqGateway implements StepTextGateway
 {
     use Concerns\BuildsTextRequests;
     use Concerns\CreatesGroqClient;
@@ -23,7 +21,6 @@ class GroqGateway implements StepTextGateway, TextGateway
     use Concerns\MapsMessages;
     use Concerns\MapsTools;
     use Concerns\ParsesTextResponses;
-    use DelegatesToTextGenerationLoop;
     use HandlesFailoverErrors;
     use ParsesServerSentEvents;
 

@@ -2,7 +2,8 @@
 
 namespace Laravel\Ai\Contracts\Providers;
 
-use Laravel\Ai\Contracts\Gateway\TextGateway;
+use Laravel\Ai\Contracts\Gateway\StepTextGateway;
+use Laravel\Ai\Gateway\TextGenerationLoop;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StreamableAgentResponse;
@@ -22,12 +23,17 @@ interface TextProvider
     /**
      * Get the provider's text gateway.
      */
-    public function textGateway(): TextGateway;
+    public function textGateway(): StepTextGateway;
 
     /**
      * Set the provider's text gateway.
      */
-    public function useTextGateway(TextGateway $gateway): self;
+    public function useTextGateway(StepTextGateway $gateway): self;
+
+    /**
+     * Get the multi-step text generation loop wrapping the provider's text gateway.
+     */
+    public function textGenerationLoop(): TextGenerationLoop;
 
     /**
      * Get the name of the default text model.

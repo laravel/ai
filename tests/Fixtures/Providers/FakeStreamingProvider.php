@@ -5,8 +5,9 @@ namespace Tests\Fixtures\Providers;
 use BadMethodCallException;
 use Closure;
 use Illuminate\Contracts\Events\Dispatcher;
-use Laravel\Ai\Contracts\Gateway\TextGateway;
+use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Gateway\TextGenerationLoop;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\AgentResponse;
@@ -30,14 +31,19 @@ class FakeStreamingProvider extends Provider implements TextProvider
         throw new BadMethodCallException('FakeStreamingProvider::prompt is not implemented.');
     }
 
-    public function textGateway(): TextGateway
+    public function textGateway(): StepTextGateway
     {
         throw new BadMethodCallException('FakeStreamingProvider::textGateway is not implemented.');
     }
 
-    public function useTextGateway(TextGateway $gateway): self
+    public function useTextGateway(StepTextGateway $gateway): self
     {
         return $this;
+    }
+
+    public function textGenerationLoop(): TextGenerationLoop
+    {
+        throw new BadMethodCallException('FakeStreamingProvider::textGenerationLoop is not implemented.');
     }
 
     public function defaultTextModel(): string
