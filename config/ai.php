@@ -130,15 +130,6 @@ return [
             'driver' => 'openai-compatible',
             'url' => env('OPENAI_COMPATIBLE_URL'),
             'key' => env('OPENAI_COMPATIBLE_API_KEY'),
-            'headers' => [],
-            'response_format' => 'json_schema',
-            'max_tokens_field' => 'max_tokens',
-            'inline_schema' => 'never',
-            'models' => [
-                'text' => [
-                    'default' => env('OPENAI_COMPATIBLE_MODEL'),
-                ],
-            ],
         ],
 
         'openrouter' => [

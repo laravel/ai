@@ -14,10 +14,7 @@ trait CreatesOpenAiCompatibleClient
      */
     protected function client(Provider $provider, ?int $timeout = null): PendingRequest
     {
-        $config = $provider->additionalConfiguration();
-
         $client = Http::baseUrl($this->baseUrl($provider))
-            ->withHeaders($config['headers'] ?? [])
             ->timeout($timeout ?? 60)
             ->throw();
 
