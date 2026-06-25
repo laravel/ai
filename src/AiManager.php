@@ -417,7 +417,7 @@ class AiManager extends MultipleInstanceManager
     /**
      * Create an OpenAI-compatible powered instance.
      */
-    public function createOpenaicompatibleDriver(array $config): OpenAiCompatibleProvider
+    public function createOpenaiCompatibleDriver(array $config): OpenAiCompatibleProvider
     {
         return new OpenAiCompatibleProvider(
             $config,

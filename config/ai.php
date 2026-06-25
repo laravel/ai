@@ -127,7 +127,7 @@ return [
         ],
 
         'openai-compatible' => [
-            'driver' => 'openaicompatible',
+            'driver' => 'openai-compatible',
             'url' => env('OPENAI_COMPATIBLE_URL'),
             'key' => env('OPENAI_COMPATIBLE_API_KEY'),
             'headers' => [],

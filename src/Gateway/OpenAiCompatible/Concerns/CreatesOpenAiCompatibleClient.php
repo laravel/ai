@@ -37,7 +37,7 @@ trait CreatesOpenAiCompatibleClient
 
         if (blank($url)) {
             throw new InvalidArgumentException(
-                "The [{$provider->name()}] openaicompatible provider requires a 'url' to be configured."
+                "The [{$provider->name()}] openai-compatible provider requires a 'url' to be configured."
             );
         }
 

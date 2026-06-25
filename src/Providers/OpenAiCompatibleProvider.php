@@ -33,7 +33,7 @@ class OpenAiCompatibleProvider extends Provider implements TextProvider
     public function defaultTextModel(): string
     {
         return $this->config['models']['text']['default'] ?? throw new InvalidArgumentException(
-            "The [{$this->name()}] openaicompatible provider requires a default text model. Set [models.text.default] in its configuration or pass a model explicitly."
+            "The [{$this->name()}] openai-compatible provider requires a default text model. Set [models.text.default] in its configuration or pass a model explicitly."
         );
     }
 

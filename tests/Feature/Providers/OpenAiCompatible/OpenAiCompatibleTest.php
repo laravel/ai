@@ -14,7 +14,7 @@ beforeEach(function () {
 
 test('throws when no url is configured', function () {
     config(['ai.providers.openai-compatible' => [
-        'driver' => 'openaicompatible',
+        'driver' => 'openai-compatible',
         'key' => 'test-key',
         'models' => ['text' => ['default' => 'local-model']],
     ]]);
@@ -27,7 +27,7 @@ test('throws when no url is configured', function () {
 
 test('throws when no default model is configured and none is passed', function () {
     config(['ai.providers.openai-compatible' => [
-        'driver' => 'openaicompatible',
+        'driver' => 'openai-compatible',
         'url' => 'http://localhost:1234/v1',
         'key' => 'test-key',
     ]]);
@@ -194,7 +194,7 @@ test('response usage is parsed using the openai standard shape', function () {
 function configureOpenAiCompatible(): void
 {
     config(['ai.providers.openai-compatible' => [
-        'driver' => 'openaicompatible',
+        'driver' => 'openai-compatible',
         'url' => 'http://localhost:1234/v1',
         'key' => 'test-key',
         'models' => ['text' => ['default' => 'local-model']],
