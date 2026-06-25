@@ -3,11 +3,16 @@
 namespace Laravel\Ai\Gateway;
 
 use Generator;
+use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Events\StepCompleted;
+use Laravel\Ai\Events\StepFailed;
+use Laravel\Ai\Events\StepStarted;
 use Laravel\Ai\Exceptions\NoSuchToolException;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -22,13 +27,19 @@ use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
+use Throwable;
 
 class TextGenerationLoop
 {
     use InvokesTools;
 
-    public function __construct(protected StepTextGateway $gateway)
-    {
+    /** Hidden context key for threading invocationId without gateway signature changes. */
+    public const INVOCATION_ID_CONTEXT_KEY = 'laravel_ai_invocation_id';
+
+    public function __construct(
+        protected StepTextGateway $gateway,
+        protected ?Dispatcher $events = null,
+    ) {
         $this->initializeToolCallbacks();
     }
 
@@ -46,6 +57,7 @@ class TextGenerationLoop
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): TextResponse {
+        $invocationId = $this->invocationIdFromContext() ?? (string) Str::uuid7();
         $steps = new Collection;
         $allMessages = $messages;
         $maxSteps = $this->resolveMaxSteps($options, $tools);
@@ -53,23 +65,48 @@ class TextGenerationLoop
         $lastResult = null;
 
         for ($step = 0; $step < $maxSteps; $step++) {
+            $stepId = strtolower((string) Str::uuid7());
+
             $stepContext = new StepContext(
                 stepNumber: $step,
                 isFinalStep: $step + 1 >= $maxSteps,
                 continuationToken: $continuationToken,
             );
 
-            $lastResult = $this->gateway->generateTextStep(
-                $provider,
-                $model,
-                $instructions,
-                $allMessages,
-                $tools,
-                $schema,
-                $options,
-                $timeout,
-                $stepContext,
-            );
+            $this->dispatch(new StepStarted($invocationId, $stepId, $step));
+
+            try {
+                $lastResult = $this->gateway->generateTextStep(
+                    $provider,
+                    $model,
+                    $instructions,
+                    $allMessages,
+                    $tools,
+                    $schema,
+                    $options,
+                    $timeout,
+                    $stepContext,
+                );
+            } catch (Throwable $e) {
+                $this->dispatch(new StepFailed($invocationId, $stepId, $step, $e));
+                throw $e;
+            }
+
+            if ($lastResult->finishReason === FinishReason::Continue) {
+                $this->dispatch(new StepCompleted($invocationId, $stepId, $step, $lastResult));
+
+                $steps->push($this->buildStep($lastResult));
+
+                $allMessages[] = new AssistantMessage(
+                    $lastResult->text,
+                    collect($lastResult->toolCalls),
+                    $lastResult->providerContentBlocks,
+                );
+
+                $continuationToken = $lastResult->continuationToken;
+
+                continue;
+            }
 
             if ($lastResult->finishReason === FinishReason::Continue) {
                 $steps->push($this->buildStep($lastResult));
@@ -93,6 +130,8 @@ class TextGenerationLoop
             );
 
             $shouldContinue = filled($toolResults);
+
+            $this->dispatch(new StepCompleted($invocationId, $stepId, $step, $lastResult));
 
             $steps->push($this->buildStep($lastResult, $toolResults));
 
@@ -137,38 +176,49 @@ class TextGenerationLoop
         $sawError = false;
 
         for ($step = 0; $step < $maxSteps; $step++) {
+            $stepId = strtolower((string) Str::uuid7());
+
             $stepContext = new StepContext(
                 stepNumber: $step,
                 isFinalStep: $step + 1 >= $maxSteps,
                 continuationToken: $continuationToken,
             );
 
-            $stream = $this->gateway->generateStreamStep(
-                $invocationId,
-                $provider,
-                $model,
-                $instructions,
-                $allMessages,
-                $tools,
-                $schema,
-                $options,
-                $timeout,
-                $stepContext,
-            );
+            $this->dispatch(new StepStarted($invocationId, $stepId, $step));
 
-            foreach ($stream as $event) {
-                yield $event;
+            try {
+                $stream = $this->gateway->generateStreamStep(
+                    $invocationId,
+                    $provider,
+                    $model,
+                    $instructions,
+                    $allMessages,
+                    $tools,
+                    $schema,
+                    $options,
+                    $timeout,
+                    $stepContext,
+                );
 
-                if ($event instanceof Error) {
-                    $sawError = true;
+                foreach ($stream as $streamEvent) {
+                    yield $streamEvent;
+
+                    if ($streamEvent instanceof Error) {
+                        $sawError = true;
+                    }
                 }
-            }
 
-            $result = $stream->getReturn();
+                $result = $stream->getReturn();
+            } catch (Throwable $e) {
+                $this->dispatch(new StepFailed($invocationId, $stepId, $step, $e));
+                throw $e;
+            }
 
             if ($result !== null) {
                 $accumulatedUsage = $accumulatedUsage->add($result->usage);
                 $finalReason = $result->finishReason;
+
+                $this->dispatch(new StepCompleted($invocationId, $stepId, $step, $result));
             }
 
             if ($result?->finishReason === FinishReason::Continue) {
@@ -225,6 +275,24 @@ class TextGenerationLoop
                 $accumulatedUsage,
                 time(),
             ))->withInvocationId($invocationId);
+        }
+    }
+
+    private function dispatch(object $event): void
+    {
+        $this->events?->dispatch($event);
+    }
+
+    /**
+     * Read the invocation ID threaded through Laravel's hidden context.
+     * Falls back to null if the Context facade is not available.
+     */
+    private function invocationIdFromContext(): ?string
+    {
+        try {
+            return Context::getHidden(self::INVOCATION_ID_CONTEXT_KEY);
+        } catch (Throwable) {
+            return null;
         }
     }
 

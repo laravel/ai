@@ -14,6 +14,7 @@ use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
@@ -27,6 +28,7 @@ use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Tools\AgentTool;
 use Laravel\Ai\Tools\McpServerTool;
 use Laravel\Ai\Tools\McpTool;
+use Throwable;
 
 use function Laravel\Ai\pipeline;
 
@@ -43,45 +45,50 @@ trait GeneratesText
 
         $processedPrompt = null;
 
-        $response = pipeline()
-            ->send($prompt)
-            ->through($this->gatherMiddlewareFor($prompt->agent))
-            ->then(function (AgentPrompt $prompt) use ($invocationId, &$processedPrompt) {
-                $processedPrompt = $prompt;
+        try {
+            $response = pipeline()
+                ->send($prompt)
+                ->through($this->gatherMiddlewareFor($prompt->agent))
+                ->then(function (AgentPrompt $prompt) use ($invocationId, &$processedPrompt) {
+                    $processedPrompt = $prompt;
 
-                $this->events->dispatch(new PromptingAgent($invocationId, $prompt));
+                    $this->events->dispatch(new PromptingAgent($invocationId, $prompt));
 
-                $agent = $prompt->agent;
+                    $agent = $prompt->agent;
 
-                $messages = [
-                    ...($agent instanceof Conversational ? $agent->messages() : []),
-                    new UserMessage($prompt->prompt, $prompt->attachments->all()),
-                ];
+                    $messages = [
+                        ...($agent instanceof Conversational ? $agent->messages() : []),
+                        new UserMessage($prompt->prompt, $prompt->attachments->all()),
+                    ];
 
-                $this->listenForToolInvocations($invocationId, $agent);
+                    $this->listenForToolInvocations($invocationId, $agent);
 
-                $schema = $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null;
+                    $schema = $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null;
 
-                $response = $this->textGenerationLoop()->generate(
-                    $this,
-                    $prompt->model,
-                    (string) $agent->instructions(),
-                    $messages,
-                    $this->resolveTools($agent),
-                    $schema,
-                    TextGenerationOptions::forAgent($agent),
-                    $prompt->timeout,
-                );
+                    $response = $this->textGenerationLoop()->generate(
+                        $this,
+                        $prompt->model,
+                        (string) $agent->instructions(),
+                        $messages,
+                        $this->resolveTools($agent),
+                        $schema,
+                        TextGenerationOptions::forAgent($agent),
+                        $prompt->timeout,
+                    );
 
-                return ! empty($schema)
-                    ? (new StructuredAgentResponse($invocationId, $response->structured, $response->text, $response->usage, $response->meta))
-                        ->withToolCallsAndResults($response->toolCalls, $response->toolResults)
-                        ->withSteps($response->steps)
-                    : (new AgentResponse($invocationId, $response->text, $response->usage, $response->meta))
-                        ->withMessages($response->messages)
-                        ->withToolCallsAndResults($response->toolCalls, $response->toolResults)
-                        ->withSteps($response->steps);
-            });
+                    return ! empty($schema)
+                        ? (new StructuredAgentResponse($invocationId, $response->structured, $response->text, $response->usage, $response->meta))
+                            ->withToolCallsAndResults($response->toolCalls, $response->toolResults)
+                            ->withSteps($response->steps)
+                        : (new AgentResponse($invocationId, $response->text, $response->usage, $response->meta))
+                            ->withMessages($response->messages)
+                            ->withToolCallsAndResults($response->toolCalls, $response->toolResults)
+                            ->withSteps($response->steps);
+                });
+        } catch (Throwable $e) {
+            $this->events->dispatch(new AgentFailed($invocationId, $processedPrompt ?? $prompt, $e));
+            throw $e;
+        }
 
         $this->events->dispatch(
             new AgentPrompted($invocationId, $processedPrompt ?? $prompt, $response)
