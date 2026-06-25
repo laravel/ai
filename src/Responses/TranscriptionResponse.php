@@ -4,18 +4,23 @@ namespace Laravel\Ai\Responses;
 
 use Illuminate\Support\Collection;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\TranscriptionSegment;
 use Laravel\Ai\Responses\Data\Usage;
 
 class TranscriptionResponse
 {
     public string $text;
 
+    /** @var Collection<int, TranscriptionSegment> */
     public Collection $segments;
 
     public Usage $usage;
 
     public Meta $meta;
 
+    /**
+     * @param  Collection<int, TranscriptionSegment>  $segments
+     */
     public function __construct(
         string $text,
         Collection $segments,
