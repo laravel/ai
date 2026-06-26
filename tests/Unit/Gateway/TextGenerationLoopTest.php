@@ -34,6 +34,7 @@ test('it does not execute tool calls on the final generation step', function () 
     ]);
 
     $response = (new TextGenerationLoop($gateway))->generate(
+        'invocation-1',
         textGenerationLoopProvider(),
         'model',
         null,
@@ -130,6 +131,7 @@ test('it clamps non-positive maxSteps to at least one turn', function (int $maxS
     ]);
 
     $response = (new TextGenerationLoop($gateway))->generate(
+        'invocation-1',
         textGenerationLoopProvider(),
         'model',
         null,
@@ -194,6 +196,7 @@ test('it throws when generation tool calls do not match local tools', function (
     ]);
 
     expect(fn () => (new TextGenerationLoop($gateway))->generate(
+        'invocation-1',
         textGenerationLoopProvider(),
         'model',
         null,

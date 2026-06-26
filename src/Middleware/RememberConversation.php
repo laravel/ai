@@ -74,6 +74,7 @@ class RememberConversation
 
         try {
             $response = $this->provider->textGenerationLoop()->generate(
+                (string) Str::uuid7(),
                 $this->provider,
                 $this->provider->cheapestTextModel(),
                 'Generate a concise 3-5 word title for a conversation that starts with the following message. Respond with only the title, no quotes or punctuation.',

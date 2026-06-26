@@ -5,7 +5,6 @@ namespace Laravel\Ai\Gateway;
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -33,9 +32,6 @@ class TextGenerationLoop
 {
     use InvokesTools;
 
-    /** Hidden context key for threading invocationId without gateway signature changes. */
-    public const INVOCATION_ID_CONTEXT_KEY = 'laravel_ai_invocation_id';
-
     public function __construct(
         protected StepTextGateway $gateway,
         protected ?Dispatcher $events = null,
@@ -48,6 +44,7 @@ class TextGenerationLoop
      * @param  array<string, mixed>|null  $schema
      */
     public function generate(
+        string $invocationId,
         TextProvider $provider,
         string $model,
         ?string $instructions,
@@ -57,7 +54,6 @@ class TextGenerationLoop
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): TextResponse {
-        $invocationId = $this->invocationIdFromContext() ?? (string) Str::uuid7();
         $steps = new Collection;
         $allMessages = $messages;
         $maxSteps = $this->resolveMaxSteps($options, $tools);
@@ -73,7 +69,7 @@ class TextGenerationLoop
                 continuationToken: $continuationToken,
             );
 
-            $this->dispatch(new StepStarted($invocationId, $stepId, $step));
+            $this->dispatch(new StepStarted($invocationId, $stepId, $step, $model, $options));
 
             try {
                 $lastResult = $this->gateway->generateTextStep(
@@ -95,20 +91,6 @@ class TextGenerationLoop
             if ($lastResult->finishReason === FinishReason::Continue) {
                 $this->dispatch(new StepCompleted($invocationId, $stepId, $step, $lastResult));
 
-                $steps->push($this->buildStep($lastResult));
-
-                $allMessages[] = new AssistantMessage(
-                    $lastResult->text,
-                    collect($lastResult->toolCalls),
-                    $lastResult->providerContentBlocks,
-                );
-
-                $continuationToken = $lastResult->continuationToken;
-
-                continue;
-            }
-
-            if ($lastResult->finishReason === FinishReason::Continue) {
                 $steps->push($this->buildStep($lastResult));
 
                 $allMessages[] = new AssistantMessage(
@@ -184,7 +166,7 @@ class TextGenerationLoop
                 continuationToken: $continuationToken,
             );
 
-            $this->dispatch(new StepStarted($invocationId, $stepId, $step));
+            $this->dispatch(new StepStarted($invocationId, $stepId, $step, $model, $options));
 
             try {
                 $stream = $this->gateway->generateStreamStep(
@@ -281,19 +263,6 @@ class TextGenerationLoop
     private function dispatch(object $event): void
     {
         $this->events?->dispatch($event);
-    }
-
-    /**
-     * Read the invocation ID threaded through Laravel's hidden context.
-     * Falls back to null if the Context facade is not available.
-     */
-    private function invocationIdFromContext(): ?string
-    {
-        try {
-            return Context::getHidden(self::INVOCATION_ID_CONTEXT_KEY);
-        } catch (Throwable) {
-            return null;
-        }
     }
 
     /**

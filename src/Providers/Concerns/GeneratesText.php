@@ -66,6 +66,7 @@ trait GeneratesText
                     $schema = $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null;
 
                     $response = $this->textGenerationLoop()->generate(
+                        $invocationId,
                         $this,
                         $prompt->model,
                         (string) $agent->instructions(),

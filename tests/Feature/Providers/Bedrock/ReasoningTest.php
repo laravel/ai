@@ -21,6 +21,7 @@ describe('reasoning capture', function () {
         $gateway = $this->gatewayWithClient($client);
 
         $response = (new TextGenerationLoop($gateway))->generate(
+            'invocation-1',
             $this->bedrockProvider(),
             'anthropic.claude-opus-4-7-v1:0',
             null,

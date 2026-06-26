@@ -41,6 +41,7 @@ describe('tool call loop', function () {
         $gateway = $this->gatewayWithClient($client);
 
         $response = (new TextGenerationLoop($gateway))->generate(
+            'invocation-1',
             $this->bedrockProvider(),
             'anthropic.claude-opus-4-7-v1:0',
             null,
@@ -69,6 +70,7 @@ describe('tool call loop', function () {
         $gateway = $this->gatewayWithClient($client);
 
         $response = (new TextGenerationLoop($gateway))->generate(
+            'invocation-1',
             $this->bedrockProvider(),
             'anthropic.claude-opus-4-7-v1:0',
             null,
@@ -92,6 +94,7 @@ describe('tool call loop', function () {
         $gateway = $this->gatewayWithClient($client);
 
         expect(fn () => (new TextGenerationLoop($gateway))->generate(
+            'invocation-1',
             $this->bedrockProvider(),
             'anthropic.claude-opus-4-7-v1:0',
             null,
@@ -111,6 +114,7 @@ describe('tool call loop', function () {
         $gateway = $this->gatewayWithClient($client);
 
         $response = (new TextGenerationLoop($gateway))->generate(
+            'invocation-1',
             $this->bedrockProvider(),
             'anthropic.claude-opus-4-7-v1:0',
             null,
