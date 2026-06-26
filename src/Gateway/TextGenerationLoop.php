@@ -9,7 +9,7 @@ use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\Events\StepCompleted;
+use Laravel\Ai\Events\StepFinished;
 use Laravel\Ai\Events\StepFailed;
 use Laravel\Ai\Events\StepStarted;
 use Laravel\Ai\Exceptions\NoSuchToolException;
@@ -89,7 +89,7 @@ class TextGenerationLoop
             }
 
             if ($lastResult->finishReason === FinishReason::Continue) {
-                $this->events->dispatch(new StepCompleted($invocationId, $stepId, $step, $lastResult));
+                $this->events->dispatch(new StepFinished($invocationId, $stepId, $step, $lastResult));
 
                 $steps->push($this->buildStep($lastResult));
 
@@ -113,7 +113,7 @@ class TextGenerationLoop
 
             $shouldContinue = filled($toolResults);
 
-            $this->events->dispatch(new StepCompleted($invocationId, $stepId, $step, $lastResult));
+            $this->events->dispatch(new StepFinished($invocationId, $stepId, $step, $lastResult));
 
             $steps->push($this->buildStep($lastResult, $toolResults));
 
@@ -200,7 +200,7 @@ class TextGenerationLoop
                 $accumulatedUsage = $accumulatedUsage->add($result->usage);
                 $finalReason = $result->finishReason;
 
-                $this->events->dispatch(new StepCompleted($invocationId, $stepId, $step, $result));
+                $this->events->dispatch(new StepFinished($invocationId, $stepId, $step, $result));
             }
 
             if ($result?->finishReason === FinishReason::Continue) {

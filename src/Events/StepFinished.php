@@ -4,7 +4,7 @@ namespace Laravel\Ai\Events;
 
 use Laravel\Ai\Gateway\StepResponse;
 
-class StepCompleted
+class StepFinished
 {
     public function __construct(
         public string $invocationId,
