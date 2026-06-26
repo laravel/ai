@@ -21,5 +21,5 @@ A unit of traced work that records a start time, end time, and attributes. Spans
 _Avoid_: Trace (refers to the full distributed trace, not a single unit)
 
 **Telemetry Context**:
-Per-invocation metadata attached to spans — user identity, session, agent name, custom tags. Sourced from two places: Laravel's `Context` facade (cross-cutting request metadata) and the agent's `HasTelemetryContext` interface (agent-specific metadata). `HasTelemetryContext` lives in `laravel/ai`; span assembly lives in `vinitkadam03/laravel-ai-telemetry`.
+Per-invocation metadata attached to spans — user identity, session, agent name, custom tags. Sourced from the agent's `HasTelemetryContext` interface (agent-specific metadata). `HasTelemetryContext` lives in `laravel/ai`; span assembly lives in `vinitkadam03/laravel-ai-telemetry`.
 _Avoid_: Metadata, baggage

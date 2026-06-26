@@ -14,13 +14,14 @@ The Scout/Mail/Filesystem analogy from ADR-0002 does not hold: those drivers imp
 
 ## Consequences
 
-`laravel/ai` has zero OTel dependency — not even in `suggest`. Its `composer.json` suggests `vinitkadam03/laravel-ai-telemetry` for users who want OTel spans.
+`laravel/ai` has zero OTel dependency — not in `require`, `require-dev`, or `suggest`. The suggest entry for `vinitkadam03/laravel-ai-telemetry` was also removed: suggesting a personal-namespace package in an official package is inappropriate. Discovery is left to documentation.
 
-`vinitkadam03/laravel-ai-telemetry` ships four drivers:
+`vinitkadam03/laravel-ai-telemetry` ships three drivers:
 
 - **null** — discards all spans. Safe default.
 - **log** — writes completed spans to a Laravel log channel. No OTel required.
-- **otlp** — manages its own `TracerProvider` + `BatchSpanProcessor` + HTTP exporter. Config-driven via `AI_TELEMETRY_OTLP_ENDPOINT`. Requires `open-telemetry/sdk` and `open-telemetry/exporter-otlp`. For teams with no existing OTel infrastructure.
 - **otel** — calls `Globals::tracerProvider()->getTracer('laravel-ai')` and emits into whatever `TracerProvider` the application has registered. Requires only `open-telemetry/api`. For teams already running OTel infrastructure (Datadog agent, Honeycomb collector, Jaeger, custom `SpanProcessor`). AI spans nest naturally inside existing HTTP/DB traces.
+
+The `otlp` driver (self-managed `TracerProvider` + exporter) was removed: it duplicates what every OTel backend already provides. Teams without existing OTel infrastructure should use a backend package (e.g. `vinitkadam03/laravel-ai-phoenix`) rather than a driver that reimplements the exporter layer.
 
 The `otel` driver enables a composable ecosystem: `vinitkadam03/laravel-ai-phoenix` is a service provider that registers a Phoenix-backed `TracerProvider` via `Globals::registerInitializer`. Users who want Phoenix support install both packages and set `AI_TELEMETRY_DRIVER=otel`. Other backends (Datadog, Honeycomb, OpenInference) follow the same pattern without changes to either core package.
