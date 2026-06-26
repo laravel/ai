@@ -34,8 +34,7 @@
         "phpstan/phpstan": "^2.1"
     },
     "suggest": {
-        "laravel/mcp": "Required to use MCP client tools or MCP server tools with Laravel AI agents.",
-        "vinitkadam03/laravel-ai-telemetry": "OpenTelemetry instrumentation — emits gen_ai.* spans for every AI operation."
+        "laravel/mcp": "Required to use MCP client tools or MCP server tools with Laravel AI agents."
     },
     "minimum-stability": "dev",
     "prefer-stable": true,
