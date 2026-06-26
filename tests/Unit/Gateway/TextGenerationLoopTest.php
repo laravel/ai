@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -33,7 +34,7 @@ test('it does not execute tool calls on the final generation step', function () 
         ),
     ]);
 
-    $response = (new TextGenerationLoop($gateway))->generate(
+    $response = (new TextGenerationLoop($gateway, textGenerationLoopDispatcher()))->generate(
         'invocation-1',
         textGenerationLoopProvider(),
         'model',
@@ -68,7 +69,7 @@ test('it holds stream end until the streamed tool loop is complete', function ()
         ),
     ]);
 
-    $events = iterator_to_array((new TextGenerationLoop($gateway))->stream(
+    $events = iterator_to_array((new TextGenerationLoop($gateway, textGenerationLoopDispatcher()))->stream(
         'invocation-1',
         textGenerationLoopProvider(),
         'model',
@@ -101,7 +102,7 @@ test('it does not execute streamed tool calls on the final step', function () {
         ),
     ]);
 
-    $events = iterator_to_array((new TextGenerationLoop($gateway))->stream(
+    $events = iterator_to_array((new TextGenerationLoop($gateway, textGenerationLoopDispatcher()))->stream(
         'invocation-1',
         textGenerationLoopProvider(),
         'model',
@@ -130,7 +131,7 @@ test('it clamps non-positive maxSteps to at least one turn', function (int $maxS
         ),
     ]);
 
-    $response = (new TextGenerationLoop($gateway))->generate(
+    $response = (new TextGenerationLoop($gateway, textGenerationLoopDispatcher()))->generate(
         'invocation-1',
         textGenerationLoopProvider(),
         'model',
@@ -163,7 +164,7 @@ test('it accumulates streamed usage across multi-step turns', function () {
         ),
     ]);
 
-    $events = iterator_to_array((new TextGenerationLoop($gateway))->stream(
+    $events = iterator_to_array((new TextGenerationLoop($gateway, textGenerationLoopDispatcher()))->stream(
         'invocation-1',
         textGenerationLoopProvider(),
         'model',
@@ -195,7 +196,7 @@ test('it throws when generation tool calls do not match local tools', function (
         ),
     ]);
 
-    expect(fn () => (new TextGenerationLoop($gateway))->generate(
+    expect(fn () => (new TextGenerationLoop($gateway, textGenerationLoopDispatcher()))->generate(
         'invocation-1',
         textGenerationLoopProvider(),
         'model',
@@ -217,7 +218,7 @@ test('it throws when streaming tool calls do not match local tools', function ()
         ),
     ]);
 
-    expect(fn () => iterator_to_array((new TextGenerationLoop($gateway))->stream(
+    expect(fn () => iterator_to_array((new TextGenerationLoop($gateway, textGenerationLoopDispatcher()))->stream(
         'invocation-1',
         textGenerationLoopProvider(),
         'model',
@@ -235,7 +236,7 @@ test('it emits a terminal stream end when a turn yields no stream end or error',
         textGenerationLoopStreamStep(events: [new TextDelta('text-delta', 'message-1', 'partial', time())]),
     ]);
 
-    $events = iterator_to_array((new TextGenerationLoop($gateway))->stream(
+    $events = iterator_to_array((new TextGenerationLoop($gateway, textGenerationLoopDispatcher()))->stream(
         'invocation-1',
         textGenerationLoopProvider(),
         'model',
@@ -258,7 +259,7 @@ test('it does not emit a stream end when a turn errors without a stream end', fu
         textGenerationLoopStreamStep(events: [new Error('error-1', 'server_error', 'Server overloaded', false, time())]),
     ]);
 
-    $events = iterator_to_array((new TextGenerationLoop($gateway))->stream(
+    $events = iterator_to_array((new TextGenerationLoop($gateway, textGenerationLoopDispatcher()))->stream(
         'invocation-1',
         textGenerationLoopProvider(),
         'model',
@@ -277,6 +278,11 @@ test('it does not emit a stream end when a turn errors without a stream end', fu
 function textGenerationLoopProvider(): TextProvider
 {
     return Mockery::mock(TextProvider::class);
+}
+
+function textGenerationLoopDispatcher(): Dispatcher
+{
+    return Mockery::spy(Dispatcher::class);
 }
 
 /** @param  array<int, object>  $events */

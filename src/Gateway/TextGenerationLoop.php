@@ -34,7 +34,7 @@ class TextGenerationLoop
 
     public function __construct(
         protected StepTextGateway $gateway,
-        protected ?Dispatcher $events = null,
+        protected Dispatcher $events,
     ) {
         $this->initializeToolCallbacks();
     }
@@ -69,7 +69,7 @@ class TextGenerationLoop
                 continuationToken: $continuationToken,
             );
 
-            $this->dispatch(new StepStarted($invocationId, $stepId, $step, $model, $options));
+            $this->events->dispatch(new StepStarted($invocationId, $stepId, $step, $model, $options));
 
             try {
                 $lastResult = $this->gateway->generateTextStep(
@@ -84,12 +84,12 @@ class TextGenerationLoop
                     $stepContext,
                 );
             } catch (Throwable $e) {
-                $this->dispatch(new StepFailed($invocationId, $stepId, $step, $e));
+                $this->events->dispatch(new StepFailed($invocationId, $stepId, $step, $e));
                 throw $e;
             }
 
             if ($lastResult->finishReason === FinishReason::Continue) {
-                $this->dispatch(new StepCompleted($invocationId, $stepId, $step, $lastResult));
+                $this->events->dispatch(new StepCompleted($invocationId, $stepId, $step, $lastResult));
 
                 $steps->push($this->buildStep($lastResult));
 
@@ -113,7 +113,7 @@ class TextGenerationLoop
 
             $shouldContinue = filled($toolResults);
 
-            $this->dispatch(new StepCompleted($invocationId, $stepId, $step, $lastResult));
+            $this->events->dispatch(new StepCompleted($invocationId, $stepId, $step, $lastResult));
 
             $steps->push($this->buildStep($lastResult, $toolResults));
 
@@ -166,7 +166,7 @@ class TextGenerationLoop
                 continuationToken: $continuationToken,
             );
 
-            $this->dispatch(new StepStarted($invocationId, $stepId, $step, $model, $options));
+            $this->events->dispatch(new StepStarted($invocationId, $stepId, $step, $model, $options));
 
             try {
                 $stream = $this->gateway->generateStreamStep(
@@ -192,7 +192,7 @@ class TextGenerationLoop
 
                 $result = $stream->getReturn();
             } catch (Throwable $e) {
-                $this->dispatch(new StepFailed($invocationId, $stepId, $step, $e));
+                $this->events->dispatch(new StepFailed($invocationId, $stepId, $step, $e));
                 throw $e;
             }
 
@@ -200,7 +200,7 @@ class TextGenerationLoop
                 $accumulatedUsage = $accumulatedUsage->add($result->usage);
                 $finalReason = $result->finishReason;
 
-                $this->dispatch(new StepCompleted($invocationId, $stepId, $step, $result));
+                $this->events->dispatch(new StepCompleted($invocationId, $stepId, $step, $result));
             }
 
             if ($result?->finishReason === FinishReason::Continue) {
@@ -258,11 +258,6 @@ class TextGenerationLoop
                 time(),
             ))->withInvocationId($invocationId);
         }
-    }
-
-    private function dispatch(object $event): void
-    {
-        $this->events?->dispatch($event);
     }
 
     /**

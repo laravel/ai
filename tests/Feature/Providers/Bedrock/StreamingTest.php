@@ -31,7 +31,7 @@ describe('text streaming', function () {
         $gateway = $this->gatewayWithClient($client);
 
         $events = iterator_to_array(
-            (new TextGenerationLoop($gateway))->stream('inv-1', $this->bedrockProvider(), 'anthropic.claude-opus-4-7-v1:0', null),
+            (new TextGenerationLoop($gateway, app('events')))->stream('inv-1', $this->bedrockProvider(), 'anthropic.claude-opus-4-7-v1:0', null),
             preserve_keys: false,
         );
 
@@ -61,7 +61,7 @@ describe('text streaming', function () {
         $gateway = $this->gatewayWithClient($client);
 
         $events = iterator_to_array(
-            (new TextGenerationLoop($gateway))->stream('inv-1', $this->bedrockProvider(), 'anthropic.claude-opus-4-7-v1:0', null),
+            (new TextGenerationLoop($gateway, app('events')))->stream('inv-1', $this->bedrockProvider(), 'anthropic.claude-opus-4-7-v1:0', null),
             preserve_keys: false,
         );
 
@@ -94,7 +94,7 @@ describe('text streaming', function () {
         $gateway = $this->gatewayWithClient($this->bedrockClient($mock));
 
         iterator_to_array(
-            (new TextGenerationLoop($gateway))->stream(
+            (new TextGenerationLoop($gateway, app('events')))->stream(
                 'inv-1',
                 $this->bedrockProvider(),
                 'anthropic.claude-opus-4-7-v1:0',
@@ -142,7 +142,7 @@ describe('text streaming', function () {
         $gateway = $this->gatewayWithClient($this->bedrockClient($mock));
 
         iterator_to_array(
-            (new TextGenerationLoop($gateway))->stream(
+            (new TextGenerationLoop($gateway, app('events')))->stream(
                 'inv-1',
                 $this->bedrockProvider(),
                 'anthropic.claude-opus-4-7-v1:0',

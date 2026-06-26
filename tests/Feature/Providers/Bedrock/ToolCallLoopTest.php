@@ -40,7 +40,7 @@ describe('tool call loop', function () {
 
         $gateway = $this->gatewayWithClient($client);
 
-        $response = (new TextGenerationLoop($gateway))->generate(
+        $response = (new TextGenerationLoop($gateway, app('events')))->generate(
             'invocation-1',
             $this->bedrockProvider(),
             'anthropic.claude-opus-4-7-v1:0',
@@ -69,7 +69,7 @@ describe('tool call loop', function () {
 
         $gateway = $this->gatewayWithClient($client);
 
-        $response = (new TextGenerationLoop($gateway))->generate(
+        $response = (new TextGenerationLoop($gateway, app('events')))->generate(
             'invocation-1',
             $this->bedrockProvider(),
             'anthropic.claude-opus-4-7-v1:0',
@@ -93,7 +93,7 @@ describe('tool call loop', function () {
 
         $gateway = $this->gatewayWithClient($client);
 
-        expect(fn () => (new TextGenerationLoop($gateway))->generate(
+        expect(fn () => (new TextGenerationLoop($gateway, app('events')))->generate(
             'invocation-1',
             $this->bedrockProvider(),
             'anthropic.claude-opus-4-7-v1:0',
@@ -113,7 +113,7 @@ describe('tool call loop', function () {
 
         $gateway = $this->gatewayWithClient($client);
 
-        $response = (new TextGenerationLoop($gateway))->generate(
+        $response = (new TextGenerationLoop($gateway, app('events')))->generate(
             'invocation-1',
             $this->bedrockProvider(),
             'anthropic.claude-opus-4-7-v1:0',
@@ -149,7 +149,7 @@ describe('tool call loop', function () {
         $gateway = $this->gatewayWithClient($client);
 
         $events = iterator_to_array(
-            (new TextGenerationLoop($gateway))->stream(
+            (new TextGenerationLoop($gateway, app('events')))->stream(
                 'inv-1',
                 $this->bedrockProvider(),
                 'anthropic.claude-opus-4-7-v1:0',

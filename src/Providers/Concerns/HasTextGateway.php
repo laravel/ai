@@ -35,6 +35,6 @@ trait HasTextGateway
      */
     public function textGenerationLoop(): TextGenerationLoop
     {
-        return $this->textGenerationLoop ??= new TextGenerationLoop($this->textGateway());
+        return $this->textGenerationLoop ??= new TextGenerationLoop($this->textGateway(), $this->events);
     }
 }
