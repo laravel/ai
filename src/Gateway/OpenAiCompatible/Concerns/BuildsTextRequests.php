@@ -49,7 +49,7 @@ trait BuildsTextRequests
             'top_p' => $options?->topP,
         ]));
 
-        $providerOptions = $options?->providerOptions($provider->driver());
+        $providerOptions = $options?->providerOptions($provider->name());
 
         if (filled($providerOptions)) {
             $body = array_merge($body, $providerOptions);

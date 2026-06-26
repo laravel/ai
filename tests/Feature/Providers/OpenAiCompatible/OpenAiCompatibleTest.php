@@ -197,6 +197,72 @@ test('streaming sends stream_options supplied via provider options', function ()
     });
 });
 
+test('custom named instances use their own configured base url and model', function () {
+    config(['ai.providers.lm-studio' => [
+        'driver' => 'openai-compatible',
+        'url' => 'http://localhost:4321/v1',
+        'key' => 'lm-studio-key',
+        'models' => ['text' => ['default' => 'lm-studio-model']],
+    ]]);
+
+    Http::fake(['*' => fakeOpenAiCompatibleResponse('Hello from LM Studio')]);
+
+    $response = agent()->prompt('Hello', provider: 'lm-studio');
+
+    expect($response->text)->toBe('Hello from LM Studio')
+        ->and($response->meta->provider)->toBe('lm-studio');
+
+    Http::assertSent(fn (Request $request) => $request->url() === 'http://localhost:4321/v1/chat/completions'
+        && $request->hasHeader('Authorization', 'Bearer lm-studio-key')
+        && data_get(json_decode($request->body(), true), 'model') === 'lm-studio-model');
+});
+
+test('named instances resolve provider options by their instance name', function () {
+    config(['ai.providers.lm-studio' => [
+        'driver' => 'openai-compatible',
+        'url' => 'http://localhost:4321/v1',
+        'key' => 'lm-studio-key',
+        'models' => ['text' => ['default' => 'lm-studio-model']],
+    ]]);
+
+    config(['ai.providers.vllm' => [
+        'driver' => 'openai-compatible',
+        'url' => 'http://localhost:8000/v1',
+        'key' => 'vllm-key',
+        'models' => ['text' => ['default' => 'vllm-model']],
+    ]]);
+
+    Http::fake(['*' => fakeOpenAiCompatibleResponse('Hello')]);
+
+    $agent = new class implements Agent, HasProviderOptions
+    {
+        use Promptable;
+
+        public function instructions(): string
+        {
+            return 'You are a helpful assistant.';
+        }
+
+        public function providerOptions(Lab|string $provider): array
+        {
+            return match ($provider) {
+                'lm-studio' => ['top_k' => 40],
+                'vllm' => ['top_k' => 10],
+                default => [],
+            };
+        }
+    };
+
+    $agent->prompt('Hello', provider: 'lm-studio');
+    $agent->prompt('Hello', provider: 'vllm');
+
+    Http::assertSent(fn (Request $request) => $request->url() === 'http://localhost:4321/v1/chat/completions'
+        && data_get(json_decode($request->body(), true), 'top_k') === 40);
+
+    Http::assertSent(fn (Request $request) => $request->url() === 'http://localhost:8000/v1/chat/completions'
+        && data_get(json_decode($request->body(), true), 'top_k') === 10);
+});
+
 function configureOpenAiCompatible(): void
 {
     config(['ai.providers.openai-compatible' => [
