@@ -5,11 +5,14 @@ use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Events\StepStarted;
 use Laravel\Ai\Exceptions\NoSuchToolException;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationLoop;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Messages\Message;
+use Laravel\Ai\Messages\MessageRole;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -273,6 +276,125 @@ test('it does not emit a stream end when a turn errors without a stream end', fu
 
     expect(collect($events)->whereInstanceOf(StreamEnd::class))->toHaveCount(0)
         ->and(collect($events)->whereInstanceOf(Error::class))->toHaveCount(1);
+});
+
+test('StepStarted is dispatched with the messages and tools at the time of each step', function () {
+    $tool = new TextGenerationLoopCountingTool;
+    $gateway = new TextGenerationLoopFakeGateway([
+        new StepResponse(
+            text: 'hi',
+            toolCalls: [],
+            finishReason: FinishReason::Stop,
+            usage: new Usage,
+            meta: new Meta('fake', 'model'),
+        ),
+    ]);
+
+    $initialMessages = [new Message(MessageRole::User, 'hello')];
+    $capturedEvents = [];
+    $dispatcher = Mockery::mock(Dispatcher::class);
+    $dispatcher->shouldReceive('dispatch')->andReturnUsing(function ($event) use (&$capturedEvents) {
+        $capturedEvents[] = $event;
+    });
+
+    (new TextGenerationLoop($gateway, $dispatcher))->generate(
+        'invocation-1',
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        $initialMessages,
+        [$tool],
+        null,
+        null,
+        null,
+    );
+
+    $stepStarted = collect($capturedEvents)->whereInstanceOf(StepStarted::class)->first();
+
+    expect($stepStarted)->not->toBeNull()
+        ->and($stepStarted->messages)->toBe($initialMessages)
+        ->and($stepStarted->tools)->toHaveCount(1)
+        ->and($stepStarted->tools[0])->toBeInstanceOf(TextGenerationLoopCountingTool::class);
+});
+
+test('StepStarted accumulates messages across multi-step tool loops', function () {
+    $tool = new TextGenerationLoopCountingTool;
+    $toolCall = new ToolCall('call-1', TextGenerationLoopCountingTool::class, [], 'call-1');
+    $gateway = new TextGenerationLoopFakeGateway([
+        new StepResponse(
+            text: '',
+            toolCalls: [$toolCall],
+            finishReason: FinishReason::ToolCalls,
+            usage: new Usage(10, 1),
+            meta: new Meta('fake', 'model'),
+        ),
+        new StepResponse(
+            text: 'done',
+            toolCalls: [],
+            finishReason: FinishReason::Stop,
+            usage: new Usage(5, 2),
+            meta: new Meta('fake', 'model'),
+        ),
+    ]);
+
+    $initialMessages = [new Message(MessageRole::User, 'hello')];
+    $capturedEvents = [];
+    $dispatcher = Mockery::mock(Dispatcher::class);
+    $dispatcher->shouldReceive('dispatch')->andReturnUsing(function ($event) use (&$capturedEvents) {
+        $capturedEvents[] = $event;
+    });
+
+    (new TextGenerationLoop($gateway, $dispatcher))->generate(
+        'invocation-1',
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        $initialMessages,
+        [$tool],
+        null,
+        new TextGenerationOptions(maxSteps: 2),
+        null,
+    );
+
+    $stepStartedEvents = collect($capturedEvents)->whereInstanceOf(StepStarted::class)->values();
+
+    expect($stepStartedEvents)->toHaveCount(2)
+        ->and($stepStartedEvents[0]->messages)->toHaveCount(1)
+        ->and($stepStartedEvents[1]->messages)->toHaveCount(3); // user + assistant + tool_result
+});
+
+test('StepStarted in stream() carries messages and tools', function () {
+    $tool = new TextGenerationLoopCountingTool;
+    $gateway = new TextGenerationLoopFakeGateway(streams: [
+        textGenerationLoopStreamStep(
+            events: [new TextDelta('delta', 'msg-1', 'hi', time())],
+            returns: new StepResponse(text: 'hi', toolCalls: [], finishReason: FinishReason::Stop, usage: new Usage, meta: new Meta('fake', 'model')),
+        ),
+    ]);
+
+    $initialMessages = [new Message(MessageRole::User, 'hello')];
+    $capturedEvents = [];
+    $dispatcher = Mockery::mock(Dispatcher::class);
+    $dispatcher->shouldReceive('dispatch')->andReturnUsing(function ($event) use (&$capturedEvents) {
+        $capturedEvents[] = $event;
+    });
+
+    iterator_to_array((new TextGenerationLoop($gateway, $dispatcher))->stream(
+        'invocation-1',
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        $initialMessages,
+        [$tool],
+        null,
+        null,
+        null,
+    ));
+
+    $stepStarted = collect($capturedEvents)->whereInstanceOf(StepStarted::class)->first();
+
+    expect($stepStarted->messages)->toBe($initialMessages)
+        ->and($stepStarted->tools)->toHaveCount(1);
 });
 
 function textGenerationLoopProvider(): TextProvider
