@@ -2,13 +2,14 @@
 
 namespace Laravel\Ai\Events;
 
+use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 
 class StepStarted
 {
     /**
      * @param  array<int, mixed>  $messages  Conversation history sent to the model for this step.
-     * @param  array<int, \Laravel\Ai\Contracts\Tool>  $tools  Tool definitions available this step.
+     * @param  array<int, Tool>  $tools  Tool definitions available this step.
      */
     public function __construct(
         public string $invocationId,
