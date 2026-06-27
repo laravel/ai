@@ -9,7 +9,7 @@ The SDK already dispatches 27+ lifecycle events (`PromptingAgent`, `AgentPrompte
 
 ## Consequences
 
-Two new event pairs (`StepStarted`/`StepCompleted` and `AgentFailed`/`StepFailed`) were added to `TextGenerationLoop` because the existing events do not cover per-step LLM call boundaries or failure cases. These are the only additions required; all other event hooks already exist.
+Two new event pairs (`StepStarted`/`StepFinished` and `AgentFailed`/`StepFailed`) were added to `TextGenerationLoop` because the existing events do not cover per-step LLM call boundaries or failure cases. These are the only additions required; all other event hooks already exist.
 
 `StepStarted` carries `string $model` and `?TextGenerationOptions $options` so span attributes (`gen_ai.request.model`, `gen_ai.request.max_tokens`, `gen_ai.request.temperature`, `gen_ai.request.top_p`) can be set at span open without the listener needing to inspect internal state.
 
