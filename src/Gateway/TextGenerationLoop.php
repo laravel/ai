@@ -69,7 +69,7 @@ class TextGenerationLoop
                 continuationToken: $continuationToken,
             );
 
-            $this->events->dispatch(new StepStarted($invocationId, $stepId, $step, $model, $options));
+            $this->events->dispatch(new StepStarted($invocationId, $stepId, $step, $model, $allMessages, $tools, $options));
 
             try {
                 $lastResult = $this->gateway->generateTextStep(
@@ -166,7 +166,7 @@ class TextGenerationLoop
                 continuationToken: $continuationToken,
             );
 
-            $this->events->dispatch(new StepStarted($invocationId, $stepId, $step, $model, $options));
+            $this->events->dispatch(new StepStarted($invocationId, $stepId, $step, $model, $allMessages, $tools, $options));
 
             try {
                 $stream = $this->gateway->generateStreamStep(
