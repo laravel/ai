@@ -1,23 +1,35 @@
 <?php
 
-namespace Tests\Feature;
-
+use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Support\Facades\Facade;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Gateway\OpenAi\OpenAiGateway;
 use Laravel\Ai\Providers\OpenAiProvider;
-use LogicException;
-use Tests\TestCase;
 
-class AiManagerTest extends TestCase
-{
-    public function test_can_get_an_openai_provider_instance(): void
-    {
-        $this->assertInstanceOf(OpenAiProvider::class, Ai::textProvider('openai'));
-    }
+test('can get an openai provider instance', function () {
+    expect(Ai::textProvider('openai'))->toBeInstanceOf(OpenAiProvider::class);
+});
 
-    public function test_provider_type_is_ensured(): void
-    {
-        $this->expectException(LogicException::class);
+test('provider type is ensured', function () {
+    Ai::audioProvider('anthropic');
+})->throws(LogicException::class);
 
-        Ai::audioProvider('anthropic');
-    }
-}
+test('driver extensions survive between queue jobs', function () {
+    config()->set('ai.providers.custom', ['driver' => 'custom']);
+
+    Ai::extend('custom', fn ($app, array $config) => new OpenAiProvider(
+        $app->make(OpenAiGateway::class),
+        $config,
+        $app->make(Dispatcher::class),
+    ));
+
+    $runJobOnFreshScope = function () {
+        app()->forgetScopedInstances();
+        Facade::clearResolvedInstances();
+
+        return Ai::textProvider('custom');
+    };
+
+    expect($runJobOnFreshScope())->toBeInstanceOf(OpenAiProvider::class);
+    expect($runJobOnFreshScope())->toBeInstanceOf(OpenAiProvider::class);
+});

@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Tool;
@@ -11,6 +12,7 @@ use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\ProviderTool;
 use Laravel\Ai\Providers\Tools\WebSearch;
+use Laravel\Ai\Tools\ToolNameResolver;
 use RuntimeException;
 
 trait MapsTools
@@ -38,29 +40,26 @@ trait MapsTools
      */
     protected function mapTool(Tool $tool): array
     {
+        $strict = Strict::isAppliedTo($tool);
+
         $schema = $tool->schema(new JsonSchemaTypeFactory);
 
-        $definition = [
+        $schemaArray = filled($schema)
+            ? (new ObjectSchema($schema, strict: $strict))->toSchema()
+            : [];
+
+        return [
             'type' => 'function',
-            'name' => class_basename($tool),
+            'name' => ToolNameResolver::resolve($tool),
             'description' => (string) $tool->description(),
-            'strict' => true,
-        ];
-
-        if (filled($schema)) {
-            $objectSchema = new ObjectSchema($schema);
-
-            $schemaArray = $objectSchema->toSchema();
-
-            $definition['parameters'] = [
+            'strict' => $strict,
+            'parameters' => [
                 'type' => 'object',
-                'properties' => $schemaArray['properties'] ?? [],
+                'properties' => $schemaArray['properties'] ?? (object) [],
                 'required' => $schemaArray['required'] ?? [],
                 'additionalProperties' => false,
-            ];
-        }
-
-        return $definition;
+            ],
+        ];
     }
 
     /**
@@ -100,7 +99,7 @@ trait MapsTools
         }
 
         return [
-            'type' => 'web_search_preview',
+            'type' => 'web_search',
             ...$provider->webSearchToolOptions($tool),
         ];
     }

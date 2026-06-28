@@ -4,6 +4,7 @@ namespace Laravel\Ai\Files;
 
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Filesystem\Filesystem;
+use InvalidArgumentException;
 use JsonSerializable;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
@@ -16,15 +17,19 @@ class LocalAudio extends Audio implements Arrayable, JsonSerializable, StorableF
 {
     use CanBeUploadedToProvider;
 
-    public ?string $mime = null;
-
     public function __construct(public string $path, ?string $mimeType = null)
     {
+        if (blank($path)) {
+            throw new InvalidArgumentException('Audio file path cannot be empty.');
+        }
+
         $this->mime = $mimeType;
     }
 
     /**
      * Get the raw representation of the file.
+     *
+     * @throws RuntimeException if the file does not exist at the configured path.
      */
     public function content(): string
     {
@@ -62,23 +67,13 @@ class LocalAudio extends Audio implements Arrayable, JsonSerializable, StorableF
     }
 
     /**
-     * Set the audio's MIME type.
-     */
-    public function withMimeType(string $mimeType): static
-    {
-        $this->mime = $mimeType;
-
-        return $this;
-    }
-
-    /**
      * Get the instance as an array.
      */
     public function toArray(): array
     {
         return [
             'type' => 'local-audio',
-            'name' => $this->name,
+            'name' => $this->name(),
             'path' => $this->path,
             'mime' => $this->mime,
         ];

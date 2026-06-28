@@ -10,6 +10,7 @@ use IteratorAggregate;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\StreamEnd;
+use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Symfony\Component\HttpFoundation\Response;
 use Traversable;
@@ -22,6 +23,7 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
 
     public ?Usage $usage;
 
+    /** @var Collection<int, StreamEvent> */
     public Collection $events;
 
     public ?string $conversationId = null;
@@ -65,6 +67,8 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
         if ($this->streamedResponse) {
             $callback($this->streamedResponse);
 
+            $this->syncConversationFromStreamedResponse();
+
             return $this;
         }
 
@@ -80,6 +84,24 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     {
         $this->conversationId = $conversationId;
         $this->conversationUser = $conversationUser;
+
+        return $this;
+    }
+
+    /**
+     * Adopt state from a completed streamed response.
+     */
+    public function adoptStateFrom(StreamedAgentResponse $response): self
+    {
+        if ($this->meta !== null) {
+            $this->meta->provider = $response->meta->provider;
+            $this->meta->model = $response->meta->model;
+            $this->meta->citations = $response->meta->citations;
+        }
+
+        if ($response->conversationId !== null) {
+            $this->withinConversation($response->conversationId, $response->conversationUser);
+        }
 
         return $this;
     }
@@ -149,8 +171,27 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
             $this->meta,
         );
 
+        if ($this->conversationId !== null) {
+            $this->streamedResponse->withinConversation(
+                $this->conversationId,
+                $this->conversationUser
+            );
+        }
+
         foreach ($this->thenCallbacks as $callback) {
             call_user_func($callback, $this->streamedResponse);
         }
+
+        $this->syncConversationFromStreamedResponse();
+    }
+
+    protected function syncConversationFromStreamedResponse(): void
+    {
+        if ($this->streamedResponse->conversationId === null) {
+            return;
+        }
+
+        $this->conversationId = $this->streamedResponse->conversationId;
+        $this->conversationUser = $this->streamedResponse->conversationUser;
     }
 }

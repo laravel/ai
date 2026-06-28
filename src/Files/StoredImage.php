@@ -4,6 +4,7 @@ namespace Laravel\Ai\Files;
 
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Support\Facades\Storage;
+use InvalidArgumentException;
 use JsonSerializable;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
@@ -13,10 +14,17 @@ class StoredImage extends Image implements Arrayable, JsonSerializable, Storable
 {
     use CanBeUploadedToProvider;
 
-    public function __construct(public string $path, public ?string $disk = null) {}
+    public function __construct(public string $path, public ?string $disk = null)
+    {
+        if (blank($path)) {
+            throw new InvalidArgumentException('Image file path cannot be empty.');
+        }
+    }
 
     /**
      * Get the raw representation of the file.
+     *
+     * @throws RuntimeException if the file does not exist on the configured disk.
      */
     public function content(): string
     {
@@ -37,7 +45,7 @@ class StoredImage extends Image implements Arrayable, JsonSerializable, Storable
      */
     public function mimeType(): ?string
     {
-        return Storage::disk($this->disk)->mimeType($this->path);
+        return $this->mime ?? (Storage::disk($this->disk)->mimeType($this->path) ?: null);
     }
 
     /**
@@ -47,7 +55,7 @@ class StoredImage extends Image implements Arrayable, JsonSerializable, Storable
     {
         return [
             'type' => 'stored-image',
-            'name' => $this->name,
+            'name' => $this->name(),
             'path' => $this->path,
             'disk' => $this->disk ?? config('filesystems.default'),
         ];

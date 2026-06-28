@@ -3,6 +3,7 @@
 namespace Laravel\Ai\PendingResponses;
 
 use Illuminate\Support\Traits\Conditionable;
+use InvalidArgumentException;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
@@ -20,10 +21,26 @@ class PendingReranking
      * Create a new pending reranking instance.
      *
      * @param  array<int, string>  $documents
+     *
+     * @throws InvalidArgumentException if the documents are not a list, are empty, or contain non-string or blank entries.
      */
     public function __construct(
         protected array $documents,
-    ) {}
+    ) {
+        if (! array_is_list($documents)) {
+            throw new InvalidArgumentException('Documents to rerank must be a list, not an associative array.');
+        }
+
+        if (blank($documents)) {
+            throw new InvalidArgumentException('At least one document is required to rerank.');
+        }
+
+        foreach ($documents as $index => $document) {
+            if (! is_string($document) || blank($document)) {
+                throw new InvalidArgumentException("Each document to rerank must be a non-blank string (index {$index}).");
+            }
+        }
+    }
 
     /**
      * Limit the number of results to return.
@@ -37,6 +54,8 @@ class PendingReranking
 
     /**
      * Rerank the documents based on their relevance to the query.
+     *
+     * @throws FailoverableException if every configured provider fails to rerank the documents.
      */
     public function rerank(string $query, Lab|array|string|null $provider = null, ?string $model = null): RerankingResponse
     {

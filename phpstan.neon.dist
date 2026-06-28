@@ -1,0 +1,7 @@
+parameters:
+  paths:
+    - config
+    - src
+    - database
+
+  level: 1

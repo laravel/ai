@@ -4,9 +4,8 @@ namespace Laravel\Ai;
 
 use Illuminate\JsonSchema\Types\Type;
 use Laravel\Ai\Contracts\Schemable;
-use Prism\Prism\Contracts\Schema as PrismSchema;
 
-class Schema implements PrismSchema, Schemable
+class Schema implements Schemable
 {
     /**
      * Create a new output schema.
@@ -14,7 +13,7 @@ class Schema implements PrismSchema, Schemable
     public function __construct(
         public Type $schema,
         public string $name = 'schema_definition',
-        public bool $strict = true
+        public bool $strict = false
     ) {}
 
     /**
@@ -30,7 +29,7 @@ class Schema implements PrismSchema, Schemable
      */
     public function withName(string $name): self
     {
-        return new static(
+        return new self(
             $this->schema,
             $name,
             $this->strict,
