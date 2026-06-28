@@ -40,7 +40,7 @@ trait RemembersConversations
         $this->conversationUser = $as;
 
         $this->conversationId = resolve(ConversationStore::class)
-            ->latestConversationId($as->id);
+            ->latestConversationId($as->id, $this->conversationParticipantType());
 
         return $this;
     }
@@ -91,5 +91,23 @@ trait RemembersConversations
     public function conversationParticipant(): ?object
     {
         return $this->conversationUser;
+    }
+
+    /**
+     * Get the morph type of the current conversation participant, if type scoping is enabled.
+     */
+    public function conversationParticipantType(): ?string
+    {
+        if ($this->conversationUser === null) {
+            return null;
+        }
+
+        if (! config('ai.conversations.scope_by_participant_type', false)) {
+            return null;
+        }
+
+        return method_exists($this->conversationUser, 'getMorphClass')
+            ? $this->conversationUser->getMorphClass()
+            : $this->conversationUser::class;
     }
 }

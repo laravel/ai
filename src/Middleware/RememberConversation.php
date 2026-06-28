@@ -28,11 +28,14 @@ class RememberConversation
         return $next($prompt)->then(function ($response) use ($prompt) {
             $agent = $prompt->agent;
 
+            $participantType = $agent->conversationParticipantType();
+
             // Create conversation if necessary...
             if (! $agent->currentConversation()) {
                 $conversationId = $this->store->storeConversation(
                     $agent->conversationParticipant()?->id,
-                    $this->generateTitle($prompt->prompt)
+                    $this->generateTitle($prompt->prompt),
+                    $participantType,
                 );
 
                 $agent->continue(
@@ -45,7 +48,8 @@ class RememberConversation
             $this->store->storeUserMessage(
                 $agent->currentConversation(),
                 $agent->conversationParticipant()?->id,
-                $prompt
+                $prompt,
+                $participantType,
             );
 
             // Record assistant message...
@@ -53,7 +57,8 @@ class RememberConversation
                 $agent->currentConversation(),
                 $agent->conversationParticipant()?->id,
                 $prompt,
-                $response
+                $response,
+                $participantType,
             );
 
             $response->withinConversation(

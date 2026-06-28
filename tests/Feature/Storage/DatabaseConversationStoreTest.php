@@ -386,6 +386,42 @@ test('malformed known stored attachments fail loudly', function () {
         ->toThrow(InvalidArgumentException::class, 'Cannot reconstruct [remote-image] attachment because [url] is missing or invalid.');
 });
 
+test('it does not leak the latest conversation between participants of different types sharing an id', function () {
+    $store = new DatabaseConversationStore;
+
+    $userConversation = $store->storeConversation(1, 'User conversation', 'App\\Models\\User');
+    $adminConversation = $store->storeConversation(1, 'Admin conversation', 'App\\Models\\Admin');
+
+    // Despite sharing id 1, each participant type only resolves its own conversation...
+    expect($store->latestConversationId(1, 'App\\Models\\User'))->toBe($userConversation)
+        ->and($store->latestConversationId(1, 'App\\Models\\Admin'))->toBe($adminConversation);
+});
+
+test('it persists the participant type on stored conversations and messages', function () {
+    $store = new DatabaseConversationStore;
+
+    $conversationId = $store->storeConversation(1, 'Conversation', 'App\\Models\\Admin');
+
+    $store->storeUserMessage(
+        $conversationId,
+        1,
+        new AgentPrompt(new ToolUsingAgent, 'Hello', [], Mockery::mock(TextProvider::class), 'test-model'),
+        'App\\Models\\Admin',
+    );
+
+    expect(DB::table('agent_conversations')->where('id', $conversationId)->value('user_type'))->toBe('App\\Models\\Admin')
+        ->and(DB::table('agent_conversation_messages')->where('conversation_id', $conversationId)->value('user_type'))->toBe('App\\Models\\Admin');
+});
+
+test('it matches conversations regardless of type when no participant type is given', function () {
+    $store = new DatabaseConversationStore;
+
+    $conversationId = $store->storeConversation(1, 'Typed conversation', 'App\\Models\\User');
+
+    // A null type filter is not applied, so a typed conversation still resolves...
+    expect($store->latestConversationId(1))->toBe($conversationId);
+});
+
 function createConversationSchema(?string $connection = null): void
 {
     $schema = Schema::connection($connection);
@@ -396,6 +432,7 @@ function createConversationSchema(?string $connection = null): void
     $schema->create($conversationsTable, function (Blueprint $table) {
         $table->string('id', 36)->primary();
         $table->foreignId('user_id')->nullable();
+        $table->string('user_type')->nullable();
         $table->string('title');
         $table->timestamps();
     });
@@ -404,6 +441,7 @@ function createConversationSchema(?string $connection = null): void
         $table->string('id', 36)->primary();
         $table->string('conversation_id', 36)->index();
         $table->foreignId('user_id')->nullable();
+        $table->string('user_type')->nullable();
         $table->string('agent');
         $table->string('role', 25);
         $table->text('content');

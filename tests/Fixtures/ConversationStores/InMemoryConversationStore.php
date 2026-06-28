@@ -14,24 +14,27 @@ class InMemoryConversationStore implements ConversationStore
 
     public array $messages = [];
 
-    public function latestConversationId(string|int $userId): ?string
+    public function latestConversationId(string|int $userId, ?string $userType = null): ?string
     {
         return collect($this->conversations)
             ->filter(fn ($conversation) => $conversation['user_id'] == $userId)
+            ->when($userType !== null, fn ($conversations) => $conversations->filter(
+                fn ($conversation) => ($conversation['user_type'] ?? null) === $userType
+            ))
             ->keys()
             ->last();
     }
 
-    public function storeConversation(string|int|null $userId, string $title): string
+    public function storeConversation(string|int|null $userId, string $title, ?string $userType = null): string
     {
         $id = (string) Str::uuid7();
 
-        $this->conversations[$id] = ['user_id' => $userId, 'title' => $title];
+        $this->conversations[$id] = ['user_id' => $userId, 'user_type' => $userType, 'title' => $title];
 
         return $id;
     }
 
-    public function storeUserMessage(string $conversationId, string|int|null $userId, AgentPrompt $prompt): string
+    public function storeUserMessage(string $conversationId, string|int|null $userId, AgentPrompt $prompt, ?string $userType = null): string
     {
         $id = (string) Str::uuid7();
 
@@ -45,7 +48,7 @@ class InMemoryConversationStore implements ConversationStore
         return $id;
     }
 
-    public function storeAssistantMessage(string $conversationId, string|int|null $userId, AgentPrompt $prompt, AgentResponse $response): string
+    public function storeAssistantMessage(string $conversationId, string|int|null $userId, AgentPrompt $prompt, AgentResponse $response, ?string $userType = null): string
     {
         $id = (string) Str::uuid7();
 
