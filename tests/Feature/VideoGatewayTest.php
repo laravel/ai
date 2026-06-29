@@ -10,6 +10,7 @@ use Laravel\Ai\Contracts\Gateway\VideoGateway;
 use Laravel\Ai\Contracts\Providers\VideoProvider;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Gateway\OpenAiVideoGateway;
+use Laravel\Ai\Providers\Provider;
 use Mockery;
 use RuntimeException;
 use Tests\TestCase;
@@ -31,7 +32,7 @@ class VideoGatewayTest extends TestCase
      */
     protected function provider(array $config = []): VideoProvider
     {
-        $provider = Mockery::mock(VideoProvider::class);
+        $provider = Mockery::mock(Provider::class, VideoProvider::class);
         $provider->shouldReceive('name')->andReturn('openai');
         $provider->shouldReceive('providerCredentials')->andReturn(['key' => 'sk-test-key']);
         $provider->shouldReceive('additionalConfiguration')->andReturn($config);

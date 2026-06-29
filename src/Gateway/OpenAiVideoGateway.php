@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Gateway;
 
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Sleep;
 use Laravel\Ai\Contracts\Gateway\VideoGateway;
 use Laravel\Ai\Contracts\Providers\VideoProvider;
@@ -15,8 +14,7 @@ use RuntimeException;
 class OpenAiVideoGateway implements VideoGateway
 {
     use Concerns\HandlesFailoverErrors;
-
-    protected const string BASE_URL = 'https://api.openai.com/v1';
+    use OpenAi\Concerns\CreatesOpenAiClient;
 
     /**
      * {@inheritdoc}
@@ -30,31 +28,22 @@ class OpenAiVideoGateway implements VideoGateway
         ?int $timeout = null,
         ?int $pollIntervalSeconds = null,
     ): VideoResponse {
-        $key = $provider->providerCredentials()['key'] ?? null;
-
-        if (empty($key)) {
-            throw new RuntimeException('OpenAI API key is missing for video generation.');
-        }
-
         $seconds ??= '4';
         $size ??= '1280x720';
         $pollIntervalSeconds = max(1, $pollIntervalSeconds ?? 2);
-        $baseUrl = rtrim($provider->additionalConfiguration()['url'] ?? self::BASE_URL, '/');
         $deadline = $timeout !== null ? microtime(true) + $timeout : null;
 
         // Bound every request's timeout by the time remaining on the single overall deadline, falling back to a per-request default when no timeout was given.
-        $remaining = function (int $default) use ($deadline): int {
-            return $deadline === null ? $default : max(1, min($default, (int) ceil($deadline - microtime(true))));
-        };
+        $remaining = fn (int $default): int => $deadline === null
+            ? $default
+            : max(1, min($default, (int) ceil($deadline - microtime(true))));
 
         return $this->withErrorHandling($provider->name(), function () use (
-            $provider, $model, $prompt, $seconds, $size, $key, $baseUrl, $deadline, $pollIntervalSeconds, $remaining, $timeout
+            $provider, $model, $prompt, $seconds, $size, $deadline, $pollIntervalSeconds, $remaining, $timeout
         ): VideoResponse {
-            $create = Http::withToken($key)
-                ->timeout($remaining(120))
+            $create = $this->client($provider, $remaining(120))
                 ->asMultipart()
-                ->throw()
-                ->post($baseUrl.'/videos', [
+                ->post('videos', [
                     ['name' => 'prompt', 'contents' => $prompt],
                     ['name' => 'model', 'contents' => $model],
                     ['name' => 'seconds', 'contents' => (string) $seconds],
@@ -76,10 +65,7 @@ class OpenAiVideoGateway implements VideoGateway
 
                 Sleep::for($pollIntervalSeconds)->seconds();
 
-                $poll = Http::withToken($key)
-                    ->timeout($remaining(60))
-                    ->throw()
-                    ->get($baseUrl.'/videos/'.$videoId);
+                $poll = $this->client($provider, $remaining(60))->get('videos/'.$videoId);
 
                 $status = (string) $poll->json('status', 'failed');
 
@@ -94,11 +80,9 @@ class OpenAiVideoGateway implements VideoGateway
                 throw new RuntimeException('OpenAI video ended in unexpected status: '.$status);
             }
 
-            $binary = Http::withToken($key)
-                ->timeout($remaining(300))
+            $binary = $this->client($provider, $remaining(300))
                 ->withHeaders(['Accept' => 'video/mp4'])
-                ->throw()
-                ->get($baseUrl.'/videos/'.$videoId.'/content');
+                ->get('videos/'.$videoId.'/content');
 
             $mime = $binary->header('Content-Type') ?: 'video/mp4';
 
