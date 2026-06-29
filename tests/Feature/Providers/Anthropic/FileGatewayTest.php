@@ -45,6 +45,18 @@ test('put file sends multipart upload', function () {
         ->and($request->hasHeader('x-api-key', 'test-key'))->toBeTrue();
 });
 
+test('put file forwards provider options into the multipart upload', function () {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response(['id' => 'file-uploaded123']),
+    ]);
+
+    Document::fromString('Hello, World!', 'text/plain')->as('hello.txt')
+        ->withProviderOptions(['custom_field' => 'value'])
+        ->put(provider: 'anthropic');
+
+    expect(multipartField(sentRequest(), 'custom_field'))->toBe('value');
+});
+
 test('delete file sends correct request', function () {
     Http::fake([
         'api.anthropic.com/*' => Http::response(['id' => 'file-abc123']),

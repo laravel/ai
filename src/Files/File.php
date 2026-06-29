@@ -82,7 +82,7 @@ abstract class File implements HasName, HasProviderOptions
     }
 
     /**
-     * Specify provider-specific options for the file upload.
+     * Specify provider-specific options for the file upload. Closures may only capture serializable values.
      *
      * @param  array<string, mixed>|Closure(Lab|string): array<string, mixed>  $options
      */

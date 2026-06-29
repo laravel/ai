@@ -52,7 +52,7 @@ class GeminiFileGateway implements FileGateway
             'x-goog-api-key' => $provider->providerCredentials()['key'],
         ]))->attach(
             'file', $content, $name, ['Content-Type' => $mime]
-        )->post("{$uploadUrl}/files", array_merge([
+        )->post("{$uploadUrl}/files", array_replace_recursive([
             'file' => ['display_name' => $name],
         ], $providerOptions))->throw());
 
