@@ -610,11 +610,6 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
     /**
      * Normalize a Cohere Bedrock embeddings response body into a list of vectors.
      *
-     * Cohere Embed v4 returns `embeddings` as a type-keyed object
-     * (e.g. {"float": [[...]]}); v3 returned a bare list of vectors. Unwrap the
-     * requested type's vectors when the typed v4 shape is present so first()/all()
-     * yield flat vectors for both generations.
-     *
      * @param  array<string, mixed>  $result
      * @return array<int, array<int, float>>
      */
@@ -622,12 +617,12 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
     {
         $raw = $result['embeddings'] ?? [];
 
-        if (is_array($raw) && isset($raw['float']) && is_array($raw['float'])) {
-            $raw = $raw['float'];
+        if (is_array($raw) && $raw !== [] && ! array_is_list($raw)) {
+            $raw = $raw['float'] ?? (reset($raw) ?: []);
         }
 
         return array_values(array_filter(
-            $raw,
+            is_array($raw) ? $raw : [],
             fn ($vector) => is_array($vector),
         ));
     }

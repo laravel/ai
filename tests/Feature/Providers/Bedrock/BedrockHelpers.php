@@ -5,6 +5,7 @@ namespace Tests\Feature\Providers\Bedrock;
 use Aws\BedrockRuntime\BedrockRuntimeClient;
 use Aws\MockHandler;
 use Aws\Result;
+use GuzzleHttp\Psr7\Utils;
 use Laravel\Ai\Gateway\Bedrock\BedrockTextGateway;
 use Laravel\Ai\Providers\BedrockProvider;
 use Laravel\Ai\Providers\Provider;
@@ -14,6 +15,14 @@ trait BedrockHelpers
     protected function fakeBedrockConverse(array $result): BedrockRuntimeClient
     {
         return $this->bedrockClient(new MockHandler([new Result($result)]));
+    }
+
+    protected function fakeBedrockInvoke(array $body, array $headers = []): BedrockRuntimeClient
+    {
+        return $this->bedrockClient(new MockHandler([new Result([
+            'body' => Utils::streamFor(json_encode($body)),
+            '@metadata' => ['headers' => $headers],
+        ])]));
     }
 
     protected function fakeBedrockStream(array $events): BedrockRuntimeClient
