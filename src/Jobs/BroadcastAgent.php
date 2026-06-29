@@ -6,6 +6,7 @@ use Illuminate\Broadcasting\Channel;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Str;
+use Laravel\Ai\Attributes\WithoutBroadcasting;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Streaming\Events\Error;
@@ -45,6 +46,10 @@ class BroadcastAgent implements ShouldQueue
 
         $this->agent->stream($this->prompt, $this->attachments, $this->provider, $this->model)
             ->each(function (StreamEvent $event) {
+                if (! WithoutBroadcasting::allows($this->agent, $event)) {
+                    return;
+                }
+
                 $event->withInvocationId($this->invocationId)->broadcastNow($this->channels);
             })
             ->then(function ($response) use (&$streamedResponse) {

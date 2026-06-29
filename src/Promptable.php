@@ -13,6 +13,7 @@ use Laravel\Ai\Attributes\Provider as ProviderAttribute;
 use Laravel\Ai\Attributes\Timeout as TimeoutAttribute;
 use Laravel\Ai\Attributes\UseCheapestModel;
 use Laravel\Ai\Attributes\UseSmartestModel;
+use Laravel\Ai\Attributes\WithoutBroadcasting;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
@@ -155,6 +156,10 @@ trait Promptable
     {
         return $this->stream($prompt, $attachments, $provider, $model)
             ->each(function (StreamEvent $event) use ($channels, $now) {
+                if (! WithoutBroadcasting::allows($this, $event)) {
+                    return;
+                }
+
                 $event->{$now ? 'broadcastNow' : 'broadcast'}($channels);
             });
     }
