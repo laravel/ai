@@ -2,24 +2,26 @@
 
 namespace Laravel\Ai\Providers\Tools;
 
+use Closure;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Enums\Lab;
+use Laravel\SerializableClosure\SerializableClosure;
 
 abstract class ProviderTool implements HasProviderOptions
 {
-    /**
-     * Provider-specific options keyed by lab name (e.g. 'openai', 'anthropic').
-     *
-     * @var array<string, array<string, mixed>>
-     */
-    protected array $providerOptions = [];
+    /** @var array<string, mixed>|SerializableClosure */
+    protected array|SerializableClosure $providerOptions = [];
 
     /**
-     * Attach provider-specific options to the tool payload.
+     * Attach provider-specific options to the tool payload. Closures may only capture serializable values.
+     *
+     * @param  array<string, mixed>|Closure(Lab|string): array<string, mixed>  $options
      */
-    public function withProviderOptions(Lab|string $provider, array $options): static
+    public function withProviderOptions(array|Closure $options): static
     {
-        $this->providerOptions[$this->normalizeProvider($provider)] = $options;
+        $this->providerOptions = $options instanceof Closure
+            ? new SerializableClosure($options)
+            : $options;
 
         return $this;
     }
@@ -31,14 +33,10 @@ abstract class ProviderTool implements HasProviderOptions
      */
     public function providerOptions(Lab|string $provider): array
     {
-        return $this->providerOptions[$this->normalizeProvider($provider)] ?? [];
-    }
+        if ($this->providerOptions instanceof SerializableClosure) {
+            return ($this->providerOptions)($provider) ?: [];
+        }
 
-    /**
-     * Normalize the provider / lab value to a string.
-     */
-    protected function normalizeProvider(Lab|string $provider): string
-    {
-        return $provider instanceof Lab ? $provider->value : $provider;
+        return $this->providerOptions;
     }
 }

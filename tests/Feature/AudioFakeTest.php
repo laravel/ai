@@ -3,9 +3,11 @@
 use Illuminate\Support\Str;
 use Laravel\Ai\Audio;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\PendingResponses\PendingAudioGeneration;
 use Laravel\Ai\Prompts\AudioPrompt;
 use Laravel\Ai\Prompts\QueuedAudioPrompt;
 use Laravel\Ai\Providers\ElevenLabsProvider;
+use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\Meta;
 
@@ -20,6 +22,20 @@ test('audio rejects whitespace-only text', function () {
 
     Audio::of(" \t\n")->generate();
 })->throws(InvalidArgumentException::class, 'Text content is required to generate audio.');
+
+test('withProviderOptions accepts array and closure options without breaking the faked pipeline', function () {
+    Audio::fake([base64_encode('some-audio')]);
+
+    $response = Audio::of('Hello')
+        ->withProviderOptions(['format' => 'mp3'])
+        ->generate();
+
+    expect($response->audio)->toEqual(base64_encode('some-audio'));
+
+    $pending = Audio::of('Hello')->withProviderOptions(fn (Provider $provider) => ['format' => 'mp3']);
+
+    expect($pending)->toBeInstanceOf(PendingAudioGeneration::class);
+});
 
 test('audio can be faked', function () {
     Audio::fake([

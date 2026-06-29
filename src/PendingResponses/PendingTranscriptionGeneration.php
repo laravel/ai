@@ -72,7 +72,7 @@ class PendingTranscriptionGeneration
      *
      * @param  array<string, mixed>|Closure(Provider): ?array<string, mixed>  $options
      */
-    public function providerOptions(array|Closure $options): self
+    public function withProviderOptions(array|Closure $options): self
     {
         $this->providerOptions = $options instanceof Closure
             ? new SerializableClosure($options)

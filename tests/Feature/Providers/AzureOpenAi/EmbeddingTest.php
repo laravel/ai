@@ -132,7 +132,7 @@ test('embeddings request includes provider options in the request body', functio
     Http::fake(['*' => fakeAzureEmbeddingsResponse()]);
 
     Embeddings::for(['Hello'])
-        ->providerOptions(['encoding_format' => 'base64', 'user' => 'tester'])
+        ->withProviderOptions(['encoding_format' => 'base64', 'user' => 'tester'])
         ->generate(provider: 'azure', model: 'text-embedding-3-small');
 
     Http::assertSent(function (Request $request) {

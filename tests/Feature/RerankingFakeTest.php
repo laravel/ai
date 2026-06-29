@@ -2,7 +2,9 @@
 
 use Illuminate\Support\Collection;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\PendingResponses\PendingReranking;
 use Laravel\Ai\Prompts\RerankingPrompt;
+use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Reranking;
 use Laravel\Ai\Responses\Data\RankedDocument;
 
@@ -35,6 +37,18 @@ test('rerank rejects non-string documents', function () {
 
     Reranking::of([123])->rerank('What is Laravel?');
 })->throws(InvalidArgumentException::class, 'Each document to rerank must be a non-blank string (index 0).');
+
+test('withProviderOptions accepts an array and is chainable', function () {
+    $pending = Reranking::of(['Laravel'])->withProviderOptions(['top_n' => 1]);
+
+    expect($pending)->toBeInstanceOf(PendingReranking::class);
+});
+
+test('withProviderOptions accepts a closure and is chainable', function () {
+    $pending = Reranking::of(['Laravel'])->withProviderOptions(fn (Provider $provider) => ['top_n' => 1]);
+
+    expect($pending)->toBeInstanceOf(PendingReranking::class);
+});
 
 test('can fake reranking', function () {
     Reranking::fake();

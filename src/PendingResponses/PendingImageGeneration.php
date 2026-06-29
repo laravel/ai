@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\PendingResponses;
 
+use Closure;
 use Illuminate\Support\Traits\Conditionable;
 use InvalidArgumentException;
 use Laravel\Ai\Ai;
@@ -17,6 +18,7 @@ use Laravel\Ai\Prompts\QueuedImagePrompt;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\QueuedImageResponse;
+use Laravel\SerializableClosure\SerializableClosure;
 use LogicException;
 
 class PendingImageGeneration
@@ -30,6 +32,9 @@ class PendingImageGeneration
     public ?string $quality = null;
 
     public ?int $timeout = null;
+
+    /** @var array<string, mixed>|SerializableClosure */
+    protected array|SerializableClosure $providerOptions = [];
 
     public function __construct(public string $prompt)
     {
@@ -48,6 +53,34 @@ class PendingImageGeneration
         $this->attachments = $attachments;
 
         return $this;
+    }
+
+    /**
+     * Specify provider-specific options for image generation. Closures may only capture serializable values.
+     *
+     * @param  array<string, mixed>|Closure(Provider): ?array<string, mixed>  $options
+     */
+    public function withProviderOptions(array|Closure $options): self
+    {
+        $this->providerOptions = $options instanceof Closure
+            ? new SerializableClosure($options)
+            : $options;
+
+        return $this;
+    }
+
+    /**
+     * Resolve provider options for the given provider.
+     *
+     * @return array<string, mixed>
+     */
+    protected function resolveProviderOptions(Provider $provider): array
+    {
+        if ($this->providerOptions instanceof SerializableClosure) {
+            return ($this->providerOptions)($provider) ?: [];
+        }
+
+        return $this->providerOptions;
     }
 
     /**

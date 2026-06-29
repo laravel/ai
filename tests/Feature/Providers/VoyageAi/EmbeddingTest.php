@@ -104,7 +104,7 @@ test('embeddings request includes provider options in the request body', functio
     Http::fake(['*' => fakeVoyageEmbeddingsResponse()]);
 
     Embeddings::for(['Hello'])
-        ->providerOptions(['input_type' => 'query', 'truncation' => true])
+        ->withProviderOptions(['input_type' => 'query', 'truncation' => true])
         ->generate(provider: 'voyageai', model: 'voyage-4');
 
     Http::assertSent(function (Request $request) {
