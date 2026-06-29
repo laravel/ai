@@ -12,6 +12,7 @@ use Laravel\Ai\Gateway\Xai\XaiImageGateway;
 
 class XaiProvider extends Provider implements ImageProvider, TextProvider
 {
+    use Concerns\CountsTokens;
     use Concerns\GeneratesImages;
     use Concerns\GeneratesText;
     use Concerns\HasImageGateway;

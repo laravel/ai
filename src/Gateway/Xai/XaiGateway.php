@@ -36,6 +36,7 @@ class XaiGateway implements Gateway, StepTextGateway
     use DelegatesToTextGenerationLoop;
     use HandlesFailoverErrors;
     use ParsesServerSentEvents;
+    use \Laravel\Ai\Gateway\Concerns\EstimatesTokenCounts;
 
     public function __construct(protected Dispatcher $events) {}
 

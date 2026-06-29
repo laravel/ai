@@ -34,6 +34,7 @@ use RuntimeException;
 class GeminiGateway implements Gateway, StepTextGateway
 {
     use Concerns\BuildsTextRequests;
+    use Concerns\CountsTokens;
     use Concerns\CreatesGeminiClient;
     use Concerns\HandlesTextStreaming;
     use Concerns\MapsAttachments;

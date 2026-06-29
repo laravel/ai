@@ -35,6 +35,7 @@ use LogicException;
 class OpenAiGateway implements Gateway, StepTextGateway
 {
     use Concerns\BuildsTextRequests;
+    use Concerns\CountsTokens;
     use Concerns\CreatesOpenAiClient;
     use Concerns\HandlesTextGeneration;
     use Concerns\HandlesTextSteps;

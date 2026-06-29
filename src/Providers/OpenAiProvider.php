@@ -22,6 +22,7 @@ use Laravel\Ai\Providers\Tools\WebSearch;
 
 class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvider, FileProvider, ImageProvider, StoreProvider, SupportsFileSearch, SupportsWebSearch, TextProvider, TranscriptionProvider
 {
+    use Concerns\CountsTokens;
     use Concerns\GeneratesAudio;
     use Concerns\GeneratesEmbeddings;
     use Concerns\GeneratesImages;

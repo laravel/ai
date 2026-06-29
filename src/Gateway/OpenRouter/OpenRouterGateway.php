@@ -45,6 +45,7 @@ class OpenRouterGateway implements Gateway, StepTextGateway
     use HandlesFailoverErrors;
     use ParsesServerSentEvents;
     use WrapsPcmAudio;
+    use \Laravel\Ai\Gateway\Concerns\EstimatesTokenCounts;
 
     public function __construct(protected Dispatcher $events)
     {

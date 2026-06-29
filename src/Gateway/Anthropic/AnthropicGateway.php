@@ -27,6 +27,7 @@ use LogicException;
 class AnthropicGateway implements Gateway, StepTextGateway
 {
     use Concerns\BuildsTextRequests;
+    use Concerns\CountsTokens;
     use Concerns\CreatesAnthropicClient;
     use Concerns\HandlesTextStreaming;
     use Concerns\MapsAttachments;

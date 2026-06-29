@@ -14,6 +14,7 @@ use Laravel\Ai\Providers\Tools\WebSearch;
 
 class AnthropicProvider extends Provider implements FileProvider, SupportsWebFetch, SupportsWebSearch, TextProvider
 {
+    use Concerns\CountsTokens;
     use Concerns\GeneratesText;
     use Concerns\HasFileGateway;
     use Concerns\HasTextGateway;

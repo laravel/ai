@@ -17,6 +17,7 @@ use Laravel\Ai\Gateway\OpenRouter\OpenRouterGateway;
 
 class OpenRouterProvider extends Provider implements AudioProvider, EmbeddingProvider, ImageProvider, TextProvider, TranscriptionProvider
 {
+    use Concerns\CountsTokens;
     use Concerns\GeneratesAudio;
     use Concerns\GeneratesEmbeddings;
     use Concerns\GeneratesImages;
