@@ -31,16 +31,26 @@ final class WithoutBroadcasting
      */
     public static function allows(?object $target, StreamEvent $event): bool
     {
+        return ! in_array($event::class, self::eventsFor($target), true);
+    }
+
+    /**
+     * Get the stream event classes that should not be broadcast for the target agent.
+     *
+     * @return array<int, class-string<StreamEvent>>
+     */
+    public static function eventsFor(?object $target): array
+    {
         if ($target === null) {
-            return true;
+            return [];
         }
 
         $attributes = (new ReflectionClass($target))->getAttributes(self::class);
 
         if ($attributes === []) {
-            return true;
+            return [];
         }
 
-        return ! in_array($event::class, $attributes[0]->newInstance()->events, true);
+        return $attributes[0]->newInstance()->events;
     }
 }

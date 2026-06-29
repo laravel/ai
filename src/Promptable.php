@@ -154,9 +154,11 @@ trait Promptable
      */
     public function broadcast(string $prompt, Channel|array $channels, array $attachments = [], bool $now = false, Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
     {
+        $without = WithoutBroadcasting::eventsFor($this);
+
         return $this->stream($prompt, $attachments, $provider, $model)
-            ->each(function (StreamEvent $event) use ($channels, $now) {
-                if (! WithoutBroadcasting::allows($this, $event)) {
+            ->each(function (StreamEvent $event) use ($channels, $now, $without) {
+                if (in_array($event::class, $without, true)) {
                     return;
                 }
 

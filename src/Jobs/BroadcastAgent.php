@@ -44,9 +44,11 @@ class BroadcastAgent implements ShouldQueue
     {
         $streamedResponse = null;
 
+        $without = WithoutBroadcasting::eventsFor($this->agent);
+
         $this->agent->stream($this->prompt, $this->attachments, $this->provider, $this->model)
-            ->each(function (StreamEvent $event) {
-                if (! WithoutBroadcasting::allows($this->agent, $event)) {
+            ->each(function (StreamEvent $event) use ($without) {
+                if (in_array($event::class, $without, true)) {
                     return;
                 }
 
