@@ -11,7 +11,7 @@ test('token counting works with anthropic provider', function (string $provider,
     requiresApiKey($apiKey);
 
     $agent = new AssistantAgent;
-    $provider = \Ai::textProvider($provider);
+    $provider = Ai::textProvider($provider);
 
     $tokens = $provider->countTokens(
         model: $model,
@@ -32,7 +32,7 @@ test('token counting works with openai provider', function (string $provider, st
 
     requiresApiKey($apiKey);
 
-    $textProvider = \Ai::textProvider($provider);
+    $textProvider = Ai::textProvider($provider);
 
     $tokens = $textProvider->countTokens(
         model: $model,
@@ -53,7 +53,7 @@ test('token counting works with gemini provider', function (string $provider, st
 
     requiresApiKey($apiKey);
 
-    $textProvider = \Ai::textProvider($provider);
+    $textProvider = Ai::textProvider($provider);
 
     $tokens = $textProvider->countTokens(
         model: $model,

@@ -17,6 +17,7 @@ use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Files\Image;
 use Laravel\Ai\Gateway\Concerns\DelegatesToTextGenerationLoop;
+use Laravel\Ai\Gateway\Concerns\EstimatesTokenCounts;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\Concerns\WrapsPcmAudio;
@@ -42,10 +43,10 @@ class OpenRouterGateway implements Gateway, StepTextGateway
     use Concerns\MapsTools;
     use Concerns\ParsesTextResponses;
     use DelegatesToTextGenerationLoop;
+    use EstimatesTokenCounts;
     use HandlesFailoverErrors;
     use ParsesServerSentEvents;
     use WrapsPcmAudio;
-    use \Laravel\Ai\Gateway\Concerns\EstimatesTokenCounts;
 
     public function __construct(protected Dispatcher $events)
     {

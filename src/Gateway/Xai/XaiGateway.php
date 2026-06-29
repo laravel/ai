@@ -13,6 +13,7 @@ use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Gateway\Concerns\DelegatesToTextGenerationLoop;
+use Laravel\Ai\Gateway\Concerns\EstimatesTokenCounts;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\StepContext;
@@ -34,9 +35,9 @@ class XaiGateway implements Gateway, StepTextGateway
     use Concerns\MapsTools;
     use Concerns\ParsesTextResponses;
     use DelegatesToTextGenerationLoop;
+    use EstimatesTokenCounts;
     use HandlesFailoverErrors;
     use ParsesServerSentEvents;
-    use \Laravel\Ai\Gateway\Concerns\EstimatesTokenCounts;
 
     public function __construct(protected Dispatcher $events) {}
 
