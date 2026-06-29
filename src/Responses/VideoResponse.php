@@ -3,14 +3,17 @@
 namespace Laravel\Ai\Responses;
 
 use Countable;
-use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Responses\Data\GeneratedVideo;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
+use RuntimeException;
 
-class VideoResponse implements Countable, Htmlable
+class VideoResponse implements Countable
 {
+    /**
+     * @param  Collection<int, GeneratedVideo>  $videos
+     */
     public function __construct(
         public Collection $videos,
         public Usage $usage,
@@ -23,7 +26,11 @@ class VideoResponse implements Countable, Htmlable
      */
     public function firstVideo(): GeneratedVideo
     {
-        return $this->videos[0];
+        if ($this->videos->isEmpty()) {
+            throw new RuntimeException('The video response does not contain any videos.');
+        }
+
+        return $this->videos->first();
     }
 
     /**
@@ -59,9 +66,9 @@ class VideoResponse implements Countable, Htmlable
     }
 
     /**
-     * Get a video tag for the video (expects a public URL; use after storing).
+     * Get a <video> tag for the given source URL (store the video first, then pass its public URL).
      */
-    public function toHtml(string $src = '', string $alt = ''): string
+    public function toHtml(string $src, string $alt = ''): string
     {
         return sprintf(
             '<video controls src="%s" playsinline>%s</video>',
@@ -83,6 +90,6 @@ class VideoResponse implements Countable, Htmlable
      */
     public function __toString(): string
     {
-        return (string) $this->videos[0];
+        return (string) $this->firstVideo();
     }
 }

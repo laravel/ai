@@ -38,6 +38,10 @@ dataset('image-providers', [
     'gemini-2.5-flash-image' => ['gemini', 'GEMINI_API_KEY', 'gemini-2.5-flash-image'],
 ]);
 
+dataset('video-providers', [
+    'openai-sora-2' => ['openai', 'OPENAI_API_KEY', 'sora-2'],
+]);
+
 dataset('file-providers', [
     'anthropic' => ['anthropic', 'ANTHROPIC_API_KEY'],
     'openai' => ['openai', 'OPENAI_API_KEY'],

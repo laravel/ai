@@ -2,7 +2,10 @@
 
 namespace Laravel\Ai\Providers\Concerns;
 
+use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Events\GeneratingVideo;
+use Laravel\Ai\Events\VideoGenerated;
 use Laravel\Ai\Prompts\VideoPrompt;
 use Laravel\Ai\Responses\VideoResponse;
 
@@ -10,9 +13,6 @@ trait GeneratesVideos
 {
     /**
      * Generate a video.
-     *
-     * @param  '4'|'8'|'12'|null  $seconds
-     * @param  '720x1280'|'1280x720'|'1024x1792'|'1792x1024'|null  $size
      */
     public function video(
         string $prompt,
@@ -22,6 +22,8 @@ trait GeneratesVideos
         ?int $timeout = null,
         ?int $pollIntervalSeconds = null,
     ): VideoResponse {
+        $invocationId = (string) Str::uuid7();
+
         $model ??= $this->defaultVideoModel();
 
         $options = $this->defaultVideoOptions($seconds, $size);
@@ -38,14 +40,22 @@ trait GeneratesVideos
             Ai::recordVideoGeneration($videoPrompt);
         }
 
-        return $this->videoGateway()->generateVideo(
+        $this->events->dispatch(new GeneratingVideo(
+            $invocationId, $this, $model, $videoPrompt,
+        ));
+
+        return tap($this->videoGateway()->generateVideo(
             $this,
             $model,
             $videoPrompt->prompt,
-            $options['seconds'],
-            $options['size'],
+            $videoPrompt->seconds,
+            $videoPrompt->size,
             $timeout,
             $pollIntervalSeconds,
-        );
+        ), function (VideoResponse $response) use ($invocationId, $videoPrompt, $model) {
+            $this->events->dispatch(new VideoGenerated(
+                $invocationId, $this, $model, $videoPrompt, $response,
+            ));
+        });
     }
 }

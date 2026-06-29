@@ -10,8 +10,8 @@ interface VideoGateway
     /**
      * Create a video job, poll until completion, and download the result.
      *
-     * @param  '4'|'8'|'12'|null  $seconds
-     * @param  '720x1280'|'1280x720'|'1024x1792'|'1792x1024'|null  $size
+     * @param  '4'|'8'|'12'|null  $seconds  Provider dependent; the union reflects OpenAI Sora.
+     * @param  '720x1280'|'1280x720'|'1024x1792'|'1792x1024'|null  $size  Provider dependent; the union reflects OpenAI Sora.
      */
     public function generateVideo(
         VideoProvider $provider,

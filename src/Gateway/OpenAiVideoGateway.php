@@ -14,6 +14,8 @@ use RuntimeException;
 
 class OpenAiVideoGateway implements VideoGateway
 {
+    use Concerns\HandlesFailoverErrors;
+
     protected const string BASE_URL = 'https://api.openai.com/v1';
 
     /**
@@ -34,77 +36,78 @@ class OpenAiVideoGateway implements VideoGateway
             throw new RuntimeException('OpenAI API key is missing for video generation.');
         }
 
-        $seconds = $seconds ?? '4';
-        $size = $size ?? '1280x720';
+        $seconds ??= '4';
+        $size ??= '1280x720';
         $pollIntervalSeconds = max(1, $pollIntervalSeconds ?? 2);
+        $baseUrl = rtrim($provider->additionalConfiguration()['url'] ?? self::BASE_URL, '/');
         $deadline = $timeout !== null ? microtime(true) + $timeout : null;
 
-        $create = Http::withToken($key)
-            ->timeout(120)
-            ->asMultipart()
-            ->post(self::BASE_URL.'/videos', [
-                ['name' => 'prompt', 'contents' => $prompt],
-                ['name' => 'model', 'contents' => $model],
-                ['name' => 'seconds', 'contents' => (string) $seconds],
-                ['name' => 'size', 'contents' => $size],
-            ]);
+        // Bound every request's timeout by the time remaining on the single overall deadline, falling back to a per-request default when no timeout was given.
+        $remaining = function (int $default) use ($deadline): int {
+            return $deadline === null ? $default : max(1, min($default, (int) ceil($deadline - microtime(true))));
+        };
 
-        if (! $create->successful()) {
-            throw new RuntimeException('OpenAI video create failed: '.$create->body());
-        }
+        return $this->withErrorHandling($provider->name(), function () use (
+            $provider, $model, $prompt, $seconds, $size, $key, $baseUrl, $deadline, $pollIntervalSeconds, $remaining, $timeout
+        ): VideoResponse {
+            $create = Http::withToken($key)
+                ->timeout($remaining(120))
+                ->asMultipart()
+                ->throw()
+                ->post($baseUrl.'/videos', [
+                    ['name' => 'prompt', 'contents' => $prompt],
+                    ['name' => 'model', 'contents' => $model],
+                    ['name' => 'seconds', 'contents' => (string) $seconds],
+                    ['name' => 'size', 'contents' => $size],
+                ]);
 
-        $videoId = $create->json('id');
+            $videoId = $create->json('id');
 
-        if (! is_string($videoId) || $videoId === '') {
-            throw new RuntimeException('OpenAI video create response missing id.');
-        }
-
-        $status = 'queued';
-
-        while (in_array($status, ['queued', 'in_progress'], true)) {
-            if ($deadline !== null && microtime(true) > $deadline) {
-                throw new RuntimeException('OpenAI video generation timed out after '.$timeout.' seconds.');
+            if (! is_string($videoId) || $videoId === '') {
+                throw new RuntimeException('OpenAI video create response missing id.');
             }
 
-            Sleep::for($pollIntervalSeconds)->seconds();
+            $status = (string) $create->json('status', 'queued');
 
-            $poll = Http::withToken($key)
-                ->timeout(60)
-                ->get(self::BASE_URL.'/videos/'.$videoId);
+            while (in_array($status, ['queued', 'in_progress'], true)) {
+                if ($deadline !== null && microtime(true) > $deadline) {
+                    throw new RuntimeException('OpenAI video generation timed out after '.$timeout.' seconds.');
+                }
 
-            if (! $poll->successful()) {
-                throw new RuntimeException('OpenAI video status failed: '.$poll->body());
+                Sleep::for($pollIntervalSeconds)->seconds();
+
+                $poll = Http::withToken($key)
+                    ->timeout($remaining(60))
+                    ->throw()
+                    ->get($baseUrl.'/videos/'.$videoId);
+
+                $status = (string) $poll->json('status', 'failed');
+
+                if ($status === 'failed') {
+                    $message = $poll->json('error.message') ?? $poll->body();
+
+                    throw new RuntimeException('OpenAI video generation failed: '.$message);
+                }
             }
 
-            $status = (string) $poll->json('status', 'failed');
-
-            if ($status === 'failed') {
-                $message = $poll->json('error.message') ?? $poll->body();
-
-                throw new RuntimeException('OpenAI video generation failed: '.$message);
+            if ($status !== 'completed') {
+                throw new RuntimeException('OpenAI video ended in unexpected status: '.$status);
             }
-        }
 
-        if ($status !== 'completed') {
-            throw new RuntimeException('OpenAI video ended in unexpected status: '.$status);
-        }
+            $binary = Http::withToken($key)
+                ->timeout($remaining(300))
+                ->withHeaders(['Accept' => 'video/mp4'])
+                ->throw()
+                ->get($baseUrl.'/videos/'.$videoId.'/content');
 
-        $binary = Http::withToken($key)
-            ->timeout(300)
-            ->withHeaders(['Accept' => 'video/mp4'])
-            ->get(self::BASE_URL.'/videos/'.$videoId.'/content');
+            $mime = $binary->header('Content-Type') ?: 'video/mp4';
 
-        if (! $binary->successful()) {
-            throw new RuntimeException('OpenAI video download failed: '.$binary->body());
-        }
-
-        $mime = $binary->header('Content-Type') ?: 'video/mp4';
-
-        return new VideoResponse(
-            collect([new GeneratedVideo($binary->body(), $mime)]),
-            new Usage,
-            new Meta(provider: $provider->name(), model: $model),
-            remoteId: $videoId,
-        );
+            return new VideoResponse(
+                collect([new GeneratedVideo($binary->body(), $mime)]),
+                new Usage,
+                new Meta(provider: $provider->name(), model: $model),
+                remoteId: $videoId,
+            );
+        });
     }
 }

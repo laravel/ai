@@ -3,6 +3,7 @@
 namespace Laravel\Ai\PendingResponses;
 
 use Illuminate\Support\Traits\Conditionable;
+use InvalidArgumentException;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
@@ -27,7 +28,7 @@ class PendingVideoGeneration
     ) {}
 
     /**
-     * Clip duration in seconds (OpenAI: 4, 8, or 12).
+     * Clip duration in seconds. Accepted values are provider dependent (OpenAI Sora: 4, 8, or 12).
      *
      * @param  '4'|'8'|'12'  $seconds
      */
@@ -39,7 +40,7 @@ class PendingVideoGeneration
     }
 
     /**
-     * Output resolution (e.g. 1280x720).
+     * Output resolution. Accepted values are provider dependent (OpenAI Sora: e.g. 1280x720).
      *
      * @param  '720x1280'|'1280x720'|'1024x1792'|'1792x1024'  $size
      */
@@ -75,6 +76,8 @@ class PendingVideoGeneration
      */
     public function generate(Lab|array|string|null $provider = null, ?string $model = null): VideoResponse
     {
+        $this->ensurePromptIsNotBlank();
+
         $providers = Provider::formatProviderAndModelList(
             $provider ?? config('ai.default_for_videos'), $model
         );
@@ -112,6 +115,8 @@ class PendingVideoGeneration
      */
     public function queue(Lab|array|string|null $provider = null, ?string $model = null): QueuedVideoResponse
     {
+        $this->ensurePromptIsNotBlank();
+
         if (Ai::videosAreFaked()) {
             Ai::recordVideoGeneration(
                 new QueuedVideoPrompt(
@@ -135,5 +140,15 @@ class PendingVideoGeneration
         }
 
         return new QueuedVideoResponse($dispatch);
+    }
+
+    /**
+     * Ensure the prompt is not blank before attempting generation.
+     */
+    protected function ensurePromptIsNotBlank(): void
+    {
+        if (trim($this->prompt) === '') {
+            throw new InvalidArgumentException('A video generation prompt must not be empty.');
+        }
     }
 }

@@ -5,7 +5,11 @@ namespace Tests\Feature;
 use Exception;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Event;
+use InvalidArgumentException;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Events\GeneratingVideo;
+use Laravel\Ai\Events\VideoGenerated;
 use Laravel\Ai\Jobs\GenerateVideo;
 use Laravel\Ai\Prompts\QueuedVideoPrompt;
 use Laravel\Ai\Prompts\VideoPrompt;
@@ -232,5 +236,58 @@ class VideoFakeTest extends TestCase
         Bus::assertDispatched(GenerateVideo::class, function (GenerateVideo $job): bool {
             return $job->queue === 'explicit-queue';
         });
+    }
+
+    public function test_blank_prompts_are_rejected_when_generating(): void
+    {
+        Video::fake();
+
+        $this->expectException(InvalidArgumentException::class);
+
+        Video::of('   ')->generate();
+    }
+
+    public function test_blank_prompts_are_rejected_when_queueing(): void
+    {
+        Video::fake();
+
+        $this->expectException(InvalidArgumentException::class);
+
+        Video::of('')->queue();
+    }
+
+    public function test_lifecycle_events_are_dispatched_when_generating(): void
+    {
+        Event::fake([GeneratingVideo::class, VideoGenerated::class]);
+
+        Video::fake(['some-bytes']);
+
+        $response = Video::of('A waterfall')->generate();
+
+        Event::assertDispatched(GeneratingVideo::class, fn (GeneratingVideo $event) => $event->prompt->prompt === 'A waterfall');
+        Event::assertDispatched(VideoGenerated::class, fn (VideoGenerated $event) => $event->response === $response);
+    }
+
+    public function test_to_html_escapes_and_requires_a_source(): void
+    {
+        $response = new VideoResponse(
+            new Collection([new GeneratedVideo('bytes')]),
+            new Usage,
+            new Meta,
+        );
+
+        $this->assertSame(
+            '<video controls src="https://cdn.test/clip.mp4" playsinline></video>',
+            $response->toHtml('https://cdn.test/clip.mp4'),
+        );
+    }
+
+    public function test_first_video_throws_on_empty_response(): void
+    {
+        $response = new VideoResponse(new Collection, new Usage, new Meta);
+
+        $this->expectException(RuntimeException::class);
+
+        $response->firstVideo();
     }
 }
