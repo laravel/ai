@@ -25,24 +25,16 @@ function multipartField(Request $request, string $name): ?string
     return collect($request->data())->firstWhere('name', $name)['contents'] ?? null;
 }
 
-function multipartArrayField(Request $request, string $name): ?array
+// Laravel 12 flattens nested multipart arrays to "name[]" => value while Laravel 13 keeps "name" => array, so we compare just the values to stay stable across both.
+function multipartNestedField(Request $request, string $name): array
 {
-    $field = collect($request->data())
-        ->where('name', $name)
-        ->pluck('contents')
-        ->first(fn ($contents) => is_array($contents));
-
-    if (is_array($field)) {
-        return $field;
-    }
-
-    $fields = collect($request->data())
-        ->filter(fn ($field) => preg_match('/^'.preg_quote($name, '/').'\[([^\]]+)\]$/', $field['name'] ?? '', $matches) === 1)
-        ->mapWithKeys(fn ($field) => [
-            preg_replace('/^'.preg_quote($name, '/').'\[([^\]]+)\]$/', '$1', $field['name']) => $field['contents'] ?? null,
-        ]);
-
-    return $fields->isEmpty() ? null : $fields->all();
+    return collect($request->data())
+        ->reject(fn ($field) => isset($field['filename']))
+        ->filter(fn ($field) => (($field['name'] ?? null) === $name && is_array($field['contents'] ?? null))
+            || preg_match('/^'.preg_quote($name, '/').'\[[^\]]*\]$/', $field['name'] ?? '') === 1)
+        ->flatMap(fn ($field) => is_array($field['contents'] ?? null) ? array_values($field['contents']) : [$field['contents'] ?? null])
+        ->values()
+        ->all();
 }
 
 function fakeGroqResponse(string $text = 'Hello'): PromiseInterface
