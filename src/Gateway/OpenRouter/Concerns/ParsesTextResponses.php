@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\OpenRouter\Concerns;
 
 use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
@@ -12,6 +13,8 @@ use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
 {
+    use DecodesStructuredOutput;
+
     /**
      * Validate the OpenRouter response data.
      *
@@ -55,7 +58,7 @@ trait ParsesTextResponses
             finishReason: $this->extractFinishReason($choice),
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model),
-            structured: $structured ? (json_decode($text, true) ?? []) : null,
+            structured: $structured ? $this->decodeStructuredOutput($text) : null,
         );
     }
 

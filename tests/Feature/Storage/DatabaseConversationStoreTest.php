@@ -169,11 +169,109 @@ test('it reloads legacy sparse keyed tool calls and results as lists', function 
 
     $messages = $store->getLatestConversationMessages($conversationId, 10);
 
-    expect($messages)->toHaveCount(2)
+    expect($messages)->toHaveCount(3)
         ->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
         ->and($messages[0]->toolCalls->keys()->all())->toBe([0, 1])
         ->and($messages[1])->toBeInstanceOf(ToolResultMessage::class)
-        ->and($messages[1]->toolResults->keys()->all())->toBe([0, 1]);
+        ->and($messages[1]->toolResults->keys()->all())->toBe([0, 1])
+        ->and($messages[2])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[2]->content)->toBe('The order has shipped.');
+});
+
+test('it replays stored tool conversations before the final assistant response', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Tool conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => 'The order has shipped.',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call-1', 'name' => 'lookup_order', 'arguments' => ['id' => 1], 'result_id' => 'result-1'],
+        ]),
+        'tool_results' => json_encode([
+            ['id' => 'call-1', 'name' => 'lookup_order', 'arguments' => ['id' => 1], 'result' => ['status' => 'shipped'], 'result_id' => 'result-1'],
+        ]),
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toHaveCount(3)
+        ->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[0]->content)->toBe('')
+        ->and($messages[0]->toolCalls)->toHaveCount(1)
+        ->and($messages[0]->toolCalls[0]->resultId)->toBe('result-1')
+        ->and($messages[1])->toBeInstanceOf(ToolResultMessage::class)
+        ->and($messages[1]->toolResults)->toHaveCount(1)
+        ->and($messages[1]->toolResults[0]->resultId)->toBe('result-1')
+        ->and($messages[2])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[2]->content)->toBe('The order has shipped.')
+        ->and($messages[2]->toolCalls)->toBeEmpty();
+});
+
+test('it drops resultless tool calls and replays only the final assistant text', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Tool conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => 'The order has shipped.',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call-1', 'name' => 'lookup_order', 'arguments' => ['id' => 1], 'result_id' => 'result-1'],
+        ]),
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toHaveCount(1)
+        ->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[0]->content)->toBe('The order has shipped.')
+        ->and($messages[0]->toolCalls)->toBeEmpty();
+});
+
+test('it drops resultless tool calls with no final text entirely', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Tool conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => '',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call-1', 'name' => 'lookup_order', 'arguments' => ['id' => 1], 'result_id' => 'result-1'],
+        ]),
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toBeEmpty();
 });
 
 test('it rehydrates reasoning encrypted content on stored tool calls', function () {

@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\Gemini\Concerns;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
@@ -15,6 +16,8 @@ use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
 {
+    use DecodesStructuredOutput;
+
     /**
      * Validate the Gemini response data.
      *
@@ -52,7 +55,7 @@ trait ParsesTextResponses
             finishReason: $this->extractFinishReason($data, $rawToolCalls),
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model, $this->extractCitations($data)),
-            structured: $structured ? (json_decode($text, true) ?? []) : null,
+            structured: $structured ? $this->decodeStructuredOutput($text) : null,
             providerContentBlocks: $this->sanitizeRequestParts($this->excludeThinkingParts($parts)),
         );
     }

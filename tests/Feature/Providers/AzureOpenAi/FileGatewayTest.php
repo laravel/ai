@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Files\Document;
 
 beforeEach(function () {
@@ -28,4 +29,20 @@ test('put file uploads to the v1 endpoint with the assistants purpose', function
         && str_contains($request->header('Content-Type')[0] ?? '', 'multipart/form-data')
         && collect($request->data())->contains(fn ($field) => ($field['name'] ?? null) === 'purpose' && ($field['contents'] ?? null) === 'assistants')
         && $request->hasHeader('api-key', 'test-key'));
+});
+
+test('provider options are resolved with the azure key, not openai', function () {
+    Http::fake([
+        'test-resource.openai.azure.com/*' => Http::response(['id' => 'file-uploaded123']),
+    ]);
+
+    Document::fromString('Hello, World!', 'text/plain')->as('hello.txt')
+        ->withProviderOptions(fn (Lab $provider) => match ($provider) {
+            Lab::Azure => ['purpose' => 'batch'],
+            Lab::OpenAI => ['purpose' => 'vision'],
+            default => [],
+        })
+        ->put(provider: 'azure');
+
+    expect(multipartField(sentRequest(), 'purpose'))->toBe('batch');
 });
