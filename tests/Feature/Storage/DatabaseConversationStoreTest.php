@@ -217,6 +217,36 @@ test('it replays stored tool conversations before the final assistant response',
         ->and($messages[2]->toolCalls)->toBeEmpty();
 });
 
+test('it keeps the final text on the tool call message when no tool results are stored', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Tool conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => 'The order has shipped.',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call-1', 'name' => 'lookup_order', 'arguments' => ['id' => 1], 'result_id' => 'result-1'],
+        ]),
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toHaveCount(1)
+        ->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[0]->content)->toBe('The order has shipped.')
+        ->and($messages[0]->toolCalls)->toHaveCount(1);
+});
+
 test('it rehydrates reasoning encrypted content on stored tool calls', function () {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Reasoning conversation');
