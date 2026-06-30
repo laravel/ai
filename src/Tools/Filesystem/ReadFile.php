@@ -28,8 +28,9 @@ class ReadFile extends FilesystemTool
      */
     public function handle(Request $request): string
     {
-        $path = $request->string('path');
         $disk = $this->disk();
+
+        $path = $request->string('path');
 
         try {
             $size = $disk->size($path);

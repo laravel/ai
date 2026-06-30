@@ -23,6 +23,7 @@ class WriteFile extends FilesystemTool
     public function handle(Request $request): string
     {
         $path = $request->string('path');
+
         $contents = $request->string('contents');
 
         if (! $this->disk()->put($path, $contents)) {

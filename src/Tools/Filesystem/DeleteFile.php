@@ -22,8 +22,9 @@ class DeleteFile extends FilesystemTool
      */
     public function handle(Request $request): string
     {
-        $path = (string) $request->string('path');
         $disk = $this->disk();
+
+        $path = (string) $request->string('path');
 
         if (! $this->fileExists($disk, $path)) {
             return "File [{$path}] does not exist.";

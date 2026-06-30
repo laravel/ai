@@ -15,7 +15,7 @@ class FileMetadata extends FilesystemTool
      */
     public function description(): string
     {
-        return 'Fetch metadata for a file (size in bytes, last modified time, MIME type, visibility) without reading its contents. Use ReadFile to read the contents.';
+        return 'Get metadata for a file (size in bytes, last modified time, MIME type, visibility) without reading its contents. Use ReadFile to read the contents.';
     }
 
     /**
@@ -23,8 +23,9 @@ class FileMetadata extends FilesystemTool
      */
     public function handle(Request $request): string
     {
-        $path = $request->string('path');
         $disk = $this->disk();
+
+        $path = $request->string('path');
 
         try {
             $size = $disk->size($path);

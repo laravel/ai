@@ -23,8 +23,9 @@ class FileUrl extends FilesystemTool
      */
     public function handle(Request $request): string
     {
-        $path = $request->string('path');
         $disk = $this->disk();
+
+        $path = $request->string('path');
 
         if (! $this->fileExists($disk, $path)) {
             return "File [{$path}] does not exist.";

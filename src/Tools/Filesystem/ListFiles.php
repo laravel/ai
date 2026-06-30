@@ -22,15 +22,18 @@ class ListFiles extends FilesystemTool
      */
     public function handle(Request $request): string
     {
-        $path = $request->string('path');
-        $recursive = $request->boolean('recursive');
-
         $disk = $this->disk();
+
+        $path = $request->string('path');
 
         return json_encode([
             'path' => $path,
-            'directories' => $recursive ? $disk->allDirectories($path) : $disk->directories($path),
-            'files' => $recursive ? $disk->allFiles($path) : $disk->files($path),
+            'directories' => $request->boolean('recursive')
+                ? $disk->allDirectories($path)
+                : $disk->directories($path),
+            'files' => $request->boolean('recursive')
+                ? $disk->allFiles($path)
+                : $disk->files($path),
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
