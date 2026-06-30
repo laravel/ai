@@ -278,6 +278,20 @@ class MyAgent implements Agent
 
 The `#[UseCheapestModel]` and `#[UseSmartestModel]` attributes are also available for automatic model selection.
 
+The `#[WithoutBroadcasting]` attribute stops the given stream event types from broadcasting (e.g. data-heavy `ToolResult` payloads that exceed the WebSocket frame limit). The events are still streamed and persisted; they just never hit the channel:
+
+```php
+use Laravel\Ai\Attributes\WithoutBroadcasting;
+use Laravel\Ai\Streaming\Events\{ToolCall, ToolResult};
+
+#[WithoutBroadcasting(ToolResult::class, ToolCall::class)]
+class SearchAgent implements Agent, HasTools
+{
+    use Promptable;
+    // ...
+}
+```
+
 ### Tools
 
 Implement the `HasTools` interface and scaffold tools with `php artisan make:tool`:

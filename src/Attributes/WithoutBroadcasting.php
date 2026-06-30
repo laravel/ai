@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Attributes;
 
 use Attribute;
+use InvalidArgumentException;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use ReflectionClass;
 
@@ -23,7 +24,23 @@ final class WithoutBroadcasting
      */
     public function __construct(string ...$events)
     {
+        foreach ($events as $event) {
+            if (! is_subclass_of($event, StreamEvent::class)) {
+                throw new InvalidArgumentException("[{$event}] is not a valid ".StreamEvent::class.' to exclude from broadcasting.');
+            }
+        }
+
         $this->events = $events;
+    }
+
+    /**
+     * Determine if the given event should be withheld from the resolved skip set.
+     *
+     * @param  array<int, class-string<StreamEvent>>  $events
+     */
+    public static function withholds(array $events, StreamEvent $event): bool
+    {
+        return in_array($event::class, $events, true);
     }
 
     /**

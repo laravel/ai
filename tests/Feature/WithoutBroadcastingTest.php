@@ -12,6 +12,11 @@ use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\NonBroadcastingTextAgent;
 use Tests\Fixtures\Agents\NonBroadcastingToolAgent;
 
+test('it rejects event classes that are not stream events', function () {
+    expect(fn () => new WithoutBroadcasting('App\Events\Typo'))
+        ->toThrow(InvalidArgumentException::class);
+});
+
 test('no events are withheld when the attribute is absent', function () {
     expect(WithoutBroadcasting::eventsFor(new AssistantAgent))->toBe([]);
 });
