@@ -27,14 +27,6 @@ final class WithoutBroadcasting
     }
 
     /**
-     * Determine if the given stream event should be broadcast for the target agent.
-     */
-    public static function allows(?object $target, StreamEvent $event): bool
-    {
-        return ! in_array($event::class, self::eventsFor($target), true);
-    }
-
-    /**
      * Get the stream event classes that should not be broadcast for the target agent.
      *
      * @return array<int, class-string<StreamEvent>>

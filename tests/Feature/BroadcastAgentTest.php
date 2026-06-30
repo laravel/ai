@@ -1,7 +1,9 @@
 <?php
 
 use Illuminate\Broadcasting\AnonymousEvent;
+use Illuminate\Broadcasting\BroadcastException;
 use Illuminate\Broadcasting\Channel;
+use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Event;
 use Laravel\Ai\Jobs\BroadcastAgent;
 use Laravel\Ai\Responses\StreamedAgentResponse;
@@ -126,6 +128,35 @@ test('failed event shares the invocation id with broadcasts from handle', functi
     });
 
     expect(array_values(array_unique($broadcastIds)))->toBe([$invocationId]);
+});
+
+test('an oversized broadcast frame does not abort the stream and then still resolves', function () {
+    AssistantAgent::fake(['Hello world']);
+
+    $pending = Mockery::mock(AnonymousEvent::class);
+    $pending->shouldReceive('as')->andReturnSelf();
+    $pending->shouldReceive('with')->andReturnSelf();
+    $pending->shouldReceive('sendNow')->andThrow(new BroadcastException('Payload too large'));
+
+    Broadcast::shouldReceive('on')->andReturn($pending);
+
+    $received = null;
+
+    $job = new BroadcastAgent(
+        agent: new AssistantAgent,
+        prompt: 'Say hello',
+        channels: new Channel('test-channel'),
+    );
+
+    $job->then(function ($response) use (&$received) {
+        $received = $response;
+    });
+
+    $job->handle();
+
+    expect($received)->not->toBeNull('then() callback was never invoked despite a failed broadcast')
+        ->toBeInstanceOf(StreamedAgentResponse::class)
+        ->and($received->text)->toBe('Hello world');
 });
 
 test('streamed response passed to then is fully resolved', function () {
