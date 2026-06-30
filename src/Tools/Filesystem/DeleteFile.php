@@ -25,11 +25,13 @@ class DeleteFile extends FilesystemTool
         $path = (string) $request->string('path');
         $disk = $this->disk();
 
-        if (! $disk->exists($path)) {
+        if (! $this->fileExists($disk, $path)) {
             return "File [{$path}] does not exist.";
         }
 
-        $disk->delete($path);
+        if (! $disk->delete($path)) {
+            return "Unable to delete [{$path}].";
+        }
 
         return "Deleted [{$path}].";
     }

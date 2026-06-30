@@ -24,7 +24,7 @@ class FileExists extends FilesystemTool
     {
         $path = $request->string('path');
 
-        return $this->disk()->exists($path)
+        return $this->fileExists($this->disk(), $path)
             ? "File [{$path}] exists."
             : "File [{$path}] does not exist.";
     }

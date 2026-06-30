@@ -25,7 +25,9 @@ class WriteFile extends FilesystemTool
         $path = $request->string('path');
         $contents = $request->string('contents');
 
-        $this->disk()->put($path, $contents);
+        if (! $this->disk()->put($path, $contents)) {
+            return "Unable to write [{$path}].";
+        }
 
         return 'Wrote '.strlen($contents)." bytes to [{$path}].";
     }

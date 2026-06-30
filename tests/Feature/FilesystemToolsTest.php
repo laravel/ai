@@ -1,6 +1,7 @@
 <?php
 
 use GuzzleHttp\Promise\PromiseInterface;
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Http\UploadedFile;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Collection;
@@ -88,6 +89,14 @@ test('file exists reports presence and absence', function () {
         ->toBe('File [nope.txt] does not exist.');
 });
 
+test('file exists does not report directories as files', function () {
+    Storage::disk('local')->makeDirectory('docs');
+
+    $result = (new FileExists('local'))->handle(new Request(['path' => 'docs']));
+
+    expect($result)->toBe('File [docs] does not exist.');
+});
+
 test('file metadata returns size and mime type', function () {
     Storage::disk('local')->put('data.txt', 'twelve bytes');
 
@@ -117,12 +126,29 @@ test('file url reports a missing file', function () {
     expect($result)->toBe('File [missing.txt] does not exist.');
 });
 
+test('file url does not generate urls for directories', function () {
+    Storage::disk('local')->makeDirectory('docs');
+
+    $result = (new FileUrl('local'))->handle(new Request(['path' => 'docs']));
+
+    expect($result)->toBe('File [docs] does not exist.');
+});
+
 test('write file creates a file', function () {
     $result = (new WriteFile('local'))->handle(new Request(['path' => 'out.txt', 'contents' => 'written']));
 
     expect($result)->toContain('Wrote');
     Storage::disk('local')->assertExists('out.txt');
     expect(Storage::disk('local')->get('out.txt'))->toBe('written');
+});
+
+test('write file reports write failures', function () {
+    $disk = Mockery::mock(Filesystem::class);
+    $disk->shouldReceive('put')->once()->with('out.txt', 'written')->andReturnFalse();
+
+    $result = (new WriteFile($disk))->handle(new Request(['path' => 'out.txt', 'contents' => 'written']));
+
+    expect($result)->toBe('Unable to write [out.txt].');
 });
 
 test('delete file removes a file', function () {
@@ -138,6 +164,25 @@ test('delete file reports a missing file', function () {
     $result = (new DeleteFile('local'))->handle(new Request(['path' => 'missing.txt']));
 
     expect($result)->toBe('File [missing.txt] does not exist.');
+});
+
+test('delete file does not report directories as files', function () {
+    Storage::disk('local')->makeDirectory('docs');
+
+    $result = (new DeleteFile('local'))->handle(new Request(['path' => 'docs']));
+
+    expect($result)->toBe('File [docs] does not exist.');
+    Storage::disk('local')->assertExists('docs');
+});
+
+test('delete file reports delete failures', function () {
+    $disk = Mockery::mock(Filesystem::class);
+    $disk->shouldReceive('size')->once()->with('gone.txt')->andReturn(1);
+    $disk->shouldReceive('delete')->once()->with('gone.txt')->andReturnFalse();
+
+    $result = (new DeleteFile($disk))->handle(new Request(['path' => 'gone.txt']));
+
+    expect($result)->toBe('Unable to delete [gone.txt].');
 });
 
 test('copy file duplicates a file', function () {
