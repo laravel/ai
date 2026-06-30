@@ -21,6 +21,7 @@ use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
+use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use RuntimeException;
 
 use function Laravel\Ai\generate_fake_data_for_json_schema_type;
@@ -92,6 +93,10 @@ class FakeTextGateway implements StepTextGateway
             }
 
             yield (new TextEnd(ulid(), $messageId, time()))->withInvocationId($invocationId);
+        }
+
+        foreach ($step->toolCalls as $toolCall) {
+            yield (new ToolCallEvent(ulid(), $toolCall, time()))->withInvocationId($invocationId);
         }
 
         return $step;
