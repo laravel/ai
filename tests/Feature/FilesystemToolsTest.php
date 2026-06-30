@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Storage;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Promptable;
-use Laravel\Ai\Tools\FileStorageTools;
+use Laravel\Ai\Tools\FileStorage;
 use Laravel\Ai\Tools\Filesystem\CopyFile;
 use Laravel\Ai\Tools\Filesystem\DeleteFile;
 use Laravel\Ai\Tools\Filesystem\FileExists;
@@ -201,7 +201,7 @@ test('copy file reports a missing source', function () {
 });
 
 test('file storage tools all returns every tool as a collection', function () {
-    $tools = FileStorageTools::all('local');
+    $tools = FileStorage::all('local');
 
     expect($tools)->toBeInstanceOf(Collection::class)
         ->toHaveCount(8)
@@ -209,7 +209,7 @@ test('file storage tools all returns every tool as a collection', function () {
 });
 
 test('file storage tools can be filtered as a collection', function () {
-    $tools = FileStorageTools::all('local')
+    $tools = FileStorage::all('local')
         ->reject(fn ($tool) => $tool instanceof DeleteFile);
 
     expect($tools)->toHaveCount(7)
@@ -217,7 +217,7 @@ test('file storage tools can be filtered as a collection', function () {
 });
 
 test('file storage tools readOnly returns only read tools', function () {
-    $tools = FileStorageTools::readOnly('local');
+    $tools = FileStorage::readOnly('local');
 
     expect($tools)->toBeInstanceOf(Collection::class)
         ->toHaveCount(5)
@@ -247,7 +247,7 @@ test('every filesystem tool maps to a strict-compliant openai schema', function 
 
     Http::fake(['*' => fakeOpenAiResponse('ok')]);
 
-    agent(tools: FileStorageTools::all('local'))
+        agent(tools: FileStorage::all('local'))
         ->prompt('List the files', provider: 'openai');
 
     Http::assertSent(function (Illuminate\Http\Client\Request $request) {
@@ -350,6 +350,6 @@ class FileStorageAgent implements Agent, HasTools
 
     public function tools(): iterable
     {
-        return FileStorageTools::all('local');
+        return FileStorage::all('local');
     }
 }

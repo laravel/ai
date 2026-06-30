@@ -14,7 +14,7 @@ use Laravel\Ai\Tools\Filesystem\ListFiles;
 use Laravel\Ai\Tools\Filesystem\ReadFile;
 use Laravel\Ai\Tools\Filesystem\WriteFile;
 
-class FileStorageTools
+class FileStorage
 {
     /**
      * Create all of the file storage tools for the given disk.
