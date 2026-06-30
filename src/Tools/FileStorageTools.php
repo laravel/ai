@@ -8,8 +8,8 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Filesystem\CopyFile;
 use Laravel\Ai\Tools\Filesystem\DeleteFile;
 use Laravel\Ai\Tools\Filesystem\FileExists;
-use Laravel\Ai\Tools\Filesystem\FileMetadata;
-use Laravel\Ai\Tools\Filesystem\FileUrl;
+use Laravel\Ai\Tools\Filesystem\GetFileMetadata;
+use Laravel\Ai\Tools\Filesystem\GetFileUrl;
 use Laravel\Ai\Tools\Filesystem\ListFiles;
 use Laravel\Ai\Tools\Filesystem\ReadFile;
 use Laravel\Ai\Tools\Filesystem\WriteFile;
@@ -41,8 +41,8 @@ class FileStorageTools
             new ListFiles($disk),
             new ReadFile($disk),
             new FileExists($disk),
-            new FileMetadata($disk),
-            new FileUrl($disk),
+            new GetFileMetadata($disk),
+            new GetFileUrl($disk),
         ]);
     }
 }

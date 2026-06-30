@@ -8,7 +8,7 @@ use Laravel\Ai\Tools\Request;
 use Throwable;
 
 #[Strict]
-class FileUrl extends FilesystemTool
+class GetFileUrl extends FilesystemTool
 {
     /**
      * Get the description of the tool's purpose.

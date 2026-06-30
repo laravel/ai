@@ -20,7 +20,7 @@ class ReadFile extends FilesystemTool
      */
     public function description(): string
     {
-        return 'Read and return the UTF-8 text contents of a file on the filesystem disk. Files larger than 256 KB or that are not valid UTF-8 text (such as images or other binary files) are rejected; use FileUrl to access those instead.';
+        return 'Read and return the UTF-8 text contents of a file on the filesystem disk. Files larger than 256 KB or that are not valid UTF-8 text (such as images or other binary files) are rejected; use GetFileUrl to access those instead.';
     }
 
     /**
@@ -39,13 +39,13 @@ class ReadFile extends FilesystemTool
         }
 
         if ($size > static::MAX_BYTES) {
-            return "File [{$path}] is too large to read inline. Use FileMetadata or FileUrl instead.";
+            return "File [{$path}] is too large to read inline. Use GetFileMetadata or GetFileUrl instead.";
         }
 
         $contents = $disk->get($path);
 
         if ($contents === null || ! mb_check_encoding($contents, 'UTF-8')) {
-            return "File [{$path}] appears to be binary and cannot be read as text. Use FileUrl to access it.";
+            return "File [{$path}] appears to be binary and cannot be read as text. Use GetFileUrl to access it.";
         }
 
         return $contents;

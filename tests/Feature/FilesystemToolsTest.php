@@ -14,8 +14,8 @@ use Laravel\Ai\Tools\FileStorageTools;
 use Laravel\Ai\Tools\Filesystem\CopyFile;
 use Laravel\Ai\Tools\Filesystem\DeleteFile;
 use Laravel\Ai\Tools\Filesystem\FileExists;
-use Laravel\Ai\Tools\Filesystem\FileMetadata;
-use Laravel\Ai\Tools\Filesystem\FileUrl;
+use Laravel\Ai\Tools\Filesystem\GetFileMetadata;
+use Laravel\Ai\Tools\Filesystem\GetFileUrl;
 use Laravel\Ai\Tools\Filesystem\ListFiles;
 use Laravel\Ai\Tools\Filesystem\ReadFile;
 use Laravel\Ai\Tools\Filesystem\WriteFile;
@@ -100,14 +100,14 @@ test('file exists does not report directories as files', function () {
 test('file metadata returns size and mime type', function () {
     Storage::disk('local')->put('data.txt', 'twelve bytes');
 
-    $metadata = json_decode((new FileMetadata('local'))->handle(new Request(['path' => 'data.txt'])), true);
+    $metadata = json_decode((new GetFileMetadata('local'))->handle(new Request(['path' => 'data.txt'])), true);
 
     expect($metadata['size'])->toBe(12)
         ->and($metadata)->toHaveKeys(['mime_type', 'last_modified', 'visibility']);
 });
 
 test('file metadata reports a missing file', function () {
-    $result = (new FileMetadata('local'))->handle(new Request(['path' => 'missing.txt']));
+    $result = (new GetFileMetadata('local'))->handle(new Request(['path' => 'missing.txt']));
 
     expect($result)->toBe('File [missing.txt] does not exist.');
 });
@@ -115,13 +115,13 @@ test('file metadata reports a missing file', function () {
 test('file url returns a usable string and never throws', function () {
     Storage::disk('local')->put('pic.txt', 'x');
 
-    expect((new FileUrl('local'))->handle(new Request(['path' => 'pic.txt'])))->toContain('pic.txt');
+    expect((new GetFileUrl('local'))->handle(new Request(['path' => 'pic.txt'])))->toContain('pic.txt');
 
-    expect((new FileUrl('local'))->handle(new Request(['path' => 'pic.txt', 'expires_in_minutes' => 5])))->toContain('pic.txt');
+    expect((new GetFileUrl('local'))->handle(new Request(['path' => 'pic.txt', 'expires_in_minutes' => 5])))->toContain('pic.txt');
 });
 
 test('file url reports a missing file', function () {
-    $result = (new FileUrl('local'))->handle(new Request(['path' => 'missing.txt']));
+    $result = (new GetFileUrl('local'))->handle(new Request(['path' => 'missing.txt']));
 
     expect($result)->toBe('File [missing.txt] does not exist.');
 });
@@ -129,7 +129,7 @@ test('file url reports a missing file', function () {
 test('file url does not generate urls for directories', function () {
     Storage::disk('local')->makeDirectory('docs');
 
-    $result = (new FileUrl('local'))->handle(new Request(['path' => 'docs']));
+    $result = (new GetFileUrl('local'))->handle(new Request(['path' => 'docs']));
 
     expect($result)->toBe('File [docs] does not exist.');
 });

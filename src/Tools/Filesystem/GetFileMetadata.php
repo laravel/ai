@@ -8,7 +8,7 @@ use Laravel\Ai\Tools\Request;
 use Throwable;
 
 #[Strict]
-class FileMetadata extends FilesystemTool
+class GetFileMetadata extends FilesystemTool
 {
     /**
      * Get the description of the tool's purpose.
