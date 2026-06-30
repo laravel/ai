@@ -12,6 +12,9 @@ use RuntimeException;
 
 class ImageResponse implements Countable, Htmlable
 {
+    /**
+     * @param  Collection<int, GeneratedImage>  $images
+     */
     public function __construct(
         public Collection $images,
         public Usage $usage,

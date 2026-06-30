@@ -69,6 +69,45 @@ test('put file sends multipart upload', function () {
     });
 });
 
+test('put file merges flat provider options into the upload body', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response(['file' => ['name' => 'files/uploaded123']]),
+    ]);
+
+    Document::fromString('Hello, World!', 'text/plain')->as('hello.txt')
+        ->withProviderOptions(['mime_type' => 'image/png'])
+        ->put(provider: 'gemini');
+
+    $request = sentRequest();
+
+    expect(multipartField($request, 'mime_type'))->toBe('image/png')
+        ->and(multipartNestedField($request, 'file'))->toBe(['hello.txt']);
+});
+
+test('put file provider options override only the file metadata keys they specify', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response(['file' => ['name' => 'files/uploaded123']]),
+    ]);
+
+    Document::fromString('Hello, World!', 'text/plain')->as('hello.txt')
+        ->withProviderOptions(['file' => ['display_name' => 'override.txt']])
+        ->put(provider: 'gemini');
+
+    expect(multipartNestedField(sentRequest(), 'file'))->toBe(['override.txt']);
+});
+
+test('put file provider options deep-merge into the file metadata without wiping the display name', function () {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response(['file' => ['name' => 'files/uploaded123']]),
+    ]);
+
+    Document::fromString('Hello, World!', 'text/plain')->as('hello.txt')
+        ->withProviderOptions(['file' => ['mime_type' => 'image/png']])
+        ->put(provider: 'gemini');
+
+    expect(multipartNestedField(sentRequest(), 'file'))->toBe(['hello.txt', 'image/png']);
+});
+
 test('delete file sends correct request', function () {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::response([], 200),

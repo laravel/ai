@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway\AzureOpenAi;
 
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\OpenAi\OpenAiFileGateway;
 
 class AzureOpenAiFileGateway extends OpenAiFileGateway
@@ -14,5 +15,13 @@ class AzureOpenAiFileGateway extends OpenAiFileGateway
     protected function defaultPurpose(): string
     {
         return 'assistants';
+    }
+
+    /**
+     * Get the provider key used to resolve file upload options.
+     */
+    protected function providerOptionsKey(): Lab
+    {
+        return Lab::Azure;
     }
 }

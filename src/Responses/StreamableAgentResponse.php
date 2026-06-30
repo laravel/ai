@@ -10,6 +10,7 @@ use IteratorAggregate;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\StreamEnd;
+use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Symfony\Component\HttpFoundation\Response;
 use Traversable;
@@ -22,6 +23,7 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
 
     public ?Usage $usage;
 
+    /** @var Collection<int, StreamEvent> */
     public Collection $events;
 
     public ?string $conversationId = null;
