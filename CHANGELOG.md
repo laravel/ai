@@ -1,6 +1,111 @@
 # Release Notes
 
-## [Unreleased](https://github.com/laravel/ai/compare/v0.6.8...0.x)
+## [Unreleased](https://github.com/laravel/ai/compare/v0.8.1...0.x)
+
+## [v0.8.1](https://github.com/laravel/ai/compare/v0.8.0...v0.8.1) - 2026-06-10
+
+### What's Changed
+
+* Normalize MCP tool schemas into the deserializable JSON Schema subset by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/696
+
+**Full Changelog**: https://github.com/laravel/ai/compare/v0.8.0...v0.8.1
+
+## [v0.8.0](https://github.com/laravel/ai/compare/v0.7.2...v0.8.0) - 2026-06-08
+
+### What's Changed
+
+* Fix Mistral transcription requests by [@NoelDeMartin](https://github.com/NoelDeMartin) in https://github.com/laravel/ai/pull/671
+* Bedrock support for remote s3 document  by [@dumbbellcode](https://github.com/dumbbellcode) in https://github.com/laravel/ai/pull/476
+* Migrate OpenAI web_search_preview to web_search with provider options by [@SergiiKhrystenko](https://github.com/SergiiKhrystenko) in https://github.com/laravel/ai/pull/662
+* Add Dependabot cooldown of 5 days by [@nunomaduro](https://github.com/nunomaduro) in https://github.com/laravel/ai/pull/685
+* Enable Dependabot auto-merge by [@nunomaduro](https://github.com/nunomaduro) in https://github.com/laravel/ai/pull/687
+* Add `contains` method to `QueuedAgentPrompt` by [@balboacodes](https://github.com/balboacodes) in https://github.com/laravel/ai/pull/678
+* Recursively remove additionalProperties for Gemini tools by [@Edward144](https://github.com/Edward144) in https://github.com/laravel/ai/pull/682
+* Fix transcription usage mapping for output tokens by [@Anoop-Kadachi](https://github.com/Anoop-Kadachi) in https://github.com/laravel/ai/pull/637
+* Fix ImageResponse::toHtml() data URI when image mime is null by [@Anoop-Kadachi](https://github.com/Anoop-Kadachi) in https://github.com/laravel/ai/pull/677
+* Pass the original prompt to AgentStreamed when a stream is short-circuited by [@FayazK](https://github.com/FayazK) in https://github.com/laravel/ai/pull/684
+* Omit null header and multipart values for Laravel 13 compatibility by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/688
+* Add MCP client and server tool support by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/655
+* Bump actions/checkout from 6.0.2 to 6.0.3 in the github-actions group by [@dependabot](https://github.com/dependabot)[bot] in https://github.com/laravel/ai/pull/692
+* Support OpenAI Zero Data Retention via encrypted reasoning by [@Junveloper](https://github.com/Junveloper) in https://github.com/laravel/ai/pull/622
+
+### New Contributors
+
+* [@SergiiKhrystenko](https://github.com/SergiiKhrystenko) made their first contribution in https://github.com/laravel/ai/pull/662
+* [@balboacodes](https://github.com/balboacodes) made their first contribution in https://github.com/laravel/ai/pull/678
+* [@Edward144](https://github.com/Edward144) made their first contribution in https://github.com/laravel/ai/pull/682
+* [@FayazK](https://github.com/FayazK) made their first contribution in https://github.com/laravel/ai/pull/684
+
+**Full Changelog**: https://github.com/laravel/ai/compare/v0.7.2...v0.8.0
+
+## [v0.7.2](https://github.com/laravel/ai/compare/v0.7.1...v0.7.2) - 2026-05-28
+
+### What's Changed
+
+* Revert "Apply model attribute and explicit model to all providers in a failover list" by [@taylorotwell](https://github.com/taylorotwell) in https://github.com/laravel/ai/pull/667
+* Set claude-opus-4-8 as Anthropic's smartest text model by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/670
+
+**Full Changelog**: https://github.com/laravel/ai/compare/v0.7.1...v0.7.2
+
+## [v0.7.1](https://github.com/laravel/ai/compare/v0.7.0...v0.7.1) - 2026-05-26
+
+### What's Changed
+
+* Set gemini-3.5-flash as Gemini's smartest text model by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/640
+* BedrockTextGateway: Add cache usage by [@liambenson](https://github.com/liambenson) in https://github.com/laravel/ai/pull/642
+* Set invocation id on fake stream events by [@Anoop-Kadachi](https://github.com/Anoop-Kadachi) in https://github.com/laravel/ai/pull/635
+* Apply model attribute and explicit model to all providers in a failover list by [@sumaiazaman](https://github.com/sumaiazaman) in https://github.com/laravel/ai/pull/633
+* Add JSON_UNESCAPED_UNICODE to schema instruction encoding by [@sumaiazaman](https://github.com/sumaiazaman) in https://github.com/laravel/ai/pull/644
+* Updates deprecated gemini model to successor by [@nicolasbuch](https://github.com/nicolasbuch) in https://github.com/laravel/ai/pull/657
+* Fix Gemini image generation when text part precedes image data by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/658
+* Update deprecated Gemini default to gemini-3.5-flash by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/661
+
+### New Contributors
+
+* [@liambenson](https://github.com/liambenson) made their first contribution in https://github.com/laravel/ai/pull/642
+* [@nicolasbuch](https://github.com/nicolasbuch) made their first contribution in https://github.com/laravel/ai/pull/657
+
+**Full Changelog**: https://github.com/laravel/ai/compare/v0.7.0...v0.7.1
+
+## [v0.7.0](https://github.com/laravel/ai/compare/v0.6.8...v0.7.0) - 2026-05-19
+
+* Reject empty reranking document lists by [@Anoop-Kadachi](https://github.com/Anoop-Kadachi) in https://github.com/laravel/ai/pull/563
+* Support closure provider options in queued embeddings by [@Anoop-Kadachi](https://github.com/Anoop-Kadachi) in https://github.com/laravel/ai/pull/562
+* Add PHPStan by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/554
+* Make OpenAI strict mode opt-in via Strict attribute by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/530
+* Add providerOptions to Transcription API by [@ihxnnxs](https://github.com/ihxnnxs) in https://github.com/laravel/ai/pull/31
+* Validate empty inputs across generation entry points by [@Anoop-Kadachi](https://github.com/Anoop-Kadachi) in https://github.com/laravel/ai/pull/564
+* Add CHANGELOG and update-changelog workflow by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/567
+* Add unit test for Strict attribute by [@mosabbirrakib](https://github.com/mosabbirrakib) in https://github.com/laravel/ai/pull/570
+* Add test for Anthropic 529 overloaded response by [@mosabbirrakib](https://github.com/mosabbirrakib) in https://github.com/laravel/ai/pull/574
+* Document [@throws](https://github.com/throws) on Image::of() and Embeddings::for() by [@mosabbirrakib](https://github.com/mosabbirrakib) in https://github.com/laravel/ai/pull/576
+* Add test for structured agent without Strict sends strict false by [@mosabbirrakib](https://github.com/mosabbirrakib) in https://github.com/laravel/ai/pull/573
+* Add unit test for HandlesFailoverErrors trait by [@mosabbirrakib](https://github.com/mosabbirrakib) in https://github.com/laravel/ai/pull/572
+* Add tests for Anthropic insufficient credits patterns by [@mosabbirrakib](https://github.com/mosabbirrakib) in https://github.com/laravel/ai/pull/575
+* Retrieve conversation list from ConversationStore and agent trait by [@barryvdh](https://github.com/barryvdh) in https://github.com/laravel/ai/pull/236
+* Pin GitHub Actions to commit SHAs and add Dependabot config by [@joetannenbaum](https://github.com/joetannenbaum) in https://github.com/laravel/ai/pull/579
+* Add generic types to conversation model relationships by [@mosabbirrakib](https://github.com/mosabbirrakib) in https://github.com/laravel/ai/pull/582
+* Document [@throws](https://github.com/throws) on AzureOpenAiGateway::generateImage() by [@mosabbirrakib](https://github.com/mosabbirrakib) in https://github.com/laravel/ai/pull/585
+* Respect configured database connection in Conversation and ConversationMessage models by [@sumaiazaman](https://github.com/sumaiazaman) in https://github.com/laravel/ai/pull/589
+* Reject blank or non-string embeddings inputs by [@Anoop-Kadachi](https://github.com/Anoop-Kadachi) in https://github.com/laravel/ai/pull/590
+* Consistent provider key resolution in provider options  by [@dumbbellcode](https://github.com/dumbbellcode) in https://github.com/laravel/ai/pull/586
+* Use consistent X generation wording by [@mosabbirrakib](https://github.com/mosabbirrakib) in https://github.com/laravel/ai/pull/584
+* Reject blank or non-string reranking documents by [@Anoop-Kadachi](https://github.com/Anoop-Kadachi) in https://github.com/laravel/ai/pull/591
+* Rehydrate attachments when loading conversation history by [@sumaiazaman](https://github.com/sumaiazaman) in https://github.com/laravel/ai/pull/587
+* Reject blank model or column in SimilaritySearch::usingModel by [@Anoop-Kadachi](https://github.com/Anoop-Kadachi) in https://github.com/laravel/ai/pull/592
+* Reject blank image size and quality by [@Anoop-Kadachi](https://github.com/Anoop-Kadachi) in https://github.com/laravel/ai/pull/593
+* Document [@throws](https://github.com/throws) RuntimeException on file content() methods by [@mosabbirrakib](https://github.com/mosabbirrakib) in https://github.com/laravel/ai/pull/601
+* Revert "Reject blank image size and quality" by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/603
+* Reject blank path in LocalDocument and StoredDocument constructors by [@mosabbirrakib](https://github.com/mosabbirrakib) in https://github.com/laravel/ai/pull/600
+* Add tests for blank file path constructor validation by [@Anoop-Kadachi](https://github.com/Anoop-Kadachi) in https://github.com/laravel/ai/pull/604
+* Bump PHPStan to level 1 and fix type errors by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/608
+* Throw InsufficientCreditsException for OpenRouter and DeepSeek credit errors by [@sumaiazaman](https://github.com/sumaiazaman) in https://github.com/laravel/ai/pull/606
+* Capture missing usage details across OpenAI-shaped providers by [@sumaiazaman](https://github.com/sumaiazaman) in https://github.com/laravel/ai/pull/610
+* Bump shivammathur/setup-php from 2.37.0 to 2.37.1 in the github-actions group by [@dependabot](https://github.com/dependabot)[bot] in https://github.com/laravel/ai/pull/615
+* Reject blank URL in RemoteDocument, RemoteImage, and RemoteAudio constructors by [@sumaiazaman](https://github.com/sumaiazaman) in https://github.com/laravel/ai/pull/613
+* Pass `providerOptions` through to Bedrock Converse and capture reasoning content by [@Junveloper](https://github.com/Junveloper) in https://github.com/laravel/ai/pull/611
+* Remove image+text restriction on openrouter image generation by [@Themodem](https://github.com/Themodem) in https://github.com/laravel/ai/pull/595
+* Document [@throws](https://github.com/throws) LogicException on OpenAiGateway::generateTranscription by [@mosabbirrakib](https://github.com/mosabbirrakib) in https://github.com/laravel/ai/pull/626
 
 ## [v0.6.8](https://github.com/laravel/ai/compare/v0.6.7...v0.6.8) - 2026-05-11
 

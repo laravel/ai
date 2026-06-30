@@ -4,15 +4,17 @@ namespace Laravel\Ai\Gateway\DeepSeek;
 
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
+use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Gateway\Concerns\DelegatesToTextGenerationLoop;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
-use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
+use Laravel\Ai\Gateway\StepContext;
+use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
-use Laravel\Ai\Responses\TextResponse;
 
-class DeepSeekGateway implements TextGateway
+class DeepSeekGateway implements StepTextGateway, TextGateway
 {
     use Concerns\BuildsTextRequests;
     use Concerns\CreatesDeepSeekClient;
@@ -21,37 +23,30 @@ class DeepSeekGateway implements TextGateway
     use Concerns\MapsMessages;
     use Concerns\MapsTools;
     use Concerns\ParsesTextResponses;
+    use DelegatesToTextGenerationLoop;
     use HandlesFailoverErrors;
-    use InvokesTools;
     use ParsesServerSentEvents;
 
     public function __construct(protected Dispatcher $events)
     {
-        $this->initializeToolCallbacks();
+        //
     }
 
     /**
-     * {@inheritdoc}
+     * Generate text for a single Chat Completions step.
      */
-    public function generateText(
+    public function generateTextStep(
         TextProvider $provider,
         string $model,
         ?string $instructions,
-        array $messages = [],
-        array $tools = [],
-        ?array $schema = null,
-        ?TextGenerationOptions $options = null,
-        ?int $timeout = null,
-    ): TextResponse {
-        $body = $this->buildTextRequestBody(
-            $provider,
-            $model,
-            $instructions,
-            $messages,
-            $tools,
-            $schema,
-            $options,
-        );
+        array $messages,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options,
+        ?int $timeout,
+        StepContext $stepContext,
+    ): StepResponse {
+        $body = $this->buildStepBody($provider, $model, $instructions, $messages, $tools, $schema, $options, $stepContext);
 
         $response = $this->withErrorHandling(
             $provider->name(),
@@ -62,42 +57,25 @@ class DeepSeekGateway implements TextGateway
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse(
-            $data,
-            $provider,
-            filled($schema),
-            $tools,
-            $schema,
-            $options,
-            $instructions,
-            $messages,
-            $timeout,
-        );
+        return $this->parseTextResponse($data, $provider, filled($schema));
     }
 
     /**
-     * {@inheritdoc}
+     * Stream text for a single Chat Completions step.
      */
-    public function streamText(
+    public function generateStreamStep(
         string $invocationId,
         TextProvider $provider,
         string $model,
         ?string $instructions,
-        array $messages = [],
-        array $tools = [],
-        ?array $schema = null,
-        ?TextGenerationOptions $options = null,
-        ?int $timeout = null,
+        array $messages,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options,
+        ?int $timeout,
+        StepContext $stepContext,
     ): Generator {
-        $body = $this->buildTextRequestBody(
-            $provider,
-            $model,
-            $instructions,
-            $messages,
-            $tools,
-            $schema,
-            $options,
-        );
+        $body = $this->buildStepBody($provider, $model, $instructions, $messages, $tools, $schema, $options, $stepContext);
 
         $body['stream'] = true;
         $body['stream_options'] = ['include_usage' => true];
@@ -109,20 +87,6 @@ class DeepSeekGateway implements TextGateway
                 ->post('chat/completions', $body),
         );
 
-        yield from $this->processTextStream(
-            $invocationId,
-            $provider,
-            $model,
-            $tools,
-            $schema,
-            $options,
-            $response->getBody(),
-            $instructions,
-            $messages,
-            0,
-            null,
-            [],
-            $timeout,
-        );
+        return yield from $this->processTextStream($invocationId, $provider, $model, $response->getBody());
     }
 }

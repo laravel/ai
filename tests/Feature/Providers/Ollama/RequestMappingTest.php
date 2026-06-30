@@ -109,6 +109,21 @@ test('structured output includes format field', function () {
     });
 });
 
+test('structured output appends json schema instruction to system message', function () {
+    Http::fake(['*' => $this->fakeStructuredResponse('{"symbol": "Au"}')]);
+
+    (new StructuredAgent)->prompt('What is the symbol for Gold?', provider: 'ollama');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $systemMessage = collect($body['messages'])->firstWhere('role', 'system');
+
+        return $systemMessage !== null
+            && str_contains($systemMessage['content'], 'You MUST respond EXCLUSIVELY with a JSON object that strictly adheres to the following schema')
+            && str_contains($systemMessage['content'], '"symbol"');
+    });
+});
+
 test('request without schema excludes format field', function () {
     Http::fake(['*' => $this->fakeTextResponse('Hello')]);
 

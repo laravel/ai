@@ -78,7 +78,7 @@ test('it persists tool calls and results from a remembered agent prompt', functi
                     'finishReason' => 'STOP',
                 ]],
                 'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5, 'totalTokenCount' => 15],
-                'modelVersion' => 'gemini-3-flash-preview',
+                'modelVersion' => 'gemini-3.5-flash',
             ]),
             Http::response([
                 'candidates' => [[
@@ -89,7 +89,7 @@ test('it persists tool calls and results from a remembered agent prompt', functi
                     'finishReason' => 'STOP',
                 ]],
                 'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5, 'totalTokenCount' => 15],
-                'modelVersion' => 'gemini-3-flash-preview',
+                'modelVersion' => 'gemini-3.5-flash',
             ]),
         ]),
     ]);
@@ -215,6 +215,76 @@ test('it replays stored tool conversations before the final assistant response',
         ->and($messages[2])->toBeInstanceOf(AssistantMessage::class)
         ->and($messages[2]->content)->toBe('The order has shipped.')
         ->and($messages[2]->toolCalls)->toBeEmpty();
+});
+
+test('it rehydrates reasoning encrypted content on stored tool calls', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Reasoning conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => 'Looking that up.',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            [
+                'id' => 'call-1',
+                'name' => 'lookup_order',
+                'arguments' => ['id' => 1],
+                'reasoning_id' => 'rs_1',
+                'reasoning_summary' => [],
+                'reasoning_encrypted_content' => 'enc-blob-1',
+            ],
+        ]),
+        'tool_results' => json_encode([
+            ['id' => 'call-1', 'name' => 'lookup_order', 'arguments' => ['id' => 1], 'result' => ['status' => 'shipped']],
+        ]),
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages[0]->toolCalls->first())
+        ->reasoningId->toBe('rs_1')
+        ->reasoningEncryptedContent->toBe('enc-blob-1');
+});
+
+test('it rehydrates legacy tool calls that predate reasoning encrypted content', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Legacy conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => 'Looking that up.',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call-1', 'name' => 'lookup_order', 'arguments' => ['id' => 1]],
+        ]),
+        'tool_results' => json_encode([
+            ['id' => 'call-1', 'name' => 'lookup_order', 'arguments' => ['id' => 1], 'result' => ['status' => 'shipped']],
+        ]),
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages[0]->toolCalls->first())
+        ->reasoningId->toBeNull()
+        ->reasoningSummary->toBeNull()
+        ->reasoningEncryptedContent->toBeNull();
 });
 
 test('user messages with stored attachments are rehydrated as UserMessage', function () {

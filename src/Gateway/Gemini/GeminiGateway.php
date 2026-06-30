@@ -7,16 +7,19 @@ use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\Gateway;
+use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Files\Image;
+use Laravel\Ai\Gateway\Concerns\DelegatesToTextGenerationLoop;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
-use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\Concerns\WrapsPcmAudio;
+use Laravel\Ai\Gateway\StepContext;
+use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
@@ -25,11 +28,10 @@ use Laravel\Ai\Responses\Data\TranscriptionSegment;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
-use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
 use RuntimeException;
 
-class GeminiGateway implements Gateway
+class GeminiGateway implements Gateway, StepTextGateway
 {
     use Concerns\BuildsTextRequests;
     use Concerns\CreatesGeminiClient;
@@ -38,32 +40,31 @@ class GeminiGateway implements Gateway
     use Concerns\MapsMessages;
     use Concerns\MapsTools;
     use Concerns\ParsesTextResponses;
+    use DelegatesToTextGenerationLoop;
     use HandlesFailoverErrors;
-    use InvokesTools;
     use ParsesServerSentEvents;
     use WrapsPcmAudio;
 
     public function __construct(protected Dispatcher $events)
     {
-        $this->initializeToolCallbacks();
+        //
     }
 
     /**
      * {@inheritdoc}
      */
-    public function generateText(
+    public function generateTextStep(
         TextProvider $provider,
         string $model,
         ?string $instructions,
-        array $messages = [],
-        array $tools = [],
-        ?array $schema = null,
-        ?TextGenerationOptions $options = null,
-        ?int $timeout = null,
-    ): TextResponse {
-        [$body, $contents] = $this->buildTextRequestBody(
-            $provider, $instructions, $messages, $tools, $schema, $options,
-        );
+        array $messages,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options,
+        ?int $timeout,
+        StepContext $stepContext,
+    ): StepResponse {
+        $body = $this->buildStepBody($provider, $model, $instructions, $messages, $tools, $schema, $options, $stepContext);
 
         $response = $this->withErrorHandling(
             $provider->name(),
@@ -74,37 +75,25 @@ class GeminiGateway implements Gateway
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse(
-            $data,
-            $provider,
-            $model,
-            filled($schema),
-            $tools,
-            $schema,
-            $options,
-            $contents,
-            $instructions,
-            $timeout,
-        );
+        return $this->parseTextResponse($data, $provider, $model, filled($schema));
     }
 
     /**
      * {@inheritdoc}
      */
-    public function streamText(
+    public function generateStreamStep(
         string $invocationId,
         TextProvider $provider,
         string $model,
         ?string $instructions,
-        array $messages = [],
-        array $tools = [],
-        ?array $schema = null,
-        ?TextGenerationOptions $options = null,
-        ?int $timeout = null,
+        array $messages,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options,
+        ?int $timeout,
+        StepContext $stepContext,
     ): Generator {
-        [$body, $contents] = $this->buildTextRequestBody(
-            $provider, $instructions, $messages, $tools, $schema, $options,
-        );
+        $body = $this->buildStepBody($provider, $model, $instructions, $messages, $tools, $schema, $options, $stepContext);
 
         $response = $this->withErrorHandling(
             $provider->name(),
@@ -113,20 +102,7 @@ class GeminiGateway implements Gateway
                 ->post("models/{$model}:streamGenerateContent?alt=sse", $body),
         );
 
-        yield from $this->processTextStream(
-            $invocationId,
-            $provider,
-            $model,
-            $tools,
-            $schema,
-            $options,
-            $response->getBody(),
-            $contents,
-            $instructions,
-            0,
-            null,
-            $timeout,
-        );
+        return yield from $this->processTextStream($invocationId, $provider, $model, $response->getBody());
     }
 
     /**
@@ -173,6 +149,7 @@ class GeminiGateway implements Gateway
 
         $images = (new Collection($data['candidates'][0]['content']['parts'] ?? []))
             ->filter(fn ($part) => isset($part['inlineData']))
+            ->values()
             ->map(fn ($part) => new GeneratedImage(
                 $part['inlineData']['data'],
                 $part['inlineData']['mimeType'],
@@ -220,6 +197,8 @@ class GeminiGateway implements Gateway
 
     /**
      * Generate audio from the given text.
+     *
+     * @throws RuntimeException if Gemini returns no audio data or invalid base64 audio.
      */
     public function generateAudio(
         AudioProvider $provider,

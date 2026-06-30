@@ -14,6 +14,7 @@ use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\OpenAi\OpenAiFileGateway;
 use Laravel\Ai\Gateway\OpenAi\OpenAiStoreGateway;
 use Laravel\Ai\Providers\Tools\FileSearch;
@@ -46,13 +47,11 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
             'vector_store_ids' => $search->ids(),
             'filters' => filled($search->filters) ? [
                 'type' => 'and',
-                'filters' => (new Collection($search->filters))->map(fn ($filter) => match ($filter['type']) {
-                    default => [
-                        'type' => $filter['type'],
-                        'key' => $filter['key'],
-                        'value' => $filter['value'],
-                    ],
-                })->all(),
+                'filters' => (new Collection($search->filters))->map(fn ($filter) => [
+                    'type' => $filter['type'],
+                    'key' => $filter['key'],
+                    'value' => $filter['value'],
+                ])->all(),
             ] : null,
         ]);
     }
@@ -62,10 +61,17 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function webSearchToolOptions(WebSearch $search): array
     {
+        $options = $search->providerOptions(Lab::OpenAI);
+
+        $filters = array_merge(
+            filled($search->allowedDomains) ? ['allowed_domains' => $search->allowedDomains] : [],
+            $options['filters'] ?? [],
+        );
+
+        unset($options['filters']);
+
         return array_filter([
-            'filters' => filled($search->allowedDomains)
-                ? ['allowed_domains' => $search->allowedDomains]
-                : null,
+            'filters' => filled($filters) ? $filters : null,
             'user_location' => $search->hasLocation()
                 ? array_filter([
                     'type' => 'approximate',
@@ -74,7 +80,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
                     'country' => $search->country,
                 ])
                 : null,
-        ]);
+        ]) + $options;
     }
 
     /**

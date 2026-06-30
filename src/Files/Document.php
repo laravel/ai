@@ -7,6 +7,11 @@ use Illuminate\Http\UploadedFile;
 abstract class Document extends File
 {
     /**
+     * Get the raw bytes of the file.
+     */
+    abstract public function content(): string;
+
+    /**
      * Create a new document from a string.
      */
     public static function fromString(string $content, ?string $mimeType = null): Base64Document
@@ -39,7 +44,7 @@ abstract class Document extends File
     }
 
     /**
-     * Create a new remote document using the document at the given URL.
+     * Create a new remote document using the document at the given HTTP(S) URL.
      */
     public static function fromUrl(string $url): RemoteDocument
     {

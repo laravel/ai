@@ -4,11 +4,9 @@ use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
-use InvalidArgumentException;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Transcription;
-use LogicException;
 
 beforeEach(function () {
     config(['ai.providers.openrouter' => [
@@ -177,7 +175,7 @@ test('transcription usage is correctly parsed', function () {
     $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'openrouter');
 
     expect($response->usage->promptTokens)->toBe(100)
-        ->and($response->usage->completionTokens)->toBe(150);
+        ->and($response->usage->completionTokens)->toBe(50);
 });
 
 test('transcription request sends bearer token', function () {

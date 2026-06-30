@@ -11,6 +11,7 @@ beforeEach(function () {
     config(['ai.providers.ollama' => [
         ...config('ai.providers.ollama'),
         'key' => '',
+        'url' => 'http://localhost:11434',
     ]]);
 });
 

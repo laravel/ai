@@ -28,6 +28,8 @@ class PendingEmbeddingsGeneration
 
     protected ?int $cacheSeconds = null;
 
+    protected ?bool $shouldCache = null;
+
     protected int $timeout = 30;
 
     /** @var array<string, mixed>|SerializableClosure */
@@ -68,10 +70,18 @@ class PendingEmbeddingsGeneration
     }
 
     /**
-     * Enable caching for this embedding request.
+     * Enable or disable caching for this embedding request.
      */
     public function cache(?int $seconds = null): self
     {
+        if (! is_null($seconds) && $seconds <= 0) {
+            $this->shouldCache = false;
+            $this->cacheSeconds = null;
+
+            return $this;
+        }
+
+        $this->shouldCache = true;
         $this->cacheSeconds = $seconds ?? config('ai.caching.embeddings.seconds', 60 * 60 * 24 * 30);
 
         return $this;
@@ -121,6 +131,8 @@ class PendingEmbeddingsGeneration
 
     /**
      * Generate the embeddings.
+     *
+     * @throws FailoverableException if every configured provider fails to generate the embeddings.
      */
     public function generate(Lab|array|string|null $provider = null, ?string $model = null): EmbeddingsResponse
     {
@@ -288,6 +300,10 @@ class PendingEmbeddingsGeneration
      */
     protected function shouldCache(): bool
     {
-        return ! is_null($this->cacheSeconds) || config('ai.caching.embeddings.cache', false);
+        if (! is_null($this->shouldCache)) {
+            return $this->shouldCache;
+        }
+
+        return (bool) config('ai.caching.embeddings.cache', false);
     }
 }

@@ -92,6 +92,43 @@ describe('tool calls', function () {
             ->and($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator');
     });
 
+    test('streaming tool loop emits a single stream end with accumulated usage', function () {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::sequence([
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->geminiChunkWithUsage([[
+                            'functionCall' => [
+                                'id' => 'call_1',
+                                'name' => 'FixedNumberGenerator',
+                                'args' => (object) [],
+                            ],
+                        ]], 10, 5),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->geminiChunkWithUsage([['text' => 'The number is 72019']], 20, 10),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+            ]),
+        ]);
+
+        $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+        $streamEnds = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd));
+
+        expect($streamEnds)->toHaveCount(1)
+            ->and($streamEnds[0]->reason)->toBe(FinishReason::Stop->value)
+            ->and($streamEnds[0]->usage)
+            ->promptTokens->toBe(30)
+            ->completionTokens->toBe(15);
+    });
+
     test('streaming thinking parts are excluded from tool call continuation', function () {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::sequence([

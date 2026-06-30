@@ -114,6 +114,8 @@ class PendingImageGeneration
 
     /**
      * Generate the image.
+     *
+     * @throws FailoverableException if every configured provider fails to generate the image.
      */
     public function generate(Lab|array|string|null $provider = null, ?string $model = null): ImageResponse
     {
@@ -146,6 +148,8 @@ class PendingImageGeneration
 
     /**
      * Queue the generation of an image.
+     *
+     * @throws LogicException if any attachment is not a local image or an image stored on a filesystem disk.
      */
     public function queue(Lab|array|string|null $provider = null, ?string $model = null): QueuedImageResponse
     {

@@ -1,6 +1,7 @@
 <?php
 
 use GuzzleHttp\Promise\PromiseInterface;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 
 function requiresApiKey(string ...$keys): void
@@ -10,6 +11,30 @@ function requiresApiKey(string ...$keys): void
             test()->markTestSkipped("Missing {$key} — skipping external test.");
         }
     }
+}
+
+function sentRequest(): Request
+{
+    [$request] = Http::recorded()->first();
+
+    return $request;
+}
+
+function multipartField(Request $request, string $name): ?string
+{
+    return collect($request->data())->firstWhere('name', $name)['contents'] ?? null;
+}
+
+// Laravel 12 flattens nested multipart arrays to "name[]" => value while Laravel 13 keeps "name" => array, so we compare just the values to stay stable across both.
+function multipartNestedField(Request $request, string $name): array
+{
+    return collect($request->data())
+        ->reject(fn ($field) => isset($field['filename']))
+        ->filter(fn ($field) => (($field['name'] ?? null) === $name && is_array($field['contents'] ?? null))
+            || preg_match('/^'.preg_quote($name, '/').'\[[^\]]*\]$/', $field['name'] ?? '') === 1)
+        ->flatMap(fn ($field) => is_array($field['contents'] ?? null) ? array_values($field['contents']) : [$field['contents'] ?? null])
+        ->values()
+        ->all();
 }
 
 function fakeGroqResponse(string $text = 'Hello'): PromiseInterface
@@ -86,6 +111,27 @@ function fakeOpenAiResponse(string $text = 'Hello'): PromiseInterface
         'usage' => [
             'input_tokens' => 1,
             'output_tokens' => 1,
+        ],
+    ]);
+}
+
+function fakeOpenAiToolCallResponse(string $id = 'resp_tool_123', string $model = 'gpt-5.4'): PromiseInterface
+{
+    return Http::response([
+        'id' => $id,
+        'status' => 'completed',
+        'model' => $model,
+        'output' => [[
+            'type' => 'function_call',
+            'id' => 'fc_123',
+            'call_id' => 'call_123',
+            'name' => 'FixedNumberGenerator',
+            'arguments' => '{}',
+            'status' => 'completed',
+        ]],
+        'usage' => [
+            'input_tokens' => 10,
+            'output_tokens' => 5,
         ],
     ]);
 }
