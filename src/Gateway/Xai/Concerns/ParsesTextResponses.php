@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\Xai\Concerns;
 
 use Illuminate\Support\Collection;
 use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
@@ -14,6 +15,8 @@ use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
 {
+    use DecodesStructuredOutput;
+
     /**
      * Validate the xAI response data.
      *
@@ -64,7 +67,7 @@ trait ParsesTextResponses
             finishReason: $finishReason,
             usage: $usage,
             meta: new Meta($provider->name(), $model, $citations),
-            structured: $structured ? (json_decode($text, true) ?? []) : null,
+            structured: $structured ? $this->decodeStructuredOutput($text) : null,
             continuationToken: $data['id'] ?? null,
         );
     }
