@@ -247,7 +247,7 @@ test('every filesystem tool maps to a strict-compliant openai schema', function 
 
     Http::fake(['*' => fakeOpenAiResponse('ok')]);
 
-        agent(tools: FileStorage::all('local'))
+    agent(tools: FileStorage::all('local'))
         ->prompt('List the files', provider: 'openai');
 
     Http::assertSent(function (Illuminate\Http\Client\Request $request) {
