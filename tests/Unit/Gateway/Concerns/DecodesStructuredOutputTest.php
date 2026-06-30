@@ -54,6 +54,13 @@ test('handles uppercase JSON fence language tag', function () {
     expect($host->decode($payload))->toBe(['ok' => true]);
 });
 
+test('handles mixed-case json fence language tag', function () {
+    $host = decoderHost();
+
+    expect($host->decode("```Json\n{\"ok\":true}\n```"))->toBe(['ok' => true])
+        ->and($host->decode("```jSoN\n{\"ok\":true}\n```"))->toBe(['ok' => true]);
+});
+
 test('returns empty array for invalid JSON', function () {
     $host = decoderHost();
 

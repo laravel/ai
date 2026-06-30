@@ -27,7 +27,7 @@ trait DecodesStructuredOutput
     {
         $trimmed = trim($text);
 
-        if (preg_match('/^```(?:json|JSON)?\s*\n?(.*?)\n?\s*```$/s', $trimmed, $matches) === 1) {
+        if (preg_match('/^```(?:json)?\s*(.*?)\s*```$/si', $trimmed, $matches) === 1) {
             return trim($matches[1]);
         }
 
