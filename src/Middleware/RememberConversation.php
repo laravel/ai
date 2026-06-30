@@ -4,8 +4,10 @@ namespace Laravel\Ai\Middleware;
 
 use Closure;
 use Illuminate\Support\Str;
+use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Contracts\RemembersConversations;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Throwable;
@@ -26,6 +28,7 @@ class RememberConversation
     public function handle(AgentPrompt $prompt, Closure $next)
     {
         return $next($prompt)->then(function ($response) use ($prompt) {
+            /** @var Agent&RemembersConversations $agent */
             $agent = $prompt->agent;
 
             // Create conversation if necessary...

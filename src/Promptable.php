@@ -3,6 +3,7 @@
 namespace Laravel\Ai;
 
 use Closure;
+use Generator;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Container\Container;
 use Illuminate\Queue\SerializesModels;
@@ -13,6 +14,7 @@ use Laravel\Ai\Attributes\Provider as ProviderAttribute;
 use Laravel\Ai\Attributes\Timeout as TimeoutAttribute;
 use Laravel\Ai\Attributes\UseCheapestModel;
 use Laravel\Ai\Attributes\UseSmartestModel;
+use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
@@ -57,7 +59,7 @@ trait Promptable
         ?int $timeout = null): AgentResponse
     {
         return $this->withModelFailover(
-            fn (Provider $provider, string $model) => $provider->prompt(
+            fn (TextProvider $provider, string $model) => $provider->prompt(
                 new AgentPrompt($this, $prompt, $attachments, $provider, $model, $this->getTimeout($timeout))
             ),
             $provider,
@@ -219,8 +221,11 @@ trait Promptable
 
     /**
      * Iterate the configured provider / model pairs.
+     *
+     * @param  array<string, string|null>  $providers
+     * @return Generator<int, array{TextProvider, string}>
      */
-    private function iterateProvidersWithFailover(array $providers): iterable
+    private function iterateProvidersWithFailover(array $providers): Generator
     {
         foreach ($providers as $provider => $model) {
             $provider = Ai::textProviderFor($this, $provider);
@@ -276,7 +281,7 @@ trait Promptable
     /**
      * Get the default model to use for the given provider.
      */
-    protected function getDefaultModelFor(Provider $provider): string
+    protected function getDefaultModelFor(TextProvider $provider): string
     {
         $reflection = new ReflectionClass($this);
 

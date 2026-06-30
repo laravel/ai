@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Files;
 
 use Illuminate\Contracts\Support\Arrayable;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 use JsonSerializable;
@@ -48,7 +49,10 @@ class StoredAudio extends Audio implements Arrayable, JsonSerializable, Storable
      */
     public function mimeType(): ?string
     {
-        return $this->mime ?? Storage::disk($this->disk)->mimeType($this->path);
+        /** @var FilesystemAdapter $disk */
+        $disk = Storage::disk($this->disk);
+
+        return $this->mime ?? $disk->mimeType($this->path);
     }
 
     /**

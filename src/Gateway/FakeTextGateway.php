@@ -61,6 +61,7 @@ class FakeTextGateway implements TextGateway
             return $message instanceof UserMessage;
         });
 
+        /** @var UserMessage $message */
         $response = $this->nextResponse(
             $provider, $model, $message->content, $message->attachments, $schema
         );
@@ -139,6 +140,7 @@ class FakeTextGateway implements TextGateway
             return $message instanceof UserMessage;
         });
 
+        /** @var UserMessage $message */
         $fakeResponse = $this->nextResponse(
             $provider, $model, $message->content, $message->attachments, $schema
         );
