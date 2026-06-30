@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\PendingResponses;
 
-use Closure;
 use Illuminate\Support\Traits\Conditionable;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
@@ -13,25 +12,22 @@ use Laravel\Ai\FakePendingDispatch;
 use Laravel\Ai\Files\LocalAudio;
 use Laravel\Ai\Files\StoredAudio;
 use Laravel\Ai\Jobs\GenerateTranscription;
+use Laravel\Ai\PendingResponses\Concerns\ResolvesProviderOptions;
 use Laravel\Ai\Prompts\QueuedTranscriptionPrompt;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\QueuedTranscriptionResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
-use Laravel\SerializableClosure\SerializableClosure;
 use LogicException;
 
 class PendingTranscriptionGeneration
 {
-    use Conditionable;
+    use Conditionable, ResolvesProviderOptions;
 
     protected ?string $language = null;
 
     protected bool $diarize = false;
 
     protected int $timeout = 30;
-
-    /** @var array<string, mixed>|SerializableClosure */
-    protected array|SerializableClosure $providerOptions = [];
 
     public function __construct(
         protected TranscribableAudio $audio,
@@ -65,34 +61,6 @@ class PendingTranscriptionGeneration
         $this->timeout = $seconds;
 
         return $this;
-    }
-
-    /**
-     * Specify provider-specific options for transcription generation.
-     *
-     * @param  array<string, mixed>|Closure(Provider): ?array<string, mixed>  $options
-     */
-    public function withProviderOptions(array|Closure $options): self
-    {
-        $this->providerOptions = $options instanceof Closure
-            ? new SerializableClosure($options)
-            : $options;
-
-        return $this;
-    }
-
-    /**
-     * Resolve provider options for the given provider.
-     *
-     * @return array<string, mixed>
-     */
-    protected function resolveProviderOptions(Provider $provider): array
-    {
-        if ($this->providerOptions instanceof SerializableClosure) {
-            return ($this->providerOptions)($provider) ?: [];
-        }
-
-        return $this->providerOptions;
     }
 
     /**

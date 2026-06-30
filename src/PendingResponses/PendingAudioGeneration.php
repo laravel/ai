@@ -3,7 +3,6 @@
 namespace Laravel\Ai\PendingResponses;
 
 use BackedEnum;
-use Closure;
 use Illuminate\Support\Traits\Conditionable;
 use InvalidArgumentException;
 use Laravel\Ai\Ai;
@@ -16,7 +15,6 @@ use Laravel\Ai\Prompts\QueuedAudioPrompt;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\QueuedAudioResponse;
-use Laravel\SerializableClosure\SerializableClosure;
 
 class PendingAudioGeneration
 {
@@ -28,43 +26,12 @@ class PendingAudioGeneration
 
     protected int $timeout = 30;
 
-    /** @var array<string, mixed>|SerializableClosure */
-    protected array|SerializableClosure $providerOptions = [];
-
     public function __construct(
         protected string $text,
     ) {
         if (blank($text)) {
             throw new InvalidArgumentException('Text content is required to generate audio.');
         }
-    }
-
-    /**
-     * Specify provider-specific options for audio generation. Closures may only capture serializable values.
-     *
-     * @param  array<string, mixed>|Closure(Provider): ?array<string, mixed>  $options
-     */
-    public function withProviderOptions(array|Closure $options): self
-    {
-        $this->providerOptions = $options instanceof Closure
-            ? new SerializableClosure($options)
-            : $options;
-
-        return $this;
-    }
-
-    /**
-     * Resolve provider options for the given provider.
-     *
-     * @return array<string, mixed>
-     */
-    protected function resolveProviderOptions(Provider $provider): array
-    {
-        if ($this->providerOptions instanceof SerializableClosure) {
-            return ($this->providerOptions)($provider) ?: [];
-        }
-
-        return $this->providerOptions;
     }
 
     /**

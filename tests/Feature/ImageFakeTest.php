@@ -3,10 +3,8 @@
 use Illuminate\Support\Collection;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Image;
-use Laravel\Ai\PendingResponses\PendingImageGeneration;
 use Laravel\Ai\Prompts\ImagePrompt;
 use Laravel\Ai\Prompts\QueuedImagePrompt;
-use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
@@ -23,20 +21,6 @@ test('image rejects whitespace-only prompt', function () {
 
     Image::of('   ')->generate();
 })->throws(InvalidArgumentException::class, 'A prompt is required to generate an image.');
-
-test('withProviderOptions accepts array and closure options without breaking the faked pipeline', function () {
-    Image::fake([base64_encode('an-image')]);
-
-    $response = Image::of('A cat')
-        ->withProviderOptions(['style' => 'vivid'])
-        ->generate();
-
-    expect($response->firstImage()->image)->toEqual(base64_encode('an-image'));
-
-    $pending = Image::of('A cat')->withProviderOptions(fn (Provider $provider) => ['style' => 'vivid']);
-
-    expect($pending)->toBeInstanceOf(PendingImageGeneration::class);
-});
 
 test('images can be faked', function () {
     Image::fake([

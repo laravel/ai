@@ -1,23 +1,22 @@
 <?php
 
-namespace Laravel\Ai\Providers\Tools;
+namespace Laravel\Ai\PendingResponses\Concerns;
 
 use Closure;
-use Laravel\Ai\Contracts\HasProviderOptions;
-use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Providers\Provider;
 use Laravel\SerializableClosure\SerializableClosure;
 
-abstract class ProviderTool implements HasProviderOptions
+trait ResolvesProviderOptions
 {
     /** @var array<string, mixed>|SerializableClosure */
     protected array|SerializableClosure $providerOptions = [];
 
     /**
-     * Attach provider-specific options to the tool payload. Closures may only capture serializable values.
+     * Specify provider-specific options for the request.
      *
-     * @param  array<string, mixed>|Closure(Lab|string): ?array<string, mixed>  $options
+     * @param  array<string, mixed>|Closure(Provider): ?array<string, mixed>  $options
      */
-    public function withProviderOptions(array|Closure $options): static
+    public function withProviderOptions(array|Closure $options): self
     {
         $this->providerOptions = $options instanceof Closure
             ? new SerializableClosure($options)
@@ -27,11 +26,11 @@ abstract class ProviderTool implements HasProviderOptions
     }
 
     /**
-     * Get the provider-specific options for the given provider.
+     * Resolve provider options for the given provider.
      *
      * @return array<string, mixed>
      */
-    public function providerOptions(Lab|string $provider): array
+    protected function resolveProviderOptions(Provider $provider): array
     {
         if ($this->providerOptions instanceof SerializableClosure) {
             return ($this->providerOptions)($provider) ?: [];
