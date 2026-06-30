@@ -157,12 +157,9 @@ class DatabaseConversationStore implements ConversationStore
 
                 if ($toolCalls->isNotEmpty()) {
                     if ($toolResults->isEmpty()) {
-                        return [
-                            new AssistantMessage(
-                                $record->content,
-                                $toolCalls->map(ToolCall::fromArray(...)),
-                            ),
-                        ];
+                        return filled($record->content)
+                            ? [new AssistantMessage($record->content)]
+                            : [];
                     }
 
                     $messages = [
