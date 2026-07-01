@@ -25,6 +25,7 @@ it('passes provider, model, and timeout options to the agent', function () {
     $this->artisan('agent:run', [
         'agent' => AssistantAgent::class,
         'prompt' => 'Summarize',
+        '--provider' => 'openai',
         '--model' => 'claude-haiku-4-5-20251001',
         '--timeout' => '120',
     ])->assertSuccessful();
@@ -36,6 +37,15 @@ it('passes provider, model, and timeout options to the agent', function () {
 
 it('fails when the agent class is invalid', function () {
     $this->artisan('agent:run', ['agent' => 'App\\Nope'])->assertFailed();
+});
+
+it('fails with a non-zero exit code when the agent throws', function () {
+    AssistantAgent::fake([fn () => throw new RuntimeException('Agent exploded')]);
+
+    $this->artisan('agent:run', [
+        'agent' => AssistantAgent::class,
+        'prompt' => 'Summarize',
+    ])->assertFailed();
 });
 
 it('schedules the agent as an agent:run command', function () {

@@ -5,11 +5,14 @@ namespace Laravel\Ai\Console\Commands;
 use Illuminate\Console\Command;
 use Laravel\Ai\Contracts\Agent;
 use Symfony\Component\Console\Output\OutputInterface;
+use Throwable;
 
 class RunAgentCommand extends Command
 {
     /**
      * The name and signature of the console command.
+     *
+     * @var string
      */
     protected $signature = 'agent:run
         {agent : The agent class to run}
@@ -20,6 +23,8 @@ class RunAgentCommand extends Command
 
     /**
      * The console command description.
+     *
+     * @var string
      */
     protected $description = 'Run an AI agent and write its response to the output';
 
@@ -36,12 +41,20 @@ class RunAgentCommand extends Command
             return self::FAILURE;
         }
 
-        $response = $agent::make()->prompt(
-            $this->argument('prompt') ?? '',
-            provider: $this->option('provider'),
-            model: $this->option('model'),
-            timeout: is_null($this->option('timeout')) ? null : (int) $this->option('timeout'),
-        );
+        try {
+            $response = $this->laravel->make($agent)->prompt(
+                $this->argument('prompt') ?? '',
+                provider: $this->option('provider'),
+                model: $this->option('model'),
+                timeout: is_numeric($this->option('timeout')) ? (int) $this->option('timeout') : null,
+            );
+        } catch (Throwable $e) {
+            report($e);
+
+            $this->components->error($e->getMessage());
+
+            return self::FAILURE;
+        }
 
         $this->output->write($response->text, true, OutputInterface::OUTPUT_RAW);
 
