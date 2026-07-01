@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\Concerns;
 
 use Closure;
+use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
 use Laravel\Ai\Tools\ToolNameResolver;
@@ -35,17 +36,35 @@ trait InvokesTools
     protected function executeTool(Tool $tool, array $arguments): string
     {
         $callbacks = $this->pushToolInvocationCallbacks();
+        $id = (string) Str::uuid7();
 
         try {
-            call_user_func($callbacks['invoking'], $tool, $arguments);
+            call_user_func($callbacks['invoking'], $tool, $arguments, $id);
 
             return (string) tap(
                 $tool->handle(new Request($arguments)),
-                fn ($result) => call_user_func($callbacks['invoked'], $tool, $arguments, $result)
+                fn ($result) => call_user_func($callbacks['invoked'], $tool, $arguments, $result, $id)
             );
         } finally {
             $this->popToolInvocationCallbacks();
         }
+    }
+
+    /**
+     * Determine whether the configured concurrency driver can run in the current environment.
+     */
+    protected function canRunInParallel(): bool
+    {
+        $driver = config('concurrency.default')
+            ?? config('concurrency.driver')
+            ?? 'process';
+
+        return match ($driver) {
+            'fork' => PHP_SAPI === 'cli'
+                && extension_loaded('pcntl')
+                && class_exists('Spatie\\Fork\\Fork'),
+            default => true,
+        };
     }
 
     /**

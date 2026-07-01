@@ -32,8 +32,6 @@ use function Laravel\Ai\pipeline;
 
 trait GeneratesText
 {
-    protected string $currentToolInvocationId;
-
     /**
      * Invoke the given agent.
      */
@@ -146,16 +144,14 @@ trait GeneratesText
     protected function listenForToolInvocations(string $invocationId, Agent $agent): void
     {
         $this->textGateway()->onToolInvocation(
-            invoking: function (Tool $tool, array $arguments) use ($invocationId, $agent) {
-                $this->currentToolInvocationId = (string) Str::uuid7();
-
+            invoking: function (Tool $tool, array $arguments, string $toolInvocationId) use ($invocationId, $agent) {
                 $this->events->dispatch(new InvokingTool(
-                    $invocationId, $this->currentToolInvocationId, $agent, $tool, $arguments
+                    $invocationId, $toolInvocationId, $agent, $tool, $arguments
                 ));
             },
-            invoked: function (Tool $tool, array $arguments, mixed $result) use ($invocationId, $agent) {
+            invoked: function (Tool $tool, array $arguments, mixed $result, string $toolInvocationId) use ($invocationId, $agent) {
                 $this->events->dispatch(new ToolInvoked(
-                    $invocationId, $this->currentToolInvocationId, $agent, $tool, $arguments, $result
+                    $invocationId, $toolInvocationId, $agent, $tool, $arguments, $result
                 ));
             },
         );

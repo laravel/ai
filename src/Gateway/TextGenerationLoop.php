@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway;
 
 use Generator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Concurrency;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -22,6 +23,7 @@ use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
+use Laravel\Ai\Tools\Request;
 
 class TextGenerationLoop
 {
@@ -49,6 +51,7 @@ class TextGenerationLoop
         $steps = new Collection;
         $allMessages = $messages;
         $maxSteps = $this->resolveMaxSteps($options, $tools);
+        $parallel = ($options?->parallelTools() ?? false) && $this->canRunInParallel();
         $continuationToken = null;
         $lastResult = null;
 
@@ -89,7 +92,8 @@ class TextGenerationLoop
                 $lastResult->finishReason,
                 $lastResult->toolCalls,
                 $stepContext->isFinalStep,
-                $tools
+                $tools,
+                $parallel,
             );
 
             $shouldContinue = filled($toolResults);
@@ -131,6 +135,7 @@ class TextGenerationLoop
     ): Generator {
         $allMessages = $messages;
         $maxSteps = $this->resolveMaxSteps($options, $tools);
+        $parallel = ($options?->parallelTools() ?? false) && $this->canRunInParallel();
         $continuationToken = null;
         $accumulatedUsage = new Usage;
         $finalReason = null;
@@ -184,7 +189,7 @@ class TextGenerationLoop
             }
 
             $toolResults = $result !== null
-                ? $this->continuationToolResults($result->finishReason, $result->toolCalls, $stepContext->isFinalStep, $tools)
+                ? $this->continuationToolResults($result->finishReason, $result->toolCalls, $stepContext->isFinalStep, $tools, $parallel)
                 : [];
 
             $shouldContinue = filled($toolResults);
@@ -249,10 +254,10 @@ class TextGenerationLoop
      * @param  Tool[]  $tools
      * @return ToolResult[]
      */
-    protected function continuationToolResults(FinishReason $reason, array $toolCalls, bool $isFinalStep, array $tools): array
+    protected function continuationToolResults(FinishReason $reason, array $toolCalls, bool $isFinalStep, array $tools, bool $parallel = false): array
     {
         return $reason === FinishReason::ToolCalls && ! $isFinalStep && filled($toolCalls)
-            ? $this->executeToolCalls($toolCalls, $tools)
+            ? $this->executeToolCalls($toolCalls, $tools, $parallel)
             : [];
     }
 
@@ -261,8 +266,12 @@ class TextGenerationLoop
      * @param  Tool[]  $tools
      * @return ToolResult[]
      */
-    protected function executeToolCalls(array $toolCalls, array $tools): array
+    protected function executeToolCalls(array $toolCalls, array $tools, bool $parallel = false): array
     {
+        if ($parallel && count($toolCalls) >= 2) {
+            return $this->executeParallelToolCalls($toolCalls, $tools);
+        }
+
         return array_map(function (ToolCall $toolCall) use ($tools) {
             $tool = $this->findTool($toolCall->name, $tools);
 
@@ -270,14 +279,75 @@ class TextGenerationLoop
                 throw new NoSuchToolException($toolCall->name);
             }
 
-            return new ToolResult(
-                $toolCall->id,
-                $toolCall->name,
-                $toolCall->arguments,
-                $this->executeTool($tool, $toolCall->arguments),
-                $toolCall->resultId,
-            );
+            return $this->toolResult($toolCall, $this->executeTool($tool, $toolCall->arguments));
         }, $toolCalls);
+    }
+
+    /**
+     * Execute the given tool calls in parallel, firing invocation events from the parent process.
+     *
+     * @param  ToolCall[]  $toolCalls
+     * @param  Tool[]  $tools
+     * @return ToolResult[]
+     */
+    protected function executeParallelToolCalls(array $toolCalls, array $tools): array
+    {
+        $pairs = array_map(function (ToolCall $toolCall) use ($tools) {
+            $tool = $this->findTool($toolCall->name, $tools);
+
+            if ($tool === null) {
+                throw new NoSuchToolException($toolCall->name);
+            }
+
+            return [$toolCall, $tool];
+        }, $toolCalls);
+
+        // Snapshot the callbacks so a tool that re-registers them mid-batch (e.g. a
+        // sub-agent invoked in-process) cannot corrupt the events we fire below.
+        $callbacks = $this->pushToolInvocationCallbacks();
+
+        try {
+            $invocationIds = array_map(function (array $pair) use ($callbacks) {
+                $id = (string) Str::uuid7();
+
+                call_user_func($callbacks['invoking'], $pair[1], $pair[0]->arguments, $id);
+
+                return $id;
+            }, $pairs);
+
+            // Only the string result crosses the process boundary; no events fire inside the child.
+            $raw = array_values(Concurrency::run(array_map(function (array $pair) {
+                [$toolCall, $tool] = $pair;
+
+                return fn () => (string) $tool->handle(new Request($toolCall->arguments));
+            }, $pairs)));
+
+            $results = [];
+
+            foreach ($pairs as $index => [$toolCall, $tool]) {
+                call_user_func($callbacks['invoked'], $tool, $toolCall->arguments, $raw[$index], $invocationIds[$index]);
+
+                $results[] = $this->toolResult($toolCall, $raw[$index]);
+            }
+
+            return $results;
+        } finally {
+            $this->popToolInvocationCallbacks();
+        }
+    }
+
+    /**
+     * Create a tool result for the given tool call.
+     */
+    protected function toolResult(ToolCall $toolCall, string $result): ToolResult
+    {
+        return new ToolResult(
+            $toolCall->id,
+            $toolCall->name,
+            $toolCall->arguments,
+            $result,
+            $toolCall->resultId,
+        );
     }
 
     /**

@@ -34,7 +34,8 @@
         "phpstan/phpstan": "^2.1"
     },
     "suggest": {
-        "laravel/mcp": "Required to use MCP client tools or MCP server tools with Laravel AI agents."
+        "laravel/mcp": "Required to use MCP client tools or MCP server tools with Laravel AI agents.",
+        "spatie/fork": "Required to run parallel agent tools with the 'fork' concurrency driver (CLI only)."
     },
     "minimum-stability": "dev",
     "prefer-stable": true,
