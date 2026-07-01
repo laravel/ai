@@ -386,40 +386,71 @@ test('malformed known stored attachments fail loudly', function () {
         ->toThrow(InvalidArgumentException::class, 'Cannot reconstruct [remote-image] attachment because [url] is missing or invalid.');
 });
 
-test('it does not leak the latest conversation between participants of different types sharing an id', function () {
+test('the default store ignores the participant and resolves the latest conversation by id alone', function () {
     $store = new DatabaseConversationStore;
 
-    $userConversation = $store->storeConversation(1, 'User conversation', 'App\\Models\\User');
-    $adminConversation = $store->storeConversation(1, 'Admin conversation', 'App\\Models\\Admin');
+    $user = new class
+    {
+        public int $id = 1;
+    };
 
-    // Despite sharing id 1, each participant type only resolves its own conversation...
-    expect($store->latestConversationId(1, 'App\\Models\\User'))->toBe($userConversation)
-        ->and($store->latestConversationId(1, 'App\\Models\\Admin'))->toBe($adminConversation);
+    $conversationId = $store->storeConversation($user->id, 'Chat', $user);
+
+    expect($store->latestConversationId($user->id, $user))->toBe($conversationId);
 });
 
-test('it persists the participant type on stored conversations and messages', function () {
-    $store = new DatabaseConversationStore;
+test('a custom store can scope conversations by participant type via the participant seam', function () {
+    Schema::table('agent_conversations', fn (Blueprint $table) => $table->string('user_type')->nullable());
 
-    $conversationId = $store->storeConversation(1, 'Conversation', 'App\\Models\\Admin');
+    $store = new class extends DatabaseConversationStore
+    {
+        public function latestConversationId(string|int $userId, ?object $participant = null): ?string
+        {
+            return DB::table('agent_conversations')
+                ->where('user_id', $userId)
+                ->where('user_type', $participant?->getMorphClass())
+                ->orderByDesc('updated_at')
+                ->value('id');
+        }
 
-    $store->storeUserMessage(
-        $conversationId,
-        1,
-        new AgentPrompt(new ToolUsingAgent, 'Hello', [], Mockery::mock(TextProvider::class), 'test-model'),
-        'App\\Models\\Admin',
-    );
+        public function storeConversation(string|int|null $userId, string $title, ?object $participant = null): string
+        {
+            $id = parent::storeConversation($userId, $title, $participant);
 
-    expect(DB::table('agent_conversations')->where('id', $conversationId)->value('user_type'))->toBe('App\\Models\\Admin')
-        ->and(DB::table('agent_conversation_messages')->where('conversation_id', $conversationId)->value('user_type'))->toBe('App\\Models\\Admin');
-});
+            DB::table('agent_conversations')->where('id', $id)->update([
+                'user_type' => $participant?->getMorphClass(),
+            ]);
 
-test('it matches conversations regardless of type when no participant type is given', function () {
-    $store = new DatabaseConversationStore;
+            return $id;
+        }
+    };
 
-    $conversationId = $store->storeConversation(1, 'Typed conversation', 'App\\Models\\User');
+    $user = new class
+    {
+        public int $id = 1;
 
-    // A null type filter is not applied, so a typed conversation still resolves...
-    expect($store->latestConversationId(1))->toBe($conversationId);
+        public function getMorphClass(): string
+        {
+            return 'user';
+        }
+    };
+
+    $admin = new class
+    {
+        public int $id = 1;
+
+        public function getMorphClass(): string
+        {
+            return 'admin';
+        }
+    };
+
+    $userConversation = $store->storeConversation($user->id, 'User chat', $user);
+    $adminConversation = $store->storeConversation($admin->id, 'Admin chat', $admin);
+
+    // Despite sharing id 1, each participant only resolves its own conversation...
+    expect($store->latestConversationId($user->id, $user))->toBe($userConversation)
+        ->and($store->latestConversationId($admin->id, $admin))->toBe($adminConversation);
 });
 
 function createConversationSchema(?string $connection = null): void
@@ -432,7 +463,6 @@ function createConversationSchema(?string $connection = null): void
     $schema->create($conversationsTable, function (Blueprint $table) {
         $table->string('id', 36)->primary();
         $table->foreignId('user_id')->nullable();
-        $table->string('user_type')->nullable();
         $table->string('title');
         $table->timestamps();
     });
@@ -441,7 +471,6 @@ function createConversationSchema(?string $connection = null): void
         $table->string('id', 36)->primary();
         $table->string('conversation_id', 36)->index();
         $table->foreignId('user_id')->nullable();
-        $table->string('user_type')->nullable();
         $table->string('agent');
         $table->string('role', 25);
         $table->text('content');

@@ -1,75 +1,54 @@
 <?php
 
-use Illuminate\Support\Facades\Config;
-use Laravel\Ai\Storage\DatabaseConversationStore;
+use Illuminate\Support\Collection;
+use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Prompts\AgentPrompt;
+use Laravel\Ai\Responses\AgentResponse;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
 
-test('it isolates the latest conversation by participant type when scoping is enabled', function () {
-    Config::set('ai.conversations.scope_by_participant_type', true);
-
-    $store = new DatabaseConversationStore;
-
-    $user = new class
-    {
-        public int $id = 1;
-    };
-
-    $admin = new class
-    {
-        public int $id = 1;
-    };
-
-    $userConversation = $store->storeConversation($user->id, 'User chat', $user::class);
-    $adminConversation = $store->storeConversation($admin->id, 'Admin chat', $admin::class);
-
-    // Despite sharing id 1, each participant only resumes its own conversation...
-    expect((new RememberingAssistantAgent)->continueLastConversation($admin)->currentConversation())
-        ->toBe($adminConversation)
-        ->and((new RememberingAssistantAgent)->continueLastConversation($user)->currentConversation())
-        ->toBe($userConversation);
-});
-
-test('it does not scope by participant type when scoping is disabled', function () {
-    Config::set('ai.conversations.scope_by_participant_type', false);
-
-    $store = new DatabaseConversationStore;
-
-    $user = new class
-    {
-        public int $id = 1;
-    };
-
-    // Stored under a different type than the participant's class...
-    $conversationId = $store->storeConversation($user->id, 'Chat', 'App\\Models\\Admin');
-
-    // With scoping off, the participant type is ignored and the conversation still resolves...
-    expect((new RememberingAssistantAgent)->continueLastConversation($user)->currentConversation())
-        ->toBe($conversationId);
-});
-
-test('it returns no participant type when scoping is disabled', function () {
-    Config::set('ai.conversations.scope_by_participant_type', false);
-
+test('it forwards the participant to the store when continuing the last conversation', function () {
     $participant = new class
     {
-        public int $id = 1;
+        public int $id = 7;
     };
 
-    expect((new RememberingAssistantAgent)->forUser($participant)->conversationParticipantType())->toBeNull();
-});
-
-test('it derives the participant morph type via getMorphClass when available', function () {
-    Config::set('ai.conversations.scope_by_participant_type', true);
-
-    $participant = new class
+    $store = new class implements ConversationStore
     {
-        public int $id = 5;
+        public ?object $participant = null;
 
-        public function getMorphClass(): string
+        public function latestConversationId(string|int $userId, ?object $participant = null): ?string
         {
-            return 'admin';
+            $this->participant = $participant;
+
+            return 'conversation-1';
+        }
+
+        public function storeConversation(string|int|null $userId, string $title, ?object $participant = null): string
+        {
+            return 'conversation-1';
+        }
+
+        public function storeUserMessage(string $conversationId, string|int|null $userId, AgentPrompt $prompt, ?object $participant = null): string
+        {
+            return 'user-1';
+        }
+
+        public function storeAssistantMessage(string $conversationId, string|int|null $userId, AgentPrompt $prompt, AgentResponse $response, ?object $participant = null): string
+        {
+            return 'assistant-1';
+        }
+
+        public function getLatestConversationMessages(string $conversationId, int $limit): Collection
+        {
+            return new Collection;
         }
     };
 
-    expect((new RememberingAssistantAgent)->forUser($participant)->conversationParticipantType())->toBe('admin');
+    app()->instance(ConversationStore::class, $store);
+
+    $agent = (new RememberingAssistantAgent)->continueLastConversation($participant);
+
+    // The full participant is handed to the store, so a custom store may scope however it likes...
+    expect($store->participant)->toBe($participant)
+        ->and($agent->currentConversation())->toBe('conversation-1');
 });

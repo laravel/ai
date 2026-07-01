@@ -9,22 +9,22 @@ use Laravel\Ai\Responses\AgentResponse;
 
 class FakeConversationStore implements ConversationStore
 {
-    public function latestConversationId(string|int $userId, ?string $userType = null): ?string
+    public function latestConversationId(string|int $userId, ?object $participant = null): ?string
     {
         return null;
     }
 
-    public function storeConversation(string|int|null $userId, string $title, ?string $userType = null): string
+    public function storeConversation(string|int|null $userId, string $title, ?object $participant = null): string
     {
         return 'conversation-123';
     }
 
-    public function storeUserMessage(string $conversationId, string|int|null $userId, AgentPrompt $prompt, ?string $userType = null): string
+    public function storeUserMessage(string $conversationId, string|int|null $userId, AgentPrompt $prompt, ?object $participant = null): string
     {
         return 'user-message-123';
     }
 
-    public function storeAssistantMessage(string $conversationId, string|int|null $userId, AgentPrompt $prompt, AgentResponse $response, ?string $userType = null): string
+    public function storeAssistantMessage(string $conversationId, string|int|null $userId, AgentPrompt $prompt, AgentResponse $response, ?object $participant = null): string
     {
         return 'assistant-message-123';
     }

@@ -31,11 +31,10 @@ class DatabaseConversationStore implements ConversationStore
     /**
      * Get the most recent conversation ID for a given user.
      */
-    public function latestConversationId(string|int $userId, ?string $userType = null): ?string
+    public function latestConversationId(string|int $userId, ?object $participant = null): ?string
     {
         return $this->table($this->conversationsTable())
             ->where('user_id', $userId)
-            ->when($userType !== null, fn ($query) => $query->where('user_type', $userType))
             ->orderBy('updated_at', 'desc')
             ->first()?->id;
     }
@@ -43,14 +42,13 @@ class DatabaseConversationStore implements ConversationStore
     /**
      * Store a new conversation and return its ID.
      */
-    public function storeConversation(string|int|null $userId, string $title, ?string $userType = null): string
+    public function storeConversation(string|int|null $userId, string $title, ?object $participant = null): string
     {
         $conversationId = (string) Str::uuid7();
 
         $this->table($this->conversationsTable())->insert([
             'id' => $conversationId,
             'user_id' => $userId,
-            'user_type' => $userType,
             'title' => $title,
             'created_at' => now(),
             'updated_at' => now(),
@@ -62,7 +60,7 @@ class DatabaseConversationStore implements ConversationStore
     /**
      * Store a new user message for the given conversation and return its ID.
      */
-    public function storeUserMessage(string $conversationId, string|int|null $userId, AgentPrompt $prompt, ?string $userType = null): string
+    public function storeUserMessage(string $conversationId, string|int|null $userId, AgentPrompt $prompt, ?object $participant = null): string
     {
         $messageId = (string) Str::uuid7();
 
@@ -72,7 +70,6 @@ class DatabaseConversationStore implements ConversationStore
             'id' => $messageId,
             'conversation_id' => $conversationId,
             'user_id' => $userId,
-            'user_type' => $userType,
             'agent' => $prompt->agent::class,
             'role' => 'user',
             'content' => $prompt->prompt,
@@ -93,7 +90,7 @@ class DatabaseConversationStore implements ConversationStore
     /**
      * Store a new assistant message for the given conversation and return its ID.
      */
-    public function storeAssistantMessage(string $conversationId, string|int|null $userId, AgentPrompt $prompt, AgentResponse $response, ?string $userType = null): string
+    public function storeAssistantMessage(string $conversationId, string|int|null $userId, AgentPrompt $prompt, AgentResponse $response, ?object $participant = null): string
     {
         $messageId = (string) Str::uuid7();
 
@@ -103,7 +100,6 @@ class DatabaseConversationStore implements ConversationStore
             'id' => $messageId,
             'conversation_id' => $conversationId,
             'user_id' => $userId,
-            'user_type' => $userType,
             'agent' => $prompt->agent::class,
             'role' => 'assistant',
             'content' => $response->text,

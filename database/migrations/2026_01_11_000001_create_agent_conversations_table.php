@@ -17,18 +17,16 @@ return new class extends AiMigration
         Schema::create($conversationsTable, function (Blueprint $table) {
             $table->string('id', 36)->primary();
             $table->foreignId('user_id')->nullable();
-            $table->string('user_type')->nullable();
             $table->string('title');
             $table->timestamps();
 
-            $table->index(['user_id', 'user_type', 'updated_at']);
+            $table->index(['user_id', 'updated_at']);
         });
 
         Schema::create($messagesTable, function (Blueprint $table) {
             $table->string('id', 36)->primary();
             $table->string('conversation_id', 36)->index();
             $table->foreignId('user_id')->nullable();
-            $table->string('user_type')->nullable();
             $table->string('agent');
             $table->string('role', 25);
             $table->text('content');
@@ -40,7 +38,7 @@ return new class extends AiMigration
             $table->timestamps();
 
             $table->index(['conversation_id', 'user_id', 'updated_at'], 'conversation_index');
-            $table->index(['user_id', 'user_type']);
+            $table->index(['user_id']);
         });
     }
 

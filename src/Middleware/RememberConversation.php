@@ -28,42 +28,39 @@ class RememberConversation
         return $next($prompt)->then(function ($response) use ($prompt) {
             $agent = $prompt->agent;
 
-            $participantType = $agent->conversationParticipantType();
+            $participant = $agent->conversationParticipant();
 
             // Create conversation if necessary...
             if (! $agent->currentConversation()) {
                 $conversationId = $this->store->storeConversation(
-                    $agent->conversationParticipant()?->id,
+                    $participant?->id,
                     $this->generateTitle($prompt->prompt),
-                    $participantType,
+                    $participant,
                 );
 
-                $agent->continue(
-                    $conversationId,
-                    $agent->conversationParticipant()
-                );
+                $agent->continue($conversationId, $participant);
             }
 
             // Record user message...
             $this->store->storeUserMessage(
                 $agent->currentConversation(),
-                $agent->conversationParticipant()?->id,
+                $participant?->id,
                 $prompt,
-                $participantType,
+                $participant,
             );
 
             // Record assistant message...
             $this->store->storeAssistantMessage(
                 $agent->currentConversation(),
-                $agent->conversationParticipant()?->id,
+                $participant?->id,
                 $prompt,
                 $response,
-                $participantType,
+                $participant,
             );
 
             $response->withinConversation(
                 $agent->currentConversation(),
-                $agent->conversationParticipant(),
+                $participant,
             );
         });
     }

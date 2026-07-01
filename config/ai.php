@@ -40,23 +40,6 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Conversations
-    |--------------------------------------------------------------------------
-    |
-    | Below you may configure how remembered conversations behave. When
-    | "scope_by_participant_type" is enabled, conversations are isolated by
-    | the participant's morph type in addition to its ID. This prevents
-    | different authenticatable models that share an ID (e.g. User #1 and
-    | Admin #1) from seeing each other's conversation history.
-    |
-    */
-
-    'conversations' => [
-        'scope_by_participant_type' => env('AI_CONVERSATIONS_SCOPE_BY_PARTICIPANT_TYPE', false),
-    ],
-
-    /*
-    |--------------------------------------------------------------------------
     | AI Providers
     |--------------------------------------------------------------------------
     |
