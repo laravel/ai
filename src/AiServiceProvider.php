@@ -11,6 +11,7 @@ use Laravel\Ai\Console\Commands\ChatCommand;
 use Laravel\Ai\Console\Commands\MakeAgentCommand;
 use Laravel\Ai\Console\Commands\MakeAgentMiddlewareCommand;
 use Laravel\Ai\Console\Commands\MakeToolCommand;
+use Laravel\Ai\Console\Commands\RunAgentCommand;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Scheduling\ScheduleMixin;
@@ -140,6 +141,7 @@ class AiServiceProvider extends ServiceProvider
             MakeAgentCommand::class,
             MakeAgentMiddlewareCommand::class,
             MakeToolCommand::class,
+            RunAgentCommand::class,
         ]);
     }
 
