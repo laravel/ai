@@ -6,9 +6,10 @@ use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Defer\DeferredCallback;
 use Illuminate\Support\Facades\Concurrency;
-use Laravel\Ai\Attributes\ParallelTools;
+use Laravel\Ai\Attributes\Parallel;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
+use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\NoSuchToolException;
@@ -26,15 +27,19 @@ use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Laravel\Ai\Tools\Request;
 use Laravel\SerializableClosure\SerializableClosure;
 
-test('the parallel tools attribute is detected on an agent', function () {
-    expect(ParallelTools::isAppliedTo(new ParallelToolsAgent))->toBeTrue()
-        ->and(ParallelTools::isAppliedTo(new SequentialToolsAgent))->toBeFalse()
-        ->and(ParallelTools::isAppliedTo(null))->toBeFalse();
+test('the parallel attribute is detected on the tools method', function () {
+    expect(Parallel::isAppliedTo(new ParallelAgent))->toBeTrue()
+        ->and(Parallel::isAppliedTo(new SequentialAgent))->toBeFalse()
+        ->and(Parallel::isAppliedTo(new class
+        {
+            // An agent without a tools() method is never parallel.
+        }))->toBeFalse()
+        ->and(Parallel::isAppliedTo(null))->toBeFalse();
 });
 
 test('forAgent resolves whether the agent runs its tools in parallel', function () {
-    expect(TextGenerationOptions::forAgent(new ParallelToolsAgent)->parallelTools())->toBeTrue()
-        ->and(TextGenerationOptions::forAgent(new SequentialToolsAgent)->parallelTools())->toBeFalse();
+    expect(TextGenerationOptions::forAgent(new ParallelAgent)->parallelTools())->toBeTrue()
+        ->and(TextGenerationOptions::forAgent(new SequentialAgent)->parallelTools())->toBeFalse();
 });
 
 test('parallel tools run together with results in original order and correctly paired events', function () {
@@ -75,7 +80,7 @@ test('parallel tools run together with results in original order and correctly p
         [],
         $tools,
         null,
-        new TextGenerationOptions(maxSteps: 2, agent: new ParallelToolsAgent),
+        new TextGenerationOptions(maxSteps: 2, agent: new ParallelAgent),
         null,
     );
 
@@ -107,7 +112,7 @@ test('a single tool call does not route through the concurrency driver', functio
         [],
         [new ParallelRecordingTool('solo', $log, 'S')],
         null,
-        new TextGenerationOptions(maxSteps: 2, agent: new ParallelToolsAgent),
+        new TextGenerationOptions(maxSteps: 2, agent: new ParallelAgent),
         null,
     );
 
@@ -146,7 +151,7 @@ test('tools run sequentially when the concurrency driver cannot run in the curre
         [],
         $tools,
         null,
-        new TextGenerationOptions(maxSteps: 2, agent: new ParallelToolsAgent),
+        new TextGenerationOptions(maxSteps: 2, agent: new ParallelAgent),
         null,
     );
 
@@ -178,7 +183,7 @@ test('an exception in a parallel tool bubbles up and fails the step', function (
         [],
         $tools,
         null,
-        new TextGenerationOptions(maxSteps: 2, agent: new ParallelToolsAgent),
+        new TextGenerationOptions(maxSteps: 2, agent: new ParallelAgent),
         null,
     ))->toThrow(RuntimeException::class, 'boom:bravo');
 });
@@ -202,7 +207,7 @@ test('an unknown tool in a parallel batch throws before any tool executes', func
         [],
         [new ParallelRecordingTool('alpha', $log, 'A')],
         null,
-        new TextGenerationOptions(maxSteps: 2, agent: new ParallelToolsAgent),
+        new TextGenerationOptions(maxSteps: 2, agent: new ParallelAgent),
         null,
     ))->toThrow(NoSuchToolException::class)
         ->and($log->getArrayCopy())->toBe([]);
@@ -234,7 +239,7 @@ test('streamed parallel tools yield one result per tool in original order', func
         [],
         $tools,
         null,
-        new TextGenerationOptions(maxSteps: 2, agent: new ParallelToolsAgent),
+        new TextGenerationOptions(maxSteps: 2, agent: new ParallelAgent),
         null,
     ));
 
@@ -271,7 +276,7 @@ test('parallel tools survive serialization and marshal results back in order und
         [],
         $tools,
         null,
-        new TextGenerationOptions(maxSteps: 2, agent: new ParallelToolsAgent),
+        new TextGenerationOptions(maxSteps: 2, agent: new ParallelAgent),
         null,
     );
 
@@ -320,7 +325,7 @@ test('a tool that re-registers callbacks mid-batch does not corrupt the parent i
         [],
         $tools,
         null,
-        new TextGenerationOptions(maxSteps: 2, agent: new ParallelToolsAgent),
+        new TextGenerationOptions(maxSteps: 2, agent: new ParallelAgent),
         null,
     );
 
@@ -350,8 +355,7 @@ function parallelToolsGateway(array $steps = [], array $streams = []): ParallelT
     return new ParallelToolsFakeGateway($steps, $streams);
 }
 
-#[ParallelTools]
-class ParallelToolsAgent implements Agent
+class ParallelAgent implements Agent, HasTools
 {
     use Promptable;
 
@@ -359,15 +363,26 @@ class ParallelToolsAgent implements Agent
     {
         return 'test';
     }
+
+    #[Parallel]
+    public function tools(): array
+    {
+        return [];
+    }
 }
 
-class SequentialToolsAgent implements Agent
+class SequentialAgent implements Agent, HasTools
 {
     use Promptable;
 
     public function instructions(): string
     {
         return 'test';
+    }
+
+    public function tools(): array
+    {
+        return [];
     }
 }
 
