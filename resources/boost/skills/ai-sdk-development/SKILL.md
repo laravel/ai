@@ -23,7 +23,7 @@ This package is new. Always search the documentation before implementing any fea
 Use these section headings as query terms for accurate results:
 
 - Introduction, Installation, Configuration, Provider Support
-- Agents: Prompting, Conversation Context, Structured Output, Attachments, Streaming, Broadcasting, Queueing, Tools, Provider Tools, Middleware, Anonymous Agents, Agent Configuration
+- Agents: Prompting, Conversation Context, Structured Output, Attachments, Streaming, Broadcasting, Queueing, Scheduling, Tools, Provider Tools, Middleware, Anonymous Agents, Agent Configuration
 - Images
 - Audio (TTS)
 - Transcription (STT)
@@ -40,6 +40,7 @@ Use these section headings as query terms for accurate results:
 Determine the right entry point before writing code:
 
 Text generation or chat? → Agent class with `Promptable` trait
+Run an agent on a schedule? → `Schedule::agent(Class::class, 'prompt')` — search the documentation for "Scheduling"
 Chat with conversation history? → Agent + `Conversational` interface (manual) or `RemembersConversations` trait (automatic)
 Structured JSON output? → Agent + `HasStructuredOutput` interface
 Image generation? → `Image::of()->generate()`
