@@ -3,6 +3,7 @@
 namespace Laravel\Ai;
 
 use Closure;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Collection;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Stringable;
@@ -12,6 +13,7 @@ use Laravel\Ai\Console\Commands\MakeAgentMiddlewareCommand;
 use Laravel\Ai\Console\Commands\MakeToolCommand;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Scheduling\ScheduleMixin;
 use Laravel\Ai\Storage\DatabaseConversationStore;
 
 class AiServiceProvider extends ServiceProvider
@@ -121,6 +123,11 @@ class AiServiceProvider extends ServiceProvider
                 fn ($result) => $this->values()[$result->index]
             );
         });
+
+        // Scheduled agent macro...
+        if (! Schedule::hasMacro('agent')) {
+            Schedule::mixin(new ScheduleMixin);
+        }
     }
 
     /**
