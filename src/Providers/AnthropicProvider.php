@@ -59,7 +59,7 @@ class AnthropicProvider extends Provider implements FileProvider, SupportsWebFet
      */
     public function defaultTextModel(): string
     {
-        return $this->config['models']['text']['default'] ?? 'claude-sonnet-4-6';
+        return $this->config['models']['text']['default'] ?? 'claude-sonnet-5';
     }
 
     /**
