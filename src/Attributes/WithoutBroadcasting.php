@@ -34,11 +34,11 @@ final class WithoutBroadcasting
     }
 
     /**
-     * Determine if the given event should be withheld from the resolved skip set.
+     * Determine if the given event is excluded by the resolved skip set.
      *
      * @param  array<int, class-string<StreamEvent>>  $events
      */
-    public static function withholds(array $events, StreamEvent $event): bool
+    public static function excludes(array $events, StreamEvent $event): bool
     {
         return in_array($event::class, $events, true);
     }

@@ -158,7 +158,7 @@ trait Promptable
 
         return $this->stream($prompt, $attachments, $provider, $model)
             ->each(function (StreamEvent $event) use ($channels, $now, $without) {
-                if (WithoutBroadcasting::withholds($without, $event)) {
+                if (WithoutBroadcasting::excludes($without, $event)) {
                     return;
                 }
 
