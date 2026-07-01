@@ -3,7 +3,6 @@
 namespace Laravel\Ai\Scheduling;
 
 use Closure;
-use Illuminate\Console\Scheduling\CallbackEvent;
 use Illuminate\Console\Scheduling\Schedule;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Enums\Lab;
@@ -21,12 +20,17 @@ class ScheduleMixin
             array $attachments = [],
             Lab|array|string|null $provider = null,
             ?string $model = null,
-        ): CallbackEvent {
+        ): PendingScheduledAgent {
             /** @var Schedule $this */
-            return $this->call(function () use ($agent, $prompt, $attachments, $provider, $model) {
-                (is_string($agent) ? $agent::make() : $agent)
-                    ->queue($prompt, $attachments, $provider, $model);
+            $pending = new PendingScheduledAgent;
+
+            $event = $this->call(function () use ($pending, $agent, $prompt, $attachments, $provider, $model) {
+                $pending->report(
+                    (is_string($agent) ? $agent::make() : $agent)->queue($prompt, $attachments, $provider, $model)
+                );
             })->name('agent:'.class_basename(is_string($agent) ? $agent : $agent::class));
+
+            return $pending->setEvent($event);
         };
     }
 }
