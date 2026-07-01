@@ -27,19 +27,12 @@ use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Laravel\Ai\Tools\Request;
 use Laravel\SerializableClosure\SerializableClosure;
 
-test('the parallel attribute is detected on the tools method', function () {
-    expect(Parallel::isAppliedTo(new ParallelAgent))->toBeTrue()
-        ->and(Parallel::isAppliedTo(new SequentialAgent))->toBeFalse()
-        ->and(Parallel::isAppliedTo(new class
-        {
-            // An agent without a tools() method is never parallel.
-        }))->toBeFalse()
-        ->and(Parallel::isAppliedTo(null))->toBeFalse();
-});
-
-test('forAgent resolves whether the agent runs its tools in parallel', function () {
+test('a #[Parallel] tools() method is detected through the resolved options', function () {
     expect(TextGenerationOptions::forAgent(new ParallelAgent)->parallelTools())->toBeTrue()
         ->and(TextGenerationOptions::forAgent(new SequentialAgent)->parallelTools())->toBeFalse();
+
+    expect(Parallel::isAppliedTo(null))->toBeFalse()
+        ->and(Parallel::isAppliedTo(new class {}))->toBeFalse();
 });
 
 test('parallel tools run together with results in original order and correctly paired events', function () {
