@@ -6,6 +6,7 @@
 /phpunit.xml
 /tmp
 /vendor
+/workbench/storage
 CLAUDE.md
 .env
 .claude
