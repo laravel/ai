@@ -32,6 +32,8 @@ use function Laravel\Ai\pipeline;
 
 trait GeneratesText
 {
+    use ManagesConversationMiddleware;
+
     protected string $currentToolInvocationId;
 
     /**
@@ -57,6 +59,8 @@ trait GeneratesText
                     ...($agent instanceof Conversational ? $agent->messages() : []),
                     new UserMessage($prompt->prompt, $prompt->attachments->all()),
                 ];
+
+                $messages = $this->applyConversationMiddleware($agent, $messages);
 
                 $this->listenForToolInvocations($invocationId, $agent);
 
