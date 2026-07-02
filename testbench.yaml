@@ -32,3 +32,6 @@ workbench:
     - from: storage
       to: workbench/storage
       reverse: true
+    - from: workbench/public/build
+      to: public/build
+      reverse: false
