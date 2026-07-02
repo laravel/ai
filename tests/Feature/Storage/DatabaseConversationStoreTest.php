@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
+use Laravel\Ai\Contracts\ParticipantAware;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\StoredDocument;
@@ -386,39 +387,36 @@ test('malformed known stored attachments fail loudly', function () {
         ->toThrow(InvalidArgumentException::class, 'Cannot reconstruct [remote-image] attachment because [url] is missing or invalid.');
 });
 
-test('the default store ignores the participant and resolves the latest conversation by id alone', function () {
-    $store = new DatabaseConversationStore;
-
-    $user = new class
-    {
-        public int $id = 1;
-    };
-
-    $conversationId = $store->storeConversation($user->id, 'Chat', $user);
-
-    expect($store->latestConversationId($user->id, $user))->toBe($conversationId);
-});
-
-test('a custom store can scope conversations by participant type via the participant seam', function () {
+test('a participant-aware store can scope conversations by participant type', function () {
     Schema::table('agent_conversations', fn (Blueprint $table) => $table->string('user_type')->nullable());
 
-    $store = new class extends DatabaseConversationStore
+    $store = new class extends DatabaseConversationStore implements ParticipantAware
     {
-        public function latestConversationId(string|int $userId, ?object $participant = null): ?string
+        protected ?object $participant = null;
+
+        public function forParticipant(?object $participant): static
+        {
+            $clone = clone $this;
+            $clone->participant = $participant;
+
+            return $clone;
+        }
+
+        public function latestConversationId(string|int $userId): ?string
         {
             return DB::table('agent_conversations')
                 ->where('user_id', $userId)
-                ->where('user_type', $participant?->getMorphClass())
+                ->where('user_type', $this->participant?->getMorphClass())
                 ->orderByDesc('updated_at')
                 ->value('id');
         }
 
-        public function storeConversation(string|int|null $userId, string $title, ?object $participant = null): string
+        public function storeConversation(string|int|null $userId, string $title): string
         {
-            $id = parent::storeConversation($userId, $title, $participant);
+            $id = parent::storeConversation($userId, $title);
 
             DB::table('agent_conversations')->where('id', $id)->update([
-                'user_type' => $participant?->getMorphClass(),
+                'user_type' => $this->participant?->getMorphClass(),
             ]);
 
             return $id;
@@ -445,12 +443,12 @@ test('a custom store can scope conversations by participant type via the partici
         }
     };
 
-    $userConversation = $store->storeConversation($user->id, 'User chat', $user);
-    $adminConversation = $store->storeConversation($admin->id, 'Admin chat', $admin);
+    $userConversation = $store->forParticipant($user)->storeConversation($user->id, 'User chat');
+    $adminConversation = $store->forParticipant($admin)->storeConversation($admin->id, 'Admin chat');
 
     // Despite sharing id 1, each participant only resolves its own conversation...
-    expect($store->latestConversationId($user->id, $user))->toBe($userConversation)
-        ->and($store->latestConversationId($admin->id, $admin))->toBe($adminConversation);
+    expect($store->forParticipant($user)->latestConversationId($user->id))->toBe($userConversation)
+        ->and($store->forParticipant($admin)->latestConversationId($admin->id))->toBe($adminConversation);
 });
 
 function createConversationSchema(?string $connection = null): void

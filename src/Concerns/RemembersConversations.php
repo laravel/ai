@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Concerns;
 
 use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Contracts\ParticipantAware;
 
 trait RemembersConversations
 {
@@ -39,8 +40,13 @@ trait RemembersConversations
     {
         $this->conversationUser = $as;
 
-        $this->conversationId = resolve(ConversationStore::class)
-            ->latestConversationId($as->id, $as);
+        $store = resolve(ConversationStore::class);
+
+        if ($store instanceof ParticipantAware) {
+            $store = $store->forParticipant($as);
+        }
+
+        $this->conversationId = $store->latestConversationId($as->id);
 
         return $this;
     }

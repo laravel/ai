@@ -5,6 +5,7 @@ namespace Laravel\Ai\Middleware;
 use Closure;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Contracts\ParticipantAware;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
@@ -30,32 +31,34 @@ class RememberConversation
 
             $participant = $agent->conversationParticipant();
 
+            // Scope the store to the participant when it opts into participant awareness...
+            $store = $this->store instanceof ParticipantAware
+                ? $this->store->forParticipant($participant)
+                : $this->store;
+
             // Create conversation if necessary...
             if (! $agent->currentConversation()) {
-                $conversationId = $this->store->storeConversation(
+                $conversationId = $store->storeConversation(
                     $participant?->id,
                     $this->generateTitle($prompt->prompt),
-                    $participant,
                 );
 
                 $agent->continue($conversationId, $participant);
             }
 
             // Record user message...
-            $this->store->storeUserMessage(
+            $store->storeUserMessage(
                 $agent->currentConversation(),
                 $participant?->id,
                 $prompt,
-                $participant,
             );
 
             // Record assistant message...
-            $this->store->storeAssistantMessage(
+            $store->storeAssistantMessage(
                 $agent->currentConversation(),
                 $participant?->id,
                 $prompt,
                 $response,
-                $participant,
             );
 
             $response->withinConversation(
