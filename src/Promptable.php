@@ -10,6 +10,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Attributes\Model as ModelAttribute;
+use Laravel\Ai\Attributes\Name as NameAttribute;
 use Laravel\Ai\Attributes\Provider as ProviderAttribute;
 use Laravel\Ai\Attributes\Timeout as TimeoutAttribute;
 use Laravel\Ai\Attributes\UseCheapestModel;
@@ -301,6 +302,20 @@ trait Promptable
         }
 
         return $provider->defaultTextModel();
+    }
+
+    /**
+     * Get the display name for this agent.
+     */
+    public function agentName(): string
+    {
+        $attributes = (new ReflectionClass($this))->getAttributes(NameAttribute::class);
+
+        if (! empty($attributes)) {
+            return $attributes[0]->newInstance()->value;
+        }
+
+        return static::class;
     }
 
     /**

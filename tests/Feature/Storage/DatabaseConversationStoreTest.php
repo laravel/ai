@@ -19,8 +19,43 @@ use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Storage\DatabaseConversationStore;
+use Tests\Fixtures\Agents\NamedAgent;
 use Tests\Fixtures\Agents\RememberingToolUsingAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
+
+test('it persists the agent class name', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Hello');
+
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        'Hello',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $store->storeUserMessage($conversationId, 1, $prompt);
+
+    expect(DB::table('agent_conversation_messages')->first()->agent)->toBe(ToolUsingAgent::class);
+});
+
+test('it persists the agent class name even when a custom name is defined', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Hello');
+
+    $prompt = new AgentPrompt(
+        new NamedAgent,
+        'Hello',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $store->storeUserMessage($conversationId, 1, $prompt);
+
+    expect(DB::table('agent_conversation_messages')->first()->agent)->toBe(NamedAgent::class);
+});
 
 test('it writes conversations to the default tables', function () {
     $store = new DatabaseConversationStore;

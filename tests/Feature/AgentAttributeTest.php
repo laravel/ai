@@ -1,14 +1,18 @@
 <?php
 
+use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Promptable;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeAgent;
 use Tests\Fixtures\Agents\IncompatibleMethodsAgent;
 use Tests\Fixtures\Agents\MethodOptionsAgent;
 use Tests\Fixtures\Agents\MethodOverridesAttributeAgent;
+use Tests\Fixtures\Agents\NamedAgent;
 use Tests\Fixtures\Agents\NullableMethodOptionsAgent;
+use Tests\Fixtures\Agents\ResearchAgent;
 
 test('text generation options can be created from agent attributes', function () {
     $options = TextGenerationOptions::forAgent(new AttributeAgent);
@@ -58,6 +62,37 @@ test('non-public or parameterized option methods are ignored', function () {
     expect($options->maxSteps)->toBe(8)
         ->and($options->maxTokens)->toBe(1024)
         ->and($options->temperature)->toBe(0.9);
+});
+
+test('agent name defaults to class name', function () {
+    expect((new AssistantAgent)->agentName())->toBe(AssistantAgent::class);
+});
+
+test('agent name can be set via the Name attribute', function () {
+    expect((new NamedAgent)->agentName())->toBe('My Custom Agent');
+});
+
+test('agent name ignores the CanActAsTool name method', function () {
+    expect((new ResearchAgent)->agentName())->toBe(ResearchAgent::class);
+});
+
+test('agent name can be overridden directly', function () {
+    $agent = new class implements Agent
+    {
+        use Promptable;
+
+        public function instructions(): string
+        {
+            return 'You are a helpful assistant.';
+        }
+
+        public function agentName(): string
+        {
+            return 'Dynamic Agent';
+        }
+    };
+
+    expect($agent->agentName())->toBe('Dynamic Agent');
 });
 
 test('provider attribute is used when prompting', function () {
