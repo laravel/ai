@@ -51,11 +51,11 @@ trait DelegatesToTextGenerationLoop
     }
 
     /**
-     * Specify callbacks that should be invoked when tools are invoking / invoked.
+     * Specify callbacks that should be invoked when tools are invoking / invoked / failed.
      */
-    public function onToolInvocation(Closure $invoking, Closure $invoked): self
+    public function onToolInvocation(Closure $invoking, Closure $invoked, ?Closure $failed = null): self
     {
-        $this->textGenerationLoop()->onToolInvocation($invoking, $invoked);
+        $this->textGenerationLoop()->onToolInvocation($invoking, $invoked, $failed);
 
         return $this;
     }

@@ -217,17 +217,6 @@ class FakeTextGateway implements TextGateway
     }
 
     /**
-     * Specify callbacks that should be invoked when tools are invoking / invoked.
-     */
-    public function onToolInvocation(Closure $invoking, Closure $invoked): self
-    {
-        $this->invokingToolCallback = $invoking;
-        $this->toolInvokedCallback = $invoked;
-
-        return $this;
-    }
-
-    /**
      * Indicate that an exception should be thrown if any prompt is not faked.
      */
     public function preventStrayPrompts(bool $prevent = true): self

@@ -17,6 +17,7 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
+use Laravel\Ai\Events\ToolInvocationFailed;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\UserMessage;
@@ -27,6 +28,7 @@ use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Tools\AgentTool;
 use Laravel\Ai\Tools\McpServerTool;
 use Laravel\Ai\Tools\McpTool;
+use Throwable;
 
 use function Laravel\Ai\pipeline;
 
@@ -152,6 +154,11 @@ trait GeneratesText
             invoked: function (Tool $tool, array $arguments, mixed $result, string $toolInvocationId) use ($invocationId, $agent) {
                 $this->events->dispatch(new ToolInvoked(
                     $invocationId, $toolInvocationId, $agent, $tool, $arguments, $result
+                ));
+            },
+            failed: function (Tool $tool, array $arguments, Throwable $exception, string $toolInvocationId) use ($invocationId, $agent) {
+                $this->events->dispatch(new ToolInvocationFailed(
+                    $invocationId, $toolInvocationId, $agent, $tool, $arguments, $exception
                 ));
             },
         );

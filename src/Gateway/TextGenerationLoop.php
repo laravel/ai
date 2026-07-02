@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway;
 
+use Closure;
 use Generator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Concurrency;
@@ -24,6 +25,8 @@ use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Laravel\Ai\Tools\Request;
+use RuntimeException;
+use Throwable;
 
 class TextGenerationLoop
 {
@@ -315,25 +318,75 @@ class TextGenerationLoop
                 return $id;
             }, $pairs);
 
-            // Only the string result crosses the process boundary; no events fire inside the child.
-            $raw = array_values(Concurrency::run(array_map(function (array $pair) {
-                [$toolCall, $tool] = $pair;
+            // Envelope each task instead of throwing so one tool's failure can't discard its siblings' results; only serializable scalars cross the process boundary.
+            $tasks = array_map(fn (array $pair) => $this->parallelTask(...$pair), $pairs);
 
-                return fn () => (string) $tool->handle(new Request($toolCall->arguments));
-            }, $pairs)));
+            try {
+                $envelopes = array_values(Concurrency::run($tasks));
+            } catch (Throwable) {
+                // Driver can't run here (unavailable, unserializable tools, a mid-batch failure); re-run the whole batch inline — so #[Parallel] tools must be safe to run more than once.
+                $envelopes = array_map(fn (Closure $task) => $task(), $tasks);
+            }
 
             $results = [];
+            $failure = null;
 
             foreach ($pairs as $index => [$toolCall, $tool]) {
-                call_user_func($callbacks['invoked'], $tool, $toolCall->arguments, $raw[$index], $invocationIds[$index]);
+                $envelope = $envelopes[$index];
 
-                $results[] = $this->toolResult($toolCall, $raw[$index]);
+                if ($envelope['ok']) {
+                    call_user_func($callbacks['invoked'], $tool, $toolCall->arguments, $envelope['result'], $invocationIds[$index]);
+
+                    $results[] = $this->toolResult($toolCall, $envelope['result']);
+
+                    continue;
+                }
+
+                $exception = $this->reconstructToolException($envelope['type'], $envelope['message']);
+
+                call_user_func($callbacks['failed'], $tool, $toolCall->arguments, $exception, $invocationIds[$index]);
+
+                $failure ??= $exception;
+            }
+
+            if ($failure !== null) {
+                throw $failure;
             }
 
             return $results;
         } finally {
             $this->popToolInvocationCallbacks();
         }
+    }
+
+    /**
+     * Build the enveloped task that runs a single tool without throwing across the boundary.
+     *
+     * @return Closure(): (array{ok: true, result: string}|array{ok: false, type: string, message: string})
+     */
+    protected function parallelTask(ToolCall $toolCall, Tool $tool): Closure
+    {
+        return function () use ($toolCall, $tool) {
+            try {
+                return ['ok' => true, 'result' => (string) $tool->handle(new Request($toolCall->arguments))];
+            } catch (Throwable $e) {
+                return ['ok' => false, 'type' => $e::class, 'message' => $e->getMessage()];
+            }
+        };
+    }
+
+    /**
+     * Rebuild a throwable for a tool that failed inside a parallel task.
+     */
+    protected function reconstructToolException(string $type, string $message): Throwable
+    {
+        try {
+            $exception = new $type($message);
+        } catch (Throwable) {
+            return new RuntimeException($message);
+        }
+
+        return $exception instanceof Throwable ? $exception : new RuntimeException($message);
     }
 
     /**

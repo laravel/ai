@@ -181,6 +181,147 @@ test('an exception in a parallel tool bubbles up and fails the step', function (
     ))->toThrow(RuntimeException::class, 'boom:bravo');
 });
 
+test('a failing parallel tool still delivers invoked events to its successful siblings', function () {
+    config(['concurrency.default' => 'sync']);
+
+    $log = new ArrayObject;
+    $tools = [
+        new ParallelRecordingTool('alpha', $log, 'A'),
+        new ParallelRecordingTool('bravo', $log, 'B', throws: true),
+    ];
+
+    $gateway = parallelToolsGateway([
+        new StepResponse('', [
+            new ToolCall('call-a', 'alpha', [], 'call-a'),
+            new ToolCall('call-b', 'bravo', [], 'call-b'),
+        ], FinishReason::ToolCalls, new Usage, new Meta('fake', 'model'), continuationToken: 'r1'),
+        new StepResponse('done', [], FinishReason::Stop, new Usage, new Meta('fake', 'model')),
+    ]);
+
+    $loop = new TextGenerationLoop($gateway);
+
+    $invoking = [];
+    $invoked = [];
+    $failed = [];
+
+    $loop->onToolInvocation(
+        invoking: function (Tool $tool, array $arguments, string $id) use (&$invoking) {
+            $invoking[$tool->name()] = $id;
+        },
+        invoked: function (Tool $tool, array $arguments, mixed $result, string $id) use (&$invoked) {
+            $invoked[$tool->name()] = $id;
+        },
+        failed: function (Tool $tool, array $arguments, Throwable $e, string $id) use (&$failed) {
+            $failed[$tool->name()] = $id;
+        },
+    );
+
+    expect(fn () => $loop->generate(
+        Mockery::mock(TextProvider::class),
+        'model',
+        null,
+        [],
+        $tools,
+        null,
+        new TextGenerationOptions(maxSteps: 2, agent: new ParallelAgent),
+        null,
+    ))->toThrow(RuntimeException::class, 'boom:bravo');
+
+    // The successful sibling is still reported while the failed tool's invocation is closed out rather than left dangling.
+    expect($invoked)->toHaveKey('alpha')
+        ->and($invoked)->not->toHaveKey('bravo')
+        ->and($invoked['alpha'])->toBe($invoking['alpha'])
+        ->and($failed)->toHaveKey('bravo')
+        ->and($failed)->not->toHaveKey('alpha')
+        ->and($failed['bravo'])->toBe($invoking['bravo']);
+});
+
+test('a failing sequential tool fires the failed callback with its invocation id', function () {
+    $log = new ArrayObject;
+
+    $gateway = parallelToolsGateway([
+        new StepResponse('', [
+            new ToolCall('call-1', 'solo', [], 'call-1'),
+        ], FinishReason::ToolCalls, new Usage, new Meta('fake', 'model'), continuationToken: 'r1'),
+        new StepResponse('done', [], FinishReason::Stop, new Usage, new Meta('fake', 'model')),
+    ]);
+
+    $loop = new TextGenerationLoop($gateway);
+
+    $invoking = [];
+    $failed = [];
+
+    $loop->onToolInvocation(
+        invoking: function (Tool $tool, array $arguments, string $id) use (&$invoking) {
+            $invoking[$tool->name()] = $id;
+        },
+        invoked: fn () => null,
+        failed: function (Tool $tool, array $arguments, Throwable $e, string $id) use (&$failed) {
+            $failed[$tool->name()] = $id;
+        },
+    );
+
+    expect(fn () => $loop->generate(
+        Mockery::mock(TextProvider::class),
+        'model',
+        null,
+        [],
+        [new ParallelRecordingTool('solo', $log, 'S', throws: true)],
+        null,
+        new TextGenerationOptions(maxSteps: 2, agent: new SequentialAgent),
+        null,
+    ))->toThrow(RuntimeException::class, 'boom:solo');
+
+    expect($failed)->toHaveKey('solo')
+        ->and($failed['solo'])->toBe($invoking['solo']);
+});
+
+test('a parallel batch degrades to inline execution when the concurrency driver cannot run', function () {
+    Concurrency::extend('throwing', fn () => new ThrowingConcurrencyDriver);
+    config(['concurrency.default' => 'throwing']);
+
+    $log = new ArrayObject;
+    $tools = [
+        new ParallelRecordingTool('alpha', $log, 'A'),
+        new ParallelRecordingTool('bravo', $log, 'B'),
+    ];
+
+    $gateway = parallelToolsGateway([
+        new StepResponse('', [
+            new ToolCall('call-a', 'alpha', [], 'call-a'),
+            new ToolCall('call-b', 'bravo', [], 'call-b'),
+        ], FinishReason::ToolCalls, new Usage, new Meta('fake', 'model'), continuationToken: 'r1'),
+        new StepResponse('done', [], FinishReason::Stop, new Usage, new Meta('fake', 'model')),
+    ]);
+
+    $loop = new TextGenerationLoop($gateway);
+
+    $invoked = [];
+
+    $loop->onToolInvocation(
+        invoking: fn () => null,
+        invoked: function (Tool $tool, array $arguments, mixed $result, string $id) use (&$invoked) {
+            $invoked[] = $tool->name();
+        },
+    );
+
+    $response = $loop->generate(
+        Mockery::mock(TextProvider::class),
+        'model',
+        null,
+        [],
+        $tools,
+        null,
+        new TextGenerationOptions(maxSteps: 2, agent: new ParallelAgent),
+        null,
+    );
+
+    // The driver threw, so the batch ran inline instead: each tool executed exactly once and produced its result in order.
+    expect(collect($response->steps->first()->toolResults)->map->result->all())->toBe(['A', 'B'])
+        ->and($log->getArrayCopy())->toBe(['alpha', 'bravo'])
+        ->and($invoked)->toBe(['alpha', 'bravo']);
+});
+
 test('an unknown tool in a parallel batch throws before any tool executes', function () {
     config(['concurrency.default' => 'sync']);
 
@@ -467,6 +608,19 @@ class ParallelToolsFakeGateway implements StepTextGateway
         }
 
         return $result;
+    }
+}
+
+class ThrowingConcurrencyDriver implements Driver
+{
+    public function run(Closure|array $tasks, CarbonInterval|int|null $timeout = null): array
+    {
+        throw new RuntimeException('driver unavailable');
+    }
+
+    public function defer(Closure|array $tasks): DeferredCallback
+    {
+        return \Illuminate\Support\defer(fn () => null);
     }
 }
 
