@@ -1,8 +1,10 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Exceptions\StructuredOutputValidationException;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeAgent;
+use Tests\Fixtures\Agents\ConstrainedStructuredAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
 use Tests\Fixtures\Agents\StructuredWithThinkingAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
@@ -298,6 +300,75 @@ describe('structured output', function () {
         );
         expect($response->structured)->toMatchArray(['name' => 'Taylor', 'age' => 30]);
     });
+
+    test('native structured output strips unsupported constraints and folds them into descriptions', function () {
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeStructuredResponse([
+                'score' => 5,
+                'summary' => 'Solid work overall.',
+                'tags' => ['clean'],
+            ]),
+        ]);
+
+        (new ConstrainedStructuredAgent)->prompt(
+            'Review this code',
+            provider: 'anthropic',
+        );
+
+        Http::assertSent(function ($request) {
+            $schema = $request->data()['output_config']['format']['schema'];
+
+            $score = $schema['properties']['score'];
+            $summary = $schema['properties']['summary'];
+            $tags = $schema['properties']['tags'];
+
+            return ! isset($score['minimum']) && ! isset($score['maximum'])
+                && str_contains($score['description'], 'Must be at least 1.')
+                && str_contains($score['description'], 'Must be at most 10.')
+                && ! isset($summary['minLength']) && ! isset($summary['maxLength'])
+                && ! isset($tags['maxItems'])
+                && str_contains($tags['description'], 'Must contain at most 5 item(s).');
+        });
+    });
+
+    test('native structured output response satisfying its constraints is returned as-is', function () {
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeStructuredResponse([
+                'score' => 5,
+                'summary' => 'Solid work overall.',
+                'tags' => ['clean'],
+            ]),
+        ]);
+
+        $response = (new ConstrainedStructuredAgent)->prompt(
+            'Review this code',
+            provider: 'anthropic',
+        );
+
+        expect($response->structured)->toMatchArray([
+            'score' => 5,
+            'summary' => 'Solid work overall.',
+            'tags' => ['clean'],
+        ]);
+    });
+
+    test('native structured output response violating a value constraint throws', function () {
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeStructuredResponse([
+                'score' => 42,
+                'summary' => 'Solid work overall.',
+                'tags' => ['clean'],
+            ]),
+        ]);
+
+        (new ConstrainedStructuredAgent)->prompt(
+            'Review this code',
+            provider: 'anthropic',
+        );
+    })->throws(
+        StructuredOutputValidationException::class,
+        "Structured output does not satisfy the schema's value constraints: `score` must be at most 10 (got 42)"
+    );
 });
 
 describe('response parsing', function () {

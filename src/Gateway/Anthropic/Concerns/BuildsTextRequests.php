@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Illuminate\Support\Arr;
+use Laravel\Ai\Gateway\Anthropic\AnthropicSchemaSanitizer;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
@@ -39,7 +40,7 @@ trait BuildsTextRequests
             $body['output_config'] = [
                 'format' => [
                     'type' => 'json_schema',
-                    'schema' => (new ObjectSchema($schema))->toSchema(),
+                    'schema' => AnthropicSchemaSanitizer::sanitize((new ObjectSchema($schema))->toSchema()),
                 ],
             ];
 

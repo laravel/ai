@@ -12,12 +12,14 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Exceptions\StructuredOutputValidationException;
 use Laravel\Ai\Gateway\Concerns\DelegatesToTextGenerationLoop;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
@@ -72,7 +74,34 @@ class AnthropicGateway implements Gateway, StepTextGateway
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, filled($schema));
+        $result = $this->parseTextResponse($data, $provider, filled($schema));
+
+        if (filled($schema) && $this->supportsNativeStructuredOutput($provider) && $result->structured !== null) {
+            $this->validateStructuredOutput($result->structured, $schema);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Validate structured output against the full schema, including the value constraints
+     * that Anthropic's native structured output accepts but does not enforce on its own.
+     *
+     * @param  array<string, mixed>  $data
+     * @param  array<string, mixed>  $schema
+     *
+     * @throws StructuredOutputValidationException
+     */
+    protected function validateStructuredOutput(array $data, array $schema): void
+    {
+        $violations = AnthropicStructuredOutputValidator::violations(
+            $data,
+            (new ObjectSchema($schema))->toSchema(),
+        );
+
+        if (filled($violations)) {
+            throw new StructuredOutputValidationException($violations, $data);
+        }
     }
 
     /**
