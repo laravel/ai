@@ -4,21 +4,26 @@ namespace Laravel\Ai\Providers;
 
 use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
+use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
+use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Gateway\Mistral\MistralFileGateway;
 use Laravel\Ai\Gateway\Mistral\MistralGateway;
 
-class MistralProvider extends Provider implements EmbeddingProvider, TextProvider, TranscriptionProvider
+class MistralProvider extends Provider implements EmbeddingProvider, FileProvider, TextProvider, TranscriptionProvider
 {
     use Concerns\GeneratesEmbeddings;
     use Concerns\GeneratesText;
     use Concerns\GeneratesTranscriptions;
     use Concerns\HasEmbeddingGateway;
+    use Concerns\HasFileGateway;
     use Concerns\HasTextGateway;
     use Concerns\HasTranscriptionGateway;
+    use Concerns\ManagesFiles;
     use Concerns\StreamsText;
 
     protected ?MistralGateway $mistralGateway = null;
@@ -50,6 +55,14 @@ class MistralProvider extends Provider implements EmbeddingProvider, TextProvide
     public function embeddingGateway(): EmbeddingGateway
     {
         return $this->embeddingGateway ??= $this->mistralGateway();
+    }
+
+    /**
+     * Get the provider's file gateway.
+     */
+    public function fileGateway(): FileGateway
+    {
+        return $this->fileGateway ??= new MistralFileGateway;
     }
 
     /**
