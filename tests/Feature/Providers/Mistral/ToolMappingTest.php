@@ -2,7 +2,7 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
-use Laravel\Ai\Providers\Tools\FileSearch;
+use Laravel\Ai\Providers\Tools\WebSearch;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 use Tests\Fixtures\Tools\NamedTool;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
@@ -57,7 +57,7 @@ test('provider tools throw runtime exception', function () {
     Http::fake(['*' => $this->fakeTextResponse()]);
 
     agent(
-        tools: [new FileSearch(['store_1'])],
+        tools: [new WebSearch],
     )->prompt('Search for something', provider: 'mistral');
 })->throws(RuntimeException::class, 'Mistral does not support');
 
