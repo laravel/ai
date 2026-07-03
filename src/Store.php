@@ -8,6 +8,7 @@ use Laravel\Ai\Contracts\Files\HasProviderId;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
+use Laravel\Ai\Contracts\Providers\UploadsDocumentsToStore;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\ProviderDocument;
 use Laravel\Ai\Responses\AddedDocumentResponse;
@@ -36,6 +37,16 @@ class Store
         }
 
         $originalFile = $file;
+
+        if ($file instanceof StorableFile && $this->provider instanceof UploadsDocumentsToStore) {
+            if (Ai::storesAreFaked()) {
+                Ai::recordFileAddition($this->id, Files::fakeId($file->name() ?? 'file'), $originalFile);
+            }
+
+            return new AddedDocumentResponse(
+                $this->provider->uploadDocumentToStore($this->id, $file, $metadata),
+            );
+        }
 
         if ($file instanceof StorableFile) {
             $file = $this->storeFile($file);
@@ -160,6 +171,7 @@ class Store
         return match (true) {
             $file instanceof HasProviderId => $file->id() === $expectedFileId,
             is_string($file) => $file === $expectedFileId,
+            $file instanceof StorableFile => Files::fakeId($file->name() ?? 'file') === $expectedFileId,
             default => false,
         };
     }

@@ -5,14 +5,17 @@ namespace Laravel\Ai\Gateway;
 use Closure;
 use DateInterval;
 use Illuminate\Support\Collection;
+use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
+use Laravel\Ai\Contracts\Gateway\UploadsDocuments;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
+use Laravel\Ai\Files;
 use Laravel\Ai\Responses\Data\StoreFileCounts;
 use Laravel\Ai\Store;
 use Laravel\Ai\Stores;
 use RuntimeException;
 
-class FakeStoreGateway implements StoreGateway
+class FakeStoreGateway implements StoreGateway, UploadsDocuments
 {
     protected int $currentResponseIndex = 0;
 
@@ -105,6 +108,18 @@ class FakeStoreGateway implements StoreGateway
     public function addFile(StoreProvider $provider, string $storeId, string $fileId, array $metadata = []): string
     {
         return $fileId;
+    }
+
+    /**
+     * Upload a document's contents directly into a vector store.
+     */
+    public function uploadDocument(
+        StoreProvider $provider,
+        string $storeId,
+        StorableFile $file,
+        array $metadata = [],
+    ): string {
+        return Files::fakeId($file->name() ?? 'file');
     }
 
     /**

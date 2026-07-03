@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Files\Document;
 use Laravel\Ai\Stores;
 
 beforeEach(function () {
@@ -147,4 +148,32 @@ test('delete store deletes the library', function () {
 
     Http::assertSent(fn (Request $request) => $request->method() === 'DELETE'
         && $request->url() === 'https://api.mistral.ai/v1/libraries/lib-123');
+});
+
+test('adding a storable file uploads it directly to the library', function () {
+    Http::fake([
+        'api.mistral.ai/v1/libraries/lib-123/documents' => Http::response([
+            'id' => 'doc-1',
+            'library_id' => 'lib-123',
+            'name' => 'hello.txt',
+            'process_status' => 'in_progress',
+        ]),
+        'api.mistral.ai/v1/libraries/lib-123' => Http::response(fakeMistralLibraryResponse()),
+    ]);
+
+    $response = Stores::get('lib-123', provider: 'mistral')
+        ->add(Document::fromString('Hello, world!', 'text/plain')->as('hello.txt'));
+
+    expect($response->id)->toBe('doc-1')
+        ->and($response->fileId)->toBeNull();
+
+    Http::assertSent(function (Request $request) {
+        return $request->method() === 'POST'
+            && $request->url() === 'https://api.mistral.ai/v1/libraries/lib-123/documents'
+            && $request->isMultipart()
+            && collect($request->data())->contains(fn ($part) => $part['name'] === 'file' && ($part['filename'] ?? null) === 'hello.txt');
+    });
+
+    // No global /v1/files upload happened...
+    Http::assertNotSent(fn (Request $request) => str_ends_with($request->url(), '/v1/files'));
 });

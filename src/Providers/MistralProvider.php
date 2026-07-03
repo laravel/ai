@@ -13,11 +13,12 @@ use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Contracts\Providers\UploadsDocumentsToStore;
 use Laravel\Ai\Gateway\Mistral\MistralFileGateway;
 use Laravel\Ai\Gateway\Mistral\MistralGateway;
 use Laravel\Ai\Gateway\Mistral\MistralStoreGateway;
 
-class MistralProvider extends Provider implements EmbeddingProvider, FileProvider, StoreProvider, TextProvider, TranscriptionProvider
+class MistralProvider extends Provider implements EmbeddingProvider, FileProvider, StoreProvider, TextProvider, TranscriptionProvider, UploadsDocumentsToStore
 {
     use Concerns\GeneratesEmbeddings;
     use Concerns\GeneratesText;
@@ -30,6 +31,7 @@ class MistralProvider extends Provider implements EmbeddingProvider, FileProvide
     use Concerns\ManagesFiles;
     use Concerns\ManagesStores;
     use Concerns\StreamsText;
+    use Concerns\UploadsStoreDocuments;
 
     protected ?MistralGateway $mistralGateway = null;
 

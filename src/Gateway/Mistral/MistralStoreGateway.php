@@ -4,17 +4,21 @@ namespace Laravel\Ai\Gateway\Mistral;
 
 use DateInterval;
 use Illuminate\Support\Collection;
+use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
+use Laravel\Ai\Contracts\Gateway\UploadsDocuments;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
+use Laravel\Ai\Gateway\Concerns\PreparesStorableFiles;
 use Laravel\Ai\Responses\Data\StoreFileCounts;
 use Laravel\Ai\Store;
 use RuntimeException;
 
-class MistralStoreGateway implements StoreGateway
+class MistralStoreGateway implements StoreGateway, UploadsDocuments
 {
     use Concerns\CreatesMistralClient;
     use HandlesFailoverErrors;
+    use PreparesStorableFiles;
 
     /**
      * Get a vector store by its ID.
@@ -72,6 +76,29 @@ class MistralStoreGateway implements StoreGateway
         throw new RuntimeException(
             'Mistral does not support adding existing files to a library by ID. Pass the document contents to [$store->add()] instead.'
         );
+    }
+
+    /**
+     * Upload a document's contents directly into the library.
+     *
+     * Mistral document uploads do not accept custom metadata; it is ignored.
+     */
+    public function uploadDocument(
+        StoreProvider $provider,
+        string $storeId,
+        StorableFile $file,
+        array $metadata = [],
+    ): string {
+        [$content, $mime, $name] = $this->prepareStorableFile($file);
+
+        $response = $this->withErrorHandling(
+            $provider->name(),
+            fn () => $this->client($provider)
+                ->attach('file', $content, $name, ['Content-Type' => $mime])
+                ->post("libraries/{$storeId}/documents", [])
+        );
+
+        return $response->json('id');
     }
 
     /**
