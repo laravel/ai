@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Collection;
+use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Document;
@@ -167,6 +168,21 @@ describe('file operations', function () {
         $store->assertAdded(fn (StorableFile $file) => $file->content() === 'Hello, world!');
 
         Files::assertNothingStored();
+    });
+
+    test('direct-upload providers add storable files matched by facade-level string id assertions', function () {
+        config(['ai.providers.mistral' => [
+            ...config('ai.providers.mistral'),
+            'key' => 'test-key',
+        ]]);
+
+        Stores::fake();
+
+        $store = Stores::create('My Store', provider: 'mistral');
+
+        $store->add(Document::fromString('Hello, world!', 'text/plain')->as('hello.txt'));
+
+        Ai::assertFileAddedToStore(Stores::fakeId('My Store'), 'hello.txt');
     });
 });
 

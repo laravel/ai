@@ -113,6 +113,22 @@ test('create store posts name and description', function () {
         && $request['description'] === 'My documents');
 });
 
+test('create store posts a falsy description', function () {
+    Http::fake([
+        'api.mistral.ai/v1/libraries' => Http::response(fakeMistralLibraryResponse()),
+        'api.mistral.ai/v1/libraries/lib-123' => Http::response(fakeMistralLibraryResponse()),
+    ]);
+
+    $store = Stores::create('Test Store', description: '0', provider: 'mistral');
+
+    expect($store->id)->toBe('lib-123');
+
+    Http::assertSent(fn (Request $request) => $request->method() === 'POST'
+        && $request->url() === 'https://api.mistral.ai/v1/libraries'
+        && $request['name'] === 'Test Store'
+        && $request['description'] === '0');
+});
+
 test('create store with file ids throws', function () {
     Stores::create('Test Store', fileIds: ['file-1'], provider: 'mistral');
 })->throws(RuntimeException::class, 'Mistral does not support attaching existing files');
