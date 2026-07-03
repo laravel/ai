@@ -148,6 +148,70 @@ test('it stores sparse keyed tool calls and results as JSON arrays', function ()
         ->and(array_is_list(json_decode((string) $record->tool_results, true)))->toBeTrue();
 });
 
+test('it persists provider content blocks when the column exists', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Reasoning conversation');
+
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        'Think this through.',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $response = new AgentResponse('invocation-id', 'Here is the answer.', new Usage, new Meta);
+    $response->withMessages(collect([
+        new AssistantMessage('Here is the answer.', providerContentBlocks: [
+            ['type' => 'reasoning', 'id' => 'rs_1', 'summary' => [['text' => 'Checked constraints.']]],
+        ]),
+    ]));
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $record = DB::table('agent_conversation_messages')
+        ->where('role', 'assistant')
+        ->first();
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect(json_decode((string) $record->provider_content_blocks, true))->toBe([
+        ['type' => 'reasoning', 'id' => 'rs_1', 'summary' => [['text' => 'Checked constraints.']]],
+    ])->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[0]->providerContentBlocks)->toBe([
+            ['type' => 'reasoning', 'id' => 'rs_1', 'summary' => [['text' => 'Checked constraints.']]],
+        ]);
+});
+
+test('it stores messages when provider content blocks column is absent', function (): void {
+    Config::set('ai.conversations.tables.conversations', 'legacy_conversations');
+    Config::set('ai.conversations.tables.messages', 'legacy_conversation_messages');
+
+    createConversationSchema();
+
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Legacy conversation');
+
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        'Think this through.',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $response = new AgentResponse('invocation-id', 'Here is the answer.', new Usage, new Meta);
+    $response->withMessages(collect([
+        new AssistantMessage('Here is the answer.', providerContentBlocks: [
+            ['type' => 'reasoning', 'id' => 'rs_1', 'summary' => [['text' => 'Checked constraints.']]],
+        ]),
+    ]));
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    expect(DB::table('legacy_conversation_messages')->where('role', 'assistant')->exists())->toBeTrue();
+});
+
 test('a bare rejection resume does not persist a blank assistant row', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Approval conversation');

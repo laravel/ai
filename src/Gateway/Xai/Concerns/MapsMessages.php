@@ -61,6 +61,10 @@ trait MapsMessages
      */
     protected function mapAssistantMessage(AssistantMessage|Message $message, array &$input): void
     {
+        if ($message instanceof AssistantMessage && filled($message->providerContentBlocks)) {
+            array_push($input, ...$message->providerContentBlocks);
+        }
+
         if ($message instanceof AssistantMessage && $message->toolCalls->isNotEmpty()) {
             $reasoningBlocks = $message->toolCalls
                 ->whereNotNull('reasoningId')
