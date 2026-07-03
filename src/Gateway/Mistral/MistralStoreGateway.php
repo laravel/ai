@@ -58,7 +58,7 @@ class MistralStoreGateway implements StoreGateway
             fn () => $this->client($provider)->post('libraries', array_filter([
                 'name' => $name,
                 'description' => $description,
-            ]))
+            ], fn ($value) => ! is_null($value)))
         );
 
         return $this->getStore($provider, $response->json('id'));
@@ -109,12 +109,25 @@ class MistralStoreGateway implements StoreGateway
             return new StoreFileCounts(0, 0, 0);
         }
 
-        $documents = $this->withErrorHandling(
-            $provider->name(),
-            fn () => $this->client($provider)->get("libraries/{$storeId}/documents", ['page_size' => 100])
-        )->json('data', []);
+        $pageSize = 100;
+        $documents = new Collection;
+        $page = 0;
 
-        $statuses = (new Collection($documents))->countBy(fn (array $document) => match ($document['process_status'] ?? null) {
+        do {
+            $pageDocuments = $this->withErrorHandling(
+                $provider->name(),
+                fn () => $this->client($provider)->get("libraries/{$storeId}/documents", [
+                    'page' => $page,
+                    'page_size' => $pageSize,
+                ])
+            )->json('data', []);
+
+            $documents = $documents->merge($pageDocuments);
+
+            $page++;
+        } while (count($pageDocuments) === $pageSize && $documents->count() < $totalDocuments);
+
+        $statuses = $documents->countBy(fn (array $document) => match ($document['process_status'] ?? null) {
             'done' => 'completed',
             'error' => 'failed',
             default => 'pending',

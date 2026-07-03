@@ -60,6 +60,42 @@ test('get store derives file counts from document statuses', function () {
         ->and($store->fileCounts->failed)->toBe(1);
 });
 
+test('get store paginates document counts across multiple pages', function () {
+    $firstPage = collect(range(1, 100))->map(fn (int $i) => [
+        'id' => "doc-{$i}",
+        'process_status' => 'done',
+    ])->all();
+
+    $secondPage = [
+        ['id' => 'doc-101', 'process_status' => 'done'],
+        ['id' => 'doc-102', 'process_status' => 'in_progress'],
+        ['id' => 'doc-103', 'process_status' => 'error'],
+    ];
+
+    Http::fake([
+        'api.mistral.ai/v1/libraries/lib-123/documents*' => function (Request $request) use ($firstPage, $secondPage) {
+            $page = (int) $request->uri()->query()->get('page', 0);
+
+            return Http::response(['data' => $page === 0 ? $firstPage : $secondPage]);
+        },
+        'api.mistral.ai/v1/libraries/lib-123' => Http::response(fakeMistralLibraryResponse(nbDocuments: 103)),
+    ]);
+
+    $store = Stores::get('lib-123', provider: 'mistral');
+
+    expect($store->fileCounts->completed)->toBe(101)
+        ->and($store->fileCounts->pending)->toBe(1)
+        ->and($store->fileCounts->failed)->toBe(1);
+
+    Http::assertSent(fn (Request $request) => str_contains($request->url(), '/documents')
+        && $request->uri()->query()->get('page') === '0'
+        && $request->uri()->query()->get('page_size') === '100');
+
+    Http::assertSent(fn (Request $request) => str_contains($request->url(), '/documents')
+        && $request->uri()->query()->get('page') === '1'
+        && $request->uri()->query()->get('page_size') === '100');
+});
+
 test('create store posts name and description', function () {
     Http::fake([
         'api.mistral.ai/v1/libraries' => Http::response(fakeMistralLibraryResponse()),
