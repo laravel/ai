@@ -21,11 +21,6 @@ interface TextProvider
     public function stream(AgentPrompt $prompt): StreamableAgentResponse;
 
     /**
-     * Get the provider's text gateway.
-     */
-    public function textGateway(): StepTextGateway;
-
-    /**
      * Set the provider's text gateway.
      */
     public function useTextGateway(StepTextGateway $gateway): self;

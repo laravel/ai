@@ -31,11 +31,6 @@ class FakeStreamingProvider extends Provider implements TextProvider
         throw new BadMethodCallException('FakeStreamingProvider::prompt is not implemented.');
     }
 
-    public function textGateway(): StepTextGateway
-    {
-        throw new BadMethodCallException('FakeStreamingProvider::textGateway is not implemented.');
-    }
-
     public function useTextGateway(StepTextGateway $gateway): self
     {
         return $this;
