@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 use Tests\Fixtures\Tools\NamedTool;
@@ -141,7 +142,7 @@ test('web search tool forwards openai provider options into the tool payload', f
     ]);
 
     agent(tools: [
-        (new WebSearch)->withProviderOptions('openai', [
+        (new WebSearch)->withProviderOptions([
             'external_web_access' => false,
             'search_context_size' => 'high',
         ]),
@@ -162,7 +163,9 @@ test('web search tool ignores provider options keyed to another provider', funct
     ]);
 
     agent(tools: [
-        (new WebSearch)->withProviderOptions('anthropic', ['external_web_access' => false]),
+        (new WebSearch)->withProviderOptions(fn (Lab|string $provider) => $provider === Lab::Anthropic
+            ? ['external_web_access' => false]
+            : []),
     ])->prompt('Search', provider: 'openai');
 
     Http::assertSent(function (Request $request) {
@@ -195,7 +198,7 @@ test('web search tool sends blocked_domains via provider options', function () {
     ]);
 
     agent(tools: [
-        (new WebSearch)->withProviderOptions('openai', [
+        (new WebSearch)->withProviderOptions([
             'filters' => ['blocked_domains' => ['spam.com', 'ads.example.com']],
         ]),
     ])->prompt('Search', provider: 'openai');
@@ -216,7 +219,7 @@ test('web search tool merges allow() with blocked_domains provider option', func
     agent(tools: [
         (new WebSearch)
             ->allow(['good.com'])
-            ->withProviderOptions('openai', ['filters' => ['blocked_domains' => ['bad.com']]]),
+            ->withProviderOptions(['filters' => ['blocked_domains' => ['bad.com']]]),
     ])->prompt('Search', provider: 'openai');
 
     Http::assertSent(function (Request $request) {

@@ -12,6 +12,7 @@ use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
+use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Files\Image;
 use Laravel\Ai\Gateway\Concerns\DelegatesToTextGenerationLoop;
@@ -21,6 +22,9 @@ use Laravel\Ai\Gateway\Concerns\WrapsPcmAudio;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionMessages;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionTools;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\PerformsChatCompletionSteps;
+use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Providers\Tools\ProviderTool;
+use Laravel\Ai\Providers\Tools\WebSearch;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
@@ -29,6 +33,7 @@ use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
 use LogicException;
+use RuntimeException;
 
 class OpenRouterGateway implements Gateway, StepTextGateway
 {
@@ -48,6 +53,25 @@ class OpenRouterGateway implements Gateway, StepTextGateway
     public function __construct(protected Dispatcher $events)
     {
         //
+    }
+
+    /**
+     * Map a provider tool to an OpenRouter tool definition.
+     */
+    protected function mapProviderTool(ProviderTool $tool, Provider $provider): array
+    {
+        if (! $tool instanceof WebSearch) {
+            throw new RuntimeException('OpenRouter does not support ['.class_basename($tool).'] provider tools.');
+        }
+
+        if (! $provider instanceof SupportsWebSearch) {
+            throw new RuntimeException('Provider ['.$provider->name().'] does not support web search.');
+        }
+
+        return [
+            'type' => 'openrouter:web_search',
+            ...$provider->webSearchToolOptions($tool),
+        ];
     }
 
     /**

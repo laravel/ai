@@ -12,7 +12,7 @@ test('tool parameters are not wrapped in schema definition', function () {
 
         public function map(array $tools): array
         {
-            return $this->mapTools($tools);
+            return array_map(fn ($tool) => $this->mapTool($tool), $tools);
         }
     };
 
@@ -58,7 +58,7 @@ test('tool with empty schema includes parameters', function () {
 
         public function map(array $tools): array
         {
-            return $this->mapTools($tools);
+            return array_map(fn ($tool) => $this->mapTool($tool), $tools);
         }
     };
 

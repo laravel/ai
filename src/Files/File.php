@@ -2,14 +2,21 @@
 
 namespace Laravel\Ai\Files;
 
+use Closure;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Files\HasName;
+use Laravel\Ai\Contracts\HasProviderOptions;
+use Laravel\Ai\Enums\Lab;
+use Laravel\SerializableClosure\SerializableClosure;
 
-abstract class File implements HasName
+abstract class File implements HasName, HasProviderOptions
 {
     public ?string $name = null;
 
     public ?string $mime = null;
+
+    /** @var array<string, mixed>|SerializableClosure */
+    protected array|SerializableClosure $providerOptions = [];
 
     /**
      * Reconstruct a file instance from its array representation.
@@ -72,6 +79,34 @@ abstract class File implements HasName
         $this->name = $name;
 
         return $this;
+    }
+
+    /**
+     * Specify provider-specific options for the file upload. Closures may only capture serializable values.
+     *
+     * @param  array<string, mixed>|Closure(Lab|string): ?array<string, mixed>  $options
+     */
+    public function withProviderOptions(array|Closure $options): static
+    {
+        $this->providerOptions = $options instanceof Closure
+            ? new SerializableClosure($options)
+            : $options;
+
+        return $this;
+    }
+
+    /**
+     * Get the provider-specific options for the file upload.
+     *
+     * @return array<string, mixed>
+     */
+    public function providerOptions(Lab|string $provider): array
+    {
+        if ($this->providerOptions instanceof SerializableClosure) {
+            return ($this->providerOptions)($provider) ?: [];
+        }
+
+        return $this->providerOptions;
     }
 
     /**
