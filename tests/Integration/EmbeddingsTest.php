@@ -65,7 +65,7 @@ test('queued embeddings with closure provider options run end-to-end through a r
     Event::fake([EmbeddingsGenerated::class]);
 
     Embeddings::for(['I love to watch Star Trek.'])
-        ->providerOptions(fn (Provider $resolved) => match ($resolved->driver()) {
+        ->withProviderOptions(fn (Provider $resolved) => match ($resolved->driver()) {
             'voyageai' => ['input_type' => 'query'],
             default => [],
         })

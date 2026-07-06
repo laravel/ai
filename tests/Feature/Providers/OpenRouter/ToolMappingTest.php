@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 use Tests\Fixtures\Tools\NamedTool;
@@ -68,11 +69,73 @@ test('tool parameters are not wrapped in schema definition', function () {
     });
 });
 
-test('provider tools throw runtime exception', function () {
+test('unsupported provider tools throw runtime exception', function () {
     Http::fake(['*' => fakeOpenRouterResponse('done')]);
 
-    expect(fn () => agent(tools: [new WebSearch])->prompt('Search', provider: 'openrouter'))
-        ->toThrow(RuntimeException::class, 'OpenRouter does not support');
+    expect(fn () => agent(tools: [new WebFetch])->prompt('Search', provider: 'openrouter'))
+        ->toThrow(RuntimeException::class, 'OpenRouter does not support [WebFetch] provider tools.');
+});
+
+test('web search tool is sent as openrouter:web_search type', function () {
+    Http::fake(['*' => fakeOpenRouterResponse('done')]);
+
+    agent(tools: [new WebSearch])->prompt('Search the web', provider: 'openrouter');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'openrouter:web_search');
+
+        return $tool !== null && ! array_key_exists('parameters', $tool);
+    });
+});
+
+test('web search tool sends max_results when maxSearches is set', function () {
+    Http::fake(['*' => fakeOpenRouterResponse('done')]);
+
+    agent(tools: [(new WebSearch)->max(5)])->prompt('Search the web', provider: 'openrouter');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'openrouter:web_search');
+
+        return data_get($tool, 'parameters.max_results') === 5;
+    });
+});
+
+test('web search tool sends allowed_domains', function () {
+    Http::fake(['*' => fakeOpenRouterResponse('done')]);
+
+    agent(tools: [(new WebSearch)->allow(['example.com', 'laravel.com'])])->prompt('Search the web', provider: 'openrouter');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'openrouter:web_search');
+
+        return data_get($tool, 'parameters.allowed_domains') === ['example.com', 'laravel.com'];
+    });
+});
+
+test('web search tool forwards provider options into parameters', function () {
+    Http::fake(['*' => fakeOpenRouterResponse('done')]);
+
+    $search = (new WebSearch)->withProviderOptions([
+        'engine' => 'exa',
+        'max_total_results' => 20,
+        'search_context_size' => 'medium',
+        'excluded_domains' => ['reddit.com'],
+    ]);
+
+    agent(tools: [$search])->prompt('Search the web', provider: 'openrouter');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'openrouter:web_search');
+
+        return data_get($tool, 'parameters.engine') === 'exa'
+            && data_get($tool, 'parameters.max_total_results') === 20
+            && data_get($tool, 'parameters.search_context_size') === 'medium'
+            && data_get($tool, 'parameters.excluded_domains') === ['reddit.com'];
+    });
 });
 
 test('tool with a name() method emits the declared name', function () {

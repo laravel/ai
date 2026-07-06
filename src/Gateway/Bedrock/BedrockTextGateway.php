@@ -16,6 +16,7 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Bedrock\Concerns\CreatesBedrockClient;
 use Laravel\Ai\Gateway\Bedrock\Concerns\MapsAttachments;
+use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
 use Laravel\Ai\Gateway\Concerns\DelegatesToTextGenerationLoop;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\StepContext;
@@ -49,6 +50,7 @@ use Throwable;
 class BedrockTextGateway implements EmbeddingGateway, StepTextGateway, TextGateway
 {
     use CreatesBedrockClient;
+    use DecodesStructuredOutput;
     use DelegatesToTextGenerationLoop;
     use HandlesFailoverErrors;
     use MapsAttachments;
@@ -210,16 +212,6 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway, TextGatew
             structured: $structuredOutput !== null ? $this->decodeStructuredOutput($structuredOutput) : null,
             providerContentBlocks: $providerContentBlocks,
         );
-    }
-
-    /**
-     * Decode the structured output JSON, falling back to an empty array on failure.
-     */
-    protected function decodeStructuredOutput(string $json): array
-    {
-        $structured = json_decode($json, true);
-
-        return json_last_error() === JSON_ERROR_NONE ? $structured : [];
     }
 
     /**

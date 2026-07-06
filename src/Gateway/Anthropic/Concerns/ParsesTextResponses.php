@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Illuminate\Support\Collection;
 use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
@@ -14,6 +15,8 @@ use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
 {
+    use DecodesStructuredOutput;
+
     /**
      * Validate the Anthropic response data.
      *
@@ -72,7 +75,7 @@ trait ParsesTextResponses
             $structuredData = $this->extractStructuredOutput($content);
 
             if (empty($structuredData) && filled($text)) {
-                $structuredData = json_decode($text, true) ?? [];
+                $structuredData = $this->decodeStructuredOutput($text);
             }
         }
 

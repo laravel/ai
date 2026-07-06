@@ -40,7 +40,7 @@ trait BuildsTextRequests
         ?TextGenerationOptions $options,
     ): array {
         if (filled($tools)) {
-            $mappedTools = $this->mapTools($tools);
+            $mappedTools = $this->mapTools($tools, $provider);
 
             if (filled($mappedTools)) {
                 $body['tool_choice'] = 'auto';

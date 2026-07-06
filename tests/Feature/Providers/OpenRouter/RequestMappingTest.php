@@ -236,3 +236,91 @@ test('structured response is correctly parsed', function () {
 
     expect($response->structured['symbol'])->toBe('Au');
 });
+
+test('web search citations are extracted from message annotations', function () {
+    Http::fake(['*' => Http::response([
+        'id' => 'chatcmpl-123',
+        'object' => 'chat.completion',
+        'model' => 'anthropic/claude-sonnet-4.6',
+        'choices' => [[
+            'index' => 0,
+            'message' => [
+                'role' => 'assistant',
+                'content' => 'Paris is the capital of France.',
+                'annotations' => [
+                    [
+                        'type' => 'url_citation',
+                        'url_citation' => [
+                            'url' => 'https://example.com/paris',
+                            'title' => 'Paris - Wikipedia',
+                            'start_index' => 0,
+                            'end_index' => 30,
+                        ],
+                    ],
+                    [
+                        'type' => 'url_citation',
+                        'url_citation' => [
+                            'url' => 'https://example.com/france',
+                            'title' => 'France - Wikipedia',
+                            'start_index' => 31,
+                            'end_index' => 50,
+                        ],
+                    ],
+                ],
+            ],
+            'finish_reason' => 'stop',
+        ]],
+        'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
+    ])]);
+
+    $response = agent()->prompt('What is the capital of France?', provider: 'openrouter');
+
+    expect($response->meta->citations)->toHaveCount(2)
+        ->and($response->meta->citations[0]->url)->toBe('https://example.com/paris')
+        ->and($response->meta->citations[0]->title)->toBe('Paris - Wikipedia')
+        ->and($response->meta->citations[0]->startIndex)->toBe(0)
+        ->and($response->meta->citations[0]->endIndex)->toBe(30)
+        ->and($response->meta->citations[1]->url)->toBe('https://example.com/france')
+        ->and($response->meta->citations[1]->title)->toBe('France - Wikipedia')
+        ->and($response->meta->citations[1]->startIndex)->toBe(31)
+        ->and($response->meta->citations[1]->endIndex)->toBe(50);
+});
+
+test('web search citations omit span indices when not provided', function () {
+    Http::fake(['*' => Http::response([
+        'id' => 'chatcmpl-123',
+        'object' => 'chat.completion',
+        'model' => 'anthropic/claude-sonnet-4.6',
+        'choices' => [[
+            'index' => 0,
+            'message' => [
+                'role' => 'assistant',
+                'content' => 'Some answer.',
+                'annotations' => [[
+                    'type' => 'url_citation',
+                    'url_citation' => [
+                        'url' => 'https://example.com/source',
+                        'title' => 'Source',
+                    ],
+                ]],
+            ],
+            'finish_reason' => 'stop',
+        ]],
+        'usage' => ['prompt_tokens' => 5, 'completion_tokens' => 3],
+    ])]);
+
+    $response = agent()->prompt('Question', provider: 'openrouter');
+
+    expect($response->meta->citations)->toHaveCount(1)
+        ->and($response->meta->citations[0]->url)->toBe('https://example.com/source')
+        ->and($response->meta->citations[0]->startIndex)->toBeNull()
+        ->and($response->meta->citations[0]->endIndex)->toBeNull();
+});
+
+test('response with no annotations has empty citations collection', function () {
+    Http::fake(['*' => fakeOpenRouterResponse('Hello')]);
+
+    $response = agent()->prompt('Hi', provider: 'openrouter');
+
+    expect($response->meta->citations)->toHaveCount(0);
+});
