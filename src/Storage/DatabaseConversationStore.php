@@ -128,6 +128,21 @@ class DatabaseConversationStore implements ConversationStore
     }
 
     /**
+     * Store tool results for the most recent assistant message in the given conversation.
+     *
+     * @param  ToolResult[]  $toolResults
+     */
+    public function storeToolResults(string $conversationId, array $toolResults): void
+    {
+        $this->table($this->messagesTable())
+            ->where('conversation_id', $conversationId)
+            ->where('role', 'assistant')
+            ->orderByDesc('id')
+            ->limit(1)
+            ->update(['tool_results' => json_encode(collect($toolResults)->values())]);
+    }
+
+    /**
      * Get the latest messages for the given conversation.
      *
      * @return Collection<int, Message>

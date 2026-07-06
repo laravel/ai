@@ -386,6 +386,79 @@ test('malformed known stored attachments fail loudly', function () {
         ->toThrow(InvalidArgumentException::class, 'Cannot reconstruct [remote-image] attachment because [url] is missing or invalid.');
 });
 
+test('storeToolResults backfills client tool results onto the last assistant message', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Client tool conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'msg-assistant-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => '',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'toolu_client_123', 'name' => 'ClientLocationTool', 'arguments' => []],
+        ]),
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $store->storeToolResults($conversationId, [
+        new ToolResult('toolu_client_123', 'ClientLocationTool', [], '37.7749° N, 122.4194° W'),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toHaveCount(2)
+        ->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[1])->toBeInstanceOf(ToolResultMessage::class)
+        ->and($messages[1]->toolResults->first()->result)->toBe('37.7749° N, 122.4194° W');
+});
+
+test('storeToolResults merges server and client results for mixed tool turns', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Mixed tool conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'msg-assistant-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => '',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'toolu_server_123', 'name' => 'FixedNumberGenerator', 'arguments' => []],
+            ['id' => 'toolu_client_123', 'name' => 'ClientLocationTool', 'arguments' => []],
+        ]),
+        'tool_results' => json_encode([
+            ['id' => 'toolu_server_123', 'name' => 'FixedNumberGenerator', 'arguments' => [], 'result' => '42'],
+        ]),
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $store->storeToolResults($conversationId, [
+        new ToolResult('toolu_server_123', 'FixedNumberGenerator', [], '42'),
+        new ToolResult('toolu_client_123', 'ClientLocationTool', [], '37.7749° N, 122.4194° W'),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toHaveCount(2)
+        ->and($messages[1])->toBeInstanceOf(ToolResultMessage::class)
+        ->and($messages[1]->toolResults)->toHaveCount(2)
+        ->and($messages[1]->toolResults[0]->name)->toBe('FixedNumberGenerator')
+        ->and($messages[1]->toolResults[1]->name)->toBe('ClientLocationTool');
+});
+
 function createConversationSchema(?string $connection = null): void
 {
     $schema = Schema::connection($connection);

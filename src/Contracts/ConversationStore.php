@@ -6,6 +6,7 @@ use Illuminate\Support\Collection;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Responses\Data\ToolResult;
 
 interface ConversationStore
 {
@@ -28,6 +29,13 @@ interface ConversationStore
      * Store a new assistant message for the given conversation and return its ID.
      */
     public function storeAssistantMessage(string $conversationId, string|int|null $userId, AgentPrompt $prompt, AgentResponse $response): string;
+
+    /**
+     * Store tool results for the most recent assistant message in the given conversation.
+     *
+     * @param  ToolResult[]  $toolResults
+     */
+    public function storeToolResults(string $conversationId, array $toolResults): void;
 
     /**
      * Get the latest messages for the given conversation.

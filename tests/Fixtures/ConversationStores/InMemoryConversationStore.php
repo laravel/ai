@@ -59,6 +59,18 @@ class InMemoryConversationStore implements ConversationStore
         return $id;
     }
 
+    public function storeToolResults(string $conversationId, array $toolResults): void
+    {
+        $index = collect($this->messages)
+            ->keys()
+            ->last(fn ($key) => $this->messages[$key]['conversation_id'] === $conversationId
+                && $this->messages[$key]['role'] === 'assistant');
+
+        if ($index !== null) {
+            $this->messages[$index]['tool_results'] = $toolResults;
+        }
+    }
+
     public function getLatestConversationMessages(string $conversationId, int $limit): Collection
     {
         return collect($this->messages)

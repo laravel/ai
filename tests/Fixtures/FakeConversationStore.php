@@ -29,6 +29,11 @@ class FakeConversationStore implements ConversationStore
         return 'assistant-message-123';
     }
 
+    public function storeToolResults(string $conversationId, array $toolResults): void
+    {
+        //
+    }
+
     public function getLatestConversationMessages(string $conversationId, int $limit): Collection
     {
         return new Collection;

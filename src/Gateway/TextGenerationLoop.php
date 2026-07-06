@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway;
 use Generator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use Laravel\Ai\Attributes\ClientSideTool;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
@@ -92,7 +93,9 @@ class TextGenerationLoop
                 $tools
             );
 
-            $shouldContinue = filled($toolResults);
+            $hasPendingClientTools = $this->hasPendingClientSideTools($lastResult->toolCalls, $tools);
+
+            $shouldContinue = filled($toolResults) && ! $hasPendingClientTools;
 
             $steps->push($this->buildStep($lastResult, $toolResults));
 
@@ -187,18 +190,18 @@ class TextGenerationLoop
                 ? $this->continuationToolResults($result->finishReason, $result->toolCalls, $stepContext->isFinalStep, $tools)
                 : [];
 
-            $shouldContinue = filled($toolResults);
+            $hasPendingClientTools = $this->hasPendingClientSideTools($result?->toolCalls ?? [], $tools);
 
-            if ($shouldContinue) {
-                foreach ($toolResults as $toolResult) {
-                    yield (new ToolResultEvent(
-                        strtolower((string) Str::uuid7()),
-                        $toolResult,
-                        true,
-                        null,
-                        time(),
-                    ))->withInvocationId($invocationId);
-                }
+            $shouldContinue = filled($toolResults) && ! $hasPendingClientTools;
+
+            foreach ($toolResults as $toolResult) {
+                yield (new ToolResultEvent(
+                    strtolower((string) Str::uuid7()),
+                    $toolResult,
+                    true,
+                    null,
+                    time(),
+                ))->withInvocationId($invocationId);
             }
 
             $allMessages[] = new AssistantMessage(
@@ -263,21 +266,56 @@ class TextGenerationLoop
      */
     protected function executeToolCalls(array $toolCalls, array $tools): array
     {
-        return array_map(function (ToolCall $toolCall) use ($tools) {
+        $results = [];
+
+        foreach ($toolCalls as $toolCall) {
             $tool = $this->findTool($toolCall->name, $tools);
 
             if ($tool === null) {
                 throw new NoSuchToolException($toolCall->name);
             }
 
-            return new ToolResult(
+            if ($this->isClientSideTool($tool)) {
+                continue;
+            }
+
+            $results[] = new ToolResult(
                 $toolCall->id,
                 $toolCall->name,
                 $toolCall->arguments,
                 $this->executeTool($tool, $toolCall->arguments),
                 $toolCall->resultId,
             );
-        }, $toolCalls);
+        }
+
+        return $results;
+    }
+
+    /**
+     * Determine whether any of the given tool calls resolve to a client-side tool.
+     *
+     * @param  ToolCall[]  $toolCalls
+     * @param  Tool[]  $tools
+     */
+    protected function hasPendingClientSideTools(array $toolCalls, array $tools): bool
+    {
+        foreach ($toolCalls as $toolCall) {
+            $tool = $this->findTool($toolCall->name, $tools);
+
+            if ($this->isClientSideTool($tool)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Determine whether the given tool is marked as client-side.
+     */
+    protected function isClientSideTool(?Tool $tool): bool
+    {
+        return ClientSideTool::isAppliedTo($tool);
     }
 
     /**
@@ -329,6 +367,11 @@ class TextGenerationLoop
             $finalStep->text,
             $totalUsage,
             $finalStep->meta,
-        ))->withMessages($newMessages)->withSteps($steps);
+        ))->withMessages($newMessages)
+            ->withToolCallsAndResults(
+                $steps->flatMap(fn (Step $s) => collect($s->toolCalls)),
+                $steps->flatMap(fn (Step $s) => collect($s->toolResults)),
+            )
+            ->withSteps($steps);
     }
 }

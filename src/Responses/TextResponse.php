@@ -91,6 +91,15 @@ class TextResponse
     }
 
     /**
+     * Determine whether the response contains tool calls that were not executed server-side
+     * and are awaiting client-side execution before the conversation can continue.
+     */
+    public function hasPendingClientSideToolCalls(): bool
+    {
+        return $this->toolCalls->count() > $this->toolResults->count();
+    }
+
+    /**
      * Get the string representation of the object.
      */
     public function __toString(): string
