@@ -25,7 +25,7 @@ trait BuildsTextRequests
     ): array {
         $body = [
             'model' => $model,
-            'input' => $this->mapMessagesToInput($messages, $instructions),
+            'input' => $this->mapMessagesToInput($messages, $instructions, $provider),
         ];
 
         return $this->mergeSharedResponsesRequestOptions($body, $tools, $schema, $options, $provider);

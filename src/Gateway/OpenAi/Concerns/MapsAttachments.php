@@ -6,6 +6,8 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
+use Laravel\Ai\Contracts\HasProviderOptions;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Files\File;
@@ -17,22 +19,25 @@ use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\StoredDocument;
 use Laravel\Ai\Files\StoredImage;
+use Laravel\Ai\Providers\Provider;
 
 trait MapsAttachments
 {
     /**
      * Map the given Laravel attachments to OpenAI content parts.
      */
-    protected function mapAttachments(Collection $attachments): array
+    protected function mapAttachments(Collection $attachments, Provider $provider): array
     {
-        return $attachments->map(function ($attachment) {
+        $providerKey = Lab::tryFrom($provider->driver()) ?? $provider->driver();
+
+        return $attachments->map(function ($attachment) use ($providerKey) {
             if (! $attachment instanceof File && ! $attachment instanceof UploadedFile) {
                 throw new InvalidArgumentException(
                     'Unsupported attachment type ['.get_class($attachment).']'
                 );
             }
 
-            return match (true) {
+            $part = match (true) {
                 $attachment instanceof ProviderImage => [
                     'type' => 'input_image',
                     'file_id' => $attachment->id,
@@ -92,6 +97,10 @@ trait MapsAttachments
                 ],
                 default => throw new InvalidArgumentException('Unsupported attachment type ['.get_class($attachment).']'),
             };
+
+            return $attachment instanceof HasProviderOptions
+                ? array_merge($part, $attachment->providerOptions($providerKey))
+                : $part;
         })->all();
     }
 

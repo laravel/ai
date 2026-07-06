@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Base64Image;
 use Tests\Fixtures\Agents\AssistantAgent;
@@ -121,6 +122,33 @@ test('image attachment maps to input_image content block', function () {
         return $imageBlock !== null
             && str_contains($imageBlock['image_url'], 'image/png')
             && str_contains($imageBlock['image_url'], base64_encode('fake-image-data'));
+    });
+});
+
+test('attachment provider options closure receives the azure provider', function () {
+    Http::fake([
+        'my-resource.cognitiveservices.azure.com/*' => fakeAzureResponse('I see an image'),
+    ]);
+
+    $image = (new Base64Image(base64_encode('fake-image-data'), 'image/png'))
+        ->withProviderOptions(fn (Lab $provider) => match ($provider) {
+            Lab::Azure => ['detail' => 'low'],
+            default => ['detail' => 'high'],
+        });
+
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [$image],
+        provider: 'azure',
+    );
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $userMessage = collect($body['input'])->firstWhere('role', 'user');
+        $imageBlock = collect($userMessage['content'])->firstWhere('type', 'input_image');
+
+        return $imageBlock !== null
+            && ($imageBlock['detail'] ?? null) === 'low';
     });
 });
 
