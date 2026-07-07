@@ -96,7 +96,7 @@ streamed events, four behaviors are now more realistic:
 
 Anthropic structured outputs now use the native `output_config.format` API by
 default instead of the synthetic tool approach. To restore the previous
-behavior, disable it in your provider config:
+behavior, disable it in your provider configuration:
 
 ```php
 'anthropic' => [
