@@ -26,12 +26,12 @@ test('cache key differs by provider options so distinct option sets do not colli
 
     Embeddings::for(['Hello'])
         ->cache(3600)
-        ->providerOptions(['input_type' => 'search_document'])
+        ->withProviderOptions(['input_type' => 'search_document'])
         ->generate(provider: 'cohere', model: 'embed-v4.0');
 
     Embeddings::for(['Hello'])
         ->cache(3600)
-        ->providerOptions(['input_type' => 'search_query'])
+        ->withProviderOptions(['input_type' => 'search_query'])
         ->generate(provider: 'cohere', model: 'embed-v4.0');
 
     $observed = collect(Http::recorded())
@@ -51,12 +51,12 @@ test('cache key is stable for the same provider options', function () {
 
     Embeddings::for(['Hello'])
         ->cache(3600)
-        ->providerOptions(['input_type' => 'search_query'])
+        ->withProviderOptions(['input_type' => 'search_query'])
         ->generate(provider: 'cohere', model: 'embed-v4.0');
 
     Embeddings::for(['Hello'])
         ->cache(3600)
-        ->providerOptions(['input_type' => 'search_query'])
+        ->withProviderOptions(['input_type' => 'search_query'])
         ->generate(provider: 'cohere', model: 'embed-v4.0');
 
     expect(Http::recorded())->toHaveCount(1);
@@ -72,12 +72,12 @@ test('cache key is insensitive to provider option key order', function () {
 
     Embeddings::for(['Hello'])
         ->cache(3600)
-        ->providerOptions(['input_type' => 'search_query', 'truncate' => 'END'])
+        ->withProviderOptions(['input_type' => 'search_query', 'truncate' => 'END'])
         ->generate(provider: 'cohere', model: 'embed-v4.0');
 
     Embeddings::for(['Hello'])
         ->cache(3600)
-        ->providerOptions(['truncate' => 'END', 'input_type' => 'search_query'])
+        ->withProviderOptions(['truncate' => 'END', 'input_type' => 'search_query'])
         ->generate(provider: 'cohere', model: 'embed-v4.0');
 
     expect(Http::recorded())->toHaveCount(1);
@@ -99,7 +99,7 @@ test('closure resolver receives the resolved provider and applies per-provider o
     $seen = [];
 
     Embeddings::for(['Hello'])
-        ->providerOptions(function (Provider $provider) use (&$seen) {
+        ->withProviderOptions(function (Provider $provider) use (&$seen) {
             $seen[] = $provider->driver();
 
             return $provider->driver() === 'cohere'
@@ -121,7 +121,7 @@ test('closure provider options are not recorded on the queued prompt fake', func
     Embeddings::fake();
 
     Embeddings::for(['Hello'])
-        ->providerOptions(fn (Provider $provider) => ['input_type' => 'search_query'])
+        ->withProviderOptions(fn (Provider $provider) => ['input_type' => 'search_query'])
         ->queue(provider: 'cohere', model: 'embed-v4.0');
 
     Embeddings::assertQueued(
@@ -138,7 +138,7 @@ test('closure provider options survive queue serialization round-trip', function
     ]);
 
     $pending = Embeddings::for(['Hello'])
-        ->providerOptions(fn (Provider $provider) => ['input_type' => 'search_query']);
+        ->withProviderOptions(fn (Provider $provider) => ['input_type' => 'search_query']);
 
     $job = new GenerateEmbeddings($pending, 'cohere', 'embed-v4.0');
 
@@ -164,7 +164,7 @@ test('closure resolver returning null is treated as no options', function () {
     ]);
 
     Embeddings::for(['Hello'])
-        ->providerOptions(fn () => null)
+        ->withProviderOptions(fn () => null)
         ->generate(provider: 'cohere', model: 'embed-v4.0');
 
     Http::assertSent(function (Request $request) {

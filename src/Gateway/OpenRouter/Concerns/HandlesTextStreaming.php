@@ -8,7 +8,9 @@ use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Responses\Data\UrlCitation;
 use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Streaming\Events\StreamStart;
@@ -123,6 +125,26 @@ trait HandlesTextStreaming
 
                     if (isset($tcDelta['function']['arguments'])) {
                         $pendingToolCalls[$idx]['arguments'] .= $tcDelta['function']['arguments'];
+                    }
+                }
+            }
+
+            if (isset($delta['annotations'])) {
+                foreach ($delta['annotations'] as $annotation) {
+                    if (($annotation['type'] ?? '') === 'url_citation') {
+                        $urlCitation = $annotation['url_citation'] ?? [];
+
+                        yield (new CitationEvent(
+                            $this->generateEventId(),
+                            $messageId,
+                            new UrlCitation(
+                                $urlCitation['url'] ?? '',
+                                $urlCitation['title'] ?? null,
+                                isset($urlCitation['start_index']) ? (int) $urlCitation['start_index'] : null,
+                                isset($urlCitation['end_index']) ? (int) $urlCitation['end_index'] : null,
+                            ),
+                            time(),
+                        ))->withInvocationId($invocationId);
                     }
                 }
             }

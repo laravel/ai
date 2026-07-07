@@ -8,7 +8,7 @@ use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 
-interface TextProvider
+interface TextProvider extends Provider
 {
     /**
      * Invoke the given agent.

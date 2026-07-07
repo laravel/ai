@@ -111,6 +111,7 @@ class FakeTextGateway implements StepTextGateway
             return $message instanceof UserMessage;
         });
 
+        /** @var UserMessage $message */
         $response = $this->nextResponse(
             $provider, $model, $message->content, $message->attachments, $schema
         );
