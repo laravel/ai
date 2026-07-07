@@ -14,6 +14,12 @@ trait HasConversations
      */
     public function conversations(): HasMany
     {
-        return $this->hasMany(Conversation::class, 'user_id');
+        $relation = $this->hasMany(Conversation::class, Conversation::ownerColumn());
+
+        if (Conversation::hasParticipantType()) {
+            $relation->where('participant_type', Conversation::participantType($this));
+        }
+
+        return $relation;
     }
 }

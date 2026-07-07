@@ -142,4 +142,20 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Conversations
+    |--------------------------------------------------------------------------
+    |
+    | The participant model is the authenticatable model that owns a
+    | conversation when no explicit participant type is recorded. Conversations
+    | owned by this model store a null participant_type; any other model stores
+    | its morph class, so models sharing an id no longer collide.
+    |
+    */
+
+    'conversations' => [
+        'participant_model' => env('AI_CONVERSATION_PARTICIPANT_MODEL'),
+    ],
+
 ];

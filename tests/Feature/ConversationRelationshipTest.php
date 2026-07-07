@@ -9,6 +9,8 @@ use Laravel\Ai\Concerns\HasConversations;
 use Laravel\Ai\Models\Conversation;
 
 uses(RefreshDatabase::class)->beforeEach(function () {
+    config(['ai.conversations.participant_model' => ConversationRelationshipUser::class]);
+
     Schema::create('users', function (Blueprint $table) {
         $table->id();
         $table->string('name');
@@ -28,21 +30,21 @@ test('model can retrieve conversations using relationship', function () {
     DB::table('agent_conversations')->insert([
         [
             'id' => 'conversation-1',
-            'user_id' => $user->id,
+            'participant_id' => $user->id,
             'title' => 'First Conversation',
             'created_at' => now()->subMinutes(10),
             'updated_at' => now()->subMinutes(10),
         ],
         [
             'id' => 'conversation-2',
-            'user_id' => $user->id,
+            'participant_id' => $user->id,
             'title' => 'Second Conversation',
             'created_at' => now()->subMinutes(5),
             'updated_at' => now()->subMinutes(5),
         ],
         [
             'id' => 'conversation-3',
-            'user_id' => $otherUser->id,
+            'participant_id' => $otherUser->id,
             'title' => 'Other Conversation',
             'created_at' => now(),
             'updated_at' => now(),
@@ -61,7 +63,7 @@ test('conversation can retrieve messages using relationship', function () {
 
     $conversation = Conversation::create([
         'id' => 'conversation-1',
-        'user_id' => $user->id,
+        'participant_id' => $user->id,
         'title' => 'Conversation',
     ]);
 
@@ -69,7 +71,7 @@ test('conversation can retrieve messages using relationship', function () {
         [
             'id' => 'message-1',
             'conversation_id' => $conversation->id,
-            'user_id' => $user->id,
+            'participant_id' => $user->id,
             'agent' => 'Agent',
             'role' => 'user',
             'content' => 'Hello',

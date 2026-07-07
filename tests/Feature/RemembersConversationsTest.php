@@ -2,45 +2,43 @@
 
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\ConversationStore;
-use Laravel\Ai\Contracts\ParticipantAware;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
 
-test('it scopes a participant-aware store to the participant when continuing the last conversation', function () {
+test('it threads the participant type into latestConversationId when continuing the last conversation', function () {
     $participant = new class
     {
         public int $id = 7;
+
+        public function getMorphClass(): string
+        {
+            return 'admin';
+        }
     };
 
-    $store = new class implements ParticipantAware
+    $store = new class implements ConversationStore
     {
-        public ?object $participant = null;
+        public ?string $receivedType = null;
 
-        public function forParticipant(?object $participant): static
+        public function latestConversationId(string|int $participantId, ?string $participantType): ?string
         {
-            $clone = clone $this;
-            $clone->participant = $participant;
+            $this->receivedType = $participantType;
 
-            return $clone;
+            return $participantType === 'admin' ? 'conversation-admin' : null;
         }
 
-        public function latestConversationId(string|int $userId): ?string
-        {
-            return $this->participant === null ? null : 'conversation-'.$this->participant->id;
-        }
-
-        public function storeConversation(string|int|null $userId, string $title): string
+        public function storeConversation(string|int|null $participantId, string $title, ?string $participantType): string
         {
             return 'conversation-1';
         }
 
-        public function storeUserMessage(string $conversationId, string|int|null $userId, AgentPrompt $prompt): string
+        public function storeUserMessage(string $conversationId, string|int|null $participantId, ?string $participantType, AgentPrompt $prompt): string
         {
             return 'user-1';
         }
 
-        public function storeAssistantMessage(string $conversationId, string|int|null $userId, AgentPrompt $prompt, AgentResponse $response): string
+        public function storeAssistantMessage(string $conversationId, string|int|null $participantId, ?string $participantType, AgentPrompt $prompt, AgentResponse $response): string
         {
             return 'assistant-1';
         }
@@ -55,11 +53,12 @@ test('it scopes a participant-aware store to the participant when continuing the
 
     $agent = (new RememberingAssistantAgent)->continueLastConversation($participant);
 
-    // The participant reached the scoped store, so it resolves that participant's own conversation...
-    expect($agent->currentConversation())->toBe('conversation-7');
+    // The participant's morph type reaches the store, so it resolves that participant's own conversation...
+    expect($store->receivedType)->toBe('admin')
+        ->and($agent->currentConversation())->toBe('conversation-admin');
 });
 
-test('it leaves a plain store untouched when continuing the last conversation', function () {
+test('it continues the last conversation through a store that ignores the participant type', function () {
     $participant = new class
     {
         public int $id = 7;
@@ -67,22 +66,22 @@ test('it leaves a plain store untouched when continuing the last conversation', 
 
     $store = new class implements ConversationStore
     {
-        public function latestConversationId(string|int $userId): ?string
+        public function latestConversationId(string|int $participantId, ?string $participantType): ?string
         {
             return 'conversation-1';
         }
 
-        public function storeConversation(string|int|null $userId, string $title): string
+        public function storeConversation(string|int|null $participantId, string $title, ?string $participantType): string
         {
             return 'conversation-1';
         }
 
-        public function storeUserMessage(string $conversationId, string|int|null $userId, AgentPrompt $prompt): string
+        public function storeUserMessage(string $conversationId, string|int|null $participantId, ?string $participantType, AgentPrompt $prompt): string
         {
             return 'user-1';
         }
 
-        public function storeAssistantMessage(string $conversationId, string|int|null $userId, AgentPrompt $prompt, AgentResponse $response): string
+        public function storeAssistantMessage(string $conversationId, string|int|null $participantId, ?string $participantType, AgentPrompt $prompt, AgentResponse $response): string
         {
             return 'assistant-1';
         }
@@ -97,6 +96,5 @@ test('it leaves a plain store untouched when continuing the last conversation', 
 
     $agent = (new RememberingAssistantAgent)->continueLastConversation($participant);
 
-    // A store that does not opt into participant awareness resolves by id alone, exactly as before...
     expect($agent->currentConversation())->toBe('conversation-1');
 });
