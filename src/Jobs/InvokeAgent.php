@@ -4,6 +4,7 @@ namespace Laravel\Ai\Jobs;
 
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Laravel\Ai\Approvals\ToolApproval;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Enums\Lab;
 
@@ -16,7 +17,7 @@ class InvokeAgent implements ShouldQueue
      */
     public function __construct(
         public Agent $agent,
-        public string $prompt,
+        public ToolApproval|string $prompt,
         public array $attachments = [],
         public Lab|array|string|null $provider = null,
         public ?string $model = null) {}

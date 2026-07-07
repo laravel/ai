@@ -4,6 +4,7 @@ namespace Laravel\Ai\Prompts;
 
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use Laravel\Ai\Approvals\ToolApproval;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 
@@ -19,7 +20,7 @@ class AgentPrompt extends Prompt
 
     public function __construct(
         Agent $agent,
-        string $prompt,
+        ToolApproval|string $prompt,
         Collection|array $attachments,
         TextProvider $provider,
         string $model,
@@ -39,6 +40,10 @@ class AgentPrompt extends Prompt
      */
     public function contains(string $string): bool
     {
+        if (! is_string($this->prompt)) {
+            return false;
+        }
+
         return Str::contains($this->prompt, $string);
     }
 
@@ -47,6 +52,10 @@ class AgentPrompt extends Prompt
      */
     public function prepend(string $prompt): AgentPrompt
     {
+        if (! is_string($this->prompt)) {
+            return $this;
+        }
+
         return $this->revise($prompt.PHP_EOL.PHP_EOL.$this->prompt);
     }
 
@@ -55,13 +64,17 @@ class AgentPrompt extends Prompt
      */
     public function append(string $prompt): AgentPrompt
     {
+        if (! is_string($this->prompt)) {
+            return $this;
+        }
+
         return $this->revise($this->prompt.PHP_EOL.PHP_EOL.$prompt);
     }
 
     /**
      * Revise the prompt and return a new prompt instance.
      */
-    public function revise(string $prompt, Collection|array|null $attachments = null): AgentPrompt
+    public function revise(ToolApproval|string $prompt, Collection|array|null $attachments = null): AgentPrompt
     {
         if (is_array($attachments)) {
             $attachments = new Collection($attachments);

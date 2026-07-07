@@ -217,7 +217,7 @@ test('it replays stored tool conversations before the final assistant response',
         ->and($messages[2]->toolCalls)->toBeEmpty();
 });
 
-test('it drops resultless tool calls and replays only the final assistant text', function () {
+test('it replays unresolved tool calls with final assistant text', function () {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Tool conversation');
 
@@ -244,10 +244,11 @@ test('it drops resultless tool calls and replays only the final assistant text',
     expect($messages)->toHaveCount(1)
         ->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
         ->and($messages[0]->content)->toBe('The order has shipped.')
-        ->and($messages[0]->toolCalls)->toBeEmpty();
+        ->and($messages[0]->toolCalls)->toHaveCount(1)
+        ->and($messages[0]->toolCalls[0]->id)->toBe('call-1');
 });
 
-test('it drops resultless tool calls with no final text entirely', function () {
+test('it replays unresolved tool calls with no final text', function () {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Tool conversation');
 
@@ -271,7 +272,65 @@ test('it drops resultless tool calls with no final text entirely', function () {
 
     $messages = $store->getLatestConversationMessages($conversationId, 10);
 
-    expect($messages)->toBeEmpty();
+    expect($messages)->toHaveCount(1)
+        ->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[0]->content)->toBe('')
+        ->and($messages[0]->toolCalls)->toHaveCount(1)
+        ->and($messages[0]->toolCalls[0]->id)->toBe('call-1');
+});
+
+test('it replays a resumed approval so the paused tool_use is answered', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Tool conversation');
+
+    // The paused turn: assistant tool_use with no results yet.
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => '',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'x'], 'result_id' => 'result-1'],
+        ]),
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    // The resume turn: results for the paused call live in their own record with no
+    // tool calls of their own, followed by the model's continuation text.
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-2',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => 'Deleted x',
+        'attachments' => '[]',
+        'tool_calls' => '[]',
+        'tool_results' => json_encode([
+            ['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'x'], 'result' => 'Deleted x', 'result_id' => 'result-1'],
+        ]),
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toHaveCount(3)
+        ->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[0]->toolCalls[0]->id)->toBe('call-1')
+        ->and($messages[1])->toBeInstanceOf(ToolResultMessage::class)
+        ->and($messages[1]->toolResults[0]->id)->toBe('call-1')
+        ->and($messages[2])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[2]->content)->toBe('Deleted x');
 });
 
 test('it rehydrates reasoning encrypted content on stored tool calls', function () {

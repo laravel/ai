@@ -2,10 +2,15 @@
 
 namespace Laravel\Ai\Responses;
 
+use Illuminate\Contracts\Support\Responsable;
+use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
+use Symfony\Component\HttpFoundation\Response;
 
-class AgentResponse extends TextResponse
+class AgentResponse extends TextResponse implements Responsable
 {
     public string $invocationId;
 
@@ -18,6 +23,17 @@ class AgentResponse extends TextResponse
         $this->invocationId = $invocationId;
 
         parent::__construct($text, $usage, $meta);
+    }
+
+    /**
+     * Create a fake response that is waiting for approval.
+     *
+     * @param  array<int, PendingApproval>|Collection<int, PendingApproval>  $pendingApprovals
+     */
+    public static function fakeAwaitingApproval(array|Collection $pendingApprovals): self
+    {
+        return (new self('fake-invocation', '', new Usage, new Meta))
+            ->withPendingApprovals(Collection::make($pendingApprovals));
     }
 
     /**
@@ -39,5 +55,27 @@ class AgentResponse extends TextResponse
         $callback($this);
 
         return $this;
+    }
+
+    /**
+     * Create an HTTP response that represents the object.
+     *
+     * @param  Request  $request
+     */
+    public function toResponse($request): Response
+    {
+        if ($this->awaitingApproval()) {
+            return response()->json([
+                'status' => 'awaiting_approval',
+                'conversation_id' => $this->conversationId,
+                'approvals' => $this->pendingApprovals->toArray(),
+            ]);
+        }
+
+        return response()->json([
+            'status' => 'complete',
+            'conversation_id' => $this->conversationId,
+            'reply' => $this->text,
+        ]);
     }
 }

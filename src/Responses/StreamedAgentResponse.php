@@ -7,6 +7,7 @@ use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Streaming\Events\TextDelta;
+use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Laravel\Ai\Streaming\Events\ToolCall;
 use Laravel\Ai\Streaming\Events\ToolResult;
 
@@ -33,5 +34,11 @@ class StreamedAgentResponse extends AgentResponse
         );
 
         $this->events = $events;
+
+        $this->withPendingApprovals(
+            $events->whereInstanceOf(ToolApprovalRequest::class)
+                ->flatMap(fn (ToolApprovalRequest $event) => $event->pendingApprovals)
+                ->values()
+        );
     }
 }

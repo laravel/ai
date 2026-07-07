@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Approvals\ToolApproval;
 use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
@@ -18,7 +19,9 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
+use Laravel\Ai\Events\ToolApprovalRequested;
 use Laravel\Ai\Events\ToolInvoked;
+use Laravel\Ai\Exceptions\ApprovalNotResumableException;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Middleware\RememberConversation;
@@ -57,8 +60,11 @@ trait GeneratesText
 
                 $messages = [
                     ...($agent instanceof Conversational ? $agent->messages() : []),
-                    new UserMessage($prompt->prompt, $prompt->attachments->all()),
                 ];
+
+                if (is_string($prompt->prompt)) {
+                    $messages[] = new UserMessage($prompt->prompt, $prompt->attachments->all());
+                }
 
                 $this->listenForToolInvocations($invocationId, $agent);
 
@@ -73,9 +79,14 @@ trait GeneratesText
                     $schema,
                     TextGenerationOptions::forAgent($agent),
                     $prompt->timeout,
+                    $prompt->prompt instanceof ToolApproval && ! Ai::hasFakeGatewayFor($agent::class) ? $prompt->prompt : null,
                 );
 
-                return $response instanceof StructuredTextResponse
+                if ($response->awaitingApproval() && ! $agent instanceof Conversational) {
+                    throw ApprovalNotResumableException::make();
+                }
+
+                $agentResponse = $response instanceof StructuredTextResponse
                     ? (new StructuredAgentResponse($invocationId, $response->structured, $response->text, $response->usage, $response->meta))
                         ->withToolCallsAndResults($response->toolCalls, $response->toolResults)
                         ->withSteps($response->steps)
@@ -83,11 +94,25 @@ trait GeneratesText
                         ->withMessages($response->messages)
                         ->withToolCallsAndResults($response->toolCalls, $response->toolResults)
                         ->withSteps($response->steps);
+
+                $agentResponse->withPendingApprovals($response->pendingApprovals);
+
+                return $agentResponse;
             });
 
         $this->events->dispatch(
             new AgentPrompted($invocationId, $processedPrompt ?? $prompt, $response)
         );
+
+        if ($response->awaitingApproval()) {
+            $this->events->dispatch(new ToolApprovalRequested(
+                $invocationId,
+                $prompt->agent,
+                $response->pendingApprovals,
+                $response->conversationId,
+                $response->conversationUser,
+            ));
+        }
 
         return $response;
     }

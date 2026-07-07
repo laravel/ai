@@ -1,6 +1,8 @@
 <?php
 
 use Laravel\Ai\Ai;
+use Laravel\Ai\Approvals\PendingApproval;
+use Laravel\Ai\Approvals\ToolApproval;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\QueuedAgentPrompt;
@@ -16,6 +18,7 @@ use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use PHPUnit\Framework\AssertionFailedError;
 use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\ConversationalAgent;
 use Tests\Fixtures\Agents\EmptySchemaStructuredAgent;
 use Tests\Fixtures\Agents\MultiStepToolAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
@@ -128,6 +131,27 @@ describe('prompt responses', function () {
         expect($response)->toBeInstanceOf(AgentResponse::class)
             ->and($response)->not->toBeInstanceOf(StructuredAgentResponse::class)
             ->and($response->text)->toEqual('Hello');
+    });
+
+    test('agents can fake paused approval responses and assert resume prompts', function () {
+        ConversationalAgent::fake([
+            AgentResponse::fakeAwaitingApproval([
+                new PendingApproval('call-1', 'DeleteFile', ['path' => 'config/app.php'], 'Deletes a file'),
+            ]),
+            'Resumed',
+        ]);
+
+        $response = (new ConversationalAgent)->prompt('Delete config/app.php');
+
+        expect($response->awaitingApproval())->toBeTrue()
+            ->and($response->pendingApprovals)->toHaveCount(1);
+
+        (new ConversationalAgent)->prompt(ToolApproval::from(['call-1' => true]));
+
+        ConversationalAgent::assertPrompted(function (AgentPrompt $prompt) {
+            return $prompt->prompt instanceof ToolApproval
+                && $prompt->prompt->decisions['call-1']->action === 'approve';
+        });
     });
 });
 

@@ -4,6 +4,7 @@ namespace Laravel\Ai;
 
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use Laravel\Ai\Approvals\ToolApproval;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Enums\Lab;
 
@@ -11,7 +12,7 @@ class QueuedAgentPrompt
 {
     public function __construct(
         public Agent $agent,
-        public string $prompt,
+        public ToolApproval|string $prompt,
         public Collection|array $attachments,
         public Lab|array|string|null $provider,
         public ?string $model
@@ -22,6 +23,10 @@ class QueuedAgentPrompt
      */
     public function contains(string $string): bool
     {
+        if (! is_string($this->prompt)) {
+            return false;
+        }
+
         return Str::contains($this->prompt, $string);
     }
 }

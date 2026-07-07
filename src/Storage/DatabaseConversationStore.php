@@ -157,9 +157,12 @@ class DatabaseConversationStore implements ConversationStore
 
                 if ($toolCalls->isNotEmpty()) {
                     if ($toolResults->isEmpty()) {
-                        return filled($record->content)
-                            ? [new AssistantMessage($record->content)]
-                            : [];
+                        return [
+                            new AssistantMessage(
+                                $record->content,
+                                $toolCalls->map(ToolCall::fromArray(...)),
+                            ),
+                        ];
                     }
 
                     $messages = [
@@ -171,6 +174,19 @@ class DatabaseConversationStore implements ConversationStore
                             $toolResults->map(ToolResult::fromArray(...)),
                         ),
                     ];
+
+                    if (filled($record->content)) {
+                        $messages[] = new AssistantMessage($record->content);
+                    }
+
+                    return $messages;
+                }
+
+                // A resume turn stores the results of a prior paused turn's tool calls,
+                // so its results have no tool calls of their own — replay them as a
+                // tool result message that answers the earlier assistant's tool_use.
+                if ($toolResults->isNotEmpty()) {
+                    $messages = [new ToolResultMessage($toolResults->map(ToolResult::fromArray(...)))];
 
                     if (filled($record->content)) {
                         $messages[] = new AssistantMessage($record->content);

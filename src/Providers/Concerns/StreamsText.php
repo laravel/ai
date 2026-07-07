@@ -4,10 +4,14 @@ namespace Laravel\Ai\Providers\Concerns;
 
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use Laravel\Ai\Ai;
+use Laravel\Ai\Approvals\ToolApproval;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Events\AgentStreamed;
 use Laravel\Ai\Events\StreamingAgent;
+use Laravel\Ai\Events\ToolApprovalRequested;
+use Laravel\Ai\Exceptions\ApprovalNotResumableException;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
@@ -49,8 +53,11 @@ trait StreamsText
 
                         $messages = [
                             ...($agent instanceof Conversational ? $agent->messages() : []),
-                            new UserMessage($prompt->prompt, $prompt->attachments->all()),
                         ];
+
+                        if (is_string($prompt->prompt)) {
+                            $messages[] = new UserMessage($prompt->prompt, $prompt->attachments->all());
+                        }
 
                         $this->listenForToolInvocations($invocationId, $agent);
 
@@ -64,14 +71,29 @@ trait StreamsText
                             null,
                             TextGenerationOptions::forAgent($agent),
                             $prompt->timeout,
+                            $prompt->prompt instanceof ToolApproval && ! Ai::hasFakeGatewayFor($agent::class) ? $prompt->prompt : null,
                         );
                     },
                     $meta,
                 );
             })->then(function (StreamedAgentResponse $response) use ($invocationId, $prompt, &$processedPrompt) {
+                if ($response->awaitingApproval() && ! $prompt->agent instanceof Conversational) {
+                    throw ApprovalNotResumableException::make();
+                }
+
                 $this->events->dispatch(
                     new AgentStreamed($invocationId, $processedPrompt ?? $prompt, $response)
                 );
+
+                if ($response->awaitingApproval()) {
+                    $this->events->dispatch(new ToolApprovalRequested(
+                        $invocationId,
+                        $prompt->agent,
+                        $response->pendingApprovals,
+                        $response->conversationId,
+                        $response->conversationUser,
+                    ));
+                }
             });
     }
 }

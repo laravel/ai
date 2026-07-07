@@ -4,6 +4,7 @@ namespace Laravel\Ai\Middleware;
 
 use Closure;
 use Illuminate\Support\Str;
+use Laravel\Ai\Approvals\ToolApproval;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -35,7 +36,7 @@ class RememberConversation
             if (! $agent->currentConversation()) {
                 $conversationId = $this->store->storeConversation(
                     $agent->conversationParticipant()?->id,
-                    $this->generateTitle($prompt->prompt)
+                    $this->generateTitle(is_string($prompt->prompt) ? $prompt->prompt : 'Tool approval')
                 );
 
                 $agent->continue(
@@ -45,11 +46,13 @@ class RememberConversation
             }
 
             // Record user message...
-            $this->store->storeUserMessage(
-                $agent->currentConversation(),
-                $agent->conversationParticipant()?->id,
-                $prompt
-            );
+            if (! $prompt->prompt instanceof ToolApproval) {
+                $this->store->storeUserMessage(
+                    $agent->currentConversation(),
+                    $agent->conversationParticipant()?->id,
+                    $prompt
+                );
+            }
 
             // Record assistant message...
             $this->store->storeAssistantMessage(
