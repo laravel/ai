@@ -136,7 +136,7 @@ class DatabaseConversationStore implements ConversationStore
      * Build the message row attributes, adapting to the installed schema.
      *
      * @param  array<string, mixed>  $attributes
-     * @return  array<string, mixed>
+     * @return array<string, mixed>
      */
     protected function messageAttributes(string $messageId, string $table, string $conversationId, string|int|null $participantId, ?string $participantType, mixed $now, array $attributes): array
     {
