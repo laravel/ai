@@ -50,9 +50,6 @@ test('conversation middleware trims the messages sent to the provider', function
 
     Ai::textProvider('openai')->useTextGateway($recorder);
 
-    // TrimmingAgent history is [U 'Message one', A 'Reply one', U 'Message two', A 'Reply two'];
-    // prompting appends a fifth (user) message. TrimConversations(keep: 2) snaps back to the
-    // 'Message two' user turn, so the first exchange is dropped and the current turn survives.
     (new TrimmingAgent)->prompt('What is my latest question?', provider: 'openai');
 
     $contents = array_map(fn ($message) => $message->content, $recorder->received);

@@ -62,11 +62,10 @@ test('trim conversations never orphans a tool result from its tool call', functi
 
     $result = trim_conversation($messages, 2);
 
-    // Snapped back to the 'u2' user turn so the tool call/result pair stays intact.
     expect($result[0])->toBeInstanceOf(UserMessage::class)
         ->and($result[0]->content)->toBe('u2')
         ->and($result)->toHaveCount(5);
 
-    $toolResultIndex = collect($result)->search(fn ($m) => $m instanceof ToolResultMessage);
+    $toolResultIndex = collect($result)->search(fn ($messages) => $messages instanceof ToolResultMessage);
     expect($result[$toolResultIndex - 1])->toBeInstanceOf(AssistantMessage::class);
 });
