@@ -6,7 +6,6 @@ use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Defer\DeferredCallback;
 use Illuminate\Support\Facades\Concurrency;
-use Laravel\Ai\Attributes\Parallel;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\HasTools;
@@ -24,15 +23,15 @@ use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
+use Laravel\Ai\Tools\Concerns\CanBeConcurrent;
 use Laravel\Ai\Tools\Request;
 use Laravel\SerializableClosure\SerializableClosure;
 
-test('a #[Parallel] tools() method is detected through the resolved options', function () {
-    expect(TextGenerationOptions::forAgent(new ParallelAgent)->parallelTools())->toBeTrue()
-        ->and(TextGenerationOptions::forAgent(new SequentialAgent)->parallelTools())->toBeFalse();
+test('a tool can opt into concurrent execution', function () {
+    $tool = new SequentialRecordingTool('bravo', new ArrayObject);
 
-    expect(Parallel::isAppliedTo(null))->toBeFalse()
-        ->and(Parallel::isAppliedTo(new class {}))->toBeFalse();
+    expect($tool->isConcurrent())->toBeFalse()
+        ->and($tool->concurrent()->isConcurrent())->toBeTrue();
 });
 
 test('parallel tools run together with results in original order and correctly paired events', function () {
@@ -85,6 +84,47 @@ test('parallel tools run together with results in original order and correctly p
         ->and($invoked['alpha'])->toBe($invoking['alpha'])
         ->and($invoked['bravo'])->toBe($invoking['bravo'])
         ->and($invoking['alpha'])->not->toBe($invoking['bravo']);
+});
+
+test('sequential tools are barriers between consecutive concurrent batches', function () {
+    Concurrency::shouldReceive('run')
+        ->twice()
+        ->andReturnUsing(fn (array $tasks) => array_map(fn (Closure $task) => $task(), $tasks));
+
+    $log = new ArrayObject;
+    $tools = [
+        new ParallelRecordingTool('first', $log, '1'),
+        new ParallelRecordingTool('second', $log, '2'),
+        new SequentialRecordingTool('barrier', $log, 'B'),
+        new ParallelRecordingTool('third', $log, '3'),
+        new ParallelRecordingTool('fourth', $log, '4'),
+    ];
+
+    $gateway = parallelToolsGateway([
+        new StepResponse('', [
+            new ToolCall('call-1', 'first', [], 'call-1'),
+            new ToolCall('call-2', 'second', [], 'call-2'),
+            new ToolCall('call-b', 'barrier', [], 'call-b'),
+            new ToolCall('call-3', 'third', [], 'call-3'),
+            new ToolCall('call-4', 'fourth', [], 'call-4'),
+        ], FinishReason::ToolCalls, new Usage, new Meta('fake', 'model')),
+        new StepResponse('done', [], FinishReason::Stop, new Usage, new Meta('fake', 'model')),
+    ]);
+
+    $response = (new TextGenerationLoop($gateway))->generate(
+        Mockery::mock(TextProvider::class),
+        'model',
+        null,
+        [],
+        $tools,
+        null,
+        new TextGenerationOptions(maxSteps: 2, agent: new ParallelAgent),
+        null,
+    );
+
+    expect(collect($response->steps->first()->toolResults)->map->result->all())
+        ->toBe(['1', '2', 'B', '3', '4'])
+        ->and($log->getArrayCopy())->toBe(['first', 'second', 'barrier', 'third', 'fourth']);
 });
 
 test('a single tool call does not route through the concurrency driver', function () {
@@ -498,7 +538,6 @@ class ParallelAgent implements Agent, HasTools
         return 'test';
     }
 
-    #[Parallel]
     public function tools(): array
     {
         return [];
@@ -522,13 +561,17 @@ class SequentialAgent implements Agent, HasTools
 
 class ParallelRecordingTool implements Tool
 {
+    use CanBeConcurrent;
+
     public function __construct(
         public string $toolName,
         public ArrayObject $log,
         public string $output = 'ok',
         public bool $throws = false,
         public ?Closure $onHandle = null,
-    ) {}
+    ) {
+        $this->concurrent();
+    }
 
     public function name(): string
     {
@@ -558,6 +601,25 @@ class ParallelRecordingTool implements Tool
     public function schema(JsonSchema $schema): array
     {
         return [];
+    }
+}
+
+class SequentialRecordingTool extends ParallelRecordingTool
+{
+    public function __construct(
+        string $toolName,
+        ArrayObject $log,
+        string $output = 'ok',
+        bool $throws = false,
+        ?Closure $onHandle = null,
+    ) {
+        parent::__construct($toolName, $log, $output, $throws, $onHandle);
+        $this->concurrent(false);
+    }
+
+    public function handle(Request $request): string
+    {
+        return parent::handle($request);
     }
 }
 

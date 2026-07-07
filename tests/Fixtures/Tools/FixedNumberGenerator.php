@@ -5,11 +5,14 @@ namespace Tests\Fixtures\Tools;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Tools\Concerns\CanBeConcurrent;
 use Laravel\Ai\Tools\Request;
 
 #[Strict]
 class FixedNumberGenerator implements Tool
 {
+    use CanBeConcurrent;
+
     public function __construct(public bool $throwsException = false) {}
 
     /**

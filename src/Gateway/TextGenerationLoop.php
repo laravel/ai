@@ -54,7 +54,6 @@ class TextGenerationLoop
         $steps = new Collection;
         $allMessages = $messages;
         $maxSteps = $this->resolveMaxSteps($options, $tools);
-        $parallel = ($options?->parallelTools() ?? false) && $this->canRunInParallel();
         $continuationToken = null;
         $lastResult = null;
 
@@ -96,7 +95,6 @@ class TextGenerationLoop
                 $lastResult->toolCalls,
                 $stepContext->isFinalStep,
                 $tools,
-                $parallel,
             );
 
             $shouldContinue = filled($toolResults);
@@ -138,7 +136,6 @@ class TextGenerationLoop
     ): Generator {
         $allMessages = $messages;
         $maxSteps = $this->resolveMaxSteps($options, $tools);
-        $parallel = ($options?->parallelTools() ?? false) && $this->canRunInParallel();
         $continuationToken = null;
         $accumulatedUsage = new Usage;
         $finalReason = null;
@@ -192,7 +189,7 @@ class TextGenerationLoop
             }
 
             $toolResults = $result !== null
-                ? $this->continuationToolResults($result->finishReason, $result->toolCalls, $stepContext->isFinalStep, $tools, $parallel)
+                ? $this->continuationToolResults($result->finishReason, $result->toolCalls, $stepContext->isFinalStep, $tools)
                 : [];
 
             $shouldContinue = filled($toolResults);
@@ -257,10 +254,10 @@ class TextGenerationLoop
      * @param  Tool[]  $tools
      * @return ToolResult[]
      */
-    protected function continuationToolResults(FinishReason $reason, array $toolCalls, bool $isFinalStep, array $tools, bool $parallel = false): array
+    protected function continuationToolResults(FinishReason $reason, array $toolCalls, bool $isFinalStep, array $tools): array
     {
         return $reason === FinishReason::ToolCalls && ! $isFinalStep && filled($toolCalls)
-            ? $this->executeToolCalls($toolCalls, $tools, $parallel)
+            ? $this->executeToolCalls($toolCalls, $tools)
             : [];
     }
 
@@ -269,31 +266,7 @@ class TextGenerationLoop
      * @param  Tool[]  $tools
      * @return ToolResult[]
      */
-    protected function executeToolCalls(array $toolCalls, array $tools, bool $parallel = false): array
-    {
-        if ($parallel && count($toolCalls) >= 2) {
-            return $this->executeParallelToolCalls($toolCalls, $tools);
-        }
-
-        return array_map(function (ToolCall $toolCall) use ($tools) {
-            $tool = $this->findTool($toolCall->name, $tools);
-
-            if ($tool === null) {
-                throw new NoSuchToolException($toolCall->name);
-            }
-
-            return $this->toolResult($toolCall, $this->executeTool($tool, $toolCall->arguments));
-        }, $toolCalls);
-    }
-
-    /**
-     * Execute the given tool calls in parallel, firing invocation events from the parent process.
-     *
-     * @param  ToolCall[]  $toolCalls
-     * @param  Tool[]  $tools
-     * @return ToolResult[]
-     */
-    protected function executeParallelToolCalls(array $toolCalls, array $tools): array
+    protected function executeToolCalls(array $toolCalls, array $tools): array
     {
         $pairs = array_map(function (ToolCall $toolCall) use ($tools) {
             $tool = $this->findTool($toolCall->name, $tools);
@@ -305,6 +278,62 @@ class TextGenerationLoop
             return [$toolCall, $tool];
         }, $toolCalls);
 
+        $results = [];
+        $batch = [];
+
+        foreach ($pairs as $pair) {
+            if ($this->isConcurrentTool($pair[1])) {
+                $batch[] = $pair;
+
+                continue;
+            }
+
+            array_push($results, ...$this->executeConcurrentBatch($batch));
+            $batch = [];
+            $results[] = $this->executeToolCall(...$pair);
+        }
+
+        array_push($results, ...$this->executeConcurrentBatch($batch));
+
+        return $results;
+    }
+
+    /**
+     * Execute a consecutive batch of concurrency-safe tool calls.
+     *
+     * @param  array<int, array{ToolCall, Tool}>  $pairs
+     * @return ToolResult[]
+     */
+    protected function executeConcurrentBatch(array $pairs): array
+    {
+        if (count($pairs) < 2 || ! $this->canRunInParallel()) {
+            return array_map(fn (array $pair) => $this->executeToolCall(...$pair), $pairs);
+        }
+
+        return $this->executeParallelToolCalls($pairs);
+    }
+
+    protected function executeToolCall(ToolCall $toolCall, Tool $tool): ToolResult
+    {
+        return $this->toolResult($toolCall, $this->executeTool($tool, $toolCall->arguments));
+    }
+
+    /**
+     * Determine whether the given tool has opted into concurrent execution.
+     */
+    protected function isConcurrentTool(Tool $tool): bool
+    {
+        return $tool->isConcurrent();
+    }
+
+    /**
+     * Execute the given tool calls in parallel, firing invocation events from the parent process.
+     *
+     * @param  array<int, array{ToolCall, Tool}>  $pairs
+     * @return ToolResult[]
+     */
+    protected function executeParallelToolCalls(array $pairs): array
+    {
         // Snapshot the callbacks so a tool that re-registers them mid-batch (e.g. a
         // sub-agent invoked in-process) cannot corrupt the events we fire below.
         $callbacks = $this->pushToolInvocationCallbacks();
@@ -318,13 +347,12 @@ class TextGenerationLoop
                 return $id;
             }, $pairs);
 
-            // Envelope each task instead of throwing so one tool's failure can't discard its siblings' results; only serializable scalars cross the process boundary.
             $tasks = array_map(fn (array $pair) => $this->parallelTask(...$pair), $pairs);
 
             try {
                 $envelopes = array_values(Concurrency::run($tasks));
             } catch (Throwable) {
-                // Driver can't run here (unavailable, unserializable tools, a mid-batch failure); re-run the whole batch inline — so #[Parallel] tools must be safe to run more than once.
+                // Driver can't run here (unavailable, unserializable tools, a mid-batch failure); re-run the whole batch inline — so concurrent tools must be safe to run more than once.
                 $envelopes = array_map(fn (Closure $task) => $task(), $tasks);
             }
 

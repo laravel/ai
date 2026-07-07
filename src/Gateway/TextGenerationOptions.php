@@ -4,7 +4,6 @@ namespace Laravel\Ai\Gateway;
 
 use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Attributes\MaxTokens;
-use Laravel\Ai\Attributes\Parallel;
 use Laravel\Ai\Attributes\Temperature;
 use Laravel\Ai\Attributes\TopP;
 use Laravel\Ai\Contracts\Agent;
@@ -38,14 +37,6 @@ class TextGenerationOptions
         }
 
         return null;
-    }
-
-    /**
-     * Determine whether the agent's tools should run in parallel.
-     */
-    public function parallelTools(): bool
-    {
-        return Parallel::isAppliedTo($this->agent);
     }
 
     /**

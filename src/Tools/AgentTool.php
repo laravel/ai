@@ -6,11 +6,14 @@ use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\CanActAsTool;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Tools\Concerns\CanBeConcurrent;
 use Stringable;
 use Throwable;
 
 class AgentTool implements Tool
 {
+    use CanBeConcurrent;
+
     public function __construct(protected Agent $agent)
     {
         //

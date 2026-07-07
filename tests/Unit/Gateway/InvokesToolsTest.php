@@ -4,6 +4,7 @@ use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
+use Laravel\Ai\Tools\Concerns\CanBeConcurrent;
 use Laravel\Ai\Tools\Request;
 
 test('tool invocation callbacks are restored after nested tool invocations', function () {
@@ -21,6 +22,8 @@ test('tool invocation callbacks are restored after nested tool invocations', fun
 
     $makeTool = fn (string $name, Closure $handler): Tool => new class($name, $handler) implements Tool
     {
+        use CanBeConcurrent;
+
         public function __construct(
             protected string $name,
             protected Closure $handler,

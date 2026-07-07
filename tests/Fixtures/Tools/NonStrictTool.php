@@ -4,10 +4,13 @@ namespace Tests\Fixtures\Tools;
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Tools\Concerns\CanBeConcurrent;
 use Laravel\Ai\Tools\Request;
 
 class NonStrictTool implements Tool
 {
+    use CanBeConcurrent;
+
     public function description(): string
     {
         return 'A tool without the Strict attribute.';

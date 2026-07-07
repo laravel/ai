@@ -3,6 +3,7 @@
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
+use Laravel\Ai\Tools\Concerns\CanBeConcurrent;
 use Laravel\Ai\Tools\Request;
 use Laravel\Ai\Tools\ToolNameResolver;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
@@ -10,6 +11,8 @@ use Tests\Fixtures\Tools\NamedTool;
 
 class ProtectedNameTool implements Tool
 {
+    use CanBeConcurrent;
+
     protected function name(): string
     {
         return 'should_not_be_used';
