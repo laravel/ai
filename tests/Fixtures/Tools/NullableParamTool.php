@@ -4,13 +4,10 @@ namespace Tests\Fixtures\Tools;
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\Tools\Concerns\CanBeConcurrent;
 use Laravel\Ai\Tools\Request;
 
 class NullableParamTool implements Tool
 {
-    use CanBeConcurrent;
-
     /**
      * Get the description of the tool's purpose.
      */

@@ -5,13 +5,10 @@ namespace Laravel\Ai\Tools\Filesystem;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\Tools\Concerns\CanBeConcurrent;
 use Throwable;
 
 abstract class FilesystemTool implements Tool
 {
-    use CanBeConcurrent;
-
     public function __construct(protected Filesystem|string|null $disk = null) {}
 
     /**

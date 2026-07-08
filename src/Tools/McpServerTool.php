@@ -7,12 +7,10 @@ use Illuminate\Container\Container;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
 use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\Tools\Concerns\CanBeConcurrent;
 use Laravel\Ai\Tools\Concerns\NormalizesMcpResult;
 
 class McpServerTool implements Tool
 {
-    use CanBeConcurrent;
     use NormalizesMcpResult;
 
     /**

@@ -8,13 +8,11 @@ use Illuminate\JsonSchema\Types\ObjectType;
 use Illuminate\JsonSchema\Types\Type;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Schema\SchemaNormalizer;
-use Laravel\Ai\Tools\Concerns\CanBeConcurrent;
 use Laravel\Ai\Tools\Concerns\NormalizesMcpResult;
 use Throwable;
 
 class McpTool implements Tool
 {
-    use CanBeConcurrent;
     use NormalizesMcpResult;
 
     /**

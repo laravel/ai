@@ -20,7 +20,6 @@ use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
-use Laravel\Ai\Tools\Concerns\CanBeConcurrent;
 use Laravel\Ai\Tools\Request;
 use Tests\Fixtures\Agents\ProviderOptionsAgent;
 use Tests\Fixtures\Tools\NamedTool;
@@ -115,8 +114,6 @@ function textGateway(): object
 
 class BedrockSampleTool implements Tool
 {
-    use CanBeConcurrent;
-
     public function description(): string
     {
         return 'Sample description';

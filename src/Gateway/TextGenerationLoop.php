@@ -7,6 +7,7 @@ use Generator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Concurrency;
 use Illuminate\Support\Str;
+use Laravel\Ai\Attributes\Concurrent;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
@@ -94,7 +95,7 @@ class TextGenerationLoop
                 $lastResult->finishReason,
                 $lastResult->toolCalls,
                 $stepContext->isFinalStep,
-                $tools,
+                $tools
             );
 
             $shouldContinue = filled($toolResults);
@@ -279,106 +280,77 @@ class TextGenerationLoop
         }, $toolCalls);
 
         $results = [];
-        $batch = [];
+        $index = 0;
+        $count = count($pairs);
 
-        foreach ($pairs as $pair) {
-            if ($this->isConcurrentTool($pair[1])) {
-                $batch[] = $pair;
+        while ($index < $count) {
+            if (! Concurrent::isAppliedTo($pairs[$index][1])) {
+                $results[] = $this->executeToolCall(...$pairs[$index]);
+                $index++;
 
                 continue;
             }
 
-            array_push($results, ...$this->executeConcurrentBatch($batch));
+            // Gather the adjacent run of concurrency-safe tools and execute it as one batch.
             $batch = [];
-            $results[] = $this->executeToolCall(...$pair);
-        }
 
-        array_push($results, ...$this->executeConcurrentBatch($batch));
+            while ($index < $count && Concurrent::isAppliedTo($pairs[$index][1])) {
+                $batch[] = $pairs[$index];
+                $index++;
+            }
+
+            array_push($results, ...$this->executeConcurrentBatch($batch));
+        }
 
         return $results;
     }
 
     /**
-     * Execute a consecutive batch of concurrency-safe tool calls.
+     * Execute a batch of concurrency-safe tool calls, running 2+ through the concurrency driver.
      *
-     * @param  array<int, array{ToolCall, Tool}>  $pairs
+     * @param  array<int, array{ToolCall, Tool}>  $batch
      * @return ToolResult[]
      */
-    protected function executeConcurrentBatch(array $pairs): array
+    protected function executeConcurrentBatch(array $batch): array
     {
-        if (count($pairs) < 2 || ! $this->canRunInParallel()) {
-            return array_map(fn (array $pair) => $this->executeToolCall(...$pair), $pairs);
+        if (count($batch) < 2 || ! $this->canRunConcurrently()) {
+            return array_map(fn (array $pair) => $this->executeToolCall(...$pair), $batch);
         }
 
-        return $this->executeParallelToolCalls($pairs);
-    }
-
-    protected function executeToolCall(ToolCall $toolCall, Tool $tool): ToolResult
-    {
-        return $this->toolResult($toolCall, $this->executeTool($tool, $toolCall->arguments));
-    }
-
-    /**
-     * Determine whether the given tool has opted into concurrent execution.
-     */
-    protected function isConcurrentTool(Tool $tool): bool
-    {
-        return $tool->isConcurrent();
-    }
-
-    /**
-     * Execute the given tool calls in parallel, firing invocation events from the parent process.
-     *
-     * @param  array<int, array{ToolCall, Tool}>  $pairs
-     * @return ToolResult[]
-     */
-    protected function executeParallelToolCalls(array $pairs): array
-    {
-        // Snapshot the callbacks so a tool that re-registers them mid-batch (e.g. a
-        // sub-agent invoked in-process) cannot corrupt the events we fire below.
         $callbacks = $this->pushToolInvocationCallbacks();
 
         try {
-            $invocationIds = array_map(function (array $pair) use ($callbacks) {
-                $id = (string) Str::uuid7();
+            $ids = [];
 
-                call_user_func($callbacks['invoking'], $pair[1], $pair[0]->arguments, $id);
+            foreach ($batch as $i => [$toolCall, $tool]) {
+                $ids[$i] = (string) Str::uuid7();
+                call_user_func($callbacks['invoking'], $tool, $toolCall->arguments, $ids[$i]);
+            }
 
-                return $id;
-            }, $pairs);
-
-            $tasks = array_map(fn (array $pair) => $this->parallelTask(...$pair), $pairs);
+            $tasks = array_map(
+                fn (array $pair) => fn () => $this->handleSafely($pair[1], $pair[0]->arguments),
+                $batch,
+            );
 
             try {
                 $envelopes = array_values(Concurrency::run($tasks));
             } catch (Throwable) {
-                // Driver can't run here (unavailable, unserializable tools, a mid-batch failure); re-run the whole batch inline — so concurrent tools must be safe to run more than once.
+                // Driver unavailable or unserializable payload; re-run inline (concurrent tools must be safe to re-run).
                 $envelopes = array_map(fn (Closure $task) => $task(), $tasks);
             }
 
             $results = [];
-            $failure = null;
 
-            foreach ($pairs as $index => [$toolCall, $tool]) {
-                $envelope = $envelopes[$index];
+            foreach ($batch as $i => [$toolCall, $tool]) {
+                $envelope = $envelopes[$i];
 
-                if ($envelope['ok']) {
-                    call_user_func($callbacks['invoked'], $tool, $toolCall->arguments, $envelope['result'], $invocationIds[$index]);
-
-                    $results[] = $this->toolResult($toolCall, $envelope['result']);
-
-                    continue;
+                if (! $envelope['ok']) {
+                    throw $this->rebuildToolException($envelope['type'], $envelope['message']);
                 }
 
-                $exception = $this->reconstructToolException($envelope['type'], $envelope['message']);
+                call_user_func($callbacks['invoked'], $tool, $toolCall->arguments, $envelope['result'], $ids[$i]);
 
-                call_user_func($callbacks['failed'], $tool, $toolCall->arguments, $exception, $invocationIds[$index]);
-
-                $failure ??= $exception;
-            }
-
-            if ($failure !== null) {
-                throw $failure;
+                $results[] = $this->toolResult($toolCall, $envelope['result']);
             }
 
             return $results;
@@ -387,34 +359,33 @@ class TextGenerationLoop
         }
     }
 
-    /**
-     * Build the enveloped task that runs a single tool without throwing across the boundary.
-     *
-     * @return Closure(): (array{ok: true, result: string}|array{ok: false, type: string, message: string})
-     */
-    protected function parallelTask(ToolCall $toolCall, Tool $tool): Closure
+    protected function executeToolCall(ToolCall $toolCall, Tool $tool): ToolResult
     {
-        return function () use ($toolCall, $tool) {
-            try {
-                return ['ok' => true, 'result' => (string) $tool->handle(new Request($toolCall->arguments))];
-            } catch (Throwable $e) {
-                return ['ok' => false, 'type' => $e::class, 'message' => $e->getMessage()];
-            }
-        };
+        return $this->toolResult($toolCall, $this->executeTool($tool, $toolCall->arguments));
     }
 
     /**
-     * Rebuild a throwable for a tool that failed inside a parallel task.
+     * Run a tool's handler, capturing success or failure into a serializable envelope.
+     *
+     * @return array{ok: true, result: string}|array{ok: false, type: string, message: string}
      */
-    protected function reconstructToolException(string $type, string $message): Throwable
+    protected function handleSafely(Tool $tool, array $arguments): array
     {
         try {
-            $exception = new $type($message);
-        } catch (Throwable) {
-            return new RuntimeException($message);
+            return ['ok' => true, 'result' => (string) $tool->handle(new Request($arguments))];
+        } catch (Throwable $e) {
+            return ['ok' => false, 'type' => $e::class, 'message' => $e->getMessage()];
         }
+    }
 
-        return $exception instanceof Throwable ? $exception : new RuntimeException($message);
+    /**
+     * Rebuild a throwable captured inside a concurrent task from its class and message.
+     */
+    protected function rebuildToolException(string $type, string $message): Throwable
+    {
+        return class_exists($type) && is_a($type, Throwable::class, true)
+            ? new $type($message)
+            : new RuntimeException($message);
     }
 
     /**

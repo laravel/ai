@@ -8,12 +8,9 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\Tools\Concerns\CanBeConcurrent;
 
 class SimilaritySearch implements Tool
 {
-    use CanBeConcurrent;
-
     protected ?string $description;
 
     protected bool $rerank = false;

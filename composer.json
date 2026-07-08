@@ -31,12 +31,11 @@
         "orchestra/testbench": "^10.6|^11.0",
         "pestphp/pest": "^3.0|^4.0",
         "pestphp/pest-plugin-laravel": "^3.0|^4.0",
-        "phpstan/phpstan": "^2.1",
-        "spatie/fork": "^1.2"
+        "phpstan/phpstan": "^2.1"
     },
     "suggest": {
         "laravel/mcp": "Required to use MCP client tools or MCP server tools with Laravel AI agents.",
-        "spatie/fork": "Required to run parallel agent tools with the 'fork' concurrency driver (CLI only)."
+        "spatie/fork": "Required to run concurrent tools with the 'fork' concurrency driver (CLI only)."
     },
     "minimum-stability": "dev",
     "prefer-stable": true,

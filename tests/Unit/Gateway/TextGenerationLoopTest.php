@@ -18,7 +18,6 @@ use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
-use Laravel\Ai\Tools\Concerns\CanBeConcurrent;
 use Laravel\Ai\Tools\Request;
 
 test('it does not execute tool calls on the final generation step', function () {
@@ -341,8 +340,6 @@ class TextGenerationLoopFakeGateway implements StepTextGateway
 
 class TextGenerationLoopCountingTool implements Tool
 {
-    use CanBeConcurrent;
-
     public int $calls = 0;
 
     public function description(): string

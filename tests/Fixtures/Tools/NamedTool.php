@@ -4,13 +4,10 @@ namespace Tests\Fixtures\Tools;
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\Tools\Concerns\CanBeConcurrent;
 use Laravel\Ai\Tools\Request;
 
 class NamedTool implements Tool
 {
-    use CanBeConcurrent;
-
     public function __construct(public readonly string $toolName = 'custom_named_tool') {}
 
     public function name(): string

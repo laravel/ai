@@ -3,7 +3,6 @@
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionTools;
-use Laravel\Ai\Tools\Concerns\CanBeConcurrent;
 use Laravel\Ai\Tools\Request;
 
 test('tool parameters are not wrapped in schema definition', function () {
@@ -19,8 +18,6 @@ test('tool parameters are not wrapped in schema definition', function () {
 
     $tool = new class implements Tool
     {
-        use CanBeConcurrent;
-
         public function description(): string
         {
             return 'Creates a new lead';
@@ -67,8 +64,6 @@ test('tool with empty schema includes parameters', function () {
 
     $tool = new class implements Tool
     {
-        use CanBeConcurrent;
-
         public function description(): string
         {
             return 'A tool with no parameters';
