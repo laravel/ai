@@ -45,11 +45,11 @@ class TextGenerationLoop
         TextProvider $provider,
         string $model,
         ?string $instructions,
-        array $messages,
-        array $tools,
-        ?array $schema,
-        ?TextGenerationOptions $options,
-        ?int $timeout,
+        array $messages = [],
+        array $tools = [],
+        ?array $schema = null,
+        ?TextGenerationOptions $options = null,
+        ?int $timeout = null,
     ): TextResponse {
         $steps = new Collection;
         $allMessages = $messages;
@@ -128,11 +128,11 @@ class TextGenerationLoop
         TextProvider $provider,
         string $model,
         ?string $instructions,
-        array $messages,
-        array $tools,
-        ?array $schema,
-        ?TextGenerationOptions $options,
-        ?int $timeout,
+        array $messages = [],
+        array $tools = [],
+        ?array $schema = null,
+        ?TextGenerationOptions $options = null,
+        ?int $timeout = null,
     ): Generator {
         $allMessages = $messages;
         $maxSteps = $this->resolveMaxSteps($options, $tools);

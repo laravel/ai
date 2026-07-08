@@ -84,7 +84,7 @@ abstract class File implements HasName, HasProviderOptions
     /**
      * Specify provider-specific options for the file upload. Closures may only capture serializable values.
      *
-     * @param  array<string, mixed>|Closure(Lab|string): array<string, mixed>  $options
+     * @param  array<string, mixed>|Closure(Lab|string): ?array<string, mixed>  $options
      */
     public function withProviderOptions(array|Closure $options): static
     {
@@ -107,6 +107,14 @@ abstract class File implements HasName, HasProviderOptions
         }
 
         return $this->providerOptions;
+    }
+
+    /**
+     * Get the file's MIME type.
+     */
+    public function mimeType(): ?string
+    {
+        return $this->mime;
     }
 
     /**

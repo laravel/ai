@@ -6,7 +6,7 @@ use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
 use Laravel\Ai\Responses\TranscriptionResponse;
 
-interface TranscriptionProvider
+interface TranscriptionProvider extends Provider
 {
     /**
      * Generate audio from the given text.

@@ -72,7 +72,7 @@ test('embeddings request includes provider options and lets them override defaul
     Http::fake(['*' => fakeCohereEmbeddingsResponse()]);
 
     Embeddings::for(['Hello'])
-        ->providerOptions(['input_type' => 'search_query', 'truncate' => 'END'])
+        ->withProviderOptions(['input_type' => 'search_query', 'truncate' => 'END'])
         ->generate(provider: 'cohere', model: 'embed-v4.0');
 
     Http::assertSent(function (Request $request) {
@@ -89,7 +89,7 @@ test('provider options cannot override framework controlled keys', function () {
     Http::fake(['*' => fakeCohereEmbeddingsResponse()]);
 
     Embeddings::for(['Hello'])
-        ->providerOptions(['model' => 'hijacked', 'texts' => ['hijacked']])
+        ->withProviderOptions(['model' => 'hijacked', 'texts' => ['hijacked']])
         ->generate(provider: 'cohere', model: 'embed-v4.0');
 
     Http::assertSent(function (Request $request) {

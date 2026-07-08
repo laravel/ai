@@ -66,7 +66,7 @@ class AiServiceProvider extends ServiceProvider
             }
 
             if (filled($providerOptions)) {
-                $request->providerOptions($providerOptions);
+                $request->withProviderOptions($providerOptions);
             }
 
             return $request->generate(provider: $provider, model: $model)->embeddings[0];

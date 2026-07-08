@@ -119,7 +119,7 @@ describe('generating embeddings', function () {
         Embeddings::fake();
 
         Embeddings::for(['Hello'])
-            ->providerOptions(['input_type' => 'search_query'])
+            ->withProviderOptions(['input_type' => 'search_query'])
             ->generate();
 
         Embeddings::assertGenerated(
@@ -131,7 +131,7 @@ describe('generating embeddings', function () {
         Embeddings::fake();
 
         Embeddings::for(['Hello'])
-            ->providerOptions(['input_type' => 'search_query'])
+            ->withProviderOptions(['input_type' => 'search_query'])
             ->queue();
 
         Embeddings::assertQueued(

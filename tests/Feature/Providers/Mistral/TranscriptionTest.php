@@ -62,7 +62,7 @@ test('transcription sends context bias from provider options', function () {
     Http::fake(['*' => fakeTranscriptionResponse()]);
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
-        ->providerOptions(['context_bias' => 'Laravel,Forge,Vapor'])
+        ->withProviderOptions(['context_bias' => 'Laravel,Forge,Vapor'])
         ->generate(provider: 'mistral');
 
     Http::assertSent(function (Request $request) {
@@ -75,7 +75,7 @@ test('transcription sends context bias array as repeated parts', function () {
     Http::fake(['*' => fakeTranscriptionResponse()]);
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
-        ->providerOptions(['context_bias' => ['Laravel', 'Forge', 'Vapor']])
+        ->withProviderOptions(['context_bias' => ['Laravel', 'Forge', 'Vapor']])
         ->generate(provider: 'mistral');
 
     Http::assertSent(function (Request $request) {

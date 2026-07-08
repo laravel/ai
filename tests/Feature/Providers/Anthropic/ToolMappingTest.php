@@ -83,7 +83,7 @@ test('web search tool forwards anthropic provider options into the tool payload'
     ]);
 
     agent(tools: [
-        (new WebSearch)->withProviderOptions('anthropic', ['blocked_domains' => ['spam.com']]),
+        (new WebSearch)->withProviderOptions(['blocked_domains' => ['spam.com']]),
     ])->prompt('Search', provider: 'anthropic');
 
     Http::assertSent(function ($request) {
