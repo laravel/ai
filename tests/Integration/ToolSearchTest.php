@@ -5,7 +5,7 @@ use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
-use Laravel\Ai\Providers\Tools\ToolSearch;
+use Laravel\Ai\Providers\Tools\ProviderToolSearch;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 use Tests\Fixtures\Tools\SecretCodeGenerator;
 
@@ -27,7 +27,7 @@ function toolSearchAgent(): Agent
         {
             return [
                 new FixedNumberGenerator,
-                new ToolSearch(tools: [new SecretCodeGenerator]),
+                new ProviderToolSearch(tools: [new SecretCodeGenerator]),
             ];
         }
 

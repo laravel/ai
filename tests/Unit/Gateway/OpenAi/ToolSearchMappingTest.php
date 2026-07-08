@@ -4,7 +4,7 @@ use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\OpenAi\Concerns\MapsTools;
 use Laravel\Ai\Providers\Provider;
-use Laravel\Ai\Providers\Tools\ToolSearch;
+use Laravel\Ai\Providers\Tools\ProviderToolSearch;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Tests\Fixtures\Tools\DeferredTool;
 use Tests\Fixtures\Tools\NonStrictTool;
@@ -43,9 +43,9 @@ function openAiToolSearchProvider(): Provider
     };
 }
 
-test('emits the tool_search entry and defers the tools nested in the ToolSearch tool', function () {
+test('emits the tool_search entry and defers the tools nested in the ProviderToolSearch tool', function () {
     $mapped = openAiToolSearchMapper()->map(
-        [new NonStrictTool, new ToolSearch(tools: [new DeferredTool])],
+        [new NonStrictTool, new ProviderToolSearch(tools: [new DeferredTool])],
         openAiToolSearchProvider(),
     );
 
@@ -61,9 +61,9 @@ test('emits the tool_search entry and defers the tools nested in the ToolSearch 
         ->and($nonDeferred)->toHaveCount(1);
 });
 
-test('emits a single tool_search entry when multiple ToolSearch tools are present', function () {
+test('emits a single tool_search entry when multiple ProviderToolSearch tools are present', function () {
     $mapped = openAiToolSearchMapper()->map(
-        [new NonStrictTool, new ToolSearch(tools: [new DeferredTool]), new ToolSearch(tools: [new DeferredTool])],
+        [new NonStrictTool, new ProviderToolSearch(tools: [new DeferredTool]), new ProviderToolSearch(tools: [new DeferredTool])],
         openAiToolSearchProvider(),
     );
 
@@ -76,9 +76,9 @@ test('throws for a provider tool OpenAI cannot map instead of emitting an empty 
         ->toThrow(RuntimeException::class, 'does not support the [WebFetch] tool');
 });
 
-test('merges provider options from every ToolSearch tool onto the single entry', function () {
-    $first = (new ToolSearch(tools: [new DeferredTool]))->withProviderOptions(Lab::OpenAI, ['foo' => 'bar']);
-    $second = (new ToolSearch(tools: [new DeferredTool]))->withProviderOptions(Lab::OpenAI, ['baz' => 'qux']);
+test('merges provider options from every ProviderToolSearch tool onto the single entry', function () {
+    $first = (new ProviderToolSearch(tools: [new DeferredTool]))->withProviderOptions(Lab::OpenAI, ['foo' => 'bar']);
+    $second = (new ProviderToolSearch(tools: [new DeferredTool]))->withProviderOptions(Lab::OpenAI, ['baz' => 'qux']);
 
     $mapped = openAiToolSearchMapper()->map([new NonStrictTool, $first, $second], openAiToolSearchProvider());
 
@@ -87,7 +87,7 @@ test('merges provider options from every ToolSearch tool onto the single entry',
 });
 
 test('forwards provider options onto the tool_search entry', function () {
-    $search = (new ToolSearch(tools: [new DeferredTool]))
+    $search = (new ProviderToolSearch(tools: [new DeferredTool]))
         ->withProviderOptions(Lab::OpenAI, ['foo' => 'bar']);
 
     $mapped = openAiToolSearchMapper()->map([new NonStrictTool, $search], openAiToolSearchProvider());
@@ -96,9 +96,9 @@ test('forwards provider options onto the tool_search entry', function () {
         ->toBe(['type' => 'tool_search', 'foo' => 'bar']);
 });
 
-test('skips an empty ToolSearch tool without emitting a tool_search entry', function () {
+test('skips an empty ProviderToolSearch tool without emitting a tool_search entry', function () {
     $mapped = openAiToolSearchMapper()->map(
-        [new NonStrictTool, new ToolSearch],
+        [new NonStrictTool, new ProviderToolSearch],
         openAiToolSearchProvider(),
     );
 
@@ -106,7 +106,7 @@ test('skips an empty ToolSearch tool without emitting a tool_search entry', func
         ->and(collect($mapped)->pluck('type'))->not->toContain('tool_search');
 });
 
-test('does not emit a tool_search entry when no ToolSearch tool is present', function () {
+test('does not emit a tool_search entry when no ProviderToolSearch tool is present', function () {
     $mapped = openAiToolSearchMapper()->map(
         [new NonStrictTool, new DeferredTool],
         openAiToolSearchProvider(),
@@ -131,7 +131,7 @@ test('throws when the provider does not support tool search', function () {
         }
     };
 
-    openAiToolSearchMapper()->map([new NonStrictTool, new ToolSearch(tools: [new DeferredTool])], $provider);
+    openAiToolSearchMapper()->map([new NonStrictTool, new ProviderToolSearch(tools: [new DeferredTool])], $provider);
 })->throws(RuntimeException::class, 'does not support tool search');
 
 test('throws when the model does not support tool search', function () {
@@ -154,7 +154,7 @@ test('throws when the model does not support tool search', function () {
     };
 
     openAiToolSearchMapper()->map(
-        [new NonStrictTool, new ToolSearch(tools: [new DeferredTool])],
+        [new NonStrictTool, new ProviderToolSearch(tools: [new DeferredTool])],
         $provider,
         'gpt-5.1',
     );

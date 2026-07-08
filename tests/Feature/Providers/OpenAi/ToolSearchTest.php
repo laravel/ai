@@ -5,7 +5,7 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Promptable;
-use Laravel\Ai\Providers\Tools\ToolSearch;
+use Laravel\Ai\Providers\Tools\ProviderToolSearch;
 use Tests\Fixtures\Agents\OpenAiToolSearchAgent;
 
 beforeEach(function () {
@@ -15,7 +15,7 @@ beforeEach(function () {
     ]]);
 });
 
-test('an agent with a ToolSearch tool emits a tool_search entry and defers its nested tools', function () {
+test('an agent with a ProviderToolSearch tool emits a tool_search entry and defers its nested tools', function () {
     Http::fake([
         '*' => fakeOpenAiResponse('ok'),
     ]);
@@ -34,7 +34,7 @@ test('an agent with a ToolSearch tool emits a tool_search entry and defers its n
     });
 });
 
-test('rejects a ToolSearch tool when response storage is disabled', function () {
+test('rejects a ProviderToolSearch tool when response storage is disabled', function () {
     config(['ai.providers.openai' => [
         ...config('ai.providers.openai'),
         'key' => 'test-key',
@@ -49,7 +49,7 @@ test('rejects a ToolSearch tool when response storage is disabled', function () 
     Http::assertNothingSent();
 });
 
-test('rejects a ToolSearch tool on a model older than gpt-5.4', function () {
+test('rejects a ProviderToolSearch tool on a model older than gpt-5.4', function () {
     Http::fake(['*' => fakeOpenAiResponse('ok')]);
 
     expect(fn () => (new OpenAiToolSearchAgent)->prompt('Hi', provider: 'openai', model: 'gpt-5.1'))
@@ -58,7 +58,7 @@ test('rejects a ToolSearch tool on a model older than gpt-5.4', function () {
     Http::assertNothingSent();
 });
 
-test('an agent whose only tool is an empty ToolSearch omits the tool fields', function () {
+test('an agent whose only tool is an empty ProviderToolSearch omits the tool fields', function () {
     Http::fake([
         '*' => fakeOpenAiResponse('ok'),
     ]);
@@ -74,7 +74,7 @@ test('an agent whose only tool is an empty ToolSearch omits the tool fields', fu
 
         public function tools(): iterable
         {
-            return [new ToolSearch];
+            return [new ProviderToolSearch];
         }
     };
 

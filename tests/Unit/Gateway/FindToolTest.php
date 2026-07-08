@@ -1,7 +1,7 @@
 <?php
 
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
-use Laravel\Ai\Providers\Tools\ToolSearch;
+use Laravel\Ai\Providers\Tools\ProviderToolSearch;
 use Tests\Fixtures\Tools\DeferredTool;
 use Tests\Fixtures\Tools\NonStrictTool;
 
@@ -24,12 +24,12 @@ test('finds a top-level tool by name', function () {
     expect(toolFinder()->find('NonStrictTool', [$tool]))->toBe($tool);
 });
 
-test('finds a tool nested inside a ToolSearch tool', function () {
+test('finds a tool nested inside a ProviderToolSearch tool', function () {
     $nested = new DeferredTool;
 
     $found = toolFinder()->find('DeferredTool', [
         new NonStrictTool,
-        new ToolSearch(tools: [$nested]),
+        new ProviderToolSearch(tools: [$nested]),
     ]);
 
     expect($found)->toBe($nested);
@@ -38,7 +38,7 @@ test('finds a tool nested inside a ToolSearch tool', function () {
 test('returns null when the tool is not present anywhere', function () {
     $found = toolFinder()->find('Missing', [
         new NonStrictTool,
-        new ToolSearch(tools: [new DeferredTool]),
+        new ProviderToolSearch(tools: [new DeferredTool]),
     ]);
 
     expect($found)->toBeNull();

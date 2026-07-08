@@ -11,7 +11,7 @@ use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\ProviderTool;
-use Laravel\Ai\Providers\Tools\ToolSearch;
+use Laravel\Ai\Providers\Tools\ProviderToolSearch;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Laravel\Ai\Tools\ToolNameResolver;
@@ -31,7 +31,7 @@ trait MapsTools
         $searchOptions = [];
 
         foreach ($tools as $tool) {
-            if ($tool instanceof ToolSearch) {
+            if ($tool instanceof ProviderToolSearch) {
                 if (blank($tool->tools)) {
                     continue;
                 }

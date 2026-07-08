@@ -4,7 +4,7 @@ namespace Laravel\Ai\Providers\Tools;
 
 use Laravel\Ai\Contracts\Tool;
 
-class ToolSearch extends ProviderTool
+class ProviderToolSearch extends ProviderTool
 {
     /**
      * @param  array<Tool>  $tools
@@ -27,7 +27,7 @@ class ToolSearch extends ProviderTool
     }
 
     /**
-     * Count the given tools for step budgeting, expanding each ToolSearch into its deferred tool count.
+     * Count the given tools for step budgeting, expanding each ProviderToolSearch into its deferred tool count.
      *
      * @param  array<mixed>  $tools
      */

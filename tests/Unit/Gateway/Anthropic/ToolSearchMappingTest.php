@@ -5,7 +5,7 @@ use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Anthropic\Concerns\MapsTools;
 use Laravel\Ai\Providers\Provider;
-use Laravel\Ai\Providers\Tools\ToolSearch;
+use Laravel\Ai\Providers\Tools\ProviderToolSearch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Tests\Fixtures\Tools\DeferredTool;
 use Tests\Fixtures\Tools\NonStrictTool;
@@ -39,9 +39,9 @@ function anthropicToolSearchProvider(): Provider
     };
 }
 
-test('emits the regex tool search entry and defers the tools nested in the ToolSearch tool', function () {
+test('emits the regex tool search entry and defers the tools nested in the ProviderToolSearch tool', function () {
     $mapped = anthropicToolSearchMapper()->map(
-        [new NonStrictTool, new ToolSearch(tools: [new DeferredTool])],
+        [new NonStrictTool, new ProviderToolSearch(tools: [new DeferredTool])],
         anthropicToolSearchProvider(),
     );
 
@@ -64,7 +64,7 @@ test('emits the regex tool search entry and defers the tools nested in the ToolS
 });
 
 test('emits the bm25 tool search entry when that strategy is set via provider options', function () {
-    $search = (new ToolSearch(tools: [new DeferredTool]))
+    $search = (new ProviderToolSearch(tools: [new DeferredTool]))
         ->withProviderOptions(Lab::Anthropic, ['strategy' => 'bm25']);
 
     $mapped = anthropicToolSearchMapper()->map(
@@ -79,7 +79,7 @@ test('emits the bm25 tool search entry when that strategy is set via provider op
 });
 
 test('does not leak the strategy option onto the tool search entry', function () {
-    $search = (new ToolSearch(tools: [new DeferredTool]))
+    $search = (new ProviderToolSearch(tools: [new DeferredTool]))
         ->withProviderOptions(Lab::Anthropic, ['strategy' => 'regex']);
 
     $mapped = anthropicToolSearchMapper()->map(
@@ -92,7 +92,7 @@ test('does not leak the strategy option onto the tool search entry', function ()
 });
 
 test('forwards provider options onto the tool search entry', function () {
-    $search = (new ToolSearch(tools: [new DeferredTool]))
+    $search = (new ProviderToolSearch(tools: [new DeferredTool]))
         ->withProviderOptions(Lab::Anthropic, ['cache_control' => ['type' => 'ephemeral']]);
 
     $mapped = anthropicToolSearchMapper()->map([new NonStrictTool, $search], anthropicToolSearchProvider());
@@ -105,10 +105,10 @@ test('forwards provider options onto the tool search entry', function () {
         ]);
 });
 
-test('merges options and strategy from every ToolSearch tool onto the single entry', function () {
-    $first = (new ToolSearch(tools: [new DeferredTool]))
+test('merges options and strategy from every ProviderToolSearch tool onto the single entry', function () {
+    $first = (new ProviderToolSearch(tools: [new DeferredTool]))
         ->withProviderOptions(Lab::Anthropic, ['cache_control' => ['type' => 'ephemeral']]);
-    $second = (new ToolSearch(tools: [new DeferredTool]))
+    $second = (new ProviderToolSearch(tools: [new DeferredTool]))
         ->withProviderOptions(Lab::Anthropic, ['strategy' => 'bm25']);
 
     $mapped = anthropicToolSearchMapper()->map([new NonStrictTool, $first, $second], anthropicToolSearchProvider());
@@ -120,9 +120,9 @@ test('merges options and strategy from every ToolSearch tool onto the single ent
     ]);
 });
 
-test('emits a single tool search entry when multiple ToolSearch tools are present', function () {
+test('emits a single tool search entry when multiple ProviderToolSearch tools are present', function () {
     $mapped = anthropicToolSearchMapper()->map(
-        [new NonStrictTool, new ToolSearch(tools: [new DeferredTool]), new ToolSearch(tools: [new DeferredTool])],
+        [new NonStrictTool, new ProviderToolSearch(tools: [new DeferredTool]), new ProviderToolSearch(tools: [new DeferredTool])],
         anthropicToolSearchProvider(),
     );
 
@@ -130,7 +130,7 @@ test('emits a single tool search entry when multiple ToolSearch tools are presen
         ->and(collect($mapped)->where('defer_loading', true))->toHaveCount(2);
 });
 
-test('does not emit a tool_search entry when no ToolSearch tool is present', function () {
+test('does not emit a tool_search entry when no ProviderToolSearch tool is present', function () {
     $mapped = anthropicToolSearchMapper()->map(
         [new NonStrictTool],
         anthropicToolSearchProvider(),
@@ -140,14 +140,14 @@ test('does not emit a tool_search entry when no ToolSearch tool is present', fun
         ->and(collect($mapped)->contains(fn ($t) => isset($t['defer_loading'])))->toBeFalse();
 });
 
-test('throws when no non-deferred tool accompanies the ToolSearch tool because Anthropic requires one', function () {
+test('throws when no non-deferred tool accompanies the ProviderToolSearch tool because Anthropic requires one', function () {
     anthropicToolSearchMapper()->map(
-        [new ToolSearch(tools: [new DeferredTool, new DeferredTool])],
+        [new ProviderToolSearch(tools: [new DeferredTool, new DeferredTool])],
         anthropicToolSearchProvider(),
     );
 })->throws(LogicException::class, 'at least one non-deferred tool');
 
-test('counts a server tool as non-deferred so a ToolSearch alongside web search is allowed', function () {
+test('counts a server tool as non-deferred so a ProviderToolSearch alongside web search is allowed', function () {
     $provider = new class extends Provider implements SupportsToolSearch, SupportsWebSearch
     {
         public function __construct() {}
@@ -164,7 +164,7 @@ test('counts a server tool as non-deferred so a ToolSearch alongside web search 
     };
 
     $mapped = anthropicToolSearchMapper()->map(
-        [new WebSearch, new ToolSearch(tools: [new DeferredTool])],
+        [new WebSearch, new ProviderToolSearch(tools: [new DeferredTool])],
         $provider,
     );
 
@@ -172,9 +172,9 @@ test('counts a server tool as non-deferred so a ToolSearch alongside web search 
         ->and(collect($mapped)->firstWhere('type', 'web_search_20250305'))->not->toBeNull();
 });
 
-test('skips an empty ToolSearch tool without emitting a search entry', function () {
+test('skips an empty ProviderToolSearch tool without emitting a search entry', function () {
     $mapped = anthropicToolSearchMapper()->map(
-        [new NonStrictTool, new ToolSearch],
+        [new NonStrictTool, new ProviderToolSearch],
         anthropicToolSearchProvider(),
     );
 
@@ -196,7 +196,7 @@ test('throws when the provider does not support tool search', function () {
         }
     };
 
-    anthropicToolSearchMapper()->map([new NonStrictTool, new ToolSearch(tools: [new DeferredTool])], $provider);
+    anthropicToolSearchMapper()->map([new NonStrictTool, new ProviderToolSearch(tools: [new DeferredTool])], $provider);
 })->throws(LogicException::class, 'does not support tool search');
 
 test('throws when the model does not support tool search', function () {
@@ -219,7 +219,7 @@ test('throws when the model does not support tool search', function () {
     };
 
     anthropicToolSearchMapper()->map(
-        [new NonStrictTool, new ToolSearch(tools: [new DeferredTool])],
+        [new NonStrictTool, new ProviderToolSearch(tools: [new DeferredTool])],
         $provider,
         'claude-3-5-sonnet-20241022',
     );
