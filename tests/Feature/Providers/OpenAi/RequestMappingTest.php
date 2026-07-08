@@ -195,7 +195,7 @@ test('structured response is correctly parsed', function () {
     expect($response->structured['symbol'])->toBe('Au');
 });
 
-test('citations preserve every annotation with span indices', function () {
+test('citations deduplicate by url and accumulate ranges', function () {
     Http::fake(['*' => Http::response([
         'id' => 'resp_123',
         'status' => 'completed',
@@ -239,14 +239,14 @@ test('citations preserve every annotation with span indices', function () {
 
     $response = agent()->prompt('Give me sources', provider: 'openai');
 
-    expect($response->meta->citations)->toHaveCount(3)
+    expect($response->meta->citations)->toHaveCount(2)
         ->and($response->meta->citations[0]->url)->toBe('https://example.com/one')
         ->and($response->meta->citations[0]->startIndex)->toBe(0)
         ->and($response->meta->citations[0]->endIndex)->toBe(10)
+        ->and($response->meta->citations[0]->ranges->all())->toBe([[0, 10], [26, 40]])
         ->and($response->meta->citations[1]->url)->toBe('https://example.com/two')
         ->and($response->meta->citations[1]->startIndex)->toBe(11)
-        ->and($response->meta->citations[2]->url)->toBe('https://example.com/one')
-        ->and($response->meta->citations[2]->startIndex)->toBe(26);
+        ->and($response->meta->citations[1]->ranges->all())->toBe([[11, 25]]);
 });
 
 test('citations omit span indices when not provided by the api', function () {
