@@ -21,6 +21,11 @@ use RuntimeException;
 trait MapsTools
 {
     /**
+     * Anthropic's dated version identifier for the hosted tool search tool.
+     */
+    protected const TOOL_SEARCH_TOOL_VERSION = '20251119';
+
+    /**
      * Map the given tools to Anthropic tool definitions.
      */
     protected function mapTools(array $tools, Provider $provider, string $model = ''): array
@@ -47,7 +52,7 @@ trait MapsTools
                 $strategy = ($searchOptions['strategy'] ?? 'regex') === 'bm25' ? 'bm25' : 'regex';
 
                 $mapped[$searchIndex] = [
-                    'type' => "tool_search_tool_{$strategy}_20251119",
+                    'type' => "tool_search_tool_{$strategy}_".self::TOOL_SEARCH_TOOL_VERSION,
                     'name' => "tool_search_tool_{$strategy}",
                     ...array_diff_key($searchOptions, ['strategy' => true, 'type' => true, 'name' => true]),
                 ];
