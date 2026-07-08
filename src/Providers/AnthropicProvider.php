@@ -83,7 +83,7 @@ class AnthropicProvider extends Provider implements FileProvider, SupportsToolSe
      */
     public function defaultTextModel(): string
     {
-        return $this->config['models']['text']['default'] ?? 'claude-sonnet-4-6';
+        return $this->config['models']['text']['default'] ?? 'claude-sonnet-5';
     }
 
     /**

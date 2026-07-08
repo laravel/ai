@@ -91,7 +91,7 @@ test('embeddings request includes provider options and overrides default task', 
     Http::fake(['*' => fakeJinaEmbeddingsResponse()]);
 
     Embeddings::for(['Hello'])
-        ->providerOptions(['task' => 'retrieval.query', 'late_chunking' => true])
+        ->withProviderOptions(['task' => 'retrieval.query', 'late_chunking' => true])
         ->generate(provider: 'jina', model: 'jina-embeddings-v4');
 
     Http::assertSent(function (Request $request) {

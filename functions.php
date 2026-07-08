@@ -96,6 +96,10 @@ function generate_fake_data_for_json_schema_type(Type $type): mixed
             return $result;
         })(),
 
+        'Illuminate\\JsonSchema\\Types\\AnyOfType' => (function () use ($attributes) {
+            return generate_fake_data_for_json_schema_type($attributes['schemas'][0] ?? throw new \RuntimeException('AnyOf schema must contain at least one branch.'));
+        })(),
+
         StringType::class => (function () use ($attributes) {
             if (isset($attributes['format'])) {
                 return match ($attributes['format']) {

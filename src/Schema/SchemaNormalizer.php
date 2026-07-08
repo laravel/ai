@@ -58,6 +58,7 @@ class SchemaNormalizer
         [$schema, $seen] = $this->inlineRefs($schema, $root, $seen);
 
         $schema = $this->mergeAllOf($schema, $root, $seen);
+        $schema = $this->preserveAnyOf($schema, $root, $seen);
         $schema = $this->collapseUnions($schema, $root, $seen);
         $schema = $this->collapseMultiType($schema);
         $schema = $this->normalizeKeywords($schema);
@@ -199,12 +200,69 @@ class SchemaNormalizer
                 continue;
             }
 
+            if ($key === 'anyOf' && $this->supportsAnyOf()) {
+                continue;
+            }
+
             $branches = $schema[$key];
 
             unset($schema[$key]);
 
             $schema = $this->mergeUnion($schema, $branches, $root, $seen);
         }
+
+        return $schema;
+    }
+
+    /**
+     * Keep anyOf compositions intact when the installed deserializer supports them.
+     *
+     * @param  array<string, mixed>  $schema
+     * @param  array<string, mixed>  $root
+     * @param  array<string, true>  $seen
+     * @return array<string, mixed>
+     */
+    private function preserveAnyOf(array $schema, array $root, array $seen): array
+    {
+        if (! $this->supportsAnyOf() || ! is_array($schema['anyOf'] ?? null)) {
+            return $schema;
+        }
+
+        $carry = ['anyOf' => true, 'title' => true, 'description' => true, 'enum' => true, 'default' => true];
+        $base = array_diff_key($schema, $carry);
+
+        $branches = [];
+        $resolved = false;
+
+        foreach ($schema['anyOf'] as $branch) {
+            if (! is_array($branch) || $branch === []) {
+                continue;
+            }
+
+            [$branch, $branchSeen] = $this->inlineRefs($branch, $root, $seen);
+
+            if ($branch === []) {
+                continue;
+            }
+
+            if ($this->isNullBranch($branch)) {
+                $branches[] = ['type' => 'null'];
+
+                continue;
+            }
+
+            $branches[] = $this->node($base === [] ? $branch : $this->mergeSchema($base, $branch), $root, $branchSeen);
+            $resolved = true;
+        }
+
+        if (! $resolved) {
+            unset($schema['anyOf']);
+
+            return $schema;
+        }
+
+        $schema = array_intersect_key($schema, $carry);
+        $schema['anyOf'] = $branches;
 
         return $schema;
     }
@@ -235,7 +293,7 @@ class SchemaNormalizer
                 continue;
             }
 
-            if (in_array($branch['type'] ?? null, ['null', ['null']], true)) {
+            if ($this->isNullBranch($branch)) {
                 $nullable = true;
             } else {
                 $resolved[] = $this->node($branch, $root, $branchSeen);
@@ -455,6 +513,24 @@ class SchemaNormalizer
         $nonNull = array_values(array_filter(is_array($type) ? $type : [$type], fn ($value) => $value !== 'null'));
 
         return $nonNull === ['object'];
+    }
+
+    /**
+     * Determine if the installed Illuminate JSON schema package supports anyOf.
+     */
+    private function supportsAnyOf(): bool
+    {
+        return class_exists('Illuminate\\JsonSchema\\Types\\AnyOfType');
+    }
+
+    /**
+     * Determine whether the branch only represents null.
+     *
+     * @param  array<string, mixed>  $schema
+     */
+    private function isNullBranch(array $schema): bool
+    {
+        return in_array($schema['type'] ?? null, ['null', ['null']], true);
     }
 
     /**

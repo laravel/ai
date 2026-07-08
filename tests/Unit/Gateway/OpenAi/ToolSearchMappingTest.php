@@ -1,7 +1,6 @@
 <?php
 
 use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
-use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\OpenAi\Concerns\MapsTools;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\ToolSearch;
@@ -77,8 +76,8 @@ test('throws for a provider tool OpenAI cannot map instead of emitting an empty 
 });
 
 test('merges provider options from every ToolSearch tool onto the single entry', function () {
-    $first = (new ToolSearch(tools: [new DeferredTool]))->withProviderOptions(Lab::OpenAI, ['foo' => 'bar']);
-    $second = (new ToolSearch(tools: [new DeferredTool]))->withProviderOptions(Lab::OpenAI, ['baz' => 'qux']);
+    $first = (new ToolSearch(tools: [new DeferredTool]))->withProviderOptions(['foo' => 'bar']);
+    $second = (new ToolSearch(tools: [new DeferredTool]))->withProviderOptions(['baz' => 'qux']);
 
     $mapped = openAiToolSearchMapper()->map([new NonStrictTool, $first, $second], openAiToolSearchProvider());
 
@@ -88,7 +87,7 @@ test('merges provider options from every ToolSearch tool onto the single entry',
 
 test('forwards provider options onto the tool_search entry', function () {
     $search = (new ToolSearch(tools: [new DeferredTool]))
-        ->withProviderOptions(Lab::OpenAI, ['foo' => 'bar']);
+        ->withProviderOptions(['foo' => 'bar']);
 
     $mapped = openAiToolSearchMapper()->map([new NonStrictTool, $search], openAiToolSearchProvider());
 

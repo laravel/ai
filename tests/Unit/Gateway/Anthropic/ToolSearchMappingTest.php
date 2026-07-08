@@ -2,7 +2,6 @@
 
 use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
-use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Anthropic\Concerns\MapsTools;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\ToolSearch;
@@ -65,7 +64,7 @@ test('emits the regex tool search entry and defers the tools nested in the ToolS
 
 test('emits the bm25 tool search entry when that strategy is set via provider options', function () {
     $search = (new ToolSearch(tools: [new DeferredTool]))
-        ->withProviderOptions(Lab::Anthropic, ['strategy' => 'bm25']);
+        ->withProviderOptions(['strategy' => 'bm25']);
 
     $mapped = anthropicToolSearchMapper()->map(
         [new NonStrictTool, $search],
@@ -80,7 +79,7 @@ test('emits the bm25 tool search entry when that strategy is set via provider op
 
 test('does not leak the strategy option onto the tool search entry', function () {
     $search = (new ToolSearch(tools: [new DeferredTool]))
-        ->withProviderOptions(Lab::Anthropic, ['strategy' => 'regex']);
+        ->withProviderOptions(['strategy' => 'regex']);
 
     $mapped = anthropicToolSearchMapper()->map(
         [new NonStrictTool, $search],
@@ -93,7 +92,7 @@ test('does not leak the strategy option onto the tool search entry', function ()
 
 test('forwards provider options onto the tool search entry', function () {
     $search = (new ToolSearch(tools: [new DeferredTool]))
-        ->withProviderOptions(Lab::Anthropic, ['cache_control' => ['type' => 'ephemeral']]);
+        ->withProviderOptions(['cache_control' => ['type' => 'ephemeral']]);
 
     $mapped = anthropicToolSearchMapper()->map([new NonStrictTool, $search], anthropicToolSearchProvider());
 
@@ -107,9 +106,9 @@ test('forwards provider options onto the tool search entry', function () {
 
 test('merges options and strategy from every ToolSearch tool onto the single entry', function () {
     $first = (new ToolSearch(tools: [new DeferredTool]))
-        ->withProviderOptions(Lab::Anthropic, ['cache_control' => ['type' => 'ephemeral']]);
+        ->withProviderOptions(['cache_control' => ['type' => 'ephemeral']]);
     $second = (new ToolSearch(tools: [new DeferredTool]))
-        ->withProviderOptions(Lab::Anthropic, ['strategy' => 'bm25']);
+        ->withProviderOptions(['strategy' => 'bm25']);
 
     $mapped = anthropicToolSearchMapper()->map([new NonStrictTool, $first, $second], anthropicToolSearchProvider());
 

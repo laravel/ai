@@ -21,7 +21,9 @@ test('withTools replaces the deferred tool set', function () {
 });
 
 test('carries provider options for a specific provider', function () {
-    $search = (new ToolSearch)->withProviderOptions(Lab::Anthropic, ['strategy' => 'bm25']);
+    $search = (new ToolSearch)->withProviderOptions(
+        fn (Lab $provider) => $provider === Lab::Anthropic ? ['strategy' => 'bm25'] : null,
+    );
 
     expect($search->providerOptions(Lab::Anthropic))->toBe(['strategy' => 'bm25'])
         ->and($search->providerOptions(Lab::OpenAI))->toBe([]);

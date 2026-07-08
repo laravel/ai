@@ -108,7 +108,7 @@ test('transcription provider options are recorded', function () {
     Transcription::fake();
 
     Transcription::of(base64_encode('audio'))
-        ->providerOptions(['prompt' => 'Laravel Forge and Vapor'])
+        ->withProviderOptions(['prompt' => 'Laravel Forge and Vapor'])
         ->generate();
 
     Transcription::assertGenerated(function (TranscriptionPrompt $prompt) {
@@ -179,7 +179,7 @@ test('queued transcription provider options are recorded', function () {
     Transcription::fake();
 
     Transcription::fromPath('/path/to/audio.mp3')
-        ->providerOptions(['prompt' => 'Laravel Forge and Vapor'])
+        ->withProviderOptions(['prompt' => 'Laravel Forge and Vapor'])
         ->queue();
 
     Transcription::assertQueued(function (QueuedTranscriptionPrompt $prompt) {

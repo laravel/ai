@@ -41,11 +41,11 @@ class TextGenerationLoop
         TextProvider $provider,
         string $model,
         ?string $instructions,
-        array $messages,
-        array $tools,
-        ?array $schema,
-        ?TextGenerationOptions $options,
-        ?int $timeout,
+        array $messages = [],
+        array $tools = [],
+        ?array $schema = null,
+        ?TextGenerationOptions $options = null,
+        ?int $timeout = null,
     ): TextResponse {
         $steps = new Collection;
         $allMessages = $messages;
@@ -71,6 +71,20 @@ class TextGenerationLoop
                 $timeout,
                 $stepContext,
             );
+
+            if ($lastResult->finishReason === FinishReason::Continue) {
+                $steps->push($this->buildStep($lastResult));
+
+                $allMessages[] = new AssistantMessage(
+                    $lastResult->text,
+                    collect($lastResult->toolCalls),
+                    $lastResult->providerContentBlocks,
+                );
+
+                $continuationToken = $lastResult->continuationToken;
+
+                continue;
+            }
 
             $toolResults = $this->continuationToolResults(
                 $lastResult->finishReason,
@@ -110,11 +124,11 @@ class TextGenerationLoop
         TextProvider $provider,
         string $model,
         ?string $instructions,
-        array $messages,
-        array $tools,
-        ?array $schema,
-        ?TextGenerationOptions $options,
-        ?int $timeout,
+        array $messages = [],
+        array $tools = [],
+        ?array $schema = null,
+        ?TextGenerationOptions $options = null,
+        ?int $timeout = null,
     ): Generator {
         $allMessages = $messages;
         $maxSteps = $this->resolveMaxSteps($options, $tools);
@@ -156,6 +170,18 @@ class TextGenerationLoop
             if ($result !== null) {
                 $accumulatedUsage = $accumulatedUsage->add($result->usage);
                 $finalReason = $result->finishReason;
+            }
+
+            if ($result?->finishReason === FinishReason::Continue) {
+                $allMessages[] = new AssistantMessage(
+                    $result->text,
+                    collect($result->toolCalls),
+                    $result->providerContentBlocks,
+                );
+
+                $continuationToken = $result->continuationToken;
+
+                continue;
             }
 
             $toolResults = $result !== null

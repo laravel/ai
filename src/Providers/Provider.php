@@ -5,9 +5,10 @@ namespace Laravel\Ai\Providers;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Gateway\Gateway;
+use Laravel\Ai\Contracts\Providers\Provider as ProviderContract;
 use Laravel\Ai\Enums\Lab;
 
-abstract class Provider
+abstract class Provider implements ProviderContract
 {
     public function __construct(
         protected Gateway $gateway,

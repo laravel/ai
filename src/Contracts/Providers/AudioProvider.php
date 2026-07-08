@@ -5,7 +5,7 @@ namespace Laravel\Ai\Contracts\Providers;
 use Laravel\Ai\Contracts\Gateway\AudioGateway;
 use Laravel\Ai\Responses\AudioResponse;
 
-interface AudioProvider
+interface AudioProvider extends Provider
 {
     /**
      * Generate audio from the given text.

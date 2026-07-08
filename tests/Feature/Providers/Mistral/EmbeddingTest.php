@@ -106,7 +106,7 @@ test('embeddings request includes provider options in the request body', functio
     Http::fake(['*' => fakeEmbeddingsResponse()]);
 
     Embeddings::for(['Hello'])
-        ->providerOptions(['output_dimension' => 256, 'output_dtype' => 'float'])
+        ->withProviderOptions(['output_dimension' => 256, 'output_dtype' => 'float'])
         ->generate(provider: 'mistral', model: 'mistral-embed');
 
     Http::assertSent(function (Request $request) {

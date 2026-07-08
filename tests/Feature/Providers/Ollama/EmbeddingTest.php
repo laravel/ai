@@ -11,6 +11,7 @@ beforeEach(function () {
     config(['ai.providers.ollama' => [
         ...config('ai.providers.ollama'),
         'key' => '',
+        'url' => 'http://localhost:11434',
     ]]);
 });
 
@@ -113,7 +114,7 @@ test('embeddings request includes provider options in the request body', functio
     Http::fake(['*' => fakeOllamaEmbeddingsResponse()]);
 
     Embeddings::for(['Hello'])
-        ->providerOptions(['truncate' => false, 'keep_alive' => '5m'])
+        ->withProviderOptions(['truncate' => false, 'keep_alive' => '5m'])
         ->generate(provider: 'ollama', model: 'nomic-embed-text');
 
     Http::assertSent(function (Request $request) {

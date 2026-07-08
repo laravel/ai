@@ -5,7 +5,7 @@ namespace Laravel\Ai\Contracts\Providers;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 
-interface EmbeddingProvider
+interface EmbeddingProvider extends Provider
 {
     /**
      * Get embedding vectors representing the given inputs.

@@ -2,6 +2,8 @@
 
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Exceptions\NoSuchToolException;
+use Tests\Fixtures\Agents\MultiStepToolAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
 beforeEach(function () {
@@ -156,6 +158,57 @@ test('tool calls are executed even when done_reason is stop', function () {
 
     expect($recorded)->toHaveCount(2)
         ->and($response->text)->toBe('The number is 72019');
+});
+
+test('multi step tool loop returns accumulated response shape', function () {
+    Http::fake([
+        '*' => Http::sequence([
+            fakeUniqueOllamaToolCallResponse(),
+            fakeUniqueOllamaToolCallResponse(),
+            $this->fakeTextResponse('Done'),
+        ]),
+    ]);
+
+    $response = (new MultiStepToolAgent)->prompt(
+        'Generate numbers',
+        provider: 'ollama',
+    );
+
+    expect((string) $response)->toBe('Done')
+        ->and($response->messages)->toHaveCount(5)
+        ->and($response->steps)->toHaveCount(3)
+        ->and($response->toolCalls)->toHaveCount(2)
+        ->and($response->toolResults)->toHaveCount(2)
+        ->and($response->usage->promptTokens)->toBe(21)
+        ->and($response->usage->completionTokens)->toBe(11);
+});
+
+test('unregistered tool call throws NoSuchToolException', function () {
+    Http::fake([
+        '*' => Http::response([
+            'model' => 'llama3.1:8b',
+            'message' => [
+                'role' => 'assistant',
+                'content' => '',
+                'tool_calls' => [[
+                    'id' => 'call_123',
+                    'function' => [
+                        'name' => 'UnregisteredTool',
+                        'arguments' => (object) [],
+                    ],
+                ]],
+            ],
+            'done_reason' => 'tool_calls',
+            'done' => true,
+            'prompt_eval_count' => 10,
+            'eval_count' => 5,
+        ]),
+    ]);
+
+    expect(fn () => (new MultiStepToolAgent)->prompt(
+        'Generate a number',
+        provider: 'ollama',
+    ))->toThrow(NoSuchToolException::class);
 });
 
 function fakeUniqueOllamaToolCallResponse(): PromiseInterface

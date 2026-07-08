@@ -13,6 +13,7 @@ use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Contracts\RemembersConversations as RemembersConversationsContract;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\InvokingTool;
@@ -25,6 +26,7 @@ use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StructuredAgentResponse;
+use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Tools\AgentTool;
 use Laravel\Ai\Tools\McpServerTool;
 use Laravel\Ai\Tools\McpTool;
@@ -63,7 +65,7 @@ trait GeneratesText
 
                 $schema = $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null;
 
-                $response = $this->textGateway()->generateText(
+                $response = $this->textGenerationLoop()->generate(
                     $this,
                     $prompt->model,
                     (string) $agent->instructions(),
@@ -74,7 +76,7 @@ trait GeneratesText
                     $prompt->timeout,
                 );
 
-                return ! empty($schema)
+                return $response instanceof StructuredTextResponse
                     ? (new StructuredAgentResponse($invocationId, $response->structured, $response->text, $response->usage, $response->meta))
                         ->withToolCallsAndResults($response->toolCalls, $response->toolResults)
                         ->withSteps($response->steps)
@@ -102,9 +104,11 @@ trait GeneratesText
             return $next($prompt);
         }] : [];
 
-        if (in_array(RemembersConversations::class, class_uses_recursive($agent))
-            && $agent->hasConversationParticipant()) {
-            $middleware[] = new RememberConversation(resolve(ConversationStore::class), $this);
+        if (in_array(RemembersConversations::class, class_uses_recursive($agent))) {
+            /** @var Agent&RemembersConversationsContract $agent */
+            if ($agent->hasConversationParticipant()) {
+                $middleware[] = new RememberConversation(resolve(ConversationStore::class), $this);
+            }
         }
 
         return $agent instanceof HasMiddleware
@@ -149,7 +153,7 @@ trait GeneratesText
      */
     protected function listenForToolInvocations(string $invocationId, Agent $agent): void
     {
-        $this->textGateway()->onToolInvocation(
+        $this->textGenerationLoop()->onToolInvocation(
             invoking: function (Tool $tool, array $arguments) use ($invocationId, $agent) {
                 $this->currentToolInvocationId = (string) Str::uuid7();
 

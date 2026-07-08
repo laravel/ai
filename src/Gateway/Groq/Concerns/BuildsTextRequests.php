@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\Groq\Concerns;
 
 use Illuminate\Support\Arr;
 use Laravel\Ai\Gateway\Concerns\ComposesSchemaInstructions;
+use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
@@ -11,6 +12,22 @@ use Laravel\Ai\Providers\Provider;
 trait BuildsTextRequests
 {
     use ComposesSchemaInstructions;
+
+    /**
+     * Build the request body for the current text generation step.
+     */
+    protected function buildStepBody(
+        Provider $provider,
+        string $model,
+        ?string $instructions,
+        array $messages,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options,
+        StepContext $stepContext,
+    ): array {
+        return $this->buildTextRequestBody($provider, $model, $instructions, $messages, $tools, $schema, $options);
+    }
 
     /**
      * Build the request body for the Chat Completions API.
@@ -29,7 +46,7 @@ trait BuildsTextRequests
         $body = ['model' => $model];
 
         if (filled($tools)) {
-            $mappedTools = $this->mapTools($tools);
+            $mappedTools = $this->mapTools($tools, $provider);
 
             if (filled($mappedTools)) {
                 $body['tool_choice'] = 'auto';

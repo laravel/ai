@@ -262,6 +262,38 @@ test('streaming captures usage from final chunk', function () {
         ->and($streamEnd->usage->completionTokens)->toBe(10);
 });
 
+test('streaming emits exactly one stream end across a tool loop', function () {
+    Http::fake([
+        '*' => Http::sequence([
+            Http::response(
+                body: $this->ndjsonPayload([
+                    $this->chatChunkWithToolCalls([
+                        $this->toolCallChunk('call_1', 'FixedNumberGenerator'),
+                    ]),
+                ]),
+                status: 200,
+            ),
+            Http::response(
+                body: $this->ndjsonPayload([
+                    $this->chatChunk('The number is 72019'),
+                    $this->chatChunk('', true, 'stop', ['prompt_eval_count' => 20, 'eval_count' => 10]),
+                ]),
+                status: 200,
+            ),
+        ]),
+    ]);
+
+    $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+    $streamEnds = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd));
+
+    expect($streamEnds)->toHaveCount(1)
+        ->and($streamEnds[0])->toBe($events[count($events) - 1])
+        ->and($streamEnds[0]->reason)->toBe(FinishReason::Stop->value)
+        ->and($streamEnds[0]->usage->promptTokens)->toBe(30)
+        ->and($streamEnds[0]->usage->completionTokens)->toBe(15);
+});
+
 test('streaming finish reason maps correctly', function (string $doneReason, $expected) {
     Http::fake([
         '*' => Http::response(

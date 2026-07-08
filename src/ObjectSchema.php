@@ -55,6 +55,12 @@ class ObjectSchema extends Schema
             $schema['items'] = static::disableAdditionalProperties($schema['items']);
         }
 
+        foreach ($schema['anyOf'] ?? [] as $key => $branch) {
+            if (is_array($branch)) {
+                $schema['anyOf'][$key] = static::disableAdditionalProperties($branch);
+            }
+        }
+
         return $schema;
     }
 

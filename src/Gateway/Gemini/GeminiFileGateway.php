@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Providers\FileProvider;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\PreparesStorableFiles;
 use Laravel\Ai\Providers\Provider;
@@ -45,13 +46,15 @@ class GeminiFileGateway implements FileGateway
 
         $uploadUrl = str_replace('/v1beta', '/upload/v1beta', $this->baseUrl($provider));
 
+        $providerOptions = $this->resolveProviderOptions($file, Lab::Gemini);
+
         $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders(array_filter([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
         ]))->attach(
             'file', $content, $name, ['Content-Type' => $mime]
-        )->post("{$uploadUrl}/files", [
+        )->post("{$uploadUrl}/files", array_replace_recursive([
             'file' => ['display_name' => $name],
-        ])->throw());
+        ], $providerOptions))->throw());
 
         return new StoredFileResponse($response->json('file.name'));
     }
