@@ -26,6 +26,7 @@ trait MapsTools
     protected function mapTools(array $tools, Provider $provider, string $model = '', bool $stateless = false): array
     {
         $mapped = [];
+        $hasToolSearch = false;
 
         foreach ($tools as $tool) {
             if ($tool instanceof ToolSearch) {
@@ -35,7 +36,10 @@ trait MapsTools
 
                 $this->guardToolSearchSupport($provider, $model, $stateless);
 
-                $mapped[] = ['type' => 'tool_search', ...$tool->providerOptions(Lab::OpenAI)];
+                if (! $hasToolSearch) {
+                    $hasToolSearch = true;
+                    $mapped[] = ['type' => 'tool_search', ...$tool->providerOptions(Lab::OpenAI)];
+                }
 
                 foreach ($tool->tools as $deferred) {
                     $mapped[] = $this->mapTool($deferred, defer: true);

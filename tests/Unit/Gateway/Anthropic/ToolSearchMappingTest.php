@@ -105,6 +105,16 @@ test('forwards provider options onto the tool search entry', function () {
         ]);
 });
 
+test('emits a single tool search entry when multiple ToolSearch tools are present', function () {
+    $mapped = anthropicToolSearchMapper()->map(
+        [new NonStrictTool, new ToolSearch(tools: [new DeferredTool]), new ToolSearch(tools: [new DeferredTool])],
+        anthropicToolSearchProvider(),
+    );
+
+    expect(collect($mapped)->filter(fn ($t) => str_starts_with($t['type'] ?? '', 'tool_search')))->toHaveCount(1)
+        ->and(collect($mapped)->where('defer_loading', true))->toHaveCount(2);
+});
+
 test('does not emit a tool_search entry when no ToolSearch tool is present', function () {
     $mapped = anthropicToolSearchMapper()->map(
         [new NonStrictTool],

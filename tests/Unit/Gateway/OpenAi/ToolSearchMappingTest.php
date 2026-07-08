@@ -55,6 +55,16 @@ test('emits the tool_search entry and defers the tools nested in the ToolSearch 
         ->and($nonDeferred)->toHaveCount(1);
 });
 
+test('emits a single tool_search entry when multiple ToolSearch tools are present', function () {
+    $mapped = openAiToolSearchMapper()->map(
+        [new NonStrictTool, new ToolSearch(tools: [new DeferredTool]), new ToolSearch(tools: [new DeferredTool])],
+        openAiToolSearchProvider(),
+    );
+
+    expect(collect($mapped)->where('type', 'tool_search'))->toHaveCount(1)
+        ->and(collect($mapped)->where('defer_loading', true))->toHaveCount(2);
+});
+
 test('forwards provider options onto the tool_search entry', function () {
     $search = (new ToolSearch(tools: [new DeferredTool]))
         ->withProviderOptions(Lab::OpenAI, ['foo' => 'bar']);

@@ -37,16 +37,18 @@ trait MapsTools
 
                 $this->guardToolSearchSupport($provider, $model);
 
-                $hasToolSearch = true;
-                $options = $tool->providerOptions(Lab::Anthropic);
-                $strategy = ($options['strategy'] ?? 'regex') === 'bm25' ? 'bm25' : 'regex';
-                unset($options['strategy']);
+                if (! $hasToolSearch) {
+                    $hasToolSearch = true;
+                    $options = $tool->providerOptions(Lab::Anthropic);
+                    $strategy = ($options['strategy'] ?? 'regex') === 'bm25' ? 'bm25' : 'regex';
+                    unset($options['strategy']);
 
-                $mapped[] = [
-                    'type' => "tool_search_tool_{$strategy}_20251119",
-                    'name' => "tool_search_tool_{$strategy}",
-                    ...$options,
-                ];
+                    $mapped[] = [
+                        'type' => "tool_search_tool_{$strategy}_20251119",
+                        'name' => "tool_search_tool_{$strategy}",
+                        ...$options,
+                    ];
+                }
 
                 foreach ($tool->tools as $deferred) {
                     $mapped[] = $this->mapTool($deferred, defer: true);
