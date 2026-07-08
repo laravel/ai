@@ -63,7 +63,9 @@ class FakeTextGateway implements TextGateway
         );
 
         if ($step instanceof StepResponse) {
-            return new TextResponse($step->text, $step->usage, $step->meta);
+            return $step->structured !== null
+                ? new StructuredTextResponse($step->structured, $step->text, $step->usage, $step->meta)
+                : new TextResponse($step->text, $step->usage, $step->meta);
         }
 
         [$model, $messages, $tools, $schema] = [$step->model, $step->messages, $step->tools, $step->schema];
@@ -73,7 +75,7 @@ class FakeTextGateway implements TextGateway
         });
 
         $response = $this->nextResponse(
-            $provider, $model, $message->content, $message->attachments, $schema
+            $provider, $model, $message?->content ?? '', $message?->attachments ?? new Collection, $schema
         );
 
         if ($response instanceof ToolCall) {
@@ -81,8 +83,8 @@ class FakeTextGateway implements TextGateway
                 $response,
                 $provider,
                 $model,
-                $message->content,
-                $message->attachments,
+                $message?->content ?? '',
+                $message?->attachments ?? new Collection,
                 $schema,
                 $tools,
             );
@@ -158,7 +160,7 @@ class FakeTextGateway implements TextGateway
             });
 
             $fakeResponse = $this->nextResponse(
-                $provider, $step->model, $message->content, $message->attachments, $step->schema
+                $provider, $step->model, $message?->content ?? '', $message?->attachments ?? new Collection, $step->schema
             );
         }
 

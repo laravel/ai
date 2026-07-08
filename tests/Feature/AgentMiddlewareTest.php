@@ -9,6 +9,7 @@ use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StreamedAgentResponse;
+use Laravel\Ai\Streaming\Events\TextDelta;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
 use Tests\Fixtures\FakeConversationStore;
@@ -98,6 +99,35 @@ test('agent middleware can short circuit a generation step', function () {
     expect($response->text)->toBe('Short-circuited response');
 });
 
+test('short-circuited tool calls execute against middleware-transformed tools', function () {
+    Ai::textProvider('openai')->useTextGateway(new RecordingStepGateway);
+
+    $addsTool = new class
+    {
+        public function handle(PendingStep $step, Closure $next)
+        {
+            return $next($step->withTools([new NamedTool]));
+        }
+    };
+
+    $shortCircuits = new class
+    {
+        public function handle(PendingStep $step, Closure $next)
+        {
+            return $step->context->stepNumber === 0
+                ? new StepResponse('', [new ToolCall('call-1', 'custom_named_tool', [])], FinishReason::ToolCalls, new Usage, new Meta)
+                : $next($step);
+        }
+    };
+
+    $response = (new AssistantAgent)
+        ->withMiddleware([$addsTool, $shortCircuits])
+        ->prompt('Test prompt', provider: 'openai');
+
+    expect($response->toolResults)->toHaveCount(1)
+        ->and($response->toolResults->first()->result)->toBe('ok');
+});
+
 test('agent middleware can short circuit a streamed generation step', function () {
     $recorder = new RecordingStepGateway;
 
@@ -107,11 +137,14 @@ test('agent middleware can short circuit a streamed generation step', function (
         ->withMiddleware([shortCircuitingMiddleware()])
         ->stream('Test prompt', provider: 'openai');
 
+    $events = [];
+
     foreach ($response as $event) {
-        expect($event)->not->toBeNull();
+        $events[] = $event;
     }
 
-    expect($recorder->steps)->toBe(0);
+    expect($recorder->steps)->toBe(0)
+        ->and(TextDelta::combine($events))->toBe('Short-circuited response');
 });
 
 test('stream response conversation id is available after remembered conversations stream completes', function () {

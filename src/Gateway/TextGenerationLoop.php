@@ -21,6 +21,10 @@ use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
+use Laravel\Ai\Streaming\Events\StreamStart;
+use Laravel\Ai\Streaming\Events\TextDelta;
+use Laravel\Ai\Streaming\Events\TextEnd;
+use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 
 use function Laravel\Ai\pipeline;
@@ -194,6 +198,8 @@ class TextGenerationLoop
                 $result = $stream->getReturn();
             } else {
                 $result = $outcome;
+
+                yield from $this->shortCircuitedStepEvents($invocationId, $pending, $result);
             }
 
             if ($result !== null) {
@@ -259,14 +265,42 @@ class TextGenerationLoop
     }
 
     /**
-     * Run the pending step through the given middleware, which may transform or short-circuit it.
+     * Run the pending step through the given middleware, updating the given step by reference so short-circuits still see earlier transforms.
      */
-    protected function sendThroughMiddleware(PendingStep $pending, array $middleware): PendingStep|StepResponse
+    protected function sendThroughMiddleware(PendingStep &$pending, array $middleware): PendingStep|StepResponse
     {
+        $through = [];
+
+        foreach ($middleware as $pipe) {
+            $through[] = function ($step, $next) use (&$pending) {
+                return $next($pending = $step);
+            };
+
+            $through[] = $pipe;
+        }
+
         return pipeline()
             ->send($pending)
-            ->through($middleware)
+            ->through($through)
             ->thenReturn();
+    }
+
+    /**
+     * Synthesize the stream events for a step that middleware short-circuited.
+     */
+    protected function shortCircuitedStepEvents(string $invocationId, PendingStep $pending, StepResponse $result): Generator
+    {
+        $messageId = strtolower((string) Str::uuid7());
+
+        yield (new StreamStart(
+            strtolower((string) Str::uuid7()), $pending->provider->name(), $pending->model, time()
+        ))->withInvocationId($invocationId);
+
+        if ($result->text !== '') {
+            yield (new TextStart(strtolower((string) Str::uuid7()), $messageId, time()))->withInvocationId($invocationId);
+            yield (new TextDelta(strtolower((string) Str::uuid7()), $messageId, $result->text, time()))->withInvocationId($invocationId);
+            yield (new TextEnd(strtolower((string) Str::uuid7()), $messageId, time()))->withInvocationId($invocationId);
+        }
     }
 
     /**
