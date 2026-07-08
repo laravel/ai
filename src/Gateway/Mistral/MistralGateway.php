@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway\Mistral;
 
+use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Files\HasName;
@@ -18,6 +19,7 @@ use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionMessages;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionTools;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\PerformsChatCompletionSteps;
 use Laravel\Ai\Gateway\StepContext;
+use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Responses\Data\Meta;
@@ -38,15 +40,16 @@ class MistralGateway implements EmbeddingGateway, StepTextGateway, Transcription
     use Concerns\CreatesMistralClient;
     use Concerns\HandlesTextStreaming;
     use Concerns\MapsAttachments;
-    use Concerns\MapsMessages;
-    use Concerns\MapsTools;
     use Concerns\ParsesConversationResponses;
     use Concerns\ParsesTextResponses;
     use HandlesFailoverErrors;
     use MapsChatCompletionMessages;
     use MapsChatCompletionTools;
     use ParsesServerSentEvents;
-    use PerformsChatCompletionSteps;
+    use PerformsChatCompletionSteps {
+        generateTextStep as generateChatCompletionStep;
+        generateStreamStep as generateChatCompletionStreamStep;
+    }
 
     public function __construct(protected Dispatcher $events)
     {
@@ -71,18 +74,7 @@ class MistralGateway implements EmbeddingGateway, StepTextGateway, Transcription
             return $this->generateConversationStep($provider, $model, $instructions, $messages, $tools, $schema, $options, $timeout);
         }
 
-        $body = $this->buildStepBody($provider, $model, $instructions, $messages, $tools, $schema, $options, $stepContext);
-
-        $response = $this->withErrorHandling(
-            $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('chat/completions', $body),
-        );
-
-        $data = $response->json();
-
-        $this->validateTextResponse($data);
-
-        return $this->parseTextResponse($data, $provider, filled($schema));
+        return $this->generateChatCompletionStep($provider, $model, $instructions, $messages, $tools, $schema, $options, $timeout, $stepContext);
     }
 
     /**
@@ -104,18 +96,7 @@ class MistralGateway implements EmbeddingGateway, StepTextGateway, Transcription
             return yield from $this->streamConversationStep($invocationId, $provider, $model, $instructions, $messages, $tools, $schema, $options, $timeout);
         }
 
-        $body = $this->buildStepBody($provider, $model, $instructions, $messages, $tools, $schema, $options, $stepContext);
-        $body['stream'] = true;
-        $body['stream_options'] = ['include_usage' => true];
-
-        $response = $this->withErrorHandling(
-            $provider->name(),
-            fn () => $this->client($provider, $timeout)
-                ->withOptions(['stream' => true])
-                ->post('chat/completions', $body),
-        );
-
-        return yield from $this->processTextStream($invocationId, $provider, $model, $response->getBody());
+        return yield from $this->generateChatCompletionStreamStep($invocationId, $provider, $model, $instructions, $messages, $tools, $schema, $options, $timeout, $stepContext);
     }
 
     /**
