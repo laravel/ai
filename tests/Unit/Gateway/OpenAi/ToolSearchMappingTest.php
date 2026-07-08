@@ -5,6 +5,7 @@ use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\OpenAi\Concerns\MapsTools;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\ToolSearch;
+use Laravel\Ai\Providers\Tools\WebFetch;
 use Tests\Fixtures\Tools\DeferredTool;
 use Tests\Fixtures\Tools\NonStrictTool;
 
@@ -28,6 +29,11 @@ function openAiToolSearchProvider(): Provider
         public function __construct()
         {
             //
+        }
+
+        public function name(): string
+        {
+            return 'openai';
         }
 
         public function supportsToolSearch(string $model): bool
@@ -63,6 +69,21 @@ test('emits a single tool_search entry when multiple ToolSearch tools are presen
 
     expect(collect($mapped)->where('type', 'tool_search'))->toHaveCount(1)
         ->and(collect($mapped)->where('defer_loading', true))->toHaveCount(2);
+});
+
+test('throws for a provider tool OpenAI cannot map instead of emitting an empty entry', function () {
+    expect(fn () => openAiToolSearchMapper()->map([new WebFetch], openAiToolSearchProvider()))
+        ->toThrow(RuntimeException::class, 'does not support the [WebFetch] tool');
+});
+
+test('merges provider options from every ToolSearch tool onto the single entry', function () {
+    $first = (new ToolSearch(tools: [new DeferredTool]))->withProviderOptions(Lab::OpenAI, ['foo' => 'bar']);
+    $second = (new ToolSearch(tools: [new DeferredTool]))->withProviderOptions(Lab::OpenAI, ['baz' => 'qux']);
+
+    $mapped = openAiToolSearchMapper()->map([new NonStrictTool, $first, $second], openAiToolSearchProvider());
+
+    expect(collect($mapped)->firstWhere('type', 'tool_search'))
+        ->toBe(['type' => 'tool_search', 'foo' => 'bar', 'baz' => 'qux']);
 });
 
 test('forwards provider options onto the tool_search entry', function () {

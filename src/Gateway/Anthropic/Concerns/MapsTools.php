@@ -27,7 +27,8 @@ trait MapsTools
     {
         $mapped = [];
         $nonDeferredCount = 0;
-        $hasToolSearch = false;
+        $searchIndex = null;
+        $searchOptions = [];
 
         foreach ($tools as $tool) {
             if ($tool instanceof ToolSearch) {
@@ -37,18 +38,19 @@ trait MapsTools
 
                 $this->guardToolSearchSupport($provider, $model);
 
-                if (! $hasToolSearch) {
-                    $hasToolSearch = true;
-                    $options = $tool->providerOptions(Lab::Anthropic);
-                    $strategy = ($options['strategy'] ?? 'regex') === 'bm25' ? 'bm25' : 'regex';
-                    unset($options['strategy']);
-
-                    $mapped[] = [
-                        'type' => "tool_search_tool_{$strategy}_20251119",
-                        'name' => "tool_search_tool_{$strategy}",
-                        ...$options,
-                    ];
+                if ($searchIndex === null) {
+                    $searchIndex = count($mapped);
+                    $mapped[$searchIndex] = [];
                 }
+
+                $searchOptions = [...$searchOptions, ...$tool->providerOptions(Lab::Anthropic)];
+                $strategy = ($searchOptions['strategy'] ?? 'regex') === 'bm25' ? 'bm25' : 'regex';
+
+                $mapped[$searchIndex] = [
+                    'type' => "tool_search_tool_{$strategy}_20251119",
+                    'name' => "tool_search_tool_{$strategy}",
+                    ...array_diff_key($searchOptions, ['strategy' => true, 'type' => true, 'name' => true]),
+                ];
 
                 foreach ($tool->tools as $deferred) {
                     $mapped[] = $this->mapTool($deferred, defer: true);
@@ -62,7 +64,7 @@ trait MapsTools
             }
         }
 
-        if ($hasToolSearch && $nonDeferredCount === 0) {
+        if ($searchIndex !== null && $nonDeferredCount === 0) {
             throw new LogicException(
                 'Anthropic tool search requires at least one non-deferred tool.'
             );

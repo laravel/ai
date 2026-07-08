@@ -26,7 +26,7 @@ trait MapsTools
     protected function mapTools(array $tools, Provider $provider, string $model = '', bool $stateless = false): array
     {
         $mapped = [];
-        $hasToolSearch = false;
+        $searchIndex = null;
 
         foreach ($tools as $tool) {
             if ($tool instanceof ToolSearch) {
@@ -36,10 +36,12 @@ trait MapsTools
 
                 $this->guardToolSearchSupport($provider, $model, $stateless);
 
-                if (! $hasToolSearch) {
-                    $hasToolSearch = true;
-                    $mapped[] = ['type' => 'tool_search', ...$tool->providerOptions(Lab::OpenAI)];
+                if ($searchIndex === null) {
+                    $searchIndex = count($mapped);
+                    $mapped[$searchIndex] = ['type' => 'tool_search'];
                 }
+
+                $mapped[$searchIndex] = [...$mapped[$searchIndex], ...array_diff_key($tool->providerOptions(Lab::OpenAI), ['type' => true])];
 
                 foreach ($tool->tools as $deferred) {
                     $mapped[] = $this->mapTool($deferred, defer: true);
@@ -113,7 +115,7 @@ trait MapsTools
         return match (true) {
             $tool instanceof FileSearch => $this->mapFileSearchTool($tool, $provider),
             $tool instanceof WebSearch => $this->mapWebSearchTool($tool, $provider),
-            default => [],
+            default => throw new RuntimeException('Provider ['.$provider->name().'] does not support the ['.class_basename($tool).'] tool.'),
         };
     }
 

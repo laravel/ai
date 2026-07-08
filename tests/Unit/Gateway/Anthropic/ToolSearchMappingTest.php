@@ -105,6 +105,21 @@ test('forwards provider options onto the tool search entry', function () {
         ]);
 });
 
+test('merges options and strategy from every ToolSearch tool onto the single entry', function () {
+    $first = (new ToolSearch(tools: [new DeferredTool]))
+        ->withProviderOptions(Lab::Anthropic, ['cache_control' => ['type' => 'ephemeral']]);
+    $second = (new ToolSearch(tools: [new DeferredTool]))
+        ->withProviderOptions(Lab::Anthropic, ['strategy' => 'bm25']);
+
+    $mapped = anthropicToolSearchMapper()->map([new NonStrictTool, $first, $second], anthropicToolSearchProvider());
+
+    expect(collect($mapped)->firstWhere('type', 'tool_search_tool_bm25_20251119'))->toBe([
+        'type' => 'tool_search_tool_bm25_20251119',
+        'name' => 'tool_search_tool_bm25',
+        'cache_control' => ['type' => 'ephemeral'],
+    ]);
+});
+
 test('emits a single tool search entry when multiple ToolSearch tools are present', function () {
     $mapped = anthropicToolSearchMapper()->map(
         [new NonStrictTool, new ToolSearch(tools: [new DeferredTool]), new ToolSearch(tools: [new DeferredTool])],
