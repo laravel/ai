@@ -1,94 +1,117 @@
 <?php
 
-use Illuminate\Support\Facades\Event;
+use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\ConversationStore;
-use Laravel\Ai\Events\AgentPrompted;
-use Laravel\Ai\Events\AgentStreamed;
-use Laravel\Ai\Prompts\AgentPrompt;
-use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Gateway\PendingStep;
+use Laravel\Ai\Gateway\StepResponse;
+use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
-use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
-use Laravel\Ai\Streaming\Events\StreamEnd;
-use Laravel\Ai\Streaming\Events\TextDelta;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
 use Tests\Fixtures\FakeConversationStore;
+use Tests\Fixtures\RecordingStepGateway;
+use Tests\Fixtures\Tools\NamedTool;
 
-test('agent middleware is invoked', function () {
-    AssistantAgent::fake([
-        'Fake response',
-    ]);
+test('agent middleware is invoked for each generation step', function () {
+    Ai::textProvider('openai')->useTextGateway(new RecordingStepGateway);
+
+    $response = (new AssistantAgent)
+        ->withMiddleware([middleware()])
+        ->prompt('Test prompt', provider: 'openai');
+
+    expect($response->text)->toEqual('ok')
+        ->and($_SERVER['__testing.middleware-step'])->toBeInstanceOf(PendingStep::class);
+
+    unset($_SERVER['__testing.middleware-step']);
+});
+
+test('agent middleware is invoked when streaming', function () {
+    Ai::textProvider('openai')->useTextGateway(new RecordingStepGateway);
+
+    $response = (new AssistantAgent)
+        ->withMiddleware([middleware()])
+        ->stream('Test prompt', provider: 'openai');
+
+    foreach ($response as $event) {
+        // Drain the stream so the step executes.
+    }
+
+    expect($_SERVER['__testing.middleware-step'])->toBeInstanceOf(PendingStep::class);
+
+    unset($_SERVER['__testing.middleware-step']);
+});
+
+test('agent middleware is invoked when the agent is faked', function () {
+    AssistantAgent::fake(['Fake response']);
 
     $response = (new AssistantAgent)
         ->withMiddleware([middleware()])
         ->prompt('Test prompt');
 
     expect($response->text)->toEqual('Fake response')
-        ->and($_SERVER['__testing.middleware-prompt'])->toBeInstanceOf(AgentPrompt::class);
+        ->and($_SERVER['__testing.middleware-step'])->toBeInstanceOf(PendingStep::class);
 
-    unset($_SERVER['__testing.middleware-prompt']);
+    unset($_SERVER['__testing.middleware-step']);
 });
 
-test('agent middleware is invoked when streaming', function () {
-    AssistantAgent::fake([
-        'Fake response',
+test('agent middleware runs on every step of a multi-step tool loop', function () {
+    $recorder = new RecordingStepGateway([
+        new StepResponse('', [new ToolCall('call-1', 'custom_named_tool', [])], FinishReason::ToolCalls, new Usage, new Meta),
+        new StepResponse('Done.', [], FinishReason::Stop, new Usage, new Meta),
     ]);
+
+    Ai::textProvider('openai')->useTextGateway($recorder);
+
+    $middleware = new class
+    {
+        public function handle(PendingStep $step, Closure $next)
+        {
+            $_SERVER['__testing.middleware-invocations'] = ($_SERVER['__testing.middleware-invocations'] ?? 0) + 1;
+
+            return $next($step->withTools([new NamedTool]));
+        }
+    };
 
     $response = (new AssistantAgent)
-        ->withMiddleware([middleware()])
-        ->stream('Test prompt');
+        ->withMiddleware([$middleware])
+        ->prompt('Test prompt', provider: 'openai');
 
-    $response
-        ->each(fn () => true)
-        ->then(function (StreamedAgentResponse $response) {
-            $_SERVER['__testing.text'] = $response->text;
-        });
+    expect($response->text)->toBe('Done.')
+        ->and($recorder->steps)->toBe(2)
+        ->and($_SERVER['__testing.middleware-invocations'])->toBe(2)
+        ->and($response->toolResults)->toHaveCount(1)
+        ->and($response->toolResults->first()->result)->toBe('ok');
 
-    expect($_SERVER['__testing.text'])->toEqual('Fake response')
-        ->and($_SERVER['__testing.middleware-prompt'])->toBeInstanceOf(AgentPrompt::class);
-
-    unset($_SERVER['__testing.text']);
-    unset($_SERVER['__testing.middleware-prompt']);
+    unset($_SERVER['__testing.middleware-invocations']);
 });
 
-test('agent prompted event receives prompt when middleware short circuits', function () {
-    Event::fake();
+test('agent middleware can short circuit a generation step', function () {
+    Ai::textProvider('openai')->useTextGateway(new RecordingStepGateway);
 
-    AssistantAgent::fake([
-        'Fake response',
-    ]);
-
-    (new AssistantAgent)
+    $response = (new AssistantAgent)
         ->withMiddleware([shortCircuitingMiddleware()])
-        ->prompt('Test prompt');
+        ->prompt('Test prompt', provider: 'openai');
 
-    Event::assertDispatched(AgentPrompted::class, function (AgentPrompted $event) {
-        return $event->prompt instanceof AgentPrompt
-            && $event->prompt->prompt === 'Test prompt';
-    });
+    expect($response->text)->toBe('Short-circuited response');
 });
 
-test('agent streamed event receives prompt when middleware short circuits a stream', function () {
-    Event::fake();
+test('agent middleware can short circuit a streamed generation step', function () {
+    $recorder = new RecordingStepGateway;
 
-    AssistantAgent::fake([
-        'Fake response',
-    ]);
+    Ai::textProvider('openai')->useTextGateway($recorder);
 
     $response = (new AssistantAgent)
-        ->withMiddleware([streamingShortCircuitingMiddleware()])
-        ->stream('Test prompt');
+        ->withMiddleware([shortCircuitingMiddleware()])
+        ->stream('Test prompt', provider: 'openai');
 
     foreach ($response as $event) {
-        // Drain the stream so the post-stream then() callback dispatches AgentStreamed.
+        expect($event)->not->toBeNull();
     }
 
-    Event::assertDispatched(AgentStreamed::class, function (AgentStreamed $event) {
-        return $event->prompt instanceof AgentPrompt
-            && $event->prompt->prompt === 'Test prompt';
-    });
+    expect($recorder->steps)->toBe(0);
 });
 
 test('stream response conversation id is available after remembered conversations stream completes', function () {
@@ -178,45 +201,55 @@ test('stream response preserves manually assigned conversation id without a part
         ->and($response->conversationUser)->toBeNull();
 });
 
+test('middleware can control the model, instructions, and tools of each step', function () {
+    $recorder = new RecordingStepGateway;
+
+    Ai::textProvider('openai')->useTextGateway($recorder);
+
+    $middleware = new class
+    {
+        public function handle(PendingStep $step, Closure $next)
+        {
+            return $next(
+                $step->withModel('overridden-model')
+                    ->withInstructions($step->instructions.' Always answer in French.')
+                    ->withTools([new NamedTool])
+            );
+        }
+    };
+
+    (new AssistantAgent)
+        ->withMiddleware([$middleware])
+        ->prompt('Hello', provider: 'openai');
+
+    expect($recorder->model)->toBe('overridden-model')
+        ->and($recorder->instructions)->toEndWith('Always answer in French.')
+        ->and($recorder->instructions)->toStartWith('You are a helpful assistant')
+        ->and($recorder->tools)->toHaveCount(1);
+});
+
+test('the step falls back to the agent when middleware overrides nothing', function () {
+    $recorder = new RecordingStepGateway;
+
+    Ai::textProvider('openai')->useTextGateway($recorder);
+
+    (new AssistantAgent)->prompt('Hello', provider: 'openai');
+
+    expect($recorder->instructions)->toBe('You are a helpful assistant that responds extremely concisely to all queries.')
+        ->and($recorder->tools)->toBe([]);
+});
+
 function shortCircuitingMiddleware(): object
 {
     return new class
     {
-        public function handle(AgentPrompt $prompt, Closure $next)
+        public function handle(PendingStep $step, Closure $next)
         {
-            return new AgentResponse(
-                'test-invocation-id',
+            return new StepResponse(
                 'Short-circuited response',
+                [],
+                FinishReason::Stop,
                 new Usage,
-                new Meta,
-            );
-        }
-    };
-}
-
-function streamingShortCircuitingMiddleware(): object
-{
-    return new class
-    {
-        public function handle(AgentPrompt $prompt, Closure $next)
-        {
-            return new StreamableAgentResponse(
-                'test-invocation-id',
-                function () {
-                    yield new TextDelta(
-                        id: 'test-0',
-                        messageId: 'test-invocation-id',
-                        delta: 'Short-circuited response',
-                        timestamp: 0,
-                    );
-
-                    yield new StreamEnd(
-                        id: 'test-end',
-                        reason: 'short_circuit',
-                        usage: new Usage,
-                        timestamp: 0,
-                    );
-                },
                 new Meta,
             );
         }
@@ -227,11 +260,11 @@ function middleware(): object
 {
     return new class
     {
-        public function handle(AgentPrompt $prompt, Closure $next)
+        public function handle(PendingStep $step, Closure $next)
         {
-            $_SERVER['__testing.middleware-prompt'] = $prompt;
+            $_SERVER['__testing.middleware-step'] = $step;
 
-            return $next($prompt);
+            return $next($step);
         }
     };
 }

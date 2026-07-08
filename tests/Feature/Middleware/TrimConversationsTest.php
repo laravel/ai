@@ -1,6 +1,9 @@
 <?php
 
 use Illuminate\Support\Collection;
+use Laravel\Ai\Ai;
+use Laravel\Ai\Gateway\PendingStep;
+use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\MessageRole;
 use Laravel\Ai\Messages\ToolResultMessage;
@@ -11,7 +14,19 @@ use Laravel\Ai\Responses\Data\ToolResult;
 
 function trim_conversation(array $messages, int $keep): array
 {
-    return (new TrimConversations(keep: $keep))->handle($messages, fn (array $messages) => $messages);
+    $step = new PendingStep(
+        provider: Ai::textProvider('openai'),
+        model: 'gpt-4.1',
+        instructions: null,
+        messages: $messages,
+        tools: [],
+        schema: null,
+        options: null,
+        timeout: null,
+        context: new StepContext,
+    );
+
+    return (new TrimConversations(keep: $keep))->handle($step, fn (PendingStep $step) => $step)->messages;
 }
 
 test('trim conversations with keep zero retains only the current turn without erroring', function () {

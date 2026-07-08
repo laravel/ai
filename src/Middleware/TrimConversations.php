@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Middleware;
 
 use Closure;
+use Laravel\Ai\Gateway\PendingStep;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\MessageRole;
 
@@ -14,17 +15,24 @@ class TrimConversations
     public function __construct(public int $keep) {}
 
     /**
+     * Handle the pending generation step.
+     */
+    public function handle(PendingStep $step, Closure $next)
+    {
+        return $next($step->withMessages($this->trim($step->messages)));
+    }
+
+    /**
      * Keep only the most recent messages, snapped to a safe conversational boundary.
      *
      * @param  Message[]  $messages
-     * @param  Closure(Message[]): Message[]  $next
      * @return Message[]
      */
-    public function handle(array $messages, Closure $next): array
+    protected function trim(array $messages): array
     {
         $messages = array_values($messages);
 
-        return $next(array_slice($messages, $this->keptStartIndex($messages)));
+        return array_slice($messages, $this->keptStartIndex($messages));
     }
 
     /**

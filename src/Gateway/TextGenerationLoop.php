@@ -23,6 +23,8 @@ use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 
+use function Laravel\Ai\pipeline;
+
 class TextGenerationLoop
 {
     use InvokesTools;
@@ -49,6 +51,7 @@ class TextGenerationLoop
         $steps = new Collection;
         $allMessages = $messages;
         $maxSteps = $this->resolveMaxSteps($options, $tools);
+        $middleware = $options?->middleware() ?? [];
         $continuationToken = null;
         $lastResult = null;
 
@@ -59,17 +62,30 @@ class TextGenerationLoop
                 continuationToken: $continuationToken,
             );
 
-            $lastResult = $this->gateway->generateTextStep(
-                $provider,
-                $model,
-                $instructions,
-                $allMessages,
-                $tools,
-                $schema,
-                $options,
-                $timeout,
-                $stepContext,
+            $pending = new PendingStep(
+                $provider, $model, $instructions, $allMessages, $tools,
+                $schema, $options, $timeout, $stepContext,
             );
+
+            $outcome = $this->sendThroughMiddleware($pending, $middleware);
+
+            if ($outcome instanceof PendingStep) {
+                $pending = $outcome;
+
+                $lastResult = $this->gateway->generateTextStep(
+                    $pending->provider,
+                    $pending->model,
+                    $pending->instructions,
+                    $pending->messages,
+                    $pending->tools,
+                    $pending->schema,
+                    $pending->options,
+                    $pending->timeout,
+                    $stepContext,
+                );
+            } else {
+                $lastResult = $outcome;
+            }
 
             if ($lastResult->finishReason === FinishReason::Continue) {
                 $steps->push($this->buildStep($lastResult));
@@ -89,7 +105,7 @@ class TextGenerationLoop
                 $lastResult->finishReason,
                 $lastResult->toolCalls,
                 $stepContext->isFinalStep,
-                $tools
+                $pending->tools
             );
 
             $shouldContinue = filled($toolResults);
@@ -131,6 +147,7 @@ class TextGenerationLoop
     ): Generator {
         $allMessages = $messages;
         $maxSteps = $this->resolveMaxSteps($options, $tools);
+        $middleware = $options?->middleware() ?? [];
         $continuationToken = null;
         $accumulatedUsage = new Usage;
         $finalReason = null;
@@ -143,28 +160,41 @@ class TextGenerationLoop
                 continuationToken: $continuationToken,
             );
 
-            $stream = $this->gateway->generateStreamStep(
-                $invocationId,
-                $provider,
-                $model,
-                $instructions,
-                $allMessages,
-                $tools,
-                $schema,
-                $options,
-                $timeout,
-                $stepContext,
+            $pending = new PendingStep(
+                $provider, $model, $instructions, $allMessages, $tools,
+                $schema, $options, $timeout, $stepContext,
             );
 
-            foreach ($stream as $event) {
-                yield $event;
+            $outcome = $this->sendThroughMiddleware($pending, $middleware);
 
-                if ($event instanceof Error) {
-                    $sawError = true;
+            if ($outcome instanceof PendingStep) {
+                $pending = $outcome;
+
+                $stream = $this->gateway->generateStreamStep(
+                    $invocationId,
+                    $pending->provider,
+                    $pending->model,
+                    $pending->instructions,
+                    $pending->messages,
+                    $pending->tools,
+                    $pending->schema,
+                    $pending->options,
+                    $pending->timeout,
+                    $stepContext,
+                );
+
+                foreach ($stream as $event) {
+                    yield $event;
+
+                    if ($event instanceof Error) {
+                        $sawError = true;
+                    }
                 }
-            }
 
-            $result = $stream->getReturn();
+                $result = $stream->getReturn();
+            } else {
+                $result = $outcome;
+            }
 
             if ($result !== null) {
                 $accumulatedUsage = $accumulatedUsage->add($result->usage);
@@ -184,7 +214,7 @@ class TextGenerationLoop
             }
 
             $toolResults = $result !== null
-                ? $this->continuationToolResults($result->finishReason, $result->toolCalls, $stepContext->isFinalStep, $tools)
+                ? $this->continuationToolResults($result->finishReason, $result->toolCalls, $stepContext->isFinalStep, $pending->tools)
                 : [];
 
             $shouldContinue = filled($toolResults);
@@ -226,6 +256,17 @@ class TextGenerationLoop
                 time(),
             ))->withInvocationId($invocationId);
         }
+    }
+
+    /**
+     * Run the pending step through the given middleware, which may transform or short-circuit it.
+     */
+    protected function sendThroughMiddleware(PendingStep $pending, array $middleware): PendingStep|StepResponse
+    {
+        return pipeline()
+            ->send($pending)
+            ->through($middleware)
+            ->thenReturn();
     }
 
     /**

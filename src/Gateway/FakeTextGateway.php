@@ -28,6 +28,7 @@ use Laravel\Ai\Streaming\Events\TextStart;
 use RuntimeException;
 
 use function Laravel\Ai\generate_fake_data_for_json_schema_type;
+use function Laravel\Ai\pipeline;
 use function Laravel\Ai\ulid;
 
 class FakeTextGateway implements TextGateway
@@ -57,6 +58,16 @@ class FakeTextGateway implements TextGateway
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
     ): TextResponse {
+        $step = $this->sendThroughMiddleware(
+            $provider, $model, $instructions, $messages, $tools, $schema, $options, $timeout
+        );
+
+        if ($step instanceof StepResponse) {
+            return new TextResponse($step->text, $step->usage, $step->meta);
+        }
+
+        [$model, $messages, $tools, $schema] = [$step->model, $step->messages, $step->tools, $step->schema];
+
         $message = (new Collection($messages))->last(function ($message) {
             return $message instanceof UserMessage;
         });
@@ -135,13 +146,21 @@ class FakeTextGateway implements TextGateway
         yield (new StreamStart(ulid(), $provider->name(), $model, time()))->withInvocationId($invocationId);
         yield (new TextStart(ulid(), $messageId, time()))->withInvocationId($invocationId);
 
-        $message = (new Collection($messages))->last(function ($message) {
-            return $message instanceof UserMessage;
-        });
-
-        $fakeResponse = $this->nextResponse(
-            $provider, $model, $message->content, $message->attachments, $schema
+        $step = $this->sendThroughMiddleware(
+            $provider, $model, $instructions, $messages, $tools, $schema, $options, $timeout
         );
+
+        if ($step instanceof StepResponse) {
+            $fakeResponse = new TextResponse($step->text, $step->usage, $step->meta);
+        } else {
+            $message = (new Collection($step->messages))->last(function ($message) {
+                return $message instanceof UserMessage;
+            });
+
+            $fakeResponse = $this->nextResponse(
+                $provider, $step->model, $message->content, $message->attachments, $step->schema
+            );
+        }
 
         $events = Str::of($fakeResponse->text)
             ->explode(' ')
@@ -160,6 +179,28 @@ class FakeTextGateway implements TextGateway
         // Fake the stream and text ending...
         yield (new TextEnd(ulid(), $messageId, time()))->withInvocationId($invocationId);
         yield (new StreamEnd(ulid(), 'stop', new Usage, time()))->withInvocationId($invocationId);
+    }
+
+    /**
+     * Run the agent's step middleware over the faked request, which may transform or short-circuit it.
+     */
+    protected function sendThroughMiddleware(
+        TextProvider $provider,
+        string $model,
+        ?string $instructions,
+        array $messages,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options,
+        ?int $timeout,
+    ): PendingStep|StepResponse {
+        return pipeline()
+            ->send(new PendingStep(
+                $provider, $model, $instructions, $messages, $tools,
+                $schema, $options, $timeout, new StepContext(isFinalStep: true),
+            ))
+            ->through($options?->middleware() ?? [])
+            ->thenReturn();
     }
 
     /**

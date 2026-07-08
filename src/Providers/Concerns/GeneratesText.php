@@ -10,7 +10,6 @@ use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\ConversationStore;
-use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Tool;
@@ -24,16 +23,12 @@ use Laravel\Ai\Middleware\RememberConversation;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StructuredAgentResponse;
-use Laravel\Ai\Tools\AgentTool;
-use Laravel\Ai\Tools\McpServerTool;
-use Laravel\Ai\Tools\McpTool;
+use Laravel\Ai\Tools\ToolResolver;
 
 use function Laravel\Ai\pipeline;
 
 trait GeneratesText
 {
-    use ManagesConversationMiddleware;
-
     protected string $currentToolInvocationId;
 
     /**
@@ -59,8 +54,6 @@ trait GeneratesText
                     ...($agent instanceof Conversational ? $agent->messages() : []),
                     new UserMessage($prompt->prompt, $prompt->attachments->all()),
                 ];
-
-                $messages = $this->applyConversationMiddleware($agent, $messages);
 
                 $this->listenForToolInvocations($invocationId, $agent);
 
@@ -110,9 +103,7 @@ trait GeneratesText
             $middleware[] = new RememberConversation(resolve(ConversationStore::class), $this);
         }
 
-        return $agent instanceof HasMiddleware
-            ? [...$middleware, ...$agent->middleware()]
-            : $middleware;
+        return $middleware;
     }
 
     /**
@@ -125,23 +116,9 @@ trait GeneratesText
         }
 
         return array_map(
-            fn ($tool) => $this->resolveTool($tool),
+            fn ($tool) => ToolResolver::resolve($tool),
             [...$agent->tools()],
         );
-    }
-
-    /**
-     * Resolve a tool returned by the agent into a native tool instance when needed.
-     */
-    protected function resolveTool(mixed $tool): mixed
-    {
-        return match (true) {
-            $tool instanceof Agent => new AgentTool($tool),
-            $tool instanceof Tool => $tool,
-            McpTool::supports($tool) => new McpTool($tool),
-            McpServerTool::supports($tool) => new McpServerTool($tool),
-            default => $tool,
-        };
     }
 
     /**

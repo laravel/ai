@@ -7,6 +7,7 @@ use Laravel\Ai\Attributes\MaxTokens;
 use Laravel\Ai\Attributes\Temperature;
 use Laravel\Ai\Attributes\TopP;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Enums\Lab;
 use ReflectionClass;
@@ -21,6 +22,16 @@ class TextGenerationOptions
         public readonly ?float $topP = null,
     ) {
         //
+    }
+
+    /**
+     * Get the agent's middleware to run around each generation step.
+     */
+    public function middleware(): array
+    {
+        return $this->agent instanceof HasMiddleware
+            ? $this->agent->middleware()
+            : [];
     }
 
     /**

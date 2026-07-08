@@ -19,8 +19,6 @@ use function Laravel\Ai\pipeline;
 
 trait StreamsText
 {
-    use ManagesConversationMiddleware;
-
     /**
      * Stream the response from the given agent.
      */
@@ -53,8 +51,6 @@ trait StreamsText
                             ...($agent instanceof Conversational ? $agent->messages() : []),
                             new UserMessage($prompt->prompt, $prompt->attachments->all()),
                         ];
-
-                        $messages = $this->applyConversationMiddleware($agent, $messages);
 
                         $this->listenForToolInvocations($invocationId, $agent);
 
