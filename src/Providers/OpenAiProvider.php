@@ -85,21 +85,6 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     }
 
     /**
-     * Determine if the provider supports hosted tool search for the given model.
-     */
-    public function supportsToolSearch(string $model): bool
-    {
-        if (! preg_match('/^gpt-(\d+)(?:\.(\d+))?/', $model, $matches)) {
-            return false;
-        }
-
-        $major = (int) $matches[1];
-        $minor = (int) ($matches[2] ?? 0);
-
-        return $major > 5 || ($major === 5 && $minor >= 4);
-    }
-
-    /**
      * Get the name of the default text model.
      */
     public function defaultTextModel(): string

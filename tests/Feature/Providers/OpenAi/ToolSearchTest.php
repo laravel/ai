@@ -49,15 +49,6 @@ test('rejects a ToolSearch tool when response storage is disabled', function () 
     Http::assertNothingSent();
 });
 
-test('rejects a ToolSearch tool on a model older than gpt-5.4', function () {
-    Http::fake(['*' => fakeOpenAiResponse('ok')]);
-
-    expect(fn () => (new OpenAiToolSearchAgent)->prompt('Hi', provider: 'openai', model: 'gpt-5.1'))
-        ->toThrow(LogicException::class, 'gpt-5.1');
-
-    Http::assertNothingSent();
-});
-
 test('an agent whose only tool is an empty ToolSearch omits the tool fields', function () {
     Http::fake([
         '*' => fakeOpenAiResponse('ok'),

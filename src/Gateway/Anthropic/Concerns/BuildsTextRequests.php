@@ -31,7 +31,7 @@ trait BuildsTextRequests
             $body['system'] = $instructions;
         }
 
-        $mappedTools = filled($tools) ? $this->mapTools($tools, $provider, $model) : [];
+        $mappedTools = filled($tools) ? $this->mapTools($tools, $provider) : [];
 
         $providerOptions = $options?->providerOptions($provider->driver()) ?? [];
 

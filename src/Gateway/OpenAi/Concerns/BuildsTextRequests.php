@@ -83,7 +83,7 @@ trait BuildsTextRequests
         Provider $provider,
     ): array {
         if (filled($tools)) {
-            $mappedTools = $this->mapTools($tools, $provider, $body['model'] ?? '', $this->isStateless($provider));
+            $mappedTools = $this->mapTools($tools, $provider, $this->isStateless($provider));
 
             if (filled($mappedTools)) {
                 $body['tool_choice'] = 'auto';

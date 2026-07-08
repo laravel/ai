@@ -15,9 +15,9 @@ function anthropicToolSearchMapper(): object
     {
         use MapsTools;
 
-        public function map(array $tools, Provider $provider, string $model = 'claude-opus-4-8'): array
+        public function map(array $tools, Provider $provider): array
         {
-            return $this->mapTools($tools, $provider, $model);
+            return $this->mapTools($tools, $provider);
         }
     };
 }
@@ -29,11 +29,6 @@ function anthropicToolSearchProvider(): Provider
         public function __construct()
         {
             //
-        }
-
-        public function supportsToolSearch(string $model): bool
-        {
-            return true;
         }
     };
 }
@@ -151,11 +146,6 @@ test('counts a server tool as non-deferred so a ToolSearch alongside web search 
     {
         public function __construct() {}
 
-        public function supportsToolSearch(string $model): bool
-        {
-            return true;
-        }
-
         public function webSearchToolOptions(WebSearch $search): array
         {
             return [];
@@ -197,29 +187,3 @@ test('throws when the provider does not support tool search', function () {
 
     anthropicToolSearchMapper()->map([new NonStrictTool, new ToolSearch(tools: [new DeferredTool])], $provider);
 })->throws(LogicException::class, 'does not support tool search');
-
-test('throws when the model does not support tool search', function () {
-    $provider = new class extends Provider implements SupportsToolSearch
-    {
-        public function __construct()
-        {
-            //
-        }
-
-        public function name(): string
-        {
-            return 'anthropic';
-        }
-
-        public function supportsToolSearch(string $model): bool
-        {
-            return false;
-        }
-    };
-
-    anthropicToolSearchMapper()->map(
-        [new NonStrictTool, new ToolSearch(tools: [new DeferredTool])],
-        $provider,
-        'claude-3-5-sonnet-20241022',
-    );
-})->throws(LogicException::class, 'claude-3-5-sonnet-20241022');

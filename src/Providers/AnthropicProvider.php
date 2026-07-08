@@ -56,29 +56,6 @@ class AnthropicProvider extends Provider implements FileProvider, SupportsToolSe
     }
 
     /**
-     * Determine if the provider supports hosted tool search for the given model.
-     */
-    public function supportsToolSearch(string $model): bool
-    {
-        if (preg_match('/claude-(?:sonnet|opus)-(\d+)-\d+/', $model, $matches)) {
-            return (int) $matches[1] >= 4;
-        }
-
-        if (preg_match('/claude-haiku-(\d+)-(\d+)/', $model, $matches)) {
-            $major = (int) $matches[1];
-            $minor = (int) $matches[2];
-
-            return $major > 4 || ($major === 4 && $minor >= 5);
-        }
-
-        if (preg_match('/claude-(?:fable|mythos)-(\d+)/', $model, $matches)) {
-            return (int) $matches[1] >= 5;
-        }
-
-        return false;
-    }
-
-    /**
      * Get the name of the default text model.
      */
     public function defaultTextModel(): string

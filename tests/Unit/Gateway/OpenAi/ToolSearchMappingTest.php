@@ -14,9 +14,9 @@ function openAiToolSearchMapper(): object
     {
         use MapsTools;
 
-        public function map(array $tools, Provider $provider, string $model = 'gpt-5.4'): array
+        public function map(array $tools, Provider $provider): array
         {
-            return $this->mapTools($tools, $provider, $model);
+            return $this->mapTools($tools, $provider);
         }
     };
 }
@@ -33,11 +33,6 @@ function openAiToolSearchProvider(): Provider
         public function name(): string
         {
             return 'openai';
-        }
-
-        public function supportsToolSearch(string $model): bool
-        {
-            return true;
         }
     };
 }
@@ -132,29 +127,3 @@ test('throws when the provider does not support tool search', function () {
 
     openAiToolSearchMapper()->map([new NonStrictTool, new ToolSearch(tools: [new DeferredTool])], $provider);
 })->throws(LogicException::class, 'does not support tool search');
-
-test('throws when the model does not support tool search', function () {
-    $provider = new class extends Provider implements SupportsToolSearch
-    {
-        public function __construct()
-        {
-            //
-        }
-
-        public function name(): string
-        {
-            return 'openai';
-        }
-
-        public function supportsToolSearch(string $model): bool
-        {
-            return false;
-        }
-    };
-
-    openAiToolSearchMapper()->map(
-        [new NonStrictTool, new ToolSearch(tools: [new DeferredTool])],
-        $provider,
-        'gpt-5.1',
-    );
-})->throws(LogicException::class, 'gpt-5.1');

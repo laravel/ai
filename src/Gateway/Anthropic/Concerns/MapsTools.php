@@ -28,7 +28,7 @@ trait MapsTools
     /**
      * Map the given tools to Anthropic tool definitions.
      */
-    protected function mapTools(array $tools, Provider $provider, string $model = ''): array
+    protected function mapTools(array $tools, Provider $provider): array
     {
         $mapped = [];
         $nonDeferredCount = 0;
@@ -41,7 +41,7 @@ trait MapsTools
                     continue;
                 }
 
-                $this->guardToolSearchSupport($provider, $model);
+                $this->guardToolSearchSupport($provider);
 
                 if ($searchIndex === null) {
                     $searchIndex = count($mapped);
@@ -79,13 +79,13 @@ trait MapsTools
     }
 
     /**
-     * Ensure the provider and model support hosted tool search.
+     * Ensure the provider supports hosted tool search.
      */
-    protected function guardToolSearchSupport(Provider $provider, string $model): void
+    protected function guardToolSearchSupport(Provider $provider): void
     {
-        if (! $provider instanceof SupportsToolSearch || ! $provider->supportsToolSearch($model)) {
+        if (! $provider instanceof SupportsToolSearch) {
             throw new LogicException(
-                "Provider [{$provider->name()}] does not support tool search for model [{$model}]."
+                "Provider [{$provider->name()}] does not support tool search."
             );
         }
     }

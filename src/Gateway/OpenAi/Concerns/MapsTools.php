@@ -24,7 +24,7 @@ trait MapsTools
     /**
      * Map the given tools to OpenAI function definitions.
      */
-    protected function mapTools(array $tools, Provider $provider, string $model = '', bool $stateless = false): array
+    protected function mapTools(array $tools, Provider $provider, bool $stateless = false): array
     {
         $mapped = [];
         $searchIndex = null;
@@ -35,7 +35,7 @@ trait MapsTools
                     continue;
                 }
 
-                $this->guardToolSearchSupport($provider, $model, $stateless);
+                $this->guardToolSearchSupport($provider, $stateless);
 
                 if ($searchIndex === null) {
                     $searchIndex = count($mapped);
@@ -58,13 +58,13 @@ trait MapsTools
     }
 
     /**
-     * Ensure the provider and model support hosted tool search.
+     * Ensure the provider supports hosted tool search.
      */
-    protected function guardToolSearchSupport(Provider $provider, string $model, bool $stateless = false): void
+    protected function guardToolSearchSupport(Provider $provider, bool $stateless = false): void
     {
-        if (! $provider instanceof SupportsToolSearch || ! $provider->supportsToolSearch($model)) {
+        if (! $provider instanceof SupportsToolSearch) {
             throw new LogicException(
-                "Provider [{$provider->name()}] does not support tool search for model [{$model}]."
+                "Provider [{$provider->name()}] does not support tool search."
             );
         }
 
