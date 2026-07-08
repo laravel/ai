@@ -9,6 +9,7 @@ use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ProviderToolEvent;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
@@ -276,12 +277,24 @@ trait HandlesTextGeneration
             }
         }
 
+        // Emit any citations found in the completed response...
+        $citations = $this->extractCitations($responseData['output'] ?? []);
+
+        foreach ($citations as $citation) {
+            yield (new CitationEvent(
+                $this->generateEventId(),
+                $messageId,
+                $citation,
+                time(),
+            ))->withInvocationId($invocationId);
+        }
+
         return new StepResponse(
             text: $currentText,
             toolCalls: $toolCalls,
             finishReason: $this->extractFinishReason($responseData),
             usage: $usage ?? new Usage(0, 0),
-            meta: new Meta($provider->name(), $responseData['model'] ?? $model),
+            meta: new Meta($provider->name(), $responseData['model'] ?? $model, $citations->isNotEmpty() ? $citations : null),
             continuationToken: $responseId,
         );
     }

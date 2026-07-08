@@ -30,6 +30,8 @@ class Citation extends StreamEvent
                 $this->citation instanceof UrlCitation => [
                     'title' => $this->citation->title,
                     'url' => $this->citation->url,
+                    'ranges' => $this->citation->ranges->values()->all(),
+                    'byte_offset' => $this->citation->isByteOffset,
                 ],
             },
             'timestamp' => $this->timestamp,

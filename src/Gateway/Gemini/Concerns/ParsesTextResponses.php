@@ -173,25 +173,28 @@ trait ParsesTextResponses
         }
 
         // Grounding metadata format (Google Search grounding)...
-        $groundingChunks = $candidate['groundingMetadata']['groundingChunks'] ?? [];
         $groundingSupports = $candidate['groundingMetadata']['groundingSupports'] ?? [];
-
-        $referencedIndices = [];
+        $groundingChunks = $candidate['groundingMetadata']['groundingChunks'] ?? [];
 
         foreach ($groundingSupports as $support) {
             foreach ($support['groundingChunkIndices'] ?? [] as $index) {
-                $referencedIndices[$index] = true;
-            }
-        }
+                $web = $groundingChunks[$index]['web'] ?? [];
 
-        foreach ($referencedIndices as $index => $_) {
-            $web = $groundingChunks[$index]['web'] ?? [];
+                if (! isset($web['uri'])) {
+                    continue;
+                }
 
-            if (isset($web['uri'])) {
-                $citations->push(new UrlCitation(
-                    $web['uri'],
-                    $web['title'] ?? null,
-                ));
+                $existing = $citations->first(fn (UrlCitation $c) => $c->url === $web['uri']);
+
+                if ($existing === null) {
+                    $existing = new UrlCitation($web['uri'], $web['title'] ?? null, isByteOffset: true);
+                    $citations->push($existing);
+                }
+
+                $existing->addRange(
+                    $support['segment']['startIndex'] ?? null,
+                    $support['segment']['endIndex'] ?? null,
+                );
             }
         }
 
