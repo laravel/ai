@@ -9,7 +9,7 @@ use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Providers\Provider;
-use Laravel\Ai\Providers\Tools\ProviderToolSearch;
+use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Step;
@@ -99,7 +99,7 @@ trait ParsesTextResponses
 
         $shouldContinue = $finishReason === FinishReason::ToolCalls
             && filled($realToolCalls)
-            && $depth + 1 < ($maxSteps ?? round(ProviderToolSearch::budget($tools) * 1.5));
+            && $depth + 1 < ($maxSteps ?? round(ToolSearch::budget($tools) * 1.5));
 
         $shouldResumePauseTurn = $stopReason === 'pause_turn'
             && $depth + 1 < ($maxSteps ?? 5);

@@ -96,6 +96,7 @@ class DatabaseConversationStore implements ConversationStore
 
         $now = now();
 
+        // providerContentBlocks are intentionally not persisted; they're stateless-replay state and rehydrating them here would change stateful conversation behavior.
         $this->table($this->messagesTable())->insert([
             'id' => $messageId,
             'conversation_id' => $conversationId,

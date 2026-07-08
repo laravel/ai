@@ -12,7 +12,7 @@ use Laravel\Ai\Exceptions\NoSuchToolException;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\ToolResultMessage;
-use Laravel\Ai\Providers\Tools\ProviderToolSearch;
+use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Step;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -214,7 +214,7 @@ class TextGenerationLoop
             return max(1, $options->maxSteps);
         }
 
-        $count = ProviderToolSearch::budget($tools);
+        $count = ToolSearch::budget($tools);
 
         return $count > 0 ? (int) round($count * 1.5) : 5;
     }
