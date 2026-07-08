@@ -9,7 +9,6 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
-use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
@@ -17,7 +16,6 @@ use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Bedrock\Concerns\CreatesBedrockClient;
 use Laravel\Ai\Gateway\Bedrock\Concerns\MapsAttachments;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
-use Laravel\Ai\Gateway\Concerns\DelegatesToTextGenerationLoop;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
@@ -47,11 +45,10 @@ use Laravel\Ai\Tools\ToolNameResolver;
 use stdClass;
 use Throwable;
 
-class BedrockTextGateway implements EmbeddingGateway, StepTextGateway, TextGateway
+class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
 {
     use CreatesBedrockClient;
     use DecodesStructuredOutput;
-    use DelegatesToTextGenerationLoop;
     use HandlesFailoverErrors;
     use MapsAttachments;
 

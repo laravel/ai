@@ -2,6 +2,7 @@
 
 use Aws\MockHandler;
 use Aws\Result;
+use Laravel\Ai\Gateway\TextGenerationLoop;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
 use Laravel\Ai\Streaming\Events\ReasoningStart;
@@ -30,7 +31,7 @@ describe('text streaming', function () {
         $gateway = $this->gatewayWithClient($client);
 
         $events = iterator_to_array(
-            $gateway->streamText('inv-1', $this->bedrockProvider(), 'anthropic.claude-opus-4-7-v1:0', null),
+            (new TextGenerationLoop($gateway))->stream('inv-1', $this->bedrockProvider(), 'anthropic.claude-opus-4-7-v1:0', null),
             preserve_keys: false,
         );
 
@@ -60,7 +61,7 @@ describe('text streaming', function () {
         $gateway = $this->gatewayWithClient($client);
 
         $events = iterator_to_array(
-            $gateway->streamText('inv-1', $this->bedrockProvider(), 'anthropic.claude-opus-4-7-v1:0', null),
+            (new TextGenerationLoop($gateway))->stream('inv-1', $this->bedrockProvider(), 'anthropic.claude-opus-4-7-v1:0', null),
             preserve_keys: false,
         );
 
@@ -93,7 +94,7 @@ describe('text streaming', function () {
         $gateway = $this->gatewayWithClient($this->bedrockClient($mock));
 
         iterator_to_array(
-            $gateway->streamText(
+            (new TextGenerationLoop($gateway))->stream(
                 'inv-1',
                 $this->bedrockProvider(),
                 'anthropic.claude-opus-4-7-v1:0',
@@ -141,7 +142,7 @@ describe('text streaming', function () {
         $gateway = $this->gatewayWithClient($this->bedrockClient($mock));
 
         iterator_to_array(
-            $gateway->streamText(
+            (new TextGenerationLoop($gateway))->stream(
                 'inv-1',
                 $this->bedrockProvider(),
                 'anthropic.claude-opus-4-7-v1:0',

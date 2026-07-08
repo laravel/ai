@@ -5,6 +5,7 @@ namespace Laravel\Ai\Providers;
 use Illuminate\Contracts\Events\Dispatcher;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
+use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Gateway\TextGateway;
@@ -54,7 +55,7 @@ class MistralProvider extends Provider implements EmbeddingProvider, FileProvide
     /**
      * Get the provider's text gateway.
      */
-    public function textGateway(): TextGateway
+    public function textGateway(): StepTextGateway
     {
         return $this->textGateway ??= $this->mistralGateway();
     }

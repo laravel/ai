@@ -110,6 +110,14 @@ abstract class File implements HasName, HasProviderOptions
     }
 
     /**
+     * Get the file's MIME type.
+     */
+    public function mimeType(): ?string
+    {
+        return $this->mime;
+    }
+
+    /**
      * Set the file's MIME type.
      */
     public function withMimeType(string $mimeType): static

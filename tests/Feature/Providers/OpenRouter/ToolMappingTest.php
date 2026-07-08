@@ -118,7 +118,7 @@ test('web search tool sends allowed_domains', function () {
 test('web search tool forwards provider options into parameters', function () {
     Http::fake(['*' => fakeOpenRouterResponse('done')]);
 
-    $search = (new WebSearch)->withProviderOptions('openrouter', [
+    $search = (new WebSearch)->withProviderOptions([
         'engine' => 'exa',
         'max_total_results' => 20,
         'search_context_size' => 'medium',

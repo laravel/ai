@@ -2,23 +2,22 @@
 
 namespace Laravel\Ai\Gateway\Mistral;
 
-use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Files\HasName;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
-use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
-use Laravel\Ai\Gateway\Concerns\DelegatesToTextGenerationLoop;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
+use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionMessages;
+use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionTools;
+use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\PerformsChatCompletionSteps;
 use Laravel\Ai\Gateway\StepContext;
-use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Responses\Data\Meta;
@@ -32,7 +31,7 @@ use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 
-class MistralGateway implements EmbeddingGateway, StepTextGateway, TextGateway, TranscriptionGateway
+class MistralGateway implements EmbeddingGateway, StepTextGateway, TranscriptionGateway
 {
     use Concerns\BuildsConversationRequests;
     use Concerns\BuildsTextRequests;
@@ -43,9 +42,11 @@ class MistralGateway implements EmbeddingGateway, StepTextGateway, TextGateway, 
     use Concerns\MapsTools;
     use Concerns\ParsesConversationResponses;
     use Concerns\ParsesTextResponses;
-    use DelegatesToTextGenerationLoop;
     use HandlesFailoverErrors;
+    use MapsChatCompletionMessages;
+    use MapsChatCompletionTools;
     use ParsesServerSentEvents;
+    use PerformsChatCompletionSteps;
 
     public function __construct(protected Dispatcher $events)
     {

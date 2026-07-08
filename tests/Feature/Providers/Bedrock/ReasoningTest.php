@@ -1,5 +1,6 @@
 <?php
 
+use Laravel\Ai\Gateway\TextGenerationLoop;
 use Laravel\Ai\Messages\AssistantMessage;
 
 describe('reasoning capture', function () {
@@ -19,7 +20,7 @@ describe('reasoning capture', function () {
 
         $gateway = $this->gatewayWithClient($client);
 
-        $response = $gateway->generateText(
+        $response = (new TextGenerationLoop($gateway))->generate(
             $this->bedrockProvider(),
             'anthropic.claude-opus-4-7-v1:0',
             null,
