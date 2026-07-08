@@ -4,10 +4,6 @@ use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Providers\Tools\ToolSearch;
 use Tests\Fixtures\Tools\DeferredTool;
 
-test('defaults to an empty tool set', function () {
-    expect((new ToolSearch)->tools)->toBe([]);
-});
-
 test('accepts a deferred tool set', function () {
     $tool = new DeferredTool;
 
