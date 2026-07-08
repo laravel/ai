@@ -125,7 +125,7 @@ trait GeneratesText
         }
 
         return array_map(
-            fn ($tool) => $this->resolveTool($tool),
+            fn ($tool) => $this->resolveTool($tool, $agent),
             [...$agent->tools()],
         );
     }
@@ -133,10 +133,10 @@ trait GeneratesText
     /**
      * Resolve a tool returned by the agent into a native tool instance when needed.
      */
-    protected function resolveTool(mixed $tool): mixed
+    protected function resolveTool(mixed $tool, Agent $parent): mixed
     {
         return match (true) {
-            $tool instanceof Agent => new AgentTool($tool),
+            $tool instanceof Agent => new AgentTool($tool, $parent),
             $tool instanceof Tool => $tool,
             McpTool::supports($tool) => new McpTool($tool),
             McpServerTool::supports($tool) => new McpServerTool($tool),

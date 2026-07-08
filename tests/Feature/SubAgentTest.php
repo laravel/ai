@@ -1,6 +1,7 @@
 <?php
 
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -8,7 +9,10 @@ use Laravel\Ai\Tools\AgentTool;
 use Tests\Fixtures\Agents\DelegatingAgent;
 use Tests\Fixtures\Agents\MiddleManagerAgent;
 use Tests\Fixtures\Agents\OrchestratorAgent;
+use Tests\Fixtures\Agents\RememberingDelegatingAgent;
+use Tests\Fixtures\Agents\RememberingSubAgent;
 use Tests\Fixtures\Agents\ResearchAgent;
+use Tests\Fixtures\ConversationStores\InMemoryConversationStore;
 
 test('agent returned from tools is invoked when called by parent agent', function () {
     DelegatingAgent::fake([
@@ -124,4 +128,52 @@ test('nested agent delegates through a middle manager to a research agent', func
         ->and($response->toolCalls->first()->name)->toBe('middle_manager')
         ->and($response->toolResults)->toHaveCount(1)
         ->and($response->toolResults->first()->result)->toBe('Research delegated.');
+});
+
+test('sub-agent continues the parent conversation when both remember conversations', function () {
+    $store = new InMemoryConversationStore;
+    app()->instance(ConversationStore::class, $store);
+
+    $user = (object) ['id' => 1];
+    $conversationId = $store->storeConversation($user->id, 'Existing conversation');
+
+    RememberingDelegatingAgent::fake([
+        new ToolCall('call_123', 'remembering_sub_agent', ['task' => 'Summarize the request']),
+        'Delegated.',
+    ]);
+
+    RememberingSubAgent::fake(['Sub-agent reply']);
+
+    (new RememberingDelegatingAgent)
+        ->continue($conversationId, $user)
+        ->prompt('What is the status?');
+
+    RememberingSubAgent::assertPrompted(function (AgentPrompt $prompt) use ($conversationId, $user) {
+        return $prompt->agent->currentConversation() === $conversationId
+            && $prompt->agent->conversationParticipant() === $user;
+    });
+});
+
+test('sub-agent stays isolated when the parent has no active conversation', function () {
+    $store = new InMemoryConversationStore;
+    app()->instance(ConversationStore::class, $store);
+
+    $user = (object) ['id' => 1];
+
+    RememberingDelegatingAgent::fake([
+        new ToolCall('call_123', 'remembering_sub_agent', ['task' => 'Do the work']),
+        'Delegated.',
+    ]);
+
+    RememberingSubAgent::fake(['Sub-agent reply']);
+
+    // forUser() starts a fresh conversation whose id is only persisted after the run,
+    // so there is nothing to share while the sub-agent is being delegated to.
+    (new RememberingDelegatingAgent)
+        ->forUser($user)
+        ->prompt('Start');
+
+    RememberingSubAgent::assertPrompted(function (AgentPrompt $prompt) {
+        return $prompt->agent->currentConversation() === null;
+    });
 });
