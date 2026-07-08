@@ -3,9 +3,8 @@
 namespace Laravel\Ai\Approvals;
 
 use Illuminate\Contracts\Support\Arrayable;
-use JsonSerializable;
 
-class PendingApproval implements Arrayable, JsonSerializable
+class PendingApproval implements Arrayable
 {
     /**
      * @param  array<string, mixed>  $arguments
@@ -28,10 +27,5 @@ class PendingApproval implements Arrayable, JsonSerializable
             'arguments' => $this->arguments,
             'reason' => $this->reason,
         ];
-    }
-
-    public function jsonSerialize(): mixed
-    {
-        return $this->toArray();
     }
 }

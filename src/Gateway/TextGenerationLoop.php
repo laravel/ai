@@ -346,23 +346,19 @@ class TextGenerationLoop
         $pendingApprovals = collect();
 
         foreach ($toolCalls as $toolCall) {
-            $tool = $this->findTool($toolCall->name, $tools);
-
-            if ($tool === null) {
+            if ($this->findTool($toolCall->name, $tools) === null) {
                 throw new NoSuchToolException($toolCall->name);
             }
 
-            if ($tool instanceof Approvable) {
-                $approval = $tool->shouldRequestApproval(new Request($toolCall->arguments));
+            $approval = $this->approvalFor($toolCall, $tools);
 
-                if ($approval->isRequired()) {
-                    $pendingApprovals->push(new PendingApproval(
-                        $toolCall->id,
-                        $toolCall->name,
-                        $toolCall->arguments,
-                        $approval->reason,
-                    ));
-                }
+            if ($approval?->isRequired()) {
+                $pendingApprovals->push(new PendingApproval(
+                    $toolCall->id,
+                    $toolCall->name,
+                    $toolCall->arguments,
+                    $approval->reason,
+                ));
             }
         }
 
@@ -462,16 +458,27 @@ class TextGenerationLoop
     }
 
     /**
+     * Resolve the approval requirement for a tool call, or null when the tool is not gated.
+     *
+     * @param  Tool[]  $tools
+     */
+    protected function approvalFor(ToolCall $toolCall, array $tools): ?Approval
+    {
+        $tool = $this->findTool($toolCall->name, $tools);
+
+        return $tool instanceof Approvable
+            ? $tool->shouldRequestApproval(new Request($toolCall->arguments))
+            : null;
+    }
+
+    /**
      * Determine whether a pending tool call requires human approval.
      *
      * @param  Tool[]  $tools
      */
     protected function toolRequiresApproval(ToolCall $toolCall, array $tools): bool
     {
-        $tool = $this->findTool($toolCall->name, $tools);
-
-        return $tool instanceof Approvable
-            && $tool->shouldRequestApproval(new Request($toolCall->arguments))->isRequired();
+        return $this->approvalFor($toolCall, $tools)?->isRequired() === true;
     }
 
     /**
@@ -511,14 +518,12 @@ class TextGenerationLoop
      */
     protected function pendingApprovalsFor(Collection $toolCalls, array $tools): Collection
     {
-        return $toolCalls->map(function (ToolCall $toolCall) use ($tools) {
-            $tool = $this->findTool($toolCall->name, $tools);
-            $approval = $tool instanceof Approvable
-                ? $tool->shouldRequestApproval(new Request($toolCall->arguments))
-                : Approval::required();
-
-            return new PendingApproval($toolCall->id, $toolCall->name, $toolCall->arguments, $approval->reason);
-        })->values();
+        return $toolCalls->map(fn (ToolCall $toolCall) => new PendingApproval(
+            $toolCall->id,
+            $toolCall->name,
+            $toolCall->arguments,
+            ($this->approvalFor($toolCall, $tools) ?? Approval::required())->reason,
+        ))->values();
     }
 
     /**
