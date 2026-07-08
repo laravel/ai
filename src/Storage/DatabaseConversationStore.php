@@ -197,9 +197,7 @@ class DatabaseConversationStore implements ConversationStore
                     return $messages;
                 }
 
-                // A resume turn stores the results of a prior paused turn's tool calls,
-                // so its results have no tool calls of their own — replay them as a
-                // tool result message that answers the earlier assistant's tool_use.
+                // Replay a resume turn's results as the answer to the earlier tool_use...
                 if ($toolResults->isNotEmpty()) {
                     $messages = [new ToolResultMessage($toolResults->map(ToolResult::fromArray(...)))];
 

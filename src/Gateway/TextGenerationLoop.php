@@ -253,8 +253,7 @@ class TextGenerationLoop
 
             $shouldContinue = filled($toolResults) && $pendingApprovals->isEmpty();
 
-            // Surface every executed tool result, even when a sibling call in the same step
-            // still needs approval and stops the loop from continuing.
+            // Yield executed tool results even when a sibling call still needs approval...
             if (filled($toolResults)) {
                 foreach ($toolResults as $toolResult) {
                     yield (new ToolResultEvent(
@@ -362,10 +361,7 @@ class TextGenerationLoop
             }
         }
 
-        // When any call in the step needs approval, defer the whole step: running the
-        // ungated calls now would fire side effects a human may still reject and split
-        // the turn's tool results across two persisted records (breaking replay). The
-        // deferred calls stay unresolved in history and are executed on resume.
+        // Defer the whole step if any call needs approval...
         if ($pendingApprovals->isNotEmpty()) {
             return [[], $pendingApprovals];
         }
@@ -390,8 +386,7 @@ class TextGenerationLoop
     {
         [$pendingToolCalls, $resolvedToolCallIds] = $this->pendingToolCalls($messages);
 
-        // Only gated calls need a human decision; ungated calls deferred alongside them
-        // are executed automatically on resume.
+        // Only gated calls need a decision...
         $gated = $pendingToolCalls->filter(fn (ToolCall $toolCall) => $this->toolRequiresApproval($toolCall, $tools));
         $gatedIds = $gated->pluck('id')->all();
         $decisionIds = array_keys($approval->decisions);
@@ -424,8 +419,7 @@ class TextGenerationLoop
                     $toolCall->resultId,
                 );
 
-                // A rejection with a message is fed back so the model can respond; a bare
-                // rejection on its own ends the turn, but must not silence approved siblings.
+                // Continue only if the rejection carries a message for the model...
                 if ($decision->result !== null) {
                     $shouldContinue = true;
                 }

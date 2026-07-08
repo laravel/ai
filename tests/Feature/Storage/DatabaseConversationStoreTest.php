@@ -302,8 +302,6 @@ test('it replays a resumed approval so the paused tool_use is answered', functio
         'updated_at' => now(),
     ]);
 
-    // The resume turn: results for the paused call live in their own record with no
-    // tool calls of their own, followed by the model's continuation text.
     DB::table('agent_conversation_messages')->insert([
         'id' => 'message-2',
         'conversation_id' => $conversationId,
