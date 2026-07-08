@@ -165,15 +165,30 @@ class DatabaseConversationStore implements ConversationStore
                         ];
                     }
 
-                    $messages = [
-                        new AssistantMessage(
-                            '',
-                            $toolCalls->map(ToolCall::fromArray(...)),
-                        ),
-                        new ToolResultMessage(
-                            $toolResults->map(ToolResult::fromArray(...)),
-                        ),
-                    ];
+                    $callIds = $toolCalls->pluck('id')->all();
+
+                    [$priorTurn, $currentTurn] = $toolResults->partition(
+                        fn (array $toolResult) => ! in_array($toolResult['id'], $callIds, true)
+                    );
+
+                    $messages = [];
+
+                    if ($priorTurn->isNotEmpty()) {
+                        $messages[] = new ToolResultMessage($priorTurn
+                            ->map(ToolResult::fromArray(...))
+                            ->values());
+                    }
+
+                    $messages[] = new AssistantMessage(
+                        '',
+                        $toolCalls->map(ToolCall::fromArray(...)),
+                    );
+
+                    if ($currentTurn->isNotEmpty()) {
+                        $messages[] = new ToolResultMessage($currentTurn
+                            ->map(ToolResult::fromArray(...))
+                            ->values());
+                    }
 
                     if (filled($record->content)) {
                         $messages[] = new AssistantMessage($record->content);

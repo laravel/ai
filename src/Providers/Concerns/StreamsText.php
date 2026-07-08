@@ -18,6 +18,7 @@ use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
+use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 
 use function Laravel\Ai\pipeline;
 
@@ -61,7 +62,7 @@ trait StreamsText
 
                         $this->listenForToolInvocations($invocationId, $agent);
 
-                        yield from $this->textGenerationLoop()->stream(
+                        foreach ($this->textGenerationLoop()->stream(
                             $invocationId,
                             $this,
                             $prompt->model,
@@ -72,15 +73,17 @@ trait StreamsText
                             TextGenerationOptions::forAgent($agent),
                             $prompt->timeout,
                             $prompt->prompt instanceof ToolApproval && ! Ai::hasFakeGatewayFor($agent::class) ? $prompt->prompt : null,
-                        );
+                        ) as $event) {
+                            if ($event instanceof ToolApprovalRequest && ! $agent instanceof Conversational) {
+                                throw ApprovalNotResumableException::make();
+                            }
+
+                            yield $event;
+                        }
                     },
                     $meta,
                 );
             })->then(function (StreamedAgentResponse $response) use ($invocationId, $prompt, &$processedPrompt) {
-                if ($response->awaitingApproval() && ! $prompt->agent instanceof Conversational) {
-                    throw ApprovalNotResumableException::make();
-                }
-
                 $this->events->dispatch(
                     new AgentStreamed($invocationId, $processedPrompt ?? $prompt, $response)
                 );
