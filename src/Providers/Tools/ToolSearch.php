@@ -27,7 +27,7 @@ class ToolSearch extends ProviderTool
     }
 
     /**
-     * Count the given tools for step budgeting, expanding each ToolSearch into its deferred tool count.
+     * Count the given tools for step budgeting, expanding each ToolSearch into its deferred tools.
      *
      * @param  array<mixed>  $tools
      */

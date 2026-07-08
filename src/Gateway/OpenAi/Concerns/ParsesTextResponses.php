@@ -67,7 +67,7 @@ trait ParsesTextResponses
     }
 
     /**
-     * Capture the full ordered response output so a stateless (store=false) continuation can replay it verbatim, preserving the reasoning/tool/message ordering the model produced.
+     * Capture the ordered response output for stateless (store=false) replay.
      *
      * @return array<int, array<string, mixed>>
      */
