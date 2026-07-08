@@ -16,6 +16,7 @@ use Laravel\Ai\Providers\Tools\ProviderTool;
 use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Laravel\Ai\Tools\ToolNameResolver;
+use LogicException;
 use RuntimeException;
 
 trait MapsTools
@@ -62,13 +63,13 @@ trait MapsTools
     protected function guardToolSearchSupport(Provider $provider, string $model, bool $stateless = false): void
     {
         if (! $provider instanceof SupportsToolSearch || ! $provider->supportsToolSearch($model)) {
-            throw new RuntimeException(
+            throw new LogicException(
                 "Provider [{$provider->name()}] does not support tool search for model [{$model}]."
             );
         }
 
         if ($stateless) {
-            throw new RuntimeException(
+            throw new LogicException(
                 "Provider [{$provider->name()}] does not support tool search when response storage is disabled (store=false)."
             );
         }

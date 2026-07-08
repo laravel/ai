@@ -36,7 +36,7 @@ test('Azure rejects a ToolSearch tool because it does not support hosted tool se
     };
 
     expect(fn () => $agent->prompt('Hi', provider: 'azure'))
-        ->toThrow(RuntimeException::class, 'does not support tool search');
+        ->toThrow(LogicException::class, 'does not support tool search');
 
     Http::assertNothingSent();
 });

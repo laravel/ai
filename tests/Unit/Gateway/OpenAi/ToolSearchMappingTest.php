@@ -132,7 +132,7 @@ test('throws when the provider does not support tool search', function () {
     };
 
     openAiToolSearchMapper()->map([new NonStrictTool, new ToolSearch(tools: [new DeferredTool])], $provider);
-})->throws(RuntimeException::class, 'does not support tool search');
+})->throws(LogicException::class, 'does not support tool search');
 
 test('throws when the model does not support tool search', function () {
     $provider = new class extends Provider implements SupportsToolSearch
@@ -158,4 +158,4 @@ test('throws when the model does not support tool search', function () {
         $provider,
         'gpt-5.1',
     );
-})->throws(RuntimeException::class, 'gpt-5.1');
+})->throws(LogicException::class, 'gpt-5.1');

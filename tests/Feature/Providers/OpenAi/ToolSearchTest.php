@@ -44,7 +44,7 @@ test('rejects a ToolSearch tool when response storage is disabled', function () 
     Http::fake(['*' => fakeOpenAiResponse('ok')]);
 
     expect(fn () => (new OpenAiToolSearchAgent)->prompt('Find the secret', provider: 'openai'))
-        ->toThrow(RuntimeException::class, 'store=false');
+        ->toThrow(LogicException::class, 'store=false');
 
     Http::assertNothingSent();
 });
@@ -53,7 +53,7 @@ test('rejects a ToolSearch tool on a model older than gpt-5.4', function () {
     Http::fake(['*' => fakeOpenAiResponse('ok')]);
 
     expect(fn () => (new OpenAiToolSearchAgent)->prompt('Hi', provider: 'openai', model: 'gpt-5.1'))
-        ->toThrow(RuntimeException::class, 'gpt-5.1');
+        ->toThrow(LogicException::class, 'gpt-5.1');
 
     Http::assertNothingSent();
 });
