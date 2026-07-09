@@ -1,0 +1,38 @@
+<?php
+
+namespace Tests\Fixtures\Agents;
+
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Enums\ToolChoiceMode;
+use Laravel\Ai\Promptable;
+use Laravel\Ai\ToolChoice;
+use Tests\Fixtures\Tools\NamedTool;
+use Tests\Fixtures\Tools\RandomNumberGenerator;
+
+class ToolChoiceAgent implements Agent, HasTools
+{
+    use Promptable;
+
+    public function __construct(
+        private ToolChoice|ToolChoiceMode|string|array|null $toolChoice = null,
+    ) {}
+
+    public function instructions(): string
+    {
+        return 'You are a helpful assistant.';
+    }
+
+    public function toolChoice(): ToolChoice|ToolChoiceMode|string|array|null
+    {
+        return $this->toolChoice;
+    }
+
+    public function tools(): iterable
+    {
+        return [
+            new RandomNumberGenerator,
+            new NamedTool('custom_named_tool'),
+        ];
+    }
+}

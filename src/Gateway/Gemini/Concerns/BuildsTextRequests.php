@@ -3,11 +3,13 @@
 namespace Laravel\Ai\Gateway\Gemini\Concerns;
 
 use Illuminate\Support\Arr;
+use Laravel\Ai\Enums\ToolChoiceMode;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\ToolResult;
+use Laravel\Ai\ToolChoice;
 
 trait BuildsTextRequests
 {
@@ -64,6 +66,12 @@ trait BuildsTextRequests
 
         if (filled($tools)) {
             $body['tools'] = $this->mapTools($tools, $provider);
+
+            if ($options?->toolChoice) {
+                $body['tool_config'] = [
+                    'function_calling_config' => $this->functionCallingConfig($options->toolChoice),
+                ];
+            }
         }
 
         $generationConfig = [];
@@ -134,5 +142,23 @@ trait BuildsTextRequests
     protected function buildResponseSchema(array $schema): array
     {
         return (new ObjectSchema($schema))->toSchema();
+    }
+
+    /**
+     * Map a tool choice to the Gemini function_calling_config block.
+     *
+     * @return array<string, mixed>
+     */
+    protected function functionCallingConfig(ToolChoice $choice): array
+    {
+        return match ($choice->mode) {
+            ToolChoiceMode::Auto => ['mode' => 'AUTO'],
+            ToolChoiceMode::None => ['mode' => 'NONE'],
+            ToolChoiceMode::Required => ['mode' => 'ANY'],
+            ToolChoiceMode::Tool => [
+                'mode' => 'ANY',
+                'allowed_function_names' => [$choice->toolName],
+            ],
+        };
     }
 }

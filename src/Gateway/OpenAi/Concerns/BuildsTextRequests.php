@@ -4,10 +4,12 @@ namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
 use Illuminate\Support\Arr;
 use Laravel\Ai\Attributes\Strict;
+use Laravel\Ai\Enums\ToolChoiceMode;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\ToolChoice;
 
 trait BuildsTextRequests
 {
@@ -83,7 +85,9 @@ trait BuildsTextRequests
         Provider $provider,
     ): array {
         if (filled($tools)) {
-            $body['tool_choice'] = 'auto';
+            $body['tool_choice'] = $options?->toolChoice
+                ? $this->mapToolChoice($options->toolChoice)
+                : 'auto';
             $body['tools'] = $this->mapTools($tools, $provider);
         }
 
@@ -118,6 +122,22 @@ trait BuildsTextRequests
         }
 
         return $body;
+    }
+
+    /**
+     * Map a tool choice to the OpenAI Responses tool_choice shape.
+     *
+     * @return string|array<string, mixed>
+     */
+    protected function mapToolChoice(ToolChoice $choice): string|array
+    {
+        return match ($choice->mode) {
+            ToolChoiceMode::Auto, ToolChoiceMode::None, ToolChoiceMode::Required => $choice->mode->value,
+            ToolChoiceMode::Tool => [
+                'type' => 'function',
+                'name' => $choice->toolName,
+            ],
+        };
     }
 
     /**

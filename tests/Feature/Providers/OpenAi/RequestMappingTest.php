@@ -4,8 +4,10 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeAgent;
+use Tests\Fixtures\Agents\AttributeToolChoiceAgent;
 use Tests\Fixtures\Agents\NestedStructuredAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
+use Tests\Fixtures\Agents\ToolChoiceAgent;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
 
 use function Laravel\Ai\agent;
@@ -280,4 +282,37 @@ test('citations omit span indices when not provided by the api', function () {
     expect($response->meta->citations)->toHaveCount(1)
         ->and($response->meta->citations[0]->startIndex)->toBeNull()
         ->and($response->meta->citations[0]->endIndex)->toBeNull();
+});
+
+test('required tool choice forces the model to call a tool', function () {
+    Http::fake(['*' => fakeOpenAiResponse('42')]);
+
+    (new ToolChoiceAgent('required'))->prompt('Give me a number', provider: 'openai');
+
+    Http::assertSent(function (Request $request) {
+        return json_decode($request->body(), true)['tool_choice'] === 'required';
+    });
+});
+
+test('required tool choice can be set via attribute', function () {
+    Http::fake(['*' => fakeOpenAiResponse('42')]);
+
+    (new AttributeToolChoiceAgent)->prompt('Give me a number', provider: 'openai');
+
+    Http::assertSent(function (Request $request) {
+        return json_decode($request->body(), true)['tool_choice'] === 'required';
+    });
+});
+
+test('named tool choice forces a specific function', function () {
+    Http::fake(['*' => fakeOpenAiResponse('42')]);
+
+    (new ToolChoiceAgent(['tool' => 'custom_named_tool']))->prompt('Give me a number', provider: 'openai');
+
+    Http::assertSent(function (Request $request) {
+        return json_decode($request->body(), true)['tool_choice'] === [
+            'type' => 'function',
+            'name' => 'custom_named_tool',
+        ];
+    });
 });
