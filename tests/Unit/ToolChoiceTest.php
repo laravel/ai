@@ -68,3 +68,49 @@ test('options leave tool choice null when the agent declares none', function () 
     expect(TextGenerationOptions::forAgent(new AssistantAgent)->toolChoice)->toBeNull();
     expect(TextGenerationOptions::forAgent(new ToolChoiceAgent)->toolChoice)->toBeNull();
 });
+
+test('forStep releases a forced tool choice after the first step', function () {
+    foreach ([ToolChoice::required, ToolChoice::tool] as $mode) {
+        $options = new TextGenerationOptions(
+            toolChoice: $mode === ToolChoice::tool ? ToolChoice::tool('calculator') : new ToolChoice($mode),
+        );
+
+        expect($options->forStep(0))->toBe($options)
+            ->and($options->forStep(0)->toolChoice->mode)->toBe($mode)
+            ->and($options->forStep(1)->toolChoice)->toBeNull()
+            ->and($options->forStep(2)->toolChoice)->toBeNull();
+    }
+});
+
+test('forStep keeps auto and none tool choices on every step', function () {
+    foreach ([ToolChoice::auto, ToolChoice::none] as $mode) {
+        $options = new TextGenerationOptions(toolChoice: new ToolChoice($mode));
+
+        expect($options->forStep(0)->toolChoice->mode)->toBe($mode)
+            ->and($options->forStep(3)->toolChoice->mode)->toBe($mode);
+    }
+});
+
+test('forStep preserves other options when releasing the tool choice', function () {
+    $options = new TextGenerationOptions(
+        maxSteps: 4,
+        maxTokens: 256,
+        temperature: 0.7,
+        topP: 0.9,
+        toolChoice: new ToolChoice(ToolChoice::required),
+    );
+
+    $stepped = $options->forStep(1);
+
+    expect($stepped->toolChoice)->toBeNull()
+        ->and($stepped->maxSteps)->toBe(4)
+        ->and($stepped->maxTokens)->toBe(256)
+        ->and($stepped->temperature)->toBe(0.7)
+        ->and($stepped->topP)->toBe(0.9);
+});
+
+test('forStep is a no-op when no tool choice is set', function () {
+    $options = new TextGenerationOptions(maxSteps: 3);
+
+    expect($options->forStep(2))->toBe($options);
+});

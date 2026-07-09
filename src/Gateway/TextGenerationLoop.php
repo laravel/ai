@@ -66,7 +66,7 @@ class TextGenerationLoop
                 $allMessages,
                 $tools,
                 $schema,
-                $options,
+                $options?->forStep($step),
                 $timeout,
                 $stepContext,
             );
@@ -151,7 +151,7 @@ class TextGenerationLoop
                 $allMessages,
                 $tools,
                 $schema,
-                $options,
+                $options?->forStep($step),
                 $timeout,
                 $stepContext,
             );

@@ -42,6 +42,29 @@ class TextGenerationOptions
     }
 
     /**
+     * Resolve the options for the given step, releasing a forced tool choice after the first step so the model can answer.
+     */
+    public function forStep(int $stepNumber): self
+    {
+        if ($stepNumber === 0 || $this->toolChoice === null) {
+            return $this;
+        }
+
+        if (! in_array($this->toolChoice->mode, [ToolChoice::required, ToolChoice::tool], true)) {
+            return $this;
+        }
+
+        return new self(
+            maxSteps: $this->maxSteps,
+            maxTokens: $this->maxTokens,
+            temperature: $this->temperature,
+            agent: $this->agent,
+            topP: $this->topP,
+            toolChoice: null,
+        );
+    }
+
+    /**
      * Create a new TextGenerationOptions instance for the given agent.
      */
     public static function forAgent(Agent $agent): self
