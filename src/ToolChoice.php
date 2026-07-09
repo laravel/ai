@@ -37,30 +37,6 @@ class ToolChoice
     }
 
     /**
-     * Let the model decide whether to call a tool (the provider default).
-     */
-    public static function auto(): self
-    {
-        return new self(self::auto);
-    }
-
-    /**
-     * Prevent the model from calling any tool.
-     */
-    public static function none(): self
-    {
-        return new self(self::none);
-    }
-
-    /**
-     * Require the model to call one of the available tools.
-     */
-    public static function required(): self
-    {
-        return new self(self::required);
-    }
-
-    /**
      * Require the model to call the tool with the given name.
      */
     public static function tool(string $name): self

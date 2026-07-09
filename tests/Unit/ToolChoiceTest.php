@@ -6,11 +6,11 @@ use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeToolChoiceAgent;
 use Tests\Fixtures\Agents\ToolChoiceAgent;
 
-test('named constructors build the expected mode and tool name', function () {
-    expect(ToolChoice::auto()->mode)->toBe(ToolChoice::auto)
-        ->and(ToolChoice::auto()->toolName)->toBeNull()
-        ->and(ToolChoice::none()->mode)->toBe(ToolChoice::none)
-        ->and(ToolChoice::required()->mode)->toBe(ToolChoice::required)
+test('constructor and tool() build the expected mode and tool name', function () {
+    expect((new ToolChoice(ToolChoice::auto))->mode)->toBe(ToolChoice::auto)
+        ->and((new ToolChoice(ToolChoice::auto))->toolName)->toBeNull()
+        ->and((new ToolChoice(ToolChoice::none))->mode)->toBe(ToolChoice::none)
+        ->and((new ToolChoice(ToolChoice::required))->mode)->toBe(ToolChoice::required)
         ->and(ToolChoice::tool('calculator')->mode)->toBe(ToolChoice::tool)
         ->and(ToolChoice::tool('calculator')->toolName)->toBe('calculator');
 });
@@ -26,7 +26,7 @@ test('non-tool modes reject a tool name', function () {
 });
 
 test('from coerces instances and strings', function () {
-    $choice = ToolChoice::required();
+    $choice = new ToolChoice(ToolChoice::required);
 
     expect(ToolChoice::from($choice))->toBe($choice)
         ->and(ToolChoice::from('auto')->mode)->toBe(ToolChoice::auto)

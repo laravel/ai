@@ -91,7 +91,7 @@ trait BuildsTextRequests
 
         if ($thinking && in_array($toolChoice->mode, [ToolChoice::required, ToolChoice::tool], true)) {
             throw new InvalidArgumentException(
-                'Anthropic cannot force tool use while extended thinking is enabled. Use ToolChoice::auto() or ToolChoice::none(), or disable thinking.'
+                'Anthropic cannot force tool use while extended thinking is enabled. Use ToolChoice::auto or ToolChoice::none, or disable thinking.'
             );
         }
 
