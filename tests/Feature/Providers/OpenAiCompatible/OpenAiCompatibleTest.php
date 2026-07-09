@@ -7,7 +7,9 @@ use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 use Tests\Fixtures\Agents\AttributeAgent;
+use Tests\Fixtures\Agents\AttributeToolChoiceAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
+use Tests\Fixtures\Agents\ToolChoiceAgent;
 
 use function Laravel\Ai\agent;
 
@@ -97,6 +99,43 @@ test('structured output defaults to json schema response format', function () {
         return $format['type'] === 'json_schema'
             && $format['json_schema']['strict'] === true;
     });
+});
+
+test('required tool choice forces the model to call a tool', function () {
+    Http::fake(['*' => fakeOpenAiCompatibleResponse('42')]);
+
+    (new ToolChoiceAgent('required'))->prompt('Give me a number', provider: 'openai-compatible');
+
+    Http::assertSent(fn (Request $request) => json_decode($request->body(), true)['tool_choice'] === 'required');
+});
+
+test('required tool choice can be set via attribute', function () {
+    Http::fake(['*' => fakeOpenAiCompatibleResponse('42')]);
+
+    (new AttributeToolChoiceAgent)->prompt('Give me a number', provider: 'openai-compatible');
+
+    Http::assertSent(fn (Request $request) => json_decode($request->body(), true)['tool_choice'] === 'required');
+});
+
+test('named tool choice forces a specific function', function () {
+    Http::fake(['*' => fakeOpenAiCompatibleResponse('42')]);
+
+    (new ToolChoiceAgent(['tool' => 'custom_named_tool']))->prompt('Give me a number', provider: 'openai-compatible');
+
+    Http::assertSent(function (Request $request) {
+        return json_decode($request->body(), true)['tool_choice'] === [
+            'type' => 'function',
+            'function' => ['name' => 'custom_named_tool'],
+        ];
+    });
+});
+
+test('none tool choice prevents tool calls', function () {
+    Http::fake(['*' => fakeOpenAiCompatibleResponse('Sure')]);
+
+    (new ToolChoiceAgent('none'))->prompt('Just talk', provider: 'openai-compatible');
+
+    Http::assertSent(fn (Request $request) => json_decode($request->body(), true)['tool_choice'] === 'none');
 });
 
 test('max tokens uses the max_tokens field by default', function () {

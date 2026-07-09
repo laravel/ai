@@ -2,24 +2,36 @@
 
 namespace Laravel\Ai;
 
+use Attribute;
 use InvalidArgumentException;
-use Laravel\Ai\Enums\ToolChoiceMode;
 
 /**
- * Controls whether and which tool a model must call, mapped to each provider's
- * native tool_choice field: auto (default), none, required (any tool), or a named tool.
+ * Controls whether and which tool a model must call, mapped to each provider's native tool_choice field.
  */
-final class ToolChoice
+#[Attribute(Attribute::TARGET_CLASS)]
+class ToolChoice
 {
+    public const string auto = 'auto';
+
+    public const string none = 'none';
+
+    public const string required = 'required';
+
+    public const string tool = 'tool';
+
     public function __construct(
-        public readonly ToolChoiceMode $mode,
+        public readonly string $mode,
         public readonly ?string $toolName = null,
     ) {
-        if ($mode === ToolChoiceMode::Tool && ($toolName === null || $toolName === '')) {
+        if (! in_array($mode, [self::auto, self::none, self::required, self::tool], true)) {
+            throw new InvalidArgumentException("Unrecognized tool choice mode \"{$mode}\".");
+        }
+
+        if ($mode === self::tool && ($toolName === null || $toolName === '')) {
             throw new InvalidArgumentException('Tool choice mode "tool" requires a tool name.');
         }
 
-        if ($mode !== ToolChoiceMode::Tool && $toolName !== null) {
+        if ($mode !== self::tool && $toolName !== null) {
             throw new InvalidArgumentException('Tool choice "toolName" is only valid for mode "tool".');
         }
     }
@@ -29,7 +41,7 @@ final class ToolChoice
      */
     public static function auto(): self
     {
-        return new self(ToolChoiceMode::Auto);
+        return new self(self::auto);
     }
 
     /**
@@ -37,7 +49,7 @@ final class ToolChoice
      */
     public static function none(): self
     {
-        return new self(ToolChoiceMode::None);
+        return new self(self::none);
     }
 
     /**
@@ -45,7 +57,7 @@ final class ToolChoice
      */
     public static function required(): self
     {
-        return new self(ToolChoiceMode::Required);
+        return new self(self::required);
     }
 
     /**
@@ -53,29 +65,22 @@ final class ToolChoice
      */
     public static function tool(string $name): self
     {
-        return new self(ToolChoiceMode::Tool, $name);
+        return new self(self::tool, $name);
     }
 
     /**
-     * Coerce a flexible value into a ToolChoice instance.
+     * Coerce a ToolChoice, a mode string, or a ['tool' => 'name'] array into a ToolChoice instance.
      *
-     * Accepts a ToolChoice, a ToolChoiceMode, the strings "auto"|"none"|"required",
-     * or an array selecting a tool: ['tool' => 'name'], ['toolName' => 'name'], or ['name' => 'name'].
-     *
-     * @param  self|ToolChoiceMode|string|array<string, mixed>  $value
+     * @param  self|string|array<string, mixed>  $value
      */
-    public static function from(self|ToolChoiceMode|string|array $value): self
+    public static function from(self|string|array $value): self
     {
         if ($value instanceof self) {
             return $value;
         }
 
-        if ($value instanceof ToolChoiceMode) {
-            return new self($value);
-        }
-
         if (is_string($value)) {
-            return new self(ToolChoiceMode::from($value));
+            return new self($value);
         }
 
         foreach (['toolName', 'tool', 'name'] as $key) {

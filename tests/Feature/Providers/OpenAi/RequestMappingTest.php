@@ -316,3 +316,13 @@ test('named tool choice forces a specific function', function () {
         ];
     });
 });
+
+test('none tool choice prevents tool calls', function () {
+    Http::fake(['*' => fakeOpenAiResponse('Sure')]);
+
+    (new ToolChoiceAgent('none'))->prompt('Just talk', provider: 'openai');
+
+    Http::assertSent(function (Request $request) {
+        return json_decode($request->body(), true)['tool_choice'] === 'none';
+    });
+});

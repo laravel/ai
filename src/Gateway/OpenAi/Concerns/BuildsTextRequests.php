@@ -4,7 +4,6 @@ namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
 use Illuminate\Support\Arr;
 use Laravel\Ai\Attributes\Strict;
-use Laravel\Ai\Enums\ToolChoiceMode;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\ObjectSchema;
@@ -132,8 +131,8 @@ trait BuildsTextRequests
     protected function mapToolChoice(ToolChoice $choice): string|array
     {
         return match ($choice->mode) {
-            ToolChoiceMode::Auto, ToolChoiceMode::None, ToolChoiceMode::Required => $choice->mode->value,
-            ToolChoiceMode::Tool => [
+            ToolChoice::auto, ToolChoice::none, ToolChoice::required => $choice->mode,
+            ToolChoice::tool => [
                 'type' => 'function',
                 'name' => $choice->toolName,
             ],

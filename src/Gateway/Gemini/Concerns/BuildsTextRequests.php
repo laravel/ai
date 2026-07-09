@@ -3,7 +3,6 @@
 namespace Laravel\Ai\Gateway\Gemini\Concerns;
 
 use Illuminate\Support\Arr;
-use Laravel\Ai\Enums\ToolChoiceMode;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
@@ -152,10 +151,10 @@ trait BuildsTextRequests
     protected function functionCallingConfig(ToolChoice $choice): array
     {
         return match ($choice->mode) {
-            ToolChoiceMode::Auto => ['mode' => 'AUTO'],
-            ToolChoiceMode::None => ['mode' => 'NONE'],
-            ToolChoiceMode::Required => ['mode' => 'ANY'],
-            ToolChoiceMode::Tool => [
+            ToolChoice::auto => ['mode' => 'AUTO'],
+            ToolChoice::none => ['mode' => 'NONE'],
+            ToolChoice::required => ['mode' => 'ANY'],
+            ToolChoice::tool => [
                 'mode' => 'ANY',
                 'allowed_function_names' => [$choice->toolName],
             ],

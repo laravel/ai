@@ -2,13 +2,13 @@
 
 namespace Tests\Fixtures\Agents;
 
-use Laravel\Ai\Attributes\ToolChoice;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Promptable;
+use Laravel\Ai\ToolChoice;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
 
-#[ToolChoice('required')]
+#[ToolChoice(ToolChoice::required)]
 class AttributeToolChoiceAgent implements Agent, HasTools
 {
     use Promptable;

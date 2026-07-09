@@ -5,7 +5,6 @@ namespace Laravel\Ai\Gateway;
 use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Attributes\MaxTokens;
 use Laravel\Ai\Attributes\Temperature;
-use Laravel\Ai\Attributes\ToolChoice as ToolChoiceAttribute;
 use Laravel\Ai\Attributes\TopP;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasProviderOptions;
@@ -76,9 +75,9 @@ class TextGenerationOptions
             }
         }
 
-        $attributes = $reflection->getAttributes(ToolChoiceAttribute::class);
+        $attributes = $reflection->getAttributes(ToolChoice::class);
 
-        return ! empty($attributes) ? $attributes[0]->newInstance()->value : null;
+        return ! empty($attributes) ? $attributes[0]->newInstance() : null;
     }
 
     /**

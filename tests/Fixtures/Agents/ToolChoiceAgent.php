@@ -4,7 +4,6 @@ namespace Tests\Fixtures\Agents;
 
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasTools;
-use Laravel\Ai\Enums\ToolChoiceMode;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\ToolChoice;
 use Tests\Fixtures\Tools\NamedTool;
@@ -15,7 +14,7 @@ class ToolChoiceAgent implements Agent, HasTools
     use Promptable;
 
     public function __construct(
-        private ToolChoice|ToolChoiceMode|string|array|null $toolChoice = null,
+        private ToolChoice|string|array|null $toolChoice = null,
     ) {}
 
     public function instructions(): string
@@ -23,7 +22,7 @@ class ToolChoiceAgent implements Agent, HasTools
         return 'You are a helpful assistant.';
     }
 
-    public function toolChoice(): ToolChoice|ToolChoiceMode|string|array|null
+    public function toolChoice(): ToolChoice|string|array|null
     {
         return $this->toolChoice;
     }

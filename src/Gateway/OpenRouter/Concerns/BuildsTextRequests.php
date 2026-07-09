@@ -47,7 +47,9 @@ trait BuildsTextRequests
             $mappedTools = $this->mapTools($tools, $provider);
 
             if (filled($mappedTools)) {
-                $body['tool_choice'] = 'auto';
+                $body['tool_choice'] = $options?->toolChoice
+                    ? $this->mapToolChoice($options->toolChoice)
+                    : 'auto';
                 $body['tools'] = $mappedTools;
             }
         }

@@ -4,7 +4,6 @@ namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Illuminate\Support\Arr;
 use InvalidArgumentException;
-use Laravel\Ai\Enums\ToolChoiceMode;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
@@ -70,13 +69,7 @@ trait BuildsTextRequests
     }
 
     /**
-     * Determine the tool_choice strategy for the request.
-     *
-     * Structured output drives its own tool_choice (the synthetic tool, or "any" alongside
-     * real tools), falling back to "auto" while thinking is enabled since the synthetic tool
-     * cannot be forced then. For a normal request the agent's tool choice is honored, but
-     * forcing a tool while extended thinking is enabled is rejected: Anthropic only allows
-     * "auto" or "none" in that mode, so we fail loudly instead of silently downgrading it.
+     * Determine the tool_choice strategy, rejecting a forced tool while thinking is enabled since Anthropic only allows "auto" or "none" in that mode.
      */
     protected function resolveToolChoice(?array $schema, array $tools, array $providerOptions, ?ToolChoice $toolChoice = null): array
     {
@@ -96,17 +89,17 @@ trait BuildsTextRequests
             return ['type' => 'auto'];
         }
 
-        if ($thinking && in_array($toolChoice->mode, [ToolChoiceMode::Required, ToolChoiceMode::Tool], true)) {
+        if ($thinking && in_array($toolChoice->mode, [ToolChoice::required, ToolChoice::tool], true)) {
             throw new InvalidArgumentException(
                 'Anthropic cannot force tool use while extended thinking is enabled. Use ToolChoice::auto() or ToolChoice::none(), or disable thinking.'
             );
         }
 
         return match ($toolChoice->mode) {
-            ToolChoiceMode::Auto => ['type' => 'auto'],
-            ToolChoiceMode::None => ['type' => 'none'],
-            ToolChoiceMode::Required => ['type' => 'any'],
-            ToolChoiceMode::Tool => ['type' => 'tool', 'name' => $toolChoice->toolName],
+            ToolChoice::auto => ['type' => 'auto'],
+            ToolChoice::none => ['type' => 'none'],
+            ToolChoice::required => ['type' => 'any'],
+            ToolChoice::tool => ['type' => 'tool', 'name' => $toolChoice->toolName],
         };
     }
 
