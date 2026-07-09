@@ -99,7 +99,7 @@ trait MapsAttachments
             };
 
             return $attachment instanceof HasProviderOptions
-                ? array_merge($part, $attachment->providerOptions($providerKey))
+                ? array_merge($attachment->providerOptions($providerKey), $part)
                 : $part;
         })->all();
     }

@@ -419,6 +419,32 @@ test('attachments without provider options map unchanged', function () {
     });
 });
 
+test('provider options cannot overwrite the mapped structural keys', function () {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiResponse('I see an image'),
+    ]);
+
+    $image = (new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png'))
+        ->withProviderOptions(['type' => 'input_text', 'detail' => 'low']);
+
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [$image],
+        provider: 'openai',
+    );
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $userMessage = collect($body['input'])->firstWhere('role', 'user');
+        $imageBlock = collect($userMessage['content'])->firstWhere('type', 'input_image');
+
+        return $imageBlock !== null
+            && $imageBlock['type'] === 'input_image'
+            && ($imageBlock['detail'] ?? null) === 'low'
+            && str_starts_with($imageBlock['image_url'], 'data:image/png;base64,');
+    });
+});
+
 test('system instructions are in input array as system role', function () {
     Http::fake([
         'api.openai.com/*' => fakeOpenAiResponse(),
