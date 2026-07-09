@@ -182,10 +182,10 @@ class TextGenerationLoop
         $sawError = false;
 
         if ($approval !== null) {
-            [$approvalResults, $shouldContinue] = $this->resolveApprovalResults($approval, $messages, $tools);
+            [$approvalResults, $shouldContinue, $rejectedToolCallIds] = $this->resolveApprovalResults($approval, $messages, $tools);
 
             foreach ($approvalResults as $toolResult) {
-                $rejected = ($approval->decisions[$toolResult->id] ?? null)?->action === 'reject';
+                $rejected = in_array($toolResult->id, $rejectedToolCallIds, true);
 
                 yield (new ToolResultEvent(
                     strtolower((string) Str::uuid7()),
@@ -436,7 +436,7 @@ class TextGenerationLoop
     /**
      * @param  Message[]  $messages
      * @param  Tool[]  $tools
-     * @return array{array<int, ToolResult>, bool}
+     * @return array{array<int, ToolResult>, bool, array<int, string>}
      */
     protected function resolveApprovalResults(ToolApproval $approval, array $messages, array $tools): array
     {
@@ -457,7 +457,11 @@ class TextGenerationLoop
         $decisionIds = array_keys($approval->decisions);
 
         $unknown = array_values(array_diff($decisionIds, $gatedIds));
-        $missing = array_values(array_diff($gatedIds, $decisionIds));
+
+        // A default decision stands in for any gated call that is not explicitly decided...
+        $missing = $approval->default === null
+            ? array_values(array_diff($gatedIds, $decisionIds))
+            : [];
 
         if ($unknown !== [] || $missing !== []) {
             $alreadyResolved = array_values(array_intersect($unknown, $resolvedToolCallIds));
@@ -470,12 +474,18 @@ class TextGenerationLoop
         }
 
         $toolResults = [];
+        $rejectedToolCallIds = [];
         $shouldContinue = false;
 
         foreach ($pendingToolCalls as $toolCall) {
-            $decision = $approval->decisions[$toolCall->id] ?? Approval::approve();
+            // The default only stands in for gated calls, so ungated companion calls always execute...
+            $decision = $approval->decisions[$toolCall->id]
+                ?? (in_array($toolCall->id, $gatedIds, true) ? $approval->default : null)
+                ?? Approval::approve();
 
             if ($decision->action === 'reject') {
+                $rejectedToolCallIds[] = $toolCall->id;
+
                 $toolResults[] = new ToolResult(
                     $toolCall->id,
                     $toolCall->name,
@@ -513,7 +523,7 @@ class TextGenerationLoop
             $shouldContinue = true;
         }
 
-        return [$toolResults, $shouldContinue];
+        return [$toolResults, $shouldContinue, $rejectedToolCallIds];
     }
 
     /**

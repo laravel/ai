@@ -269,6 +269,160 @@ test('a bare rejection stops the loop without another model call', function () {
         ->and($response->toolResults[0]->result)->toBe('Tool call rejected by approver.');
 });
 
+test('a default decision approves every pending call without naming ids', function () {
+    $gated = new TextGenerationLoopApprovableTool;
+    $ungated = new TextGenerationLoopCountingTool;
+    $gatedCall = new ToolCall('call-gated', TextGenerationLoopApprovableTool::class, ['value' => 'approved'], 'call-gated');
+    $ungatedCall = new ToolCall('call-ungated', TextGenerationLoopCountingTool::class, [], 'call-ungated');
+    $gateway = new TextGenerationLoopFakeGateway([
+        new StepResponse('done', [], FinishReason::Stop, new Usage, new Meta('fake', 'model')),
+    ]);
+
+    $response = (new TextGenerationLoop($gateway))->generate(
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [new AssistantMessage('', collect([$gatedCall, $ungatedCall]))],
+        [$gated, $ungated],
+        null,
+        new TextGenerationOptions(maxSteps: 2),
+        null,
+        ToolApproval::approveAll(),
+    );
+
+    expect($gated->calls)->toBe(1)
+        ->and($ungated->calls)->toBe(1)
+        ->and($response->awaitingApproval())->toBeFalse()
+        ->and($response->toolResults)->toHaveCount(2)
+        ->and($response->text)->toBe('done');
+});
+
+test('an explicit decision overrides the default decision', function () {
+    $tool = new TextGenerationLoopApprovableTool;
+    $firstCall = new ToolCall('call-1', TextGenerationLoopApprovableTool::class, ['value' => 'approved'], 'call-1');
+    $secondCall = new ToolCall('call-2', TextGenerationLoopApprovableTool::class, ['value' => 'blocked'], 'call-2');
+    $gateway = new TextGenerationLoopFakeGateway([
+        new StepResponse('done', [], FinishReason::Stop, new Usage, new Meta('fake', 'model')),
+    ]);
+
+    $response = (new TextGenerationLoop($gateway))->generate(
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [new AssistantMessage('', collect([$firstCall, $secondCall]))],
+        [$tool],
+        null,
+        new TextGenerationOptions(maxSteps: 2),
+        null,
+        new ToolApproval(['call-2' => Approval::reject('Wrong file')], Approval::approve()),
+    );
+
+    expect($tool->calls)->toBe(1)
+        ->and($tool->handledArguments)->toBe([['value' => 'approved']])
+        ->and($response->toolResults)->toHaveCount(2)
+        ->and($response->toolResults[1]->result)->toBe('Wrong file');
+});
+
+test('a default rejection only rejects gated calls and still runs ungated companions', function () {
+    $gated = new TextGenerationLoopApprovableTool;
+    $ungated = new TextGenerationLoopCountingTool;
+    $gatedCall = new ToolCall('call-gated', TextGenerationLoopApprovableTool::class, ['value' => 'blocked'], 'call-gated');
+    $ungatedCall = new ToolCall('call-ungated', TextGenerationLoopCountingTool::class, [], 'call-ungated');
+    $gateway = new TextGenerationLoopFakeGateway([
+        new StepResponse('done', [], FinishReason::Stop, new Usage, new Meta('fake', 'model')),
+    ]);
+
+    $response = (new TextGenerationLoop($gateway))->generate(
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [new AssistantMessage('', collect([$gatedCall, $ungatedCall]))],
+        [$gated, $ungated],
+        null,
+        new TextGenerationOptions(maxSteps: 2),
+        null,
+        ToolApproval::rejectAll('Not now'),
+    );
+
+    expect($gated->calls)->toBe(0)
+        ->and($ungated->calls)->toBe(1)
+        ->and($response->toolResults)->toHaveCount(2)
+        ->and($response->toolResults[0]->result)->toBe('Not now')
+        ->and($response->toolResults[1]->result)->toBe('counted');
+});
+
+test('a bare default rejection stops the loop without another model call', function () {
+    $tool = new TextGenerationLoopApprovableTool;
+    $toolCall = new ToolCall('call-1', TextGenerationLoopApprovableTool::class, ['value' => 'blocked'], 'call-1');
+    $gateway = new TextGenerationLoopFakeGateway;
+
+    $response = (new TextGenerationLoop($gateway))->generate(
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [new AssistantMessage('', collect([$toolCall]))],
+        [$tool],
+        null,
+        new TextGenerationOptions(maxSteps: 2),
+        null,
+        ToolApproval::rejectAll(),
+    );
+
+    expect($tool->calls)->toBe(0)
+        ->and($gateway->generateCalls)->toBe(0)
+        ->and($response->toolResults)->toHaveCount(1)
+        ->and($response->toolResults[0]->result)->toBe('Tool call rejected by approver.');
+});
+
+test('a default decision does not excuse decisions for unknown tool calls', function () {
+    $tool = new TextGenerationLoopApprovableTool;
+    $toolCall = new ToolCall('call-1', TextGenerationLoopApprovableTool::class, ['value' => 'pending'], 'call-1');
+
+    expect(fn () => (new TextGenerationLoop(new TextGenerationLoopFakeGateway))->generate(
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [new AssistantMessage('', collect([$toolCall]))],
+        [$tool],
+        null,
+        new TextGenerationOptions(maxSteps: 2),
+        null,
+        new ToolApproval(['call-2' => Approval::approve()], Approval::approve()),
+    ))->toThrow(ApprovalMismatchException::class);
+});
+
+test('a streamed default rejection marks the tool results as unsuccessful', function () {
+    $tool = new TextGenerationLoopApprovableTool;
+    $toolCall = new ToolCall('call-1', TextGenerationLoopApprovableTool::class, ['value' => 'blocked'], 'call-1');
+    $gateway = new TextGenerationLoopFakeGateway(streams: [
+        textGenerationLoopStreamStep(
+            events: [new TextDelta('text-delta', 'message-1', 'Understood.', time())],
+            returns: new StepResponse('Understood.', [], FinishReason::Stop, new Usage, new Meta('fake', 'model')),
+        ),
+    ]);
+
+    $events = iterator_to_array((new TextGenerationLoop($gateway))->stream(
+        'invocation-1',
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [new AssistantMessage('', collect([$toolCall]))],
+        [$tool],
+        null,
+        new TextGenerationOptions(maxSteps: 2),
+        null,
+        ToolApproval::rejectAll('Not now'),
+    ));
+
+    $toolResults = collect($events)->whereInstanceOf(ToolResultEvent::class);
+
+    expect($tool->calls)->toBe(0)
+        ->and($toolResults)->toHaveCount(1)
+        ->and($toolResults->first()->successful)->toBeFalse()
+        ->and($toolResults->first()->error)->toBe('Not now')
+        ->and(collect($events)->whereInstanceOf(StreamEnd::class))->toHaveCount(1);
+});
+
 test('it does not execute tool calls on the final generation step', function () {
     $tool = new TextGenerationLoopCountingTool;
     $gateway = new TextGenerationLoopFakeGateway([

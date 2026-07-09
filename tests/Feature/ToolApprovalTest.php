@@ -58,6 +58,62 @@ test('tool approval request parsing validates malformed decisions', function () 
     ]));
 })->throws(ValidationException::class);
 
+test('tool approval treats a wildcard decision as the default for undecided calls', function () {
+    $approval = ToolApproval::fromRequest(Request::create('/chat', 'POST', [
+        'decisions' => [
+            ['id' => '*', 'action' => 'approve'],
+        ],
+    ]));
+
+    expect($approval->decisions)->toBe([])
+        ->and($approval->default->action)->toBe('approve');
+});
+
+test('tool approval accepts a wildcard rejection with a reason', function () {
+    $approval = ToolApproval::fromRequest(Request::create('/chat', 'POST', [
+        'decisions' => [
+            ['id' => '*', 'action' => 'reason', 'result' => 'Not now'],
+        ],
+    ]));
+
+    expect($approval->decisions)->toBe([])
+        ->and($approval->default->action)->toBe('reject')
+        ->and($approval->default->result)->toBe('Not now');
+});
+
+test('tool approval treats explicit decisions as overrides of the wildcard', function () {
+    $approval = ToolApproval::fromRequest(Request::create('/chat', 'POST', [
+        'decisions' => [
+            ['id' => '*', 'action' => 'approve'],
+            ['id' => 'call-1', 'action' => 'reason', 'result' => 'Wrong file'],
+        ],
+    ]));
+
+    expect($approval->default->action)->toBe('approve')
+        ->and($approval->decisions['call-1']->action)->toBe('reject')
+        ->and($approval->decisions['call-1']->result)->toBe('Wrong file');
+});
+
+test('tool approval rejects a wildcard edit decision', function () {
+    ToolApproval::fromRequest(Request::create('/chat', 'POST', [
+        'decisions' => [
+            ['id' => '*', 'action' => 'edit', 'arguments' => ['path' => '/tmp/file']],
+        ],
+    ]));
+})->throws(ValidationException::class);
+
+test('tool approval from treats a wildcard key as the default for undecided calls', function () {
+    $approval = ToolApproval::from(['*' => true, 'call-1' => false]);
+
+    expect($approval->default->action)->toBe('approve')
+        ->and($approval->decisions)->toHaveKeys(['call-1'])
+        ->and($approval->decisions['call-1']->action)->toBe('reject');
+});
+
+test('tool approval from rejects a wildcard edit decision', function () {
+    ToolApproval::from(['*' => Approval::edit(['path' => '/tmp/file'])]);
+})->throws(InvalidArgumentException::class, 'The wildcard decision may not use the edit action.');
+
 test('agent responses render awaiting approval and complete payloads', function () {
     $pending = new PendingApproval('call-1', 'DeleteFile', ['path' => 'config/app.php'], 'Deletes a file');
 
