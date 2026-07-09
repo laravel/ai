@@ -69,7 +69,7 @@ trait BuildsTextRequests
     }
 
     /**
-     * Determine the tool_choice strategy, rejecting a forced tool while thinking is enabled since Anthropic only allows "auto" or "none" in that mode.
+     * Determine the tool_choice strategy for the request.
      */
     protected function resolveToolChoice(?array $schema, array $tools, array $providerOptions, ?ToolChoice $toolChoice = null): array
     {
