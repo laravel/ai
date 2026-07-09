@@ -8,6 +8,7 @@ use Laravel\Ai\Approvals\ToolApproval;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\StructuredAgentResponse;
 
 test('tool approval can be built from the canonical request payload', function () {
     $approval = ToolApproval::fromRequest(Request::create('/chat', 'POST', [
@@ -72,6 +73,12 @@ test('agent responses render awaiting approval and complete payloads', function 
         'conversation_id' => 'conversation-1',
         'reply' => 'Done',
     ]);
+});
+
+test('structured agent responses render their payload rather than the responsable envelope', function () {
+    $response = new StructuredAgentResponse('invocation-1', ['number' => 72019], '72019', new Usage, new Meta);
+
+    expect($response->toResponse(Request::create('/'))->getData(true))->toBe(['number' => 72019]);
 });
 
 test('tool approval from normalizes boolean decisions', function () {

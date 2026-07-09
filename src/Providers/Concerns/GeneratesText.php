@@ -82,7 +82,7 @@ trait GeneratesText
                     $prompt->prompt instanceof ToolApproval && ! Ai::hasFakeGatewayFor($agent::class) ? $prompt->prompt : null,
                 );
 
-                if ($response->awaitingApproval() && ! $agent instanceof Conversational) {
+                if ($response->awaitingApproval() && ! ApprovalNotResumableException::resumable($agent)) {
                     throw ApprovalNotResumableException::make();
                 }
 

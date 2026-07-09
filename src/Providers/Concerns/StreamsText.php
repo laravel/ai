@@ -74,7 +74,7 @@ trait StreamsText
                             $prompt->timeout,
                             $prompt->prompt instanceof ToolApproval && ! Ai::hasFakeGatewayFor($agent::class) ? $prompt->prompt : null,
                         ) as $event) {
-                            if ($event instanceof ToolApprovalRequest && ! $agent instanceof Conversational) {
+                            if ($event instanceof ToolApprovalRequest && ! ApprovalNotResumableException::resumable($agent)) {
                                 throw ApprovalNotResumableException::make();
                             }
 

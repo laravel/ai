@@ -179,8 +179,11 @@ class DatabaseConversationStore implements ConversationStore
                             ->values());
                     }
 
+                    // A paused turn (its tool calls have no results yet) carries the model's text alongside the tool_use, so merge it in; a completed turn's text is the final answer and follows the results.
+                    $paused = $currentTurn->isEmpty();
+
                     $messages[] = new AssistantMessage(
-                        '',
+                        $paused ? $record->content : '',
                         $toolCalls->map(ToolCall::fromArray(...)),
                     );
 
@@ -190,7 +193,7 @@ class DatabaseConversationStore implements ConversationStore
                             ->values());
                     }
 
-                    if (filled($record->content)) {
+                    if (! $paused && filled($record->content)) {
                         $messages[] = new AssistantMessage($record->content);
                     }
 

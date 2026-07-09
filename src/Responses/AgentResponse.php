@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\Data\Usage;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -72,10 +73,21 @@ class AgentResponse extends TextResponse implements Responsable
             ]);
         }
 
-        return response()->json([
+        $payload = [
             'status' => 'complete',
             'conversation_id' => $this->conversationId,
             'reply' => $this->text,
-        ]);
+        ];
+
+        // A bare rejection stops the loop with no model reply; surface the recorded tool results so the client isn't left with an empty success...
+        if (blank($this->text) && $this->toolResults->isNotEmpty()) {
+            $payload['tool_results'] = $this->toolResults->map(fn (ToolResult $result) => [
+                'id' => $result->id,
+                'tool' => $result->name,
+                'result' => $result->result,
+            ])->values()->toArray();
+        }
+
+        return response()->json($payload);
     }
 }

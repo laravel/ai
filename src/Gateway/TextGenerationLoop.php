@@ -96,6 +96,12 @@ class TextGenerationLoop
             if (filled($lastResult->pendingApprovals)) {
                 $steps->push($this->buildStep($lastResult));
 
+                $allMessages[] = new AssistantMessage(
+                    $lastResult->text,
+                    collect($lastResult->toolCalls),
+                    $lastResult->providerContentBlocks,
+                );
+
                 return $this->buildFinalResponse($steps, $allMessages, count($messages), $lastResult)
                     ->withPendingApprovals(collect($lastResult->pendingApprovals));
             }
@@ -177,11 +183,13 @@ class TextGenerationLoop
             [$approvalResults, $shouldContinue] = $this->resolveApprovalResults($approval, $messages, $tools);
 
             foreach ($approvalResults as $toolResult) {
+                $rejected = ($approval->decisions[$toolResult->id] ?? null)?->action === 'reject';
+
                 yield (new ToolResultEvent(
                     strtolower((string) Str::uuid7()),
                     $toolResult,
-                    true,
-                    null,
+                    ! $rejected,
+                    $rejected ? $toolResult->result : null,
                     time(),
                 ))->withInvocationId($invocationId);
             }
@@ -328,11 +336,33 @@ class TextGenerationLoop
      */
     protected function continuationToolResults(FinishReason $reason, array $toolCalls, bool $isFinalStep, array $tools): array
     {
-        if ($reason !== FinishReason::ToolCalls || $isFinalStep || blank($toolCalls)) {
+        if ($reason !== FinishReason::ToolCalls || blank($toolCalls)) {
             return [[], collect()];
         }
 
+        // Budget exhausted: don't execute, but record a result per call so a trailing tool_use with no matching tool_result doesn't 400 the provider on the next turn...
+        if ($isFinalStep) {
+            return [$this->exhaustedToolResults($toolCalls), collect()];
+        }
+
         return $this->approvalAwareToolResults($toolCalls, $tools);
+    }
+
+    /**
+     * Build placeholder results for tool calls that could not run because the step budget was exhausted.
+     *
+     * @param  ToolCall[]  $toolCalls
+     * @return array<int, ToolResult>
+     */
+    protected function exhaustedToolResults(array $toolCalls): array
+    {
+        return array_map(fn (ToolCall $toolCall) => new ToolResult(
+            $toolCall->id,
+            $toolCall->name,
+            $toolCall->arguments,
+            'The agent reached its maximum number of steps without running this tool call.',
+            $toolCall->resultId,
+        ), $toolCalls);
     }
 
     /**

@@ -297,9 +297,10 @@ test('it does not execute tool calls on the final generation step', function () 
         ->and($gateway->generateCalls)->toBe(1)
         ->and($gateway->contexts[0]->isFinalStep)->toBeTrue()
         ->and($response->toolCalls)->toHaveCount(1)
-        ->and($response->toolResults)->toHaveCount(0)
+        ->and($response->toolResults)->toHaveCount(1)
+        ->and($response->toolResults[0]->result)->toBe('The agent reached its maximum number of steps without running this tool call.')
         ->and($response->steps)->toHaveCount(1)
-        ->and($response->steps->first()->toolResults)->toBe([]);
+        ->and($response->steps->first()->toolResults)->toHaveCount(1);
 });
 
 test('it holds stream end until the streamed tool loop is complete', function () {
@@ -363,7 +364,7 @@ test('it does not execute streamed tool calls on the final step', function () {
 
     expect($tool->calls)->toBe(0)
         ->and($gateway->streamCalls)->toBe(1)
-        ->and(collect($events)->whereInstanceOf(ToolResultEvent::class))->toHaveCount(0)
+        ->and(collect($events)->whereInstanceOf(ToolResultEvent::class))->toHaveCount(1)
         ->and(collect($events)->whereInstanceOf(StreamEnd::class))->toHaveCount(1);
 });
 
