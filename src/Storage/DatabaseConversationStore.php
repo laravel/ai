@@ -156,44 +156,36 @@ class DatabaseConversationStore implements ConversationStore
                 }
 
                 if ($toolCalls->isNotEmpty()) {
-                    if ($toolResults->isEmpty()) {
-                        return [
-                            new AssistantMessage(
-                                $record->content,
-                                $toolCalls->map(ToolCall::fromArray(...)),
-                            ),
-                        ];
-                    }
-
                     $callIds = $toolCalls->pluck('id')->all();
 
-                    [$priorTurn, $currentTurn] = $toolResults->partition(
+                    // Split results answering an earlier turn's calls from results for this turn's own calls...
+                    [$priorResults, $ownResults] = $toolResults->partition(
                         fn (array $toolResult) => ! in_array($toolResult['id'], $callIds, true)
+                    );
+
+                    $ownResultIds = $ownResults->pluck('id')->all();
+
+                    // Split this turn's calls into those already executed and those still awaiting approval, since a mid-run pause can carry both...
+                    [$resolvedCalls, $pendingCalls] = $toolCalls->partition(
+                        fn (array $toolCall) => in_array($toolCall['id'], $ownResultIds, true)
                     );
 
                     $messages = [];
 
-                    if ($priorTurn->isNotEmpty()) {
-                        $messages[] = new ToolResultMessage($priorTurn
-                            ->map(ToolResult::fromArray(...))
-                            ->values());
+                    if ($priorResults->isNotEmpty()) {
+                        $messages[] = new ToolResultMessage($priorResults->map(ToolResult::fromArray(...))->values());
                     }
 
-                    // A paused turn (its tool calls have no results yet) carries the model's text alongside the tool_use, so merge it in; a completed turn's text is the final answer and follows the results.
-                    $paused = $currentTurn->isEmpty();
-
-                    $messages[] = new AssistantMessage(
-                        $paused ? $record->content : '',
-                        $toolCalls->map(ToolCall::fromArray(...)),
-                    );
-
-                    if ($currentTurn->isNotEmpty()) {
-                        $messages[] = new ToolResultMessage($currentTurn
-                            ->map(ToolResult::fromArray(...))
-                            ->values());
+                    if ($resolvedCalls->isNotEmpty()) {
+                        $messages[] = new AssistantMessage('', $resolvedCalls->map(ToolCall::fromArray(...))->values());
+                        $messages[] = new ToolResultMessage($ownResults->map(ToolResult::fromArray(...))->values());
                     }
 
-                    if (! $paused && filled($record->content)) {
+                    if ($pendingCalls->isNotEmpty()) {
+                        // The pause point carries the model's text alongside the still-unanswered tool_use...
+                        $messages[] = new AssistantMessage($record->content, $pendingCalls->map(ToolCall::fromArray(...))->values());
+                    } elseif (filled($record->content)) {
+                        // A fully answered turn's text is the final answer and follows the results...
                         $messages[] = new AssistantMessage($record->content);
                     }
 
@@ -212,7 +204,10 @@ class DatabaseConversationStore implements ConversationStore
                 }
 
                 return [new AssistantMessage($record->content)];
-            });
+            })
+            // A pause and its resume span two rows, so the row window can drop the tool_use row while keeping the tool_result row; a history may never begin with an orphaned tool_result...
+            ->skipWhile(fn (Message $message) => $message instanceof ToolResultMessage)
+            ->values();
     }
 
     protected function rehydrateAttachments(string $attachments): Collection

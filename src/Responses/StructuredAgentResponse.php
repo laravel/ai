@@ -58,6 +58,11 @@ class StructuredAgentResponse extends AgentResponse implements Arrayable, ArrayA
      */
     public function toResponse($request): Response
     {
+        // A structured agent can still pause for tool approval before it produces a payload...
+        if ($this->awaitingApproval()) {
+            return parent::toResponse($request);
+        }
+
         return response()->json($this->structured);
     }
 

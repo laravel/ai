@@ -79,8 +79,8 @@ class AgentResponse extends TextResponse implements Responsable
             'reply' => $this->text,
         ];
 
-        // A bare rejection stops the loop with no model reply; surface the recorded tool results so the client isn't left with an empty success...
-        if (blank($this->text) && $this->toolResults->isNotEmpty()) {
+        // A bare rejection stops the loop before any model step, leaving an empty reply; surface only that turn's tool results so a normal completion's internal tool output is never exposed...
+        if (blank($this->text) && $this->toolResults->isNotEmpty() && $this->steps->isEmpty()) {
             $payload['tool_results'] = $this->toolResults->map(fn (ToolResult $result) => [
                 'id' => $result->id,
                 'tool' => $result->name,

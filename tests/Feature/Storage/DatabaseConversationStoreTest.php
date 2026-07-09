@@ -331,6 +331,76 @@ test('it replays a resumed approval so the paused tool_use is answered', functio
         ->and($messages[2]->content)->toBe('Deleted x');
 });
 
+test('it splits a mid-run pause row so an executed call is answered before the still-pending call', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Tool conversation');
+
+    // One turn ran an ungated call (call-1, with a result) then paused on a gated call (call-2, no result yet).
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => 'Let me delete b too',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'a'], 'result_id' => 'result-1'],
+            ['id' => 'call-2', 'name' => 'delete_file', 'arguments' => ['path' => 'b'], 'result_id' => 'result-2'],
+        ]),
+        'tool_results' => json_encode([
+            ['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'a'], 'result' => 'Deleted a', 'result_id' => 'result-1'],
+        ]),
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toHaveCount(3)
+        ->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[0]->toolCalls)->toHaveCount(1)
+        ->and($messages[0]->toolCalls[0]->id)->toBe('call-1')
+        ->and($messages[1])->toBeInstanceOf(ToolResultMessage::class)
+        ->and($messages[1]->toolResults[0]->id)->toBe('call-1')
+        ->and($messages[2])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[2]->content)->toBe('Let me delete b too')
+        ->and($messages[2]->toolCalls)->toHaveCount(1)
+        ->and($messages[2]->toolCalls[0]->id)->toBe('call-2');
+});
+
+test('it drops a leading orphaned tool_result when the row window splits a pause from its resume', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Tool conversation');
+
+    // The paused tool_use row has fallen outside the window; only the resume row (its result) remains.
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => 'Deleted a',
+        'attachments' => '[]',
+        'tool_calls' => '[]',
+        'tool_results' => json_encode([
+            ['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'a'], 'result' => 'Deleted a', 'result_id' => 'result-1'],
+        ]),
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toHaveCount(1)
+        ->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[0]->content)->toBe('Deleted a');
+});
+
 test('it replays a re-pause so the prior result precedes the new tool_use', function () {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Tool conversation');
