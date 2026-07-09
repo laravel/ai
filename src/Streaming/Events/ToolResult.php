@@ -39,6 +39,14 @@ class ToolResult extends StreamEvent
      */
     public function toVercelProtocolArray(): ?array
     {
+        if (! $this->successful) {
+            return [
+                'type' => 'tool-output-error',
+                'toolCallId' => $this->toolResult->id,
+                'errorText' => $this->error ?? 'The tool call failed.',
+            ];
+        }
+
         return [
             'type' => 'tool-output-available',
             'toolCallId' => $this->toolResult->id,

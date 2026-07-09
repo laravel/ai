@@ -2,8 +2,10 @@
 
 namespace Laravel\Ai\Responses\Concerns;
 
+use Generator;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
+use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Laravel\Ai\Streaming\Events\ToolCall;
 use Laravel\Ai\Streaming\Events\ToolResult;
 use Symfony\Component\HttpFoundation\Response;
@@ -27,8 +29,6 @@ trait CanStreamUsingVercelProtocol
         };
 
         return response()->stream(function () use ($state) {
-            $lastStreamEndEvent = null;
-
             foreach ($this as $event) {
                 // Send one stream start event...
                 if ($event instanceof StreamStart) {
@@ -44,9 +44,29 @@ trait CanStreamUsingVercelProtocol
                     $state->toolCalls[$event->toolCall->id] = true;
                 }
 
-                // Skip tool results if no prior associated tool call...
+                // A resumed approval's tool call streamed in a prior response, so replay its input before its output so the client can associate the two...
                 if ($event instanceof ToolResult &&
                     ! isset($state->toolCalls[$event->toolResult->id])) {
+                    $state->toolCalls[$event->toolResult->id] = true;
+
+                    yield from $this->toVercelProtocolPart($state, [
+                        'type' => 'tool-input-available',
+                        'toolCallId' => $event->toolResult->id,
+                        'toolName' => $event->toolResult->name,
+                        'input' => $event->toolResult->arguments,
+                    ]);
+                }
+
+                // Surface each pending approval so the client may render an approval prompt...
+                if ($event instanceof ToolApprovalRequest) {
+                    foreach ($event->pendingApprovals as $pendingApproval) {
+                        yield from $this->toVercelProtocolPart($state, [
+                            'type' => 'tool-approval-request',
+                            'toolCallId' => $pendingApproval->id,
+                            'approvalId' => $pendingApproval->id,
+                        ]);
+                    }
+
                     continue;
                 }
 
@@ -61,7 +81,7 @@ trait CanStreamUsingVercelProtocol
                     continue;
                 }
 
-                yield 'data: '.json_encode($data)."\n\n";
+                yield from $this->toVercelProtocolPart($state, $data);
             }
 
             if ($state->lastStreamEndEvent) {
@@ -74,5 +94,20 @@ trait CanStreamUsingVercelProtocol
             'Content-Type' => 'text/event-stream',
             'x-vercel-ai-ui-message-stream' => 'v1',
         ]);
+    }
+
+    /**
+     * Encode the given protocol part, preceded by a start part when one has not been sent yet.
+     */
+    protected function toVercelProtocolPart(object $state, array $data): Generator
+    {
+        // Resuming from an approval yields tool parts before the provider's stream start...
+        if (! $state->streamStarted && $data['type'] !== 'start') {
+            $state->streamStarted = true;
+
+            yield 'data: '.json_encode(['type' => 'start', 'messageId' => $this->invocationId])."\n\n";
+        }
+
+        yield 'data: '.json_encode($data)."\n\n";
     }
 }
