@@ -36,6 +36,7 @@ class StoredImage extends Image implements Arrayable, JsonSerializable, Storable
     /**
      * Get the displayable name of the file.
      */
+    #[\Override]
     public function name(): ?string
     {
         return $this->name ?? basename($this->path);
@@ -44,6 +45,7 @@ class StoredImage extends Image implements Arrayable, JsonSerializable, Storable
     /**
      * Get the file's MIME type.
      */
+    #[\Override]
     public function mimeType(): ?string
     {
         /** @var FilesystemAdapter $disk */

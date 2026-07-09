@@ -12,7 +12,7 @@ use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\Data\Usage;
 
-class TextResponse
+class TextResponse implements \Stringable
 {
     /** @var Collection<int, Message> */
     public Collection $messages;
@@ -70,7 +70,7 @@ class TextResponse
     {
         // Filter Anthropic tool use for "JSON mode"...
         $this->toolCalls = $toolCalls->reject(
-            fn ($toolCall) => $toolCall->name === 'output_structured_data'
+            fn ($toolCall): bool => $toolCall->name === 'output_structured_data'
         )->values();
 
         $this->toolResults = $toolResults->values();

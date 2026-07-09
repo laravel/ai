@@ -20,6 +20,7 @@ class Base64Document extends Document implements Arrayable, JsonSerializable, St
     /**
      * Create a new instance from an uploaded file.
      */
+    #[\Override]
     public static function fromUpload(UploadedFile $file, ?string $mimeType = null): self
     {
         return new self(
@@ -39,6 +40,7 @@ class Base64Document extends Document implements Arrayable, JsonSerializable, St
     /**
      * Get the file's MIME type.
      */
+    #[\Override]
     public function mimeType(): ?string
     {
         return $this->mime;

@@ -30,6 +30,7 @@ class BedrockProvider extends Provider implements EmbeddingProvider, ImageProvid
     /**
      * Get the credentials for the underlying AI provider.
      */
+    #[\Override]
     public function providerCredentials(): array
     {
         return array_filter([
@@ -43,6 +44,7 @@ class BedrockProvider extends Provider implements EmbeddingProvider, ImageProvid
     /**
      * Get the provider connection configuration other than the driver, key, and name.
      */
+    #[\Override]
     public function additionalConfiguration(): array
     {
         return [

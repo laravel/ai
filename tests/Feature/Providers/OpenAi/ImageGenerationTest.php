@@ -8,7 +8,7 @@ use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Image;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.openai' => [
         ...config('ai.providers.openai'),
         'key' => 'test-key',
@@ -24,14 +24,14 @@ function fakeOpenAiImageResponse(): PromiseInterface
     ]);
 }
 
-test('image request does not include quality when not specified', function () {
+test('image request does not include quality when not specified', function (): void {
     Http::fake([
         '*' => fakeOpenAiImageResponse(),
     ]);
 
     Image::of('A red apple')->generate(provider: 'openai', model: 'dall-e-2');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['model'] === 'dall-e-2'
@@ -39,14 +39,14 @@ test('image request does not include quality when not specified', function () {
     });
 });
 
-test('image request does not include moderation for non gpt-image models', function () {
+test('image request does not include moderation for non gpt-image models', function (): void {
     Http::fake([
         '*' => fakeOpenAiImageResponse(),
     ]);
 
     Image::of('A red apple')->generate(provider: 'openai', model: 'dall-e-3');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['model'] === 'dall-e-3'
@@ -54,14 +54,14 @@ test('image request does not include moderation for non gpt-image models', funct
     });
 });
 
-test('image request includes moderation low for gpt-image models', function () {
+test('image request includes moderation low for gpt-image models', function (): void {
     Http::fake([
         '*' => fakeOpenAiImageResponse(),
     ]);
 
     Image::of('A red apple')->generate(provider: 'openai', model: 'gpt-image-1');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['model'] === 'gpt-image-1'
@@ -69,14 +69,14 @@ test('image request includes moderation low for gpt-image models', function () {
     });
 });
 
-test('image request includes quality when explicitly specified', function () {
+test('image request includes quality when explicitly specified', function (): void {
     Http::fake([
         '*' => fakeOpenAiImageResponse(),
     ]);
 
     Image::of('A red apple')->quality('high')->generate(provider: 'openai', model: 'dall-e-3');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['quality'] === 'high'
@@ -84,35 +84,35 @@ test('image request includes quality when explicitly specified', function () {
     });
 });
 
-test('image request includes size when specified', function () {
+test('image request includes size when specified', function (): void {
     Http::fake([
         '*' => fakeOpenAiImageResponse(),
     ]);
 
     Image::of('A red apple')->square()->generate(provider: 'openai', model: 'gpt-image-1');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['size'] === '1024x1024';
     });
 });
 
-test('image request does not include size when not specified', function () {
+test('image request does not include size when not specified', function (): void {
     Http::fake([
         '*' => fakeOpenAiImageResponse(),
     ]);
 
     Image::of('A red apple')->generate(provider: 'openai', model: 'gpt-image-1');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return ! array_key_exists('size', $body);
     });
 });
 
-test('image response includes usage tokens when returned by gpt-image', function () {
+test('image response includes usage tokens when returned by gpt-image', function (): void {
     Http::fake([
         '*' => Http::response([
             'data' => [[
@@ -135,7 +135,7 @@ test('image response includes usage tokens when returned by gpt-image', function
         ->and($response->usage->completionTokens)->toBe(1024);
 });
 
-test('image response subtracts cached tokens from prompt tokens', function () {
+test('image response subtracts cached tokens from prompt tokens', function (): void {
     Http::fake([
         '*' => Http::response([
             'data' => [[
@@ -159,7 +159,7 @@ test('image response subtracts cached tokens from prompt tokens', function () {
         ->and($response->usage->completionTokens)->toBe(1024);
 });
 
-test('image response defaults to zero usage when not returned by dalle', function () {
+test('image response defaults to zero usage when not returned by dalle', function (): void {
     Http::fake([
         '*' => fakeOpenAiImageResponse(),
     ]);
@@ -170,35 +170,35 @@ test('image response defaults to zero usage when not returned by dalle', functio
         ->and($response->usage->completionTokens)->toBe(0);
 });
 
-test('image generation request adds response_format b64_json for dall-e models', function () {
+test('image generation request adds response_format b64_json for dall-e models', function (): void {
     Http::fake([
         '*' => fakeOpenAiImageResponse(),
     ]);
 
     Image::of('A red apple')->generate(provider: 'openai', model: 'dall-e-3');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return ($body['response_format'] ?? null) === 'b64_json';
     });
 });
 
-test('image generation request omits response_format for gpt-image models', function () {
+test('image generation request omits response_format for gpt-image models', function (): void {
     Http::fake([
         '*' => fakeOpenAiImageResponse(),
     ]);
 
     Image::of('A red apple')->generate(provider: 'openai', model: 'gpt-image-1');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return ! array_key_exists('response_format', $body);
     });
 });
 
-test('image rate limit response throws rate limited exception', function () {
+test('image rate limit response throws rate limited exception', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::response([
             'error' => [
@@ -211,7 +211,7 @@ test('image rate limit response throws rate limited exception', function () {
     Image::of('A red apple')->generate(provider: 'openai', model: 'gpt-image-1');
 })->throws(RateLimitedException::class);
 
-test('image overloaded response throws provider overloaded exception', function () {
+test('image overloaded response throws provider overloaded exception', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::response([
             'error' => [
@@ -224,7 +224,7 @@ test('image overloaded response throws provider overloaded exception', function 
     Image::of('A red apple')->generate(provider: 'openai', model: 'gpt-image-1');
 })->throws(ProviderOverloadedException::class);
 
-test('image http error response throws request exception', function () {
+test('image http error response throws request exception', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::response([
             'error' => [

@@ -5,14 +5,14 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Document;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.anthropic' => [
         ...config('ai.providers.anthropic'),
         'key' => 'test-key',
     ]]);
 });
 
-test('get file sends correct request', function () {
+test('get file sends correct request', function (): void {
     Http::fake([
         'api.anthropic.com/*' => Http::response(['id' => 'file-abc123', 'mime_type' => 'text/plain']),
     ]);
@@ -21,12 +21,12 @@ test('get file sends correct request', function () {
 
     expect($response->id)->toBe('file-abc123');
 
-    Http::assertSent(fn (Request $request) => $request->method() === 'GET'
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'GET'
         && $request->url() === 'https://api.anthropic.com/v1/files/file-abc123'
         && $request->hasHeader('x-api-key', 'test-key'));
 });
 
-test('put file sends multipart upload', function () {
+test('put file sends multipart upload', function (): void {
     Http::fake([
         'api.anthropic.com/*' => Http::response(['id' => 'file-uploaded123']),
     ]);
@@ -45,7 +45,7 @@ test('put file sends multipart upload', function () {
         ->and($request->hasHeader('x-api-key', 'test-key'))->toBeTrue();
 });
 
-test('put file forwards provider options into the multipart upload', function () {
+test('put file forwards provider options into the multipart upload', function (): void {
     Http::fake([
         'api.anthropic.com/*' => Http::response(['id' => 'file-uploaded123']),
     ]);
@@ -57,14 +57,14 @@ test('put file forwards provider options into the multipart upload', function ()
     expect(multipartField(sentRequest(), 'custom_field'))->toBe('value');
 });
 
-test('delete file sends correct request', function () {
+test('delete file sends correct request', function (): void {
     Http::fake([
         'api.anthropic.com/*' => Http::response(['id' => 'file-abc123']),
     ]);
 
     Files::delete('file-abc123', provider: 'anthropic');
 
-    Http::assertSent(fn (Request $request) => $request->method() === 'DELETE'
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'DELETE'
         && $request->url() === 'https://api.anthropic.com/v1/files/file-abc123'
         && $request->hasHeader('x-api-key', 'test-key'));
 });

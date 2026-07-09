@@ -2,7 +2,7 @@
 
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
 
-test('transcription segment stores text speaker and timestamps', function () {
+test('transcription segment stores text speaker and timestamps', function (): void {
     $segment = new TranscriptionSegment('Hello world', 'Speaker 1', 0.0, 2.5);
 
     expect($segment->text)->toBe('Hello world')
@@ -11,7 +11,7 @@ test('transcription segment stores text speaker and timestamps', function () {
         ->and($segment->endSeconds)->toBe(2.5);
 });
 
-test('transcription segment to array returns all properties', function () {
+test('transcription segment to array returns all properties', function (): void {
     $segment = new TranscriptionSegment('Test speech', 'Speaker A', 1.0, 3.5);
 
     $array = $segment->toArray();
@@ -22,7 +22,7 @@ test('transcription segment to array returns all properties', function () {
         ->and($array['end_seconds'])->toBe(3.5);
 });
 
-test('transcription segment json serialize returns to array', function () {
+test('transcription segment json serialize returns to array', function (): void {
     $segment = new TranscriptionSegment('Content', 'Speaker', 5.0, 10.0);
 
     $json = $segment->jsonSerialize();

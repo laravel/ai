@@ -70,6 +70,7 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FilePro
      *
      * Azure OpenAI uses API key authentication via the `api-key` header.
      */
+    #[\Override]
     public function providerCredentials(): array
     {
         return [
@@ -166,6 +167,7 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FilePro
     /**
      * Get the provider connection configuration other than the driver, key, and name.
      */
+    #[\Override]
     public function additionalConfiguration(): array
     {
         return [

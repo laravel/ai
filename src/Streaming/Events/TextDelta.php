@@ -23,7 +23,7 @@ class TextDelta extends StreamEvent
         $events = is_array($events) ? new Collection($events) : $events;
 
         return $events->whereInstanceOf(TextDelta::class)
-            ->map(fn (TextDelta $event) => $event->delta)
+            ->map(fn (TextDelta $event): string => $event->delta)
             ->join('');
     }
 

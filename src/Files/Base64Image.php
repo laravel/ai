@@ -27,6 +27,7 @@ class Base64Image extends Image implements Arrayable, JsonSerializable, Storable
     /**
      * Get the file's MIME type.
      */
+    #[\Override]
     public function mimeType(): ?string
     {
         return $this->mime;

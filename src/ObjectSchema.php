@@ -26,6 +26,7 @@ class ObjectSchema extends Schema
      *
      * @return array<string, mixed>
      */
+    #[\Override]
     public function toSchema(): array
     {
         return static::disableAdditionalProperties(parent::toSchema());

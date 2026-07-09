@@ -46,7 +46,7 @@ trait ParsesTextResponses
         $text = $message['content'] ?? '';
         $rawToolCalls = $message['tool_calls'] ?? [];
 
-        $toolCalls = array_map(fn (array $toolCall) => new ToolCall(
+        $toolCalls = array_map(fn (array $toolCall): ToolCall => new ToolCall(
             $toolCall['id'] ?? '',
             $toolCall['function']['name'] ?? '',
             json_decode($toolCall['function']['arguments'] ?? '{}', true) ?? [],

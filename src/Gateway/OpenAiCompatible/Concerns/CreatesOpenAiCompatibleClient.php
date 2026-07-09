@@ -38,6 +38,6 @@ trait CreatesOpenAiCompatibleClient
             );
         }
 
-        return rtrim($url, '/');
+        return rtrim((string) $url, '/');
     }
 }

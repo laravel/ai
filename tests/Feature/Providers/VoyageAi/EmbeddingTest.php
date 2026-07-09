@@ -7,19 +7,19 @@ use Laravel\Ai\Embeddings;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.voyageai' => [
         ...config('ai.providers.voyageai'),
         'key' => 'test-key',
     ]]);
 });
 
-test('embeddings request includes model, input, and output_dimension', function () {
+test('embeddings request includes model, input, and output_dimension', function (): void {
     Http::fake(['*' => fakeVoyageEmbeddingsResponse()]);
 
     Embeddings::for(['Hello world'])->dimensions(1024)->generate(provider: 'voyageai', model: 'voyage-4');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['model'] === 'voyage-4'
@@ -29,7 +29,7 @@ test('embeddings request includes model, input, and output_dimension', function 
     });
 });
 
-test('embeddings response is correctly parsed', function () {
+test('embeddings response is correctly parsed', function (): void {
     Http::fake(['*' => fakeVoyageEmbeddingsResponse()]);
 
     $response = Embeddings::for(['Hello world'])->generate(provider: 'voyageai', model: 'voyage-4');
@@ -41,17 +41,15 @@ test('embeddings response is correctly parsed', function () {
         ->and($response->meta->model)->toBe('voyage-4');
 });
 
-test('embeddings request sends bearer token', function () {
+test('embeddings request sends bearer token', function (): void {
     Http::fake(['*' => fakeVoyageEmbeddingsResponse()]);
 
     Embeddings::for(['Hello'])->generate(provider: 'voyageai', model: 'voyage-4');
 
-    Http::assertSent(function (Request $request) {
-        return $request->hasHeader('Authorization', 'Bearer test-key');
-    });
+    Http::assertSent(fn (Request $request) => $request->hasHeader('Authorization', 'Bearer test-key'));
 });
 
-test('multiple inputs return multiple embeddings', function () {
+test('multiple inputs return multiple embeddings', function (): void {
     Http::fake(['*' => Http::response([
         'object' => 'list',
         'data' => [
@@ -68,15 +66,15 @@ test('multiple inputs return multiple embeddings', function () {
         ->and($response->embeddings[1])->toBe([0.4, 0.5, 0.6]);
 });
 
-test('embeddings default to 1024 dimensions when none specified', function () {
+test('embeddings default to 1024 dimensions when none specified', function (): void {
     Http::fake(['*' => fakeVoyageEmbeddingsResponse()]);
 
     Embeddings::for(['Hello'])->generate(provider: 'voyageai', model: 'voyage-4');
 
-    Http::assertSent(fn (Request $request) => json_decode($request->body(), true)['output_dimension'] === 1024);
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['output_dimension'] === 1024);
 });
 
-test('embeddings rate limit response throws rate limited exception', function () {
+test('embeddings rate limit response throws rate limited exception', function (): void {
     Http::fake([
         'api.voyageai.com/*' => Http::response(['detail' => 'Rate limit exceeded'], 429),
     ]);
@@ -84,7 +82,7 @@ test('embeddings rate limit response throws rate limited exception', function ()
     Embeddings::for(['Hello'])->generate(provider: 'voyageai', model: 'voyage-4');
 })->throws(RateLimitedException::class);
 
-test('embeddings overloaded response throws provider overloaded exception', function () {
+test('embeddings overloaded response throws provider overloaded exception', function (): void {
     Http::fake([
         'api.voyageai.com/*' => Http::response(['detail' => 'Service unavailable'], 503),
     ]);
@@ -92,7 +90,7 @@ test('embeddings overloaded response throws provider overloaded exception', func
     Embeddings::for(['Hello'])->generate(provider: 'voyageai', model: 'voyage-4');
 })->throws(ProviderOverloadedException::class);
 
-test('embeddings http error response throws request exception', function () {
+test('embeddings http error response throws request exception', function (): void {
     Http::fake([
         'api.voyageai.com/*' => Http::response(['detail' => 'Invalid model'], 400),
     ]);
@@ -100,14 +98,14 @@ test('embeddings http error response throws request exception', function () {
     Embeddings::for(['Hello'])->generate(provider: 'voyageai', model: 'voyage-4');
 })->throws(RequestException::class);
 
-test('embeddings request includes provider options in the request body', function () {
+test('embeddings request includes provider options in the request body', function (): void {
     Http::fake(['*' => fakeVoyageEmbeddingsResponse()]);
 
     Embeddings::for(['Hello'])
         ->withProviderOptions(['input_type' => 'query', 'truncation' => true])
         ->generate(provider: 'voyageai', model: 'voyage-4');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['input_type'] === 'query'

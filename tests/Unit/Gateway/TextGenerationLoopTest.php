@@ -13,6 +13,7 @@ use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\TextDelta;
@@ -20,7 +21,7 @@ use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Laravel\Ai\Tools\Request;
 
-test('it does not execute tool calls on the final generation step', function () {
+test('it does not execute tool calls on the final generation step', function (): void {
     $tool = new TextGenerationLoopCountingTool;
     $gateway = new TextGenerationLoopFakeGateway([
         new StepResponse(
@@ -41,7 +42,6 @@ test('it does not execute tool calls on the final generation step', function () 
         [$tool],
         null,
         new TextGenerationOptions(maxSteps: 1),
-        null,
     );
 
     expect($tool->calls)->toBe(0)
@@ -53,7 +53,7 @@ test('it does not execute tool calls on the final generation step', function () 
         ->and($response->steps->first()->toolResults)->toBe([]);
 });
 
-test('it holds stream end until the streamed tool loop is complete', function () {
+test('it holds stream end until the streamed tool loop is complete', function (): void {
     $tool = new TextGenerationLoopCountingTool;
     $firstToolCall = new ToolCall('call-1', TextGenerationLoopCountingTool::class, [], 'call-1');
     $gateway = new TextGenerationLoopFakeGateway(streams: [
@@ -76,7 +76,6 @@ test('it holds stream end until the streamed tool loop is complete', function ()
         [$tool],
         null,
         new TextGenerationOptions(maxSteps: 2),
-        null,
     ));
 
     $streamEnds = collect($events)->whereInstanceOf(StreamEnd::class);
@@ -90,7 +89,7 @@ test('it holds stream end until the streamed tool loop is complete', function ()
         ->and($streamEnds->first()->usage->completionTokens)->toBe(3);
 });
 
-test('it does not execute streamed tool calls on the final step', function () {
+test('it does not execute streamed tool calls on the final step', function (): void {
     $tool = new TextGenerationLoopCountingTool;
     $toolCall = new ToolCall('call-1', TextGenerationLoopCountingTool::class, [], 'call-1');
     $gateway = new TextGenerationLoopFakeGateway(streams: [
@@ -109,7 +108,6 @@ test('it does not execute streamed tool calls on the final step', function () {
         [$tool],
         null,
         new TextGenerationOptions(maxSteps: 1),
-        null,
     ));
 
     expect($tool->calls)->toBe(0)
@@ -118,7 +116,7 @@ test('it does not execute streamed tool calls on the final step', function () {
         ->and(collect($events)->whereInstanceOf(StreamEnd::class))->toHaveCount(1);
 });
 
-test('it clamps non-positive maxSteps to at least one turn', function (int $maxSteps) {
+test('it clamps non-positive maxSteps to at least one turn', function (int $maxSteps): void {
     $gateway = new TextGenerationLoopFakeGateway([
         new StepResponse(
             text: 'hi',
@@ -137,7 +135,6 @@ test('it clamps non-positive maxSteps to at least one turn', function (int $maxS
         [],
         null,
         new TextGenerationOptions(maxSteps: $maxSteps),
-        null,
     );
 
     expect($gateway->generateCalls)->toBe(1)
@@ -147,7 +144,7 @@ test('it clamps non-positive maxSteps to at least one turn', function (int $maxS
     'negative' => -3,
 ]);
 
-test('it accumulates streamed usage across multi-step turns', function () {
+test('it accumulates streamed usage across multi-step turns', function (): void {
     $tool = new TextGenerationLoopCountingTool;
     $toolCall = new ToolCall('call-1', TextGenerationLoopCountingTool::class, [], 'call-1');
     $gateway = new TextGenerationLoopFakeGateway(streams: [
@@ -170,7 +167,6 @@ test('it accumulates streamed usage across multi-step turns', function () {
         [$tool],
         null,
         new TextGenerationOptions(maxSteps: 2),
-        null,
     ));
 
     $streamEnd = collect($events)->whereInstanceOf(StreamEnd::class)->first();
@@ -181,7 +177,7 @@ test('it accumulates streamed usage across multi-step turns', function () {
         ->and($streamEnd->reason)->toBe(FinishReason::Stop->value);
 });
 
-test('it throws when generation tool calls do not match local tools', function () {
+test('it throws when generation tool calls do not match local tools', function (): void {
     $gateway = new TextGenerationLoopFakeGateway([
         new StepResponse(
             text: '',
@@ -193,19 +189,16 @@ test('it throws when generation tool calls do not match local tools', function (
         ),
     ]);
 
-    expect(fn () => (new TextGenerationLoop($gateway))->generate(
+    expect(fn (): TextResponse => (new TextGenerationLoop($gateway))->generate(
         textGenerationLoopProvider(),
         'model',
         null,
         [],
         [],
-        null,
-        null,
-        null,
     ))->toThrow(NoSuchToolException::class, "Model tried to call unavailable tool 'MissingTool'.");
 });
 
-test('it throws when streaming tool calls do not match local tools', function () {
+test('it throws when streaming tool calls do not match local tools', function (): void {
     $toolCall = new ToolCall('call-1', 'MissingTool', [], 'call-1');
     $gateway = new TextGenerationLoopFakeGateway(streams: [
         textGenerationLoopStreamStep(
@@ -214,20 +207,17 @@ test('it throws when streaming tool calls do not match local tools', function ()
         ),
     ]);
 
-    expect(fn () => iterator_to_array((new TextGenerationLoop($gateway))->stream(
+    expect(fn (): array => iterator_to_array((new TextGenerationLoop($gateway))->stream(
         'invocation-1',
         textGenerationLoopProvider(),
         'model',
         null,
         [],
         [],
-        null,
-        null,
-        null,
     )))->toThrow(NoSuchToolException::class);
 });
 
-test('it emits a terminal stream end when a turn yields no stream end or error', function () {
+test('it emits a terminal stream end when a turn yields no stream end or error', function (): void {
     $gateway = new TextGenerationLoopFakeGateway(streams: [
         textGenerationLoopStreamStep(events: [new TextDelta('text-delta', 'message-1', 'partial', time())]),
     ]);
@@ -239,9 +229,6 @@ test('it emits a terminal stream end when a turn yields no stream end or error',
         null,
         [],
         [],
-        null,
-        null,
-        null,
     ));
 
     $streamEnds = collect($events)->whereInstanceOf(StreamEnd::class);
@@ -250,7 +237,7 @@ test('it emits a terminal stream end when a turn yields no stream end or error',
         ->and($streamEnds->first()->reason)->toBe(FinishReason::Error->value);
 });
 
-test('it does not emit a stream end when a turn errors without a stream end', function () {
+test('it does not emit a stream end when a turn errors without a stream end', function (): void {
     $gateway = new TextGenerationLoopFakeGateway(streams: [
         textGenerationLoopStreamStep(events: [new Error('error-1', 'server_error', 'Server overloaded', false, time())]),
     ]);
@@ -262,9 +249,6 @@ test('it does not emit a stream end when a turn errors without a stream end', fu
         null,
         [],
         [],
-        null,
-        null,
-        null,
     ));
 
     expect(collect($events)->whereInstanceOf(StreamEnd::class))->toHaveCount(0)

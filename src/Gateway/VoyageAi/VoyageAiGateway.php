@@ -71,7 +71,7 @@ class VoyageAiGateway implements EmbeddingGateway, RerankingGateway
         )->json();
 
         return new RerankingResponse(
-            collect($data['data'])->map(fn (array $result) => new RankedDocument(
+            collect($data['data'])->map(fn (array $result): RankedDocument => new RankedDocument(
                 index: $result['index'],
                 document: $documents[$result['index']],
                 score: $result['relevance_score'],

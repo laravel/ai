@@ -7,21 +7,21 @@ use Tests\Fixtures\Tools\RandomNumberGenerator;
 
 use function Laravel\Ai\agent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.deepseek' => [
         ...config('ai.providers.deepseek'),
         'key' => 'test-key',
     ]]);
 });
 
-test('tool with parameters includes correct schema', function () {
+test('tool with parameters includes correct schema', function (): void {
     Http::fake([
         '*' => fakeDeepSeekResponse('42'),
     ]);
 
     agent(tools: [new RandomNumberGenerator])->prompt('Give me a random number', provider: 'deepseek');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'function');
         $function = $tool['function'] ?? [];
@@ -35,14 +35,14 @@ test('tool with parameters includes correct schema', function () {
     });
 });
 
-test('tool with empty schema includes parameters', function () {
+test('tool with empty schema includes parameters', function (): void {
     Http::fake([
         '*' => fakeDeepSeekResponse('72019'),
     ]);
 
     agent(tools: [new FixedNumberGenerator])->prompt('Give me a number', provider: 'deepseek');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'function');
         $function = $tool['function'] ?? [];
@@ -55,14 +55,14 @@ test('tool with empty schema includes parameters', function () {
     });
 });
 
-test('tool parameters are not wrapped in schema definition', function () {
+test('tool parameters are not wrapped in schema definition', function (): void {
     Http::fake([
         '*' => fakeDeepSeekResponse('done'),
     ]);
 
     agent(tools: [new RandomNumberGenerator])->prompt('Give me a random number', provider: 'deepseek');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'function');
         $function = $tool['function'] ?? [];

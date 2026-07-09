@@ -8,7 +8,7 @@ use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 
-beforeEach(function () {
+beforeEach(function (): void {
     $this->gateway = new class
     {
         use HandlesFailoverErrors {
@@ -34,7 +34,7 @@ function failoverableException(int $status, array $body = []): RequestException
     return new RequestException(new Response($psr));
 }
 
-test('overriding overloadedStatusCodes replaces the default 503', function () {
+test('overriding overloadedStatusCodes replaces the default 503', function (): void {
     expect(fn () => $this->gateway->withErrorHandling(
         'anthropic',
         fn () => throw failoverableException(529),
@@ -46,7 +46,7 @@ test('overriding overloadedStatusCodes replaces the default 503', function () {
     ))->toThrow(RequestException::class);
 });
 
-test('429 takes precedence over insufficient credit pattern matching', function () {
+test('429 takes precedence over insufficient credit pattern matching', function (): void {
     expect(fn () => $this->gateway->withErrorHandling(
         'anthropic',
         fn () => throw failoverableException(429, [
@@ -55,7 +55,7 @@ test('429 takes precedence over insufficient credit pattern matching', function 
     ))->toThrow(RateLimitedException::class);
 });
 
-test('402 throws InsufficientCreditsException without requiring patterns', function () {
+test('402 throws InsufficientCreditsException without requiring patterns', function (): void {
     $gateway = new class
     {
         use HandlesFailoverErrors {
@@ -63,7 +63,7 @@ test('402 throws InsufficientCreditsException without requiring patterns', funct
         }
     };
 
-    expect(fn () => $gateway->withErrorHandling(
+    expect(fn (): mixed => $gateway->withErrorHandling(
         'deepseek',
         fn () => throw failoverableException(402, [
             'error' => ['message' => 'Insufficient Balance'],
@@ -71,7 +71,7 @@ test('402 throws InsufficientCreditsException without requiring patterns', funct
     ))->toThrow(InsufficientCreditsException::class);
 });
 
-test('non-matching message is rethrown as the original RequestException', function () {
+test('non-matching message is rethrown as the original RequestException', function (): void {
     expect(fn () => $this->gateway->withErrorHandling(
         'anthropic',
         fn () => throw failoverableException(400, [
