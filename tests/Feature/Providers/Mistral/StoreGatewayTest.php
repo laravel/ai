@@ -97,6 +97,33 @@ test('get store paginates document counts across multiple pages', function () {
         && $request->uri()->query()->get('page_size') === '100');
 });
 
+test('get store paginates every document even when nb_documents is stale', function () {
+    $firstPage = collect(range(1, 100))->map(fn (int $i) => [
+        'id' => "doc-{$i}",
+        'process_status' => 'done',
+    ])->all();
+
+    $secondPage = [
+        ['id' => 'doc-101', 'process_status' => 'done'],
+        ['id' => 'doc-102', 'process_status' => 'done'],
+        ['id' => 'doc-103', 'process_status' => 'done'],
+    ];
+
+    Http::fake([
+        'api.mistral.ai/v1/libraries/lib-123/documents*' => function (Request $request) use ($firstPage, $secondPage) {
+            $page = (int) $request->uri()->query()->get('page', 0);
+
+            return Http::response(['data' => $page === 0 ? $firstPage : $secondPage]);
+        },
+        // nb_documents lags the documents actually returned (eventual consistency)...
+        'api.mistral.ai/v1/libraries/lib-123' => Http::response(fakeMistralLibraryResponse(nbDocuments: 100)),
+    ]);
+
+    $store = Stores::get('lib-123', provider: 'mistral');
+
+    expect($store->fileCounts->completed)->toBe(103);
+});
+
 test('create store posts name and description', function () {
     Http::fake([
         'api.mistral.ai/v1/libraries' => Http::response(fakeMistralLibraryResponse()),
@@ -127,6 +154,20 @@ test('create store posts a falsy description', function () {
         && $request->url() === 'https://api.mistral.ai/v1/libraries'
         && $request['name'] === 'Test Store'
         && $request['description'] === '0');
+});
+
+test('create store ignores unsupported idle expiration', function () {
+    Http::fake([
+        'api.mistral.ai/v1/libraries' => Http::response(fakeMistralLibraryResponse()),
+        'api.mistral.ai/v1/libraries/lib-123' => Http::response(fakeMistralLibraryResponse()),
+    ]);
+
+    Stores::create('Test Store', expiresWhenIdleFor: new DateInterval('P7D'), provider: 'mistral');
+
+    Http::assertSent(fn (Request $request) => $request->method() === 'POST'
+        && $request->url() === 'https://api.mistral.ai/v1/libraries'
+        && ! array_key_exists('expires_after', $request->data())
+        && ! array_key_exists('expires_when_idle_for', $request->data()));
 });
 
 test('create store with file ids throws', function () {
@@ -192,4 +233,20 @@ test('adding a storable file uploads it directly to the library', function () {
 
     // No global /v1/files upload happened...
     Http::assertNotSent(fn (Request $request) => str_ends_with($request->url(), '/v1/files'));
+});
+
+test('adding a storable file ignores unsupported metadata', function () {
+    Http::fake([
+        'api.mistral.ai/v1/libraries/lib-123/documents' => Http::response([
+            'id' => 'doc-1',
+            'process_status' => 'in_progress',
+        ]),
+        'api.mistral.ai/v1/libraries/lib-123' => Http::response(fakeMistralLibraryResponse()),
+    ]);
+
+    Stores::get('lib-123', provider: 'mistral')
+        ->add(Document::fromString('Hello, world!', 'text/plain')->as('hello.txt'), metadata: ['team' => 'laravel']);
+
+    Http::assertSent(fn (Request $request) => str_ends_with($request->url(), '/libraries/lib-123/documents')
+        && collect($request->data())->pluck('name')->all() === ['file']);
 });

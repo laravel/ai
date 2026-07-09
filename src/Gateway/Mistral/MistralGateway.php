@@ -57,7 +57,7 @@ class MistralGateway implements EmbeddingGateway, StepTextGateway, Transcription
     }
 
     /**
-     * Generate text for a single Chat Completions step.
+     * Generate text for a single step, routing to the Conversations API when file search is requested.
      */
     public function generateTextStep(
         TextProvider $provider,
@@ -78,7 +78,7 @@ class MistralGateway implements EmbeddingGateway, StepTextGateway, Transcription
     }
 
     /**
-     * Stream text for a single Chat Completions step.
+     * Stream text for a single step, routing to the Conversations API when file search is requested.
      */
     public function generateStreamStep(
         string $invocationId,

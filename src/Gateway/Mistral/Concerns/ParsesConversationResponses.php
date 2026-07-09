@@ -78,7 +78,9 @@ trait ParsesConversationResponses
             return $content;
         }
 
-        return (new Collection($content))
+        $chunks = array_is_list($content) ? $content : [$content];
+
+        return (new Collection($chunks))
             ->filter(fn ($chunk) => ($chunk['type'] ?? null) === 'text')
             ->map(fn ($chunk) => $chunk['text'] ?? '')
             ->implode('');

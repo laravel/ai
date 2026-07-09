@@ -3,6 +3,7 @@
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
@@ -56,6 +57,16 @@ test('file search metadata filters throw an exception', function () {
         ->toThrow(InvalidArgumentException::class, 'Mistral does not support file search metadata filters.');
 });
 
+test('attachments with file search throw an exception', function () {
+    Http::fake([
+        'api.mistral.ai/v1/conversations' => Http::response(fakeMistralConversationResponse()),
+    ]);
+
+    expect(fn () => agent(tools: [new FileSearch(['lib-123'])])
+        ->prompt('Describe this', attachments: [new RemoteImage('https://example.com/image.png')], provider: 'mistral'))
+        ->toThrow(RuntimeException::class, 'Mistral does not support attachments when using file search.');
+});
+
 test('prompts with file search route to the conversations api', function () {
     Http::fake([
         'api.mistral.ai/v1/conversations' => Http::response(fakeMistralConversationResponse()),
@@ -92,6 +103,19 @@ test('chunked message output content is concatenated', function () {
         ->prompt('Is Valkey mentioned?', provider: 'mistral');
 
     expect((string) $response)->toBe('Yes, Valkey is mentioned.');
+});
+
+test('single object message output content is extracted', function () {
+    Http::fake([
+        'api.mistral.ai/v1/conversations' => Http::response(fakeMistralConversationResponse([
+            'type' => 'text', 'text' => 'Valkey is mentioned.',
+        ])),
+    ]);
+
+    $response = agent(tools: [new FileSearch(['lib-123'])])
+        ->prompt('Is Valkey mentioned?', provider: 'mistral');
+
+    expect((string) $response)->toBe('Valkey is mentioned.');
 });
 
 test('function calls in conversations trigger the tool loop', function () {

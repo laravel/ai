@@ -40,7 +40,7 @@ class Store
 
         if ($file instanceof StorableFile && $this->provider instanceof UploadsDocumentsToStore) {
             if (Ai::storesAreFaked()) {
-                Ai::recordFileAddition($this->id, Files::fakeId($file->name() ?? 'file'), $originalFile);
+                Ai::recordFileAddition($this->id, Files::fakeIdFor($file), $originalFile);
             }
 
             return new AddedDocumentResponse(
@@ -171,7 +171,7 @@ class Store
         return match (true) {
             $file instanceof HasProviderId => $file->id() === $expectedFileId,
             is_string($file) => $file === $expectedFileId,
-            $file instanceof StorableFile => Files::fakeId($file->name() ?? 'file') === $expectedFileId,
+            $file instanceof StorableFile => Files::fakeIdFor($file) === $expectedFileId,
             default => false,
         };
     }

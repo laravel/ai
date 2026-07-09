@@ -119,7 +119,7 @@ class FakeStoreGateway implements StoreGateway, UploadsDocuments
         StorableFile $file,
         array $metadata = [],
     ): string {
-        return Files::fakeId($file->name() ?? 'file');
+        return Files::fakeIdFor($file);
     }
 
     /**

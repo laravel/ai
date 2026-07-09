@@ -228,6 +228,20 @@ describe('file assertions', function () {
         $store->assertNotAdded(fn ($f) => $f instanceof ProviderDocument && $f->id() === 'file_456');
     });
 
+    test('nameless storable files are distinguished by their contents', function () {
+        Stores::fake();
+
+        $store = Stores::create('My Store');
+
+        $store->add(Document::fromString('First document', 'text/plain'));
+        $store->add(Document::fromString('Second document', 'text/plain'));
+
+        // Distinct nameless documents no longer collide onto a single fake id...
+        $store->assertAdded('First document');
+        $store->assertAdded('Second document');
+        $store->assertNotAdded('Third document');
+    });
+
     test('can assert file removed from store', function () {
         Stores::fake();
 

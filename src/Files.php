@@ -88,6 +88,14 @@ class Files
     }
 
     /**
+     * Get the fake file ID for a storable file, keyed by its name or contents.
+     */
+    public static function fakeIdFor(StorableFile $file): string
+    {
+        return static::fakeId($file->name() ?? $file->content());
+    }
+
+    /**
      * Assert that a file was stored matching a given truth test.
      */
     public static function assertStored(Closure $callback): void

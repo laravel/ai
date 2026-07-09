@@ -2,11 +2,8 @@
 
 namespace Laravel\Ai\Providers\Concerns;
 
-use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\UploadsDocuments;
-use Laravel\Ai\Events\AddingFileToStore;
-use Laravel\Ai\Events\FileAddedToStore;
 use RuntimeException;
 
 trait UploadsStoreDocuments
@@ -22,19 +19,9 @@ trait UploadsStoreDocuments
             throw new RuntimeException('The provider\'s store gateway does not support direct document uploads.');
         }
 
-        $invocationId = (string) Str::uuid7();
-
-        $this->events->dispatch(new AddingFileToStore(
-            $invocationId, $this, $storeId, $file->name() ?? ''
-        ));
-
-        return tap(
-            $gateway->uploadDocument($this, $storeId, $file, $metadata),
-            function (string $documentId) use ($invocationId, $storeId, $file) {
-                $this->events->dispatch(new FileAddedToStore(
-                    $invocationId, $this, $storeId, $file->name() ?? '', $documentId,
-                ));
-            }
+        return $this->dispatchFileAddition(
+            $storeId, $file->name() ?? '',
+            fn () => $gateway->uploadDocument($this, $storeId, $file, $metadata),
         );
     }
 }

@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\Mistral;
 
 use DateInterval;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
@@ -59,10 +60,10 @@ class MistralStoreGateway implements StoreGateway, UploadsDocuments
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider)->post('libraries', array_filter([
+            fn () => $this->client($provider)->post('libraries', Arr::whereNotNull([
                 'name' => $name,
                 'description' => $description,
-            ], fn ($value) => ! is_null($value)))
+            ]))
         );
 
         return $this->getStore($provider, $response->json('id'));
@@ -152,7 +153,7 @@ class MistralStoreGateway implements StoreGateway, UploadsDocuments
             $documents = $documents->merge($pageDocuments);
 
             $page++;
-        } while (count($pageDocuments) === $pageSize && $documents->count() < $totalDocuments);
+        } while (count($pageDocuments) === $pageSize);
 
         $statuses = $documents->countBy(fn (array $document) => match ($document['process_status'] ?? null) {
             'done' => 'completed',

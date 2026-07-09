@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Providers\Concerns;
 
+use Closure;
 use DateInterval;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -62,20 +63,28 @@ trait ManagesStores
      */
     public function addFileToStore(string $storeId, HasProviderId $file, array $metadata = []): string
     {
+        return $this->dispatchFileAddition(
+            $storeId, $file->id(),
+            fn () => $this->storeGateway()->addFile($this, $storeId, $file->id(), $metadata),
+        );
+    }
+
+    /**
+     * Dispatch the add-to-store lifecycle events around the given upload.
+     */
+    protected function dispatchFileAddition(string $storeId, string $identifier, Closure $upload): string
+    {
         $invocationId = (string) Str::uuid7();
 
         $this->events->dispatch(new AddingFileToStore(
-            $invocationId, $this, $storeId, $file->id()
+            $invocationId, $this, $storeId, $identifier
         ));
 
-        return tap(
-            $this->storeGateway()->addFile($this, $storeId, $file->id(), $metadata),
-            function (string $documentId) use ($invocationId, $storeId, $file) {
-                $this->events->dispatch(new FileAddedToStore(
-                    $invocationId, $this, $storeId, $file->id(), $documentId,
-                ));
-            }
-        );
+        return tap($upload(), function (string $documentId) use ($invocationId, $storeId, $identifier) {
+            $this->events->dispatch(new FileAddedToStore(
+                $invocationId, $this, $storeId, $identifier, $documentId,
+            ));
+        });
     }
 
     /**
