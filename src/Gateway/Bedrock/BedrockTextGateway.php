@@ -298,7 +298,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
                 $index = $event['contentBlockDelta']['contentBlockIndex'] ?? $currentBlockIndex;
                 $delta = $event['contentBlockDelta']['delta'] ?? [];
 
-                if (isset($delta['text'])) {
+                if (isset($delta['text']) && $delta['text'] !== '') {
                     $currentBlockType = 'text';
 
                     if ($emittedEvent = $emitTextStart()) {
@@ -314,7 +314,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
                         $delta['text'],
                         $timestamp,
                     ))->withInvocationId($invocationId);
-                } elseif (isset($delta['reasoningContent']['text'])) {
+                } elseif (isset($delta['reasoningContent']['text']) && $delta['reasoningContent']['text'] !== '') {
                     $currentBlockType = 'reasoning';
 
                     if ($emittedEvent = $emitReasoningStart()) {
@@ -329,7 +329,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
                         $delta['reasoningContent']['text'],
                         $timestamp,
                     ))->withInvocationId($invocationId);
-                } elseif (isset($delta['reasoningContent']['signature'])) {
+                } elseif (isset($delta['reasoningContent']['signature']) && $delta['reasoningContent']['signature'] !== '') {
                     $currentBlockType = 'reasoning';
 
                     if ($emittedEvent = $emitReasoningStart()) {
@@ -337,7 +337,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
                     }
 
                     $currentReasoningSignature .= $delta['reasoningContent']['signature'];
-                } elseif (isset($delta['reasoningContent']['redactedContent'])) {
+                } elseif (isset($delta['reasoningContent']['redactedContent']) && $delta['reasoningContent']['redactedContent'] !== '') {
                     $currentBlockType = 'reasoning';
 
                     if ($emittedEvent = $emitReasoningStart()) {
@@ -363,12 +363,15 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
                             ],
                         ];
                     } else {
+                        $reasoningText = ['text' => $currentReasoningText];
+
+                        if ($currentReasoningSignature !== '') {
+                            $reasoningText['signature'] = $currentReasoningSignature;
+                        }
+
                         $responseContent[$index] = [
                             'reasoningContent' => [
-                                'reasoningText' => [
-                                    'text' => $currentReasoningText,
-                                    'signature' => $currentReasoningSignature,
-                                ],
+                                'reasoningText' => $reasoningText,
                             ],
                         ];
                     }

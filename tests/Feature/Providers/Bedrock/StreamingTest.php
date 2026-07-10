@@ -120,6 +120,85 @@ describe('text streaming', function () {
             ->and($assistantTurn['content'][1]['toolUse']['name'])->toBe('FixedNumberGenerator');
     });
 
+    test('streaming does not round-trip an empty text block on follow-up tool step', function () {
+        $mock = new MockHandler([
+            new Result(['stream' => [
+                $this->contentBlockStart(0),
+                $this->contentBlockDelta(0, ['text' => '']),
+                $this->contentBlockStop(0),
+                $this->contentBlockStart(1, ['toolUse' => ['toolUseId' => 't1', 'name' => 'FixedNumberGenerator']]),
+                $this->contentBlockDelta(1, ['toolUse' => ['input' => '{}']]),
+                $this->contentBlockStop(1),
+                $this->messageStop('tool_use'),
+            ]]),
+            new Result(['stream' => [
+                $this->contentBlockStart(0),
+                $this->contentBlockDelta(0, ['text' => 'Done']),
+                $this->contentBlockStop(0),
+                $this->messageStop('end_turn'),
+            ]]),
+        ]);
+
+        $gateway = $this->gatewayWithClient($this->bedrockClient($mock));
+
+        iterator_to_array(
+            (new TextGenerationLoop($gateway))->stream(
+                'inv-1',
+                $this->bedrockProvider(),
+                'anthropic.claude-sonnet-5',
+                null,
+                tools: [new FixedNumberGenerator],
+            ),
+            preserve_keys: false,
+        );
+
+        $assistantTurn = $mock->getLastCommand()->toArray()['messages'][0];
+
+        expect($assistantTurn['content'])->toHaveCount(1)
+            ->and($assistantTurn['content'][0])->toHaveKey('toolUse');
+    });
+
+    test('streaming omits an empty reasoning signature on follow-up tool step', function () {
+        $mock = new MockHandler([
+            new Result(['stream' => [
+                $this->contentBlockStart(0),
+                $this->contentBlockDelta(0, ['reasoningContent' => ['text' => 'I should call the tool']]),
+                $this->contentBlockStop(0),
+                $this->contentBlockStart(1, ['toolUse' => ['toolUseId' => 't1', 'name' => 'FixedNumberGenerator']]),
+                $this->contentBlockDelta(1, ['toolUse' => ['input' => '{}']]),
+                $this->contentBlockStop(1),
+                $this->messageStop('tool_use'),
+            ]]),
+            new Result(['stream' => [
+                $this->contentBlockStart(0),
+                $this->contentBlockDelta(0, ['text' => 'Done']),
+                $this->contentBlockStop(0),
+                $this->messageStop('end_turn'),
+            ]]),
+        ]);
+
+        $gateway = $this->gatewayWithClient($this->bedrockClient($mock));
+
+        iterator_to_array(
+            (new TextGenerationLoop($gateway))->stream(
+                'inv-1',
+                $this->bedrockProvider(),
+                'openai.gpt-oss-120b-1:0',
+                null,
+                tools: [new FixedNumberGenerator],
+            ),
+            preserve_keys: false,
+        );
+
+        $assistantTurn = $mock->getLastCommand()->toArray()['messages'][0];
+
+        expect($assistantTurn['content'][0])->toBe([
+            'reasoningContent' => [
+                'reasoningText' => ['text' => 'I should call the tool'],
+            ],
+        ]);
+    });
+
     test('streaming round-trips redacted reasoning block', function () {
         $mock = new MockHandler([
             new Result(['stream' => [
