@@ -419,6 +419,7 @@ test('a streamed default rejection marks the tool results as unsuccessful', func
     expect($tool->calls)->toBe(0)
         ->and($toolResults)->toHaveCount(1)
         ->and($toolResults->first()->successful)->toBeFalse()
+        ->and($toolResults->first()->denied)->toBeTrue()
         ->and($toolResults->first()->error)->toBe('Not now')
         ->and(collect($events)->whereInstanceOf(StreamEnd::class))->toHaveCount(1);
 });

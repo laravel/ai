@@ -193,6 +193,7 @@ class TextGenerationLoop
                     ! $rejected,
                     $rejected ? $toolResult->result : null,
                     time(),
+                    denied: $rejected,
                 ))->withInvocationId($invocationId);
             }
 

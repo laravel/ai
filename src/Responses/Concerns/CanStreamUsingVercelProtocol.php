@@ -6,8 +6,6 @@ use Generator;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
-use Laravel\Ai\Streaming\Events\ToolCall;
-use Laravel\Ai\Streaming\Events\ToolResult;
 use Symfony\Component\HttpFoundation\Response;
 
 trait CanStreamUsingVercelProtocol
@@ -23,8 +21,6 @@ trait CanStreamUsingVercelProtocol
         {
             public bool $streamStarted = false;
 
-            public array $toolCalls = [];
-
             public ?array $lastStreamEndEvent = null;
         };
 
@@ -37,24 +33,6 @@ trait CanStreamUsingVercelProtocol
                     }
 
                     $state->streamStarted = true;
-                }
-
-                // Store initiated tool calls...
-                if ($event instanceof ToolCall) {
-                    $state->toolCalls[$event->toolCall->id] = true;
-                }
-
-                // A resumed approval's tool call streamed in a prior response, so replay its input before its output so the client can associate the two...
-                if ($event instanceof ToolResult &&
-                    ! isset($state->toolCalls[$event->toolResult->id])) {
-                    $state->toolCalls[$event->toolResult->id] = true;
-
-                    yield from $this->toVercelProtocolPart($state, [
-                        'type' => 'tool-input-available',
-                        'toolCallId' => $event->toolResult->id,
-                        'toolName' => $event->toolResult->name,
-                        'input' => $event->toolResult->arguments,
-                    ]);
                 }
 
                 // Surface each pending approval so the client may render an approval prompt...
@@ -101,11 +79,12 @@ trait CanStreamUsingVercelProtocol
      */
     protected function toVercelProtocolPart(object $state, array $data): Generator
     {
-        // Resuming from an approval yields tool parts before the provider's stream start...
-        if (! $state->streamStarted && $data['type'] !== 'start') {
+        if ($data['type'] === 'start') {
+            $data['messageId'] = $this->vercelProtocolMessageId ?? $data['messageId'];
+        } elseif (! $state->streamStarted) {
             $state->streamStarted = true;
 
-            yield 'data: '.json_encode(['type' => 'start', 'messageId' => $this->invocationId])."\n\n";
+            yield 'data: '.json_encode(['type' => 'start', 'messageId' => $this->vercelProtocolMessageId ?? $this->invocationId])."\n\n";
         }
 
         yield 'data: '.json_encode($data)."\n\n";
