@@ -4,6 +4,7 @@ namespace Laravel\Ai\Files;
 
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Http\UploadedFile;
+use InvalidArgumentException;
 use JsonSerializable;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
@@ -14,6 +15,10 @@ class Base64Document extends Document implements Arrayable, JsonSerializable, St
 
     public function __construct(public string $base64, ?string $mimeType = null)
     {
+        if (blank($base64)) {
+            throw new InvalidArgumentException('Base64 document content cannot be empty.');
+        }
+
         $this->mime = $mimeType;
     }
 
