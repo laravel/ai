@@ -94,6 +94,37 @@ test('web search tool forwards anthropic provider options into the tool payload'
     });
 });
 
+test('web search tool sends user_location when location is set', function () {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [(new WebSearch)->location(city: 'Warsaw', country: 'PL')])
+        ->prompt('Search', provider: 'anthropic');
+
+    Http::assertSent(function ($request) {
+        $tool = collect($request->data()['tools'] ?? [])->firstWhere('name', 'web_search');
+
+        return data_get($tool, 'user_location.type') === 'approximate'
+            && data_get($tool, 'user_location.city') === 'Warsaw'
+            && data_get($tool, 'user_location.country') === 'PL';
+    });
+});
+
+test('web search tool omits user_location when no location set', function () {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [new WebSearch])->prompt('Search', provider: 'anthropic');
+
+    Http::assertSent(function ($request) {
+        $tool = collect($request->data()['tools'] ?? [])->firstWhere('name', 'web_search');
+
+        return ! array_key_exists('user_location', $tool);
+    });
+});
+
 test('web fetch tool sends allowed_domains', function () {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
