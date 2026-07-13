@@ -4,6 +4,8 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Approvals\ToolApproval;
+use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Tests\Fixtures\Agents\RememberingApprovableAgent;
 
 test('a remembered agent pauses for approval, persists the tool_use, and resumes from history when approved', function () {
@@ -65,4 +67,195 @@ test('a remembered agent pauses for approval, persists the tool_use, and resumes
         ->and($resumed->text)->toBe('The number is 72019.')
         ->and($resumed->toolResults)->toHaveCount(1)
         ->and($resumed->toolResults[0]->result)->toBe('72019');
+});
+
+test('a resumed approval replays the paused turn provider content blocks', function () {
+    Config::set('ai.conversations.generate_title', false);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            Http::response([
+                'id' => 'msg_tool_1',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [
+                    [
+                        'type' => 'thinking',
+                        'thinking' => 'Deciding whether to call the tool.',
+                        'signature' => 'signature-1',
+                    ],
+                    [
+                        'type' => 'tool_use',
+                        'id' => 'toolu_1',
+                        'name' => 'ApprovableNumberGenerator',
+                        'input' => (object) [],
+                    ],
+                ],
+                'stop_reason' => 'tool_use',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+            Http::response([
+                'id' => 'msg_2',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [['type' => 'text', 'text' => 'The number is 72019.']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+        ]),
+    ]);
+
+    $user = (object) ['id' => 1];
+
+    $paused = (new RememberingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
+
+    expect($paused->awaitingApproval())->toBeTrue();
+
+    (new RememberingApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->prompt(ToolApproval::from(['toolu_1' => true]), provider: 'anthropic');
+
+    $resumeMessages = collect(Http::recorded())->last()[0]->data()['messages'];
+
+    $assistantTurn = collect($resumeMessages)->firstWhere('role', 'assistant');
+
+    expect($assistantTurn['content'][0]['type'])->toBe('thinking')
+        ->and($assistantTurn['content'][0]['signature'])->toBe('signature-1')
+        ->and(collect($assistantTurn['content'])->firstWhere('type', 'tool_use')['id'])->toBe('toolu_1');
+});
+
+test('a resume that loses the pause claim receives a conflict without executing tools', function () {
+    Config::set('ai.conversations.generate_title', false);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::response([
+            'id' => 'msg_tool_1',
+            'type' => 'message',
+            'role' => 'assistant',
+            'model' => 'claude-sonnet-4-6',
+            'content' => [[
+                'type' => 'tool_use',
+                'id' => 'toolu_1',
+                'name' => 'ApprovableNumberGenerator',
+                'input' => (object) [],
+            ]],
+            'stop_reason' => 'tool_use',
+            'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+        ]),
+    ]);
+
+    $user = (object) ['id' => 1];
+
+    $paused = (new RememberingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
+
+    // Simulate a racing resume that already holds the claim...
+    expect(resolve(ConversationStore::class)->claimPausedMessage($paused->conversationId))->toBeTrue();
+
+    expect(fn () => (new RememberingApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->prompt(ToolApproval::from(['toolu_1' => true]), provider: 'anthropic')
+    )->toThrow(ApprovalMismatchException::class, 'The pending tool calls have already been resumed or are being resumed.');
+});
+
+test('a plain prompt after an abandoned pause settles the dangling tool call', function () {
+    Config::set('ai.conversations.generate_title', false);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            Http::response([
+                'id' => 'msg_tool_1',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [[
+                    'type' => 'tool_use',
+                    'id' => 'toolu_1',
+                    'name' => 'ApprovableNumberGenerator',
+                    'input' => (object) [],
+                ]],
+                'stop_reason' => 'tool_use',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+            Http::response([
+                'id' => 'msg_2',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [['type' => 'text', 'text' => 'Hi there.']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+        ]),
+    ]);
+
+    $user = (object) ['id' => 1];
+
+    $paused = (new RememberingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
+
+    expect($paused->awaitingApproval())->toBeTrue();
+
+    $reply = (new RememberingApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->prompt('Never mind, just say hi', provider: 'anthropic');
+
+    expect($reply->text)->toBe('Hi there.');
+
+    $messages = collect(Http::recorded())->last()[0]->data()['messages'];
+    $toolResults = collect($messages)
+        ->flatMap(fn (array $message) => is_array($message['content']) ? $message['content'] : [])
+        ->filter(fn ($block) => is_array($block) && ($block['type'] ?? null) === 'tool_result');
+
+    expect($toolResults)->toHaveCount(1)
+        ->and($toolResults->first()['tool_use_id'])->toBe('toolu_1');
+});
+
+test('a streamed resume with mismatched decisions throws before the stream begins and releases the claim', function () {
+    Config::set('ai.conversations.generate_title', false);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            Http::response([
+                'id' => 'msg_tool_1',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [[
+                    'type' => 'tool_use',
+                    'id' => 'toolu_1',
+                    'name' => 'ApprovableNumberGenerator',
+                    'input' => (object) [],
+                ]],
+                'stop_reason' => 'tool_use',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+            Http::response([
+                'id' => 'msg_2',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [['type' => 'text', 'text' => 'The number is 72019.']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+        ]),
+    ]);
+
+    $user = (object) ['id' => 1];
+
+    $paused = (new RememberingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
+
+    // The mismatch must surface when the response is created, before any SSE bytes are sent...
+    expect(fn () => (new RememberingApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->stream(ToolApproval::from(['bogus-id' => true]), provider: 'anthropic')
+    )->toThrow(ApprovalMismatchException::class);
+
+    // The failed submission must not burn the claim, so a corrected resume still succeeds...
+    $resumed = (new RememberingApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->prompt(ToolApproval::from(['toolu_1' => true]), provider: 'anthropic');
+
+    expect($resumed->text)->toBe('The number is 72019.');
 });

@@ -79,11 +79,11 @@ trait GeneratesText
                     $schema,
                     TextGenerationOptions::forAgent($agent),
                     $prompt->timeout,
-                    $prompt->prompt instanceof ToolApproval && ! Ai::hasFakeGatewayFor($agent::class) ? $prompt->prompt : null,
+                    $this->resumableApprovalFor($prompt),
                 );
 
-                if ($response->awaitingApproval() && ! ApprovalNotResumableException::resumable($agent)) {
-                    throw ApprovalNotResumableException::make();
+                if ($response->awaitingApproval()) {
+                    ApprovalNotResumableException::throwUnlessResumable($agent);
                 }
 
                 $agentResponse = $response instanceof StructuredTextResponse
@@ -115,6 +115,18 @@ trait GeneratesText
         }
 
         return $response;
+    }
+
+    /**
+     * Get the tool approval to resume with, unless the agent's gateway is faked.
+     */
+    protected function resumableApprovalFor(AgentPrompt $prompt): ?ToolApproval
+    {
+        if (! $prompt->prompt instanceof ToolApproval || Ai::hasFakeGatewayFor($prompt->agent::class)) {
+            return null;
+        }
+
+        return $prompt->prompt;
     }
 
     /**

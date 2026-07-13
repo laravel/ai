@@ -4,8 +4,6 @@ namespace Laravel\Ai\Providers\Concerns;
 
 use Illuminate\Support\Str;
 use InvalidArgumentException;
-use Laravel\Ai\Ai;
-use Laravel\Ai\Approvals\ToolApproval;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Events\AgentStreamed;
@@ -47,18 +45,26 @@ trait StreamsText
 
                 $meta = new Meta($this->name(), $prompt->model);
 
+                $messages = [
+                    ...($agent instanceof Conversational ? $agent->messages() : []),
+                ];
+
+                if (is_string($prompt->prompt)) {
+                    $messages[] = new UserMessage($prompt->prompt, $prompt->attachments->all());
+                }
+
+                $tools = $this->resolveTools($agent);
+                $approval = $this->resumableApprovalFor($prompt);
+
+                // Validate the approval before the SSE response begins so a mismatch can still render as a 409...
+                if ($approval !== null) {
+                    $this->textGenerationLoop()->validateApproval($approval, $messages, $tools);
+                }
+
                 return new StreamableAgentResponse(
                     $invocationId,
-                    function () use ($invocationId, $prompt, $agent) {
+                    function () use ($invocationId, $prompt, $agent, $messages, $tools, $approval) {
                         $this->events->dispatch(new StreamingAgent($invocationId, $prompt));
-
-                        $messages = [
-                            ...($agent instanceof Conversational ? $agent->messages() : []),
-                        ];
-
-                        if (is_string($prompt->prompt)) {
-                            $messages[] = new UserMessage($prompt->prompt, $prompt->attachments->all());
-                        }
 
                         $this->listenForToolInvocations($invocationId, $agent);
 
@@ -68,14 +74,14 @@ trait StreamsText
                             $prompt->model,
                             (string) $agent->instructions(),
                             $messages,
-                            $this->resolveTools($agent),
+                            $tools,
                             null,
                             TextGenerationOptions::forAgent($agent),
                             $prompt->timeout,
-                            $prompt->prompt instanceof ToolApproval && ! Ai::hasFakeGatewayFor($agent::class) ? $prompt->prompt : null,
+                            $approval,
                         ) as $event) {
-                            if ($event instanceof ToolApprovalRequest && ! ApprovalNotResumableException::resumable($agent)) {
-                                throw ApprovalNotResumableException::make();
+                            if ($event instanceof ToolApprovalRequest) {
+                                ApprovalNotResumableException::throwUnlessResumable($agent);
                             }
 
                             yield $event;

@@ -41,4 +41,14 @@ class StreamedAgentResponse extends AgentResponse
                 ->values()
         );
     }
+
+    /**
+     * Get the raw provider replay state for the paused assistant turn, if any.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function pausedProviderContentBlocks(): array
+    {
+        return $this->events->whereInstanceOf(ToolApprovalRequest::class)->last()?->providerContentBlocks ?? [];
+    }
 }

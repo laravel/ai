@@ -14,6 +14,16 @@ class FakeConversationStore implements ConversationStore
         return null;
     }
 
+    public function claimPausedMessage(string $conversationId): bool
+    {
+        return true;
+    }
+
+    public function releasePausedMessage(string $conversationId): void
+    {
+        //
+    }
+
     public function storeConversation(string|int|null $userId, string $title): string
     {
         return 'conversation-123';

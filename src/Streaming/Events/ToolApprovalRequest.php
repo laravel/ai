@@ -9,11 +9,13 @@ class ToolApprovalRequest extends StreamEvent
 {
     /**
      * @param  Collection<int, PendingApproval>  $pendingApprovals
+     * @param  array<int, array<string, mixed>>  $providerContentBlocks  raw provider replay state for the paused turn; never serialized to clients
      */
     public function __construct(
         public string $id,
         public Collection $pendingApprovals,
         public int $timestamp,
+        public array $providerContentBlocks = [],
     ) {}
 
     /**

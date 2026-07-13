@@ -12,7 +12,7 @@ interface RemembersConversations extends Conversational
     /**
      * Continue an existing conversation as the given user.
      */
-    public function continue(string $conversationId, object $as): static;
+    public function continue(?string $conversationId, object $as): static;
 
     /**
      * Continue the last conversation as the given user.

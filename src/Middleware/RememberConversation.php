@@ -9,6 +9,7 @@ use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\RemembersConversations;
+use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Throwable;
@@ -27,6 +28,39 @@ class RememberConversation
      * Handle the incoming prompt.
      */
     public function handle(AgentPrompt $prompt, Closure $next)
+    {
+        /** @var Agent&RemembersConversations $agent */
+        $agent = $prompt->agent;
+
+        $claimed = false;
+
+        // Claim the pause before executing anything so racing resumes cannot run a gated tool twice...
+        if ($prompt->prompt instanceof ToolApproval && $agent->currentConversation()) {
+            if (! $this->store->claimPausedMessage($agent->currentConversation())) {
+                throw new ApprovalMismatchException(
+                    'The pending tool calls have already been resumed or are being resumed.', collect()
+                );
+            }
+
+            $claimed = true;
+        }
+
+        try {
+            return $this->remember($prompt, $next);
+        } catch (ApprovalMismatchException $exception) {
+            // A mismatch throws before any tool executes, so an invalid submission must not burn the claim...
+            if ($claimed) {
+                $this->store->releasePausedMessage($agent->currentConversation());
+            }
+
+            throw $exception;
+        }
+    }
+
+    /**
+     * Run the prompt and persist the conversation once it completes.
+     */
+    protected function remember(AgentPrompt $prompt, Closure $next)
     {
         return $next($prompt)->then(function ($response) use ($prompt) {
             /** @var Agent&RemembersConversations $agent */

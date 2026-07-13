@@ -13,7 +13,11 @@ class ToolApproval
     public function __construct(
         public array $decisions = [],
         public ?Approval $default = null,
-    ) {}
+    ) {
+        if ($this->default?->isEdit()) {
+            throw new InvalidArgumentException('The default decision may not use the edit action.');
+        }
+    }
 
     /**
      * Approve every pending tool call that is not explicitly decided.
@@ -49,7 +53,7 @@ class ToolApproval
 
             // A wildcard decision stands in for every pending call that is not explicitly decided...
             if ($id === '*') {
-                if ($decision->action === 'edit') {
+                if ($decision->isEdit()) {
                     throw new InvalidArgumentException('The wildcard decision may not use the edit action.');
                 }
 

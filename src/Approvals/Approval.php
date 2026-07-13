@@ -7,22 +7,11 @@ class Approval
     /**
      * @param  array<string, mixed>|null  $arguments
      */
-    public function __construct(
+    private function __construct(
         public string $action,
-        public ?string $reason = null,
         public ?string $result = null,
         public ?array $arguments = null,
     ) {}
-
-    public static function required(?string $reason = null): self
-    {
-        return new self('required', reason: $reason);
-    }
-
-    public static function notRequired(): self
-    {
-        return new self('not_required');
-    }
 
     public static function approve(): self
     {
@@ -42,13 +31,13 @@ class Approval
         return new self('edit', arguments: $arguments);
     }
 
-    public function isRequired(): bool
+    public function isRejection(): bool
     {
-        return $this->action === 'required';
+        return $this->action === 'reject';
     }
 
-    public function isNotRequired(): bool
+    public function isEdit(): bool
     {
-        return $this->action === 'not_required';
+        return $this->action === 'edit';
     }
 }

@@ -15,6 +15,16 @@ class ApprovalNotResumableException extends AiException
     }
 
     /**
+     * Throw when a paused approval cannot be resumed from persisted history.
+     */
+    public static function throwUnlessResumable(Agent $agent): void
+    {
+        if (! static::resumable($agent)) {
+            throw static::make();
+        }
+    }
+
+    /**
      * Determine whether a paused approval can be resumed from persisted history.
      */
     public static function resumable(Agent $agent): bool
