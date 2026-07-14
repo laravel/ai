@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\Schedule;
+use Laravel\Ai\Files\LocalDocument;
+use Laravel\Ai\Files\StoredDocument;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Tests\Fixtures\Agents\AssistantAgent;
 
@@ -33,6 +35,29 @@ it('passes provider, model, and timeout options to the agent', function () {
     AssistantAgent::assertPrompted(fn (AgentPrompt $prompt) => $prompt->model === 'claude-haiku-4-5-20251001'
         && $prompt->timeout === 120
     );
+});
+
+it('passes local and stored document attachments to the agent', function () {
+    AssistantAgent::fake(['Digest']);
+
+    $this->artisan('agent:run', [
+        'agent' => AssistantAgent::class,
+        'prompt' => 'Summarize the attachments',
+        '--attachment' => ['/home/laravel/transcript.md'],
+        '--storage-attachment' => ['transcript.pdf'],
+        '--disk' => 'documents',
+    ])->assertSuccessful();
+
+    AssistantAgent::assertPrompted(function (AgentPrompt $prompt) {
+        expect($prompt->attachments)->toHaveCount(2)
+            ->and($prompt->attachments->get(0))->toBeInstanceOf(LocalDocument::class)
+            ->and($prompt->attachments->get(0)->path)->toBe('/home/laravel/transcript.md')
+            ->and($prompt->attachments->get(1))->toBeInstanceOf(StoredDocument::class)
+            ->and($prompt->attachments->get(1)->path)->toBe('transcript.pdf')
+            ->and($prompt->attachments->get(1)->disk)->toBe('documents');
+
+        return true;
+    });
 });
 
 it('fails when the agent class is invalid', function () {
