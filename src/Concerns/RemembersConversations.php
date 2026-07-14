@@ -12,14 +12,22 @@ trait RemembersConversations
     protected ?object $conversationUser = null;
 
     /**
+     * Start a new conversation for the given participant.
+     */
+    public function forParticipant(object $participant): static
+    {
+        $this->conversationId = null;
+        $this->conversationUser = $participant;
+
+        return $this;
+    }
+
+    /**
      * Start a new conversation for the given user.
      */
     public function forUser($user): static
     {
-        $this->conversationId = null;
-        $this->conversationUser = $user;
-
-        return $this;
+        return $this->forParticipant($user);
     }
 
     /**

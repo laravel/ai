@@ -56,27 +56,11 @@ class Conversation extends Model
     }
 
     /**
-     * Resolve the participant model that owns conversations with a null type.
-     */
-    public static function configuredParticipantModel(): string
-    {
-        return config('ai.conversations.participant_model') ?: config('auth.providers.users.model', 'App\Models\User');
-    }
-
-    /**
      * Resolve the participant_type discriminator to record for the participant.
-     *
-     * Null signals the configured user model (or no participant); any other
-     * model records its morph class so ids that collide across models no longer
-     * share history.
      */
     public static function participantType(?object $participant): ?string
     {
         if ($participant === null) {
-            return null;
-        }
-
-        if ($participant::class === static::configuredParticipantModel()) {
             return null;
         }
 

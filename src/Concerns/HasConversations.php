@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Concerns;
 
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Laravel\Ai\Models\Conversation;
 
 trait HasConversations
@@ -10,16 +11,14 @@ trait HasConversations
     /**
      * Get the conversations for the model.
      *
-     * @return HasMany<Conversation, $this>
+     * @return MorphMany<Conversation, $this>|HasMany<Conversation, $this>
      */
-    public function conversations(): HasMany
+    public function conversations(): MorphMany|HasMany
     {
-        $relation = $this->hasMany(Conversation::class, Conversation::ownerColumn());
-
         if (Conversation::hasParticipantType()) {
-            $relation->where('participant_type', Conversation::participantType($this));
+            return $this->morphMany(Conversation::class, 'participant', 'participant_type', Conversation::ownerColumn());
         }
 
-        return $relation;
+        return $this->hasMany(Conversation::class, Conversation::ownerColumn());
     }
 }

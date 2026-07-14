@@ -418,7 +418,7 @@ test('it scopes conversations by participant type so shared ids no longer collid
         ->and($userConversation)->not->toBe($adminConversation);
 });
 
-test('a null participant type matches the configured user model rows', function () {
+test('a null participant type only matches conversations stored without one', function () {
     $store = new DatabaseConversationStore;
 
     $user = new class

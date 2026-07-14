@@ -9,8 +9,6 @@ use Laravel\Ai\Concerns\HasConversations;
 use Laravel\Ai\Models\Conversation;
 
 uses(RefreshDatabase::class)->beforeEach(function () {
-    config(['ai.conversations.participant_model' => ConversationRelationshipUser::class]);
-
     Schema::create('users', function (Blueprint $table) {
         $table->id();
         $table->string('name');
@@ -31,6 +29,7 @@ test('model can retrieve conversations using relationship', function () {
         [
             'id' => 'conversation-1',
             'participant_id' => $user->id,
+            'participant_type' => $user->getMorphClass(),
             'title' => 'First Conversation',
             'created_at' => now()->subMinutes(10),
             'updated_at' => now()->subMinutes(10),
@@ -38,6 +37,7 @@ test('model can retrieve conversations using relationship', function () {
         [
             'id' => 'conversation-2',
             'participant_id' => $user->id,
+            'participant_type' => $user->getMorphClass(),
             'title' => 'Second Conversation',
             'created_at' => now()->subMinutes(5),
             'updated_at' => now()->subMinutes(5),
@@ -45,7 +45,16 @@ test('model can retrieve conversations using relationship', function () {
         [
             'id' => 'conversation-3',
             'participant_id' => $otherUser->id,
+            'participant_type' => $otherUser->getMorphClass(),
             'title' => 'Other Conversation',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ],
+        [
+            'id' => 'conversation-4',
+            'participant_id' => $user->id,
+            'participant_type' => 'admin',
+            'title' => 'Colliding Admin Conversation',
             'created_at' => now(),
             'updated_at' => now(),
         ],
