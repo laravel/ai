@@ -7,7 +7,6 @@ use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
 use Laravel\Ai\Tools\ToolNameResolver;
-use Spatie\Fork\Fork;
 
 trait InvokesTools
 {
@@ -49,18 +48,6 @@ trait InvokesTools
         } finally {
             $this->popToolInvocationCallbacks();
         }
-    }
-
-    /**
-     * Determine whether the configured concurrency driver can run in the current environment.
-     */
-    protected function canRunConcurrently(): bool
-    {
-        $driver = config('concurrency.default', 'process');
-
-        return $driver === 'fork'
-            ? PHP_SAPI === 'cli' && extension_loaded('pcntl') && class_exists(Fork::class)
-            : true;
     }
 
     /**

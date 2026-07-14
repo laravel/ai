@@ -46,6 +46,15 @@ class ConcurrentEchoTool implements Tool
 
 class SequentialEchoTool extends ConcurrentEchoTool {}
 
+#[Concurrent]
+class ThrowsWithCodeTool extends ConcurrentEchoTool
+{
+    public function handle(Request $request): string
+    {
+        throw new RuntimeException('coded', 42);
+    }
+}
+
 function concurrentToolLoop(): object
 {
     return new class(Mockery::mock(StepTextGateway::class)) extends TextGenerationLoop
@@ -127,3 +136,35 @@ test('it propagates a tool exception raised inside a concurrent batch', function
 
     concurrentToolLoop()->runToolCalls(toolCallsFor($tools), $tools);
 })->throws(RuntimeException::class, 'kaboom');
+
+test('it preserves the thrown exception rather than rebuilding it from its message', function () {
+    $tools = [new ConcurrentEchoTool('a'), new ThrowsWithCodeTool('b')];
+
+    try {
+        concurrentToolLoop()->runToolCalls(toolCallsFor($tools), $tools);
+    } catch (RuntimeException $e) {
+        expect($e->getCode())->toBe(42);
+
+        return;
+    }
+
+    $this->fail('Expected the tool exception to propagate.');
+});
+
+test('it still reports tools that succeeded after a failing one in the batch', function () {
+    $tools = [new ConcurrentEchoTool('a'), new ConcurrentEchoTool('b', throws: 'kaboom'), new ConcurrentEchoTool('c')];
+
+    $invoked = [];
+
+    $loop = concurrentToolLoop()->onToolInvocation(fn () => true, function ($tool) use (&$invoked) {
+        $invoked[] = $tool->name();
+    });
+
+    try {
+        $loop->runToolCalls(toolCallsFor($tools), $tools);
+    } catch (RuntimeException) {
+        // Expected: the batch surfaces b's failure after reporting a and c.
+    }
+
+    expect($invoked)->toEqualCanonicalizing(['a', 'c']);
+});

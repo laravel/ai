@@ -26,7 +26,6 @@ use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Laravel\Ai\Tools\Request;
-use RuntimeException;
 use Throwable;
 
 class TextGenerationLoop
@@ -313,7 +312,7 @@ class TextGenerationLoop
      */
     protected function executeConcurrentBatch(array $batch): array
     {
-        if (count($batch) < 2 || ! $this->canRunConcurrently()) {
+        if (count($batch) < 2) {
             return array_map(fn (array $pair) => $this->executeToolCall(...$pair), $batch);
         }
 
@@ -328,7 +327,7 @@ class TextGenerationLoop
             }
 
             $tasks = array_map(
-                fn (array $pair) => fn () => $this->handleSafely($pair[1], $pair[0]->arguments),
+                static fn (array $pair) => static fn () => static::handleSafely($pair[1], $pair[0]->arguments),
                 $batch,
             );
 
@@ -340,17 +339,24 @@ class TextGenerationLoop
             }
 
             $results = [];
+            $error = null;
 
             foreach ($batch as $i => [$toolCall, $tool]) {
                 $envelope = $envelopes[$i];
 
                 if (! $envelope['ok']) {
-                    throw $this->rebuildToolException($envelope['type'], $envelope['message']);
+                    $error ??= $envelope['error'];
+
+                    continue;
                 }
 
                 call_user_func($callbacks['invoked'], $tool, $toolCall->arguments, $envelope['result'], $ids[$i]);
 
                 $results[] = $this->toolResult($toolCall, $envelope['result']);
+            }
+
+            if ($error !== null) {
+                throw $error;
             }
 
             return $results;
@@ -365,27 +371,17 @@ class TextGenerationLoop
     }
 
     /**
-     * Run a tool's handler, capturing success or failure into a serializable envelope.
+     * Run a tool's handler, capturing success or the thrown exception into an envelope.
      *
-     * @return array{ok: true, result: string}|array{ok: false, type: string, message: string}
+     * @return array{ok: true, result: string}|array{ok: false, error: Throwable}
      */
-    protected function handleSafely(Tool $tool, array $arguments): array
+    protected static function handleSafely(Tool $tool, array $arguments): array
     {
         try {
             return ['ok' => true, 'result' => (string) $tool->handle(new Request($arguments))];
         } catch (Throwable $e) {
-            return ['ok' => false, 'type' => $e::class, 'message' => $e->getMessage()];
+            return ['ok' => false, 'error' => $e];
         }
-    }
-
-    /**
-     * Rebuild a throwable captured inside a concurrent task from its class and message.
-     */
-    protected function rebuildToolException(string $type, string $message): Throwable
-    {
-        return class_exists($type) && is_a($type, Throwable::class, true)
-            ? new $type($message)
-            : new RuntimeException($message);
     }
 
     /**
