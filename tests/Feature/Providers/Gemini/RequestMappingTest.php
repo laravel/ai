@@ -3,9 +3,11 @@
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\AttributeToolChoiceAgent;
 use Tests\Fixtures\Agents\NestedStructuredAgent;
 use Tests\Fixtures\Agents\NullableStructuredAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
+use Tests\Fixtures\Agents\ToolChoiceAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
 describe('request structure', function () {
@@ -406,5 +408,46 @@ describe('citations', function () {
         $response = (new AssistantAgent)->prompt('Query', provider: 'gemini');
 
         expect($response->meta->citations)->toHaveCount(1);
+    });
+});
+
+describe('tool choice', function () {
+    test('required tool choice sends function calling config in ANY mode', function () {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('The number is 42'),
+        ]);
+
+        (new ToolChoiceAgent('required'))->prompt('Generate a number', provider: 'gemini');
+
+        Http::assertSent(function ($request) {
+            return $request->data()['tool_config']['function_calling_config'] === ['mode' => 'ANY'];
+        });
+    });
+
+    test('required tool choice can be set via attribute', function () {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('The number is 42'),
+        ]);
+
+        (new AttributeToolChoiceAgent)->prompt('Generate a number', provider: 'gemini');
+
+        Http::assertSent(function ($request) {
+            return $request->data()['tool_config']['function_calling_config'] === ['mode' => 'ANY'];
+        });
+    });
+
+    test('named tool choice restricts the allowed function names', function () {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('The number is 42'),
+        ]);
+
+        (new ToolChoiceAgent(['tool' => 'custom_named_tool']))->prompt('Generate a number', provider: 'gemini');
+
+        Http::assertSent(function ($request) {
+            return $request->data()['tool_config']['function_calling_config'] === [
+                'mode' => 'ANY',
+                'allowed_function_names' => ['custom_named_tool'],
+            ];
+        });
     });
 });

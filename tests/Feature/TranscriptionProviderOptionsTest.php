@@ -19,7 +19,7 @@ test('flat provider options are sent on the transcription request', function () 
     Http::fake(['*' => Http::response(['text' => 'Hello', 'usage' => ['input_tokens' => 1, 'total_tokens' => 2]])]);
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
-        ->providerOptions(['prompt' => 'Laravel Forge and Vapor'])
+        ->withProviderOptions(['prompt' => 'Laravel Forge and Vapor'])
         ->generate(provider: 'openai', model: 'gpt-4o-transcribe');
 
     Http::assertSent(fn (Request $request) => str_contains($request->body(), 'Laravel Forge and Vapor'));
@@ -34,7 +34,7 @@ test('closure resolver receives the resolved provider and applies per-provider o
     $seen = [];
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
-        ->providerOptions(function (Provider $provider) use (&$seen) {
+        ->withProviderOptions(function (Provider $provider) use (&$seen) {
             $seen[] = $provider->driver();
 
             return $provider->driver() === 'openai'
@@ -52,7 +52,7 @@ test('closure provider options are not recorded on the queued prompt fake', func
     Transcription::fake();
 
     Transcription::fromPath('/path/to/audio.mp3')
-        ->providerOptions(fn (Provider $provider) => ['prompt' => 'hint'])
+        ->withProviderOptions(fn (Provider $provider) => ['prompt' => 'hint'])
         ->queue(provider: 'openai');
 
     Transcription::assertQueued(
@@ -66,7 +66,7 @@ test('closure provider options survive queue serialization round-trip', function
     ]);
 
     $pending = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
-        ->providerOptions(fn (Provider $provider) => ['prompt' => 'Serialized hint']);
+        ->withProviderOptions(fn (Provider $provider) => ['prompt' => 'Serialized hint']);
 
     $job = new GenerateTranscription($pending, 'openai', 'gpt-4o-transcribe');
 
@@ -85,7 +85,7 @@ test('closure resolver returning null is treated as no options', function () {
     ]);
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
-        ->providerOptions(fn () => null)
+        ->withProviderOptions(fn () => null)
         ->generate(provider: 'openai', model: 'gpt-4o-transcribe');
 
     Http::assertSent(fn (Request $request) => ! str_contains($request->body(), 'prompt'));

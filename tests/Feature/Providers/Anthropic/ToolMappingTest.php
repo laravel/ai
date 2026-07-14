@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Providers\Tools\FileSearch;
+use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Tests\Fixtures\Agents\NamedToolAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
@@ -83,13 +84,88 @@ test('web search tool forwards anthropic provider options into the tool payload'
     ]);
 
     agent(tools: [
-        (new WebSearch)->withProviderOptions('anthropic', ['blocked_domains' => ['spam.com']]),
+        (new WebSearch)->withProviderOptions(['blocked_domains' => ['spam.com']]),
     ])->prompt('Search', provider: 'anthropic');
 
     Http::assertSent(function ($request) {
         $tool = collect($request->data()['tools'] ?? [])->firstWhere('name', 'web_search');
 
         return data_get($tool, 'blocked_domains') === ['spam.com'];
+    });
+});
+
+test('web search tool sends user_location when location is set', function () {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [(new WebSearch)->location(city: 'Warsaw', country: 'PL')])
+        ->prompt('Search', provider: 'anthropic');
+
+    Http::assertSent(function ($request) {
+        $tool = collect($request->data()['tools'] ?? [])->firstWhere('name', 'web_search');
+
+        return data_get($tool, 'user_location.type') === 'approximate'
+            && data_get($tool, 'user_location.city') === 'Warsaw'
+            && data_get($tool, 'user_location.country') === 'PL';
+    });
+});
+
+test('web search tool omits user_location when no location set', function () {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [new WebSearch])->prompt('Search', provider: 'anthropic');
+
+    Http::assertSent(function ($request) {
+        $tool = collect($request->data()['tools'] ?? [])->firstWhere('name', 'web_search');
+
+        return ! array_key_exists('user_location', $tool);
+    });
+});
+
+test('web fetch tool sends allowed_domains', function () {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [(new WebFetch)->allow(['laravel.com', 'php.net'])])
+        ->prompt('Fetch', provider: 'anthropic');
+
+    Http::assertSent(function ($request) {
+        $tool = collect($request->data()['tools'] ?? [])->firstWhere('name', 'web_fetch');
+
+        return data_get($tool, 'type') === 'web_fetch_20250910'
+            && data_get($tool, 'allowed_domains') === ['laravel.com', 'php.net'];
+    });
+});
+
+test('web fetch tool defaults max_uses to ten', function () {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [new WebFetch])->prompt('Fetch', provider: 'anthropic');
+
+    Http::assertSent(function ($request) {
+        $tool = collect($request->data()['tools'] ?? [])->firstWhere('name', 'web_fetch');
+
+        return data_get($tool, 'max_uses') === 10;
+    });
+});
+
+test('web fetch tool forwards a custom max_uses', function () {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [(new WebFetch)->max(3)])->prompt('Fetch', provider: 'anthropic');
+
+    Http::assertSent(function ($request) {
+        $tool = collect($request->data()['tools'] ?? [])->firstWhere('name', 'web_fetch');
+
+        return data_get($tool, 'max_uses') === 3;
     });
 });
 

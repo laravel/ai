@@ -46,11 +46,11 @@ class TextGenerationLoop
         TextProvider $provider,
         string $model,
         ?string $instructions,
-        array $messages,
-        array $tools,
-        ?array $schema,
-        ?TextGenerationOptions $options,
-        ?int $timeout,
+        array $messages = [],
+        array $tools = [],
+        ?array $schema = null,
+        ?TextGenerationOptions $options = null,
+        ?int $timeout = null,
     ): TextResponse {
         $steps = new Collection;
         $allMessages = $messages;
@@ -68,7 +68,7 @@ class TextGenerationLoop
 
             $pending = new PendingStep(
                 $provider, $model, $instructions, $allMessages, $tools,
-                $schema, $options, $timeout, $stepContext,
+                $schema, $options?->forStep($step), $timeout, $stepContext,
             );
 
             $outcome = $this->sendThroughMiddleware($pending, $middleware);
@@ -143,11 +143,11 @@ class TextGenerationLoop
         TextProvider $provider,
         string $model,
         ?string $instructions,
-        array $messages,
-        array $tools,
-        ?array $schema,
-        ?TextGenerationOptions $options,
-        ?int $timeout,
+        array $messages = [],
+        array $tools = [],
+        ?array $schema = null,
+        ?TextGenerationOptions $options = null,
+        ?int $timeout = null,
     ): Generator {
         $allMessages = $messages;
         $maxSteps = $this->resolveMaxSteps($options, $tools);
@@ -166,7 +166,7 @@ class TextGenerationLoop
 
             $pending = new PendingStep(
                 $provider, $model, $instructions, $allMessages, $tools,
-                $schema, $options, $timeout, $stepContext,
+                $schema, $options?->forStep($step), $timeout, $stepContext,
             );
 
             $outcome = $this->sendThroughMiddleware($pending, $middleware);

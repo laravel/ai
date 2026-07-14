@@ -4,9 +4,7 @@ namespace Tests\Fixtures;
 
 use Generator;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
-use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
-use Laravel\Ai\Gateway\Concerns\DelegatesToTextGenerationLoop;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -15,10 +13,8 @@ use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
 
-class RecordingStepGateway implements StepTextGateway, TextGateway
+class RecordingStepGateway implements StepTextGateway
 {
-    use DelegatesToTextGenerationLoop;
-
     public string $model = '';
 
     public ?string $instructions = null;

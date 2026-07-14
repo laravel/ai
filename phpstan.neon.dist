@@ -4,4 +4,6 @@ parameters:
     - src
     - database
 
-  level: 1
+  level: 2
+
+  treatPhpDocTypesAsCertain: false

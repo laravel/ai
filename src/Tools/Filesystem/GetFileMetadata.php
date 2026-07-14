@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Tools\Filesystem;
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Tools\Request;
 use Throwable;
@@ -23,6 +24,7 @@ class GetFileMetadata extends FilesystemTool
      */
     public function handle(Request $request): string
     {
+        /** @var FilesystemAdapter $disk */
         $disk = $this->disk();
 
         $path = $request->string('path');

@@ -54,7 +54,7 @@ trait StreamsText
 
                         $this->listenForToolInvocations($invocationId, $agent);
 
-                        yield from $this->textGateway()->streamText(
+                        yield from $this->textGenerationLoop()->stream(
                             $invocationId,
                             $this,
                             $prompt->model,

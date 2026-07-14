@@ -311,17 +311,17 @@ test('s3 document content throws unsupported exception', function () {
 test('document format maps common mime types', function () {
     $gateway = textGateway();
 
-    expect($gateway->callGetDocumentFormat(new Base64Document('', 'application/pdf')))->toBe('pdf');
-    expect($gateway->callGetDocumentFormat(new Base64Document('', 'text/csv')))->toBe('csv');
-    expect($gateway->callGetDocumentFormat(new Base64Document('', 'application/msword')))->toBe('doc');
-    expect($gateway->callGetDocumentFormat(new Base64Document('', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')))->toBe('docx');
-    expect($gateway->callGetDocumentFormat(new Base64Document('', 'application/vnd.ms-excel')))->toBe('xls');
-    expect($gateway->callGetDocumentFormat(new Base64Document('', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')))->toBe('xlsx');
-    expect($gateway->callGetDocumentFormat(new Base64Document('', 'text/html')))->toBe('html');
-    expect($gateway->callGetDocumentFormat(new Base64Document('', 'text/markdown')))->toBe('md');
-    expect($gateway->callGetDocumentFormat(new Base64Document('', 'text/x-markdown')))->toBe('md');
-    expect($gateway->callGetDocumentFormat(new Base64Document('', 'text/plain; charset=utf-8')))->toBe('txt');
-    expect($gateway->callGetDocumentFormat(new Base64Document('', null)))->toBeNull();
+    expect($gateway->callGetDocumentFormat(new Base64Document(base64_encode('doc-bytes'), 'application/pdf')))->toBe('pdf');
+    expect($gateway->callGetDocumentFormat(new Base64Document(base64_encode('doc-bytes'), 'text/csv')))->toBe('csv');
+    expect($gateway->callGetDocumentFormat(new Base64Document(base64_encode('doc-bytes'), 'application/msword')))->toBe('doc');
+    expect($gateway->callGetDocumentFormat(new Base64Document(base64_encode('doc-bytes'), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')))->toBe('docx');
+    expect($gateway->callGetDocumentFormat(new Base64Document(base64_encode('doc-bytes'), 'application/vnd.ms-excel')))->toBe('xls');
+    expect($gateway->callGetDocumentFormat(new Base64Document(base64_encode('doc-bytes'), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')))->toBe('xlsx');
+    expect($gateway->callGetDocumentFormat(new Base64Document(base64_encode('doc-bytes'), 'text/html')))->toBe('html');
+    expect($gateway->callGetDocumentFormat(new Base64Document(base64_encode('doc-bytes'), 'text/markdown')))->toBe('md');
+    expect($gateway->callGetDocumentFormat(new Base64Document(base64_encode('doc-bytes'), 'text/x-markdown')))->toBe('md');
+    expect($gateway->callGetDocumentFormat(new Base64Document(base64_encode('doc-bytes'), 'text/plain; charset=utf-8')))->toBe('txt');
+    expect($gateway->callGetDocumentFormat(new Base64Document(base64_encode('doc-bytes'), null)))->toBeNull();
 });
 
 test('user message with base64 image attachment produces image block', function () {
@@ -380,20 +380,20 @@ test('uploaded file attachment is rejected as unsupported', function () {
 test('image format maps common image mime types', function () {
     $gateway = textGateway();
 
-    expect($gateway->callGetImageFormat(new Base64Image('', 'image/png')))->toBe('png');
-    expect($gateway->callGetImageFormat(new Base64Image('', 'image/jpeg')))->toBe('jpeg');
-    expect($gateway->callGetImageFormat(new Base64Image('', 'image/jpg')))->toBe('jpeg');
-    expect($gateway->callGetImageFormat(new Base64Image('', 'image/gif')))->toBe('gif');
-    expect($gateway->callGetImageFormat(new Base64Image('', 'image/webp')))->toBe('webp');
+    expect($gateway->callGetImageFormat(new Base64Image(base64_encode('image-bytes'), 'image/png')))->toBe('png');
+    expect($gateway->callGetImageFormat(new Base64Image(base64_encode('image-bytes'), 'image/jpeg')))->toBe('jpeg');
+    expect($gateway->callGetImageFormat(new Base64Image(base64_encode('image-bytes'), 'image/jpg')))->toBe('jpeg');
+    expect($gateway->callGetImageFormat(new Base64Image(base64_encode('image-bytes'), 'image/gif')))->toBe('gif');
+    expect($gateway->callGetImageFormat(new Base64Image(base64_encode('image-bytes'), 'image/webp')))->toBe('webp');
 });
 
 test('image format throws when mime type is unsupported', function () {
-    expect(fn () => textGateway()->callGetImageFormat(new Base64Image('', 'image/unsupported')))
+    expect(fn () => textGateway()->callGetImageFormat(new Base64Image(base64_encode('image-bytes'), 'image/unsupported')))
         ->toThrow(InvalidArgumentException::class, 'Unsupported image MIME type [image/unsupported]');
 });
 
 test('image format throws when mime type is missing', function () {
-    expect(fn () => textGateway()->callGetImageFormat(new Base64Image('', null)))
+    expect(fn () => textGateway()->callGetImageFormat(new Base64Image(base64_encode('image-bytes'), null)))
         ->toThrow(InvalidArgumentException::class, 'Unable to determine MIME type');
 });
 
