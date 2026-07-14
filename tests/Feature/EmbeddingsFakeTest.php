@@ -68,6 +68,28 @@ describe('generating embeddings', function (): void {
         expect($response)->toHaveCount(3);
     });
 
+    test('can iterate over response', function () {
+        Embeddings::fake([
+            [
+                array_fill(0, 3, 0.1),
+                array_fill(0, 3, 0.2),
+            ],
+        ]);
+
+        $response = Embeddings::for(['Hello', 'World'])->dimensions(3)->generate();
+
+        $embeddings = [];
+
+        foreach ($response as $embedding) {
+            $embeddings[] = $embedding;
+        }
+
+        expect($embeddings)->toEqual([
+            array_fill(0, 3, 0.1),
+            array_fill(0, 3, 0.2),
+        ]);
+    });
+
     test('can fake embeddings with custom response', function (): void {
         $customEmbedding = array_fill(0, 100, 0.5);
 
