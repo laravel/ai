@@ -22,8 +22,7 @@ class ScheduleMixin
             ?string $model = null,
             ?int $timeout = null,
         ): Event {
-            /** @var Schedule $this */
-            return $this->command(RunAgentCommand::class, array_filter([
+            return app(Schedule::class)->command(RunAgentCommand::class, array_filter([
                 $agent,
                 $prompt,
                 '--provider' => $provider instanceof Lab ? $provider->value : $provider,
