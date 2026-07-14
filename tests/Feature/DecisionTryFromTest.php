@@ -3,10 +3,14 @@
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Laravel\Ai\Approvals\Decision;
-use Laravel\Ai\Vercel\ToolApprovalResponses;
+
+function useChatRequest(array $messages): Request
+{
+    return Request::create('/chat', 'POST', ['messages' => $messages]);
+}
 
 test('tool approval decisions are extracted from a useChat request', function () {
-    $approval = ToolApprovalResponses::fromRequest(Request::create('/chat', 'POST', [
+    $approval = Decision::tryFrom(Request::create('/chat', 'POST', [
         'id' => 'chat-1',
         'trigger' => 'submit-message',
         'messages' => [
@@ -38,7 +42,7 @@ test('tool approval decisions are extracted from a useChat request', function ()
 });
 
 test('a denial without a reason becomes a bare rejection', function () {
-    $approval = ToolApprovalResponses::fromMessages([
+    $approval = Decision::tryFrom(useChatRequest([
         ['role' => 'assistant', 'parts' => [
             [
                 'type' => 'tool-DeleteFile',
@@ -47,14 +51,14 @@ test('a denial without a reason becomes a bare rejection', function () {
                 'approval' => ['id' => 'call-1', 'approved' => false],
             ],
         ]],
-    ]);
+    ]));
 
     expect($approval->decisions['call-1']->action)->toBe('reject')
         ->and($approval->decisions['call-1']->result)->toBeNull();
 });
 
 test('dynamic tool parts may carry approval responses', function () {
-    $approval = ToolApprovalResponses::fromMessages([
+    $approval = Decision::tryFrom(useChatRequest([
         ['role' => 'assistant', 'parts' => [
             [
                 'type' => 'dynamic-tool',
@@ -64,19 +68,19 @@ test('dynamic tool parts may carry approval responses', function () {
                 'approval' => ['id' => 'call-1', 'approved' => true],
             ],
         ]],
-    ]);
+    ]));
 
     expect($approval->decisions['call-1']->action)->toBe('approve');
 });
 
 test('parsing returns null when the request carries no messages', function () {
-    expect(ToolApprovalResponses::fromRequest(Request::create('/chat', 'POST', [
+    expect(Decision::tryFrom(Request::create('/chat', 'POST', [
         'message' => 'Hello',
     ])))->toBeNull();
 });
 
 test('parsing returns null when the trailing message is not from the assistant', function () {
-    expect(ToolApprovalResponses::fromMessages([
+    expect(Decision::tryFrom(useChatRequest([
         ['role' => 'assistant', 'parts' => [
             [
                 'type' => 'tool-DeleteFile',
@@ -86,11 +90,11 @@ test('parsing returns null when the trailing message is not from the assistant',
             ],
         ]],
         ['role' => 'user', 'parts' => [['type' => 'text', 'text' => 'Actually, hold on.']]],
-    ]))->toBeNull();
+    ])))->toBeNull();
 });
 
 test('parsing ignores tool parts that have already been resolved', function () {
-    expect(ToolApprovalResponses::fromMessages([
+    expect(Decision::tryFrom(useChatRequest([
         ['role' => 'assistant', 'parts' => [
             [
                 'type' => 'tool-DeleteFile',
@@ -106,11 +110,11 @@ test('parsing ignores tool parts that have already been resolved', function () {
                 'approval' => ['id' => 'call-2', 'approved' => false],
             ],
         ]],
-    ]))->toBeNull();
+    ])))->toBeNull();
 });
 
-test('parsing validates malformed approval response parts', function () {
-    ToolApprovalResponses::fromMessages([
+test('a request with malformed approval parts fails validation instead of crashing', function () {
+    Decision::tryFrom(useChatRequest([
         ['role' => 'assistant', 'parts' => [
             [
                 'type' => 'tool-DeleteFile',
@@ -119,20 +123,5 @@ test('parsing validates malformed approval response parts', function () {
                 'approval' => ['id' => 'call-1'],
             ],
         ]],
-    ]);
-})->throws(InvalidArgumentException::class, 'Tool approval response parts must contain a tool call id and an approval decision.');
-
-test('a request with malformed approval parts fails validation instead of crashing', function () {
-    ToolApprovalResponses::fromRequest(Request::create('/chat', 'POST', [
-        'messages' => [
-            ['role' => 'assistant', 'parts' => [
-                [
-                    'type' => 'tool-DeleteFile',
-                    'toolCallId' => 'call-1',
-                    'state' => 'approval-responded',
-                    'approval' => ['id' => 'call-1', 'approved' => false, 'reason' => 123],
-                ],
-            ]],
-        ],
     ]));
 })->throws(ValidationException::class);

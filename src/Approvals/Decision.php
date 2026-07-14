@@ -2,6 +2,8 @@
 
 namespace Laravel\Ai\Approvals;
 
+use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
 class Decision
@@ -60,6 +62,55 @@ class Decision
         }
 
         return new self(decisions: $normalized);
+    }
+
+    /**
+     * Extract tool approval decisions from a Vercel AI SDK "useChat" request, or null when it carries none.
+     */
+    public static function tryFrom(Request $request): ?self
+    {
+        $messages = $request->input('messages');
+
+        try {
+            return is_array($messages) ? self::fromUiMessages($messages) : null;
+        } catch (InvalidArgumentException $exception) {
+            throw ValidationException::withMessages(['messages' => $exception->getMessage()]);
+        }
+    }
+
+    /**
+     * Extract tool approval decisions from a list of Vercel AI SDK UI messages.
+     *
+     * @param  array<int, mixed>  $messages
+     */
+    private static function fromUiMessages(array $messages): ?self
+    {
+        $message = end($messages);
+
+        // Approval responses may only be awaiting resumption on a trailing assistant message...
+        if (! is_array($message) || ($message['role'] ?? null) !== 'assistant') {
+            return null;
+        }
+
+        $decisions = collect($message['parts'] ?? [])
+            ->filter(fn ($part) => is_array($part) && ($part['state'] ?? null) === 'approval-responded')
+            ->mapWithKeys(function (array $part) {
+                $reason = $part['approval']['reason'] ?? null;
+
+                if (! is_string($part['toolCallId'] ?? null)
+                    || ! is_bool($part['approval']['approved'] ?? null)
+                    || ($reason !== null && ! is_string($reason))) {
+                    throw new InvalidArgumentException('Tool approval response parts must contain a tool call id and an approval decision.');
+                }
+
+                return [
+                    $part['toolCallId'] => $part['approval']['approved']
+                        ? self::approve()
+                        : self::reject($reason),
+                ];
+            });
+
+        return $decisions->isEmpty() ? null : self::collection($decisions->all());
     }
 
     public function isRejected(): bool
