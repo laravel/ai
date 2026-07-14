@@ -8,6 +8,11 @@ test('can create an agent middleware class', function () {
     $response->assertExitCode(0)->run();
 
     expect(app_path('Ai/Middleware/TestMiddleware.php'))->toBeFile();
+
+    $contents = file_get_contents(app_path('Ai/Middleware/TestMiddleware.php'));
+
+    expect($contents)->toContain('handle(PendingStep $step, Closure $next)')
+        ->and($contents)->not->toContain('AgentPrompt');
 });
 
 test('may publish custom middleware stub', function () {

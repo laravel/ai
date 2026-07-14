@@ -3,18 +3,15 @@
 namespace {{ namespace }};
 
 use Closure;
-use Laravel\Ai\Prompts\AgentPrompt;
-use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Gateway\PendingStep;
 
 class {{ class }}
 {
     /**
-     * Handle the incoming prompt.
+     * Handle the pending generation step.
      */
-    public function handle(AgentPrompt $prompt, Closure $next)
+    public function handle(PendingStep $step, Closure $next)
     {
-        return $next($prompt)->then(function (AgentResponse $response) {
-            // ...
-        });
+        return $next($step);
     }
 }

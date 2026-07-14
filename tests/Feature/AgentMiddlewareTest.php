@@ -10,6 +10,8 @@ use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Streaming\Events\TextDelta;
+use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
+use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
 use Tests\Fixtures\FakeConversationStore;
@@ -145,6 +147,42 @@ test('agent middleware can short circuit a streamed generation step', function (
 
     expect($recorder->steps)->toBe(0)
         ->and(TextDelta::combine($events))->toBe('Short-circuited response');
+});
+
+test('short-circuiting a streamed step emits tool-call events before their tool results', function () {
+    Ai::textProvider('openai')->useTextGateway(new RecordingStepGateway);
+
+    $addsTool = new class
+    {
+        public function handle(PendingStep $step, Closure $next)
+        {
+            return $next($step->withTools([new NamedTool]));
+        }
+    };
+
+    $shortCircuits = new class
+    {
+        public function handle(PendingStep $step, Closure $next)
+        {
+            return $step->context->stepNumber === 0
+                ? new StepResponse('', [new ToolCall('call-1', 'custom_named_tool', [])], FinishReason::ToolCalls, new Usage, new Meta)
+                : $next($step);
+        }
+    };
+
+    $events = [];
+
+    foreach ((new AssistantAgent)->withMiddleware([$addsTool, $shortCircuits])->stream('Test prompt', provider: 'openai') as $event) {
+        $events[] = $event;
+    }
+
+    $toolCallIndex = collect($events)->search(fn ($event) => $event instanceof ToolCallEvent);
+    $toolResultIndex = collect($events)->search(fn ($event) => $event instanceof ToolResultEvent);
+
+    expect($toolCallIndex)->not->toBeFalse()
+        ->and($toolResultIndex)->not->toBeFalse()
+        ->and($toolCallIndex)->toBeLessThan($toolResultIndex)
+        ->and($events[$toolCallIndex]->toolCall->id)->toBe('call-1');
 });
 
 test('stream response conversation id is available after remembered conversations stream completes', function () {

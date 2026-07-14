@@ -25,6 +25,7 @@ use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
+use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 
 use function Laravel\Ai\pipeline;
@@ -300,6 +301,10 @@ class TextGenerationLoop
             yield (new TextStart(strtolower((string) Str::uuid7()), $messageId, time()))->withInvocationId($invocationId);
             yield (new TextDelta(strtolower((string) Str::uuid7()), $messageId, $result->text, time()))->withInvocationId($invocationId);
             yield (new TextEnd(strtolower((string) Str::uuid7()), $messageId, time()))->withInvocationId($invocationId);
+        }
+
+        foreach ($result->toolCalls as $toolCall) {
+            yield (new ToolCallEvent(strtolower((string) Str::uuid7()), $toolCall, time()))->withInvocationId($invocationId);
         }
     }
 

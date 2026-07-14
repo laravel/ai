@@ -84,3 +84,37 @@ test('trim conversations never orphans a tool result from its tool call', functi
     $toolResultIndex = collect($result)->search(fn ($messages) => $messages instanceof ToolResultMessage);
     expect($result[$toolResultIndex - 1])->toBeInstanceOf(AssistantMessage::class);
 });
+
+test('trim conversations drops the opening turn instead of keeping the whole history', function () {
+    $messages = [
+        new UserMessage('u1'),
+        new AssistantMessage('', new Collection([new ToolCall('c1', 'Clock', [])])),
+        new ToolResultMessage(new Collection([new ToolResult('c1', 'Clock', [], '12:00')])),
+        new AssistantMessage('', new Collection([new ToolCall('c2', 'Clock', [])])),
+        new ToolResultMessage(new Collection([new ToolResult('c2', 'Clock', [], '13:00')])),
+        new AssistantMessage('a1'),
+        new AssistantMessage('a2'),
+        new UserMessage('u2'),
+        new AssistantMessage('a3'),
+    ];
+
+    $result = trim_conversation($messages, 3);
+
+    expect($result)->toHaveCount(2)
+        ->and($result[0])->toBeInstanceOf(UserMessage::class)
+        ->and($result[0]->content)->toBe('u2');
+});
+
+test('trim conversations keeps a single unsplittable turn intact', function () {
+    $messages = [
+        new UserMessage('u1'),
+        new AssistantMessage('', new Collection([new ToolCall('c1', 'Clock', [])])),
+        new ToolResultMessage(new Collection([new ToolResult('c1', 'Clock', [], '12:00')])),
+        new AssistantMessage('', new Collection([new ToolCall('c2', 'Clock', [])])),
+        new ToolResultMessage(new Collection([new ToolResult('c2', 'Clock', [], '13:00')])),
+        new AssistantMessage('done'),
+    ];
+
+    // A lone user turn cannot be trimmed without orphaning a tool result, so it is kept whole.
+    expect(trim_conversation($messages, 2))->toBe($messages);
+});
