@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway;
 
+use Laravel\Ai\Approvals\Approval;
 use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Attributes\MaxTokens;
 use Laravel\Ai\Attributes\Temperature;
@@ -19,6 +20,7 @@ class TextGenerationOptions
         public readonly ?float $temperature = null,
         public readonly ?Agent $agent = null,
         public readonly ?float $topP = null,
+        public readonly bool $resumableApprovals = true,
     ) {
         //
     }
@@ -52,6 +54,7 @@ class TextGenerationOptions
             temperature: self::resolve($agent, $reflection, 'temperature', Temperature::class),
             agent: $agent,
             topP: self::resolve($agent, $reflection, 'topP', TopP::class),
+            resumableApprovals: Approval::resumableFor($agent),
         );
     }
 

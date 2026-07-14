@@ -13,6 +13,7 @@ use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
+use Laravel\Ai\Exceptions\ApprovalNotResumableException;
 use Laravel\Ai\Exceptions\NoSuchToolException;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -130,7 +131,8 @@ class TextGenerationLoop
                 $lastResult->finishReason,
                 $lastResult->toolCalls,
                 $stepContext->isFinalStep,
-                $tools
+                $tools,
+                $options?->resumableApprovals ?? true,
             );
 
             $shouldContinue = filled($toolResults) && $pendingApprovals->isEmpty();
@@ -285,7 +287,7 @@ class TextGenerationLoop
             }
 
             [$toolResults, $pendingApprovals] = $result !== null
-                ? $this->continuationToolResults($result->finishReason, $result->toolCalls, $stepContext->isFinalStep, $tools)
+                ? $this->continuationToolResults($result->finishReason, $result->toolCalls, $stepContext->isFinalStep, $tools, $options?->resumableApprovals ?? true)
                 : [[], collect()];
 
             $shouldContinue = filled($toolResults) && $pendingApprovals->isEmpty();
@@ -364,7 +366,7 @@ class TextGenerationLoop
      * @param  Tool[]  $tools
      * @return array{array<int, ToolResult>, Collection<int, PendingApproval>}
      */
-    protected function continuationToolResults(FinishReason $reason, array $toolCalls, bool $isFinalStep, array $tools): array
+    protected function continuationToolResults(FinishReason $reason, array $toolCalls, bool $isFinalStep, array $tools, bool $resumableApprovals = true): array
     {
         if ($reason !== FinishReason::ToolCalls || blank($toolCalls)) {
             return [[], collect()];
@@ -375,7 +377,7 @@ class TextGenerationLoop
             return [$this->exhaustedToolResults($toolCalls), collect()];
         }
 
-        return $this->approvalAwareToolResults($toolCalls, $tools);
+        return $this->approvalAwareToolResults($toolCalls, $tools, $resumableApprovals);
     }
 
     /**
@@ -400,7 +402,7 @@ class TextGenerationLoop
      * @param  Tool[]  $tools
      * @return array{array<int, ToolResult>, Collection<int, PendingApproval>}
      */
-    protected function approvalAwareToolResults(array $toolCalls, array $tools): array
+    protected function approvalAwareToolResults(array $toolCalls, array $tools, bool $resumableApprovals = true): array
     {
         $pendingApprovals = collect();
         $resolved = [];
@@ -428,6 +430,11 @@ class TextGenerationLoop
             $resolved[] = [$toolCall, $tool];
         }
 
+        // Refuse an unresumable pause before running ungated companions so a doomed turn leaves no side effects...
+        if ($pendingApprovals->isNotEmpty() && ! $resumableApprovals) {
+            throw ApprovalNotResumableException::make();
+        }
+
         // Ungated companion calls run immediately; only gated calls wait for a decision...
         $toolResults = array_map(fn (array $pair) => new ToolResult(
             $pair[0]->id,
@@ -447,7 +454,7 @@ class TextGenerationLoop
      */
     protected function resolveApprovalResults(Decision $approval, array $messages, array $tools): array
     {
-        [$pendingToolCalls, $resolvedTools, $gatedIds] = $this->validateApproval($approval, $messages, $tools);
+        [$pendingToolCalls, $resolvedTools] = $this->validateApproval($approval, $messages, $tools);
 
         $toolResults = [];
         $rejectedToolCallIds = [];
@@ -455,11 +462,12 @@ class TextGenerationLoop
         $bareRejection = false;
 
         foreach ($pendingToolCalls as $toolCall) {
+            // The wildcard covers every undecided pending call so a gate that has since relaxed cannot bypass a blanket rejection...
             $decision = $approval->decisions[$toolCall->id]
-                ?? (in_array($toolCall->id, $gatedIds, true) ? ($approval->decisions['*'] ?? null) : null)
+                ?? $approval->decisions['*']
                 ?? Decision::approve();
 
-            if ($decision->isRejection()) {
+            if ($decision->isRejected()) {
                 $rejectedToolCallIds[] = $toolCall->id;
 
                 $toolResults[] = new ToolResult(
@@ -480,7 +488,7 @@ class TextGenerationLoop
                 continue;
             }
 
-            $arguments = $decision->isEdit()
+            $arguments = $decision->isEdited()
                 ? ($decision->arguments ?? $toolCall->arguments)
                 : $toolCall->arguments;
 
@@ -502,6 +510,27 @@ class TextGenerationLoop
         }
 
         return [$toolResults, $shouldContinue && ! $bareRejection, $rejectedToolCallIds];
+    }
+
+    /**
+     * Get the pending approvals awaiting a decision in the given message history.
+     *
+     * @param  Message[]  $messages
+     * @param  Tool[]  $tools
+     * @return Collection<int, PendingApproval>
+     */
+    public function pendingApprovals(array $messages, array $tools): Collection
+    {
+        [$pendingToolCalls] = $this->pendingToolCalls($messages);
+
+        $approvals = $pendingToolCalls->mapWithKeys(fn (ToolCall $toolCall) => [
+            $toolCall->id => $this->approvalForTool($this->findTool($toolCall->name, $tools), $toolCall),
+        ]);
+
+        return $this->pendingApprovalsFor(
+            $pendingToolCalls->filter(fn (ToolCall $toolCall) => $approvals[$toolCall->id] !== null)->values(),
+            $approvals,
+        );
     }
 
     /**
@@ -617,40 +646,49 @@ class TextGenerationLoop
     }
 
     /**
-     * Settle unresolved tool calls from an abandoned pause so the history remains replayable.
+     * Settle unresolved tool calls from abandoned pauses so the history remains replayable.
      *
      * @param  Message[]  $messages
      * @return Message[]
      */
     protected function settleAbandonedToolCalls(array $messages): array
     {
-        [$pendingToolCalls] = $this->pendingToolCalls($messages);
+        $resolved = collect($messages)
+            ->whereInstanceOf(ToolResultMessage::class)
+            ->flatMap(fn (ToolResultMessage $message) => $message->toolResults)
+            ->pluck('id')
+            ->all();
 
-        if ($pendingToolCalls->isEmpty()) {
-            return $messages;
-        }
+tG        for ($index = 0; $index < count($messages); $index++) {
+            $message = $messages[$index];
 
-        $placeholders = $pendingToolCalls->map(fn (ToolCall $toolCall) => new ToolResult(
-            $toolCall->id,
-            $toolCall->name,
-            $toolCall->arguments,
-            'This tool call was not executed because it was not approved before the conversation continued.',
-            $toolCall->resultId,
-        ));
-
-        for ($index = count($messages) - 1; $index >= 0; $index--) {
-            if ($messages[$index] instanceof AssistantMessage) {
-                break;
+            if (! $message instanceof AssistantMessage) {
+                continue;
             }
-        }
 
-        $next = $messages[$index + 1] ?? null;
+            $dangling = $message->toolCalls->reject(
+                fn (ToolCall $toolCall) => in_array($toolCall->id, $resolved, true)
+            )->values();
 
-        // Merge into the turn's partial results when present so each assistant turn keeps a single answering message...
-        if ($next instanceof ToolResultMessage) {
-            $messages[$index + 1] = new ToolResultMessage($next->toolResults->concat($placeholders)->values());
-        } else {
-            array_splice($messages, $index + 1, 0, [new ToolResultMessage($placeholders->values())]);
+            if ($dangling->isEmpty()) {
+                continue;
+            }
+
+            $placeholders = $dangling->map(fn (ToolCall $toolCall) => new ToolResult(
+                $toolCall->id,
+                $toolCall->name,
+                $toolCall->arguments,
+                'This tool call was not executed because it was not approved before the conversation continued.',
+                $toolCall->resultId,
+            ));
+
+            $next = $messages[$index + 1] ?? null;
+
+            if ($next instanceof ToolResultMessage) {
+                $messages[$index + 1] = new ToolResultMessage($next->toolResults->concat($placeholders)->values());
+            } else {
+                array_splice($messages, $index + 1, 0, [new ToolResultMessage($placeholders->values())]);
+            }
         }
 
         return $messages;

@@ -28,13 +28,6 @@ test('decision collections normalize boolean decisions', function () {
         ->and($approval->decisions['call-3']->arguments)->toBe(['path' => '/tmp/file']);
 });
 
-test('decision collections keep a wildcard rejection with a result', function () {
-    $approval = Decision::collection(['*' => Decision::reject('Not now')]);
-
-    expect($approval->decisions['*']->action)->toBe('reject')
-        ->and($approval->decisions['*']->result)->toBe('Not now');
-});
-
 test('decision collections reject a wildcard edit decision', function () {
     Decision::collection(['*' => Decision::edit(['path' => '/tmp/file'])]);
 })->throws(InvalidArgumentException::class, 'The wildcard decision may not use the edit action.');

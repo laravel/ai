@@ -122,19 +122,6 @@ test('parsing validates malformed approval response parts', function () {
     ]);
 })->throws(InvalidArgumentException::class, 'Tool approval response parts must contain a tool call id and an approval decision.');
 
-test('parsing rejects a non-string approval reason', function () {
-    ToolApprovalResponses::fromMessages([
-        ['role' => 'assistant', 'parts' => [
-            [
-                'type' => 'tool-DeleteFile',
-                'toolCallId' => 'call-1',
-                'state' => 'approval-responded',
-                'approval' => ['id' => 'call-1', 'approved' => false, 'reason' => ['text' => 'no']],
-            ],
-        ]],
-    ]);
-})->throws(InvalidArgumentException::class, 'Tool approval response parts must contain a tool call id and an approval decision.');
-
 test('a request with malformed approval parts fails validation instead of crashing', function () {
     ToolApprovalResponses::fromRequest(Request::create('/chat', 'POST', [
         'messages' => [

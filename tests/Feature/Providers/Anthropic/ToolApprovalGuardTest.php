@@ -6,6 +6,8 @@ use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Tests\Fixtures\Agents\RememberingApprovableAgent;
 use Tests\Fixtures\Agents\StatelessApprovableAgent;
+use Tests\Fixtures\Agents\StatelessMixedToolsAgent;
+use Tests\Fixtures\Tools\SideEffectRecorder;
 
 test('a gated tool on a non-conversational agent throws at pause time', function () {
     Http::fake([
@@ -69,4 +71,37 @@ test('a gated tool on a non-conversational agent throws before streaming a pause
 
     expect($thrown)->toBeInstanceOf(ApprovalNotResumableException::class)
         ->and(array_filter($events, fn ($event) => $event instanceof ToolApprovalRequest))->toBeEmpty();
+});
+
+test('ungated companion tools do not run when the pause is not resumable', function () {
+    SideEffectRecorder::$invocations = 0;
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::response([
+            'id' => 'msg_tool_1',
+            'type' => 'message',
+            'role' => 'assistant',
+            'model' => 'claude-sonnet-4-6',
+            'content' => [
+                [
+                    'type' => 'tool_use',
+                    'id' => 'toolu_side',
+                    'name' => 'SideEffectRecorder',
+                    'input' => (object) [],
+                ],
+                [
+                    'type' => 'tool_use',
+                    'id' => 'toolu_gated',
+                    'name' => 'ApprovableNumberGenerator',
+                    'input' => (object) [],
+                ],
+            ],
+            'stop_reason' => 'tool_use',
+            'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+        ]),
+    ]);
+
+    expect(fn () => (new StatelessMixedToolsAgent)->prompt('Record and generate', provider: 'anthropic'))
+        ->toThrow(ApprovalNotResumableException::class)
+        ->and(SideEffectRecorder::$invocations)->toBe(0);
 });

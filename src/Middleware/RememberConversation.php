@@ -3,12 +3,18 @@
 namespace Laravel\Ai\Middleware;
 
 use Closure;
+use Illuminate\Contracts\Cache\Lock;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
+use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\RemembersConversations;
+use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
@@ -40,15 +46,16 @@ class RememberConversation
 
             if (! $lock->get()) {
                 throw new ApprovalMismatchException(
-                    'The pending tool calls have already been resumed or are being resumed.', collect()
+                    'The pending tool calls have already been resumed or are being resumed.',
+                    $this->pendingApprovalsFor($agent),
                 );
             }
         }
 
         try {
-            return $this->remember($prompt, $next);
-        } catch (ApprovalMismatchException $exception) {
-            // A mismatch throws before any tool executes, so an invalid submission must not hold the lock...
+            return $this->remember($prompt, $next, $lock);
+        } catch (Throwable $exception) {
+            // A failed resume never persists the turn, so the pause is still pending and must not stay locked...
             $lock?->release();
 
             throw $exception;
@@ -58,9 +65,9 @@ class RememberConversation
     /**
      * Run the prompt and persist the conversation once it completes.
      */
-    protected function remember(AgentPrompt $prompt, Closure $next)
+    protected function remember(AgentPrompt $prompt, Closure $next, ?Lock $lock = null)
     {
-        return $next($prompt)->then(function ($response) use ($prompt) {
+        return $next($prompt)->then(function ($response) use ($prompt, $lock) {
             /** @var Agent&RemembersConversations $agent */
             $agent = $prompt->agent;
 
@@ -98,7 +105,26 @@ class RememberConversation
                 $agent->currentConversation(),
                 $agent->conversationParticipant(),
             );
+
+            // The turn is persisted, so history validation now guards duplicates and a re-pause may be resumed immediately...
+            $lock?->release();
         });
+    }
+
+    /**
+     * Get the pending approvals awaiting a decision in the agent's conversation.
+     *
+     * @return Collection<int, PendingApproval>
+     */
+    protected function pendingApprovalsFor(Agent $agent)
+    {
+        $messages = $agent instanceof Conversational ? [...$agent->messages()] : [];
+
+        $tools = $agent instanceof HasTools
+            ? array_values(array_filter([...$agent->tools()], fn ($tool) => $tool instanceof Tool))
+            : [];
+
+        return $this->provider->textGenerationLoop()->pendingApprovals($messages, $tools);
     }
 
     /**

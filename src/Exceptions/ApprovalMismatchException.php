@@ -12,10 +12,8 @@ class ApprovalMismatchException extends AiException
     /**
      * @param  Collection<int, PendingApproval>  $pendingApprovals
      */
-    public function __construct(
-        string $message,
-        public Collection $pendingApprovals,
-    ) {
+    public function __construct(string $message, public Collection $pendingApprovals)
+    {
         parent::__construct($message);
     }
 

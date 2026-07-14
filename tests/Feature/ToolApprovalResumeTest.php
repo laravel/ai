@@ -153,10 +153,132 @@ test('a resume that loses the pause claim receives a conflict without executing 
     // Simulate a racing resume that already holds the lock...
     expect(Cache::lock('ai:approval-resume:'.$paused->conversationId, 300)->get())->toBeTrue();
 
-    expect(fn () => (new RememberingApprovableAgent)
+    $thrown = null;
+
+    try {
+        (new RememberingApprovableAgent)
+            ->continue($paused->conversationId, $user)
+            ->prompt(Decision::collection(['toolu_1' => true]), provider: 'anthropic');
+    } catch (ApprovalMismatchException $exception) {
+        $thrown = $exception;
+    }
+
+    // The conflict must carry the still-pending approvals so a client can rebuild its UI from the error alone...
+    expect($thrown)->toBeInstanceOf(ApprovalMismatchException::class)
+        ->and($thrown->getMessage())->toBe('The pending tool calls have already been resumed or are being resumed.')
+        ->and($thrown->pendingApprovals)->toHaveCount(1)
+        ->and($thrown->pendingApprovals[0]->id)->toBe('toolu_1');
+});
+
+test('a resume that fails mid-flight releases the pause lock', function () {
+    Config::set('ai.conversations.generate_title', false);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            Http::response([
+                'id' => 'msg_tool_1',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [[
+                    'type' => 'tool_use',
+                    'id' => 'toolu_1',
+                    'name' => 'ApprovableNumberGenerator',
+                    'input' => (object) [],
+                ]],
+                'stop_reason' => 'tool_use',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+            Http::response([
+                'type' => 'error',
+                'error' => ['type' => 'api_error', 'message' => 'Internal server error'],
+            ], 500),
+        ]),
+    ]);
+
+    $user = (object) ['id' => 1];
+
+    $paused = (new RememberingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
+
+    $thrown = null;
+
+    try {
+        (new RememberingApprovableAgent)
+            ->continue($paused->conversationId, $user)
+            ->prompt(Decision::collection(['toolu_1' => true]), provider: 'anthropic');
+    } catch (Throwable $exception) {
+        $thrown = $exception;
+    }
+
+    // The failed resume never persisted the turn, so the pause must remain resumable instead of locked for five minutes...
+    expect($thrown)->not->toBeNull()
+        ->and($thrown)->not->toBeInstanceOf(ApprovalMismatchException::class)
+        ->and(Cache::lock('ai:approval-resume:'.$paused->conversationId, 300)->get())->toBeTrue();
+});
+
+test('a resume that pauses again can itself be resumed', function () {
+    Config::set('ai.conversations.generate_title', false);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            Http::response([
+                'id' => 'msg_tool_1',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [[
+                    'type' => 'tool_use',
+                    'id' => 'toolu_1',
+                    'name' => 'ApprovableNumberGenerator',
+                    'input' => (object) [],
+                ]],
+                'stop_reason' => 'tool_use',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+            Http::response([
+                'id' => 'msg_tool_2',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [[
+                    'type' => 'tool_use',
+                    'id' => 'toolu_2',
+                    'name' => 'ApprovableNumberGenerator',
+                    'input' => (object) [],
+                ]],
+                'stop_reason' => 'tool_use',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+            Http::response([
+                'id' => 'msg_3',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [['type' => 'text', 'text' => 'Both numbers generated.']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+        ]),
+    ]);
+
+    $user = (object) ['id' => 1];
+
+    $paused = (new RememberingApprovableAgent)->forUser($user)->prompt('Generate two numbers', provider: 'anthropic');
+
+    $pausedAgain = (new RememberingApprovableAgent)
         ->continue($paused->conversationId, $user)
-        ->prompt(Decision::collection(['toolu_1' => true]), provider: 'anthropic')
-    )->toThrow(ApprovalMismatchException::class, 'The pending tool calls have already been resumed or are being resumed.');
+        ->prompt(Decision::collection(['toolu_1' => true]), provider: 'anthropic');
+
+    expect($pausedAgain->awaitingApproval())->toBeTrue()
+        ->and($pausedAgain->pendingApprovals[0]->id)->toBe('toolu_2');
+
+    // The first resume settled, so its lock must not block approving the second pause...
+    $resumed = (new RememberingApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->prompt(Decision::collection(['toolu_2' => true]), provider: 'anthropic');
+
+    expect($resumed->awaitingApproval())->toBeFalse()
+        ->and($resumed->text)->toBe('Both numbers generated.');
 });
 
 test('a plain prompt after an abandoned pause settles the dangling tool call', function () {
@@ -187,6 +309,15 @@ test('a plain prompt after an abandoned pause settles the dangling tool call', f
                 'stop_reason' => 'end_turn',
                 'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
             ]),
+            Http::response([
+                'id' => 'msg_3',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [['type' => 'text', 'text' => 'Hi again.']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
         ]),
     ]);
 
@@ -209,6 +340,22 @@ test('a plain prompt after an abandoned pause settles the dangling tool call', f
 
     expect($toolResults)->toHaveCount(1)
         ->and($toolResults->first()['tool_use_id'])->toBe('toolu_1');
+
+    // A later turn must still answer the abandoned tool_use adjacently when replaying persisted history...
+    (new RememberingApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->prompt('Say hi once more', provider: 'anthropic');
+
+    $messages = collect(collect(Http::recorded())->last()[0]->data()['messages'])->values();
+
+    $toolUseIndex = $messages->search(fn (array $message) => collect(is_array($message['content']) ? $message['content'] : [])
+        ->contains(fn ($block) => is_array($block) && ($block['type'] ?? null) === 'tool_use' && $block['id'] === 'toolu_1'));
+
+    $answeringBlocks = collect($messages[$toolUseIndex + 1]['content'] ?? [])
+        ->filter(fn ($block) => is_array($block) && ($block['type'] ?? null) === 'tool_result');
+
+    expect($toolUseIndex)->not->toBeFalse()
+        ->and($answeringBlocks->pluck('tool_use_id')->all())->toBe(['toolu_1']);
 });
 
 test('a streamed resume with mismatched decisions throws before the stream begins and releases the claim', function () {

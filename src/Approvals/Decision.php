@@ -52,7 +52,7 @@ class Decision
                 default => throw new InvalidArgumentException('Tool approval decisions must be Decision instances or booleans.'),
             };
 
-            if ($id === '*' && $decision->isEdit()) {
+            if ($id === '*' && $decision->isEdited()) {
                 throw new InvalidArgumentException('The wildcard decision may not use the edit action.');
             }
 
@@ -62,12 +62,12 @@ class Decision
         return new self(decisions: $normalized);
     }
 
-    public function isRejection(): bool
+    public function isRejected(): bool
     {
         return $this->action === 'reject';
     }
 
-    public function isEdit(): bool
+    public function isEdited(): bool
     {
         return $this->action === 'edit';
     }
