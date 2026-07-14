@@ -56,14 +56,19 @@ class DatabaseConversationStore implements ConversationStore
 
         $table = $this->conversationsTable();
 
-        $this->table($table)->insert(array_filter([
+        $row = [
             'id' => $conversationId,
             $this->ownerColumnFor($table) => $participantId,
-            'participant_type' => $this->hasTypeColumn($table) ? $participantType : null,
             'title' => $title,
             'created_at' => now(),
             'updated_at' => now(),
-        ], fn ($value) => $value !== null));
+        ];
+
+        if ($this->hasTypeColumn($table)) {
+            $row['participant_type'] = $participantType;
+        }
+
+        $this->table($table)->insert($row);
 
         return $conversationId;
     }
@@ -140,14 +145,19 @@ class DatabaseConversationStore implements ConversationStore
      */
     protected function messageAttributes(string $messageId, string $table, string $conversationId, string|int|null $participantId, ?string $participantType, mixed $now, array $attributes): array
     {
-        return array_filter(array_merge($attributes, [
+        $row = array_merge($attributes, [
             'id' => $messageId,
             'conversation_id' => $conversationId,
             $this->ownerColumnFor($table) => $participantId,
-            'participant_type' => $this->hasTypeColumn($table) ? $participantType : null,
             'created_at' => $now,
             'updated_at' => $now,
-        ]), fn ($value) => $value !== null);
+        ]);
+
+        if ($this->hasTypeColumn($table)) {
+            $row['participant_type'] = $participantType;
+        }
+
+        return $row;
     }
 
     /**
