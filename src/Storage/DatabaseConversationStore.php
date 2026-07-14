@@ -157,7 +157,6 @@ class DatabaseConversationStore implements ConversationStore, RecordsApprovalRes
 
         $toolResults = $response->toolResults->values();
 
-        // A resume's answering results already live on the paused row, so a re-record would duplicate them in history...
         if ($prompt->resume !== null) {
             $existing = $this->existingToolResultIds($conversationId);
 
@@ -285,19 +284,16 @@ class DatabaseConversationStore implements ConversationStore, RecordsApprovalRes
                 if ($toolCalls->isNotEmpty()) {
                     $callIds = $toolCalls->pluck('id')->all();
 
-                    // Split results answering an earlier turn's calls from results for this turn's own calls...
                     [$priorResults, $ownResults] = $toolResults->partition(
                         fn (array $toolResult) => ! in_array($toolResult['id'], $callIds, true)
                     );
 
                     $ownResultIds = $ownResults->pluck('id')->all();
 
-                    // Split this turn's calls into those already executed and those still awaiting approval, since a mid-run pause can carry both...
                     [$resolvedCalls, $pendingCalls] = $toolCalls->partition(
                         fn (array $toolCall) => in_array($toolCall['id'], $ownResultIds, true)
                     );
 
-                    // Only a row marked in approval_state is a genuine pause; unresolved calls on any other row (e.g. a legacy max-steps truncation) are not awaiting a decision...
                     $pausedCallIds = $this->pausedCallIds($record);
                     $isPause = $pendingCalls->isNotEmpty()
                         && $pendingCalls->every(fn (array $toolCall) => in_array($toolCall['id'], $pausedCallIds, true));
@@ -309,7 +305,6 @@ class DatabaseConversationStore implements ConversationStore, RecordsApprovalRes
                     }
 
                     if (! $isPause) {
-                        // Not a pause: replay executed calls as an answered turn and drop any unresolved (unexecuted) calls, matching pre-approval history handling...
                         if ($resolvedCalls->isNotEmpty()) {
                             $messages[] = new AssistantMessage('', $resolvedCalls->map(ToolCall::fromArray(...))->values());
                             $messages[] = new ToolResultMessage($ownResults->map(ToolResult::fromArray(...))->values());
@@ -325,7 +320,6 @@ class DatabaseConversationStore implements ConversationStore, RecordsApprovalRes
                     $providerContentBlocks = ((array) json_decode($record->meta ?? '[]', true))['provider_content_blocks'] ?? [];
 
                     if (filled($providerContentBlocks)) {
-                        // Raw provider blocks encode the whole turn (reasoning + every tool_use), so replay them once on a single assistant message and answer only the executed calls; the gated call stays open until resume...
                         $messages[] = new AssistantMessage($record->content, $toolCalls->map(ToolCall::fromArray(...))->values(), $providerContentBlocks);
 
                         if ($ownResults->isNotEmpty()) {
@@ -335,7 +329,6 @@ class DatabaseConversationStore implements ConversationStore, RecordsApprovalRes
                         return $messages;
                     }
 
-                    // No provider replay state: split the executed calls from the still-pending ones so each group is well-formed...
                     if ($resolvedCalls->isNotEmpty()) {
                         $messages[] = new AssistantMessage('', $resolvedCalls->map(ToolCall::fromArray(...))->values());
                         $messages[] = new ToolResultMessage($ownResults->map(ToolResult::fromArray(...))->values());
@@ -346,7 +339,6 @@ class DatabaseConversationStore implements ConversationStore, RecordsApprovalRes
                     return $messages;
                 }
 
-                // Replay a resume turn's results as the answer to the earlier tool_use...
                 if ($toolResults->isNotEmpty()) {
                     $messages = [new ToolResultMessage($toolResults->map(ToolResult::fromArray(...)))];
 
@@ -359,7 +351,6 @@ class DatabaseConversationStore implements ConversationStore, RecordsApprovalRes
 
                 return [new AssistantMessage($record->content)];
             })
-            // A pause and its resume span two rows, so the row window can drop the tool_use row while keeping the tool_result row; a history may never begin with an orphaned tool_result...
             ->skipWhile(fn (Message $message) => $message instanceof ToolResultMessage)
             ->values();
     }

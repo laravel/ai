@@ -26,7 +26,6 @@ class Decision
 
     public static function reject(?string $result = null): self
     {
-        // A whitespace-only reason carries no message for the model, so it behaves as a bare rejection...
         return new self('reject', result: blank($result) ? null : $result);
     }
 
@@ -55,7 +54,6 @@ class Decision
                 default => throw new InvalidArgumentException('Tool approval decisions must be Decision instances or booleans.'),
             };
 
-            // A leaf decision must name a concrete action; a nested collection has none and would otherwise fall through to an approval...
             if ($decision->isCollection()) {
                 throw new InvalidArgumentException('Tool approval decisions may not nest another decision collection.');
             }
@@ -93,7 +91,6 @@ class Decision
     {
         $message = end($messages);
 
-        // Approval responses may only be awaiting resumption on a trailing assistant message...
         if (! is_array($message) || ($message['role'] ?? null) !== 'assistant') {
             return null;
         }
@@ -114,7 +111,6 @@ class Decision
                 throw new InvalidArgumentException('Tool approval response parts must contain a tool call id and an approval decision.');
             }
 
-            // A client that submits two responses for one call is ambiguous; refuse rather than silently last-win...
             if (array_key_exists($id, $decisions)) {
                 throw new InvalidArgumentException('Tool approval response parts contain conflicting decisions for the same tool call.');
             }

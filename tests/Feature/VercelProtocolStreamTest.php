@@ -19,7 +19,6 @@ function vercelProtocolParts(array $events, ?string $messageId = null): array
 
     $output = '';
 
-    // Accumulate flushed chunks, since the streamed response flushes the buffer as it goes...
     ob_start(function (string $buffer) use (&$output): string {
         $output .= $buffer;
 

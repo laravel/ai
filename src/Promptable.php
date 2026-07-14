@@ -66,7 +66,6 @@ trait Promptable
             new AgentPrompt($this, $prompt, $attachments, $provider, $model, $this->getTimeout($timeout), resume: $resume)
         );
 
-        // A resume executes approved tools before the model call, so failing over to another provider would run them again; continue on the pause's provider only...
         if ($resume !== null) {
             [$provider, $model] = $this->iterateProvidersWithFailover(
                 $this->getProvidersAndModelsForFailover($provider, $model)
@@ -194,7 +193,6 @@ trait Promptable
             return ['', $prompt];
         }
 
-        // A bare edit has no id to target, so widening it to a wildcard would always be rejected; ask for a keyed collection instead...
         if ($prompt->isEdited()) {
             throw new InvalidArgumentException(
                 'A bare edit decision has no tool call to target; pass Decision::collection([$id => Decision::edit(...)]) instead.'

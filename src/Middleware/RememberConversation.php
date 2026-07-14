@@ -43,7 +43,6 @@ class RememberConversation
 
         $conversation = $agent->currentConversation();
 
-        // A resume executes gated tools, so verify the conversation belongs to the participant before anything runs...
         if ($conversation !== null && $prompt->resume !== null && $this->store instanceof VerifiesConversationOwnership
             && ! $this->store->conversationBelongsTo($conversation, $agent->conversationParticipant()?->id)) {
             throw new AuthorizationException('This conversation does not belong to the current participant.');
@@ -65,7 +64,6 @@ class RememberConversation
         try {
             return $this->remember($prompt, $next, $lock);
         } catch (Throwable $exception) {
-            // A failed resume never persists the turn, so the pause is still pending and must not stay locked...
             $lock?->release();
 
             throw $exception;
@@ -136,7 +134,6 @@ class RememberConversation
                 $agent->conversationParticipant(),
             );
 
-            // The turn is persisted, so history validation now guards duplicates and a re-pause may be resumed immediately...
             $lock?->release();
         });
     }

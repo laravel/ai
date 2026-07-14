@@ -79,7 +79,6 @@ class TextGenerationLoop
                     ->withMessages(collect(array_slice($allMessages, $originalMessageCount)));
             }
 
-            // Commit the resolved results before the model call so a crash or retry cannot run an approved tool a second time...
             if ($onApprovalResolved !== null && filled($approvalResults)) {
                 $onApprovalResolved($approvalResults);
             }
@@ -107,7 +106,6 @@ class TextGenerationLoop
                 $stepContext,
             );
 
-            // A gateway may surface a pause directly (e.g. a faked paused response) instead of the loop detecting one...
             [$toolResults, $pendingApprovals] = filled($lastResult->pendingApprovals)
                 ? [[], collect($lastResult->pendingApprovals)]
                 : $this->continuationToolResults(
@@ -192,7 +190,6 @@ class TextGenerationLoop
                 return;
             }
 
-            // Commit the resolved results before the model call so a crash or retry cannot run an approved tool a second time...
             if ($onApprovalResolved !== null && filled($approvalResults)) {
                 $onApprovalResolved($approvalResults);
             }
@@ -237,7 +234,6 @@ class TextGenerationLoop
             $accumulatedUsage = $accumulatedUsage->add($result->usage);
             $finalReason = $result->finishReason;
 
-            // A gateway may surface a pause directly (e.g. a faked paused response) instead of the loop detecting one...
             [$toolResults, $pendingApprovals] = filled($result->pendingApprovals)
                 ? [[], collect($result->pendingApprovals)]
                 : $this->continuationToolResults(
@@ -248,7 +244,6 @@ class TextGenerationLoop
                     $options?->resumableApprovals ?? true,
                 );
 
-            // Final-step placeholders stream as unsuccessful results so a UI does not render an unexecuted call as a completed tool run...
             foreach ($toolResults as $toolResult) {
                 yield (new ToolResultEvent(
                     strtolower((string) Str::uuid7()),
@@ -358,12 +353,10 @@ class TextGenerationLoop
             $resolved[] = [$toolCall, $tool];
         }
 
-        // Refuse an unresumable pause before running ungated companions so a doomed turn leaves no side effects...
         if ($pendingApprovals->isNotEmpty() && ! $resumableApprovals) {
             throw ApprovalNotResumableException::make();
         }
 
-        // Ungated calls run immediately — or, once the step budget is exhausted, receive a placeholder so a trailing tool_use with no matching tool_result doesn't 400 the provider — while gated calls always wait for a decision, since a resume restarts the budget...
         $toolResults = array_map(function (array $pair) use ($isFinalStep) {
             [$toolCall, $tool] = $pair;
 
@@ -390,7 +383,6 @@ class TextGenerationLoop
      */
     protected function resumeFromApproval(Decision $approval, array $messages, array $tools): array
     {
-        // An earlier abandoned pause may still dangle in the replayed history; settle everything except the turn being decided...
         $messages = $this->settleAbandonedToolCalls($messages, exceptLatestAssistantTurn: true);
 
         $originalMessageCount = count($messages);
@@ -411,7 +403,6 @@ class TextGenerationLoop
      */
     protected function resolveApprovalResults(Decision $approval, array $messages, array $tools): array
     {
-        // Consume any pre-stream validation so user-defined approval gates are only evaluated once per resume...
         $validated = $this->validatedApprovals[$approval] ?? $this->validateApproval($approval, $messages, $tools);
 
         unset($this->validatedApprovals[$approval]);
@@ -425,7 +416,6 @@ class TextGenerationLoop
         $bareRejection = false;
 
         foreach ($pendingToolCalls as $toolCall) {
-            // A call surfaced for approval that has no decision and no wildcard fails closed; a gate that has relaxed since the pause must never auto-run without a human decision...
             $decision = $approval->decisions[$toolCall->id]
                 ?? $approval->decisions['*']
                 ?? Decision::reject('This tool call was not approved.');
@@ -441,7 +431,6 @@ class TextGenerationLoop
                     $toolCall->resultId,
                 );
 
-                // Continue only if the rejection carries a message for the model; a bare rejection stops the loop even beside approvals...
                 if ($decision->result !== null) {
                     $shouldContinue = true;
                 } else {
@@ -514,7 +503,6 @@ class TextGenerationLoop
     {
         [$pendingToolCalls, $resolvedToolCallIds] = $this->pendingToolCalls($messages);
 
-        // Resolve each tool once, then evaluate its approval requirement once, so neither the lookup nor a user-supplied hook is repeated per call...
         $resolvedTools = $pendingToolCalls->mapWithKeys(fn (ToolCall $toolCall) => [
             $toolCall->id => $this->findTool($toolCall->name, $tools),
         ]);
@@ -543,12 +531,10 @@ class TextGenerationLoop
             throw new ApprovalMismatchException($message, $this->pendingApprovalsFor($gated, $approvals));
         }
 
-        // A stale approval (e.g. a wildcard resent after resolution) must not report success...
         if ($pendingToolCalls->isEmpty()) {
             throw new ApprovalMismatchException('There are no pending tool calls awaiting approval.', collect());
         }
 
-        // Remember the validation so a streaming resume can consume it without re-evaluating approval gates...
         return $this->validatedApprovals[$approval] = [$pendingToolCalls, $resolvedTools, $gatedIds];
     }
 
@@ -574,7 +560,6 @@ class TextGenerationLoop
             ->pluck('id')
             ->all();
 
-        // Only the latest assistant turn may await approval; once the model has moved on, nothing is pending...
         for ($index = count($messages) - 1; $index >= 0; $index--) {
             $message = $messages[$index];
 
@@ -745,7 +730,6 @@ class TextGenerationLoop
                 $finalStep->meta,
             ))->withToolCallsAndResults(
                 toolCalls: $steps->flatMap(fn (Step $s) => $s->toolCalls),
-                // Source results from the message trail, not steps, so a resumed approval's result (recorded outside any step) is not lost...
                 toolResults: $newMessages
                     ->whereInstanceOf(ToolResultMessage::class)
                     ->flatMap(fn (ToolResultMessage $message) => $message->toolResults),

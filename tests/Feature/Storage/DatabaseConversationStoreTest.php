@@ -221,7 +221,6 @@ test('it drops unresolved tool calls on an unmarked legacy row keeping the final
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Tool conversation');
 
-    // A legacy max-steps truncation row: tool_use with no results and no approval_state marker, so it is not a pause awaiting a decision.
     DB::table('agent_conversation_messages')->insert([
         'id' => 'message-1',
         'conversation_id' => $conversationId,
@@ -279,7 +278,6 @@ test('it replays a resumed approval so the paused tool_use is answered', functio
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Tool conversation');
 
-    // The paused turn: assistant tool_use with no results yet.
     DB::table('agent_conversation_messages')->insert([
         'id' => 'message-1',
         'conversation_id' => $conversationId,
@@ -332,7 +330,6 @@ test('it splits a mid-run pause row so an executed call is answered before the s
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Tool conversation');
 
-    // One turn ran an ungated call (call-1, with a result) then paused on a gated call (call-2, no result yet).
     DB::table('agent_conversation_messages')->insert([
         'id' => 'message-1',
         'conversation_id' => $conversationId,
@@ -373,7 +370,6 @@ test('it preserves provider content blocks when a mixed pause carries an execute
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Tool conversation');
 
-    // One turn ran an ungated call (call-1) and paused on a gated call (call-2), with the provider's raw reasoning/signature blocks persisted.
     DB::table('agent_conversation_messages')->insert([
         'id' => 'message-1',
         'conversation_id' => $conversationId,
@@ -398,7 +394,6 @@ test('it preserves provider content blocks when a mixed pause carries an execute
 
     $messages = $store->getLatestConversationMessages($conversationId, 10);
 
-    // The blocks encode the whole turn, so replay is one assistant message carrying every call plus a result message for the executed call.
     expect($messages)->toHaveCount(2)
         ->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
         ->and($messages[0]->toolCalls->pluck('id')->all())->toBe(['call-1', 'call-2'])
@@ -411,7 +406,6 @@ test('it drops a leading orphaned tool_result when the row window splits a pause
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Tool conversation');
 
-    // The paused tool_use row has fallen outside the window; only the resume row (its result) remains.
     DB::table('agent_conversation_messages')->insert([
         'id' => 'message-1',
         'conversation_id' => $conversationId,

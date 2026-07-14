@@ -86,7 +86,6 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
      */
     public function finally(callable $callback): self
     {
-        // If iteration already settled, run now so a late registration is never stranded...
         if ($this->streamedResponse || count($this->events) > 0) {
             $callback();
 
@@ -207,7 +206,6 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
 
             $this->syncConversationFromStreamedResponse();
         } finally {
-            // Runs on clean completion, a thrown error, or generator abandonment (client disconnect) so a pause lock is never stranded...
             $this->runFinallyCallbacks();
         }
     }

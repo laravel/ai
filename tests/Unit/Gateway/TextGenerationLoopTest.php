@@ -401,7 +401,6 @@ test('a relaxed gate with no decision fails closed instead of auto-running the t
         Decision::collection([]),
     );
 
-    // The call was pending, its gate relaxed, and no decision was given, so it must not execute...
     expect($tool->calls)->toBe(0)
         ->and($response->toolResults->firstWhere('id', 'call-1')->result)->toBe('This tool call was not approved.');
 });

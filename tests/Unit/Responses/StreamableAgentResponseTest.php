@@ -43,6 +43,5 @@ test('finally callbacks run even when stream iteration throws mid-flight', funct
         // expected
     }
 
-    // The pause lock release rides on this callback, so it must fire on failure too...
     expect($released)->toBeTrue();
 });

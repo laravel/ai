@@ -57,7 +57,6 @@ trait StreamsText
                 $approval = $this->resumableApprovalFor($prompt);
                 $onApprovalResolved = $this->approvalResultRecorderFor($prompt);
 
-                // Validate the approval before the SSE response begins so a mismatch can still render as a 409...
                 if ($approval !== null) {
                     $this->textGenerationLoop()->validateApproval($approval, $messages, $tools);
                 }

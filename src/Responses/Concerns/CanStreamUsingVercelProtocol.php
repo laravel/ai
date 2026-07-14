@@ -35,7 +35,6 @@ trait CanStreamUsingVercelProtocol
                     $state->streamStarted = true;
                 }
 
-                // Surface each pending approval so the client may render an approval prompt...
                 if ($event instanceof ToolApprovalRequest) {
                     foreach ($event->pendingApprovals as $pendingApproval) {
                         yield from $this->toVercelProtocolPart($state, [

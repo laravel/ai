@@ -12,7 +12,6 @@ use Tests\Fixtures\Agents\RememberingApprovableAgent;
 use Tests\Fixtures\Tools\ApprovableNumberGenerator;
 
 test('a remembered agent pauses for approval, persists the tool_use, and resumes from history when approved', function () {
-    // Title generation makes its own provider call and would consume a faked response, so disable it for this flow.
     Config::set('ai.conversations.generate_title', false);
 
     Http::fake([
@@ -153,7 +152,6 @@ test('a resume that loses the pause claim receives a conflict without executing 
 
     $paused = (new RememberingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
 
-    // Simulate a racing resume that already holds the lock...
     expect(Cache::lock('ai:approval-resume:'.$paused->conversationId, 300)->get())->toBeTrue();
 
     $thrown = null;
@@ -166,7 +164,6 @@ test('a resume that loses the pause claim receives a conflict without executing 
         $thrown = $exception;
     }
 
-    // The conflict must carry the still-pending approvals so a client can rebuild its UI from the error alone...
     expect($thrown)->toBeInstanceOf(ApprovalMismatchException::class)
         ->and($thrown->getMessage())->toBe('The pending tool calls have already been resumed or are being resumed.')
         ->and($thrown->pendingApprovals)->toHaveCount(1)
@@ -213,7 +210,6 @@ test('a resume that fails mid-flight releases the pause lock', function () {
         $thrown = $exception;
     }
 
-    // The failed resume never persisted the turn, so the pause must remain resumable instead of locked for five minutes...
     expect($thrown)->not->toBeNull()
         ->and($thrown)->not->toBeInstanceOf(ApprovalMismatchException::class)
         ->and(Cache::lock('ai:approval-resume:'.$paused->conversationId, 300)->get())->toBeTrue();
@@ -275,7 +271,6 @@ test('a resume that pauses again can itself be resumed', function () {
     expect($pausedAgain->awaitingApproval())->toBeTrue()
         ->and($pausedAgain->pendingApprovals[0]->id)->toBe('toolu_2');
 
-    // The first resume settled, so its lock must not block approving the second pause...
     $resumed = (new RememberingApprovableAgent)
         ->continue($paused->conversationId, $user)
         ->prompt(Decision::collection(['toolu_2' => true]), provider: 'anthropic');
@@ -344,7 +339,6 @@ test('a plain prompt after an abandoned pause settles the dangling tool call', f
     expect($toolResults)->toHaveCount(1)
         ->and($toolResults->first()['tool_use_id'])->toBe('toolu_1');
 
-    // A later turn must still answer the abandoned tool_use adjacently when replaying persisted history...
     (new RememberingApprovableAgent)
         ->continue($paused->conversationId, $user)
         ->prompt('Say hi once more', provider: 'anthropic');
@@ -396,13 +390,11 @@ test('a streamed resume with mismatched decisions throws before the stream begin
 
     $paused = (new RememberingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
 
-    // The mismatch must surface when the response is created, before any SSE bytes are sent...
     expect(fn () => (new RememberingApprovableAgent)
         ->continue($paused->conversationId, $user)
         ->stream(Decision::collection(['bogus-id' => true]), provider: 'anthropic')
     )->toThrow(ApprovalMismatchException::class);
 
-    // The failed submission must not burn the claim, so a corrected resume still succeeds...
     $resumed = (new RememberingApprovableAgent)
         ->continue($paused->conversationId, $user)
         ->prompt(Decision::collection(['toolu_1' => true]), provider: 'anthropic');
@@ -466,7 +458,6 @@ test('a plain prompt on a paused conversation is refused while a resume holds th
 
     $paused = (new RememberingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
 
-    // Simulate an in-flight resume holding the conversation's pause lock.
     Cache::lock('ai:approval-resume:'.$paused->conversationId, 300)->get();
 
     expect(fn () => (new RememberingApprovableAgent)
@@ -509,7 +500,6 @@ test('a resume does not fail over to another provider and re-run the approved to
 
     $paused = (new RememberingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: ['primary', 'backup']);
 
-    // The post-resume model call rate-limits; the resume must surface it rather than failing over and re-running the gated tool.
     expect(fn () => (new RememberingApprovableAgent)
         ->continue($paused->conversationId, $user)
         ->prompt(Decision::collection(['toolu_1' => true]), provider: ['primary', 'backup'])
@@ -582,7 +572,6 @@ test('a resume that fails after the tool runs does not re-execute the tool on re
 
     $paused = (new RememberingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
 
-    // The tool executes and is durably recorded, then the model continuation fails.
     expect(fn () => (new RememberingApprovableAgent)
         ->continue($paused->conversationId, $user)
         ->prompt(Decision::collection(['toolu_1' => true]), provider: 'anthropic')
@@ -590,7 +579,6 @@ test('a resume that fails after the tool runs does not re-execute the tool on re
 
     expect(ApprovableNumberGenerator::$invocations)->toBe(1);
 
-    // Retrying the same decision sees the recorded result and refuses rather than running the tool again.
     expect(fn () => (new RememberingApprovableAgent)
         ->continue($paused->conversationId, $user)
         ->prompt(Decision::collection(['toolu_1' => true]), provider: 'anthropic')

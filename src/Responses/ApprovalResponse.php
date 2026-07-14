@@ -32,7 +32,6 @@ class ApprovalResponse implements Responsable
             'reply' => $this->response->text,
         ];
 
-        // A bare rejection stops the loop before any model step, leaving an empty reply; surface only that turn's tool results so a normal completion's internal tool output is never exposed...
         if (blank($this->response->text) && $this->response->toolResults->isNotEmpty() && $this->response->steps->isEmpty()) {
             $payload['tool_results'] = $this->response->toolResults->map(fn (ToolResult $result) => [
                 'id' => $result->id,
