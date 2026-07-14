@@ -32,13 +32,19 @@ use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Laravel\Ai\Tools\Request;
+use WeakMap;
 
 class TextGenerationLoop
 {
     use InvokesTools;
 
+    /** @var WeakMap<Decision, array{Collection<int, ToolCall>, Collection<string, ?Tool>, array<int, string>}> */
+    protected WeakMap $validatedApprovals;
+
     public function __construct(protected StepTextGateway $gateway)
     {
+        $this->validatedApprovals = new WeakMap;
+
         $this->initializeToolCallbacks();
     }
 
@@ -58,25 +64,19 @@ class TextGenerationLoop
         ?Decision $approval = null,
     ): TextResponse {
         $steps = new Collection;
-        $allMessages = $messages;
-        $originalMessageCount = count($messages);
         $maxSteps = $this->resolveMaxSteps($options, $tools);
         $continuationToken = null;
         $lastResult = null;
 
         if ($approval !== null) {
-            [$approvalResults, $shouldContinue] = $this->resolveApprovalResults($approval, $messages, $tools);
-
-            if (filled($approvalResults)) {
-                [$allMessages, $originalMessageCount] = $this->appendApprovalResults($allMessages, $approvalResults, $originalMessageCount);
-            }
+            [$allMessages, $originalMessageCount, $shouldContinue] = $this->resumeFromApproval($approval, $messages, $tools);
 
             if (! $shouldContinue) {
                 return (new TextResponse('', new Usage, new Meta($provider->name(), $model)))
                     ->withMessages(collect(array_slice($allMessages, $originalMessageCount)));
             }
         } else {
-            $allMessages = $this->settleAbandonedToolCalls($allMessages);
+            $allMessages = $this->settleAbandonedToolCalls($messages);
             $originalMessageCount = count($allMessages);
         }
 
@@ -99,51 +99,20 @@ class TextGenerationLoop
                 $stepContext,
             );
 
-            // A gateway may surface a pause directly (e.g. a faked paused response).
-            if (filled($lastResult->pendingApprovals)) {
-                $steps->push($this->buildStep($lastResult));
-
-                $allMessages[] = new AssistantMessage(
-                    $lastResult->text,
-                    collect($lastResult->toolCalls),
-                    $lastResult->providerContentBlocks,
+            // A gateway may surface a pause directly (e.g. a faked paused response) instead of the loop detecting one...
+            [$toolResults, $pendingApprovals] = filled($lastResult->pendingApprovals)
+                ? [[], collect($lastResult->pendingApprovals)]
+                : $this->continuationToolResults(
+                    $lastResult->finishReason,
+                    $lastResult->toolCalls,
+                    $stepContext->isFinalStep,
+                    $tools,
+                    $options?->resumableApprovals ?? true,
                 );
-
-                return $this->buildFinalResponse($steps, $allMessages, $originalMessageCount, $lastResult)
-                    ->withPendingApprovals(collect($lastResult->pendingApprovals));
-            }
-
-            if ($lastResult->finishReason === FinishReason::Continue) {
-                $steps->push($this->buildStep($lastResult));
-
-                $allMessages[] = new AssistantMessage(
-                    $lastResult->text,
-                    collect($lastResult->toolCalls),
-                    $lastResult->providerContentBlocks,
-                );
-
-                $continuationToken = $lastResult->continuationToken;
-
-                continue;
-            }
-
-            [$toolResults, $pendingApprovals] = $this->continuationToolResults(
-                $lastResult->finishReason,
-                $lastResult->toolCalls,
-                $stepContext->isFinalStep,
-                $tools,
-                $options?->resumableApprovals ?? true,
-            );
-
-            $shouldContinue = filled($toolResults) && $pendingApprovals->isEmpty();
 
             $steps->push($this->buildStep($lastResult, $toolResults));
 
-            $allMessages[] = new AssistantMessage(
-                $lastResult->text,
-                collect($lastResult->toolCalls),
-                $lastResult->providerContentBlocks,
-            );
+            $allMessages[] = $this->buildAssistantMessage($lastResult);
 
             if (filled($toolResults)) {
                 $allMessages[] = new ToolResultMessage(collect($toolResults));
@@ -154,7 +123,7 @@ class TextGenerationLoop
                     ->withPendingApprovals($pendingApprovals);
             }
 
-            if (! $shouldContinue) {
+            if (blank($toolResults) && $lastResult->finishReason !== FinishReason::Continue) {
                 break;
             }
 
@@ -180,7 +149,6 @@ class TextGenerationLoop
         ?int $timeout = null,
         ?Decision $approval = null,
     ): Generator {
-        $allMessages = $messages;
         $maxSteps = $this->resolveMaxSteps($options, $tools);
         $continuationToken = null;
         $accumulatedUsage = new Usage;
@@ -188,7 +156,7 @@ class TextGenerationLoop
         $sawError = false;
 
         if ($approval !== null) {
-            [$approvalResults, $shouldContinue, $rejectedToolCallIds] = $this->resolveApprovalResults($approval, $messages, $tools);
+            [$allMessages, , $shouldContinue, $approvalResults, $rejectedToolCallIds] = $this->resumeFromApproval($approval, $messages, $tools);
 
             foreach ($approvalResults as $toolResult) {
                 $rejected = in_array($toolResult->id, $rejectedToolCallIds, true);
@@ -203,10 +171,6 @@ class TextGenerationLoop
                 ))->withInvocationId($invocationId);
             }
 
-            if (filled($approvalResults)) {
-                [$allMessages] = $this->appendApprovalResults($allMessages, $approvalResults, count($allMessages));
-            }
-
             if (! $shouldContinue) {
                 yield (new StreamEnd(
                     strtolower((string) Str::uuid7()),
@@ -218,7 +182,7 @@ class TextGenerationLoop
                 return;
             }
         } else {
-            $allMessages = $this->settleAbandonedToolCalls($allMessages);
+            $allMessages = $this->settleAbandonedToolCalls($messages);
         }
 
         for ($step = 0; $step < $maxSteps; $step++) {
@@ -251,65 +215,36 @@ class TextGenerationLoop
 
             $result = $stream->getReturn();
 
-            if ($result !== null) {
-                $accumulatedUsage = $accumulatedUsage->add($result->usage);
-                $finalReason = $result->finishReason;
-            }
-
-            // A gateway may surface a pause directly (e.g. a faked paused response), mirroring generate()...
-            if ($result !== null && filled($result->pendingApprovals)) {
-                $allMessages[] = new AssistantMessage(
-                    $result->text,
-                    collect($result->toolCalls),
-                    $result->providerContentBlocks,
-                );
-
-                yield (new ToolApprovalRequest(
-                    strtolower((string) Str::uuid7()),
-                    collect($result->pendingApprovals),
-                    time(),
-                    $result->providerContentBlocks,
-                ))->withInvocationId($invocationId);
-
+            if ($result === null) {
                 break;
             }
 
-            if ($result?->finishReason === FinishReason::Continue) {
-                $allMessages[] = new AssistantMessage(
-                    $result->text,
-                    collect($result->toolCalls),
-                    $result->providerContentBlocks,
+            $accumulatedUsage = $accumulatedUsage->add($result->usage);
+            $finalReason = $result->finishReason;
+
+            // A gateway may surface a pause directly (e.g. a faked paused response) instead of the loop detecting one...
+            [$toolResults, $pendingApprovals] = filled($result->pendingApprovals)
+                ? [[], collect($result->pendingApprovals)]
+                : $this->continuationToolResults(
+                    $result->finishReason,
+                    $result->toolCalls,
+                    $stepContext->isFinalStep,
+                    $tools,
+                    $options?->resumableApprovals ?? true,
                 );
 
-                $continuationToken = $result->continuationToken;
-
-                continue;
+            // Final-step placeholders stream as unsuccessful results so a UI does not render an unexecuted call as a completed tool run...
+            foreach ($toolResults as $toolResult) {
+                yield (new ToolResultEvent(
+                    strtolower((string) Str::uuid7()),
+                    $toolResult,
+                    ! $stepContext->isFinalStep,
+                    $stepContext->isFinalStep ? $toolResult->result : null,
+                    time(),
+                ))->withInvocationId($invocationId);
             }
 
-            [$toolResults, $pendingApprovals] = $result !== null
-                ? $this->continuationToolResults($result->finishReason, $result->toolCalls, $stepContext->isFinalStep, $tools, $options?->resumableApprovals ?? true)
-                : [[], collect()];
-
-            $shouldContinue = filled($toolResults) && $pendingApprovals->isEmpty();
-
-            // On the final step the tool calls are never executed; surface the placeholder as an unsuccessful result so a streaming UI does not render it as a completed tool run...
-            if (filled($toolResults)) {
-                foreach ($toolResults as $toolResult) {
-                    yield (new ToolResultEvent(
-                        strtolower((string) Str::uuid7()),
-                        $toolResult,
-                        ! $stepContext->isFinalStep,
-                        $stepContext->isFinalStep ? $toolResult->result : null,
-                        time(),
-                    ))->withInvocationId($invocationId);
-                }
-            }
-
-            $allMessages[] = new AssistantMessage(
-                $result?->text ?? '',
-                collect($result?->toolCalls ?? []),
-                $result?->providerContentBlocks ?? [],
-            );
+            $allMessages[] = $this->buildAssistantMessage($result);
 
             if (filled($toolResults)) {
                 $allMessages[] = new ToolResultMessage(collect($toolResults));
@@ -320,17 +255,17 @@ class TextGenerationLoop
                     strtolower((string) Str::uuid7()),
                     $pendingApprovals,
                     time(),
-                    $result?->providerContentBlocks ?? [],
+                    $result->providerContentBlocks,
                 ))->withInvocationId($invocationId);
 
                 break;
             }
 
-            if (! $shouldContinue) {
+            if (blank($toolResults) && $result->finishReason !== FinishReason::Continue) {
                 break;
             }
 
-            $continuationToken = $result?->continuationToken;
+            $continuationToken = $result->continuationToken;
         }
 
         $reason = $finalReason ?? ($sawError ? null : FinishReason::Error);
@@ -372,29 +307,7 @@ class TextGenerationLoop
             return [[], collect()];
         }
 
-        // Budget exhausted: don't execute, but record a result per call so a trailing tool_use with no matching tool_result doesn't 400 the provider on the next turn...
-        if ($isFinalStep) {
-            return [$this->exhaustedToolResults($toolCalls), collect()];
-        }
-
-        return $this->approvalAwareToolResults($toolCalls, $tools, $resumableApprovals);
-    }
-
-    /**
-     * Build placeholder results for tool calls that could not run because the step budget was exhausted.
-     *
-     * @param  ToolCall[]  $toolCalls
-     * @return array<int, ToolResult>
-     */
-    protected function exhaustedToolResults(array $toolCalls): array
-    {
-        return array_map(fn (ToolCall $toolCall) => new ToolResult(
-            $toolCall->id,
-            $toolCall->name,
-            $toolCall->arguments,
-            'The agent reached its maximum number of steps without running this tool call.',
-            $toolCall->resultId,
-        ), $toolCalls);
+        return $this->approvalAwareToolResults($toolCalls, $tools, $resumableApprovals, $isFinalStep);
     }
 
     /**
@@ -402,7 +315,7 @@ class TextGenerationLoop
      * @param  Tool[]  $tools
      * @return array{array<int, ToolResult>, Collection<int, PendingApproval>}
      */
-    protected function approvalAwareToolResults(array $toolCalls, array $tools, bool $resumableApprovals = true): array
+    protected function approvalAwareToolResults(array $toolCalls, array $tools, bool $resumableApprovals = true, bool $isFinalStep = false): array
     {
         $pendingApprovals = collect();
         $resolved = [];
@@ -435,16 +348,41 @@ class TextGenerationLoop
             throw ApprovalNotResumableException::make();
         }
 
-        // Ungated companion calls run immediately; only gated calls wait for a decision...
+        // Ungated calls run immediately — or, once the step budget is exhausted, receive a placeholder so a trailing tool_use with no matching tool_result doesn't 400 the provider — while gated calls always wait for a decision, since a resume restarts the budget...
         $toolResults = array_map(fn (array $pair) => new ToolResult(
             $pair[0]->id,
             $pair[0]->name,
             $pair[0]->arguments,
-            $this->executeTool($pair[1], $pair[0]->arguments),
+            $isFinalStep
+                ? 'The agent reached its maximum number of steps without running this tool call.'
+                : $this->executeTool($pair[1], $pair[0]->arguments),
             $pair[0]->resultId,
         ), $resolved);
 
         return [$toolResults, $pendingApprovals];
+    }
+
+    /**
+     * Apply the approval's decisions to the pending pause, returning the updated history and resume state.
+     *
+     * @param  Message[]  $messages
+     * @param  Tool[]  $tools
+     * @return array{Message[], int, bool, array<int, ToolResult>, array<int, string>}
+     */
+    protected function resumeFromApproval(Decision $approval, array $messages, array $tools): array
+    {
+        // An earlier abandoned pause may still dangle in the replayed history; settle everything except the turn being decided...
+        $messages = $this->settleAbandonedToolCalls($messages, exceptLatestAssistantTurn: true);
+
+        $originalMessageCount = count($messages);
+
+        [$approvalResults, $shouldContinue, $rejectedToolCallIds] = $this->resolveApprovalResults($approval, $messages, $tools);
+
+        if (filled($approvalResults)) {
+            [$messages, $originalMessageCount] = $this->appendApprovalResults($messages, $approvalResults, $originalMessageCount);
+        }
+
+        return [$messages, $originalMessageCount, $shouldContinue, $approvalResults, $rejectedToolCallIds];
     }
 
     /**
@@ -454,7 +392,12 @@ class TextGenerationLoop
      */
     protected function resolveApprovalResults(Decision $approval, array $messages, array $tools): array
     {
-        [$pendingToolCalls, $resolvedTools] = $this->validateApproval($approval, $messages, $tools);
+        // Consume any pre-stream validation so user-defined approval gates are only evaluated once per resume...
+        $validated = $this->validatedApprovals[$approval] ?? $this->validateApproval($approval, $messages, $tools);
+
+        unset($this->validatedApprovals[$approval]);
+
+        [$pendingToolCalls, $resolvedTools] = $validated;
 
         $toolResults = [];
         $rejectedToolCallIds = [];
@@ -578,7 +521,8 @@ class TextGenerationLoop
             throw new ApprovalMismatchException('There are no pending tool calls awaiting approval.', collect());
         }
 
-        return [$pendingToolCalls, $resolvedTools, $gatedIds];
+        // Remember the validation so a streaming resume can consume it without re-evaluating approval gates...
+        return $this->validatedApprovals[$approval] = [$pendingToolCalls, $resolvedTools, $gatedIds];
     }
 
     /**
@@ -646,20 +590,33 @@ class TextGenerationLoop
     }
 
     /**
-     * Settle unresolved tool calls from abandoned pauses so the history remains replayable.
+     * Settle unresolved tool calls from abandoned pauses so the history remains replayable, optionally leaving the latest assistant turn for a resume to decide.
      *
      * @param  Message[]  $messages
      * @return Message[]
      */
-    protected function settleAbandonedToolCalls(array $messages): array
+    protected function settleAbandonedToolCalls(array $messages, bool $exceptLatestAssistantTurn = false): array
     {
         $resolved = collect($messages)
             ->whereInstanceOf(ToolResultMessage::class)
             ->flatMap(fn (ToolResultMessage $message) => $message->toolResults)
             ->pluck('id')
+            ->flip()
             ->all();
 
-tG        for ($index = 0; $index < count($messages); $index++) {
+        $bound = count($messages);
+
+        if ($exceptLatestAssistantTurn) {
+            for ($index = $bound - 1; $index >= 0; $index--) {
+                if ($messages[$index] instanceof AssistantMessage) {
+                    $bound = $index;
+
+                    break;
+                }
+            }
+        }
+
+        for ($index = 0; $index < $bound; $index++) {
             $message = $messages[$index];
 
             if (! $message instanceof AssistantMessage) {
@@ -667,7 +624,7 @@ tG        for ($index = 0; $index < count($messages); $index++) {
             }
 
             $dangling = $message->toolCalls->reject(
-                fn (ToolCall $toolCall) => in_array($toolCall->id, $resolved, true)
+                fn (ToolCall $toolCall) => isset($resolved[$toolCall->id])
             )->values();
 
             if ($dangling->isEmpty()) {
@@ -688,6 +645,8 @@ tG        for ($index = 0; $index < count($messages); $index++) {
                 $messages[$index + 1] = new ToolResultMessage($next->toolResults->concat($placeholders)->values());
             } else {
                 array_splice($messages, $index + 1, 0, [new ToolResultMessage($placeholders->values())]);
+
+                $bound++;
             }
         }
 
@@ -707,6 +666,15 @@ tG        for ($index = 0; $index < count($messages); $index++) {
             $toolCall->arguments,
             $approvals[$toolCall->id]?->reason,
         ))->values();
+    }
+
+    protected function buildAssistantMessage(StepResponse $result): AssistantMessage
+    {
+        return new AssistantMessage(
+            $result->text,
+            collect($result->toolCalls),
+            $result->providerContentBlocks,
+        );
     }
 
     /**
