@@ -2,7 +2,7 @@
 
 namespace Laravel\Ai\Contracts;
 
-use Laravel\Ai\Approvals\ApprovalRequirement;
+use Laravel\Ai\Approvals\Approval;
 use Laravel\Ai\Tools\Request;
 
 interface Approvable
@@ -11,5 +11,5 @@ interface Approvable
 
     public function withoutApproval(): static;
 
-    public function shouldRequestApproval(Request $request): ApprovalRequirement;
+    public function shouldRequestApproval(Request $request): ?Approval;
 }

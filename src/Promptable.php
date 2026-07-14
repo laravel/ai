@@ -9,7 +9,7 @@ use Illuminate\Container\Container;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
-use Laravel\Ai\Approvals\ToolApproval;
+use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Attributes\Model as ModelAttribute;
 use Laravel\Ai\Attributes\Provider as ProviderAttribute;
 use Laravel\Ai\Attributes\Timeout as TimeoutAttribute;
@@ -51,18 +51,20 @@ trait Promptable
     }
 
     /**
-     * Invoke the agent with a given prompt.
+     * Invoke the agent with a given prompt, or resume a paused run with tool approval decisions.
      */
     public function prompt(
-        ToolApproval|string $prompt,
+        Decision|string $prompt,
         array $attachments = [],
         Lab|array|string|null $provider = null,
         ?string $model = null,
         ?int $timeout = null): AgentResponse
     {
+        [$prompt, $resume] = $this->extractResume($prompt);
+
         return $this->withModelFailover(
             fn (TextProvider $provider, string $model) => $provider->prompt(
-                new AgentPrompt($this, $prompt, $attachments, $provider, $model, $this->getTimeout($timeout))
+                new AgentPrompt($this, $prompt, $attachments, $provider, $model, $this->getTimeout($timeout), resume: $resume)
             ),
             $provider,
             $model,
@@ -73,11 +75,27 @@ trait Promptable
      * Invoke the agent with a given prompt and return a streamable response.
      */
     public function stream(
-        ToolApproval|string $prompt,
+        Decision|string $prompt,
         array $attachments = [],
         Lab|array|string|null $provider = null,
         ?string $model = null,
         ?int $timeout = null): StreamableAgentResponse
+    {
+        [$prompt, $resume] = $this->extractResume($prompt);
+
+        return $this->streamPrompt($prompt, $resume, $attachments, $provider, $model, $timeout);
+    }
+
+    /**
+     * Stream a text prompt or an approval resume through the configured providers.
+     */
+    private function streamPrompt(
+        string $prompt,
+        ?Decision $resume,
+        array $attachments,
+        Lab|array|string|null $provider,
+        ?string $model,
+        ?int $timeout): StreamableAgentResponse
     {
         $providers = $this->getProvidersAndModelsForFailover($provider, $model);
         $resolvedTimeout = $this->getTimeout($timeout);
@@ -88,7 +106,7 @@ trait Promptable
             [$resolved, $resolvedModel] = $this->iterateProvidersWithFailover($providers)->current();
 
             return $resolved->stream(
-                new AgentPrompt($this, $prompt, $attachments, $resolved, $resolvedModel, $resolvedTimeout, $invocationId)
+                new AgentPrompt($this, $prompt, $attachments, $resolved, $resolvedModel, $resolvedTimeout, $invocationId, $resume)
             );
         }
 
@@ -97,7 +115,7 @@ trait Promptable
 
         $outer = new StreamableAgentResponse(
             $invocationId,
-            function () use ($providers, $prompt, $attachments, $resolvedTimeout, $invocationId, &$outer) {
+            function () use ($providers, $prompt, $resume, $attachments, $resolvedTimeout, $invocationId, &$outer) {
                 $lastException = null;
 
                 foreach ($this->iterateProvidersWithFailover($providers) as [$provider, $model]) {
@@ -105,7 +123,7 @@ trait Promptable
 
                     try {
                         $innerResponse = $provider->stream(
-                            new AgentPrompt($this, $prompt, $attachments, $provider, $model, $resolvedTimeout, $invocationId)
+                            new AgentPrompt($this, $prompt, $attachments, $provider, $model, $resolvedTimeout, $invocationId, $resume)
                         );
 
                         $innerResponse->then(fn (StreamedAgentResponse $response) => $outer->adoptStateFrom($response));
@@ -137,25 +155,41 @@ trait Promptable
     /**
      * Invoke the agent in a queued job.
      */
-    public function queue(ToolApproval|string $prompt, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
+    public function queue(Decision|string $prompt, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
     {
+        [$prompt, $resume] = $this->extractResume($prompt);
+
         if (static::isFaked()) {
             Ai::recordPrompt(
-                new QueuedAgentPrompt($this, $prompt, $attachments, $provider, $model),
+                new QueuedAgentPrompt($this, $prompt, $attachments, $provider, $model, $resume),
             );
 
             return new QueuedAgentResponse(new FakePendingDispatch);
         }
 
         return new QueuedAgentResponse(
-            InvokeAgent::dispatch($this, $prompt, $attachments, $provider, $model)
+            InvokeAgent::dispatch($this, $prompt, $attachments, $provider, $model, $resume)
         );
+    }
+
+    /**
+     * Split a prompt into its text and tool approval resume parts, widening a bare decision to every pending call.
+     *
+     * @return array{string, ?Decision}
+     */
+    private function extractResume(Decision|string $prompt): array
+    {
+        if (is_string($prompt)) {
+            return [$prompt, null];
+        }
+
+        return ['', $prompt->action !== null ? Decision::collection(['*' => $prompt]) : $prompt];
     }
 
     /**
      * Invoke the agent with a given prompt and broadcast the streamed events.
      */
-    public function broadcast(ToolApproval|string $prompt, Channel|array $channels, array $attachments = [], bool $now = false, Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
+    public function broadcast(string $prompt, Channel|array $channels, array $attachments = [], bool $now = false, Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
     {
         $without = WithoutBroadcasting::eventsFor($this);
 
@@ -172,7 +206,7 @@ trait Promptable
     /**
      * Invoke the agent with a given prompt and broadcast the streamed events immediately.
      */
-    public function broadcastNow(ToolApproval|string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
+    public function broadcastNow(string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
     {
         return $this->broadcast($prompt, $channels, $attachments, now: true, provider: $provider, model: $model);
     }
@@ -180,7 +214,7 @@ trait Promptable
     /**
      * Invoke the agent with a given prompt and broadcast the streamed events.
      */
-    public function broadcastOnQueue(ToolApproval|string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
+    public function broadcastOnQueue(string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
     {
         if (static::isFaked()) {
             Ai::recordPrompt(

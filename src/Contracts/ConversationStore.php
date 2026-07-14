@@ -30,16 +30,6 @@ interface ConversationStore
     public function storeAssistantMessage(string $conversationId, string|int|null $userId, AgentPrompt $prompt, AgentResponse $response): string;
 
     /**
-     * Atomically claim the conversation's latest assistant message for a tool approval resume.
-     */
-    public function claimPausedMessage(string $conversationId): bool;
-
-    /**
-     * Release a previously claimed pause so the tool approval may be retried.
-     */
-    public function releasePausedMessage(string $conversationId): void;
-
-    /**
      * Get the latest messages for the given conversation.
      *
      * @return Collection<int, Message>

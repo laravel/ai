@@ -6,7 +6,7 @@ use Closure;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
-use Laravel\Ai\Approvals\ToolApproval;
+use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
@@ -62,7 +62,7 @@ trait GeneratesText
                     ...($agent instanceof Conversational ? $agent->messages() : []),
                 ];
 
-                if (is_string($prompt->prompt)) {
+                if ($prompt->resume === null) {
                     $messages[] = new UserMessage($prompt->prompt, $prompt->attachments->all());
                 }
 
@@ -120,13 +120,13 @@ trait GeneratesText
     /**
      * Get the tool approval to resume with, unless the agent's gateway is faked.
      */
-    protected function resumableApprovalFor(AgentPrompt $prompt): ?ToolApproval
+    protected function resumableApprovalFor(AgentPrompt $prompt): ?Decision
     {
-        if (! $prompt->prompt instanceof ToolApproval || Ai::hasFakeGatewayFor($prompt->agent::class)) {
+        if ($prompt->resume === null || Ai::hasFakeGatewayFor($prompt->agent::class)) {
             return null;
         }
 
-        return $prompt->prompt;
+        return $prompt->resume;
     }
 
     /**

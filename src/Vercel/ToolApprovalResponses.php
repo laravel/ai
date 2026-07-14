@@ -5,15 +5,14 @@ namespace Laravel\Ai\Vercel;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
-use Laravel\Ai\Approvals\Approval;
-use Laravel\Ai\Approvals\ToolApproval;
+use Laravel\Ai\Approvals\Decision;
 
 class ToolApprovalResponses
 {
     /**
      * Extract tool approval decisions from a Vercel AI SDK "useChat" request.
      */
-    public static function fromRequest(Request $request): ?ToolApproval
+    public static function fromRequest(Request $request): ?Decision
     {
         $messages = $request->input('messages');
 
@@ -29,7 +28,7 @@ class ToolApprovalResponses
      *
      * @param  array<int, mixed>  $messages
      */
-    public static function fromMessages(array $messages): ?ToolApproval
+    public static function fromMessages(array $messages): ?Decision
     {
         $message = end($messages);
 
@@ -51,11 +50,11 @@ class ToolApprovalResponses
 
                 return [
                     $part['toolCallId'] => $part['approval']['approved']
-                        ? Approval::approve()
-                        : Approval::reject($reason),
+                        ? Decision::approve()
+                        : Decision::reject($reason),
                 ];
             });
 
-        return $decisions->isEmpty() ? null : new ToolApproval($decisions->all());
+        return $decisions->isEmpty() ? null : Decision::collection($decisions->all());
     }
 }

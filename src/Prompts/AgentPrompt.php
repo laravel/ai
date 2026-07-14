@@ -3,8 +3,7 @@
 namespace Laravel\Ai\Prompts;
 
 use Illuminate\Support\Collection;
-use Illuminate\Support\Str;
-use Laravel\Ai\Approvals\ToolApproval;
+use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 
@@ -20,14 +19,15 @@ class AgentPrompt extends Prompt
 
     public function __construct(
         Agent $agent,
-        ToolApproval|string $prompt,
+        string $prompt,
         Collection|array $attachments,
         TextProvider $provider,
         string $model,
         ?int $timeout = null,
         ?string $invocationId = null,
+        ?Decision $resume = null,
     ) {
-        parent::__construct($prompt, $provider, $model);
+        parent::__construct($prompt, $provider, $model, $resume);
 
         $this->agent = $agent;
         $this->attachments = Collection::make($attachments);
@@ -36,45 +36,9 @@ class AgentPrompt extends Prompt
     }
 
     /**
-     * Determine if the prompt contains the given string.
-     */
-    public function contains(string $string): bool
-    {
-        if (! is_string($this->prompt)) {
-            return false;
-        }
-
-        return Str::contains($this->prompt, $string);
-    }
-
-    /**
-     * Prepend to the prompt and return a new prompt instance.
-     */
-    public function prepend(string $prompt): AgentPrompt
-    {
-        if (! is_string($this->prompt)) {
-            return $this;
-        }
-
-        return $this->revise($prompt.PHP_EOL.PHP_EOL.$this->prompt);
-    }
-
-    /**
-     * Append to the prompt and return a new prompt instance.
-     */
-    public function append(string $prompt): AgentPrompt
-    {
-        if (! is_string($this->prompt)) {
-            return $this;
-        }
-
-        return $this->revise($this->prompt.PHP_EOL.PHP_EOL.$prompt);
-    }
-
-    /**
      * Revise the prompt and return a new prompt instance.
      */
-    public function revise(ToolApproval|string $prompt, Collection|array|null $attachments = null): AgentPrompt
+    public function revise(string $prompt, Collection|array|null $attachments = null): AgentPrompt
     {
         if (is_array($attachments)) {
             $attachments = new Collection($attachments);
@@ -88,15 +52,8 @@ class AgentPrompt extends Prompt
             $this->model,
             $this->timeout,
             $this->invocationId,
+            $this->resume,
         );
-    }
-
-    /**
-     * Add new attachment to the prompt, returning a new prompt instance.
-     */
-    public function withAttachments(Collection|array $attachments): AgentPrompt
-    {
-        return $this->revise($this->prompt, $attachments);
     }
 
     /**

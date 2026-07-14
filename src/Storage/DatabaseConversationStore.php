@@ -76,7 +76,6 @@ class DatabaseConversationStore implements ConversationStore
             'attachments' => $prompt->attachments->toJson(),
             'tool_calls' => '[]',
             'tool_results' => '[]',
-            'provider_content_blocks' => '[]',
             'usage' => '[]',
             'meta' => '[]',
             'created_at' => $now,
@@ -107,9 +106,8 @@ class DatabaseConversationStore implements ConversationStore
             'attachments' => '[]',
             'tool_calls' => json_encode($response->toolCalls->values()),
             'tool_results' => json_encode($response->toolResults->values()),
-            'provider_content_blocks' => json_encode($response->pausedProviderContentBlocks()),
             'usage' => json_encode($response->usage),
-            'meta' => json_encode($response->meta),
+            'meta' => json_encode($this->messageMeta($response)),
             'created_at' => $now,
             'updated_at' => $now,
         ]);
@@ -130,44 +128,19 @@ class DatabaseConversationStore implements ConversationStore
     }
 
     /**
-     * Atomically claim the conversation's latest assistant message for a tool approval resume.
+     * Build the message meta payload, tucking a paused turn's raw provider blocks alongside the response meta.
+     *
+     * @return array<string, mixed>
      */
-    public function claimPausedMessage(string $conversationId): bool
+    protected function messageMeta(AgentResponse $response): array
     {
-        $messageId = $this->table($this->messagesTable())
-            ->where('conversation_id', $conversationId)
-            ->where('role', 'assistant')
-            ->orderByDesc('id')
-            ->value('id');
+        $meta = (array) json_decode(json_encode($response->meta), true);
 
-        if ($messageId === null) {
-            return false;
+        if (filled($blocks = $response->pausedProviderContentBlocks())) {
+            $meta['provider_content_blocks'] = $blocks;
         }
 
-        return $this->table($this->messagesTable())
-            ->where('id', $messageId)
-            ->whereNull('resumed_at')
-            ->update(['resumed_at' => now()]) === 1;
-    }
-
-    /**
-     * Release a previously claimed pause so the tool approval may be retried.
-     */
-    public function releasePausedMessage(string $conversationId): void
-    {
-        $messageId = $this->table($this->messagesTable())
-            ->where('conversation_id', $conversationId)
-            ->where('role', 'assistant')
-            ->orderByDesc('id')
-            ->value('id');
-
-        if ($messageId === null) {
-            return;
-        }
-
-        $this->table($this->messagesTable())
-            ->where('id', $messageId)
-            ->update(['resumed_at' => null]);
+        return $meta;
     }
 
     /**
@@ -227,7 +200,7 @@ class DatabaseConversationStore implements ConversationStore
                     if ($pendingCalls->isNotEmpty()) {
                         // Raw provider blocks describe the whole turn, so they may only replace a pause message that carries every call...
                         $providerContentBlocks = $resolvedCalls->isEmpty()
-                            ? (json_decode($record->provider_content_blocks ?? '[]', true) ?: [])
+                            ? (((array) json_decode($record->meta ?? '[]', true))['provider_content_blocks'] ?? [])
                             : [];
 
                         // The pause point carries the model's text alongside the still-unanswered tool_use and any provider replay state...

@@ -14,16 +14,6 @@ class InMemoryConversationStore implements ConversationStore
 
     public array $messages = [];
 
-    public function claimPausedMessage(string $conversationId): bool
-    {
-        return true;
-    }
-
-    public function releasePausedMessage(string $conversationId): void
-    {
-        //
-    }
-
     public function latestConversationId(string|int $userId): ?string
     {
         return collect($this->conversations)

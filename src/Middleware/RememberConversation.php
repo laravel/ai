@@ -3,8 +3,8 @@
 namespace Laravel\Ai\Middleware;
 
 use Closure;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
-use Laravel\Ai\Approvals\ToolApproval;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -32,26 +32,24 @@ class RememberConversation
         /** @var Agent&RemembersConversations $agent */
         $agent = $prompt->agent;
 
-        $claimed = false;
+        $lock = null;
 
-        // Claim the pause before executing anything so racing resumes cannot run a gated tool twice...
-        if ($prompt->prompt instanceof ToolApproval && $agent->currentConversation()) {
-            if (! $this->store->claimPausedMessage($agent->currentConversation())) {
+        // Lock the pause before executing anything so racing resumes cannot run a gated tool twice...
+        if ($prompt->resume !== null && $agent->currentConversation()) {
+            $lock = Cache::lock('ai:approval-resume:'.$agent->currentConversation(), 300);
+
+            if (! $lock->get()) {
                 throw new ApprovalMismatchException(
                     'The pending tool calls have already been resumed or are being resumed.', collect()
                 );
             }
-
-            $claimed = true;
         }
 
         try {
             return $this->remember($prompt, $next);
         } catch (ApprovalMismatchException $exception) {
-            // A mismatch throws before any tool executes, so an invalid submission must not burn the claim...
-            if ($claimed) {
-                $this->store->releasePausedMessage($agent->currentConversation());
-            }
+            // A mismatch throws before any tool executes, so an invalid submission must not hold the lock...
+            $lock?->release();
 
             throw $exception;
         }
@@ -70,7 +68,7 @@ class RememberConversation
             if (! $agent->currentConversation()) {
                 $conversationId = $this->store->storeConversation(
                     $agent->conversationParticipant()?->id,
-                    $this->generateTitle(is_string($prompt->prompt) ? $prompt->prompt : 'Tool approval')
+                    $this->generateTitle($prompt->resume !== null ? 'Tool approval' : $prompt->prompt)
                 );
 
                 $agent->continue(
@@ -80,7 +78,7 @@ class RememberConversation
             }
 
             // Record user message...
-            if (! $prompt->prompt instanceof ToolApproval) {
+            if ($prompt->resume === null) {
                 $this->store->storeUserMessage(
                     $agent->currentConversation(),
                     $agent->conversationParticipant()?->id,

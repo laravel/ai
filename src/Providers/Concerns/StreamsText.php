@@ -49,7 +49,7 @@ trait StreamsText
                     ...($agent instanceof Conversational ? $agent->messages() : []),
                 ];
 
-                if (is_string($prompt->prompt)) {
+                if ($prompt->resume === null) {
                     $messages[] = new UserMessage($prompt->prompt, $prompt->attachments->all());
                 }
 

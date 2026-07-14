@@ -2,8 +2,7 @@
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Approvals\Approval;
-use Laravel\Ai\Approvals\ApprovalRequirement;
-use Laravel\Ai\Approvals\ToolApproval;
+use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Concerns\InteractsWithApproval;
 use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
@@ -86,7 +85,7 @@ test('it resumes approved tool calls and continues generation', function () {
         null,
         new TextGenerationOptions(maxSteps: 2),
         null,
-        ToolApproval::from(['call-1' => true]),
+        Decision::collection(['call-1' => true]),
     );
 
     expect($tool->calls)->toBe(1)
@@ -114,7 +113,7 @@ test('it resumes edited tool calls with replacement arguments', function () {
         null,
         new TextGenerationOptions(maxSteps: 2),
         null,
-        ToolApproval::from(['call-1' => Approval::edit(['value' => 'edited'])]),
+        Decision::collection(['call-1' => Decision::edit(['value' => 'edited'])]),
     );
 
     expect($tool->handledArguments)->toBe([['value' => 'edited']]);
@@ -136,7 +135,7 @@ test('it records rejection results without executing the tool', function () {
         null,
         new TextGenerationOptions(maxSteps: 2),
         null,
-        ToolApproval::from(['call-1' => Approval::reject('Not that file')]),
+        Decision::collection(['call-1' => Decision::reject('Not that file')]),
     );
 
     expect($tool->calls)->toBe(0)
@@ -158,7 +157,7 @@ test('it rejects approval decisions that do not match pending tool calls', funct
         null,
         new TextGenerationOptions(maxSteps: 2),
         null,
-        ToolApproval::from(['call-2' => true]),
+        Decision::collection(['call-2' => true]),
     ))->toThrow(ApprovalMismatchException::class);
 });
 
@@ -248,7 +247,7 @@ test('it resumes a paused step running only the still-pending gated call', funct
         null,
         new TextGenerationOptions(maxSteps: 2),
         null,
-        ToolApproval::from(['call-gated' => true]),
+        Decision::collection(['call-gated' => true]),
     );
 
     expect($gated->calls)->toBe(1)
@@ -272,7 +271,7 @@ test('a bare rejection stops the loop without another model call', function () {
         null,
         new TextGenerationOptions(maxSteps: 2),
         null,
-        ToolApproval::from(['call-1' => false]),
+        Decision::collection(['call-1' => false]),
     );
 
     expect($tool->calls)->toBe(0)
@@ -320,7 +319,7 @@ test('a bare rejection stops the loop even beside an approved call', function ()
         null,
         new TextGenerationOptions(maxSteps: 2),
         null,
-        ToolApproval::from(['call-1' => true, 'call-2' => false]),
+        Decision::collection(['call-1' => true, 'call-2' => false]),
     );
 
     expect($tool->calls)->toBe(1)
@@ -346,7 +345,7 @@ test('a streamed bare rejection stops the loop even beside an approved call', fu
         null,
         new TextGenerationOptions(maxSteps: 2),
         null,
-        ToolApproval::from(['call-1' => true, 'call-2' => false]),
+        Decision::collection(['call-1' => true, 'call-2' => false]),
     ));
 
     $toolResults = collect($events)->whereInstanceOf(ToolResultEvent::class);
@@ -375,7 +374,7 @@ test('a gate that has relaxed since the pause can still be resumed', function ()
         null,
         new TextGenerationOptions(maxSteps: 2),
         null,
-        ToolApproval::from(['call-1' => true]),
+        Decision::collection(['call-1' => true]),
     );
 
     expect($tool->calls)->toBe(1)
@@ -406,7 +405,7 @@ test('a resumed mixed batch merges its results into the pause turn answering mes
         null,
         new TextGenerationOptions(maxSteps: 2),
         null,
-        ToolApproval::from(['call-gated' => true]),
+        Decision::collection(['call-gated' => true]),
     );
 
     $toolResultMessages = $response->messages->whereInstanceOf(ToolResultMessage::class);
@@ -467,7 +466,7 @@ test('a stale approval with no pending gated calls is rejected', function () {
         null,
         new TextGenerationOptions(maxSteps: 2),
         null,
-        ToolApproval::approveAll(),
+        Decision::collection(['*' => Decision::approve()]),
     ))->toThrow(ApprovalMismatchException::class, 'There are no pending tool calls awaiting approval.');
 });
 
@@ -489,7 +488,7 @@ test('a default decision approves every pending call without naming ids', functi
         null,
         new TextGenerationOptions(maxSteps: 2),
         null,
-        ToolApproval::approveAll(),
+        Decision::collection(['*' => Decision::approve()]),
     );
 
     expect($gated->calls)->toBe(1)
@@ -516,7 +515,7 @@ test('an explicit decision overrides the default decision', function () {
         null,
         new TextGenerationOptions(maxSteps: 2),
         null,
-        new ToolApproval(['call-2' => Approval::reject('Wrong file')], Approval::approve()),
+        Decision::collection(['call-2' => Decision::reject('Wrong file'), '*' => Decision::approve()]),
     );
 
     expect($tool->calls)->toBe(1)
@@ -543,7 +542,7 @@ test('a default rejection only rejects gated calls and still runs ungated compan
         null,
         new TextGenerationOptions(maxSteps: 2),
         null,
-        ToolApproval::rejectAll('Not now'),
+        Decision::collection(['*' => Decision::reject('Not now')]),
     );
 
     expect($gated->calls)->toBe(0)
@@ -567,7 +566,7 @@ test('a bare default rejection stops the loop without another model call', funct
         null,
         new TextGenerationOptions(maxSteps: 2),
         null,
-        ToolApproval::rejectAll(),
+        Decision::collection(['*' => Decision::reject()]),
     );
 
     expect($tool->calls)->toBe(0)
@@ -589,7 +588,7 @@ test('a default decision does not excuse decisions for unknown tool calls', func
         null,
         new TextGenerationOptions(maxSteps: 2),
         null,
-        new ToolApproval(['call-2' => Approval::approve()], Approval::approve()),
+        Decision::collection(['call-2' => Decision::approve(), '*' => Decision::approve()]),
     ))->toThrow(ApprovalMismatchException::class);
 });
 
@@ -613,7 +612,7 @@ test('a streamed default rejection marks the tool results as unsuccessful', func
         null,
         new TextGenerationOptions(maxSteps: 2),
         null,
-        ToolApproval::rejectAll('Not now'),
+        Decision::collection(['*' => Decision::reject('Not now')]),
     ));
 
     $toolResults = collect($events)->whereInstanceOf(ToolResultEvent::class);
@@ -979,9 +978,9 @@ class TextGenerationLoopApprovableTool extends TextGenerationLoopCountingTool im
 
     public array $handledArguments = [];
 
-    protected function needsApproval(Request $request): ApprovalRequirement
+    protected function needsApproval(Request $request): bool|Approval
     {
-        return ApprovalRequirement::required('Needs a human');
+        return Approval::required('Needs a human');
     }
 
     public function handle(Request $request): string

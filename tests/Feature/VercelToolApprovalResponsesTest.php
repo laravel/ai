@@ -2,7 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
-use Laravel\Ai\Approvals\ToolApproval;
+use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Vercel\ToolApprovalResponses;
 
 test('tool approval decisions are extracted from a useChat request', function () {
@@ -31,7 +31,7 @@ test('tool approval decisions are extracted from a useChat request', function ()
         ],
     ]));
 
-    expect($approval)->toBeInstanceOf(ToolApproval::class)
+    expect($approval)->toBeInstanceOf(Decision::class)
         ->and($approval->decisions['call-1']->action)->toBe('approve')
         ->and($approval->decisions['call-2']->action)->toBe('reject')
         ->and($approval->decisions['call-2']->result)->toBe('Keep this file.');

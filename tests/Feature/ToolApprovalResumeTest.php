@@ -1,10 +1,10 @@
 <?php
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
-use Laravel\Ai\Approvals\ToolApproval;
-use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Tests\Fixtures\Agents\RememberingApprovableAgent;
 
@@ -61,7 +61,7 @@ test('a remembered agent pauses for approval, persists the tool_use, and resumes
 
     $resumed = (new RememberingApprovableAgent)
         ->continue($paused->conversationId, $user)
-        ->prompt(ToolApproval::from(['toolu_1' => true]), provider: 'anthropic');
+        ->prompt(Decision::collection(['toolu_1' => true]), provider: 'anthropic');
 
     expect($resumed->awaitingApproval())->toBeFalse()
         ->and($resumed->text)->toBe('The number is 72019.')
@@ -115,7 +115,7 @@ test('a resumed approval replays the paused turn provider content blocks', funct
 
     (new RememberingApprovableAgent)
         ->continue($paused->conversationId, $user)
-        ->prompt(ToolApproval::from(['toolu_1' => true]), provider: 'anthropic');
+        ->prompt(Decision::collection(['toolu_1' => true]), provider: 'anthropic');
 
     $resumeMessages = collect(Http::recorded())->last()[0]->data()['messages'];
 
@@ -150,12 +150,12 @@ test('a resume that loses the pause claim receives a conflict without executing 
 
     $paused = (new RememberingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
 
-    // Simulate a racing resume that already holds the claim...
-    expect(resolve(ConversationStore::class)->claimPausedMessage($paused->conversationId))->toBeTrue();
+    // Simulate a racing resume that already holds the lock...
+    expect(Cache::lock('ai:approval-resume:'.$paused->conversationId, 300)->get())->toBeTrue();
 
     expect(fn () => (new RememberingApprovableAgent)
         ->continue($paused->conversationId, $user)
-        ->prompt(ToolApproval::from(['toolu_1' => true]), provider: 'anthropic')
+        ->prompt(Decision::collection(['toolu_1' => true]), provider: 'anthropic')
     )->toThrow(ApprovalMismatchException::class, 'The pending tool calls have already been resumed or are being resumed.');
 });
 
@@ -249,13 +249,13 @@ test('a streamed resume with mismatched decisions throws before the stream begin
     // The mismatch must surface when the response is created, before any SSE bytes are sent...
     expect(fn () => (new RememberingApprovableAgent)
         ->continue($paused->conversationId, $user)
-        ->stream(ToolApproval::from(['bogus-id' => true]), provider: 'anthropic')
+        ->stream(Decision::collection(['bogus-id' => true]), provider: 'anthropic')
     )->toThrow(ApprovalMismatchException::class);
 
     // The failed submission must not burn the claim, so a corrected resume still succeeds...
     $resumed = (new RememberingApprovableAgent)
         ->continue($paused->conversationId, $user)
-        ->prompt(ToolApproval::from(['toolu_1' => true]), provider: 'anthropic');
+        ->prompt(Decision::collection(['toolu_1' => true]), provider: 'anthropic');
 
     expect($resumed->text)->toBe('The number is 72019.');
 });

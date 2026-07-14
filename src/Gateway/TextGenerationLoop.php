@@ -6,9 +6,8 @@ use Generator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Approvals\Approval;
-use Laravel\Ai\Approvals\ApprovalRequirement;
+use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\PendingApproval;
-use Laravel\Ai\Approvals\ToolApproval;
 use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -55,7 +54,7 @@ class TextGenerationLoop
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
-        ?ToolApproval $approval = null,
+        ?Decision $approval = null,
     ): TextResponse {
         $steps = new Collection;
         $allMessages = $messages;
@@ -177,7 +176,7 @@ class TextGenerationLoop
         ?array $schema = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
-        ?ToolApproval $approval = null,
+        ?Decision $approval = null,
     ): Generator {
         $allMessages = $messages;
         $maxSteps = $this->resolveMaxSteps($options, $tools);
@@ -415,7 +414,7 @@ class TextGenerationLoop
 
             $approval = $this->approvalForTool($tool, $toolCall);
 
-            if ($approval?->isRequired()) {
+            if ($approval !== null) {
                 $pendingApprovals->push(new PendingApproval(
                     $toolCall->id,
                     $toolCall->name,
@@ -446,7 +445,7 @@ class TextGenerationLoop
      * @param  Tool[]  $tools
      * @return array{array<int, ToolResult>, bool, array<int, string>}
      */
-    protected function resolveApprovalResults(ToolApproval $approval, array $messages, array $tools): array
+    protected function resolveApprovalResults(Decision $approval, array $messages, array $tools): array
     {
         [$pendingToolCalls, $resolvedTools, $gatedIds] = $this->validateApproval($approval, $messages, $tools);
 
@@ -456,10 +455,9 @@ class TextGenerationLoop
         $bareRejection = false;
 
         foreach ($pendingToolCalls as $toolCall) {
-            // The default only stands in for gated calls, so ungated companion calls always execute...
             $decision = $approval->decisions[$toolCall->id]
-                ?? (in_array($toolCall->id, $gatedIds, true) ? $approval->default : null)
-                ?? Approval::approve();
+                ?? (in_array($toolCall->id, $gatedIds, true) ? ($approval->decisions['*'] ?? null) : null)
+                ?? Decision::approve();
 
             if ($decision->isRejection()) {
                 $rejectedToolCallIds[] = $toolCall->id;
@@ -513,7 +511,7 @@ class TextGenerationLoop
      * @param  Tool[]  $tools
      * @return array{Collection<int, ToolCall>, Collection<string, ?Tool>, array<int, string>}
      */
-    public function validateApproval(ToolApproval $approval, array $messages, array $tools): array
+    public function validateApproval(Decision $approval, array $messages, array $tools): array
     {
         [$pendingToolCalls, $resolvedToolCallIds] = $this->pendingToolCalls($messages);
 
@@ -526,18 +524,15 @@ class TextGenerationLoop
             $toolCall->id => $this->approvalForTool($resolvedTools[$toolCall->id], $toolCall),
         ]);
 
-        // Only gated calls need a decision...
-        $gated = $pendingToolCalls->filter(fn (ToolCall $toolCall) => $approvals[$toolCall->id]?->isRequired() === true);
+        $gated = $pendingToolCalls->filter(fn (ToolCall $toolCall) => $approvals[$toolCall->id] !== null);
         $gatedIds = $gated->pluck('id')->all();
-        $decisionIds = array_keys($approval->decisions);
+        $decisionIds = array_values(array_diff(array_keys($approval->decisions), ['*']));
 
-        // Decisions may target any still-pending call so a gate that has since relaxed can still be resumed...
         $unknown = array_values(array_diff($decisionIds, $pendingToolCalls->pluck('id')->all()));
 
-        // A default decision stands in for any gated call that is not explicitly decided...
-        $missing = $approval->default === null
-            ? array_values(array_diff($gatedIds, $decisionIds))
-            : [];
+        $missing = array_key_exists('*', $approval->decisions)
+            ? []
+            : array_values(array_diff($gatedIds, $decisionIds));
 
         if ($unknown !== [] || $missing !== []) {
             $alreadyResolved = array_values(array_intersect($unknown, $resolvedToolCallIds));
@@ -560,7 +555,7 @@ class TextGenerationLoop
     /**
      * Resolve the approval requirement for an already-resolved tool, or null when it is not gated.
      */
-    protected function approvalForTool(?Tool $tool, ToolCall $toolCall): ?ApprovalRequirement
+    protected function approvalForTool(?Tool $tool, ToolCall $toolCall): ?Approval
     {
         return $tool instanceof Approvable
             ? $tool->shouldRequestApproval(new Request($toolCall->arguments))
@@ -663,7 +658,7 @@ class TextGenerationLoop
 
     /**
      * @param  Collection<int, ToolCall>  $toolCalls
-     * @param  Collection<string, ?ApprovalRequirement>  $approvals
+     * @param  Collection<string, ?Approval>  $approvals
      * @return Collection<int, PendingApproval>
      */
     protected function pendingApprovalsFor(Collection $toolCalls, Collection $approvals): Collection

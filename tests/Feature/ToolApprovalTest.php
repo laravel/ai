@@ -4,9 +4,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
-use Laravel\Ai\Approvals\Approval;
+use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\PendingApproval;
-use Laravel\Ai\Approvals\ToolApproval;
 use Laravel\Ai\Events\ToolApprovalRequested;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
@@ -17,41 +16,32 @@ use Tests\Fixtures\Agents\ConversationalAgent;
 use Tests\Fixtures\Agents\RememberingApprovableAgent;
 use Tests\Fixtures\Tools\ApprovableNumberGenerator;
 
-test('tool approval from treats a wildcard key as the default for undecided calls', function () {
-    $approval = ToolApproval::from(['*' => true, 'call-1' => false]);
-
-    expect($approval->default->action)->toBe('approve')
-        ->and($approval->decisions)->toHaveKeys(['call-1'])
-        ->and($approval->decisions['call-1']->action)->toBe('reject');
-});
-
-test('tool approval from accepts a wildcard rejection with a result', function () {
-    $approval = ToolApproval::from(['*' => Approval::reject('Not now')]);
-
-    expect($approval->decisions)->toBe([])
-        ->and($approval->default->action)->toBe('reject')
-        ->and($approval->default->result)->toBe('Not now');
-});
-
-test('tool approval from rejects a wildcard edit decision', function () {
-    ToolApproval::from(['*' => Approval::edit(['path' => '/tmp/file'])]);
-})->throws(InvalidArgumentException::class, 'The wildcard decision may not use the edit action.');
-
-test('tool approval rejects an edit decision as the default', function () {
-    new ToolApproval(default: Approval::edit(['path' => '/tmp/file']));
-})->throws(InvalidArgumentException::class, 'The default decision may not use the edit action.');
-
-test('tool approval from normalizes boolean decisions', function () {
-    $approval = ToolApproval::from([
+test('decision collections normalize boolean decisions', function () {
+    $approval = Decision::collection([
         'call-1' => true,
         'call-2' => false,
-        'call-3' => Approval::edit(['path' => '/tmp/file']),
+        'call-3' => Decision::edit(['path' => '/tmp/file']),
     ]);
 
     expect($approval->decisions['call-1']->action)->toBe('approve')
         ->and($approval->decisions['call-2']->action)->toBe('reject')
         ->and($approval->decisions['call-3']->arguments)->toBe(['path' => '/tmp/file']);
 });
+
+test('decision collections keep a wildcard rejection with a result', function () {
+    $approval = Decision::collection(['*' => Decision::reject('Not now')]);
+
+    expect($approval->decisions['*']->action)->toBe('reject')
+        ->and($approval->decisions['*']->result)->toBe('Not now');
+});
+
+test('decision collections reject a wildcard edit decision', function () {
+    Decision::collection(['*' => Decision::edit(['path' => '/tmp/file'])]);
+})->throws(InvalidArgumentException::class, 'The wildcard decision may not use the edit action.');
+
+test('decision collections reject values that are not decisions or booleans', function () {
+    Decision::collection(['call-1' => 'approve']);
+})->throws(InvalidArgumentException::class, 'Tool approval decisions must be Decision instances or booleans.');
 
 test('agent responses render awaiting approval and complete payloads', function () {
     $pending = new PendingApproval('call-1', 'DeleteFile', ['path' => 'config/app.php'], 'Deletes a file');
@@ -79,9 +69,9 @@ test('structured agent responses render their payload rather than the responsabl
 test('approval overrides take precedence over the tool default', function () {
     $tool = new ApprovableNumberGenerator;
 
-    expect($tool->shouldRequestApproval(new ToolRequest([]))->isRequired())->toBeTrue()
-        ->and($tool->withoutApproval()->shouldRequestApproval(new ToolRequest([]))->isRequired())->toBeFalse()
-        ->and($tool->requireApproval('Dangerous')->shouldRequestApproval(new ToolRequest([]))->isRequired())->toBeTrue()
+    expect($tool->shouldRequestApproval(new ToolRequest([])))->not->toBeNull()
+        ->and($tool->withoutApproval()->shouldRequestApproval(new ToolRequest([])))->toBeNull()
+        ->and($tool->requireApproval('Dangerous')->shouldRequestApproval(new ToolRequest([])))->not->toBeNull()
         ->and($tool->requireApproval('Dangerous')->shouldRequestApproval(new ToolRequest([]))->reason)->toBe('Dangerous');
 });
 
@@ -141,10 +131,19 @@ test('a paused stream dispatches the tool approval requested event', function ()
 test('approval resume prompts can be queued', function () {
     ConversationalAgent::fake();
 
-    (new ConversationalAgent)->queue(ToolApproval::from(['call-1' => true]));
+    (new ConversationalAgent)->queue(Decision::collection(['call-1' => true]));
 
     ConversationalAgent::assertQueued(function ($prompt) {
-        return $prompt->prompt instanceof ToolApproval
-            && $prompt->prompt->decisions['call-1']->action === 'approve';
+        return $prompt->resume?->decisions['call-1']->action === 'approve';
+    });
+});
+
+test('a bare decision widens to every pending call', function () {
+    ConversationalAgent::fake();
+
+    (new ConversationalAgent)->queue(Decision::approve());
+
+    ConversationalAgent::assertQueued(function ($prompt) {
+        return $prompt->resume?->decisions['*']->action === 'approve';
     });
 });

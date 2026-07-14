@@ -1,8 +1,8 @@
 <?php
 
 use Laravel\Ai\Ai;
+use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\PendingApproval;
-use Laravel\Ai\Approvals\ToolApproval;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\QueuedAgentPrompt;
@@ -146,11 +146,10 @@ describe('prompt responses', function () {
         expect($response->awaitingApproval())->toBeTrue()
             ->and($response->pendingApprovals)->toHaveCount(1);
 
-        (new ConversationalAgent)->prompt(ToolApproval::from(['call-1' => true]));
+        (new ConversationalAgent)->prompt(Decision::collection(['call-1' => true]));
 
         ConversationalAgent::assertPrompted(function (AgentPrompt $prompt) {
-            return $prompt->prompt instanceof ToolApproval
-                && $prompt->prompt->decisions['call-1']->action === 'approve';
+            return $prompt->resume?->decisions['call-1']->action === 'approve';
         });
     });
 });
