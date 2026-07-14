@@ -55,6 +55,7 @@ trait StreamsText
 
                 $tools = $this->resolveTools($agent);
                 $approval = $this->resumableApprovalFor($prompt);
+                $onApprovalResolved = $this->approvalResultRecorderFor($prompt);
 
                 // Validate the approval before the SSE response begins so a mismatch can still render as a 409...
                 if ($approval !== null) {
@@ -63,7 +64,7 @@ trait StreamsText
 
                 return new StreamableAgentResponse(
                     $invocationId,
-                    function () use ($invocationId, $prompt, $agent, $messages, $tools, $approval) {
+                    function () use ($invocationId, $prompt, $agent, $messages, $tools, $approval, $onApprovalResolved) {
                         $this->events->dispatch(new StreamingAgent($invocationId, $prompt));
 
                         $this->listenForToolInvocations($invocationId, $agent);
@@ -79,6 +80,7 @@ trait StreamsText
                             TextGenerationOptions::forAgent($agent),
                             $prompt->timeout,
                             $approval,
+                            $onApprovalResolved,
                         ) as $event) {
                             if ($event instanceof ToolApprovalRequest) {
                                 ApprovalNotResumableException::throwUnlessResumable($agent);

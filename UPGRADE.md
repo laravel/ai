@@ -103,31 +103,3 @@ behavior, disable it in your provider configuration:
     'use_native_structured_output' => false,
 ],
 ```
-
-### Agent Responses Are Now Responsable
-
-**Likelihood Of Impact: Medium**
-
-`AgentResponse` now implements `Illuminate\Contracts\Support\Responsable`, so
-returning it directly from a controller renders a JSON payload instead of the
-agent's reply as plain text:
-
-```php
-// Before: the response body was the reply text (text/html)...
-return $agent->forUser($user)->prompt('Summarize this order');
-
-// After: the response body is JSON...
-// {"status": "complete", "conversation_id": "...", "reply": "..."}
-return $agent->forUser($user)->prompt('Summarize this order');
-```
-
-When the run pauses for tool approval, the body is
-`{"status": "awaiting_approval", "conversation_id": "...", "approvals": [...]}`.
-If you relied on the previous plain-text rendering, return the reply explicitly:
-
-```php
-return response((string) $response);
-```
-
-`StructuredAgentResponse` continues to render its structured payload as JSON, so
-structured-output endpoints are unaffected.

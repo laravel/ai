@@ -382,6 +382,30 @@ test('a gate that has relaxed since the pause can still be resumed', function ()
         ->and($response->text)->toBe('done');
 });
 
+test('a relaxed gate with no decision fails closed instead of auto-running the tool', function () {
+    $tool = (new TextGenerationLoopApprovableTool)->withoutApproval();
+    $toolCall = new ToolCall('call-1', TextGenerationLoopApprovableTool::class, ['value' => 'approved'], 'call-1');
+    $gateway = new TextGenerationLoopFakeGateway([
+        new StepResponse('done', [], FinishReason::Stop, new Usage, new Meta('fake', 'model')),
+    ]);
+
+    $response = (new TextGenerationLoop($gateway))->generate(
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [new AssistantMessage('', collect([$toolCall]))],
+        [$tool],
+        null,
+        new TextGenerationOptions(maxSteps: 2),
+        null,
+        Decision::collection([]),
+    );
+
+    // The call was pending, its gate relaxed, and no decision was given, so it must not execute...
+    expect($tool->calls)->toBe(0)
+        ->and($response->toolResults->firstWhere('id', 'call-1')->result)->toBe('This tool call was not approved.');
+});
+
 test('a resumed mixed batch merges its results into the pause turn answering message', function () {
     $gated = new TextGenerationLoopApprovableTool;
     $ungated = new TextGenerationLoopCountingTool;

@@ -32,6 +32,8 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
 
     protected array $thenCallbacks = [];
 
+    protected array $finallyCallbacks = [];
+
     protected bool $usesVercelProtocol = false;
 
     protected ?string $vercelProtocolMessageId = null;
@@ -75,6 +77,23 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
         }
 
         $this->thenCallbacks[] = $callback;
+
+        return $this;
+    }
+
+    /**
+     * Register a callback to run once iteration settles, whether it completes, errors, or is abandoned.
+     */
+    public function finally(callable $callback): self
+    {
+        // If iteration already settled, run now so a late registration is never stranded...
+        if ($this->streamedResponse || count($this->events) > 0) {
+            $callback();
+
+            return $this;
+        }
+
+        $this->finallyCallbacks[] = $callback;
 
         return $this;
     }
@@ -155,37 +174,56 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
             return;
         }
 
-        $events = [];
+        try {
+            $events = [];
 
-        // Resolve the stream of the prompt and yield the events...
-        foreach (call_user_func($this->generator) as $event) {
-            $events[] = $event;
+            // Resolve the stream of the prompt and yield the events...
+            foreach (call_user_func($this->generator) as $event) {
+                $events[] = $event;
 
-            yield $event;
-        }
+                yield $event;
+            }
 
-        $this->events = new Collection($events);
-        $this->text = TextDelta::combine($events);
-        $this->usage = StreamEnd::combineUsage($events);
+            $this->events = new Collection($events);
+            $this->text = TextDelta::combine($events);
+            $this->usage = StreamEnd::combineUsage($events);
 
-        $this->streamedResponse = new StreamedAgentResponse(
-            $this->invocationId,
-            $this->events,
-            $this->meta,
-        );
-
-        if ($this->conversationId !== null) {
-            $this->streamedResponse->withinConversation(
-                $this->conversationId,
-                $this->conversationUser
+            $this->streamedResponse = new StreamedAgentResponse(
+                $this->invocationId,
+                $this->events,
+                $this->meta,
             );
-        }
 
-        foreach ($this->thenCallbacks as $callback) {
-            call_user_func($callback, $this->streamedResponse);
-        }
+            if ($this->conversationId !== null) {
+                $this->streamedResponse->withinConversation(
+                    $this->conversationId,
+                    $this->conversationUser
+                );
+            }
 
-        $this->syncConversationFromStreamedResponse();
+            foreach ($this->thenCallbacks as $callback) {
+                call_user_func($callback, $this->streamedResponse);
+            }
+
+            $this->syncConversationFromStreamedResponse();
+        } finally {
+            // Runs on clean completion, a thrown error, or generator abandonment (client disconnect) so a pause lock is never stranded...
+            $this->runFinallyCallbacks();
+        }
+    }
+
+    /**
+     * Invoke and clear the registered settle callbacks.
+     */
+    protected function runFinallyCallbacks(): void
+    {
+        $callbacks = $this->finallyCallbacks;
+
+        $this->finallyCallbacks = [];
+
+        foreach ($callbacks as $callback) {
+            $callback();
+        }
     }
 
     protected function syncConversationFromStreamedResponse(): void

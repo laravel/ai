@@ -35,6 +35,7 @@ return new class extends AiMigration
             $table->text('tool_results');
             $table->text('usage');
             $table->text('meta');
+            $table->text('approval_state')->nullable();
             $table->timestamps();
 
             $table->index(['conversation_id', 'user_id', 'updated_at'], 'conversation_index');

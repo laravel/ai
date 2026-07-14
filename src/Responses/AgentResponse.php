@@ -2,17 +2,13 @@
 
 namespace Laravel\Ai\Responses;
 
-use Illuminate\Contracts\Support\Responsable;
-use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\Data\Usage;
-use Symfony\Component\HttpFoundation\Response;
 
-class AgentResponse extends TextResponse implements Responsable
+class AgentResponse extends TextResponse
 {
     public string $invocationId;
 
@@ -74,35 +70,10 @@ class AgentResponse extends TextResponse implements Responsable
     }
 
     /**
-     * Create an HTTP response that represents the object.
-     *
-     * @param  Request  $request
+     * Wrap the response in an explicit approval-aware HTTP adapter that renders the JSON envelope.
      */
-    public function toResponse($request): Response
+    public function toApprovalResponse(): ApprovalResponse
     {
-        if ($this->awaitingApproval()) {
-            return response()->json([
-                'status' => 'awaiting_approval',
-                'conversation_id' => $this->conversationId,
-                'approvals' => $this->pendingApprovals->toArray(),
-            ]);
-        }
-
-        $payload = [
-            'status' => 'complete',
-            'conversation_id' => $this->conversationId,
-            'reply' => $this->text,
-        ];
-
-        // A bare rejection stops the loop before any model step, leaving an empty reply; surface only that turn's tool results so a normal completion's internal tool output is never exposed...
-        if (blank($this->text) && $this->toolResults->isNotEmpty() && $this->steps->isEmpty()) {
-            $payload['tool_results'] = $this->toolResults->map(fn (ToolResult $result) => [
-                'id' => $result->id,
-                'tool' => $result->name,
-                'result' => $result->result,
-            ])->values()->toArray();
-        }
-
-        return response()->json($payload);
+        return new ApprovalResponse($this);
     }
 }

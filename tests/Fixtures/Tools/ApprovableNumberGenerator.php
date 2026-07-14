@@ -12,6 +12,8 @@ class ApprovableNumberGenerator implements Approvable, Tool
 {
     use InteractsWithApproval;
 
+    public static int $invocations = 0;
+
     public function description(): string
     {
         return 'Generates a number, but requires human approval first.';
@@ -19,6 +21,8 @@ class ApprovableNumberGenerator implements Approvable, Tool
 
     public function handle(Request $request): string
     {
+        static::$invocations++;
+
         return '72019';
     }
 

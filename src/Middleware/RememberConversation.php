@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Middleware;
 
 use Closure;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Cache\Lock;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -15,9 +16,11 @@ use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\RemembersConversations;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Contracts\VerifiesConversationOwnership;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
+use Laravel\Ai\Responses\StreamableAgentResponse;
 use Throwable;
 
 class RememberConversation
@@ -38,11 +41,18 @@ class RememberConversation
         /** @var Agent&RemembersConversations $agent */
         $agent = $prompt->agent;
 
+        $conversation = $agent->currentConversation();
+
+        // A resume executes gated tools, so verify the conversation belongs to the participant before anything runs...
+        if ($conversation !== null && $prompt->resume !== null && $this->store instanceof VerifiesConversationOwnership
+            && ! $this->store->conversationBelongsTo($conversation, $agent->conversationParticipant()?->id)) {
+            throw new AuthorizationException('This conversation does not belong to the current participant.');
+        }
+
         $lock = null;
 
-        // Lock the pause before executing anything so racing resumes cannot run a gated tool twice...
-        if ($prompt->resume !== null && $agent->currentConversation()) {
-            $lock = Cache::lock('ai:approval-resume:'.$agent->currentConversation(), 300);
+        if ($conversation !== null && $this->requiresPauseLock($prompt, $agent)) {
+            $lock = Cache::lock('ai:approval-resume:'.$conversation, 300);
 
             if (! $lock->get()) {
                 throw new ApprovalMismatchException(
@@ -63,11 +73,31 @@ class RememberConversation
     }
 
     /**
+     * Determine whether the turn must hold the conversation's pause lock.
+     */
+    protected function requiresPauseLock(AgentPrompt $prompt, Agent $agent): bool
+    {
+        if ($prompt->resume !== null) {
+            return true;
+        }
+
+        return $agent instanceof HasTools && $this->pendingApprovalsFor($agent)->isNotEmpty();
+    }
+
+    /**
      * Run the prompt and persist the conversation once it completes.
      */
     protected function remember(AgentPrompt $prompt, Closure $next, ?Lock $lock = null)
     {
-        return $next($prompt)->then(function ($response) use ($prompt, $lock) {
+        $pending = $next($prompt);
+
+        if ($lock !== null && $pending instanceof StreamableAgentResponse) {
+            $pending->finally(fn () => $lock->release());
+
+            $lock = null;
+        }
+
+        return $pending->then(function ($response) use ($prompt, $lock) {
             /** @var Agent&RemembersConversations $agent */
             $agent = $prompt->agent;
 

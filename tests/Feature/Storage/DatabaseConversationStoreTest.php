@@ -217,10 +217,11 @@ test('it replays stored tool conversations before the final assistant response',
         ->and($messages[2]->toolCalls)->toBeEmpty();
 });
 
-test('it replays unresolved tool calls with final assistant text', function () {
+test('it drops unresolved tool calls on an unmarked legacy row keeping the final assistant text', function () {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Tool conversation');
 
+    // A legacy max-steps truncation row: tool_use with no results and no approval_state marker, so it is not a pause awaiting a decision.
     DB::table('agent_conversation_messages')->insert([
         'id' => 'message-1',
         'conversation_id' => $conversationId,
@@ -244,11 +245,10 @@ test('it replays unresolved tool calls with final assistant text', function () {
     expect($messages)->toHaveCount(1)
         ->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
         ->and($messages[0]->content)->toBe('The order has shipped.')
-        ->and($messages[0]->toolCalls)->toHaveCount(1)
-        ->and($messages[0]->toolCalls[0]->id)->toBe('call-1');
+        ->and($messages[0]->toolCalls)->toBeEmpty();
 });
 
-test('it replays unresolved tool calls with no final text', function () {
+test('it drops unresolved tool calls on an unmarked legacy row with no final text', function () {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Tool conversation');
 
@@ -272,11 +272,7 @@ test('it replays unresolved tool calls with no final text', function () {
 
     $messages = $store->getLatestConversationMessages($conversationId, 10);
 
-    expect($messages)->toHaveCount(1)
-        ->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
-        ->and($messages[0]->content)->toBe('')
-        ->and($messages[0]->toolCalls)->toHaveCount(1)
-        ->and($messages[0]->toolCalls[0]->id)->toBe('call-1');
+    expect($messages)->toBeEmpty();
 });
 
 test('it replays a resumed approval so the paused tool_use is answered', function () {
@@ -298,6 +294,7 @@ test('it replays a resumed approval so the paused tool_use is answered', functio
         'tool_results' => '[]',
         'usage' => '[]',
         'meta' => '[]',
+        'approval_state' => json_encode(['version' => 1, 'pending' => ['call-1']]),
         'created_at' => now(),
         'updated_at' => now(),
     ]);
@@ -353,6 +350,7 @@ test('it splits a mid-run pause row so an executed call is answered before the s
         ]),
         'usage' => '[]',
         'meta' => '[]',
+        'approval_state' => json_encode(['version' => 1, 'pending' => ['call-2']]),
         'created_at' => now(),
         'updated_at' => now(),
     ]);
@@ -369,6 +367,44 @@ test('it splits a mid-run pause row so an executed call is answered before the s
         ->and($messages[2]->content)->toBe('Let me delete b too')
         ->and($messages[2]->toolCalls)->toHaveCount(1)
         ->and($messages[2]->toolCalls[0]->id)->toBe('call-2');
+});
+
+test('it preserves provider content blocks when a mixed pause carries an executed and a gated call', function () {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Tool conversation');
+
+    // One turn ran an ungated call (call-1) and paused on a gated call (call-2), with the provider's raw reasoning/signature blocks persisted.
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => 'Let me delete b too',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'a'], 'result_id' => 'result-1'],
+            ['id' => 'call-2', 'name' => 'delete_file', 'arguments' => ['path' => 'b'], 'result_id' => 'result-2'],
+        ]),
+        'tool_results' => json_encode([
+            ['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'a'], 'result' => 'Deleted a', 'result_id' => 'result-1'],
+        ]),
+        'usage' => '[]',
+        'meta' => json_encode(['provider_content_blocks' => [['type' => 'thinking', 'signature' => 'sig-1']]]),
+        'approval_state' => json_encode(['version' => 1, 'pending' => ['call-2']]),
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    // The blocks encode the whole turn, so replay is one assistant message carrying every call plus a result message for the executed call.
+    expect($messages)->toHaveCount(2)
+        ->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[0]->toolCalls->pluck('id')->all())->toBe(['call-1', 'call-2'])
+        ->and($messages[0]->providerContentBlocks)->toBe([['type' => 'thinking', 'signature' => 'sig-1']])
+        ->and($messages[1])->toBeInstanceOf(ToolResultMessage::class)
+        ->and($messages[1]->toolResults[0]->id)->toBe('call-1');
 });
 
 test('it drops a leading orphaned tool_result when the row window splits a pause from its resume', function () {
@@ -419,6 +455,7 @@ test('it merges a re-paused turn text into the new tool_use message rather than 
         'tool_results' => '[]',
         'usage' => '[]',
         'meta' => '[]',
+        'approval_state' => json_encode(['version' => 1, 'pending' => ['call-1']]),
         'created_at' => now(),
         'updated_at' => now(),
     ]);
@@ -439,6 +476,7 @@ test('it merges a re-paused turn text into the new tool_use message rather than 
         ]),
         'usage' => '[]',
         'meta' => '[]',
+        'approval_state' => json_encode(['version' => 1, 'pending' => ['call-2']]),
         'created_at' => now(),
         'updated_at' => now(),
     ]);
@@ -691,6 +729,7 @@ function createConversationSchema(?string $connection = null): void
         $table->text('tool_results');
         $table->text('usage');
         $table->text('meta');
+        $table->text('approval_state')->nullable();
         $table->timestamps();
     });
 }

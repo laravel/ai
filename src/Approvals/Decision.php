@@ -13,10 +13,10 @@ class Decision
      * @param  array<string, Decision>  $decisions  keyed by tool call id when this decision bundles a collection
      */
     private function __construct(
-        public ?string $action = null,
-        public ?string $result = null,
-        public ?array $arguments = null,
-        public array $decisions = [],
+        public readonly ?string $action = null,
+        public readonly ?string $result = null,
+        public readonly ?array $arguments = null,
+        public readonly array $decisions = [],
     ) {}
 
     public static function approve(): self
@@ -26,7 +26,8 @@ class Decision
 
     public static function reject(?string $result = null): self
     {
-        return new self('reject', result: $result);
+        // A whitespace-only reason carries no message for the model, so it behaves as a bare rejection...
+        return new self('reject', result: blank($result) ? null : $result);
     }
 
     /**
@@ -53,6 +54,11 @@ class Decision
                 $decision instanceof self => $decision,
                 default => throw new InvalidArgumentException('Tool approval decisions must be Decision instances or booleans.'),
             };
+
+            // A leaf decision must name a concrete action; a nested collection has none and would otherwise fall through to an approval...
+            if ($decision->isCollection()) {
+                throw new InvalidArgumentException('Tool approval decisions may not nest another decision collection.');
+            }
 
             if ($id === '*' && $decision->isEdited()) {
                 throw new InvalidArgumentException('The wildcard decision may not use the edit action.');
@@ -92,25 +98,38 @@ class Decision
             return null;
         }
 
-        $decisions = collect($message['parts'] ?? [])
-            ->filter(fn ($part) => is_array($part) && ($part['state'] ?? null) === 'approval-responded')
-            ->mapWithKeys(function (array $part) {
-                $reason = $part['approval']['reason'] ?? null;
+        $decisions = [];
 
-                if (! is_string($part['toolCallId'] ?? null)
-                    || ! is_bool($part['approval']['approved'] ?? null)
-                    || ($reason !== null && ! is_string($reason))) {
-                    throw new InvalidArgumentException('Tool approval response parts must contain a tool call id and an approval decision.');
-                }
+        foreach ($message['parts'] ?? [] as $part) {
+            if (! is_array($part) || ($part['state'] ?? null) !== 'approval-responded') {
+                continue;
+            }
 
-                return [
-                    $part['toolCallId'] => $part['approval']['approved']
-                        ? self::approve()
-                        : self::reject($reason),
-                ];
-            });
+            $reason = $part['approval']['reason'] ?? null;
+            $id = $part['toolCallId'] ?? null;
 
-        return $decisions->isEmpty() ? null : self::collection($decisions->all());
+            if (! is_string($id)
+                || ! is_bool($part['approval']['approved'] ?? null)
+                || ($reason !== null && ! is_string($reason))) {
+                throw new InvalidArgumentException('Tool approval response parts must contain a tool call id and an approval decision.');
+            }
+
+            // A client that submits two responses for one call is ambiguous; refuse rather than silently last-win...
+            if (array_key_exists($id, $decisions)) {
+                throw new InvalidArgumentException('Tool approval response parts contain conflicting decisions for the same tool call.');
+            }
+
+            $decisions[$id] = $part['approval']['approved']
+                ? self::approve()
+                : self::reject($reason);
+        }
+
+        return $decisions === [] ? null : self::collection($decisions);
+    }
+
+    public function isApproved(): bool
+    {
+        return $this->action === 'approve';
     }
 
     public function isRejected(): bool
@@ -121,5 +140,13 @@ class Decision
     public function isEdited(): bool
     {
         return $this->action === 'edit';
+    }
+
+    /**
+     * Determine whether this decision bundles a collection rather than naming a single action.
+     */
+    public function isCollection(): bool
+    {
+        return $this->action === null;
     }
 }

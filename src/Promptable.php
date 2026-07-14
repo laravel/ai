@@ -62,13 +62,20 @@ trait Promptable
     {
         [$prompt, $resume] = $this->extractResume($prompt);
 
-        return $this->withModelFailover(
-            fn (TextProvider $provider, string $model) => $provider->prompt(
-                new AgentPrompt($this, $prompt, $attachments, $provider, $model, $this->getTimeout($timeout), resume: $resume)
-            ),
-            $provider,
-            $model,
+        $run = fn (TextProvider $provider, string $model) => $provider->prompt(
+            new AgentPrompt($this, $prompt, $attachments, $provider, $model, $this->getTimeout($timeout), resume: $resume)
         );
+
+        // A resume executes approved tools before the model call, so failing over to another provider would run them again; continue on the pause's provider only...
+        if ($resume !== null) {
+            [$provider, $model] = $this->iterateProvidersWithFailover(
+                $this->getProvidersAndModelsForFailover($provider, $model)
+            )->current();
+
+            return $run($provider, $model);
+        }
+
+        return $this->withModelFailover($run, $provider, $model);
     }
 
     /**
@@ -183,7 +190,18 @@ trait Promptable
             return [$prompt, null];
         }
 
-        return ['', $prompt->action !== null ? Decision::collection(['*' => $prompt]) : $prompt];
+        if ($prompt->isCollection()) {
+            return ['', $prompt];
+        }
+
+        // A bare edit has no id to target, so widening it to a wildcard would always be rejected; ask for a keyed collection instead...
+        if ($prompt->isEdited()) {
+            throw new InvalidArgumentException(
+                'A bare edit decision has no tool call to target; pass Decision::collection([$id => Decision::edit(...)]) instead.'
+            );
+        }
+
+        return ['', Decision::collection(['*' => $prompt])];
     }
 
     /**

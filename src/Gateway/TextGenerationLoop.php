@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway;
 
+use Closure;
 use Generator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -32,6 +33,7 @@ use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Laravel\Ai\Tools\Request;
+use Throwable;
 use WeakMap;
 
 class TextGenerationLoop
@@ -62,6 +64,7 @@ class TextGenerationLoop
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
         ?Decision $approval = null,
+        ?Closure $onApprovalResolved = null,
     ): TextResponse {
         $steps = new Collection;
         $maxSteps = $this->resolveMaxSteps($options, $tools);
@@ -69,11 +72,16 @@ class TextGenerationLoop
         $lastResult = null;
 
         if ($approval !== null) {
-            [$allMessages, $originalMessageCount, $shouldContinue] = $this->resumeFromApproval($approval, $messages, $tools);
+            [$allMessages, $originalMessageCount, $shouldContinue, $approvalResults] = $this->resumeFromApproval($approval, $messages, $tools);
 
             if (! $shouldContinue) {
                 return (new TextResponse('', new Usage, new Meta($provider->name(), $model)))
                     ->withMessages(collect(array_slice($allMessages, $originalMessageCount)));
+            }
+
+            // Commit the resolved results before the model call so a crash or retry cannot run an approved tool a second time...
+            if ($onApprovalResolved !== null && filled($approvalResults)) {
+                $onApprovalResolved($approvalResults);
             }
         } else {
             $allMessages = $this->settleAbandonedToolCalls($messages);
@@ -148,6 +156,7 @@ class TextGenerationLoop
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
         ?Decision $approval = null,
+        ?Closure $onApprovalResolved = null,
     ): Generator {
         $maxSteps = $this->resolveMaxSteps($options, $tools);
         $continuationToken = null;
@@ -156,16 +165,17 @@ class TextGenerationLoop
         $sawError = false;
 
         if ($approval !== null) {
-            [$allMessages, , $shouldContinue, $approvalResults, $rejectedToolCallIds] = $this->resumeFromApproval($approval, $messages, $tools);
+            [$allMessages, , $shouldContinue, $approvalResults, $rejectedToolCallIds, $failedToolCallIds] = $this->resumeFromApproval($approval, $messages, $tools);
 
             foreach ($approvalResults as $toolResult) {
                 $rejected = in_array($toolResult->id, $rejectedToolCallIds, true);
+                $failed = in_array($toolResult->id, $failedToolCallIds, true);
 
                 yield (new ToolResultEvent(
                     strtolower((string) Str::uuid7()),
                     $toolResult,
-                    ! $rejected,
-                    $rejected ? $toolResult->result : null,
+                    ! $rejected && ! $failed,
+                    $rejected || $failed ? $toolResult->result : null,
                     time(),
                     denied: $rejected,
                 ))->withInvocationId($invocationId);
@@ -180,6 +190,11 @@ class TextGenerationLoop
                 ))->withInvocationId($invocationId);
 
                 return;
+            }
+
+            // Commit the resolved results before the model call so a crash or retry cannot run an approved tool a second time...
+            if ($onApprovalResolved !== null && filled($approvalResults)) {
+                $onApprovalResolved($approvalResults);
             }
         } else {
             $allMessages = $this->settleAbandonedToolCalls($messages);
@@ -323,11 +338,7 @@ class TextGenerationLoop
         foreach ($toolCalls as $toolCall) {
             $tool = $this->findTool($toolCall->name, $tools);
 
-            if ($tool === null) {
-                throw new NoSuchToolException($toolCall->name);
-            }
-
-            $approval = $this->approvalForTool($tool, $toolCall);
+            $approval = $tool !== null ? $this->approvalForTool($tool, $toolCall) : null;
 
             if ($approval !== null) {
                 $pendingApprovals->push(new PendingApproval(
@@ -340,6 +351,10 @@ class TextGenerationLoop
                 continue;
             }
 
+            if ($tool === null && ! $isFinalStep) {
+                throw new NoSuchToolException($toolCall->name);
+            }
+
             $resolved[] = [$toolCall, $tool];
         }
 
@@ -349,15 +364,19 @@ class TextGenerationLoop
         }
 
         // Ungated calls run immediately — or, once the step budget is exhausted, receive a placeholder so a trailing tool_use with no matching tool_result doesn't 400 the provider — while gated calls always wait for a decision, since a resume restarts the budget...
-        $toolResults = array_map(fn (array $pair) => new ToolResult(
-            $pair[0]->id,
-            $pair[0]->name,
-            $pair[0]->arguments,
-            $isFinalStep
-                ? 'The agent reached its maximum number of steps without running this tool call.'
-                : $this->executeTool($pair[1], $pair[0]->arguments),
-            $pair[0]->resultId,
-        ), $resolved);
+        $toolResults = array_map(function (array $pair) use ($isFinalStep) {
+            [$toolCall, $tool] = $pair;
+
+            return new ToolResult(
+                $toolCall->id,
+                $toolCall->name,
+                $toolCall->arguments,
+                $isFinalStep || $tool === null
+                    ? 'The agent reached its maximum number of steps without running this tool call.'
+                    : $this->executeTool($tool, $toolCall->arguments, $toolCall->id),
+                $toolCall->resultId,
+            );
+        }, $resolved);
 
         return [$toolResults, $pendingApprovals];
     }
@@ -367,7 +386,7 @@ class TextGenerationLoop
      *
      * @param  Message[]  $messages
      * @param  Tool[]  $tools
-     * @return array{Message[], int, bool, array<int, ToolResult>, array<int, string>}
+     * @return array{Message[], int, bool, array<int, ToolResult>, array<int, string>, array<int, string>}
      */
     protected function resumeFromApproval(Decision $approval, array $messages, array $tools): array
     {
@@ -376,19 +395,19 @@ class TextGenerationLoop
 
         $originalMessageCount = count($messages);
 
-        [$approvalResults, $shouldContinue, $rejectedToolCallIds] = $this->resolveApprovalResults($approval, $messages, $tools);
+        [$approvalResults, $shouldContinue, $rejectedToolCallIds, $failedToolCallIds] = $this->resolveApprovalResults($approval, $messages, $tools);
 
         if (filled($approvalResults)) {
             [$messages, $originalMessageCount] = $this->appendApprovalResults($messages, $approvalResults, $originalMessageCount);
         }
 
-        return [$messages, $originalMessageCount, $shouldContinue, $approvalResults, $rejectedToolCallIds];
+        return [$messages, $originalMessageCount, $shouldContinue, $approvalResults, $rejectedToolCallIds, $failedToolCallIds];
     }
 
     /**
      * @param  Message[]  $messages
      * @param  Tool[]  $tools
-     * @return array{array<int, ToolResult>, bool, array<int, string>}
+     * @return array{array<int, ToolResult>, bool, array<int, string>, array<int, string>}
      */
     protected function resolveApprovalResults(Decision $approval, array $messages, array $tools): array
     {
@@ -401,14 +420,15 @@ class TextGenerationLoop
 
         $toolResults = [];
         $rejectedToolCallIds = [];
+        $failedToolCallIds = [];
         $shouldContinue = false;
         $bareRejection = false;
 
         foreach ($pendingToolCalls as $toolCall) {
-            // The wildcard covers every undecided pending call so a gate that has since relaxed cannot bypass a blanket rejection...
+            // A call surfaced for approval that has no decision and no wildcard fails closed; a gate that has relaxed since the pause must never auto-run without a human decision...
             $decision = $approval->decisions[$toolCall->id]
                 ?? $approval->decisions['*']
-                ?? Decision::approve();
+                ?? Decision::reject('This tool call was not approved.');
 
             if ($decision->isRejected()) {
                 $rejectedToolCallIds[] = $toolCall->id;
@@ -441,18 +461,25 @@ class TextGenerationLoop
                 throw new NoSuchToolException($toolCall->name);
             }
 
+            try {
+                $result = $this->executeTool($tool, $arguments, $toolCall->id);
+            } catch (Throwable $exception) {
+                $failedToolCallIds[] = $toolCall->id;
+                $result = 'The tool call failed: '.$exception->getMessage();
+            }
+
             $toolResults[] = new ToolResult(
                 $toolCall->id,
                 $toolCall->name,
                 $arguments,
-                $this->executeTool($tool, $arguments),
+                $result,
                 $toolCall->resultId,
             );
 
             $shouldContinue = true;
         }
 
-        return [$toolResults, $shouldContinue && ! $bareRejection, $rejectedToolCallIds];
+        return [$toolResults, $shouldContinue && ! $bareRejection, $rejectedToolCallIds, $failedToolCallIds];
     }
 
     /**

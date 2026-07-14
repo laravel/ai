@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Contracts\Support\Responsable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
@@ -36,27 +37,49 @@ test('decision collections reject values that are not decisions or booleans', fu
     Decision::collection(['call-1' => 'approve']);
 })->throws(InvalidArgumentException::class, 'Tool approval decisions must be Decision instances or booleans.');
 
-test('agent responses render awaiting approval and complete payloads', function () {
+test('decision collections reject a nested decision collection so it cannot fall through to approval', function () {
+    Decision::collection(['call-1' => Decision::collection(['call-1' => false])]);
+})->throws(InvalidArgumentException::class, 'Tool approval decisions may not nest another decision collection.');
+
+test('a blank rejection reason is treated as a bare rejection that stops the loop', function () {
+    expect(Decision::reject('')->result)->toBeNull()
+        ->and(Decision::reject('   ')->result)->toBeNull()
+        ->and(Decision::reject('Already handled')->result)->toBe('Already handled');
+});
+
+test('a bare edit decision through prompt asks for a keyed collection instead of a misleading wildcard error', function () {
+    (new RememberingApprovableAgent)->forUser((object) ['id' => 1])->prompt(Decision::edit(['path' => '/tmp/x']));
+})->throws(InvalidArgumentException::class, 'A bare edit decision has no tool call to target');
+
+test('the approval response adapter renders awaiting approval and complete payloads', function () {
     $pending = new PendingApproval('call-1', 'DeleteFile', ['path' => 'config/app.php'], 'Deletes a file');
 
     $paused = AgentResponse::fakeAwaitingApproval([$pending])->withinConversation('conversation-1');
     $complete = (new AgentResponse('invocation-1', 'Done', new Usage, new Meta))->withinConversation('conversation-1');
 
-    expect($paused->toResponse(Request::create('/'))->getData(true))->toBe([
+    expect($paused->toApprovalResponse()->toResponse(Request::create('/'))->getData(true))->toBe([
         'status' => 'awaiting_approval',
         'conversation_id' => 'conversation-1',
         'approvals' => [$pending->toArray()],
-    ])->and($complete->toResponse(Request::create('/'))->getData(true))->toBe([
+    ])->and($complete->toApprovalResponse()->toResponse(Request::create('/'))->getData(true))->toBe([
         'status' => 'complete',
         'conversation_id' => 'conversation-1',
         'reply' => 'Done',
     ]);
 });
 
-test('structured agent responses render their payload rather than the responsable envelope', function () {
+test('agent responses are not globally responsable so a normal reply still renders as text', function () {
+    $response = (new AgentResponse('invocation-1', 'Done', new Usage, new Meta));
+
+    expect($response)->not->toBeInstanceOf(Responsable::class)
+        ->and((string) $response)->toBe('Done');
+});
+
+test('structured agent responses render their payload rather than the approval envelope', function () {
     $response = new StructuredAgentResponse('invocation-1', ['number' => 72019], '72019', new Usage, new Meta);
 
-    expect($response->toResponse(Request::create('/'))->getData(true))->toBe(['number' => 72019]);
+    expect($response->toJson())->toBe(json_encode(['number' => 72019]))
+        ->and($response->toArray())->toBe(['number' => 72019]);
 });
 
 test('approval overrides take precedence over the tool default', function () {

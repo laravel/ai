@@ -14,6 +14,7 @@ use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Contracts\RecordsApprovalResults;
 use Laravel\Ai\Contracts\RemembersConversations as RemembersConversationsContract;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\AgentPrompted;
@@ -80,6 +81,7 @@ trait GeneratesText
                     TextGenerationOptions::forAgent($agent),
                     $prompt->timeout,
                     $this->resumableApprovalFor($prompt),
+                    $this->approvalResultRecorderFor($prompt),
                 );
 
                 if ($response->awaitingApproval()) {
@@ -127,6 +129,32 @@ trait GeneratesText
         }
 
         return $prompt->resume;
+    }
+
+    /**
+     * Get a callback that durably records resolved approval results before the run continues, if the store supports it.
+     */
+    protected function approvalResultRecorderFor(AgentPrompt $prompt): ?Closure
+    {
+        $agent = $prompt->agent;
+
+        if ($prompt->resume === null
+            || Ai::hasFakeGatewayFor($agent::class)
+            || ! in_array(RemembersConversations::class, class_uses_recursive($agent))) {
+            return null;
+        }
+
+        /** @var Agent&RemembersConversationsContract $agent */
+        $store = app(ConversationStore::class);
+
+        if ($agent->currentConversation() === null || ! $store instanceof RecordsApprovalResults) {
+            return null;
+        }
+
+        $conversationId = $agent->currentConversation();
+        $participantId = $agent->conversationParticipant()?->id;
+
+        return fn (array $toolResults) => $store->recordApprovalResults($conversationId, $participantId, $toolResults);
     }
 
     /**

@@ -125,3 +125,22 @@ test('a request with malformed approval parts fails validation instead of crashi
         ]],
     ]));
 })->throws(ValidationException::class);
+
+test('conflicting approval responses for the same tool call fail validation instead of last-winning', function () {
+    Decision::tryFrom(useChatRequest([
+        ['role' => 'assistant', 'parts' => [
+            [
+                'type' => 'tool-DeleteFile',
+                'toolCallId' => 'call-1',
+                'state' => 'approval-responded',
+                'approval' => ['id' => 'call-1', 'approved' => true],
+            ],
+            [
+                'type' => 'tool-DeleteFile',
+                'toolCallId' => 'call-1',
+                'state' => 'approval-responded',
+                'approval' => ['id' => 'call-1', 'approved' => false],
+            ],
+        ]],
+    ]));
+})->throws(ValidationException::class);

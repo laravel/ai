@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Prompts;
 
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -33,6 +34,38 @@ class AgentPrompt extends Prompt
         $this->attachments = Collection::make($attachments);
         $this->timeout = $timeout;
         $this->invocationId = $invocationId;
+    }
+
+    /**
+     * Determine if the prompt contains the given string.
+     */
+    public function contains(string $string): bool
+    {
+        return Str::contains($this->prompt, $string);
+    }
+
+    /**
+     * Prepend to the prompt and return a new prompt instance.
+     */
+    public function prepend(string $prompt): AgentPrompt
+    {
+        return $this->revise($prompt.PHP_EOL.PHP_EOL.$this->prompt);
+    }
+
+    /**
+     * Append to the prompt and return a new prompt instance.
+     */
+    public function append(string $prompt): AgentPrompt
+    {
+        return $this->revise($this->prompt.PHP_EOL.PHP_EOL.$prompt);
+    }
+
+    /**
+     * Add new attachment to the prompt, returning a new prompt instance.
+     */
+    public function withAttachments(Collection|array $attachments): AgentPrompt
+    {
+        return $this->revise($this->prompt, $attachments);
     }
 
     /**
