@@ -126,7 +126,7 @@ When the run pauses for tool approval, the body is
 If you relied on the previous plain-text rendering, return the reply explicitly:
 
 ```php
-return response()->json(['reply' => (string) $response]);
+return response((string) $response);
 ```
 
 `StructuredAgentResponse` continues to render its structured payload as JSON, so
