@@ -4,11 +4,9 @@ use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
-use InvalidArgumentException;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Transcription;
-use LogicException;
 
 beforeEach(function () {
     config(['ai.providers.openrouter' => [

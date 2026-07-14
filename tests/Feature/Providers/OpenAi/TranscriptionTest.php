@@ -18,7 +18,7 @@ test('transcription sends prompt from provider options', function () {
     Http::fake(['*' => fakeOpenAiTranscriptionResponse()]);
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
-        ->providerOptions(['prompt' => 'Laravel Forge and Vapor'])
+        ->withProviderOptions(['prompt' => 'Laravel Forge and Vapor'])
         ->generate(provider: 'openai', model: 'gpt-4o-transcribe');
 
     Http::assertSent(function (Request $request) {
@@ -32,7 +32,7 @@ test('transcription throws when prompt provider option is used with diarized mod
     Http::fake(['*' => fakeOpenAiTranscriptionResponse()]);
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
-        ->providerOptions(['prompt' => 'Laravel Forge and Vapor'])
+        ->withProviderOptions(['prompt' => 'Laravel Forge and Vapor'])
         ->diarize()
         ->generate(provider: 'openai', model: 'gpt-4o-transcribe-diarize');
 })->throws(LogicException::class, 'OpenAI does not support the `prompt` option for diarized transcriptions.');

@@ -105,6 +105,28 @@ test('image size and quality are recorded', function () {
     });
 });
 
+test('image portrait aspect ratio is recorded', function () {
+    Image::fake();
+
+    Image::of('A sunset')->portrait()->generate();
+
+    Image::assertGenerated(function (ImagePrompt $prompt) {
+        return $prompt->prompt === 'A sunset'
+            && $prompt->size === '2:3';
+    });
+});
+
+test('image custom size is recorded', function () {
+    Image::fake();
+
+    Image::of('A sunset')->size('16:9')->generate();
+
+    Image::assertGenerated(function (ImagePrompt $prompt) {
+        return $prompt->prompt === 'A sunset'
+            && $prompt->size === '16:9';
+    });
+});
+
 test('queued images can be faked', function () {
     Image::fake();
 

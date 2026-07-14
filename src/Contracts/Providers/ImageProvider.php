@@ -6,7 +6,7 @@ use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Files\Image;
 use Laravel\Ai\Responses\ImageResponse;
 
-interface ImageProvider
+interface ImageProvider extends Provider
 {
     /**
      * Generate an image.

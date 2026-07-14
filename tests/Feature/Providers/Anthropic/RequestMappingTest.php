@@ -3,8 +3,11 @@
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeAgent;
+use Tests\Fixtures\Agents\AttributeToolChoiceAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
 use Tests\Fixtures\Agents\StructuredWithThinkingAgent;
+use Tests\Fixtures\Agents\ThinkingToolChoiceAgent;
+use Tests\Fixtures\Agents\ToolChoiceAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
 describe('request structure', function () {
@@ -340,5 +343,67 @@ describe('response parsing', function () {
         expect($response->usage)
             ->promptTokens->toBe(25)
             ->completionTokens->toBe(15);
+    });
+});
+
+describe('tool choice', function () {
+    test('required tool choice maps to any', function () {
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeTextResponse('The number is 42'),
+        ]);
+
+        (new ToolChoiceAgent('required'))->prompt('Generate a number', provider: 'anthropic');
+
+        Http::assertSent(function ($request) {
+            return $request->data()['tool_choice'] === ['type' => 'any'];
+        });
+    });
+
+    test('required tool choice can be set via attribute', function () {
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeTextResponse('The number is 42'),
+        ]);
+
+        (new AttributeToolChoiceAgent)->prompt('Generate a number', provider: 'anthropic');
+
+        Http::assertSent(function ($request) {
+            return $request->data()['tool_choice'] === ['type' => 'any'];
+        });
+    });
+
+    test('named tool choice maps to a specific tool', function () {
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeTextResponse('The number is 42'),
+        ]);
+
+        (new ToolChoiceAgent(['tool' => 'custom_named_tool']))->prompt('Generate a number', provider: 'anthropic');
+
+        Http::assertSent(function ($request) {
+            return $request->data()['tool_choice'] === ['type' => 'tool', 'name' => 'custom_named_tool'];
+        });
+    });
+
+    test('none tool choice prevents tool calls', function () {
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeTextResponse('Sure'),
+        ]);
+
+        (new ToolChoiceAgent('none'))->prompt('Just talk', provider: 'anthropic');
+
+        Http::assertSent(function ($request) {
+            return $request->data()['tool_choice'] === ['type' => 'none'];
+        });
+    });
+
+    test('forcing a tool while thinking is enabled throws', function () {
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeTextResponse('The number is 42'),
+        ]);
+
+        expect(fn () => (new ThinkingToolChoiceAgent)->prompt('Generate a number', provider: 'anthropic'))
+            ->toThrow(
+                InvalidArgumentException::class,
+                'Anthropic cannot force tool use while extended thinking is enabled.',
+            );
     });
 });

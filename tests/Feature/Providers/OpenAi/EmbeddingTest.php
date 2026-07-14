@@ -97,7 +97,7 @@ test('embeddings request includes provider options in the request body', functio
     Http::fake(['*' => fakeOpenAiEmbeddingResponse()]);
 
     Embeddings::for(['Hello'])
-        ->providerOptions(['encoding_format' => 'base64', 'user' => 'tester'])
+        ->withProviderOptions(['encoding_format' => 'base64', 'user' => 'tester'])
         ->generate(provider: 'openai', model: 'text-embedding-3-small');
 
     Http::assertSent(function (Request $request) {
@@ -113,7 +113,7 @@ test('provider options cannot override framework controlled keys', function () {
     Http::fake(['*' => fakeOpenAiEmbeddingResponse()]);
 
     Embeddings::for(['Hello'])
-        ->providerOptions(['model' => 'hijacked', 'input' => ['hijacked'], 'dimensions' => 1])
+        ->withProviderOptions(['model' => 'hijacked', 'input' => ['hijacked'], 'dimensions' => 1])
         ->generate(provider: 'openai', model: 'text-embedding-3-small');
 
     Http::assertSent(function (Request $request) {

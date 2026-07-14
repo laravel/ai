@@ -1,6 +1,6 @@
 <?php
 
-namespace Laravel\Ai\Gateway\OpenRouter\Concerns;
+namespace Laravel\Ai\Gateway\OpenAiCompatible\Concerns;
 
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
@@ -9,7 +9,7 @@ use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Responses\Data\ToolCall;
 
-trait MapsMessages
+trait MapsChatCompletionMessages
 {
     /**
      * Map the given Laravel messages to Chat Completions messages format.

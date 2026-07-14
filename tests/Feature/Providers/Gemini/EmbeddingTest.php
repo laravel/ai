@@ -180,7 +180,7 @@ test('embeddings request merges provider options into each per-input request', f
     ]);
 
     Embeddings::for(['Hello', 'World'])
-        ->providerOptions(['taskType' => 'RETRIEVAL_QUERY', 'title' => 'doc'])
+        ->withProviderOptions(['taskType' => 'RETRIEVAL_QUERY', 'title' => 'doc'])
         ->generate(provider: 'gemini', model: 'gemini-embedding-001');
 
     Http::assertSent(function (Request $request) {
@@ -210,7 +210,7 @@ test('gemini provider options cannot override framework controlled per-request k
     ]);
 
     Embeddings::for(['Hello'])
-        ->providerOptions([
+        ->withProviderOptions([
             'model' => 'hijacked',
             'content' => ['hijacked'],
             'output_dimensionality' => 1,

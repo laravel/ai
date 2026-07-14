@@ -2,6 +2,7 @@
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Exceptions\NoSuchToolException;
+use Laravel\Ai\Gateway\TextGenerationLoop;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Responses\StructuredTextResponse;
@@ -39,7 +40,7 @@ describe('tool call loop', function () {
 
         $gateway = $this->gatewayWithClient($client);
 
-        $response = $gateway->generateText(
+        $response = (new TextGenerationLoop($gateway))->generate(
             $this->bedrockProvider(),
             'anthropic.claude-opus-4-7-v1:0',
             null,
@@ -67,7 +68,7 @@ describe('tool call loop', function () {
 
         $gateway = $this->gatewayWithClient($client);
 
-        $response = $gateway->generateText(
+        $response = (new TextGenerationLoop($gateway))->generate(
             $this->bedrockProvider(),
             'anthropic.claude-opus-4-7-v1:0',
             null,
@@ -90,7 +91,7 @@ describe('tool call loop', function () {
 
         $gateway = $this->gatewayWithClient($client);
 
-        expect(fn () => $gateway->generateText(
+        expect(fn () => (new TextGenerationLoop($gateway))->generate(
             $this->bedrockProvider(),
             'anthropic.claude-opus-4-7-v1:0',
             null,
@@ -109,7 +110,7 @@ describe('tool call loop', function () {
 
         $gateway = $this->gatewayWithClient($client);
 
-        $response = $gateway->generateText(
+        $response = (new TextGenerationLoop($gateway))->generate(
             $this->bedrockProvider(),
             'anthropic.claude-opus-4-7-v1:0',
             null,
@@ -144,7 +145,7 @@ describe('tool call loop', function () {
         $gateway = $this->gatewayWithClient($client);
 
         $events = iterator_to_array(
-            $gateway->streamText(
+            (new TextGenerationLoop($gateway))->stream(
                 'inv-1',
                 $this->bedrockProvider(),
                 'anthropic.claude-opus-4-7-v1:0',

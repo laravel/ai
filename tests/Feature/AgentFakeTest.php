@@ -6,13 +6,18 @@ use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\QueuedAgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
+use Laravel\Ai\Streaming\Events\TextStart;
+use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
+use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use PHPUnit\Framework\AssertionFailedError;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\EmptySchemaStructuredAgent;
+use Tests\Fixtures\Agents\MultiStepToolAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
 
 describe('prompt responses', function () {
@@ -159,6 +164,36 @@ describe('stream responses', function () {
 
         expect($response->events)
             ->each(fn ($event) => $event->invocationId->toBe($response->invocationId));
+    });
+
+    test('faked empty response streams without text events', function () {
+        AssistantAgent::fake(['']);
+
+        $response = (new AssistantAgent)->stream('First prompt');
+        $response->each(fn () => true);
+
+        expect($response->text)->toEqual('')
+            ->and($response->events)->toHaveCount(2)
+            ->and(collect($response->events)->contains(fn ($event) => $event instanceof TextStart))->toBeFalse();
+    });
+
+    test('faked tool calls emit a tool call event while streaming', function () {
+        MultiStepToolAgent::fake([
+            new ToolCall('call_123', 'FixedNumberGenerator', []),
+            'The number is 72019.',
+        ]);
+
+        $response = (new MultiStepToolAgent)->stream('Generate a number');
+        $response->each(fn () => true);
+
+        $events = collect($response->events);
+
+        $toolCall = $events->first(fn ($event) => $event instanceof ToolCallEvent);
+
+        expect($toolCall)->not->toBeNull()
+            ->and($toolCall->toolCall->name)->toBe('FixedNumberGenerator')
+            ->and($events->search(fn ($event) => $event instanceof ToolCallEvent))
+            ->toBeLessThan($events->search(fn ($event) => $event instanceof ToolResultEvent));
     });
 });
 
