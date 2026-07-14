@@ -8,6 +8,7 @@ use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\ToolChoice;
 
 trait BuildsTextRequests
 {
@@ -82,7 +83,9 @@ trait BuildsTextRequests
         Provider $provider,
     ): array {
         if (filled($tools)) {
-            $body['tool_choice'] = 'auto';
+            $body['tool_choice'] = $options?->toolChoice
+                ? $this->mapToolChoice($options->toolChoice)
+                : 'auto';
             $body['tools'] = $this->mapTools($tools, $provider);
         }
 
@@ -106,6 +109,22 @@ trait BuildsTextRequests
         }
 
         return $body;
+    }
+
+    /**
+     * Map a tool choice to the xAI Responses tool_choice shape.
+     *
+     * @return string|array<string, mixed>
+     */
+    protected function mapToolChoice(ToolChoice $choice): string|array
+    {
+        return match ($choice->mode) {
+            ToolChoice::auto, ToolChoice::none, ToolChoice::required => $choice->mode,
+            ToolChoice::tool => [
+                'type' => 'function',
+                'name' => $choice->toolName,
+            ],
+        };
     }
 
     /**

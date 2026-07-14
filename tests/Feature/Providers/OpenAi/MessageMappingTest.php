@@ -3,6 +3,7 @@
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\LocalImage;
@@ -317,6 +318,130 @@ test('reasoning blocks are interleaved with associated tool calls on assistant r
             && $call2Index !== false
             && $rs2Index + 1 === $call2Index
             && $call3Index !== false;
+    });
+});
+
+test('image attachment provider options are forwarded to the content part', function () {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiResponse('I see an image'),
+    ]);
+
+    $image = (new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png'))
+        ->withProviderOptions(['detail' => 'low']);
+
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [$image],
+        provider: 'openai',
+    );
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $userMessage = collect($body['input'])->firstWhere('role', 'user');
+        $imageBlock = collect($userMessage['content'])->firstWhere('type', 'input_image');
+
+        return $imageBlock !== null
+            && ($imageBlock['detail'] ?? null) === 'low'
+            && str_starts_with($imageBlock['image_url'], 'data:image/png;base64,');
+    });
+});
+
+test('document attachment provider options are forwarded to the content part', function () {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiResponse('I see a document'),
+    ]);
+
+    $document = Files\Document::fromString('hello world', 'text/plain')
+        ->withProviderOptions(['detail' => 'high']);
+
+    agent('You are helpful.')->prompt(
+        'Read this.',
+        attachments: [$document],
+        provider: 'openai',
+    );
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $userMessage = collect($body['input'])->firstWhere('role', 'user');
+        $fileBlock = collect($userMessage['content'])->firstWhere('type', 'input_file');
+
+        return $fileBlock !== null
+            && ($fileBlock['detail'] ?? null) === 'high'
+            && str_contains($fileBlock['file_data'], base64_encode('hello world'));
+    });
+});
+
+test('attachment provider options resolve from a closure scoped to the provider', function () {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiResponse('I see an image'),
+    ]);
+
+    $image = (new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png'))
+        ->withProviderOptions(fn (Lab $provider) => match ($provider) {
+            Lab::OpenAI => ['detail' => 'low'],
+            default => [],
+        });
+
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [$image],
+        provider: 'openai',
+    );
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $userMessage = collect($body['input'])->firstWhere('role', 'user');
+        $imageBlock = collect($userMessage['content'])->firstWhere('type', 'input_image');
+
+        return $imageBlock !== null
+            && ($imageBlock['detail'] ?? null) === 'low';
+    });
+});
+
+test('attachments without provider options map unchanged', function () {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiResponse('I see an image'),
+    ]);
+
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')],
+        provider: 'openai',
+    );
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $userMessage = collect($body['input'])->firstWhere('role', 'user');
+        $imageBlock = collect($userMessage['content'])->firstWhere('type', 'input_image');
+
+        return $imageBlock !== null
+            && ! array_key_exists('detail', $imageBlock);
+    });
+});
+
+test('provider options cannot overwrite the mapped structural keys', function () {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiResponse('I see an image'),
+    ]);
+
+    $image = (new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png'))
+        ->withProviderOptions(['type' => 'input_text', 'detail' => 'low']);
+
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [$image],
+        provider: 'openai',
+    );
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $userMessage = collect($body['input'])->firstWhere('role', 'user');
+        $imageBlock = collect($userMessage['content'])->firstWhere('type', 'input_image');
+
+        return $imageBlock !== null
+            && $imageBlock['type'] === 'input_image'
+            && ($imageBlock['detail'] ?? null) === 'low'
+            && str_starts_with($imageBlock['image_url'], 'data:image/png;base64,');
     });
 });
 
