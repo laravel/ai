@@ -50,17 +50,17 @@ class RememberConversation
             $this->store->storeUserMessage(
                 $agent->currentConversation(),
                 $participant?->id,
-                $participantType,
                 $prompt,
+                $participantType,
             );
 
             // Record assistant message...
             $this->store->storeAssistantMessage(
                 $agent->currentConversation(),
                 $participant?->id,
-                $participantType,
                 $prompt,
                 $response,
+                $participantType,
             );
 
             $response->withinConversation(

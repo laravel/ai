@@ -131,7 +131,7 @@ test('it stores sparse keyed tool calls and results as JSON arrays', function ()
         8 => new ToolResult('call-2', 'lookup_carrier', ['id' => 1], ['carrier' => 'UPS']),
     ]);
 
-    $store->storeAssistantMessage($conversationId, 1, null, $prompt, $response);
+    $store->storeAssistantMessage($conversationId, 1, $prompt, $response);
 
     $record = DB::table('agent_conversation_messages')
         ->where('role', 'assistant')
@@ -185,7 +185,7 @@ test('it replays stored tool conversations before the final assistant response',
     DB::table('agent_conversation_messages')->insert([
         'id' => 'message-1',
         'conversation_id' => $conversationId,
-        'user_id' => 1,
+        'participant_id' => 1,
         'agent' => ToolUsingAgent::class,
         'role' => 'assistant',
         'content' => 'The order has shipped.',
@@ -224,7 +224,7 @@ test('it drops resultless tool calls and replays only the final assistant text',
     DB::table('agent_conversation_messages')->insert([
         'id' => 'message-1',
         'conversation_id' => $conversationId,
-        'user_id' => 1,
+        'participant_id' => 1,
         'agent' => ToolUsingAgent::class,
         'role' => 'assistant',
         'content' => 'The order has shipped.',
@@ -254,7 +254,7 @@ test('it drops resultless tool calls with no final text entirely', function () {
     DB::table('agent_conversation_messages')->insert([
         'id' => 'message-1',
         'conversation_id' => $conversationId,
-        'user_id' => 1,
+        'participant_id' => 1,
         'agent' => ToolUsingAgent::class,
         'role' => 'assistant',
         'content' => '',
