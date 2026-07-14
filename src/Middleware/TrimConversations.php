@@ -50,7 +50,6 @@ class TrimConversations
 
         $naive = min($count - $this->keep, $count - 1);
 
-
         for ($index = $naive; $index >= 1; $index--) {
             if ($messages[$index]->role === MessageRole::User) {
                 return $index;
