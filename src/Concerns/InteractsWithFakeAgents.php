@@ -84,7 +84,7 @@ trait InteractsWithFakeAgents
         ?string $message = null): self
     {
         $callback = is_string($callback)
-            ? fn ($prompt) => $prompt->prompt === $callback
+            ? fn ($prompt) => $prompt->text() === $callback
             : $callback;
 
         PHPUnit::assertTrue(
@@ -120,7 +120,7 @@ trait InteractsWithFakeAgents
         ?string $message = null): self
     {
         $callback = is_string($callback)
-            ? fn ($prompt) => $prompt->prompt === $callback
+            ? fn ($prompt) => $prompt->text() === $callback
             : $callback;
 
         PHPUnit::assertTrue(

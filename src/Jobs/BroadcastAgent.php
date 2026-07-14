@@ -9,6 +9,7 @@ use Illuminate\Support\Str;
 use Laravel\Ai\Attributes\WithoutBroadcasting;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Throwable;
@@ -25,10 +26,12 @@ class BroadcastAgent implements ShouldQueue
 
     /**
      * Create a new job instance.
+     *
+     * @param  Message[]|string  $prompt
      */
     public function __construct(
         public Agent $agent,
-        public string $prompt,
+        public array|string $prompt,
         public Channel|array $channels,
         public array $attachments = [],
         public Lab|array|string|null $provider = null,

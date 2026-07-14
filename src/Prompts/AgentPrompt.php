@@ -6,6 +6,8 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Messages\Message;
+use Laravel\Ai\Messages\UserMessage;
 
 class AgentPrompt extends Prompt
 {
@@ -17,9 +19,12 @@ class AgentPrompt extends Prompt
 
     public readonly ?string $invocationId;
 
+    /**
+     * @param  Message[]|string  $prompt
+     */
     public function __construct(
         Agent $agent,
-        string $prompt,
+        array|string $prompt,
         Collection|array $attachments,
         TextProvider $provider,
         string $model,
@@ -39,7 +44,7 @@ class AgentPrompt extends Prompt
      */
     public function contains(string $string): bool
     {
-        return Str::contains($this->prompt, $string);
+        return Str::contains($this->text(), $string);
     }
 
     /**
@@ -47,7 +52,7 @@ class AgentPrompt extends Prompt
      */
     public function prepend(string $prompt): AgentPrompt
     {
-        return $this->revise($prompt.PHP_EOL.PHP_EOL.$this->prompt);
+        return $this->revise($prompt.PHP_EOL.PHP_EOL.$this->text());
     }
 
     /**
@@ -55,11 +60,11 @@ class AgentPrompt extends Prompt
      */
     public function append(string $prompt): AgentPrompt
     {
-        return $this->revise($this->prompt.PHP_EOL.PHP_EOL.$prompt);
+        return $this->revise($this->text().PHP_EOL.PHP_EOL.$prompt);
     }
 
     /**
-     * Revise the prompt and return a new prompt instance.
+     * Revise the trailing prompt message and return a new prompt instance.
      */
     public function revise(string $prompt, Collection|array|null $attachments = null): AgentPrompt
     {
@@ -67,9 +72,15 @@ class AgentPrompt extends Prompt
             $attachments = new Collection($attachments);
         }
 
+        $trailing = $this->trailingMessage();
+
+        $revised = $this->hasTranscript()
+            ? [...$this->history(), new UserMessage($prompt, $trailing instanceof UserMessage ? $trailing->attachments : [])]
+            : $prompt;
+
         return new self(
             $this->agent,
-            $prompt,
+            $revised,
             $attachments ?? $this->attachments,
             $this->provider,
             $this->model,
@@ -83,7 +94,7 @@ class AgentPrompt extends Prompt
      */
     public function withAttachments(Collection|array $attachments): AgentPrompt
     {
-        return $this->revise($this->prompt, $attachments);
+        return $this->revise($this->text(), $attachments);
     }
 
     /**

@@ -214,6 +214,39 @@ test('empty tool arguments serialize as object string on assistant replay', func
     });
 });
 
+test('a client-supplied transcript with a tool call/result pair maps to openai format', function () {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiResponse('Sure thing.'),
+    ]);
+
+    (new AssistantAgent)->prompt([
+        new UserMessage('Generate a number'),
+        new AssistantMessage('Rolling.', collect([
+            new ToolCall(id: 'call_1', name: 'FixedNumberGenerator', arguments: [], resultId: 'call_1'),
+        ])),
+        new ToolResultMessage(collect([
+            new ToolResult(id: 'call_1', name: 'FixedNumberGenerator', arguments: [], result: '72019', resultId: 'call_1'),
+        ])),
+        new UserMessage('Thanks, what does that mean?'),
+    ], provider: 'openai');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+        $input = $body['input'];
+
+        $firstUser = collect($input)->firstWhere('role', 'user');
+        $functionCall = collect($input)->firstWhere('type', 'function_call');
+        $functionCallOutput = collect($input)->firstWhere('type', 'function_call_output');
+        $lastUser = collect($input)->where('role', 'user')->last();
+
+        return $firstUser['content'][0]['text'] === 'Generate a number'
+            && $functionCall['call_id'] === 'call_1'
+            && $functionCall['name'] === 'FixedNumberGenerator'
+            && $functionCallOutput['call_id'] === 'call_1'
+            && $lastUser['content'][0]['text'] === 'Thanks, what does that mean?';
+    });
+});
+
 test('non-empty tool arguments preserve shape on assistant replay', function () {
     Http::fake([
         'api.openai.com/*' => fakeOpenAiResponse('hi'),

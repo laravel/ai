@@ -15,13 +15,17 @@ use Laravel\Ai\Attributes\Timeout as TimeoutAttribute;
 use Laravel\Ai\Attributes\UseCheapestModel;
 use Laravel\Ai\Attributes\UseSmartestModel;
 use Laravel\Ai\Attributes\WithoutBroadcasting;
+use Laravel\Ai\Concerns\RemembersConversations;
+use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Contracts\RemembersConversations as RemembersConversationsContract;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Gateway\FakeTextGateway;
 use Laravel\Ai\Jobs\BroadcastAgent;
 use Laravel\Ai\Jobs\InvokeAgent;
+use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\AgentResponse;
@@ -30,6 +34,7 @@ use Laravel\Ai\Responses\QueuedAgentResponse;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Streaming\Events\StreamEvent;
+use LogicException;
 use ReflectionClass;
 use RuntimeException;
 
@@ -51,14 +56,18 @@ trait Promptable
 
     /**
      * Invoke the agent with a given prompt.
+     *
+     * @param  Message[]|string  $prompt
      */
     public function prompt(
-        string $prompt,
+        array|string $prompt,
         array $attachments = [],
         Lab|array|string|null $provider = null,
         ?string $model = null,
         ?int $timeout = null): AgentResponse
     {
+        $this->ensureTranscriptCanBePrompted($prompt);
+
         return $this->withModelFailover(
             fn (TextProvider $provider, string $model) => $provider->prompt(
                 new AgentPrompt($this, $prompt, $attachments, $provider, $model, $this->getTimeout($timeout))
@@ -70,14 +79,18 @@ trait Promptable
 
     /**
      * Invoke the agent with a given prompt and return a streamable response.
+     *
+     * @param  Message[]|string  $prompt
      */
     public function stream(
-        string $prompt,
+        array|string $prompt,
         array $attachments = [],
         Lab|array|string|null $provider = null,
         ?string $model = null,
         ?int $timeout = null): StreamableAgentResponse
     {
+        $this->ensureTranscriptCanBePrompted($prompt);
+
         $providers = $this->getProvidersAndModelsForFailover($provider, $model);
         $resolvedTimeout = $this->getTimeout($timeout);
 
@@ -135,9 +148,13 @@ trait Promptable
 
     /**
      * Invoke the agent in a queued job.
+     *
+     * @param  Message[]|string  $prompt
      */
-    public function queue(string $prompt, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
+    public function queue(array|string $prompt, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
     {
+        $this->ensureTranscriptCanBePrompted($prompt);
+
         if (static::isFaked()) {
             Ai::recordPrompt(
                 new QueuedAgentPrompt($this, $prompt, $attachments, $provider, $model),
@@ -153,8 +170,10 @@ trait Promptable
 
     /**
      * Invoke the agent with a given prompt and broadcast the streamed events.
+     *
+     * @param  Message[]|string  $prompt
      */
-    public function broadcast(string $prompt, Channel|array $channels, array $attachments = [], bool $now = false, Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
+    public function broadcast(array|string $prompt, Channel|array $channels, array $attachments = [], bool $now = false, Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
     {
         $without = WithoutBroadcasting::eventsFor($this);
 
@@ -170,17 +189,23 @@ trait Promptable
 
     /**
      * Invoke the agent with a given prompt and broadcast the streamed events immediately.
+     *
+     * @param  Message[]|string  $prompt
      */
-    public function broadcastNow(string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
+    public function broadcastNow(array|string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
     {
         return $this->broadcast($prompt, $channels, $attachments, now: true, provider: $provider, model: $model);
     }
 
     /**
      * Invoke the agent with a given prompt and broadcast the streamed events.
+     *
+     * @param  Message[]|string  $prompt
      */
-    public function broadcastOnQueue(string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
+    public function broadcastOnQueue(array|string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
     {
+        $this->ensureTranscriptCanBePrompted($prompt);
+
         if (static::isFaked()) {
             Ai::recordPrompt(
                 new QueuedAgentPrompt($this, $prompt, $attachments, $provider, $model),
@@ -192,6 +217,37 @@ trait Promptable
         return new QueuedAgentResponse(
             BroadcastAgent::dispatch($this, $prompt, $channels, $attachments, $provider, $model)
         );
+    }
+
+    /**
+     * Ensure a transcript prompt is not combined with an agent's own conversation history.
+     *
+     * @param  Message[]|string  $prompt
+     */
+    private function ensureTranscriptCanBePrompted(array|string $prompt): void
+    {
+        if (! is_array($prompt)) {
+            return;
+        }
+
+        $this->ensureNoActiveConversation($this);
+    }
+
+    /**
+     * Throw if the given agent uses RemembersConversations and has an active conversation.
+     */
+    private function ensureNoActiveConversation(Agent $agent): void
+    {
+        if (! in_array(RemembersConversations::class, class_uses_recursive($agent))) {
+            return;
+        }
+
+        /** @var Agent&RemembersConversationsContract $agent */
+        if ($agent->hasConversationParticipant()) {
+            throw new LogicException(
+                'A transcript cannot be prompted while the agent has an active RemembersConversations conversation. Drop forUser()/continue() to replay the transcript statelessly.'
+            );
+        }
     }
 
     /**

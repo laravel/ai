@@ -8,7 +8,10 @@ use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Gateway\Anthropic\AnthropicGateway;
 use Laravel\Ai\Messages\AssistantMessage;
+use Laravel\Ai\Messages\ToolResultMessage;
+use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Responses\Data\ToolResult;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
@@ -471,6 +474,40 @@ test('thinking and redacted_thinking blocks are preserved on replay', function (
     $mapped = $method->invoke($gateway, [$assistant]);
 
     expect($mapped[0]['content'])->toBe($contentBlocks);
+});
+
+test('a client-supplied transcript with a tool call/result pair maps to anthropic format', function () {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('Sure thing.'),
+    ]);
+
+    (new AssistantAgent)->prompt([
+        new UserMessage('Generate a number'),
+        new AssistantMessage('Rolling.', collect([
+            new ToolCall(id: 'toolu_1', name: 'FixedNumberGenerator', arguments: []),
+        ])),
+        new ToolResultMessage(collect([
+            new ToolResult(id: 'toolu_1', name: 'FixedNumberGenerator', arguments: [], result: '72019'),
+        ])),
+        new UserMessage('Thanks, what does that mean?'),
+    ], provider: 'anthropic');
+
+    Http::assertSent(function ($request) {
+        $messages = $request->data()['messages'];
+
+        $toolUseBlock = collect($messages[1]['content'])->firstWhere('type', 'tool_use');
+        $toolResultBlock = collect($messages[2]['content'])->firstWhere('type', 'tool_result');
+
+        return $messages[0]['role'] === 'user'
+            && $messages[0]['content'][0]['text'] === 'Generate a number'
+            && $messages[1]['role'] === 'assistant'
+            && $toolUseBlock['id'] === 'toolu_1'
+            && $toolUseBlock['name'] === 'FixedNumberGenerator'
+            && $messages[2]['role'] === 'user'
+            && $toolResultBlock['tool_use_id'] === 'toolu_1'
+            && $messages[3]['role'] === 'user'
+            && $messages[3]['content'][0]['text'] === 'Thanks, what does that mean?';
+    });
 });
 
 test('system instructions are not in messages array', function () {

@@ -6,6 +6,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Messages\Message;
 
 class InvokeAgent implements ShouldQueue
 {
@@ -13,10 +14,12 @@ class InvokeAgent implements ShouldQueue
 
     /**
      * Create a new job instance.
+     *
+     * @param  Message[]|string  $prompt
      */
     public function __construct(
         public Agent $agent,
-        public string $prompt,
+        public array|string $prompt,
         public array $attachments = [],
         public Lab|array|string|null $provider = null,
         public ?string $model = null) {}

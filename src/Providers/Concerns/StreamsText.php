@@ -4,12 +4,10 @@ namespace Laravel\Ai\Providers\Concerns;
 
 use Illuminate\Support\Str;
 use InvalidArgumentException;
-use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Events\AgentStreamed;
 use Laravel\Ai\Events\StreamingAgent;
 use Laravel\Ai\Gateway\TextGenerationOptions;
-use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\StreamableAgentResponse;
@@ -47,10 +45,7 @@ trait StreamsText
                     function () use ($invocationId, $prompt, $agent) {
                         $this->events->dispatch(new StreamingAgent($invocationId, $prompt));
 
-                        $messages = [
-                            ...($agent instanceof Conversational ? $agent->messages() : []),
-                            new UserMessage($prompt->prompt, $prompt->attachments->all()),
-                        ];
+                        $messages = $this->buildMessages($prompt, $agent);
 
                         $this->listenForToolInvocations($invocationId, $agent);
 

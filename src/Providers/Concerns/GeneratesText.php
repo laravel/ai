@@ -4,6 +4,7 @@ namespace Laravel\Ai\Providers\Concerns;
 
 use Closure;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Concerns\RemembersConversations;
@@ -55,10 +56,7 @@ trait GeneratesText
 
                 $agent = $prompt->agent;
 
-                $messages = [
-                    ...($agent instanceof Conversational ? $agent->messages() : []),
-                    new UserMessage($prompt->prompt, $prompt->attachments->all()),
-                ];
+                $messages = $this->buildMessages($prompt, $agent);
 
                 $this->listenForToolInvocations($invocationId, $agent);
 
@@ -90,6 +88,31 @@ trait GeneratesText
         );
 
         return $response;
+    }
+
+    /**
+     * Build the messages to send for the given prompt: transcript history, conversation history, then the trailing user message.
+     */
+    protected function buildMessages(AgentPrompt $prompt, Agent $agent): array
+    {
+        return [
+            ...$prompt->history(),
+            ...($agent instanceof Conversational && ! $prompt->hasTranscript() ? $agent->messages() : []),
+            new UserMessage($prompt->text(), $this->trailingAttachmentsFor($prompt)->all()),
+        ];
+    }
+
+    /**
+     * Get the attachments for the trailing user message, merging any transcript-embedded
+     * attachments with the ones passed at the call site (call-site attachments last).
+     */
+    protected function trailingAttachmentsFor(AgentPrompt $prompt): Collection
+    {
+        $trailing = $prompt->trailingMessage();
+
+        return $trailing instanceof UserMessage
+            ? $trailing->attachments->merge($prompt->attachments)
+            : $prompt->attachments;
     }
 
     /**
