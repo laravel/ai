@@ -143,18 +143,6 @@ test('it stores sparse keyed tool calls and results as JSON arrays', function ()
         ->and(array_is_list(json_decode((string) $record->tool_results, true)))->toBeTrue();
 });
 
-test('a conversation is never owned by a participant-less caller', function (): void {
-    $store = new DatabaseConversationStore;
-
-    $ownedId = $store->storeConversation(1, 'Owned');
-    $guestId = $store->storeConversation(null, 'Guest');
-
-    expect($store->conversationBelongsTo($ownedId, 1))->toBeTrue()
-        ->and($store->conversationBelongsTo($guestId, null))->toBeFalse()
-        ->and($store->conversationBelongsTo($ownedId, null))->toBeFalse()
-        ->and($store->conversationBelongsTo($guestId, 1))->toBeFalse();
-});
-
 test('a bare rejection resume does not persist a blank assistant row', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Approval conversation');

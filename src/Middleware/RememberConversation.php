@@ -3,7 +3,6 @@
 namespace Laravel\Ai\Middleware;
 
 use Closure;
-use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
@@ -29,16 +28,6 @@ class RememberConversation
      */
     public function handle(AgentPrompt $prompt, Closure $next)
     {
-        /** @var Agent&RemembersConversations $agent */
-        $agent = $prompt->agent;
-
-        $conversation = $agent->currentConversation();
-
-        if ($conversation !== null && $prompt->resume !== null
-            && ! $this->store->conversationBelongsTo($conversation, $agent->conversationParticipant()?->id)) {
-            throw new AuthorizationException('This conversation does not belong to the current participant.');
-        }
-
         return $this->remember($prompt, $next);
     }
 

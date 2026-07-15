@@ -34,11 +34,6 @@ class FakeConversationStore implements ConversationStore
         return new Collection;
     }
 
-    public function conversationBelongsTo(string $conversationId, string|int|null $participantId): bool
-    {
-        return true;
-    }
-
     public function storeApprovalResults(string $conversationId, string|int|null $participantId, array $toolResults): void
     {
         //

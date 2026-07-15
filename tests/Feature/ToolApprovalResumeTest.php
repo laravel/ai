@@ -1,6 +1,5 @@
 <?php
 
-use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -312,38 +311,6 @@ test('a streamed resume with mismatched decisions throws before the stream begin
 
     expect($resumed->text)->toBe('The number is 72019.');
 });
-
-test('another participant cannot resume a paused conversation or run its gated tool', function () {
-    Config::set('ai.conversations.generate_title', false);
-
-    Http::fake([
-        'api.anthropic.com/*' => Http::response([
-            'id' => 'msg_tool_1',
-            'type' => 'message',
-            'role' => 'assistant',
-            'model' => 'claude-sonnet-4-6',
-            'content' => [[
-                'type' => 'tool_use',
-                'id' => 'toolu_1',
-                'name' => 'ApprovableNumberGenerator',
-                'input' => (object) [],
-            ]],
-            'stop_reason' => 'tool_use',
-            'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
-        ]),
-    ]);
-
-    $owner = (object) ['id' => 1];
-
-    $paused = (new RememberingApprovableAgent)->forUser($owner)->prompt('Generate a number', provider: 'anthropic');
-
-    $intruder = (object) ['id' => 2];
-
-    expect(fn () => (new RememberingApprovableAgent)
-        ->continue($paused->conversationId, $intruder)
-        ->prompt(['toolu_1' => true], provider: 'anthropic')
-    )->toThrow(AuthorizationException::class);
-})->skip(fn () => ! class_exists(AuthorizationException::class));
 
 test('a resume does not fail over to another provider and re-run the approved tool', function () {
     Config::set('ai.conversations.generate_title', false);

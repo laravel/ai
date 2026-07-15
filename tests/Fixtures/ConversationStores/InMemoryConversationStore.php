@@ -67,12 +67,6 @@ class InMemoryConversationStore implements ConversationStore
             ->values();
     }
 
-    public function conversationBelongsTo(string $conversationId, string|int|null $participantId): bool
-    {
-        return isset($this->conversations[$conversationId])
-            && $this->conversations[$conversationId]['user_id'] == $participantId;
-    }
-
     public function storeApprovalResults(string $conversationId, string|int|null $participantId, array $toolResults): void
     {
         //

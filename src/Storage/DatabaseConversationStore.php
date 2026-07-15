@@ -74,22 +74,6 @@ class DatabaseConversationStore implements ConversationStore
     }
 
     /**
-     * Determine whether the conversation belongs to the given participant.
-     */
-    public function conversationBelongsTo(string $conversationId, string|int|null $participantId): bool
-    {
-        $conversation = $this->table($this->conversationsTable())
-            ->where('id', $conversationId)
-            ->first();
-
-        if ($conversation === null || $conversation->user_id === null || $participantId === null) {
-            return false;
-        }
-
-        return (string) $conversation->user_id === (string) $participantId;
-    }
-
-    /**
      * Get the most recent conversation ID for a given user.
      */
     public function latestConversationId(string|int $userId): ?string
