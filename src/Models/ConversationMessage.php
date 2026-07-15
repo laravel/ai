@@ -34,6 +34,7 @@ class ConversationMessage extends Model
         'tool_results' => 'array',
         'usage' => 'array',
         'meta' => 'array',
+        'approval_state' => 'array',
     ];
 
     /**

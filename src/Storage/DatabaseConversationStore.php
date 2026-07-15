@@ -61,7 +61,9 @@ class DatabaseConversationStore implements ConversationStore
                 json_decode(json_encode($toolResults), true),
             );
 
-            $pending = array_values(array_diff($this->pausedCallIds($row), $resultIds));
+            $pending = collect(((array) json_decode($row->approval_state ?? 'null', true))['pending'] ?? [])
+                ->except($resultIds)
+                ->all();
 
             $this->table($this->messagesTable())
                 ->where('id', $row->id)
@@ -201,7 +203,7 @@ class DatabaseConversationStore implements ConversationStore
         }
 
         return json_encode([
-            'pending' => $response->pendingApprovals->pluck('id')->values()->all(),
+            'pending' => $response->pendingApprovals->mapWithKeys(fn ($approval) => [$approval->id => $approval->reason])->all(),
         ]);
     }
 
@@ -214,7 +216,7 @@ class DatabaseConversationStore implements ConversationStore
     {
         $state = json_decode($record->approval_state ?? 'null', true);
 
-        return is_array($state) && is_array($state['pending'] ?? null) ? $state['pending'] : [];
+        return is_array($state) && is_array($state['pending'] ?? null) ? array_keys($state['pending']) : [];
     }
 
     /**
