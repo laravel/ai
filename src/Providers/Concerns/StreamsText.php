@@ -9,7 +9,6 @@ use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Events\AgentStreamed;
 use Laravel\Ai\Events\StreamingAgent;
 use Laravel\Ai\Events\ToolApprovalRequested;
-use Laravel\Ai\Exceptions\ApprovalNotResumableException;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
@@ -65,7 +64,7 @@ trait StreamsText
                     function () use ($invocationId, $prompt, $agent, $messages, $tools, $approval, $onApprovalResolved) {
                         $this->events->dispatch(new StreamingAgent($invocationId, $prompt));
 
-                        ApprovalNotResumableException::throwUnlessResumable($agent, $tools);
+                        $this->ensureApprovalsAreResumable($agent, $tools);
 
                         $this->listenForToolInvocations($invocationId, $agent);
 

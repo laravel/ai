@@ -280,61 +280,7 @@ class DatabaseConversationStore implements ConversationStore
                 }
 
                 if ($toolCalls->isNotEmpty()) {
-                    $callIds = $toolCalls->pluck('id')->all();
-
-                    [$priorResults, $ownResults] = $toolResults->partition(
-                        fn (array $toolResult) => ! in_array($toolResult['id'], $callIds, true)
-                    );
-
-                    $ownResultIds = $ownResults->pluck('id')->all();
-
-                    [$resolvedCalls, $pendingCalls] = $toolCalls->partition(
-                        fn (array $toolCall) => in_array($toolCall['id'], $ownResultIds, true)
-                    );
-
-                    $pausedCallIds = $this->pausedCallIds($record);
-                    $isPause = $pendingCalls->isNotEmpty()
-                        && $pendingCalls->every(fn (array $toolCall) => in_array($toolCall['id'], $pausedCallIds, true));
-
-                    $messages = [];
-
-                    if ($priorResults->isNotEmpty()) {
-                        $messages[] = new ToolResultMessage($priorResults->map(ToolResult::fromArray(...))->values());
-                    }
-
-                    if (! $isPause) {
-                        if ($resolvedCalls->isNotEmpty()) {
-                            $messages[] = new AssistantMessage('', $resolvedCalls->map(ToolCall::fromArray(...))->values());
-                            $messages[] = new ToolResultMessage($ownResults->map(ToolResult::fromArray(...))->values());
-                        }
-
-                        if (filled($record->content)) {
-                            $messages[] = new AssistantMessage($record->content);
-                        }
-
-                        return $messages;
-                    }
-
-                    $providerContentBlocks = ((array) json_decode($record->meta ?? '[]', true))['provider_content_blocks'] ?? [];
-
-                    if (filled($providerContentBlocks)) {
-                        $messages[] = new AssistantMessage($record->content, $toolCalls->map(ToolCall::fromArray(...))->values(), $providerContentBlocks);
-
-                        if ($ownResults->isNotEmpty()) {
-                            $messages[] = new ToolResultMessage($ownResults->map(ToolResult::fromArray(...))->values());
-                        }
-
-                        return $messages;
-                    }
-
-                    if ($resolvedCalls->isNotEmpty()) {
-                        $messages[] = new AssistantMessage('', $resolvedCalls->map(ToolCall::fromArray(...))->values());
-                        $messages[] = new ToolResultMessage($ownResults->map(ToolResult::fromArray(...))->values());
-                    }
-
-                    $messages[] = new AssistantMessage($record->content, $pendingCalls->map(ToolCall::fromArray(...))->values());
-
-                    return $messages;
+                    return $this->reconstructToolTurn($record, $toolCalls, $toolResults);
                 }
 
                 if ($toolResults->isNotEmpty()) {
@@ -351,6 +297,66 @@ class DatabaseConversationStore implements ConversationStore
             })
             ->skipWhile(fn (Message $message) => $message instanceof ToolResultMessage)
             ->values();
+    }
+
+    /**
+     * Rebuild the messages for a stored assistant turn that made tool calls, keeping a pause distinct from a completed turn.
+     *
+     * @param  Collection<int, array<string, mixed>>  $toolCalls
+     * @param  Collection<int, array<string, mixed>>  $toolResults
+     * @return array<int, Message>
+     */
+    protected function reconstructToolTurn(object $record, Collection $toolCalls, Collection $toolResults): array
+    {
+        $callIds = $toolCalls->pluck('id')->all();
+
+        [$priorResults, $ownResults] = $toolResults->partition(
+            fn (array $toolResult) => ! in_array($toolResult['id'], $callIds, true)
+        );
+
+        $ownResultIds = $ownResults->pluck('id')->all();
+
+        [$resolvedCalls, $pendingCalls] = $toolCalls->partition(
+            fn (array $toolCall) => in_array($toolCall['id'], $ownResultIds, true)
+        );
+
+        $pausedCallIds = $this->pausedCallIds($record);
+
+        $isPause = $pendingCalls->isNotEmpty()
+            && $pendingCalls->every(fn (array $toolCall) => in_array($toolCall['id'], $pausedCallIds, true));
+
+        $messages = [];
+
+        if ($priorResults->isNotEmpty()) {
+            $messages[] = new ToolResultMessage($priorResults->map(ToolResult::fromArray(...))->values());
+        }
+
+        $providerContentBlocks = ((array) json_decode($record->meta ?? '[]', true))['provider_content_blocks'] ?? [];
+
+        if ($isPause && filled($providerContentBlocks)) {
+            $messages[] = new AssistantMessage($record->content, $toolCalls->map(ToolCall::fromArray(...))->values(), $providerContentBlocks);
+
+            if ($ownResults->isNotEmpty()) {
+                $messages[] = new ToolResultMessage($ownResults->map(ToolResult::fromArray(...))->values());
+            }
+
+            return $messages;
+        }
+
+        // Calls already answered this turn are replayed with their results.
+        if ($resolvedCalls->isNotEmpty()) {
+            $messages[] = new AssistantMessage('', $resolvedCalls->map(ToolCall::fromArray(...))->values());
+            $messages[] = new ToolResultMessage($ownResults->map(ToolResult::fromArray(...))->values());
+        }
+
+        // The answering turn keeps its still-pending calls when paused, or is plain text when complete.
+        if ($isPause) {
+            $messages[] = new AssistantMessage($record->content, $pendingCalls->map(ToolCall::fromArray(...))->values());
+        } elseif (filled($record->content)) {
+            $messages[] = new AssistantMessage($record->content);
+        }
+
+        return $messages;
     }
 
     protected function rehydrateAttachments(string $attachments): Collection

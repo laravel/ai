@@ -9,6 +9,7 @@ use Laravel\Ai\Ai;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\HasMiddleware;
@@ -73,7 +74,7 @@ trait GeneratesText
 
                 $tools = $this->resolveTools($agent);
 
-                ApprovalNotResumableException::throwUnlessResumable($agent, $tools);
+                $this->ensureApprovalsAreResumable($agent, $tools);
 
                 $response = $this->textGenerationLoop()->generate(
                     $this,
@@ -157,6 +158,41 @@ trait GeneratesText
         $participantId = $agent->conversationParticipant()?->id;
 
         return fn (array $toolResults) => $store->storeApprovalResults($conversationId, $participantId, $toolResults);
+    }
+
+    /**
+     * Fail before a run begins when a non-resumable agent carries a tool that could pause for approval.
+     *
+     * @param  Tool[]  $tools
+     */
+    protected function ensureApprovalsAreResumable(Agent $agent, array $tools): void
+    {
+        if ($this->agentCanResumeApprovals($agent)) {
+            return;
+        }
+
+        foreach ($tools as $tool) {
+            if ($tool instanceof Approvable && $tool->mayRequireApproval()) {
+                throw ApprovalNotResumableException::make();
+            }
+        }
+    }
+
+    /**
+     * Determine whether the given agent can resume a paused approval from persisted history.
+     */
+    protected function agentCanResumeApprovals(Agent $agent): bool
+    {
+        if (! $agent instanceof Conversational) {
+            return false;
+        }
+
+        if (! in_array(RemembersConversations::class, class_uses_recursive($agent), true)) {
+            return true;
+        }
+
+        /** @var Agent&RemembersConversationsContract $agent */
+        return $agent->hasConversationParticipant();
     }
 
     /**
