@@ -290,7 +290,7 @@ class TextGenerationLoop
             return max(1, $options->maxSteps);
         }
 
-        return count($tools) > 0 ? (int) round(count($tools) * 1.5) : 5;
+        return $tools !== [] ? (int) round(count($tools) * 1.5) : 5;
     }
 
     /**
@@ -712,7 +712,7 @@ class TextGenerationLoop
         $finalStep = $steps->last();
 
         $totalUsage = $steps->reduce(
-            fn (Usage $carry, Step $step) => $carry->add($step->usage),
+            fn (Usage $carry, Step $step): Usage => $carry->add($step->usage),
             new Usage,
         );
 
@@ -725,10 +725,10 @@ class TextGenerationLoop
                 $totalUsage,
                 $finalStep->meta,
             ))->withToolCallsAndResults(
-                toolCalls: $steps->flatMap(fn (Step $s) => $s->toolCalls),
+                toolCalls: $steps->flatMap(fn (Step $s): array => $s->toolCalls),
                 toolResults: $newMessages
                     ->whereInstanceOf(ToolResultMessage::class)
-                    ->flatMap(fn (ToolResultMessage $message) => $message->toolResults),
+                    ->flatMap(fn (ToolResultMessage $message): Collection => $message->toolResults),
             )->withSteps($steps);
         }
 

@@ -26,7 +26,7 @@ function fakeVoyageBaseUrlRerankingResponse(): PromiseInterface
     ]);
 }
 
-test('voyageai embedding requests use the configured base url', function () {
+test('voyageai embedding requests use the configured base url', function (): void {
     config(['ai.providers.voyageai' => [
         ...config('ai.providers.voyageai'),
         'key' => 'test-key',
@@ -37,10 +37,10 @@ test('voyageai embedding requests use the configured base url', function () {
 
     Embeddings::for(['Hello'])->generate(provider: 'voyageai', model: 'voyage-4');
 
-    Http::assertSent(fn (Request $r) => $r->url() === 'http://localhost:8080/v1/embeddings');
+    Http::assertSent(fn (Request $r): bool => $r->url() === 'http://localhost:8080/v1/embeddings');
 });
 
-test('voyageai reranking requests use the configured base url', function () {
+test('voyageai reranking requests use the configured base url', function (): void {
     config(['ai.providers.voyageai' => [
         ...config('ai.providers.voyageai'),
         'key' => 'test-key',
@@ -51,10 +51,10 @@ test('voyageai reranking requests use the configured base url', function () {
 
     Reranking::of(['doc1'])->rerank('What is AI?', provider: 'voyageai', model: 'rerank-2.5-lite');
 
-    Http::assertSent(fn (Request $r) => $r->url() === 'http://localhost:8080/v1/rerank');
+    Http::assertSent(fn (Request $r): bool => $r->url() === 'http://localhost:8080/v1/rerank');
 });
 
-test('voyageai requests fall back to the default base url', function () {
+test('voyageai requests fall back to the default base url', function (): void {
     config(['ai.providers.voyageai' => array_diff_key(
         [...config('ai.providers.voyageai'), 'key' => 'test-key'],
         ['url' => null],
@@ -64,5 +64,5 @@ test('voyageai requests fall back to the default base url', function () {
 
     Embeddings::for(['Hello'])->generate(provider: 'voyageai', model: 'voyage-4');
 
-    Http::assertSent(fn (Request $r) => $r->url() === 'https://api.voyageai.com/v1/embeddings');
+    Http::assertSent(fn (Request $r): bool => $r->url() === 'https://api.voyageai.com/v1/embeddings');
 });

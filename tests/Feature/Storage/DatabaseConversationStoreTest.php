@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -22,7 +23,7 @@ use Laravel\Ai\Storage\DatabaseConversationStore;
 use Tests\Fixtures\Agents\RememberingToolUsingAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
-test('it writes conversations to the default tables', function () {
+test('it writes conversations to the default tables', function (): void {
     $store = new DatabaseConversationStore;
 
     $conversationId = $store->storeConversation(1, 'Hello');
@@ -30,7 +31,7 @@ test('it writes conversations to the default tables', function () {
     expect(DB::table('agent_conversations')->where('id', $conversationId)->where('title', 'Hello')->exists())->toBeTrue();
 });
 
-test('it writes to overridden table names from config', function () {
+test('it writes to overridden table names from config', function (): void {
     Config::set('ai.conversations.tables.conversations', 'custom_conversations');
     Config::set('ai.conversations.tables.messages', 'custom_conversation_messages');
 
@@ -43,7 +44,7 @@ test('it writes to overridden table names from config', function () {
         ->and(DB::table('agent_conversations')->where('id', $conversationId)->exists())->toBeFalse();
 });
 
-test('it routes queries through the configured connection', function () {
+test('it routes queries through the configured connection', function (): void {
     Config::set('database.connections.secondary', [
         'driver' => 'sqlite',
         'database' => ':memory:',
@@ -60,7 +61,7 @@ test('it routes queries through the configured connection', function () {
         ->and(DB::table('agent_conversations')->where('id', $conversationId)->exists())->toBeFalse();
 });
 
-test('it persists tool calls and results from a remembered agent prompt', function () {
+test('it persists tool calls and results from a remembered agent prompt', function (): void {
     Http::fake([
         '*' => Http::sequence([
             Http::response([
@@ -105,11 +106,11 @@ test('it persists tool calls and results from a remembered agent prompt', functi
         ->where('role', 'assistant')
         ->first();
 
-    expect(json_decode($record->tool_calls, true))->toBeList()
-        ->and(json_decode($record->tool_results, true))->toBeList();
+    expect(json_decode((string) $record->tool_calls, true))->toBeList()
+        ->and(json_decode((string) $record->tool_results, true))->toBeList();
 });
 
-test('it stores sparse keyed tool calls and results as JSON arrays', function () {
+test('it stores sparse keyed tool calls and results as JSON arrays', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Tool conversation');
 
@@ -137,11 +138,11 @@ test('it stores sparse keyed tool calls and results as JSON arrays', function ()
         ->where('role', 'assistant')
         ->first();
 
-    expect(array_is_list(json_decode($record->tool_calls, true)))->toBeTrue()
-        ->and(array_is_list(json_decode($record->tool_results, true)))->toBeTrue();
+    expect(array_is_list(json_decode((string) $record->tool_calls, true)))->toBeTrue()
+        ->and(array_is_list(json_decode((string) $record->tool_results, true)))->toBeTrue();
 });
 
-test('it reloads legacy sparse keyed tool calls and results as lists', function () {
+test('it reloads legacy sparse keyed tool calls and results as lists', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Tool conversation');
 
@@ -178,7 +179,7 @@ test('it reloads legacy sparse keyed tool calls and results as lists', function 
         ->and($messages[2]->content)->toBe('The order has shipped.');
 });
 
-test('it replays stored tool conversations before the final assistant response', function () {
+test('it replays stored tool conversations before the final assistant response', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Tool conversation');
 
@@ -217,7 +218,7 @@ test('it replays stored tool conversations before the final assistant response',
         ->and($messages[2]->toolCalls)->toBeEmpty();
 });
 
-test('it drops unresolved tool calls on an unmarked legacy row keeping the final assistant text', function () {
+test('it drops unresolved tool calls on an unmarked legacy row keeping the final assistant text', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Tool conversation');
 
@@ -247,7 +248,7 @@ test('it drops unresolved tool calls on an unmarked legacy row keeping the final
         ->and($messages[0]->toolCalls)->toBeEmpty();
 });
 
-test('it drops unresolved tool calls on an unmarked legacy row with no final text', function () {
+test('it drops unresolved tool calls on an unmarked legacy row with no final text', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Tool conversation');
 
@@ -274,7 +275,7 @@ test('it drops unresolved tool calls on an unmarked legacy row with no final tex
     expect($messages)->toBeEmpty();
 });
 
-test('it replays a resumed approval so the paused tool_use is answered', function () {
+test('it replays a resumed approval so the paused tool_use is answered', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Tool conversation');
 
@@ -326,7 +327,7 @@ test('it replays a resumed approval so the paused tool_use is answered', functio
         ->and($messages[2]->content)->toBe('Deleted x');
 });
 
-test('it splits a mid-run pause row so an executed call is answered before the still-pending call', function () {
+test('it splits a mid-run pause row so an executed call is answered before the still-pending call', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Tool conversation');
 
@@ -366,7 +367,7 @@ test('it splits a mid-run pause row so an executed call is answered before the s
         ->and($messages[2]->toolCalls[0]->id)->toBe('call-2');
 });
 
-test('it preserves provider content blocks when a mixed pause carries an executed and a gated call', function () {
+test('it preserves provider content blocks when a mixed pause carries an executed and a gated call', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Tool conversation');
 
@@ -402,7 +403,7 @@ test('it preserves provider content blocks when a mixed pause carries an execute
         ->and($messages[1]->toolResults[0]->id)->toBe('call-1');
 });
 
-test('it drops a leading orphaned tool_result when the row window splits a pause from its resume', function () {
+test('it drops a leading orphaned tool_result when the row window splits a pause from its resume', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Tool conversation');
 
@@ -431,7 +432,7 @@ test('it drops a leading orphaned tool_result when the row window splits a pause
         ->and($messages[0]->content)->toBe('Deleted a');
 });
 
-test('it merges a re-paused turn text into the new tool_use message rather than emitting two assistant messages', function () {
+test('it merges a re-paused turn text into the new tool_use message rather than emitting two assistant messages', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Tool conversation');
 
@@ -487,7 +488,7 @@ test('it merges a re-paused turn text into the new tool_use message rather than 
         ->and($messages[2]->toolCalls[0]->id)->toBe('call-2');
 });
 
-test('it rehydrates reasoning encrypted content on stored tool calls', function () {
+test('it rehydrates reasoning encrypted content on stored tool calls', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Reasoning conversation');
 
@@ -525,7 +526,7 @@ test('it rehydrates reasoning encrypted content on stored tool calls', function 
         ->reasoningEncryptedContent->toBe('enc-blob-1');
 });
 
-test('it rehydrates legacy tool calls that predate reasoning encrypted content', function () {
+test('it rehydrates legacy tool calls that predate reasoning encrypted content', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Legacy conversation');
 
@@ -557,7 +558,7 @@ test('it rehydrates legacy tool calls that predate reasoning encrypted content',
         ->reasoningEncryptedContent->toBeNull();
 });
 
-test('user messages with stored attachments are rehydrated as UserMessage', function () {
+test('user messages with stored attachments are rehydrated as UserMessage', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Attachment conversation');
 
@@ -589,7 +590,7 @@ test('user messages with stored attachments are rehydrated as UserMessage', func
         ->and($messages[0]->attachments->first()->url)->toBe('https://example.com/photo.jpg');
 });
 
-test('user messages with multiple attachment types are all rehydrated', function () {
+test('user messages with multiple attachment types are all rehydrated', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Multi-attachment conversation');
 
@@ -621,7 +622,7 @@ test('user messages with multiple attachment types are all rehydrated', function
         ->and($messages[0]->attachments[1]->path)->toBe('docs/report.pdf');
 });
 
-test('user messages with no attachments are returned as plain Message', function () {
+test('user messages with no attachments are returned as plain Message', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Plain conversation');
 
@@ -647,7 +648,7 @@ test('user messages with no attachments are returned as plain Message', function
         ->and($messages[0])->not->toBeInstanceOf(UserMessage::class);
 });
 
-test('malformed stored attachment JSON fails loudly', function () {
+test('malformed stored attachment JSON fails loudly', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Malformed attachment conversation');
 
@@ -667,11 +668,11 @@ test('malformed stored attachment JSON fails loudly', function () {
         'updated_at' => now(),
     ]);
 
-    expect(fn () => $store->getLatestConversationMessages($conversationId, 10))
+    expect(fn (): Collection => $store->getLatestConversationMessages($conversationId, 10))
         ->toThrow(InvalidArgumentException::class, 'Stored conversation attachments must be a JSON array.');
 });
 
-test('malformed known stored attachments fail loudly', function () {
+test('malformed known stored attachments fail loudly', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Malformed attachment conversation');
 
@@ -693,7 +694,7 @@ test('malformed known stored attachments fail loudly', function () {
         'updated_at' => now(),
     ]);
 
-    expect(fn () => $store->getLatestConversationMessages($conversationId, 10))
+    expect(fn (): Collection => $store->getLatestConversationMessages($conversationId, 10))
         ->toThrow(InvalidArgumentException::class, 'Cannot reconstruct [remote-image] attachment because [url] is missing or invalid.');
 });
 
@@ -704,14 +705,14 @@ function createConversationSchema(?string $connection = null): void
     $conversationsTable = config('ai.conversations.tables.conversations', 'agent_conversations');
     $messagesTable = config('ai.conversations.tables.messages', 'agent_conversation_messages');
 
-    $schema->create($conversationsTable, function (Blueprint $table) {
+    $schema->create($conversationsTable, function (Blueprint $table): void {
         $table->string('id', 36)->primary();
         $table->foreignId('user_id')->nullable();
         $table->string('title');
         $table->timestamps();
     });
 
-    $schema->create($messagesTable, function (Blueprint $table) {
+    $schema->create($messagesTable, function (Blueprint $table): void {
         $table->string('id', 36)->primary();
         $table->string('conversation_id', 36)->index();
         $table->foreignId('user_id')->nullable();

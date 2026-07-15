@@ -41,7 +41,7 @@ trait InvokesTools
 
             return (string) tap(
                 $tool->handle(new Request($arguments, $toolCallId)),
-                fn ($result) => call_user_func($callbacks['invoked'], $tool, $arguments, $result)
+                fn ($result): mixed => call_user_func($callbacks['invoked'], $tool, $arguments, $result)
             );
         } finally {
             $this->popToolInvocationCallbacks();
@@ -67,8 +67,8 @@ trait InvokesTools
      */
     protected function initializeToolCallbacks(): void
     {
-        $this->invokingToolCallback ??= fn () => true;
-        $this->toolInvokedCallback ??= fn () => true;
+        $this->invokingToolCallback ??= fn (): true => true;
+        $this->toolInvokedCallback ??= fn (): true => true;
     }
 
     /**

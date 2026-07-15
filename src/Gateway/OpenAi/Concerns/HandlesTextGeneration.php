@@ -169,8 +169,8 @@ trait HandlesTextGeneration
                 }
             }
 
-            if (str_starts_with($type, 'response.') && str_contains($type, '_call.')) {
-                $parts = explode('.', $type, 3);
+            if (str_starts_with((string) $type, 'response.') && str_contains((string) $type, '_call.')) {
+                $parts = explode('.', (string) $type, 3);
 
                 if (count($parts) === 3 && str_ends_with($parts[1], '_call')) {
                     yield (new ProviderToolEvent(
@@ -218,6 +218,7 @@ trait HandlesTextGeneration
                         break;
                     }
                 }
+
                 unset($call);
 
                 continue;

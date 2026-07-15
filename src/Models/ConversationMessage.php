@@ -2,18 +2,13 @@
 
 namespace Laravel\Ai\Models;
 
+use Illuminate\Database\Eloquent\Attributes\WithoutIncrementing;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+#[WithoutIncrementing]
 class ConversationMessage extends Model
 {
-    /**
-     * Indicates if the model's ID is auto-incrementing.
-     *
-     * @var bool
-     */
-    public $incrementing = false;
-
     /**
      * The data type of the primary key ID.
      *
@@ -54,6 +49,7 @@ class ConversationMessage extends Model
     /**
      * Get the table associated with the model.
      */
+    #[\Override]
     public function getTable(): string
     {
         return config('ai.conversations.tables.messages', 'agent_conversation_messages');
@@ -62,6 +58,7 @@ class ConversationMessage extends Model
     /**
      * Get the database connection for the model.
      */
+    #[\Override]
     public function getConnectionName(): ?string
     {
         return config('ai.conversations.connection');

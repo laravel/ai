@@ -15,7 +15,7 @@ function bedrockClientTrait(): object
     };
 }
 
-test('bearer token credentials use http bearer auth scheme', function () {
+test('bearer token credentials use http bearer auth scheme', function (): void {
     $config = bedrockClientTrait()->resolve(
         ['key' => 'bedrock-token'],
         [],
@@ -27,7 +27,7 @@ test('bearer token credentials use http bearer auth scheme', function () {
     ]);
 });
 
-test('bearer token takes priority over iam credentials', function () {
+test('bearer token takes priority over iam credentials', function (): void {
     $config = bedrockClientTrait()->resolve(
         [
             'key' => 'bedrock-token',
@@ -41,7 +41,7 @@ test('bearer token takes priority over iam credentials', function () {
         ->and($config)->not->toHaveKey('credentials');
 });
 
-test('iam credentials produce key and secret', function () {
+test('iam credentials produce key and secret', function (): void {
     $config = bedrockClientTrait()->resolve(
         [
             'access_key_id' => 'AKIA123',
@@ -58,7 +58,7 @@ test('iam credentials produce key and secret', function () {
     ]);
 });
 
-test('session token is included when provided with iam credentials', function () {
+test('session token is included when provided with iam credentials', function (): void {
     $config = bedrockClientTrait()->resolve(
         [
             'access_key_id' => 'AKIA123',
@@ -75,13 +75,13 @@ test('session token is included when provided with iam credentials', function ()
     ]);
 });
 
-test('empty credentials with default provider enabled returns empty config', function () {
+test('empty credentials with default provider enabled returns empty config', function (): void {
     $config = bedrockClientTrait()->resolve([], []);
 
     expect($config)->toEqual([]);
 });
 
-test('empty credentials with default provider disabled returns false credentials', function () {
+test('empty credentials with default provider disabled returns false credentials', function (): void {
     $config = bedrockClientTrait()->resolve(
         [],
         ['use_default_credential_provider' => false],
@@ -90,7 +90,7 @@ test('empty credentials with default provider disabled returns false credentials
     expect($config)->toEqual(['credentials' => false]);
 });
 
-test('partial iam credentials fall back to default provider', function () {
+test('partial iam credentials fall back to default provider', function (): void {
     $config = bedrockClientTrait()->resolve(
         ['access_key_id' => 'AKIA123'],
         [],

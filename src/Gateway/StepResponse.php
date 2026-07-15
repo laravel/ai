@@ -38,7 +38,7 @@ class StepResponse implements Arrayable, JsonSerializable
         return [
             'text' => $this->text,
             'structured' => $this->structured,
-            'tool_calls' => array_map(fn (ToolCall $tc) => $tc->toArray(), $this->toolCalls),
+            'tool_calls' => array_map(fn (ToolCall $tc): array => $tc->toArray(), $this->toolCalls),
             'provider_content_blocks' => $this->providerContentBlocks,
             'finish_reason' => $this->finishReason->value,
             'usage' => $this->usage->toArray(),

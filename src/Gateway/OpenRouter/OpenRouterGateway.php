@@ -106,7 +106,7 @@ class OpenRouterGateway implements Gateway, StepTextGateway
 
         $message = $data['choices'][0]['message'] ?? [];
 
-        $images = collect($message['images'] ?? [])->map(function (array $image) {
+        $images = collect($message['images'] ?? [])->map(function (array $image): ?GeneratedImage {
             $url = $image['image_url']['url'] ?? '';
 
             if (preg_match('/^data:(image\/[\w+.-]+);base64,(.+)$/', $url, $matches)) {
@@ -132,7 +132,7 @@ class OpenRouterGateway implements Gateway, StepTextGateway
      */
     protected function buildImageMessages(string $prompt, array $attachments): array
     {
-        if (empty($attachments)) {
+        if ($attachments === []) {
             return [['role' => 'user', 'content' => $prompt]];
         }
 

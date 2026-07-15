@@ -29,6 +29,7 @@ use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Responses\StructuredTextResponse;
+use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Tools\AgentTool;
 use Laravel\Ai\Tools\McpServerTool;
 use Laravel\Ai\Tools\McpTool;
@@ -51,7 +52,7 @@ trait GeneratesText
         $response = pipeline()
             ->send($prompt)
             ->through($this->gatherMiddlewareFor($prompt->agent))
-            ->then(function (AgentPrompt $prompt) use ($invocationId, &$processedPrompt) {
+            ->then(function (AgentPrompt $prompt) use ($invocationId, &$processedPrompt): TextResponse {
                 $processedPrompt = $prompt;
 
                 $this->events->dispatch(new PromptingAgent($invocationId, $prompt));
@@ -216,14 +217,14 @@ trait GeneratesText
     protected function listenForToolInvocations(string $invocationId, Agent $agent): void
     {
         $this->textGenerationLoop()->onToolInvocation(
-            invoking: function (Tool $tool, array $arguments) use ($invocationId, $agent) {
+            invoking: function (Tool $tool, array $arguments) use ($invocationId, $agent): void {
                 $this->currentToolInvocationId = (string) Str::uuid7();
 
                 $this->events->dispatch(new InvokingTool(
                     $invocationId, $this->currentToolInvocationId, $agent, $tool, $arguments
                 ));
             },
-            invoked: function (Tool $tool, array $arguments, mixed $result) use ($invocationId, $agent) {
+            invoked: function (Tool $tool, array $arguments, mixed $result) use ($invocationId, $agent): void {
                 $this->events->dispatch(new ToolInvoked(
                     $invocationId, $this->currentToolInvocationId, $agent, $tool, $arguments, $result
                 ));

@@ -107,9 +107,7 @@ class FakeTextGateway implements StepTextGateway
      */
     protected function nextStep(TextProvider $provider, string $model, array $messages, ?array $schema): StepResponse
     {
-        $message = (new Collection($messages))->last(function ($message) {
-            return $message instanceof UserMessage;
-        });
+        $message = (new Collection($messages))->last(fn ($message): bool => $message instanceof UserMessage);
 
         $prompt = $message instanceof UserMessage ? $message->content : '';
         $attachments = $message instanceof UserMessage ? $message->attachments : new Collection;
@@ -161,7 +159,7 @@ class FakeTextGateway implements StepTextGateway
 
         return tap($this->marshalResponse(
             $response, $provider, $model, $prompt, $attachments, $schema
-        ), fn () => $this->currentResponseIndex++);
+        ), fn (): int => $this->currentResponseIndex++);
     }
 
     /**

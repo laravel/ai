@@ -11,47 +11,47 @@ use Tests\Fixtures\Tools\RandomNumberGenerator;
 
 use function Laravel\Ai\agent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.groq' => [
         ...config('ai.providers.groq'),
         'key' => 'test-key',
     ]]);
 });
 
-test('request includes model and messages', function () {
+test('request includes model and messages', function (): void {
     Http::fake(['*' => fakeGroqResponse('Hello')]);
 
     agent()->prompt('Hi there', provider: 'groq', model: 'llama-3.3-70b-versatile');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['model'] === 'llama-3.3-70b-versatile'
             && count($body['messages']) >= 1
-            && collect($body['messages'])->contains(fn ($m) => $m['role'] === 'user' && $m['content'] === 'Hi there');
+            && collect($body['messages'])->contains(fn ($m): bool => $m['role'] === 'user' && $m['content'] === 'Hi there');
     });
 });
 
-test('system instructions are sent as system message', function () {
+test('system instructions are sent as system message', function (): void {
     Http::fake(['*' => fakeGroqResponse('Hello')]);
 
     (new AssistantAgent)->prompt('Hello', provider: 'groq');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $systemMsg = collect($body['messages'])->firstWhere('role', 'system');
 
         return $systemMsg !== null
-            && str_contains($systemMsg['content'], 'helpful assistant');
+            && str_contains((string) $systemMsg['content'], 'helpful assistant');
     });
 });
 
-test('temperature and max tokens are included when set via attributes', function () {
+test('temperature and max tokens are included when set via attributes', function (): void {
     Http::fake(['*' => fakeGroqResponse('Hello')]);
 
     (new AttributeAgent)->prompt('Hello', provider: 'groq');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return data_get($body, 'temperature') === 0.7
@@ -59,12 +59,12 @@ test('temperature and max tokens are included when set via attributes', function
     });
 });
 
-test('temperature and max tokens are excluded when not set', function () {
+test('temperature and max tokens are excluded when not set', function (): void {
     Http::fake(['*' => fakeGroqResponse('Hello')]);
 
     agent()->prompt('Hello', provider: 'groq');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return ! array_key_exists('temperature', $body)
@@ -72,26 +72,26 @@ test('temperature and max tokens are excluded when not set', function () {
     });
 });
 
-test('tools include tool choice auto', function () {
+test('tools include tool choice auto', function (): void {
     Http::fake(['*' => fakeGroqResponse('42')]);
 
     agent(tools: [new RandomNumberGenerator])->prompt('Give me a number', provider: 'groq');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['tool_choice'] === 'auto'
             && is_array($body['tools'])
-            && count($body['tools']) > 0;
+            && $body['tools'] !== [];
     });
 });
 
-test('request without tools excludes tool fields', function () {
+test('request without tools excludes tool fields', function (): void {
     Http::fake(['*' => fakeGroqResponse('Hello')]);
 
     agent()->prompt('Hello', provider: 'groq');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return ! array_key_exists('tools', $body)
@@ -99,49 +99,47 @@ test('request without tools excludes tool fields', function () {
     });
 });
 
-test('required tool choice forces the model to call a tool', function () {
+test('required tool choice forces the model to call a tool', function (): void {
     Http::fake(['*' => fakeGroqResponse('42')]);
 
     (new ToolChoiceAgent('required'))->prompt('Give me a number', provider: 'groq');
 
-    Http::assertSent(fn (Request $request) => json_decode($request->body(), true)['tool_choice'] === 'required');
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['tool_choice'] === 'required');
 });
 
-test('required tool choice can be set via attribute', function () {
+test('required tool choice can be set via attribute', function (): void {
     Http::fake(['*' => fakeGroqResponse('42')]);
 
     (new AttributeToolChoiceAgent)->prompt('Give me a number', provider: 'groq');
 
-    Http::assertSent(fn (Request $request) => json_decode($request->body(), true)['tool_choice'] === 'required');
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['tool_choice'] === 'required');
 });
 
-test('named tool choice forces a specific function', function () {
+test('named tool choice forces a specific function', function (): void {
     Http::fake(['*' => fakeGroqResponse('42')]);
 
     (new ToolChoiceAgent(['tool' => 'custom_named_tool']))->prompt('Give me a number', provider: 'groq');
 
-    Http::assertSent(function (Request $request) {
-        return json_decode($request->body(), true)['tool_choice'] === [
-            'type' => 'function',
-            'function' => ['name' => 'custom_named_tool'],
-        ];
-    });
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['tool_choice'] === [
+        'type' => 'function',
+        'function' => ['name' => 'custom_named_tool'],
+    ]);
 });
 
-test('none tool choice prevents tool calls', function () {
+test('none tool choice prevents tool calls', function (): void {
     Http::fake(['*' => fakeGroqResponse('Sure')]);
 
     (new ToolChoiceAgent('none'))->prompt('Just talk', provider: 'groq');
 
-    Http::assertSent(fn (Request $request) => json_decode($request->body(), true)['tool_choice'] === 'none');
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['tool_choice'] === 'none');
 });
 
-test('structured output includes json schema response format', function () {
+test('structured output includes json schema response format', function (): void {
     Http::fake(['*' => fakeGroqResponse('{"symbol": "Au"}')]);
 
     (new StructuredAgent)->prompt('What is the symbol for Gold?', provider: 'groq');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $format = data_get($body, 'response_format');
 
@@ -152,38 +150,38 @@ test('structured output includes json schema response format', function () {
     });
 });
 
-test('request without schema excludes response format', function () {
+test('request without schema excludes response format', function (): void {
     Http::fake(['*' => fakeGroqResponse('Hello')]);
 
     agent()->prompt('Hello', provider: 'groq');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return ! array_key_exists('response_format', $body);
     });
 });
 
-test('schema combined with tools omits response format but keeps schema instructions', function () {
+test('schema combined with tools omits response format but keeps schema instructions', function (): void {
     Http::fake(['*' => fakeGroqResponse('{"number": 42}')]);
 
     agent(
         tools: [new RandomNumberGenerator],
-        schema: fn ($s) => ['number' => $s->integer()->required()],
+        schema: fn ($s): array => ['number' => $s->integer()->required()],
     )->prompt('Give me a number', provider: 'groq');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $systemMsg = collect($body['messages'])->firstWhere('role', 'system');
 
         return ! array_key_exists('response_format', $body)
             && is_array($body['tools'])
             && $systemMsg !== null
-            && str_contains($systemMsg['content'], 'JSON object that strictly adheres');
+            && str_contains((string) $systemMsg['content'], 'JSON object that strictly adheres');
     });
 });
 
-test('streaming request includes stream options', function () {
+test('streaming request includes stream options', function (): void {
     Http::fake(['*' => Http::response("data: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"Hi\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1}}\n\ndata: [DONE]\n\n")]);
 
     $stream = agent()->stream('Hello', provider: 'groq');
@@ -193,7 +191,7 @@ test('streaming request includes stream options', function () {
         //
     }
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['stream'] === true
@@ -201,17 +199,15 @@ test('streaming request includes stream options', function () {
     });
 });
 
-test('request sends bearer token authorization', function () {
+test('request sends bearer token authorization', function (): void {
     Http::fake(['*' => fakeGroqResponse('Hello')]);
 
     agent()->prompt('Hello', provider: 'groq');
 
-    Http::assertSent(function (Request $request) {
-        return $request->hasHeader('Authorization', 'Bearer test-key');
-    });
+    Http::assertSent(fn (Request $request) => $request->hasHeader('Authorization', 'Bearer test-key'));
 });
 
-test('response text is correctly parsed', function () {
+test('response text is correctly parsed', function (): void {
     Http::fake(['*' => fakeGroqResponse('Laravel is great')]);
 
     $response = agent()->prompt('Tell me about Laravel', provider: 'groq');
@@ -220,7 +216,7 @@ test('response text is correctly parsed', function () {
         ->and($response->meta->provider)->toBe('groq');
 });
 
-test('response usage is correctly parsed', function () {
+test('response usage is correctly parsed', function (): void {
     Http::fake(['*' => Http::response([
         'id' => 'chatcmpl-123',
         'object' => 'chat.completion',
@@ -242,7 +238,7 @@ test('response usage is correctly parsed', function () {
         ->and($response->usage->completionTokens)->toBe(5);
 });
 
-test('response usage includes reasoning tokens', function () {
+test('response usage includes reasoning tokens', function (): void {
     Http::fake(['*' => Http::response([
         'id' => 'chatcmpl-r1-1',
         'object' => 'chat.completion',
@@ -269,7 +265,7 @@ test('response usage includes reasoning tokens', function () {
         ->and($response->usage->reasoningTokens)->toBe(20);
 });
 
-test('response usage includes cached prompt tokens', function () {
+test('response usage includes cached prompt tokens', function (): void {
     Http::fake(['*' => Http::response([
         'id' => 'chatcmpl-cache-1',
         'object' => 'chat.completion',
@@ -296,7 +292,7 @@ test('response usage includes cached prompt tokens', function () {
         ->and($response->usage->cacheReadInputTokens)->toBe(4608);
 });
 
-test('structured response is correctly parsed', function () {
+test('structured response is correctly parsed', function (): void {
     Http::fake(['*' => fakeGroqResponse('{"symbol": "Au"}')]);
 
     $response = (new StructuredAgent)->prompt('What is the symbol for Gold?', provider: 'groq');

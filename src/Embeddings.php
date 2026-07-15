@@ -94,13 +94,13 @@ class Embeddings
     {
         // Generate random values...
         $values = array_map(
-            fn () => (mt_rand() / mt_getrandmax()) * 2 - 1,
+            fn (): float|int => (mt_rand() / mt_getrandmax()) * 2 - 1,
             range(1, $dimensions)
         );
 
         // Normalize the vector (unit length)...
-        $magnitude = sqrt(array_sum(array_map(fn ($v) => $v * $v, $values)));
+        $magnitude = sqrt(array_sum(array_map(fn ($v): int|float => $v * $v, $values)));
 
-        return array_map(fn ($v) => $v / $magnitude, $values);
+        return array_map(fn ($v): float => $v / $magnitude, $values);
     }
 }

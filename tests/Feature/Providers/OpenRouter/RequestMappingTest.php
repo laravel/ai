@@ -11,47 +11,47 @@ use Tests\Fixtures\Tools\RandomNumberGenerator;
 
 use function Laravel\Ai\agent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.openrouter' => [
         ...config('ai.providers.openrouter'),
         'key' => 'test-key',
     ]]);
 });
 
-test('request includes model and messages', function () {
+test('request includes model and messages', function (): void {
     Http::fake(['*' => fakeOpenRouterResponse('Hello')]);
 
     agent()->prompt('Hi there', provider: 'openrouter', model: 'anthropic/claude-sonnet-4.6');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['model'] === 'anthropic/claude-sonnet-4.6'
             && count($body['messages']) >= 1
-            && collect($body['messages'])->contains(fn ($m) => $m['role'] === 'user' && $m['content'] === 'Hi there');
+            && collect($body['messages'])->contains(fn ($m): bool => $m['role'] === 'user' && $m['content'] === 'Hi there');
     });
 });
 
-test('system instructions are sent as system message', function () {
+test('system instructions are sent as system message', function (): void {
     Http::fake(['*' => fakeOpenRouterResponse('Hello')]);
 
     (new AssistantAgent)->prompt('Hello', provider: 'openrouter');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $systemMsg = collect($body['messages'])->firstWhere('role', 'system');
 
         return $systemMsg !== null
-            && str_contains($systemMsg['content'], 'helpful assistant');
+            && str_contains((string) $systemMsg['content'], 'helpful assistant');
     });
 });
 
-test('temperature and max tokens are included when set via attributes', function () {
+test('temperature and max tokens are included when set via attributes', function (): void {
     Http::fake(['*' => fakeOpenRouterResponse('Hello')]);
 
     (new AttributeAgent)->prompt('Hello', provider: 'openrouter');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return data_get($body, 'temperature') === 0.7
@@ -59,12 +59,12 @@ test('temperature and max tokens are included when set via attributes', function
     });
 });
 
-test('temperature and max tokens are excluded when not set', function () {
+test('temperature and max tokens are excluded when not set', function (): void {
     Http::fake(['*' => fakeOpenRouterResponse('Hello')]);
 
     agent()->prompt('Hello', provider: 'openrouter');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return ! array_key_exists('temperature', $body)
@@ -72,26 +72,26 @@ test('temperature and max tokens are excluded when not set', function () {
     });
 });
 
-test('tools include tool choice auto', function () {
+test('tools include tool choice auto', function (): void {
     Http::fake(['*' => fakeOpenRouterResponse('42')]);
 
     agent(tools: [new RandomNumberGenerator])->prompt('Give me a number', provider: 'openrouter');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['tool_choice'] === 'auto'
             && is_array($body['tools'])
-            && count($body['tools']) > 0;
+            && $body['tools'] !== [];
     });
 });
 
-test('request without tools excludes tool fields', function () {
+test('request without tools excludes tool fields', function (): void {
     Http::fake(['*' => fakeOpenRouterResponse('Hello')]);
 
     agent()->prompt('Hello', provider: 'openrouter');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return ! array_key_exists('tools', $body)
@@ -99,49 +99,47 @@ test('request without tools excludes tool fields', function () {
     });
 });
 
-test('required tool choice forces the model to call a tool', function () {
+test('required tool choice forces the model to call a tool', function (): void {
     Http::fake(['*' => fakeOpenRouterResponse('42')]);
 
     (new ToolChoiceAgent('required'))->prompt('Give me a number', provider: 'openrouter');
 
-    Http::assertSent(fn (Request $request) => json_decode($request->body(), true)['tool_choice'] === 'required');
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['tool_choice'] === 'required');
 });
 
-test('required tool choice can be set via attribute', function () {
+test('required tool choice can be set via attribute', function (): void {
     Http::fake(['*' => fakeOpenRouterResponse('42')]);
 
     (new AttributeToolChoiceAgent)->prompt('Give me a number', provider: 'openrouter');
 
-    Http::assertSent(fn (Request $request) => json_decode($request->body(), true)['tool_choice'] === 'required');
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['tool_choice'] === 'required');
 });
 
-test('named tool choice forces a specific function', function () {
+test('named tool choice forces a specific function', function (): void {
     Http::fake(['*' => fakeOpenRouterResponse('42')]);
 
     (new ToolChoiceAgent(['tool' => 'custom_named_tool']))->prompt('Give me a number', provider: 'openrouter');
 
-    Http::assertSent(function (Request $request) {
-        return json_decode($request->body(), true)['tool_choice'] === [
-            'type' => 'function',
-            'function' => ['name' => 'custom_named_tool'],
-        ];
-    });
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['tool_choice'] === [
+        'type' => 'function',
+        'function' => ['name' => 'custom_named_tool'],
+    ]);
 });
 
-test('none tool choice prevents tool calls', function () {
+test('none tool choice prevents tool calls', function (): void {
     Http::fake(['*' => fakeOpenRouterResponse('Sure')]);
 
     (new ToolChoiceAgent('none'))->prompt('Just talk', provider: 'openrouter');
 
-    Http::assertSent(fn (Request $request) => json_decode($request->body(), true)['tool_choice'] === 'none');
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['tool_choice'] === 'none');
 });
 
-test('structured output includes json schema response format', function () {
+test('structured output includes json schema response format', function (): void {
     Http::fake(['*' => fakeOpenRouterResponse('{"symbol": "Au"}')]);
 
     (new StructuredAgent)->prompt('What is the symbol for Gold?', provider: 'openrouter');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $format = data_get($body, 'response_format');
 
@@ -152,19 +150,19 @@ test('structured output includes json schema response format', function () {
     });
 });
 
-test('request without schema excludes response format', function () {
+test('request without schema excludes response format', function (): void {
     Http::fake(['*' => fakeOpenRouterResponse('Hello')]);
 
     agent()->prompt('Hello', provider: 'openrouter');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return ! array_key_exists('response_format', $body);
     });
 });
 
-test('streaming request includes stream options', function () {
+test('streaming request includes stream options', function (): void {
     Http::fake(['*' => Http::response("data: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"Hi\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1}}\n\ndata: [DONE]\n\n")]);
 
     $stream = agent()->stream('Hello', provider: 'openrouter');
@@ -173,7 +171,7 @@ test('streaming request includes stream options', function () {
         //
     }
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['stream'] === true
@@ -181,7 +179,7 @@ test('streaming request includes stream options', function () {
     });
 });
 
-test('request sends bearer token authorization', function () {
+test('request sends bearer token authorization', function (): void {
     Http::fake(['*' => fakeOpenRouterResponse('Hello')]);
 
     agent()->prompt('Hello', provider: 'openrouter');
@@ -189,7 +187,7 @@ test('request sends bearer token authorization', function () {
     Http::assertSent(fn (Request $request) => $request->hasHeader('Authorization', 'Bearer test-key'));
 });
 
-test('request sends http referer and x openrouter title headers when configured', function () {
+test('request sends http referer and x openrouter title headers when configured', function (): void {
     config(['ai.providers.openrouter' => [
         ...config('ai.providers.openrouter'),
         'key' => 'test-key',
@@ -201,11 +199,11 @@ test('request sends http referer and x openrouter title headers when configured'
 
     agent()->prompt('Hello', provider: 'openrouter');
 
-    Http::assertSent(fn (Request $request) => $request->hasHeader('HTTP-Referer', 'https://example.com')
+    Http::assertSent(fn (Request $request): bool => $request->hasHeader('HTTP-Referer', 'https://example.com')
         && $request->hasHeader('X-OpenRouter-Title', 'My App'));
 });
 
-test('response text is correctly parsed', function () {
+test('response text is correctly parsed', function (): void {
     Http::fake(['*' => fakeOpenRouterResponse('Laravel is great')]);
 
     $response = agent()->prompt('Tell me about Laravel', provider: 'openrouter');
@@ -214,7 +212,7 @@ test('response text is correctly parsed', function () {
         ->and($response->meta->provider)->toBe('openrouter');
 });
 
-test('response usage is correctly parsed', function () {
+test('response usage is correctly parsed', function (): void {
     Http::fake(['*' => Http::response([
         'id' => 'chatcmpl-123',
         'object' => 'chat.completion',
@@ -236,7 +234,7 @@ test('response usage is correctly parsed', function () {
         ->and($response->usage->completionTokens)->toBe(5);
 });
 
-test('response usage includes cache and reasoning tokens', function () {
+test('response usage includes cache and reasoning tokens', function (): void {
     Http::fake(['*' => Http::response([
         'id' => 'chatcmpl-123',
         'object' => 'chat.completion',
@@ -268,7 +266,7 @@ test('response usage includes cache and reasoning tokens', function () {
         ->and($response->usage->reasoningTokens)->toBe(10);
 });
 
-test('structured response is correctly parsed', function () {
+test('structured response is correctly parsed', function (): void {
     Http::fake(['*' => fakeOpenRouterResponse('{"symbol": "Au"}')]);
 
     $response = (new StructuredAgent)->prompt('What is the symbol for Gold?', provider: 'openrouter');
@@ -276,7 +274,7 @@ test('structured response is correctly parsed', function () {
     expect($response->structured['symbol'])->toBe('Au');
 });
 
-test('web search citations are extracted from message annotations', function () {
+test('web search citations are extracted from message annotations', function (): void {
     Http::fake(['*' => Http::response([
         'id' => 'chatcmpl-123',
         'object' => 'chat.completion',
@@ -325,7 +323,7 @@ test('web search citations are extracted from message annotations', function () 
         ->and($response->meta->citations[1]->endIndex)->toBe(50);
 });
 
-test('web search citations omit span indices when not provided', function () {
+test('web search citations omit span indices when not provided', function (): void {
     Http::fake(['*' => Http::response([
         'id' => 'chatcmpl-123',
         'object' => 'chat.completion',
@@ -356,7 +354,7 @@ test('web search citations omit span indices when not provided', function () {
         ->and($response->meta->citations[0]->endIndex)->toBeNull();
 });
 
-test('response with no annotations has empty citations collection', function () {
+test('response with no annotations has empty citations collection', function (): void {
     Http::fake(['*' => fakeOpenRouterResponse('Hello')]);
 
     $response = agent()->prompt('Hi', provider: 'openrouter');

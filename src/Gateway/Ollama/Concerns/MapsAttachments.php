@@ -19,10 +19,10 @@ trait MapsAttachments
      */
     protected function mapAttachments(Collection $attachments): array
     {
-        return $attachments->map(function ($attachment) {
+        return $attachments->map(function ($attachment): string {
             if (! $attachment instanceof File && ! $attachment instanceof UploadedFile) {
                 throw new InvalidArgumentException(
-                    'Unsupported attachment type ['.get_class($attachment).']'
+                    'Unsupported attachment type ['.$attachment::class.']'
                 );
             }
 
@@ -30,7 +30,7 @@ trait MapsAttachments
                 $attachment instanceof Base64Image => $attachment->base64,
                 $attachment instanceof LocalImage => base64_encode(file_get_contents($attachment->path)),
                 $attachment instanceof StoredImage => base64_encode(
-                    Storage::disk($attachment->disk)->get($attachment->path)
+                    (string) Storage::disk($attachment->disk)->get($attachment->path)
                 ),
                 $attachment instanceof UploadedFile && $this->isImage($attachment) => base64_encode($attachment->get()),
                 $attachment instanceof RemoteImage => throw new InvalidArgumentException('Ollama does not support remote image URLs. Use a local or base64 image instead.'),
@@ -49,6 +49,7 @@ trait MapsAttachments
             'image/png',
             'image/gif',
             'image/webp',
-        ]);
+        ],
+            true);
     }
 }

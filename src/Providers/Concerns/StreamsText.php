@@ -33,7 +33,7 @@ trait StreamsText
         return pipeline()
             ->send($prompt)
             ->through($this->gatherMiddlewareFor($prompt->agent))
-            ->then(function (AgentPrompt $prompt) use ($invocationId, &$processedPrompt) {
+            ->then(function (AgentPrompt $prompt) use ($invocationId, &$processedPrompt): StreamableAgentResponse {
                 $processedPrompt = $prompt;
 
                 $agent = $prompt->agent;
@@ -87,7 +87,7 @@ trait StreamsText
                     },
                     $meta,
                 );
-            })->then(function (StreamedAgentResponse $response) use ($invocationId, $prompt, &$processedPrompt) {
+            })->then(function (StreamedAgentResponse $response) use ($invocationId, $prompt, &$processedPrompt): void {
                 $this->events->dispatch(
                     new AgentStreamed($invocationId, $processedPrompt ?? $prompt, $response)
                 );

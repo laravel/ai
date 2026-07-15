@@ -30,7 +30,7 @@ use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Laravel\Ai\Tools\Request;
 
-test('it pauses approvable tool calls without executing them', function () {
+test('it pauses approvable tool calls without executing them', function (): void {
     $tool = new TextGenerationLoopApprovableTool;
     $toolCall = new ToolCall('call-1', TextGenerationLoopApprovableTool::class, ['value' => 'danger'], 'call-1');
     $gateway = new TextGenerationLoopFakeGateway([
@@ -64,7 +64,7 @@ test('it pauses approvable tool calls without executing them', function () {
         ->and($tool->approvalToolCallId)->toBe('call-1');
 });
 
-test('it resumes approved tool calls and continues generation', function () {
+test('it resumes approved tool calls and continues generation', function (): void {
     $tool = new TextGenerationLoopApprovableTool;
     $toolCall = new ToolCall('call-1', TextGenerationLoopApprovableTool::class, ['value' => 'approved'], 'call-1');
     $gateway = new TextGenerationLoopFakeGateway([
@@ -98,7 +98,7 @@ test('it resumes approved tool calls and continues generation', function () {
         ->and($response->text)->toBe('done');
 });
 
-test('it resumes edited tool calls with replacement arguments', function () {
+test('it resumes edited tool calls with replacement arguments', function (): void {
     $tool = new TextGenerationLoopApprovableTool;
     $toolCall = new ToolCall('call-1', TextGenerationLoopApprovableTool::class, ['value' => 'original'], 'call-1');
     $gateway = new TextGenerationLoopFakeGateway([
@@ -120,7 +120,7 @@ test('it resumes edited tool calls with replacement arguments', function () {
     expect($tool->handledArguments)->toBe([['value' => 'edited']]);
 });
 
-test('it records rejection results without executing the tool', function () {
+test('it records rejection results without executing the tool', function (): void {
     $tool = new TextGenerationLoopApprovableTool;
     $toolCall = new ToolCall('call-1', TextGenerationLoopApprovableTool::class, ['value' => 'blocked'], 'call-1');
     $gateway = new TextGenerationLoopFakeGateway([
@@ -145,7 +145,7 @@ test('it records rejection results without executing the tool', function () {
         ->and($gateway->generateCalls)->toBe(1);
 });
 
-test('it rejects approval decisions that do not match pending tool calls', function () {
+test('it rejects approval decisions that do not match pending tool calls', function (): void {
     $tool = new TextGenerationLoopApprovableTool;
     $toolCall = new ToolCall('call-1', TextGenerationLoopApprovableTool::class, ['value' => 'pending'], 'call-1');
 
@@ -162,7 +162,7 @@ test('it rejects approval decisions that do not match pending tool calls', funct
     ))->toThrow(ApprovalMismatchException::class);
 });
 
-test('it emits streamed approval requests without executing gated tools', function () {
+test('it emits streamed approval requests without executing gated tools', function (): void {
     $tool = new TextGenerationLoopApprovableTool;
     $toolCall = new ToolCall('call-1', TextGenerationLoopApprovableTool::class, ['value' => 'danger'], 'call-1');
     $gateway = new TextGenerationLoopFakeGateway(streams: [
@@ -193,7 +193,7 @@ test('it emits streamed approval requests without executing gated tools', functi
         ->and(collect($events)->whereInstanceOf(StreamEnd::class))->toHaveCount(1);
 });
 
-test('it runs ungated tool calls immediately in a step that also needs approval', function () {
+test('it runs ungated tool calls immediately in a step that also needs approval', function (): void {
     $gated = new TextGenerationLoopApprovableTool;
     $ungated = new TextGenerationLoopCountingTool;
     $gatedCall = new ToolCall('call-gated', TextGenerationLoopApprovableTool::class, ['value' => 'danger'], 'call-gated');
@@ -224,7 +224,7 @@ test('it runs ungated tool calls immediately in a step that also needs approval'
         ->and($response->toolResults[0]->result)->toBe('counted');
 });
 
-test('it resumes a paused step running only the still-pending gated call', function () {
+test('it resumes a paused step running only the still-pending gated call', function (): void {
     $gated = new TextGenerationLoopApprovableTool;
     $ungated = new TextGenerationLoopCountingTool;
     $gatedCall = new ToolCall('call-gated', TextGenerationLoopApprovableTool::class, ['value' => 'approved'], 'call-gated');
@@ -258,7 +258,7 @@ test('it resumes a paused step running only the still-pending gated call', funct
         ->and($response->text)->toBe('done');
 });
 
-test('a bare rejection stops the loop without another model call', function () {
+test('a bare rejection stops the loop without another model call', function (): void {
     $tool = new TextGenerationLoopApprovableTool;
     $toolCall = new ToolCall('call-1', TextGenerationLoopApprovableTool::class, ['value' => 'blocked'], 'call-1');
     $gateway = new TextGenerationLoopFakeGateway;
@@ -281,7 +281,7 @@ test('a bare rejection stops the loop without another model call', function () {
         ->and($response->toolResults[0]->result)->toBe('Tool call rejected by approver.');
 });
 
-test('a gated tool with approval disabled executes without pausing', function () {
+test('a gated tool with approval disabled executes without pausing', function (): void {
     $tool = (new TextGenerationLoopApprovableTool)->withoutApproval();
     $toolCall = new ToolCall('call-1', TextGenerationLoopApprovableTool::class, ['value' => 'safe'], 'call-1');
     $gateway = new TextGenerationLoopFakeGateway([
@@ -305,7 +305,7 @@ test('a gated tool with approval disabled executes without pausing', function ()
         ->and($response->text)->toBe('done');
 });
 
-test('a bare rejection stops the loop even beside an approved call', function () {
+test('a bare rejection stops the loop even beside an approved call', function (): void {
     $tool = new TextGenerationLoopApprovableTool;
     $firstCall = new ToolCall('call-1', TextGenerationLoopApprovableTool::class, ['value' => 'approved'], 'call-1');
     $secondCall = new ToolCall('call-2', TextGenerationLoopApprovableTool::class, ['value' => 'blocked'], 'call-2');
@@ -330,7 +330,7 @@ test('a bare rejection stops the loop even beside an approved call', function ()
         ->and($response->toolResults[1]->result)->toBe('Tool call rejected by approver.');
 });
 
-test('a bare rejection beside an approved call still records the executed result before returning', function () {
+test('a bare rejection beside an approved call still records the executed result before returning', function (): void {
     $tool = new TextGenerationLoopApprovableTool;
     $firstCall = new ToolCall('call-1', TextGenerationLoopApprovableTool::class, ['value' => 'approved'], 'call-1');
     $secondCall = new ToolCall('call-2', TextGenerationLoopApprovableTool::class, ['value' => 'blocked'], 'call-2');
@@ -358,7 +358,7 @@ test('a bare rejection beside an approved call still records the executed result
         ->and(collect($recorded)->firstWhere('id', 'call-1')->result)->toBe('handled approved');
 });
 
-test('a streamed bare rejection stops the loop even beside an approved call', function () {
+test('a streamed bare rejection stops the loop even beside an approved call', function (): void {
     $tool = new TextGenerationLoopApprovableTool;
     $firstCall = new ToolCall('call-1', TextGenerationLoopApprovableTool::class, ['value' => 'approved'], 'call-1');
     $secondCall = new ToolCall('call-2', TextGenerationLoopApprovableTool::class, ['value' => 'blocked'], 'call-2');
@@ -387,7 +387,7 @@ test('a streamed bare rejection stops the loop even beside an approved call', fu
         ->and(collect($events)->whereInstanceOf(StreamEnd::class))->toHaveCount(1);
 });
 
-test('a gate that has relaxed since the pause can still be resumed', function () {
+test('a gate that has relaxed since the pause can still be resumed', function (): void {
     $tool = (new TextGenerationLoopApprovableTool)->withoutApproval();
     $toolCall = new ToolCall('call-1', TextGenerationLoopApprovableTool::class, ['value' => 'approved'], 'call-1');
     $gateway = new TextGenerationLoopFakeGateway([
@@ -411,7 +411,7 @@ test('a gate that has relaxed since the pause can still be resumed', function ()
         ->and($response->text)->toBe('done');
 });
 
-test('a relaxed gate with no decision fails closed instead of auto-running the tool', function () {
+test('a relaxed gate with no decision fails closed instead of auto-running the tool', function (): void {
     $tool = (new TextGenerationLoopApprovableTool)->withoutApproval();
     $toolCall = new ToolCall('call-1', TextGenerationLoopApprovableTool::class, ['value' => 'approved'], 'call-1');
     $gateway = new TextGenerationLoopFakeGateway([
@@ -434,7 +434,7 @@ test('a relaxed gate with no decision fails closed instead of auto-running the t
         ->and($response->toolResults->firstWhere('id', 'call-1')->result)->toBe('This tool call was not approved.');
 });
 
-test('a resumed mixed batch merges its results into the pause turn answering message', function () {
+test('a resumed mixed batch merges its results into the pause turn answering message', function (): void {
     $gated = new TextGenerationLoopApprovableTool;
     $ungated = new TextGenerationLoopCountingTool;
     $gatedCall = new ToolCall('call-gated', TextGenerationLoopApprovableTool::class, ['value' => 'approved'], 'call-gated');
@@ -469,7 +469,7 @@ test('a resumed mixed batch merges its results into the pause turn answering mes
         ->and($response->text)->toBe('done');
 });
 
-test('a plain generation settles an abandoned pause before calling the model', function () {
+test('a plain generation settles an abandoned pause before calling the model', function (): void {
     $tool = new TextGenerationLoopApprovableTool;
     $toolCall = new ToolCall('call-1', TextGenerationLoopApprovableTool::class, ['value' => 'danger'], 'call-1');
     $gateway = new TextGenerationLoopFakeGateway([
@@ -500,7 +500,7 @@ test('a plain generation settles an abandoned pause before calling the model', f
         ->and($response->text)->toBe('Sure, moving on.');
 });
 
-test('a stale approval with no pending gated calls is rejected', function () {
+test('a stale approval with no pending gated calls is rejected', function (): void {
     $tool = new TextGenerationLoopApprovableTool;
     $toolCall = new ToolCall('call-1', TextGenerationLoopApprovableTool::class, ['value' => 'approved'], 'call-1');
 
@@ -522,7 +522,7 @@ test('a stale approval with no pending gated calls is rejected', function () {
     ))->toThrow(ApprovalMismatchException::class, 'There are no pending tool calls awaiting approval.');
 });
 
-test('a default decision approves every pending call without naming ids', function () {
+test('a default decision approves every pending call without naming ids', function (): void {
     $gated = new TextGenerationLoopApprovableTool;
     $ungated = new TextGenerationLoopCountingTool;
     $gatedCall = new ToolCall('call-gated', TextGenerationLoopApprovableTool::class, ['value' => 'approved'], 'call-gated');
@@ -550,7 +550,7 @@ test('a default decision approves every pending call without naming ids', functi
         ->and($response->text)->toBe('done');
 });
 
-test('an explicit decision overrides the default decision', function () {
+test('an explicit decision overrides the default decision', function (): void {
     $tool = new TextGenerationLoopApprovableTool;
     $firstCall = new ToolCall('call-1', TextGenerationLoopApprovableTool::class, ['value' => 'approved'], 'call-1');
     $secondCall = new ToolCall('call-2', TextGenerationLoopApprovableTool::class, ['value' => 'blocked'], 'call-2');
@@ -576,7 +576,7 @@ test('an explicit decision overrides the default decision', function () {
         ->and($response->toolResults[1]->result)->toBe('Wrong file');
 });
 
-test('a default decision does not excuse decisions for unknown tool calls', function () {
+test('a default decision does not excuse decisions for unknown tool calls', function (): void {
     $tool = new TextGenerationLoopApprovableTool;
     $toolCall = new ToolCall('call-1', TextGenerationLoopApprovableTool::class, ['value' => 'pending'], 'call-1');
 
@@ -593,7 +593,7 @@ test('a default decision does not excuse decisions for unknown tool calls', func
     ))->toThrow(ApprovalMismatchException::class);
 });
 
-test('a streamed default rejection marks the tool results as unsuccessful', function () {
+test('a streamed default rejection marks the tool results as unsuccessful', function (): void {
     $tool = new TextGenerationLoopApprovableTool;
     $toolCall = new ToolCall('call-1', TextGenerationLoopApprovableTool::class, ['value' => 'blocked'], 'call-1');
     $gateway = new TextGenerationLoopFakeGateway(streams: [
@@ -626,7 +626,7 @@ test('a streamed default rejection marks the tool results as unsuccessful', func
         ->and(collect($events)->whereInstanceOf(StreamEnd::class))->toHaveCount(1);
 });
 
-test('it does not execute tool calls on the final generation step', function () {
+test('it does not execute tool calls on the final generation step', function (): void {
     $tool = new TextGenerationLoopCountingTool;
     $gateway = new TextGenerationLoopFakeGateway([
         new StepResponse(
@@ -660,7 +660,7 @@ test('it does not execute tool calls on the final generation step', function () 
         ->and($response->steps->first()->toolResults)->toHaveCount(1);
 });
 
-test('it holds stream end until the streamed tool loop is complete', function () {
+test('it holds stream end until the streamed tool loop is complete', function (): void {
     $tool = new TextGenerationLoopCountingTool;
     $firstToolCall = new ToolCall('call-1', TextGenerationLoopCountingTool::class, [], 'call-1');
     $gateway = new TextGenerationLoopFakeGateway(streams: [
@@ -697,7 +697,7 @@ test('it holds stream end until the streamed tool loop is complete', function ()
         ->and($streamEnds->first()->usage->completionTokens)->toBe(3);
 });
 
-test('it does not execute streamed tool calls on the final step', function () {
+test('it does not execute streamed tool calls on the final step', function (): void {
     $tool = new TextGenerationLoopCountingTool;
     $toolCall = new ToolCall('call-1', TextGenerationLoopCountingTool::class, [], 'call-1');
     $gateway = new TextGenerationLoopFakeGateway(streams: [
@@ -725,7 +725,7 @@ test('it does not execute streamed tool calls on the final step', function () {
         ->and(collect($events)->whereInstanceOf(StreamEnd::class))->toHaveCount(1);
 });
 
-test('it clamps non-positive maxSteps to at least one turn', function (int $maxSteps) {
+test('it clamps non-positive maxSteps to at least one turn', function (int $maxSteps): void {
     $gateway = new TextGenerationLoopFakeGateway([
         new StepResponse(
             text: 'hi',
@@ -754,7 +754,7 @@ test('it clamps non-positive maxSteps to at least one turn', function (int $maxS
     'negative' => -3,
 ]);
 
-test('it accumulates streamed usage across multi-step turns', function () {
+test('it accumulates streamed usage across multi-step turns', function (): void {
     $tool = new TextGenerationLoopCountingTool;
     $toolCall = new ToolCall('call-1', TextGenerationLoopCountingTool::class, [], 'call-1');
     $gateway = new TextGenerationLoopFakeGateway(streams: [
@@ -788,7 +788,7 @@ test('it accumulates streamed usage across multi-step turns', function () {
         ->and($streamEnd->reason)->toBe(FinishReason::Stop->value);
 });
 
-test('it throws when generation tool calls do not match local tools', function () {
+test('it throws when generation tool calls do not match local tools', function (): void {
     $gateway = new TextGenerationLoopFakeGateway([
         new StepResponse(
             text: '',
@@ -812,7 +812,7 @@ test('it throws when generation tool calls do not match local tools', function (
     ))->toThrow(NoSuchToolException::class, "Model tried to call unavailable tool 'MissingTool'.");
 });
 
-test('it throws when streaming tool calls do not match local tools', function () {
+test('it throws when streaming tool calls do not match local tools', function (): void {
     $toolCall = new ToolCall('call-1', 'MissingTool', [], 'call-1');
     $gateway = new TextGenerationLoopFakeGateway(streams: [
         textGenerationLoopStreamStep(
@@ -834,7 +834,7 @@ test('it throws when streaming tool calls do not match local tools', function ()
     )))->toThrow(NoSuchToolException::class);
 });
 
-test('it emits a terminal stream end when a turn yields no stream end or error', function () {
+test('it emits a terminal stream end when a turn yields no stream end or error', function (): void {
     $gateway = new TextGenerationLoopFakeGateway(streams: [
         textGenerationLoopStreamStep(events: [new TextDelta('text-delta', 'message-1', 'partial', time())]),
     ]);
@@ -857,7 +857,7 @@ test('it emits a terminal stream end when a turn yields no stream end or error',
         ->and($streamEnds->first()->reason)->toBe(FinishReason::Error->value);
 });
 
-test('it does not emit a stream end when a turn errors without a stream end', function () {
+test('it does not emit a stream end when a turn errors without a stream end', function (): void {
     $gateway = new TextGenerationLoopFakeGateway(streams: [
         textGenerationLoopStreamStep(events: [new Error('error-1', 'server_error', 'Server overloaded', false, time())]),
     ]);
@@ -997,7 +997,7 @@ class TextGenerationLoopApprovableTool extends TextGenerationLoopCountingTool im
     }
 }
 
-test('an approval resume settles an earlier abandoned pause', function () {
+test('an approval resume settles an earlier abandoned pause', function (): void {
     $tool = new TextGenerationLoopApprovableTool;
     $abandonedCall = new ToolCall('call-old', TextGenerationLoopApprovableTool::class, ['value' => 'abandoned'], 'call-old');
     $pendingCall = new ToolCall('call-new', TextGenerationLoopApprovableTool::class, ['value' => 'approved'], 'call-new');
@@ -1030,7 +1030,7 @@ test('an approval resume settles an earlier abandoned pause', function () {
         ->and($response->text)->toBe('done');
 });
 
-test('a gated tool call on the final step pauses instead of being exhausted', function () {
+test('a gated tool call on the final step pauses instead of being exhausted', function (): void {
     $gated = new TextGenerationLoopApprovableTool;
     $ungated = new TextGenerationLoopCountingTool;
     $gatedCall = new ToolCall('call-gated', TextGenerationLoopApprovableTool::class, ['value' => 'danger'], 'call-gated');
@@ -1060,7 +1060,7 @@ test('a gated tool call on the final step pauses instead of being exhausted', fu
         ->and($response->toolResults[0]->result)->toContain('maximum number of steps');
 });
 
-test('a pre-validated streamed resume executes the approved tool exactly once', function () {
+test('a pre-validated streamed resume executes the approved tool exactly once', function (): void {
     $tool = new TextGenerationLoopApprovableTool;
     $toolCall = new ToolCall('call-1', TextGenerationLoopApprovableTool::class, ['value' => 'approved'], 'call-1');
     $gateway = new TextGenerationLoopFakeGateway(streams: [

@@ -2,17 +2,18 @@
 
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\NoSuchToolException;
+use Laravel\Ai\Responses\AgentResponse;
 use Tests\Fixtures\Agents\MultiStepToolAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.mistral' => [
         ...config('ai.providers.mistral'),
         'key' => 'test-key',
     ]]);
 });
 
-test('tool calls trigger follow up request', function () {
+test('tool calls trigger follow up request', function (): void {
     Http::fake([
         '*' => Http::sequence([
             $this->fakeToolCallResponse('FixedNumberGenerator', 'call_'.uniqid()),
@@ -29,7 +30,7 @@ test('tool calls trigger follow up request', function () {
 
     expect($recorded)->toHaveCount(2);
 
-    $followUpBody = json_decode($recorded[1][0]->body(), true);
+    $followUpBody = json_decode((string) $recorded[1][0]->body(), true);
 
     $hasAssistantWithToolCalls = false;
     $hasToolResult = false;
@@ -48,7 +49,7 @@ test('tool calls trigger follow up request', function () {
         ->and($hasToolResult)->toBeTrue();
 });
 
-test('max steps limits tool call depth', function () {
+test('max steps limits tool call depth', function (): void {
     Http::fake([
         '*' => Http::sequence([
             $this->fakeToolCallResponse('FixedNumberGenerator', 'call_'.uniqid()),
@@ -68,7 +69,7 @@ test('max steps limits tool call depth', function () {
     expect(count($recorded))->toBeLessThanOrEqual(3);
 });
 
-test('multi step tool loop returns accumulated response shape', function () {
+test('multi step tool loop returns accumulated response shape', function (): void {
     Http::fake([
         '*' => Http::sequence([
             $this->fakeToolCallResponse('FixedNumberGenerator', 'call_'.uniqid()),
@@ -91,20 +92,20 @@ test('multi step tool loop returns accumulated response shape', function () {
         ->and($response->usage->completionTokens)->toBe(15);
 });
 
-test('unregistered tool call throws', function () {
+test('unregistered tool call throws', function (): void {
     Http::fake([
         '*' => Http::sequence([
             $this->fakeToolCallResponse('NonExistentTool', 'call_'.uniqid()),
         ]),
     ]);
 
-    expect(fn () => (new MultiStepToolAgent)->prompt(
+    expect(fn (): AgentResponse => (new MultiStepToolAgent)->prompt(
         'Generate numbers',
         provider: 'mistral',
     ))->toThrow(NoSuchToolException::class);
 });
 
-test('follow up request includes original messages', function () {
+test('follow up request includes original messages', function (): void {
     Http::fake([
         '*' => Http::sequence([
             $this->fakeToolCallResponse('FixedNumberGenerator', 'call_'.uniqid()),
@@ -119,7 +120,7 @@ test('follow up request includes original messages', function () {
 
     $recorded = Http::recorded();
 
-    $followUpBody = json_decode($recorded[1][0]->body(), true);
+    $followUpBody = json_decode((string) $recorded[1][0]->body(), true);
 
     $userMsg = collect($followUpBody['messages'])->firstWhere('role', 'user');
 

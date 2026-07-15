@@ -2,12 +2,14 @@
 
 use Illuminate\JsonSchema\JsonSchema as JsonSchemaFactory;
 use Illuminate\JsonSchema\Serializer;
+use Illuminate\JsonSchema\Types\AnyOfType;
 use Illuminate\JsonSchema\Types\ObjectType;
+use Illuminate\JsonSchema\Types\Type;
 use Laravel\Ai\Schema\SchemaNormalizer;
 
 function supportsNativeAnyOf(): bool
 {
-    return class_exists('Illuminate\\JsonSchema\\Types\\AnyOfType');
+    return class_exists(AnyOfType::class);
 }
 
 /**
@@ -17,12 +19,12 @@ function normalizesWithoutThrowing(array $raw): array
 {
     $normalized = SchemaNormalizer::normalize($raw);
 
-    expect(fn () => JsonSchemaFactory::fromArray($normalized))->not->toThrow(Throwable::class);
+    expect(fn (): Type => JsonSchemaFactory::fromArray($normalized))->not->toThrow(Throwable::class);
 
     return $normalized;
 }
 
-test('it passes a plain object schema through unchanged', function () {
+test('it passes a plain object schema through unchanged', function (): void {
     $raw = [
         'type' => 'object',
         'properties' => ['name' => ['type' => 'string', 'description' => 'A name.']],
@@ -32,7 +34,7 @@ test('it passes a plain object schema through unchanged', function () {
     expect(SchemaNormalizer::normalize($raw))->toBe($raw);
 });
 
-test('it preserves a nullable anyOf when the framework supports it natively', function () {
+test('it preserves a nullable anyOf when the framework supports it natively', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => [
@@ -48,7 +50,7 @@ test('it preserves a nullable anyOf when the framework supports it natively', fu
     ]);
 })->skip(! supportsNativeAnyOf(), 'The installed Illuminate JSON schema package does not support anyOf.');
 
-test('it collapses a nullable anyOf to a nullable single type when native support is unavailable', function () {
+test('it collapses a nullable anyOf to a nullable single type when native support is unavailable', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => [
@@ -62,7 +64,7 @@ test('it collapses a nullable anyOf to a nullable single type when native suppor
     ]);
 })->skip(supportsNativeAnyOf(), 'Native anyOf support preserves compositions instead of using the fallback collapse.');
 
-test('it collapses a non-nullable scalar oneOf to a multi-type union', function () {
+test('it collapses a non-nullable scalar oneOf to a multi-type union', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => [
@@ -74,7 +76,7 @@ test('it collapses a non-nullable scalar oneOf to a multi-type union', function 
     expect($normalized['properties']['choice'])->not->toHaveKey('maxLength');
 });
 
-test('it strips type-specific keywords from a multi-type union so it deserializes', function () {
+test('it strips type-specific keywords from a multi-type union so it deserializes', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => [
@@ -87,7 +89,7 @@ test('it strips type-specific keywords from a multi-type union so it deserialize
     expect($normalized['properties']['value'])->not->toHaveKey('minimum');
 });
 
-test('it merges allOf branches into the node', function () {
+test('it merges allOf branches into the node', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => [
@@ -102,7 +104,7 @@ test('it merges allOf branches into the node', function () {
     ]);
 });
 
-test('it drops keywords the deserializer cannot represent', function () {
+test('it drops keywords the deserializer cannot represent', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         '$schema' => 'http://json-schema.org/draft-07/schema#',
@@ -121,7 +123,7 @@ test('it drops keywords the deserializer cannot represent', function () {
     expect($normalized['properties']['a'])->toBe(['type' => 'string']);
 });
 
-test('it drops boolean property schemas', function () {
+test('it drops boolean property schemas', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => [
@@ -136,7 +138,7 @@ test('it drops boolean property schemas', function () {
     expect($normalized['required'])->toBe(['name']);
 });
 
-test('it drops tuple and boolean array items', function () {
+test('it drops tuple and boolean array items', function (): void {
     $tuple = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => ['list' => ['type' => 'array', 'items' => [['type' => 'string'], ['type' => 'integer']]]],
@@ -152,7 +154,7 @@ test('it drops tuple and boolean array items', function () {
     expect($single['properties']['list']['items'])->toBe(['type' => 'string']);
 });
 
-test('it inlines local $ref and drops remote or unresolvable $ref', function () {
+test('it inlines local $ref and drops remote or unresolvable $ref', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => [
@@ -175,7 +177,7 @@ test('it inlines local $ref and drops remote or unresolvable $ref', function () 
     expect($normalized)->not->toHaveKey('$defs');
 });
 
-test('it breaks circular $ref without infinite recursion', function () {
+test('it breaks circular $ref without infinite recursion', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => ['node' => ['$ref' => '#/$defs/Node']],
@@ -191,7 +193,7 @@ test('it breaks circular $ref without infinite recursion', function () {
     expect($normalized['properties']['node']['properties']['child'])->toBe(['type' => 'string']);
 });
 
-test('it drops a null default', function () {
+test('it drops a null default', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => ['flag' => ['type' => 'boolean', 'default' => null]],
@@ -200,7 +202,7 @@ test('it drops a null default', function () {
     expect($normalized['properties']['flag'])->not->toHaveKey('default');
 });
 
-test('it keeps additionalProperties false but drops permissive forms', function () {
+test('it keeps additionalProperties false but drops permissive forms', function (): void {
     $normalized = SchemaNormalizer::normalize([
         'type' => 'object',
         'additionalProperties' => false,
@@ -213,7 +215,7 @@ test('it keeps additionalProperties false but drops permissive forms', function 
     expect($normalized['properties']['open'])->not->toHaveKey('additionalProperties');
 });
 
-test('it assigns a type to an otherwise-typeless allOf root so it does not throw', function () {
+test('it assigns a type to an otherwise-typeless allOf root so it does not throw', function (): void {
     $normalized = normalizesWithoutThrowing([
         'allOf' => [['description' => 'x'], ['title' => 'y']],
     ]);
@@ -222,7 +224,7 @@ test('it assigns a type to an otherwise-typeless allOf root so it does not throw
     expect($normalized)->not->toHaveKey('allOf');
 });
 
-test('it unions required across allOf branches and the outer node', function () {
+test('it unions required across allOf branches and the outer node', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'required' => ['c'],
@@ -237,7 +239,7 @@ test('it unions required across allOf branches and the outer node', function () 
     expect($normalized['properties'])->toHaveKeys(['a', 'b', 'c']);
 });
 
-test('it strips unsupported keywords pulled in from an allOf branch', function () {
+test('it strips unsupported keywords pulled in from an allOf branch', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => [
@@ -248,7 +250,7 @@ test('it strips unsupported keywords pulled in from an allOf branch', function (
     expect($normalized['properties']['n'])->toBe(['type' => 'integer']);
 });
 
-test('it preserves object shape inside nullable anyOf when the framework supports it natively', function () {
+test('it preserves object shape inside nullable anyOf when the framework supports it natively', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => [
@@ -263,7 +265,7 @@ test('it preserves object shape inside nullable anyOf when the framework support
     expect($normalized['properties']['addr']['anyOf'][0]['properties'])->toHaveKey('city');
 })->skip(! supportsNativeAnyOf(), 'The installed Illuminate JSON schema package does not support anyOf.');
 
-test('it preserves object shape for a nullable object branch when native support is unavailable', function () {
+test('it preserves object shape for a nullable object branch when native support is unavailable', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => [
@@ -278,7 +280,7 @@ test('it preserves object shape for a nullable object branch when native support
     expect($normalized['properties']['addr']['properties'])->toHaveKey('city');
 })->skip(supportsNativeAnyOf(), 'Native anyOf support preserves compositions instead of using the fallback collapse.');
 
-test('it preserves anyOf compositions when the framework deserializer supports them', function () {
+test('it preserves anyOf compositions when the framework deserializer supports them', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => [
@@ -304,7 +306,7 @@ test('it preserves anyOf compositions when the framework deserializer supports t
     ]);
 })->skip(! supportsNativeAnyOf(), 'The installed Illuminate JSON schema package does not support anyOf.');
 
-test('it folds outer object siblings into each branch so the deserializer keeps them', function () {
+test('it folds outer object siblings into each branch so the deserializer keeps them', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => ['kind' => ['type' => 'string']],
@@ -324,7 +326,7 @@ test('it folds outer object siblings into each branch so the deserializer keeps 
     expect($normalized['anyOf'][1]['required'])->toEqualCanonicalizing(['kind', 'age']);
 })->skip(! supportsNativeAnyOf(), 'The installed Illuminate JSON schema package does not support anyOf.');
 
-test('it keeps the shared base property after round-tripping a sibling anyOf through the deserializer', function () {
+test('it keeps the shared base property after round-tripping a sibling anyOf through the deserializer', function (): void {
     $type = JsonSchemaFactory::fromArray(SchemaNormalizer::normalize([
         'type' => 'object',
         'properties' => ['kind' => ['type' => 'string']],
@@ -338,7 +340,7 @@ test('it keeps the shared base property after round-tripping a sibling anyOf thr
     expect(json_encode((new Serializer)->serialize($type)))->toContain('"kind"');
 })->skip(! supportsNativeAnyOf(), 'The installed Illuminate JSON schema package does not support anyOf.');
 
-test('it keeps the outer description on a preserved anyOf composition', function () {
+test('it keeps the outer description on a preserved anyOf composition', function (): void {
     $normalized = normalizesWithoutThrowing([
         'description' => 'A union.',
         'anyOf' => [['type' => 'string'], ['type' => 'integer']],
@@ -348,7 +350,7 @@ test('it keeps the outer description on a preserved anyOf composition', function
     expect($normalized['anyOf'])->toHaveCount(2);
 })->skip(! supportsNativeAnyOf(), 'The installed Illuminate JSON schema package does not support anyOf.');
 
-test('it drops empty branches from a preserved anyOf instead of inventing a string branch', function () {
+test('it drops empty branches from a preserved anyOf instead of inventing a string branch', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => [
@@ -362,7 +364,7 @@ test('it drops empty branches from a preserved anyOf instead of inventing a stri
     ]);
 })->skip(! supportsNativeAnyOf(), 'The installed Illuminate JSON schema package does not support anyOf.');
 
-test('it drops a cyclic anyOf branch instead of inventing a string branch', function () {
+test('it drops a cyclic anyOf branch instead of inventing a string branch', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => ['node' => ['$ref' => '#/$defs/Node']],
@@ -374,7 +376,7 @@ test('it drops a cyclic anyOf branch instead of inventing a string branch', func
     expect($normalized['properties']['node']['anyOf'])->toBe([['type' => 'integer']]);
 })->skip(! supportsNativeAnyOf(), 'The installed Illuminate JSON schema package does not support anyOf.');
 
-test('it drops a preserved anyOf made up entirely of null branches', function () {
+test('it drops a preserved anyOf made up entirely of null branches', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => [
@@ -386,7 +388,7 @@ test('it drops a preserved anyOf made up entirely of null branches', function ()
     expect($normalized['properties']['v']['type'])->toBe('string');
 })->skip(! supportsNativeAnyOf(), 'The installed Illuminate JSON schema package does not support anyOf.');
 
-test('it types heterogeneous, empty, and homogeneous enums without throwing', function (array $enum, $expected) {
+test('it types heterogeneous, empty, and homogeneous enums without throwing', function (array $enum, $expected): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => ['e' => ['enum' => $enum]],
@@ -399,7 +401,7 @@ test('it types heterogeneous, empty, and homogeneous enums without throwing', fu
     'homogeneous int' => [[1, 2, 3], 'integer'],
 ]);
 
-test('it replaces a null-only type with a scalar so it deserializes', function (array $raw) {
+test('it replaces a null-only type with a scalar so it deserializes', function (array $raw): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => ['n' => $raw],
@@ -411,7 +413,7 @@ test('it replaces a null-only type with a scalar so it deserializes', function (
     'null-only array' => [['type' => ['null']]],
 ]);
 
-test('it re-infers a type when the declared type is not a known JSON Schema type', function () {
+test('it re-infers a type when the declared type is not a known JSON Schema type', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => [
@@ -425,7 +427,7 @@ test('it re-infers a type when the declared type is not a known JSON Schema type
     expect($normalized['properties']['b']['properties'])->toHaveKey('x');
 });
 
-test('it drops unknown members from a multi-type union but keeps the rest', function () {
+test('it drops unknown members from a multi-type union but keeps the rest', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => [
@@ -440,7 +442,7 @@ test('it drops unknown members from a multi-type union but keeps the rest', func
     expect($normalized['properties']['only']['type'])->toBe('string');
 });
 
-test('it produces an ObjectType for a gnarly real-world schema', function () {
+test('it produces an ObjectType for a gnarly real-world schema', function (): void {
     $type = JsonSchemaFactory::fromArray(SchemaNormalizer::normalize([
         '$schema' => 'http://json-schema.org/draft-07/schema#',
         'type' => 'object',
@@ -457,7 +459,7 @@ test('it produces an ObjectType for a gnarly real-world schema', function () {
     expect($type)->toBeInstanceOf(ObjectType::class);
 });
 
-test('it terminates on a recursive allOf instead of hanging', function () {
+test('it terminates on a recursive allOf instead of hanging', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => ['node' => ['$ref' => '#/$defs/Node']],
@@ -474,7 +476,7 @@ test('it terminates on a recursive allOf instead of hanging', function () {
     expect($normalized['properties']['node']['properties'])->toHaveKey('v');
 });
 
-test('it terminates on a nullable recursive union instead of hanging', function () {
+test('it terminates on a nullable recursive union instead of hanging', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => ['node' => ['$ref' => '#/$defs/Node']],
@@ -491,7 +493,7 @@ test('it terminates on a nullable recursive union instead of hanging', function 
     expect($normalized['properties']['node']['properties'])->toHaveKey('child');
 });
 
-test('it resolves arbitrary local JSON pointers, including escaped keys', function () {
+test('it resolves arbitrary local JSON pointers, including escaped keys', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => [
@@ -507,7 +509,7 @@ test('it resolves arbitrary local JSON pointers, including escaped keys', functi
     expect($normalized['properties']['b'])->toMatchArray(['type' => 'integer', 'minimum' => 1]);
 });
 
-test('it converts const to a single-value enum', function () {
+test('it converts const to a single-value enum', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => ['mode' => ['const' => 'fast']],
@@ -516,7 +518,7 @@ test('it converts const to a single-value enum', function () {
     expect($normalized['properties']['mode'])->toBe(['enum' => ['fast'], 'type' => 'string']);
 });
 
-test('it infers object type from additionalProperties', function (array $raw) {
+test('it infers object type from additionalProperties', function (array $raw): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => ['opts' => $raw],
@@ -528,7 +530,7 @@ test('it infers object type from additionalProperties', function (array $raw) {
     'false form' => [['additionalProperties' => false]],
 ]);
 
-test('it merges all object variants from anyOf instead of discarding all but the first', function () {
+test('it merges all object variants from anyOf instead of discarding all but the first', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => [
@@ -564,7 +566,7 @@ test('it merges all object variants from anyOf instead of discarding all but the
     expect($item['required'])->toBe(['type']);
 })->skip(supportsNativeAnyOf(), 'Native anyOf support preserves compositions instead of using the fallback merge.');
 
-test('it falls back to the single object branch when fewer than two object variants are present', function () {
+test('it falls back to the single object branch when fewer than two object variants are present', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => [
@@ -582,7 +584,7 @@ test('it falls back to the single object branch when fewer than two object varia
     expect($normalized['properties']['value']['properties'])->not->toHaveKey('y');
 })->skip(supportsNativeAnyOf(), 'Native anyOf support preserves compositions instead of using the fallback merge.');
 
-test('it merges the object variants and ignores scalar branches when two or more objects are present', function () {
+test('it merges the object variants and ignores scalar branches when two or more objects are present', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => [
@@ -600,7 +602,7 @@ test('it merges the object variants and ignores scalar branches when two or more
     expect($normalized['properties']['value']['properties'])->toHaveKeys(['x', 'y']);
 })->skip(supportsNativeAnyOf(), 'Native anyOf support preserves compositions instead of using the fallback merge.');
 
-test('it recursively merges branch refinements into a generic outer property', function () {
+test('it recursively merges branch refinements into a generic outer property', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => ['kind' => ['type' => 'string']],
@@ -613,7 +615,7 @@ test('it recursively merges branch refinements into a generic outer property', f
     expect($normalized['properties']['kind']['enum'])->toBe(['a', 'b']);
 })->skip(supportsNativeAnyOf(), 'Native anyOf support preserves compositions instead of using the fallback merge.');
 
-test('it recursively merges duplicate nested object properties across object variants', function () {
+test('it recursively merges duplicate nested object properties across object variants', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => [
@@ -629,7 +631,7 @@ test('it recursively merges duplicate nested object properties across object var
     expect($normalized['properties']['item']['properties']['payload']['properties'])->toHaveKeys(['a', 'b']);
 })->skip(supportsNativeAnyOf(), 'Native anyOf support preserves compositions instead of using the fallback merge.');
 
-test('it ignores a no-opinion variant when intersecting required on a nested object property', function () {
+test('it ignores a no-opinion variant when intersecting required on a nested object property', function (): void {
     $normalized = normalizesWithoutThrowing([
         'anyOf' => [
             ['type' => 'object', 'properties' => ['payload' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string'], 'b' => ['type' => 'string']], 'required' => ['a']]]],
@@ -641,7 +643,7 @@ test('it ignores a no-opinion variant when intersecting required on a nested obj
     expect($normalized['properties']['payload']['required'])->toBe(['a']);
 })->skip(supportsNativeAnyOf(), 'Native anyOf support preserves compositions instead of using the fallback merge.');
 
-test('it keeps a nested object property open unless every variant closes it', function () {
+test('it keeps a nested object property open unless every variant closes it', function (): void {
     $normalized = normalizesWithoutThrowing([
         'anyOf' => [
             ['type' => 'object', 'properties' => ['payload' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']], 'additionalProperties' => false]]],
@@ -652,7 +654,7 @@ test('it keeps a nested object property open unless every variant closes it', fu
     expect($normalized['properties']['payload'])->not->toHaveKey('additionalProperties');
 })->skip(supportsNativeAnyOf(), 'Native anyOf support preserves compositions instead of using the fallback merge.');
 
-test('it closes a nested object property only when every variant closes it', function () {
+test('it closes a nested object property only when every variant closes it', function (): void {
     $normalized = normalizesWithoutThrowing([
         'anyOf' => [
             ['type' => 'object', 'properties' => ['payload' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']], 'additionalProperties' => false]]],
@@ -663,7 +665,7 @@ test('it closes a nested object property only when every variant closes it', fun
     expect($normalized['properties']['payload']['additionalProperties'])->toBeFalse();
 })->skip(supportsNativeAnyOf(), 'Native anyOf support preserves compositions instead of using the fallback merge.');
 
-test('it unions scalar property types when the same key differs across object variants', function () {
+test('it unions scalar property types when the same key differs across object variants', function (): void {
     $normalized = normalizesWithoutThrowing([
         'anyOf' => [
             ['type' => 'object', 'properties' => ['id' => ['type' => 'string']]],
@@ -674,7 +676,7 @@ test('it unions scalar property types when the same key differs across object va
     expect($normalized['properties']['id']['type'])->toBe(['string', 'integer']);
 })->skip(supportsNativeAnyOf(), 'Native anyOf support preserves compositions instead of using the fallback merge.');
 
-test('it keeps the nested object shape when one variant types a property as an object', function () {
+test('it keeps the nested object shape when one variant types a property as an object', function (): void {
     $normalized = normalizesWithoutThrowing([
         'anyOf' => [
             ['type' => 'object', 'properties' => ['id' => ['type' => 'object', 'properties' => ['n' => ['type' => 'string']]]]],
@@ -686,7 +688,7 @@ test('it keeps the nested object shape when one variant types a property as an o
     expect($normalized['properties']['id']['properties'])->toHaveKey('n');
 })->skip(supportsNativeAnyOf(), 'Native anyOf support preserves compositions instead of using the fallback merge.');
 
-test('it does not throw when an object variant has a malformed scalar properties value', function () {
+test('it does not throw when an object variant has a malformed scalar properties value', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => [
@@ -702,7 +704,7 @@ test('it does not throw when an object variant has a malformed scalar properties
     expect($normalized['properties']['item']['properties'])->toHaveKey('b');
 })->skip(supportsNativeAnyOf(), 'Native anyOf support preserves compositions instead of using the fallback merge.');
 
-test('it preserves outer schema properties and required when merging anyOf object variants', function () {
+test('it preserves outer schema properties and required when merging anyOf object variants', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => ['kind' => ['type' => 'string']],
@@ -717,7 +719,7 @@ test('it preserves outer schema properties and required when merging anyOf objec
     expect($normalized['required'])->toContain('kind');
 })->skip(supportsNativeAnyOf(), 'Native anyOf support preserves compositions instead of using the fallback merge.');
 
-test('it treats a branch with no required key as no-opinion rather than zero-required', function () {
+test('it treats a branch with no required key as no-opinion rather than zero-required', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => [
@@ -741,7 +743,7 @@ test('it treats a branch with no required key as no-opinion rather than zero-req
     expect($item['required'])->toBe(['type']);
 })->skip(supportsNativeAnyOf(), 'Native anyOf support preserves compositions instead of using the fallback merge.');
 
-test('it merges nullable object variants and marks result nullable', function () {
+test('it merges nullable object variants and marks result nullable', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => [
@@ -758,7 +760,7 @@ test('it merges nullable object variants and marks result nullable', function ()
     expect($normalized['properties']['payload']['properties'])->toHaveKeys(['x', 'y']);
 })->skip(supportsNativeAnyOf(), 'Native anyOf support preserves compositions instead of using the fallback merge.');
 
-test('it does not promote required fields when only one of multiple branches declares required', function () {
+test('it does not promote required fields when only one of multiple branches declares required', function (): void {
     $normalized = normalizesWithoutThrowing([
         'anyOf' => [
             ['type' => 'object', 'properties' => ['id' => ['type' => 'string'], 'name' => ['type' => 'string']], 'required' => ['id']],
@@ -770,7 +772,7 @@ test('it does not promote required fields when only one of multiple branches dec
     expect($normalized['properties'])->toHaveKeys(['id', 'name', 'code']);
 })->skip(supportsNativeAnyOf(), 'Native anyOf support preserves compositions instead of using the fallback merge.');
 
-test('it unions enum values for overlapping discriminator properties across anyOf variants', function () {
+test('it unions enum values for overlapping discriminator properties across anyOf variants', function (): void {
     $normalized = normalizesWithoutThrowing([
         'anyOf' => [
             ['type' => 'object', 'properties' => ['kind' => ['type' => 'string', 'enum' => ['open']],    'text' => ['type' => 'string']]],
@@ -785,7 +787,7 @@ test('it unions enum values for overlapping discriminator properties across anyO
     expect($normalized['properties'])->toHaveKeys(['kind', 'text', 'choices', 'scale']);
 })->skip(supportsNativeAnyOf(), 'Native anyOf support preserves compositions instead of using the fallback merge.');
 
-test('it does not bleed branch-specific keys like additionalProperties into the merged result', function () {
+test('it does not bleed branch-specific keys like additionalProperties into the merged result', function (): void {
     $normalized = normalizesWithoutThrowing([
         'type' => 'object',
         'properties' => [
@@ -802,7 +804,7 @@ test('it does not bleed branch-specific keys like additionalProperties into the 
     expect($normalized['properties']['value'])->not->toHaveKey('additionalProperties');
 })->skip(supportsNativeAnyOf(), 'Native anyOf support preserves compositions instead of using the fallback merge.');
 
-test('it prefers the object branch over a scalar branch regardless of branch order', function () {
+test('it prefers the object branch over a scalar branch regardless of branch order', function (): void {
     $stringFirst = normalizesWithoutThrowing([
         'anyOf' => [
             ['type' => 'string'],
@@ -823,7 +825,7 @@ test('it prefers the object branch over a scalar branch regardless of branch ord
     expect($objectFirst)->toBe($stringFirst);
 })->skip(supportsNativeAnyOf(), 'Native anyOf support preserves compositions instead of using the fallback merge.');
 
-test('it skips an empty no-opinion branch when intersecting required across object variants', function () {
+test('it skips an empty no-opinion branch when intersecting required across object variants', function (): void {
     $normalized = normalizesWithoutThrowing([
         'anyOf' => [
             ['type' => 'object', 'properties' => ['type' => ['type' => 'string', 'enum' => ['behavioral']], 'key' => ['type' => 'string'], 'value' => ['type' => 'string'], 'event_type' => ['type' => 'string']], 'required' => ['type', 'key', 'value', 'event_type']],
@@ -838,7 +840,7 @@ test('it skips an empty no-opinion branch when intersecting required across obje
     expect($normalized['properties']['type']['enum'])->toBe(['behavioral', 'person', 'cohort']);
 })->skip(supportsNativeAnyOf(), 'Native anyOf support preserves compositions instead of using the fallback merge.');
 
-test('it skips a leading empty branch instead of degrading the union to a string', function () {
+test('it skips a leading empty branch instead of degrading the union to a string', function (): void {
     $normalized = normalizesWithoutThrowing([
         'anyOf' => [
             [],
@@ -851,7 +853,7 @@ test('it skips a leading empty branch instead of degrading the union to a string
     expect($normalized['properties'])->toHaveKeys(['a', 'b']);
 })->skip(supportsNativeAnyOf(), 'Native anyOf support preserves compositions instead of using the fallback merge.');
 
-test('it carries the first object branch description into the merged result', function () {
+test('it carries the first object branch description into the merged result', function (): void {
     $normalized = normalizesWithoutThrowing([
         'anyOf' => [
             ['type' => 'object', 'description' => 'Variant A', 'properties' => ['a' => ['type' => 'string']]],
@@ -863,7 +865,7 @@ test('it carries the first object branch description into the merged result', fu
     expect($normalized['properties'])->toHaveKeys(['a', 'b']);
 })->skip(supportsNativeAnyOf(), 'Native anyOf support preserves compositions instead of using the fallback merge.');
 
-test('it keeps additionalProperties false only when every merged object branch agrees', function () {
+test('it keeps additionalProperties false only when every merged object branch agrees', function (): void {
     $unanimous = normalizesWithoutThrowing([
         'anyOf' => [
             ['type' => 'object', 'properties' => ['a' => ['type' => 'string']], 'additionalProperties' => false],
@@ -882,7 +884,7 @@ test('it keeps additionalProperties false only when every merged object branch a
     expect($mixed)->not->toHaveKey('additionalProperties');
 })->skip(supportsNativeAnyOf(), 'Native anyOf support preserves compositions instead of using the fallback merge.');
 
-test('it deep-merges overlapping properties across allOf branches', function () {
+test('it deep-merges overlapping properties across allOf branches', function (): void {
     $normalized = normalizesWithoutThrowing([
         'allOf' => [
             ['properties' => ['value' => ['type' => 'string', 'minLength' => 5]]],

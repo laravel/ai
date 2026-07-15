@@ -7,10 +7,12 @@ use Illuminate\Foundation\Queue\Queueable;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Responses\AgentResponse;
 
 class InvokeAgent implements ShouldQueue
 {
-    use Concerns\InvokesQueuedResponseCallbacks, Queueable;
+    use Concerns\InvokesQueuedResponseCallbacks;
+    use Queueable;
 
     /**
      * Create a new job instance.
@@ -30,7 +32,7 @@ class InvokeAgent implements ShouldQueue
      */
     public function handle(): void
     {
-        $this->withCallbacks(fn () => $this->agent->prompt(
+        $this->withCallbacks(fn (): AgentResponse => $this->agent->prompt(
             $this->resume ?? $this->prompt, $this->attachments, $this->provider, $this->model
         ));
     }

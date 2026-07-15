@@ -4,14 +4,14 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Document;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.gemini' => [
         ...config('ai.providers.gemini'),
         'key' => 'test-gemini-key',
     ]]);
 });
 
-test('get file sends correct request', function () {
+test('get file sends correct request', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::response([
             'name' => 'files/abc123',
@@ -24,14 +24,12 @@ test('get file sends correct request', function () {
     expect($response->id)->toBe('files/abc123');
     expect($response->mime)->toBe('text/plain');
 
-    Http::assertSent(function ($request) {
-        return $request->method() === 'GET'
-            && str_contains($request->url(), 'v1beta/files/abc123')
-            && $request->hasHeader('x-goog-api-key', 'test-gemini-key');
-    });
+    Http::assertSent(fn ($request): bool => $request->method() === 'GET'
+        && str_contains((string) $request->url(), 'v1beta/files/abc123')
+        && $request->hasHeader('x-goog-api-key', 'test-gemini-key'));
 });
 
-test('get file normalizes id with prefix', function () {
+test('get file normalizes id with prefix', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::response([
             'name' => 'files/abc123',
@@ -41,13 +39,11 @@ test('get file normalizes id with prefix', function () {
 
     Files::get('files/abc123', provider: 'gemini');
 
-    Http::assertSent(function ($request) {
-        return str_contains($request->url(), 'v1beta/files/abc123')
-            && ! str_contains($request->url(), 'files/files/');
-    });
+    Http::assertSent(fn ($request): bool => str_contains((string) $request->url(), 'v1beta/files/abc123')
+        && ! str_contains((string) $request->url(), 'files/files/'));
 });
 
-test('put file sends multipart upload', function () {
+test('put file sends multipart upload', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::response([
             'file' => [
@@ -62,14 +58,12 @@ test('put file sends multipart upload', function () {
 
     expect($response->id)->toBe('files/uploaded123');
 
-    Http::assertSent(function ($request) {
-        return $request->method() === 'POST'
-            && str_contains($request->url(), '/upload/v1beta/files')
-            && $request->hasHeader('x-goog-api-key', 'test-gemini-key');
-    });
+    Http::assertSent(fn ($request): bool => $request->method() === 'POST'
+        && str_contains((string) $request->url(), '/upload/v1beta/files')
+        && $request->hasHeader('x-goog-api-key', 'test-gemini-key'));
 });
 
-test('put file merges flat provider options into the upload body', function () {
+test('put file merges flat provider options into the upload body', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::response(['file' => ['name' => 'files/uploaded123']]),
     ]);
@@ -84,7 +78,7 @@ test('put file merges flat provider options into the upload body', function () {
         ->and(multipartNestedField($request, 'file'))->toBe(['hello.txt']);
 });
 
-test('put file provider options override only the file metadata keys they specify', function () {
+test('put file provider options override only the file metadata keys they specify', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::response(['file' => ['name' => 'files/uploaded123']]),
     ]);
@@ -96,7 +90,7 @@ test('put file provider options override only the file metadata keys they specif
     expect(multipartNestedField(sentRequest(), 'file'))->toBe(['override.txt']);
 });
 
-test('put file provider options deep-merge into the file metadata without wiping the display name', function () {
+test('put file provider options deep-merge into the file metadata without wiping the display name', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::response(['file' => ['name' => 'files/uploaded123']]),
     ]);
@@ -108,34 +102,30 @@ test('put file provider options deep-merge into the file metadata without wiping
     expect(multipartNestedField(sentRequest(), 'file'))->toBe(['hello.txt', 'image/png']);
 });
 
-test('delete file sends correct request', function () {
+test('delete file sends correct request', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::response([], 200),
     ]);
 
     Files::delete('abc123', provider: 'gemini');
 
-    Http::assertSent(function ($request) {
-        return $request->method() === 'DELETE'
-            && str_contains($request->url(), 'v1beta/files/abc123')
-            && $request->hasHeader('x-goog-api-key', 'test-gemini-key');
-    });
+    Http::assertSent(fn ($request): bool => $request->method() === 'DELETE'
+        && str_contains((string) $request->url(), 'v1beta/files/abc123')
+        && $request->hasHeader('x-goog-api-key', 'test-gemini-key'));
 });
 
-test('delete file normalizes id with prefix', function () {
+test('delete file normalizes id with prefix', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::response([], 200),
     ]);
 
     Files::delete('files/abc123', provider: 'gemini');
 
-    Http::assertSent(function ($request) {
-        return str_contains($request->url(), 'v1beta/files/abc123')
-            && ! str_contains($request->url(), 'files/files/');
-    });
+    Http::assertSent(fn ($request): bool => str_contains((string) $request->url(), 'v1beta/files/abc123')
+        && ! str_contains((string) $request->url(), 'files/files/'));
 });
 
-test('file gateway uses custom base url', function () {
+test('file gateway uses custom base url', function (): void {
     config(['ai.providers.gemini' => [
         ...config('ai.providers.gemini'),
         'key' => 'test-gemini-key',
@@ -151,7 +141,5 @@ test('file gateway uses custom base url', function () {
 
     Files::get('abc123', provider: 'gemini');
 
-    Http::assertSent(function ($request) {
-        return str_contains($request->url(), 'custom.api.example.com/v1beta/files/abc123');
-    });
+    Http::assertSent(fn ($request): bool => str_contains((string) $request->url(), 'custom.api.example.com/v1beta/files/abc123'));
 });
