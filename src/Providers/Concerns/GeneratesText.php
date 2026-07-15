@@ -145,11 +145,11 @@ trait GeneratesText
             return null;
         }
 
+        /** @var Agent&RemembersConversationsContract $agent */
         if ($agent->currentConversation() === null) {
             return null;
         }
 
-        /** @var Agent&RemembersConversationsContract $agent */
         $store = app(ConversationStore::class);
 
         $conversationId = $agent->currentConversation();
