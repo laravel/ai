@@ -5,7 +5,7 @@ use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\StructuredStep;
 use Laravel\Ai\Responses\Data\Usage;
 
-test('structured step stores structured data', function () {
+test('structured step stores structured data', function (): void {
     $step = new StructuredStep(
         'test response',
         ['key' => 'value'],
@@ -20,7 +20,7 @@ test('structured step stores structured data', function () {
         ->and($step->structured)->toBe(['key' => 'value']);
 });
 
-test('structured step to array includes structured data', function () {
+test('structured step to array includes structured data', function (): void {
     $step = new StructuredStep(
         'text content',
         ['name' => 'test', 'count' => 5],
@@ -37,7 +37,7 @@ test('structured step to array includes structured data', function () {
         ->and($array['structured'])->toBe(['name' => 'test', 'count' => 5]);
 });
 
-test('structured step jsonSerialize includes structured data', function () {
+test('structured step jsonSerialize includes structured data', function (): void {
     $step = new StructuredStep(
         'response text',
         ['result' => true],

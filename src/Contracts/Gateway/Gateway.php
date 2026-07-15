@@ -2,7 +2,7 @@
 
 namespace Laravel\Ai\Contracts\Gateway;
 
-interface Gateway extends AudioGateway, EmbeddingGateway, ImageGateway, TextGateway, TranscriptionGateway
+interface Gateway extends AudioGateway, EmbeddingGateway, ImageGateway, StepTextGateway, TranscriptionGateway
 {
     //
 }

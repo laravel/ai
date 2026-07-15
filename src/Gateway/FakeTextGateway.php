@@ -8,32 +8,27 @@ use Illuminate\JsonSchema\Types\ObjectType;
 use Illuminate\JsonSchema\Types\Type;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
-use Laravel\Ai\Contracts\Gateway\TextGateway;
+use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
-use Laravel\Ai\Gateway\Concerns\InvokesTools;
-use Laravel\Ai\Messages\AssistantMessage;
-use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
+use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
-use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
-use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
+use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use RuntimeException;
 
 use function Laravel\Ai\generate_fake_data_for_json_schema_type;
 use function Laravel\Ai\ulid;
 
-class FakeTextGateway implements TextGateway
+class FakeTextGateway implements StepTextGateway
 {
-    use InvokesTools;
-
     protected int $currentResponseIndex = 0;
 
     protected bool $preventStrayPrompts = false;
@@ -43,123 +38,105 @@ class FakeTextGateway implements TextGateway
     ) {}
 
     /**
-     * Generate text representing the next message in a conversation.
+     * Generate text for a single step in a conversation.
      *
      * @param  array<string, Type>|null  $schema
      */
-    public function generateText(
+    public function generateTextStep(
         TextProvider $provider,
         string $model,
         ?string $instructions,
-        array $messages = [],
-        array $tools = [],
-        ?array $schema = null,
-        ?TextGenerationOptions $options = null,
-        ?int $timeout = null,
-    ): TextResponse {
-        $message = (new Collection($messages))->last(function ($message) {
-            return $message instanceof UserMessage;
-        });
-
-        $response = $this->nextResponse(
-            $provider, $model, $message->content, $message->attachments, $schema
-        );
-
-        if ($response instanceof ToolCall) {
-            return $this->handleFakeToolCalls(
-                $response,
-                $provider,
-                $model,
-                $message->content,
-                $message->attachments,
-                $schema,
-                $tools,
-            );
-        }
-
-        return $response;
-    }
-
-    /**
-     * Execute a faked tool call and return the next fake response.
-     */
-    protected function handleFakeToolCalls(
-        ToolCall $toolCall,
-        TextProvider $provider,
-        string $model,
-        string $prompt,
-        Collection $attachments,
-        ?array $schema,
+        array $messages,
         array $tools,
-    ): TextResponse {
-        $this->initializeToolCallbacks();
-
-        $toolResults = new Collection;
-
-        if ($tool = $this->findTool($toolCall->name, $tools)) {
-            $toolResults->push(new ToolResult(
-                $toolCall->id,
-                $toolCall->name,
-                $toolCall->arguments,
-                $this->executeTool($tool, $toolCall->arguments),
-                $toolCall->resultId,
-            ));
-        }
-
-        return $this->nextResponse($provider, $model, $prompt, $attachments, $schema)
-            ->withMessages(new Collection([
-                new AssistantMessage('', new Collection([$toolCall])),
-                new ToolResultMessage($toolResults),
-            ]));
+        ?array $schema,
+        ?TextGenerationOptions $options,
+        ?int $timeout,
+        StepContext $stepContext,
+    ): StepResponse {
+        return $this->nextStep($provider, $model, $messages, $schema);
     }
 
     /**
-     * Stream text representing the next message in a conversation.
+     * Stream text for a single step in a conversation.
      *
      * @param  array<string, Type>|null  $schema
+     * @return Generator<int, mixed, mixed, StepResponse>
      */
-    public function streamText(
+    public function generateStreamStep(
         string $invocationId,
         TextProvider $provider,
         string $model,
         ?string $instructions,
-        array $messages = [],
-        array $tools = [],
-        ?array $schema = null,
-        ?TextGenerationOptions $options = null,
-        ?int $timeout = null,
+        array $messages,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options,
+        ?int $timeout,
+        StepContext $stepContext,
     ): Generator {
+        $step = $this->nextStep($provider, $model, $messages, $schema);
+
         $messageId = ulid();
 
-        // Fake the stream and text starting...
         yield (new StreamStart(ulid(), $provider->name(), $model, time()))->withInvocationId($invocationId);
-        yield (new TextStart(ulid(), $messageId, time()))->withInvocationId($invocationId);
 
-        $message = (new Collection($messages))->last(function ($message) {
-            return $message instanceof UserMessage;
-        });
+        if (filled($step->text)) {
+            yield (new TextStart(ulid(), $messageId, time()))->withInvocationId($invocationId);
 
-        $fakeResponse = $this->nextResponse(
+            foreach (Str::of($step->text)->explode(' ') as $index => $word) {
+                yield (new TextDelta(
+                    ulid(),
+                    $messageId,
+                    $index > 0 ? ' '.$word : $word,
+                    time(),
+                ))->withInvocationId($invocationId);
+            }
+
+            yield (new TextEnd(ulid(), $messageId, time()))->withInvocationId($invocationId);
+        }
+
+        foreach ($step->toolCalls as $toolCall) {
+            yield (new ToolCallEvent(ulid(), $toolCall, time()))->withInvocationId($invocationId);
+        }
+
+        return $step;
+    }
+
+    /**
+     * Resolve the next fake response and marshal it into a step response.
+     */
+    protected function nextStep(TextProvider $provider, string $model, array $messages, ?array $schema): StepResponse
+    {
+        $message = (new Collection($messages))->last(fn ($message): bool => $message instanceof UserMessage);
+
+        /** @var UserMessage $message */
+        $response = $this->nextResponse(
             $provider, $model, $message->content, $message->attachments, $schema
         );
 
-        $events = Str::of($fakeResponse->text)
-            ->explode(' ')
-            ->map(fn ($word, $index) => (new TextDelta(
-                ulid(),
-                $messageId,
-                $index > 0 ? ' '.$word : $word,
-                time(),
-            ))->withInvocationId($invocationId))->all();
+        return $this->toStepResponse($response, $provider, $model);
+    }
 
-        // Fake the text delta events...
-        foreach ($events as $event) {
-            yield $event;
+    /**
+     * Convert a marshalled fake response into a step response for the generation loop.
+     */
+    protected function toStepResponse(mixed $response, TextProvider $provider, string $model): StepResponse
+    {
+        if ($response instanceof ToolCall) {
+            return new StepResponse(
+                '', [$response], FinishReason::ToolCalls, new Usage, new Meta($provider->name(), $model)
+            );
         }
 
-        // Fake the stream and text ending...
-        yield (new TextEnd(ulid(), $messageId, time()))->withInvocationId($invocationId);
-        yield (new StreamEnd(ulid(), 'stop', new Usage, time()))->withInvocationId($invocationId);
+        if ($response instanceof StructuredTextResponse) {
+            return new StepResponse(
+                $response->text, [], FinishReason::Stop, $response->usage, $response->meta, $response->structured
+            );
+        }
+
+        return new StepResponse(
+            $response->text, [], FinishReason::Stop, $response->usage, $response->meta
+        );
     }
 
     /**
@@ -173,7 +150,7 @@ class FakeTextGateway implements TextGateway
 
         return tap($this->marshalResponse(
             $response, $provider, $model, $prompt, $attachments, $schema
-        ), fn () => $this->currentResponseIndex++);
+        ), fn (): int => $this->currentResponseIndex++);
     }
 
     /**
@@ -214,17 +191,6 @@ class FakeTextGateway implements TextGateway
             ),
             default => $response,
         };
-    }
-
-    /**
-     * Specify callbacks that should be invoked when tools are invoking / invoked.
-     */
-    public function onToolInvocation(Closure $invoking, Closure $invoked): self
-    {
-        $this->invokingToolCallback = $invoking;
-        $this->toolInvokedCallback = $invoked;
-
-        return $this;
     }
 
     /**

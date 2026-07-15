@@ -7,7 +7,7 @@ use Illuminate\Support\Str;
 use JsonSerializable;
 use Laravel\Ai\Concerns\Storable;
 
-class GeneratedImage implements Arrayable, JsonSerializable
+class GeneratedImage implements \Stringable, Arrayable, JsonSerializable
 {
     use Storable;
 
@@ -36,7 +36,7 @@ class GeneratedImage implements Arrayable, JsonSerializable
      */
     protected function randomStorageName(): string
     {
-        return once(fn () => Str::random(40).match ($this->mime()) {
+        return once(fn (): string => Str::random(40).match ($this->mime()) {
             'image/jpeg' => '.jpg',
             'image/png' => '.png',
             'image/webp' => '.webp',

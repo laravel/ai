@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Tools\Filesystem;
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Tools\Request;
 use Throwable;
@@ -23,6 +24,7 @@ class GetFileUrl extends FilesystemTool
      */
     public function handle(Request $request): string
     {
+        /** @var FilesystemAdapter $disk */
         $disk = $this->disk();
 
         $path = $request->string('path');
@@ -37,8 +39,8 @@ class GetFileUrl extends FilesystemTool
             return $minutes > 0
                 ? $disk->temporaryUrl($path, now()->addMinutes($minutes))
                 : $disk->url($path);
-        } catch (Throwable $e) {
-            return "Unable to generate a URL for [{$path}]: {$e->getMessage()}";
+        } catch (Throwable $throwable) {
+            return "Unable to generate a URL for [{$path}]: {$throwable->getMessage()}";
         }
     }
 
@@ -52,7 +54,7 @@ class GetFileUrl extends FilesystemTool
                 ->description('The file path, relative to the disk root.')
                 ->required(),
             'expires_in_minutes' => $schema->integer()
-                ->description('Number of minutes a temporary signed URL stays valid, or null for the disk\'s standard (non-expiring) URL.')
+                ->description("Number of minutes a temporary signed URL stays valid, or null for the disk's standard (non-expiring) URL.")
                 ->nullable()
                 ->required(),
         ];

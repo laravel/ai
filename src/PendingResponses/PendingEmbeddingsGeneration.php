@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\PendingResponses;
 
-use Closure;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Traits\Conditionable;
@@ -13,16 +12,17 @@ use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\FakePendingDispatch;
 use Laravel\Ai\Jobs\GenerateEmbeddings;
+use Laravel\Ai\PendingResponses\Concerns\ResolvesProviderOptions;
 use Laravel\Ai\Prompts\QueuedEmbeddingsPrompt;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\QueuedEmbeddingsResponse;
-use Laravel\SerializableClosure\SerializableClosure;
 
 class PendingEmbeddingsGeneration
 {
     use Conditionable;
+    use ResolvesProviderOptions;
 
     protected ?int $dimensions = null;
 
@@ -31,9 +31,6 @@ class PendingEmbeddingsGeneration
     protected ?bool $shouldCache = null;
 
     protected int $timeout = 30;
-
-    /** @var array<string, mixed>|SerializableClosure */
-    protected array|SerializableClosure $providerOptions = [];
 
     /**
      * Create a new pending embeddings generation instance.
@@ -98,38 +95,6 @@ class PendingEmbeddingsGeneration
     }
 
     /**
-     * Specify provider-specific options for embeddings generation.
-     *
-     * Pass a flat array to apply the same options to every selected provider,
-     * or a closure that receives the resolved Provider and returns the options
-     * for that provider. Queued closures may only capture serializable values.
-     *
-     * @param  array<string, mixed>|Closure(Provider): ?array<string, mixed>  $options
-     */
-    public function providerOptions(array|Closure $options): self
-    {
-        $this->providerOptions = $options instanceof Closure
-            ? new SerializableClosure($options)
-            : $options;
-
-        return $this;
-    }
-
-    /**
-     * Resolve provider options for the given provider.
-     *
-     * @return array<string, mixed>
-     */
-    protected function resolveProviderOptions(Provider $provider): array
-    {
-        if ($this->providerOptions instanceof SerializableClosure) {
-            return ($this->providerOptions)($provider) ?: [];
-        }
-
-        return $this->providerOptions;
-    }
-
-    /**
      * Generate the embeddings.
      *
      * @throws FailoverableException if every configured provider fails to generate the embeddings.
@@ -151,14 +116,14 @@ class PendingEmbeddingsGeneration
 
             $providerOptions = $this->resolveProviderOptions($provider);
 
-            if ($cached = $this->generateFromCache($provider, $model, $dimensions, $providerOptions)) {
+            if (($cached = $this->generateFromCache($provider, $model, $dimensions, $providerOptions)) instanceof EmbeddingsResponse) {
                 return $cached;
             }
 
             try {
                 return tap(
                     $provider->embeddings($this->inputs, $dimensions, $model, $this->timeout, $providerOptions),
-                    fn ($response) => $this->cacheEmbeddings($provider, $model, $dimensions, $providerOptions, $response)
+                    fn (EmbeddingsResponse $response) => $this->cacheEmbeddings($provider, $model, $dimensions, $providerOptions, $response)
                 );
             } catch (FailoverableException $e) {
                 $lastException = $e;
@@ -186,7 +151,7 @@ class PendingEmbeddingsGeneration
         $response = $this->cacheStore()->get($this->cacheKey($provider, $model, $dimensions, $providerOptions));
 
         if (! is_null($response)) {
-            $response = json_decode($response, true);
+            $response = json_decode((string) $response, true);
 
             return new EmbeddingsResponse($response['embeddings'], 0, new Meta(
                 provider: $response['meta']['provider'],
@@ -254,12 +219,12 @@ class PendingEmbeddingsGeneration
         }
 
         if (array_is_list($value)) {
-            return array_map(fn ($item) => $this->normalizeForFingerprint($item), $value);
+            return array_map($this->normalizeForFingerprint(...), $value);
         }
 
         ksort($value);
 
-        return array_map(fn ($item) => $this->normalizeForFingerprint($item), $value);
+        return array_map($this->normalizeForFingerprint(...), $value);
     }
 
     /**

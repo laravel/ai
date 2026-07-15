@@ -7,8 +7,8 @@ use InvalidArgumentException;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
+use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
-use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
@@ -52,7 +52,7 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FilePro
     /**
      * Get the provider's text gateway.
      */
-    public function textGateway(): TextGateway
+    public function textGateway(): StepTextGateway
     {
         return $this->textGateway ??= $this->azureGateway();
     }
@@ -70,6 +70,7 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FilePro
      *
      * Azure OpenAI uses API key authentication via the `api-key` header.
      */
+    #[\Override]
     public function providerCredentials(): array
     {
         return [
@@ -166,6 +167,7 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FilePro
     /**
      * Get the provider connection configuration other than the driver, key, and name.
      */
+    #[\Override]
     public function additionalConfiguration(): array
     {
         return [

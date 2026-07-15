@@ -5,11 +5,11 @@ use Illuminate\Support\Facades\Http;
 
 use function Laravel\Ai\agent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     $this->customUrl = 'http://localhost:1234/v1';
 });
 
-test('xai text requests use the configured base url', function () {
+test('xai text requests use the configured base url', function (): void {
     config(['ai.providers.xai' => array_filter([
         ...config('ai.providers.xai'),
         'key' => 'test-key',
@@ -25,11 +25,11 @@ test('xai text requests use the configured base url', function () {
     expect($response->text)->toBe('Hello from local model');
 
     Http::assertSentCount(1);
-    Http::assertSent(fn (Request $request) => $request->method() === 'POST'
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'POST'
         && $request->url() === "{$this->customUrl}/responses");
 });
 
-test('xai requests fall back to the default base url', function () {
+test('xai requests fall back to the default base url', function (): void {
     config(['ai.providers.xai' => array_filter([
         ...config('ai.providers.xai'),
         'key' => 'test-key',
@@ -44,7 +44,7 @@ test('xai requests fall back to the default base url', function () {
     expect($response->text)->toBe('Hello from xAI');
 
     Http::assertSentCount(1);
-    Http::assertSent(fn (Request $request) => $request->method() === 'POST'
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'POST'
         && $request->url() === 'https://api.x.ai/v1/responses');
 });
 

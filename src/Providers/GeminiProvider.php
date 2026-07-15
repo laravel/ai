@@ -46,9 +46,9 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
     {
         return array_filter([
             'fileSearchStoreNames' => $search->ids(),
-            'metadataFilter' => ! empty($search->filters)
-                ? $this->formatMetadataFilter($search->filters)
-                : null,
+            'metadataFilter' => $search->filters === []
+                ? null
+                : $this->formatMetadataFilter($search->filters),
         ]);
     }
 
@@ -59,14 +59,14 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     protected function formatMetadataFilter(array $filters): string
     {
-        return (new Collection($filters))->map(fn ($filter) => match ($filter['type']) {
+        return (new Collection($filters))->map(fn ($filter): string => match ($filter['type']) {
             'eq' => is_numeric($filter['value'])
                 ? "{$filter['key']}={$filter['value']}"
                 : "{$filter['key']}=\"{$filter['value']}\"",
             'ne' => is_numeric($filter['value'])
                 ? "{$filter['key']}!={$filter['value']}"
                 : "{$filter['key']}!=\"{$filter['value']}\"",
-            'in' => '('.(new Collection($filter['value']))->map(fn ($v) => is_numeric($v) ? "{$filter['key']}={$v}" : "{$filter['key']}=\"{$v}\""
+            'in' => '('.(new Collection($filter['value']))->map(fn ($v): string => is_numeric($v) ? "{$filter['key']}={$v}" : "{$filter['key']}=\"{$v}\""
             )->implode(' OR ').')',
         })->implode(' AND ');
     }

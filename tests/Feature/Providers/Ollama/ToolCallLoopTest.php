@@ -3,17 +3,18 @@
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\NoSuchToolException;
+use Laravel\Ai\Responses\AgentResponse;
 use Tests\Fixtures\Agents\MultiStepToolAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.ollama' => [
         ...config('ai.providers.ollama'),
         'key' => '',
     ]]);
 });
 
-test('tool calls trigger follow up request', function () {
+test('tool calls trigger follow up request', function (): void {
     Http::fake([
         '*' => Http::sequence([
             fakeUniqueOllamaToolCallResponse(),
@@ -30,13 +31,13 @@ test('tool calls trigger follow up request', function () {
 
     expect($recorded)->toHaveCount(2);
 
-    $followUpMessages = collect(json_decode($recorded[1][0]->body(), true)['messages']);
+    $followUpMessages = collect(json_decode((string) $recorded[1][0]->body(), true)['messages']);
 
-    expect($followUpMessages->contains(fn ($m) => $m['role'] === 'assistant' && isset($m['tool_calls'])))->toBeTrue()
-        ->and($followUpMessages->contains(fn ($m) => $m['role'] === 'tool'))->toBeTrue();
+    expect($followUpMessages->contains(fn ($m): bool => $m['role'] === 'assistant' && isset($m['tool_calls'])))->toBeTrue()
+        ->and($followUpMessages->contains(fn ($m): bool => $m['role'] === 'tool'))->toBeTrue();
 });
 
-test('tool result message uses tool_name field', function () {
+test('tool result message uses tool_name field', function (): void {
     Http::fake([
         '*' => Http::sequence([
             fakeUniqueOllamaToolCallResponse(),
@@ -50,9 +51,9 @@ test('tool result message uses tool_name field', function () {
     );
 
     $recorded = Http::recorded();
-    $followUpBody = json_decode($recorded[1][0]->body(), true);
+    $followUpBody = json_decode((string) $recorded[1][0]->body(), true);
 
-    $toolMsg = collect($followUpBody['messages'])->first(fn ($m) => $m['role'] === 'tool');
+    $toolMsg = collect($followUpBody['messages'])->first(fn ($m): bool => $m['role'] === 'tool');
 
     expect($toolMsg)->not->toBeNull()
         ->and($toolMsg)->toHaveKey('tool_name')
@@ -60,7 +61,7 @@ test('tool result message uses tool_name field', function () {
         ->and($toolMsg)->not->toHaveKey('tool_call_id');
 });
 
-test('max steps limits tool call depth', function () {
+test('max steps limits tool call depth', function (): void {
     Http::fake([
         '*' => Http::sequence([
             fakeUniqueOllamaToolCallResponse(),
@@ -80,7 +81,7 @@ test('max steps limits tool call depth', function () {
     expect(count($recorded))->toBeLessThanOrEqual(3);
 });
 
-test('tool calls without id are executed with a generated id', function () {
+test('tool calls without id are executed with a generated id', function (): void {
     Http::fake([
         '*' => Http::sequence([
             Http::response([
@@ -114,15 +115,15 @@ test('tool calls without id are executed with a generated id', function () {
 
     expect($recorded)->toHaveCount(2);
 
-    $followUpBody = json_decode($recorded[1][0]->body(), true);
+    $followUpBody = json_decode((string) $recorded[1][0]->body(), true);
 
-    $toolMsg = collect($followUpBody['messages'])->first(fn ($m) => $m['role'] === 'tool');
+    $toolMsg = collect($followUpBody['messages'])->first(fn ($m): bool => $m['role'] === 'tool');
 
     expect($toolMsg)->not->toBeNull()
         ->and($toolMsg['tool_name'])->toBe('FixedNumberGenerator');
 });
 
-test('tool calls are executed even when done_reason is stop', function () {
+test('tool calls are executed even when done_reason is stop', function (): void {
     Http::fake([
         '*' => Http::sequence([
             Http::response([
@@ -160,7 +161,7 @@ test('tool calls are executed even when done_reason is stop', function () {
         ->and($response->text)->toBe('The number is 72019');
 });
 
-test('multi step tool loop returns accumulated response shape', function () {
+test('multi step tool loop returns accumulated response shape', function (): void {
     Http::fake([
         '*' => Http::sequence([
             fakeUniqueOllamaToolCallResponse(),
@@ -183,7 +184,7 @@ test('multi step tool loop returns accumulated response shape', function () {
         ->and($response->usage->completionTokens)->toBe(11);
 });
 
-test('unregistered tool call throws NoSuchToolException', function () {
+test('unregistered tool call throws NoSuchToolException', function (): void {
     Http::fake([
         '*' => Http::response([
             'model' => 'llama3.1:8b',
@@ -205,7 +206,7 @@ test('unregistered tool call throws NoSuchToolException', function () {
         ]),
     ]);
 
-    expect(fn () => (new MultiStepToolAgent)->prompt(
+    expect(fn (): AgentResponse => (new MultiStepToolAgent)->prompt(
         'Generate a number',
         provider: 'ollama',
     ))->toThrow(NoSuchToolException::class);

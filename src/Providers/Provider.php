@@ -5,9 +5,10 @@ namespace Laravel\Ai\Providers;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Gateway\Gateway;
+use Laravel\Ai\Contracts\Providers\Provider as ProviderContract;
 use Laravel\Ai\Enums\Lab;
 
-abstract class Provider
+abstract class Provider implements \Stringable, ProviderContract
 {
     public function __construct(
         protected Gateway $gateway,
@@ -61,11 +62,9 @@ abstract class Provider
             return [$providers => $model];
         }
 
-        return (new Collection($providers))->mapWithKeys(function ($value, $key) {
-            return is_numeric($key)
-                ? [($value instanceof Lab ? $value->value : $value) => null]
-                : [($key instanceof Lab ? $key->value : $key) => $value];
-        })->all();
+        return (new Collection($providers))->mapWithKeys(fn ($value, $key): array => is_numeric($key)
+            ? [($value instanceof Lab ? $value->value : $value) => null]
+            : [($key instanceof Lab ? $key->value : $key) => $value])->all();
     }
 
     /**

@@ -1,13 +1,15 @@
 <?php
 
 use Illuminate\Broadcasting\AnonymousEvent;
+use Illuminate\Broadcasting\BroadcastException;
 use Illuminate\Broadcasting\Channel;
+use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Event;
 use Laravel\Ai\Jobs\BroadcastAgent;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Tests\Fixtures\Agents\AssistantAgent;
 
-test('then callback receives streamed agent response', function () {
+test('then callback receives streamed agent response', function (): void {
     Event::fake();
     AssistantAgent::fake(['Hello world']);
 
@@ -19,7 +21,7 @@ test('then callback receives streamed agent response', function () {
         channels: new Channel('test-channel'),
     );
 
-    $job->then(function ($response) use (&$received) {
+    $job->then(function ($response) use (&$received): void {
         $received = $response;
     });
 
@@ -30,7 +32,7 @@ test('then callback receives streamed agent response', function () {
         ->and($received->text)->toBe('Hello world');
 });
 
-test('multiple then callbacks all receive streamed agent response', function () {
+test('multiple then callbacks all receive streamed agent response', function (): void {
     Event::fake();
     AssistantAgent::fake(['Hello world']);
 
@@ -43,11 +45,11 @@ test('multiple then callbacks all receive streamed agent response', function () 
         channels: new Channel('test-channel'),
     );
 
-    $job->then(function ($response) use (&$receivedA) {
+    $job->then(function ($response) use (&$receivedA): void {
         $receivedA = $response;
     });
 
-    $job->then(function ($response) use (&$receivedB) {
+    $job->then(function ($response) use (&$receivedB): void {
         $receivedB = $response;
     });
 
@@ -57,7 +59,7 @@ test('multiple then callbacks all receive streamed agent response', function () 
         ->and($receivedB)->toBeInstanceOf(StreamedAgentResponse::class);
 });
 
-test('failed broadcasts a stream_failed event with recoverable false on the configured channel', function () {
+test('failed broadcasts a stream_failed event with recoverable false on the configured channel', function (): void {
     Event::fake();
 
     $channel = new Channel('test-channel');
@@ -73,7 +75,7 @@ test('failed broadcasts a stream_failed event with recoverable false on the conf
 
     $job->failed(new RuntimeException('Something went wrong'));
 
-    Event::assertDispatched(AnonymousEvent::class, function (AnonymousEvent $event) use ($channel, $invocationId) {
+    Event::assertDispatched(AnonymousEvent::class, function (AnonymousEvent $event) use ($channel, $invocationId): bool {
         $payload = $event->broadcastWith();
 
         return $event->broadcastAs() === 'stream_failed'
@@ -84,7 +86,7 @@ test('failed broadcasts a stream_failed event with recoverable false on the conf
     });
 });
 
-test('failed broadcasts on every channel when given an array', function () {
+test('failed broadcasts on every channel when given an array', function (): void {
     Event::fake();
 
     $channels = [new Channel('a'), new Channel('b')];
@@ -97,13 +99,11 @@ test('failed broadcasts on every channel when given an array', function () {
 
     $job->failed(new RuntimeException('boom'));
 
-    Event::assertDispatched(AnonymousEvent::class, function (AnonymousEvent $event) use ($channels) {
-        return $event->broadcastAs() === 'stream_failed'
-            && $event->broadcastOn() === $channels;
-    });
+    Event::assertDispatched(AnonymousEvent::class, fn (AnonymousEvent $event): bool => $event->broadcastAs() === 'stream_failed'
+        && $event->broadcastOn() === $channels);
 });
 
-test('failed event shares the invocation id with broadcasts from handle', function () {
+test('failed event shares the invocation id with broadcasts from handle', function (): void {
     Event::fake();
     AssistantAgent::fake(['Hello world']);
 
@@ -119,7 +119,7 @@ test('failed event shares the invocation id with broadcasts from handle', functi
 
     $broadcastIds = [];
 
-    Event::assertDispatched(AnonymousEvent::class, function (AnonymousEvent $event) use (&$broadcastIds) {
+    Event::assertDispatched(AnonymousEvent::class, function (AnonymousEvent $event) use (&$broadcastIds): true {
         $broadcastIds[] = $event->broadcastWith()['invocation_id'] ?? null;
 
         return true;
@@ -128,7 +128,36 @@ test('failed event shares the invocation id with broadcasts from handle', functi
     expect(array_values(array_unique($broadcastIds)))->toBe([$invocationId]);
 });
 
-test('streamed response passed to then is fully resolved', function () {
+test('an oversized broadcast frame does not abort the stream and then still resolves', function (): void {
+    AssistantAgent::fake(['Hello world']);
+
+    $pending = Mockery::mock(AnonymousEvent::class);
+    $pending->shouldReceive('as')->andReturnSelf();
+    $pending->shouldReceive('with')->andReturnSelf();
+    $pending->shouldReceive('sendNow')->andThrow(new BroadcastException('Payload too large'));
+
+    Broadcast::shouldReceive('on')->andReturn($pending);
+
+    $received = null;
+
+    $job = new BroadcastAgent(
+        agent: new AssistantAgent,
+        prompt: 'Say hello',
+        channels: new Channel('test-channel'),
+    );
+
+    $job->then(function ($response) use (&$received): void {
+        $received = $response;
+    });
+
+    $job->handle();
+
+    expect($received)->not->toBeNull('then() callback was never invoked despite a failed broadcast')
+        ->toBeInstanceOf(StreamedAgentResponse::class)
+        ->and($received->text)->toBe('Hello world');
+});
+
+test('streamed response passed to then is fully resolved', function (): void {
     Event::fake();
     AssistantAgent::fake(['Hello world']);
 
@@ -140,7 +169,7 @@ test('streamed response passed to then is fully resolved', function () {
         channels: new Channel('test-channel'),
     );
 
-    $job->then(function ($response) use (&$received) {
+    $job->then(function ($response) use (&$received): void {
         $received = $response;
     });
 

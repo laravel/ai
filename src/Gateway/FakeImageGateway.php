@@ -55,7 +55,7 @@ class FakeImageGateway implements ImageGateway
 
         return tap($this->marshalResponse(
             $response, $provider, $model, $prompt
-        ), fn () => $this->currentResponseIndex++);
+        ), fn (): int => $this->currentResponseIndex++);
     }
 
     /**
