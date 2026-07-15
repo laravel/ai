@@ -51,9 +51,14 @@ test('a blank rejection reason is treated as a bare rejection that stops the loo
         ->and(Decision::reject('Already handled')->result)->toBe('Already handled');
 });
 
-test('a bare edit decision through prompt asks for a keyed collection instead of a misleading wildcard error', function () {
-    (new RememberingApprovableAgent)->forUser((object) ['id' => 1])->prompt(Decision::edit(['path' => '/tmp/x']));
-})->throws(InvalidArgumentException::class, 'A bare edit decision has no tool call to target');
+test('the blanket helpers approve or reject every pending call', function () {
+    $approveAll = Decision::approveAll();
+    $rejectAll = Decision::rejectAll();
+
+    expect($approveAll['*']->isApproved())->toBeTrue()
+        ->and($rejectAll['*']->isRejected())->toBeTrue()
+        ->and($rejectAll['*']->result)->toBeNull();
+});
 
 test('the approval response adapter renders awaiting approval and complete payloads', function () {
     $pending = new PendingApproval('call-1', 'DeleteFile', ['path' => 'config/app.php'], 'Deletes a file');
@@ -158,10 +163,10 @@ test('approval resume prompts can be queued', function () {
     });
 });
 
-test('a bare decision widens to every pending call', function () {
+test('the blanket approve helper widens to every pending call', function () {
     ConversationalAgent::fake();
 
-    (new ConversationalAgent)->queue(Decision::approve());
+    (new ConversationalAgent)->queue(Decision::approveAll());
 
     ConversationalAgent::assertQueued(function ($prompt) {
         return ($prompt->resume['*'] ?? null)?->action === 'approve';

@@ -52,9 +52,11 @@ trait Promptable
 
     /**
      * Invoke the agent with a given prompt, or resume a paused run with tool approval decisions.
+     *
+     * @param  array<string, Decision|bool>|string  $prompt
      */
     public function prompt(
-        Decision|array|string $prompt,
+        array|string $prompt,
         array $attachments = [],
         Lab|array|string|null $provider = null,
         ?string $model = null,
@@ -79,9 +81,11 @@ trait Promptable
 
     /**
      * Invoke the agent with a given prompt and return a streamable response.
+     *
+     * @param  array<string, Decision|bool>|string  $prompt
      */
     public function stream(
-        Decision|array|string $prompt,
+        array|string $prompt,
         array $attachments = [],
         Lab|array|string|null $provider = null,
         ?string $model = null,
@@ -164,8 +168,10 @@ trait Promptable
 
     /**
      * Invoke the agent in a queued job.
+     *
+     * @param  array<string, Decision|bool>|string  $prompt
      */
-    public function queue(Decision|array|string $prompt, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
+    public function queue(array|string $prompt, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
     {
         [$prompt, $resume] = $this->extractResume($prompt);
 
@@ -183,27 +189,18 @@ trait Promptable
     }
 
     /**
-     * Split a prompt into its text and tool approval resume parts, widening a bare decision to every pending call.
+     * Split a prompt into its text and tool approval resume parts.
      *
+     * @param  array<string, Decision|bool>|string  $prompt
      * @return array{string, ?array<string, Decision>}
      */
-    private function extractResume(Decision|array|string $prompt): array
+    private function extractResume(array|string $prompt): array
     {
         if (is_string($prompt)) {
             return [$prompt, null];
         }
 
-        if (is_array($prompt)) {
-            return ['', Decision::normalize($prompt)];
-        }
-
-        if ($prompt->isEdited()) {
-            throw new InvalidArgumentException(
-                'A bare edit decision has no tool call to target; pass [$id => Decision::edit(...)] instead.'
-            );
-        }
-
-        return ['', ['*' => $prompt]];
+        return ['', Decision::normalize($prompt)];
     }
 
     /**

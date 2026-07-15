@@ -36,6 +36,26 @@ class Decision
     }
 
     /**
+     * A blanket approval for every pending tool call.
+     *
+     * @return array<string, Decision>
+     */
+    public static function approveAll(): array
+    {
+        return ['*' => self::approve()];
+    }
+
+    /**
+     * A blanket rejection for every pending tool call.
+     *
+     * @return array<string, Decision>
+     */
+    public static function rejectAll(): array
+    {
+        return ['*' => self::reject()];
+    }
+
+    /**
      * Normalize an id-keyed decision map, accepting booleans as shorthand and a '*' wildcard for undecided calls.
      *
      * @param  array<string, Decision|bool>  $decisions
