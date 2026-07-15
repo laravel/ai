@@ -18,6 +18,11 @@ interface Approvable
     public function withoutApproval(): static;
 
     /**
+     * Determine whether the tool's approval gate is enabled at all, before any specific call is known.
+     */
+    public function mayRequireApproval(): bool;
+
+    /**
      * Determine whether the tool should request approval for the given request.
      */
     public function shouldRequestApproval(Request $request): ?Approval;

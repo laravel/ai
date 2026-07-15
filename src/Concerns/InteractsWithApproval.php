@@ -23,6 +23,11 @@ trait InteractsWithApproval
         return $this;
     }
 
+    public function mayRequireApproval(): bool
+    {
+        return $this->approvalOverride !== false;
+    }
+
     public function shouldRequestApproval(Request $request): ?Approval
     {
         $result = $this->approvalOverride ?? $this->needsApproval($request);

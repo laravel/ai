@@ -4,6 +4,7 @@ namespace Laravel\Ai\Exceptions;
 
 use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\RemembersConversations as RemembersConversationsContract;
 
@@ -15,12 +16,20 @@ class ApprovalNotResumableException extends AiException
     }
 
     /**
-     * Throw when a paused approval cannot be resumed from persisted history.
+     * Throw before a run begins when a non-resumable agent carries a tool that could pause for approval.
+     *
+     * @param  array<int, object>  $tools
      */
-    public static function throwUnlessResumable(Agent $agent): void
+    public static function throwUnlessResumable(Agent $agent, array $tools): void
     {
-        if (! static::resumableFor($agent)) {
-            throw static::make();
+        if (static::resumableFor($agent)) {
+            return;
+        }
+
+        foreach ($tools as $tool) {
+            if ($tool instanceof Approvable && $tool->mayRequireApproval()) {
+                throw static::make();
+            }
         }
     }
 

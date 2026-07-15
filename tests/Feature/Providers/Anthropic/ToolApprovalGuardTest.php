@@ -9,7 +9,7 @@ use Tests\Fixtures\Agents\StatelessApprovableAgent;
 use Tests\Fixtures\Agents\StatelessMixedToolsAgent;
 use Tests\Fixtures\Tools\SideEffectRecorder;
 
-test('a gated tool on a non-conversational agent throws at pause time', function () {
+test('a gated tool on a non-conversational agent throws before generating', function () {
     Http::fake([
         'api.anthropic.com/*' => Http::response([
             'id' => 'msg_tool_1',
@@ -30,7 +30,7 @@ test('a gated tool on a non-conversational agent throws at pause time', function
     (new StatelessApprovableAgent)->prompt('Generate a number', provider: 'anthropic');
 })->throws(ApprovalNotResumableException::class);
 
-test('a gated tool on a conversational agent with no conversation participant throws at pause time', function () {
+test('a gated tool on a conversational agent with no conversation participant throws before generating', function () {
     Http::fake([
         'api.anthropic.com/*' => Http::response([
             'id' => 'msg_tool_1',
@@ -73,7 +73,7 @@ test('a gated tool on a non-conversational agent throws before streaming a pause
         ->and(array_filter($events, fn ($event) => $event instanceof ToolApprovalRequest))->toBeEmpty();
 });
 
-test('a non-resumable pause still throws, running its step like any other before it does', function () {
+test('a non-resumable agent with a gated tool throws before running any of its tools', function () {
     SideEffectRecorder::$invocations = 0;
 
     Http::fake([
@@ -101,8 +101,7 @@ test('a non-resumable pause still throws, running its step like any other before
         ]),
     ]);
 
-    // The unresumable pause throws, but its ungated companion runs first, as in any earlier step.
     expect(fn () => (new StatelessMixedToolsAgent)->prompt('Record and generate', provider: 'anthropic'))
         ->toThrow(ApprovalNotResumableException::class)
-        ->and(SideEffectRecorder::$invocations)->toBe(1);
+        ->and(SideEffectRecorder::$invocations)->toBe(0);
 });

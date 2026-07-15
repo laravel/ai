@@ -70,22 +70,22 @@ trait GeneratesText
 
                 $schema = $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null;
 
+                $tools = $this->resolveTools($agent);
+
+                ApprovalNotResumableException::throwUnlessResumable($agent, $tools);
+
                 $response = $this->textGenerationLoop()->generate(
                     $this,
                     $prompt->model,
                     (string) $agent->instructions(),
                     $messages,
-                    $this->resolveTools($agent),
+                    $tools,
                     $schema,
                     TextGenerationOptions::forAgent($agent),
                     $prompt->timeout,
                     $this->resumableApprovalFor($prompt),
                     $this->approvalResultRecorderFor($prompt),
                 );
-
-                if ($response->awaitingApproval()) {
-                    ApprovalNotResumableException::throwUnlessResumable($agent);
-                }
 
                 $agentResponse = $response instanceof StructuredTextResponse
                     ? (new StructuredAgentResponse($invocationId, $response->structured, $response->text, $response->usage, $response->meta))
