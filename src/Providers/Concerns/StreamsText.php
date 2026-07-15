@@ -15,6 +15,7 @@ use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
+use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 
 use function Laravel\Ai\pipeline;
 
@@ -64,8 +65,6 @@ trait StreamsText
                     function () use ($invocationId, $prompt, $agent, $messages, $tools, $approval, $onApprovalResolved) {
                         $this->events->dispatch(new StreamingAgent($invocationId, $prompt));
 
-                        $this->ensureApprovalsAreResumable($agent, $tools);
-
                         $this->listenForToolInvocations($invocationId, $agent);
 
                         foreach ($this->textGenerationLoop()->stream(
@@ -81,6 +80,10 @@ trait StreamsText
                             $approval,
                             $onApprovalResolved,
                         ) as $event) {
+                            if ($event instanceof ToolApprovalRequest) {
+                                $this->throwIfNotResumable($agent);
+                            }
+
                             yield $event;
                         }
                     },

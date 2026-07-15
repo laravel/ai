@@ -9,7 +9,6 @@ use Laravel\Ai\Ai;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
-use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\HasMiddleware;
@@ -72,22 +71,22 @@ trait GeneratesText
 
                 $schema = $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null;
 
-                $tools = $this->resolveTools($agent);
-
-                $this->ensureApprovalsAreResumable($agent, $tools);
-
                 $response = $this->textGenerationLoop()->generate(
                     $this,
                     $prompt->model,
                     (string) $agent->instructions(),
                     $messages,
-                    $tools,
+                    $this->resolveTools($agent),
                     $schema,
                     TextGenerationOptions::forAgent($agent),
                     $prompt->timeout,
                     $this->resumableApprovalFor($prompt),
                     $this->approvalResultRecorderFor($prompt),
                 );
+
+                if ($response->awaitingApproval()) {
+                    $this->throwIfNotResumable($agent);
+                }
 
                 $agentResponse = $response instanceof StructuredTextResponse
                     ? (new StructuredAgentResponse($invocationId, $response->structured, $response->text, $response->usage, $response->meta))
@@ -161,20 +160,12 @@ trait GeneratesText
     }
 
     /**
-     * Fail before a run begins when a non-resumable agent carries a tool that could pause for approval.
-     *
-     * @param  Tool[]  $tools
+     * Throw when a pause has surfaced on an agent that cannot resume it from persisted history.
      */
-    protected function ensureApprovalsAreResumable(Agent $agent, array $tools): void
+    protected function throwIfNotResumable(Agent $agent): void
     {
-        if ($this->agentCanResumeApprovals($agent)) {
-            return;
-        }
-
-        foreach ($tools as $tool) {
-            if ($tool instanceof Approvable && $tool->mayRequireApproval()) {
-                throw ApprovalNotResumableException::make();
-            }
+        if (! $this->agentCanResumeApprovals($agent)) {
+            throw ApprovalNotResumableException::make();
         }
     }
 
