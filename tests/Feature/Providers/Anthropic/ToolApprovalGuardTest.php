@@ -101,8 +101,7 @@ test('a non-resumable pause still throws, running its step like any other before
         ]),
     ]);
 
-    // The pause is rejected because the agent cannot resume; its ungated companion runs
-    // first, exactly as tool calls in any earlier step would have.
+    // The unresumable pause throws, but its ungated companion runs first, as in any earlier step.
     expect(fn () => (new StatelessMixedToolsAgent)->prompt('Record and generate', provider: 'anthropic'))
         ->toThrow(ApprovalNotResumableException::class)
         ->and(SideEffectRecorder::$invocations)->toBe(1);
