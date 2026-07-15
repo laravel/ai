@@ -66,7 +66,7 @@ trait BuildsTextRequests
         if (filled($tools)) {
             $body['tools'] = $this->mapTools($tools, $provider);
 
-            if ($options?->toolChoice) {
+            if ($options?->toolChoice instanceof ToolChoice) {
                 $body['tool_config'] = [
                     'function_calling_config' => $this->functionCallingConfig($options->toolChoice),
                 ];
@@ -118,7 +118,7 @@ trait BuildsTextRequests
      */
     protected function buildFunctionResponseParts(array $toolResults): array
     {
-        return array_values(array_map(function ($result) {
+        return array_values(array_map(function ($result): array {
             $functionResponse = [
                 'name' => $result->name,
                 'response' => [

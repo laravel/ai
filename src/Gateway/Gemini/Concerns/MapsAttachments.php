@@ -29,10 +29,10 @@ trait MapsAttachments
      */
     protected function mapAttachments(Collection $attachments): array
     {
-        return $attachments->map(function ($attachment) {
+        return $attachments->map(function ($attachment): array {
             if (! $attachment instanceof File && ! $attachment instanceof UploadedFile) {
                 throw new InvalidArgumentException(
-                    'Unsupported attachment type ['.get_class($attachment).']'
+                    'Unsupported attachment type ['.$attachment::class.']'
                 );
             }
 
@@ -64,7 +64,7 @@ trait MapsAttachments
                     'inlineData' => [
                         'mimeType' => $attachment->mimeType() ?? 'image/png',
                         'data' => base64_encode(
-                            Storage::disk($attachment->disk)->get($attachment->path)
+                            (string) Storage::disk($attachment->disk)->get($attachment->path)
                         ),
                     ],
                 ],
@@ -95,7 +95,7 @@ trait MapsAttachments
                     'inlineData' => [
                         'mimeType' => $attachment->mimeType() ?? 'application/octet-stream',
                         'data' => base64_encode(
-                            Storage::disk($attachment->disk)->get($attachment->path)
+                            (string) Storage::disk($attachment->disk)->get($attachment->path)
                         ),
                     ],
                 ],
@@ -115,7 +115,7 @@ trait MapsAttachments
                     'inlineData' => [
                         'mimeType' => $attachment->mimeType() ?? 'audio/mp3',
                         'data' => base64_encode(
-                            Storage::disk($attachment->disk)->get($attachment->path)
+                            (string) Storage::disk($attachment->disk)->get($attachment->path)
                         ),
                     ],
                 ],
@@ -131,7 +131,7 @@ trait MapsAttachments
                         'data' => base64_encode($attachment->get()),
                     ],
                 ],
-                default => throw new InvalidArgumentException('Unsupported attachment type ['.get_class($attachment).']'),
+                default => throw new InvalidArgumentException('Unsupported attachment type ['.$attachment::class.']'),
             };
         })->all();
     }

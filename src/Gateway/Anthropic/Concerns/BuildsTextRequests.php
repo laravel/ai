@@ -85,7 +85,7 @@ trait BuildsTextRequests
                 : ['type' => 'tool', 'name' => 'output_structured_data'];
         }
 
-        if (! $toolChoice) {
+        if (! $toolChoice instanceof ToolChoice) {
             return ['type' => 'auto'];
         }
 

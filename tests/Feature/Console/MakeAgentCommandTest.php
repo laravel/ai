@@ -1,6 +1,6 @@
 <?php
 
-test('can create an agent class', function () {
+test('can create an agent class', function (): void {
     $response = $this->artisan('make:agent', [
         'name' => 'TestAgent',
     ]);
@@ -10,7 +10,7 @@ test('can create an agent class', function () {
     expect(app_path('Ai/Agents/TestAgent.php'))->toBeFile();
 });
 
-test('can create a structured agent class', function () {
+test('can create a structured agent class', function (): void {
     $response = $this->artisan('make:agent', [
         'name' => 'StructuredAgent',
         '--structured' => true,
@@ -21,7 +21,7 @@ test('can create a structured agent class', function () {
     expect(app_path('Ai/Agents/StructuredAgent.php'))->toBeFile();
 });
 
-test('may publish custom agent stubs', function () {
+test('may publish custom agent stubs', function (): void {
     $this->artisan('vendor:publish', [
         '--tag' => 'ai-stubs',
         '--force' => true,

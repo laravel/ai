@@ -2,7 +2,7 @@
 
 use Laravel\Ai\Responses\Data\StoreFileCounts;
 
-test('store file counts stores completed pending and failed counts', function () {
+test('store file counts stores completed pending and failed counts', function (): void {
     $counts = new StoreFileCounts(10, 5, 2);
 
     expect($counts->completed)->toBe(10)
@@ -10,7 +10,7 @@ test('store file counts stores completed pending and failed counts', function ()
         ->and($counts->failed)->toBe(2);
 });
 
-test('store file counts to array returns all counts', function () {
+test('store file counts to array returns all counts', function (): void {
     $counts = new StoreFileCounts(1, 0, 0);
 
     $array = $counts->toArray();
@@ -22,7 +22,7 @@ test('store file counts to array returns all counts', function () {
     ]);
 });
 
-test('store file counts json serialize returns to array', function () {
+test('store file counts json serialize returns to array', function (): void {
     $counts = new StoreFileCounts(5, 5, 5);
 
     expect($counts->jsonSerialize())->toBe($counts->toArray());

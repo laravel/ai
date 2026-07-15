@@ -19,9 +19,9 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
 {
     use Concerns\CanStreamUsingVercelProtocol;
 
-    public ?string $text;
+    public ?string $text = null;
 
-    public ?Usage $usage;
+    public ?Usage $usage = null;
 
     /** @var Collection<int, StreamEvent> */
     public Collection $events;
@@ -64,7 +64,7 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     public function then(callable $callback): self
     {
         // If the response has already been iterated / streamed, invoke now...
-        if ($this->streamedResponse) {
+        if ($this->streamedResponse instanceof StreamedAgentResponse) {
             $callback($this->streamedResponse);
 
             $this->syncConversationFromStreamedResponse();
@@ -93,7 +93,7 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
      */
     public function adoptStateFrom(StreamedAgentResponse $response): self
     {
-        if ($this->meta !== null) {
+        if ($this->meta instanceof Meta) {
             $this->meta->provider = $response->meta->provider;
             $this->meta->model = $response->meta->model;
             $this->meta->citations = $response->meta->citations;
@@ -131,7 +131,7 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
 
         return response()->stream(function () {
             foreach ($this as $event) {
-                yield 'data: '.((string) $event)."\n\n";
+                yield 'data: '.($event)."\n\n";
             }
 
             yield "data: [DONE]\n\n";

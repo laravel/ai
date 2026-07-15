@@ -12,7 +12,8 @@ use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 class RememberingToolAgent implements Agent, HasProviderOptions, HasTools
 {
-    use Promptable, RemembersConversations;
+    use Promptable;
+    use RemembersConversations;
 
     public function __construct(public array $extraProviderOptions = []) {}
 

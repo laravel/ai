@@ -13,8 +13,8 @@ use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
-describe('text streaming', function () {
-    test('streaming handles reasoning and text blocks', function () {
+describe('text streaming', function (): void {
+    test('streaming handles reasoning and text blocks', function (): void {
         $client = $this->fakeBedrockStream([
             $this->contentBlockStart(0),
             $this->contentBlockDelta(0, ['reasoningContent' => ['text' => 'Let me think']]),
@@ -47,7 +47,7 @@ describe('text streaming', function () {
             ->and($events[9])->toBeInstanceOf(StreamEnd::class);
     });
 
-    test('each text block in a stream gets a distinct message id', function () {
+    test('each text block in a stream gets a distinct message id', function (): void {
         $client = $this->fakeBedrockStream([
             $this->contentBlockStart(0),
             $this->contentBlockDelta(0, ['text' => 'first']),
@@ -65,13 +65,13 @@ describe('text streaming', function () {
             preserve_keys: false,
         );
 
-        $textStarts = array_values(array_filter($events, fn ($e) => $e instanceof TextStart));
+        $textStarts = array_values(array_filter($events, fn ($e): bool => $e instanceof TextStart));
 
         expect($textStarts)->toHaveCount(2)
             ->and($textStarts[0]->messageId)->not->toBe($textStarts[1]->messageId);
     });
 
-    test('streaming round-trips reasoning block on follow-up tool step', function () {
+    test('streaming round-trips reasoning block on follow-up tool step', function (): void {
         $mock = new MockHandler([
             new Result(['stream' => [
                 $this->contentBlockStart(0),
@@ -295,7 +295,7 @@ describe('text streaming', function () {
         ]);
     });
 
-    test('streaming round-trips redacted reasoning block', function () {
+    test('streaming round-trips redacted reasoning block', function (): void {
         $mock = new MockHandler([
             new Result(['stream' => [
                 $this->contentBlockStart(0),

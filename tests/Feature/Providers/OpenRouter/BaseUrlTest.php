@@ -5,11 +5,11 @@ use Illuminate\Support\Facades\Http;
 
 use function Laravel\Ai\agent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     $this->customUrl = 'http://localhost:1234/v1';
 });
 
-test('openrouter text requests use the configured base url', function () {
+test('openrouter text requests use the configured base url', function (): void {
     configureOpenRouterProvider($this->customUrl);
 
     Http::fake(['*' => fakeOpenRouterResponse('Hello from local model')]);
@@ -22,7 +22,7 @@ test('openrouter text requests use the configured base url', function () {
     openRouterAssertRequestSent('POST', "{$this->customUrl}/chat/completions");
 });
 
-test('openrouter requests fall back to the default base url', function () {
+test('openrouter requests fall back to the default base url', function (): void {
     configureOpenRouterProvider();
 
     Http::fake(['*' => fakeOpenRouterResponse('Hello from OpenRouter')]);
@@ -46,6 +46,6 @@ function configureOpenRouterProvider(?string $url = null): void
 
 function openRouterAssertRequestSent(string $method, string $url): void
 {
-    Http::assertSent(fn (Request $request) => $request->method() === $method
+    Http::assertSent(fn (Request $request): bool => $request->method() === $method
         && $request->url() === $url);
 }

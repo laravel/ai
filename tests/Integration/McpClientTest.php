@@ -13,7 +13,7 @@ function requiresMcpServerEverything(): void
     }
 }
 
-test('every weird MCP tool from the everything server works across providers', function (string $provider, string $apiKey, string $model) {
+test('every weird MCP tool from the everything server works across providers', function (string $provider, string $apiKey, string $model): void {
     requiresApiKey($apiKey);
     requiresMcpServerEverything();
 
@@ -39,7 +39,7 @@ test('every weird MCP tool from the everything server works across providers', f
             model: $model,
         );
 
-        expect($response->toolCalls->contains(fn ($call) => $call->name === 'mcp_tools_echo'))->toBeTrue()
+        expect($response->toolCalls->contains(fn ($call): bool => $call->name === 'mcp_tools_echo'))->toBeTrue()
             ->and($response->text)->toContain('hello-mcp-123');
     } finally {
         $client->disconnect();

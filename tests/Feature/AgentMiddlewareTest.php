@@ -16,7 +16,7 @@ use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
 use Tests\Fixtures\FakeConversationStore;
 
-test('agent middleware is invoked', function () {
+test('agent middleware is invoked', function (): void {
     AssistantAgent::fake([
         'Fake response',
     ]);
@@ -31,7 +31,7 @@ test('agent middleware is invoked', function () {
     unset($_SERVER['__testing.middleware-prompt']);
 });
 
-test('agent middleware is invoked when streaming', function () {
+test('agent middleware is invoked when streaming', function (): void {
     AssistantAgent::fake([
         'Fake response',
     ]);
@@ -41,8 +41,8 @@ test('agent middleware is invoked when streaming', function () {
         ->stream('Test prompt');
 
     $response
-        ->each(fn () => true)
-        ->then(function (StreamedAgentResponse $response) {
+        ->each(fn (): true => true)
+        ->then(function (StreamedAgentResponse $response): void {
             $_SERVER['__testing.text'] = $response->text;
         });
 
@@ -53,7 +53,7 @@ test('agent middleware is invoked when streaming', function () {
     unset($_SERVER['__testing.middleware-prompt']);
 });
 
-test('agent prompted event receives prompt when middleware short circuits', function () {
+test('agent prompted event receives prompt when middleware short circuits', function (): void {
     Event::fake();
 
     AssistantAgent::fake([
@@ -64,13 +64,11 @@ test('agent prompted event receives prompt when middleware short circuits', func
         ->withMiddleware([shortCircuitingMiddleware()])
         ->prompt('Test prompt');
 
-    Event::assertDispatched(AgentPrompted::class, function (AgentPrompted $event) {
-        return $event->prompt instanceof AgentPrompt
-            && $event->prompt->prompt === 'Test prompt';
-    });
+    Event::assertDispatched(AgentPrompted::class, fn (AgentPrompted $event): bool => $event->prompt instanceof AgentPrompt
+        && $event->prompt->prompt === 'Test prompt');
 });
 
-test('agent streamed event receives prompt when middleware short circuits a stream', function () {
+test('agent streamed event receives prompt when middleware short circuits a stream', function (): void {
     Event::fake();
 
     AssistantAgent::fake([
@@ -85,13 +83,11 @@ test('agent streamed event receives prompt when middleware short circuits a stre
         // Drain the stream so the post-stream then() callback dispatches AgentStreamed.
     }
 
-    Event::assertDispatched(AgentStreamed::class, function (AgentStreamed $event) {
-        return $event->prompt instanceof AgentPrompt
-            && $event->prompt->prompt === 'Test prompt';
-    });
+    Event::assertDispatched(AgentStreamed::class, fn (AgentStreamed $event): bool => $event->prompt instanceof AgentPrompt
+        && $event->prompt->prompt === 'Test prompt');
 });
 
-test('stream response conversation id is available after remembered conversations stream completes', function () {
+test('stream response conversation id is available after remembered conversations stream completes', function (): void {
     app()->instance(ConversationStore::class, new FakeConversationStore);
 
     RememberingAssistantAgent::fake([
@@ -113,7 +109,7 @@ test('stream response conversation id is available after remembered conversation
         ->and($response->conversationUser)->toBe($user);
 });
 
-test('stream response conversation id is available when continuing an existing conversation', function () {
+test('stream response conversation id is available when continuing an existing conversation', function (): void {
     app()->instance(ConversationStore::class, new FakeConversationStore);
 
     RememberingAssistantAgent::fake([
@@ -137,7 +133,7 @@ test('stream response conversation id is available when continuing an existing c
         ->and($response->conversationUser)->toBe($user);
 });
 
-test('stream response conversation id syncs after late then callbacks', function () {
+test('stream response conversation id syncs after late then callbacks', function (): void {
     AssistantAgent::fake([
         'Fake response',
     ]);
@@ -153,7 +149,7 @@ test('stream response conversation id syncs after late then callbacks', function
         expect($event)->not->toBeNull();
     }
 
-    $response->then(function (StreamedAgentResponse $response) use ($user) {
+    $response->then(function (StreamedAgentResponse $response) use ($user): void {
         $response->withinConversation('late-conversation-id', $user);
     });
 
@@ -161,7 +157,7 @@ test('stream response conversation id syncs after late then callbacks', function
         ->and($response->conversationUser)->toBe($user);
 });
 
-test('stream response preserves manually assigned conversation id without a participant', function () {
+test('stream response preserves manually assigned conversation id without a participant', function (): void {
     AssistantAgent::fake([
         'Fake response',
     ]);
@@ -182,7 +178,7 @@ function shortCircuitingMiddleware(): object
 {
     return new class
     {
-        public function handle(AgentPrompt $prompt, Closure $next)
+        public function handle(AgentPrompt $prompt, Closure $next): AgentResponse
         {
             return new AgentResponse(
                 'test-invocation-id',
@@ -198,7 +194,7 @@ function streamingShortCircuitingMiddleware(): object
 {
     return new class
     {
-        public function handle(AgentPrompt $prompt, Closure $next)
+        public function handle(AgentPrompt $prompt, Closure $next): StreamableAgentResponse
         {
             return new StreamableAgentResponse(
                 'test-invocation-id',

@@ -5,14 +5,14 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Audio;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.gemini' => [
         ...config('ai.providers.gemini'),
         'key' => 'test-key',
     ]]);
 });
 
-test('audio request includes model, prompt text, and voice name', function () {
+test('audio request includes model, prompt text, and voice name', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => fakeGeminiAudioResponse(),
     ]);
@@ -21,7 +21,7 @@ test('audio request includes model, prompt text, and voice name', function () {
         ->voice('Kore')
         ->generate(provider: 'gemini', model: 'gemini-2.5-flash-preview-tts');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = $request->data();
 
         return str_contains($request->url(), 'models/gemini-2.5-flash-preview-tts:generateContent')
@@ -31,7 +31,7 @@ test('audio request includes model, prompt text, and voice name', function () {
     });
 });
 
-test('audio request resolves default voice aliases', function () {
+test('audio request resolves default voice aliases', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => fakeGeminiAudioResponse(),
     ]);
@@ -39,11 +39,11 @@ test('audio request resolves default voice aliases', function () {
     Audio::of('Hello world')->generate(provider: 'gemini', model: 'gemini-2.5-flash-preview-tts');
     Audio::of('Hello world')->male()->generate(provider: 'gemini', model: 'gemini-2.5-flash-preview-tts');
 
-    Http::assertSent(fn (Request $request) => $request->data()['generationConfig']['speechConfig']['voiceConfig']['prebuiltVoiceConfig']['voiceName'] === 'Kore');
-    Http::assertSent(fn (Request $request) => $request->data()['generationConfig']['speechConfig']['voiceConfig']['prebuiltVoiceConfig']['voiceName'] === 'Puck');
+    Http::assertSent(fn (Request $request): bool => $request->data()['generationConfig']['speechConfig']['voiceConfig']['prebuiltVoiceConfig']['voiceName'] === 'Kore');
+    Http::assertSent(fn (Request $request): bool => $request->data()['generationConfig']['speechConfig']['voiceConfig']['prebuiltVoiceConfig']['voiceName'] === 'Puck');
 });
 
-test('audio instructions are prepended to the prompt instead of sent in speech config', function () {
+test('audio instructions are prepended to the prompt instead of sent in speech config', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => fakeGeminiAudioResponse(),
     ]);
@@ -53,7 +53,7 @@ test('audio instructions are prepended to the prompt instead of sent in speech c
         ->instructions('Say cheerfully:')
         ->generate(provider: 'gemini', model: 'gemini-2.5-flash-preview-tts');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = $request->data();
         $speechConfig = $body['generationConfig']['speechConfig'];
 
@@ -64,7 +64,7 @@ test('audio instructions are prepended to the prompt instead of sent in speech c
     });
 });
 
-test('audio response is wrapped as wav with correct meta', function () {
+test('audio response is wrapped as wav with correct meta', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => fakeGeminiAudioResponse("\x01\x00\x02\x00"),
     ]);
@@ -80,7 +80,7 @@ test('audio response is wrapped as wav with correct meta', function () {
         ->and($response->meta->model)->toBe('gemini-2.5-flash-preview-tts');
 });
 
-test('audio request passes custom voice name through unchanged', function () {
+test('audio request passes custom voice name through unchanged', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => fakeGeminiAudioResponse(),
     ]);
@@ -89,17 +89,17 @@ test('audio request passes custom voice name through unchanged', function () {
         ->voice('my-custom-voice')
         ->generate(provider: 'gemini', model: 'gemini-2.5-flash-preview-tts');
 
-    Http::assertSent(fn (Request $request) => $request->data()['generationConfig']['speechConfig']['voiceConfig']['prebuiltVoiceConfig']['voiceName'] === 'my-custom-voice');
+    Http::assertSent(fn (Request $request): bool => $request->data()['generationConfig']['speechConfig']['voiceConfig']['prebuiltVoiceConfig']['voiceName'] === 'my-custom-voice');
 });
 
-test('audio uses default model when none specified', function () {
+test('audio uses default model when none specified', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => fakeGeminiAudioResponse(),
     ]);
 
     Audio::of('Hello world')->voice('Kore')->generate(provider: 'gemini');
 
-    Http::assertSent(fn (Request $request) => str_contains($request->url(), 'models/gemini-2.5-flash-preview-tts:generateContent'));
+    Http::assertSent(fn (Request $request): bool => str_contains($request->url(), 'models/gemini-2.5-flash-preview-tts:generateContent'));
 });
 
 function fakeGeminiAudioResponse(string $pcm = "\x00\x00"): PromiseInterface

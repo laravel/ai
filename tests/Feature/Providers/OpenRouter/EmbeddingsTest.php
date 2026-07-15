@@ -7,14 +7,14 @@ use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.openrouter' => [
         ...config('ai.providers.openrouter'),
         'key' => 'test-key',
     ]]);
 });
 
-test('embeddings request is correctly formatted', function () {
+test('embeddings request is correctly formatted', function (): void {
     Http::fake(['*' => Http::response([
         'object' => 'list',
         'data' => [
@@ -25,7 +25,7 @@ test('embeddings request is correctly formatted', function () {
 
     Ai::instance('openrouter')->embeddings(['Hello world']);
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['model'] === 'google/gemini-embedding-001'
@@ -35,7 +35,7 @@ test('embeddings request is correctly formatted', function () {
     });
 });
 
-test('embeddings response is correctly parsed', function () {
+test('embeddings response is correctly parsed', function (): void {
     Http::fake(['*' => Http::response([
         'object' => 'list',
         'data' => [
@@ -53,7 +53,7 @@ test('embeddings response is correctly parsed', function () {
         ->and($response->tokens)->toBe(10);
 });
 
-test('embeddings request sends bearer token', function () {
+test('embeddings request sends bearer token', function (): void {
     Http::fake(['*' => Http::response([
         'object' => 'list',
         'data' => [['object' => 'embedding', 'index' => 0, 'embedding' => [0.1]]],
@@ -65,7 +65,7 @@ test('embeddings request sends bearer token', function () {
     Http::assertSent(fn (Request $request) => $request->hasHeader('Authorization', 'Bearer test-key'));
 });
 
-test('embeddings request uses openrouter base url', function () {
+test('embeddings request uses openrouter base url', function (): void {
     Http::fake(['*' => Http::response([
         'object' => 'list',
         'data' => [['object' => 'embedding', 'index' => 0, 'embedding' => [0.1]]],
@@ -74,10 +74,10 @@ test('embeddings request uses openrouter base url', function () {
 
     Ai::instance('openrouter')->embeddings(['test']);
 
-    Http::assertSent(fn (Request $request) => $request->url() === 'https://openrouter.ai/api/v1/embeddings');
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://openrouter.ai/api/v1/embeddings');
 });
 
-test('embeddings request includes provider options in the request body', function () {
+test('embeddings request includes provider options in the request body', function (): void {
     Http::fake(['*' => Http::response([
         'object' => 'list',
         'data' => [['object' => 'embedding', 'index' => 0, 'embedding' => [0.1]]],
@@ -89,7 +89,7 @@ test('embeddings request includes provider options in the request body', functio
         providerOptions: ['encoding_format' => 'base64'],
     );
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['encoding_format'] === 'base64'
@@ -97,7 +97,7 @@ test('embeddings request includes provider options in the request body', functio
     });
 });
 
-test('embeddings rate limit response throws rate limited exception', function () {
+test('embeddings rate limit response throws rate limited exception', function (): void {
     Http::fake([
         'openrouter.ai/*' => Http::response(['error' => ['message' => 'Rate limited']], 429),
     ]);
@@ -106,7 +106,7 @@ test('embeddings rate limit response throws rate limited exception', function ()
         ->toThrow(RateLimitedException::class);
 });
 
-test('embeddings overloaded response throws provider overloaded exception', function () {
+test('embeddings overloaded response throws provider overloaded exception', function (): void {
     Http::fake([
         'openrouter.ai/*' => Http::response(['error' => ['message' => 'Server overloaded']], 503),
     ]);
@@ -115,7 +115,7 @@ test('embeddings overloaded response throws provider overloaded exception', func
         ->toThrow(ProviderOverloadedException::class);
 });
 
-test('embeddings error in 200 response throws ai exception', function () {
+test('embeddings error in 200 response throws ai exception', function (): void {
     Http::fake([
         'openrouter.ai/*' => Http::response([
             'error' => [

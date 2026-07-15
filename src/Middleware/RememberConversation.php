@@ -11,6 +11,7 @@ use Laravel\Ai\Contracts\RemembersConversations;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Models\Conversation;
 use Laravel\Ai\Prompts\AgentPrompt;
+use Laravel\Ai\Responses\AgentResponse;
 use Throwable;
 
 class RememberConversation
@@ -28,7 +29,7 @@ class RememberConversation
      */
     public function handle(AgentPrompt $prompt, Closure $next)
     {
-        return $next($prompt)->then(function ($response) use ($prompt) {
+        return $next($prompt)->then(function (AgentResponse $response) use ($prompt): void {
             /** @var Agent&RemembersConversations $agent */
             $agent = $prompt->agent;
 

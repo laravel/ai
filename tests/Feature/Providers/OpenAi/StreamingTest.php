@@ -14,14 +14,14 @@ use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.openai' => [
         ...config('ai.providers.openai'),
         'key' => 'test-key',
     ]]);
 });
 
-test('streaming emits text events', function () {
+test('streaming emits text events', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::response(
             body: $this->ssePayload([
@@ -46,7 +46,7 @@ test('streaming emits text events', function () {
         ->and($events[count($events) - 1])->toBeInstanceOf(StreamEnd::class);
 });
 
-test('streaming handles tool calls', function () {
+test('streaming handles tool calls', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::sequence([
             Http::response(
@@ -80,8 +80,8 @@ test('streaming handles tool calls', function () {
 
     $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
 
-    $toolCallEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolCallEvent));
-    $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+    $toolCallEvents = array_values(array_filter($events, fn ($e): bool => $e instanceof ToolCallEvent));
+    $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
 
     expect($toolCallEvents)->not->toBeEmpty()
         ->and($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator')
@@ -91,7 +91,7 @@ test('streaming handles tool calls', function () {
         ->and($streamEnd->usage->completionTokens)->toBe(15);
 });
 
-test('streaming handles reasoning events', function () {
+test('streaming handles reasoning events', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::response(
             body: $this->ssePayload([
@@ -118,11 +118,11 @@ test('streaming handles reasoning events', function () {
         ->toContain(ReasoningDelta::class)
         ->toContain(ReasoningEnd::class);
 
-    $reasoningDelta = array_values(array_filter($events, fn ($e) => $e instanceof ReasoningDelta))[0];
+    $reasoningDelta = array_values(array_filter($events, fn ($e): bool => $e instanceof ReasoningDelta))[0];
     expect($reasoningDelta->delta)->toBe('Let me think...');
 });
 
-test('streaming error event stops stream', function () {
+test('streaming error event stops stream', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::response(
             body: $this->ssePayload([
@@ -141,7 +141,7 @@ test('streaming error event stops stream', function () {
         ->and($events[0]->message)->toBe('Server overloaded');
 });
 
-test('streaming captures usage from response completed', function () {
+test('streaming captures usage from response completed', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::response(
             body: $this->ssePayload([
@@ -157,14 +157,14 @@ test('streaming captures usage from response completed', function () {
 
     $events = $this->collectStreamEvents();
 
-    $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+    $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
 
     expect($streamEnd->usage->promptTokens)->toBe(37)
         ->and($streamEnd->usage->completionTokens)->toBe(10)
         ->and($streamEnd->usage->cacheReadInputTokens)->toBe(5);
 });
 
-test('streaming finish reason maps correctly', function (string $status, string $type, $expected) {
+test('streaming finish reason maps correctly', function (string $status, string $type, $expected): void {
     Http::fake([
         'api.openai.com/*' => Http::response(
             body: $this->ssePayload([
@@ -182,7 +182,7 @@ test('streaming finish reason maps correctly', function (string $status, string 
 
     $events = $this->collectStreamEvents();
 
-    $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+    $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
 
     expect($streamEnd->reason)->toBe($expected->value);
 })->with([

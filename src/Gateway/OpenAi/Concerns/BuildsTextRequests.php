@@ -65,7 +65,7 @@ trait BuildsTextRequests
         }
 
         return collect($lastMessage->toolResults)
-            ->map(fn ($toolResult) => [
+            ->map(fn ($toolResult): array => [
                 'type' => 'function_call_output',
                 'call_id' => $toolResult->resultId,
                 'output' => $this->serializeToolResultOutput($toolResult->result),
@@ -84,7 +84,7 @@ trait BuildsTextRequests
         Provider $provider,
     ): array {
         if (filled($tools)) {
-            $body['tool_choice'] = $options?->toolChoice
+            $body['tool_choice'] = $options?->toolChoice instanceof ToolChoice
                 ? $this->mapToolChoice($options->toolChoice)
                 : 'auto';
             $body['tools'] = $this->mapTools($tools, $provider);

@@ -146,9 +146,9 @@ class GeminiGateway implements Gateway, StepTextGateway
         $data = $response->json();
 
         $images = (new Collection($data['candidates'][0]['content']['parts'] ?? []))
-            ->filter(fn ($part) => isset($part['inlineData']))
+            ->filter(fn ($part): bool => isset($part['inlineData']))
             ->values()
-            ->map(fn ($part) => new GeneratedImage(
+            ->map(fn ($part): GeneratedImage => new GeneratedImage(
                 $part['inlineData']['data'],
                 $part['inlineData']['mimeType'],
             ));
@@ -171,7 +171,7 @@ class GeminiGateway implements Gateway, StepTextGateway
         int $timeout = 30,
         array $providerOptions = [],
     ): EmbeddingsResponse {
-        $requests = array_map(fn (string $input) => array_merge($providerOptions, [
+        $requests = array_map(fn (string $input): array => array_merge($providerOptions, [
             'model' => "models/{$model}",
             'content' => ['parts' => [['text' => $input]]],
             'output_dimensionality' => $dimensions,
@@ -314,7 +314,7 @@ class GeminiGateway implements Gateway, StepTextGateway
 
             $text = $data['transcript'] ?? '';
 
-            $segments = (new Collection($data['segments'] ?? []))->map(fn ($seg) => new TranscriptionSegment(
+            $segments = (new Collection($data['segments'] ?? []))->map(fn ($seg): TranscriptionSegment => new TranscriptionSegment(
                 $seg['text'],
                 '',
                 $this->timestampToSeconds($seg['start_time'] ?? '0:00'),
@@ -342,7 +342,7 @@ class GeminiGateway implements Gateway, StepTextGateway
         $usageMeta = $response->json('usageMetadata') ?? [];
 
         return new TranscriptionResponse(
-            trim($text),
+            trim((string) $text),
             $segments,
             new Usage(
                 promptTokens: $usageMeta['promptTokenCount'] ?? 0,

@@ -21,7 +21,8 @@ use LogicException;
 
 class PendingTranscriptionGeneration
 {
-    use Conditionable, ResolvesProviderOptions;
+    use Conditionable;
+    use ResolvesProviderOptions;
 
     protected ?string $language = null;
 

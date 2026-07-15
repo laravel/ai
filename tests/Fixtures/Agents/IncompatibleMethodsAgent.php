@@ -29,9 +29,4 @@ class IncompatibleMethodsAgent implements Agent
     {
         return 256;
     }
-
-    private function temperature(): float
-    {
-        return 0.1;
-    }
 }

@@ -30,10 +30,10 @@ trait MapsAttachments
     {
         $providerKey = Lab::tryFrom($provider->driver()) ?? $provider->driver();
 
-        return $attachments->map(function ($attachment) use ($providerKey) {
+        return $attachments->map(function ($attachment) use ($providerKey): array {
             if (! $attachment instanceof File && ! $attachment instanceof UploadedFile) {
                 throw new InvalidArgumentException(
-                    'Unsupported attachment type ['.get_class($attachment).']'
+                    'Unsupported attachment type ['.$attachment::class.']'
                 );
             }
 
@@ -57,7 +57,7 @@ trait MapsAttachments
                 $attachment instanceof StoredImage => [
                     'type' => 'input_image',
                     'image_url' => 'data:'.($attachment->mimeType() ?? 'image/png').';base64,'.base64_encode(
-                        Storage::disk($attachment->disk)->get($attachment->path)
+                        (string) Storage::disk($attachment->disk)->get($attachment->path)
                     ),
                 ],
                 $attachment instanceof ProviderDocument => array_filter([
@@ -82,7 +82,7 @@ trait MapsAttachments
                 $attachment instanceof StoredDocument => [
                     'type' => 'input_file',
                     'file_data' => 'data:'.($attachment->mimeType() ?? 'application/octet-stream').';base64,'.base64_encode(
-                        Storage::disk($attachment->disk)->get($attachment->path)
+                        (string) Storage::disk($attachment->disk)->get($attachment->path)
                     ),
                     'filename' => $attachment->name() ?? $this->fallbackFilename($attachment->mimeType()),
                 ],
@@ -95,7 +95,7 @@ trait MapsAttachments
                     'file_data' => 'data:'.$attachment->getClientMimeType().';base64,'.base64_encode($attachment->get()),
                     'filename' => $attachment->getClientOriginalName(),
                 ],
-                default => throw new InvalidArgumentException('Unsupported attachment type ['.get_class($attachment).']'),
+                default => throw new InvalidArgumentException('Unsupported attachment type ['.$attachment::class.']'),
             };
 
             return $attachment instanceof HasProviderOptions
@@ -114,7 +114,8 @@ trait MapsAttachments
             'image/png',
             'image/gif',
             'image/webp',
-        ]);
+        ],
+            true);
     }
 
     protected function fallbackFilename(?string $mimeType): string
