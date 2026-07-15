@@ -98,14 +98,7 @@ class TextGenerationLoop
                 $stepContext,
             );
 
-            [$toolResults, $pendingApprovals] = filled($lastResult->pendingApprovals)
-                ? [[], collect($lastResult->pendingApprovals)]
-                : $this->continuationToolResults(
-                    $lastResult->finishReason,
-                    $lastResult->toolCalls,
-                    $stepContext->isFinalStep,
-                    $tools,
-                );
+            [$toolResults, $pendingApprovals] = $this->stepToolResults($lastResult, $stepContext->isFinalStep, $tools);
 
             $steps->push($this->buildStep($lastResult, $toolResults));
 
@@ -162,7 +155,7 @@ class TextGenerationLoop
                 $failed = in_array($toolResult->id, $failedToolCallIds, true);
 
                 yield (new ToolResultEvent(
-                    strtolower((string) Str::uuid7()),
+                    $this->generateEventId(),
                     $toolResult,
                     ! $rejected && ! $failed,
                     $rejected || $failed ? $toolResult->result : null,
@@ -175,7 +168,7 @@ class TextGenerationLoop
 
             if (! $shouldContinue) {
                 yield (new StreamEnd(
-                    strtolower((string) Str::uuid7()),
+                    $this->generateEventId(),
                     FinishReason::Stop->value,
                     $accumulatedUsage,
                     time(),
@@ -217,25 +210,18 @@ class TextGenerationLoop
 
             $result = $stream->getReturn();
 
-            if ($result === null) {
+            if (! $result instanceof StepResponse) {
                 break;
             }
 
             $accumulatedUsage = $accumulatedUsage->add($result->usage);
             $finalReason = $result->finishReason;
 
-            [$toolResults, $pendingApprovals] = filled($result->pendingApprovals)
-                ? [[], collect($result->pendingApprovals)]
-                : $this->continuationToolResults(
-                    $result->finishReason,
-                    $result->toolCalls,
-                    $stepContext->isFinalStep,
-                    $tools,
-                );
+            [$toolResults, $pendingApprovals] = $this->stepToolResults($result, $stepContext->isFinalStep, $tools);
 
             foreach ($toolResults as $toolResult) {
                 yield (new ToolResultEvent(
-                    strtolower((string) Str::uuid7()),
+                    $this->generateEventId(),
                     $toolResult,
                     ! $stepContext->isFinalStep,
                     $stepContext->isFinalStep ? $toolResult->result : null,
@@ -251,7 +237,7 @@ class TextGenerationLoop
 
             if ($pendingApprovals->isNotEmpty()) {
                 yield (new ToolApprovalRequest(
-                    strtolower((string) Str::uuid7()),
+                    $this->generateEventId(),
                     $pendingApprovals,
                     time(),
                     $result->providerContentBlocks,
@@ -271,7 +257,7 @@ class TextGenerationLoop
 
         if ($reason !== null) {
             yield (new StreamEnd(
-                strtolower((string) Str::uuid7()),
+                $this->generateEventId(),
                 $reason->value,
                 $accumulatedUsage,
                 time(),
@@ -294,19 +280,22 @@ class TextGenerationLoop
     }
 
     /**
-     * Tool results to continue the loop with, or [] when this step should be the last.
+     * Tool results to continue the loop with, plus any pending approvals that pause it.
      *
-     * @param  ToolCall[]  $toolCalls
      * @param  Tool[]  $tools
      * @return array{array<int, ToolResult>, Collection<int, PendingApproval>}
      */
-    protected function continuationToolResults(FinishReason $reason, array $toolCalls, bool $isFinalStep, array $tools): array
+    protected function stepToolResults(StepResponse $result, bool $isFinalStep, array $tools): array
     {
-        if ($reason !== FinishReason::ToolCalls || blank($toolCalls)) {
+        if (filled($result->pendingApprovals)) {
+            return [[], collect($result->pendingApprovals)];
+        }
+
+        if ($result->finishReason !== FinishReason::ToolCalls || blank($result->toolCalls)) {
             return [[], collect()];
         }
 
-        return $this->approvalAwareToolResults($toolCalls, $tools, $isFinalStep);
+        return $this->approvalAwareToolResults($result->toolCalls, $tools, $isFinalStep);
     }
 
     /**
@@ -322,9 +311,9 @@ class TextGenerationLoop
         foreach ($toolCalls as $toolCall) {
             $tool = $this->findTool($toolCall->name, $tools);
 
-            $approval = $tool !== null ? $this->approvalForTool($tool, $toolCall) : null;
+            $approval = $tool instanceof Tool ? $this->approvalForTool($tool, $toolCall) : null;
 
-            if ($approval !== null) {
+            if ($approval instanceof Approval) {
                 $pendingApprovals->push(new PendingApproval(
                     $toolCall->id,
                     $toolCall->name,
@@ -335,7 +324,7 @@ class TextGenerationLoop
                 continue;
             }
 
-            if ($tool === null && ! $isFinalStep) {
+            if (! $tool instanceof Tool && ! $isFinalStep) {
                 throw new NoSuchToolException($toolCall->name);
             }
 
@@ -349,7 +338,7 @@ class TextGenerationLoop
                 $toolCall->id,
                 $toolCall->name,
                 $toolCall->arguments,
-                $isFinalStep || $tool === null
+                $isFinalStep || ! $tool instanceof Tool
                     ? 'The agent reached its maximum number of steps without running this tool call.'
                     : $this->executeTool($tool, $toolCall->arguments, $toolCall->id),
                 $toolCall->resultId,
@@ -389,7 +378,7 @@ class TextGenerationLoop
      */
     protected function commitApprovalResults(?Closure $onApprovalResolved, array $approvalResults): void
     {
-        if ($onApprovalResolved !== null && filled($approvalResults)) {
+        if ($onApprovalResolved instanceof Closure && filled($approvalResults)) {
             $onApprovalResolved($approvalResults);
         }
     }
@@ -441,7 +430,7 @@ class TextGenerationLoop
 
             $tool = $resolvedTools[$toolCall->id];
 
-            if ($tool === null) {
+            if (! $tool instanceof Tool) {
                 throw new NoSuchToolException($toolCall->name);
             }
 
@@ -482,7 +471,7 @@ class TextGenerationLoop
         ]);
 
         return $this->pendingApprovalsFor(
-            $pendingToolCalls->filter(fn (ToolCall $toolCall) => $approvals[$toolCall->id] !== null)->values(),
+            $pendingToolCalls->filter(fn (ToolCall $toolCall) => $approvals[$toolCall->id] instanceof Approval)->values(),
             $approvals,
         );
     }
@@ -507,7 +496,7 @@ class TextGenerationLoop
             $toolCall->id => $this->approvalForTool($resolvedTools[$toolCall->id], $toolCall),
         ]);
 
-        $gated = $pendingToolCalls->filter(fn (ToolCall $toolCall) => $approvals[$toolCall->id] !== null);
+        $gated = $pendingToolCalls->filter(fn (ToolCall $toolCall) => $approvals[$toolCall->id] instanceof Approval);
         $gatedIds = $gated->pluck('id')->all();
         $decisionIds = array_values(array_diff(array_keys($approval), ['*']));
 
@@ -674,6 +663,11 @@ class TextGenerationLoop
             $toolCall->arguments,
             $approvals[$toolCall->id]?->reason,
         ))->values();
+    }
+
+    protected function generateEventId(): string
+    {
+        return strtolower((string) Str::uuid7());
     }
 
     protected function buildAssistantMessage(StepResponse $result): AssistantMessage
