@@ -13,6 +13,7 @@ use Rector\TypeDeclaration\Rector\FuncCall\AddArrayFunctionClosureParamTypeRecto
 use Rector\TypeDeclaration\Rector\FunctionLike\AddClosureParamTypeForArrayMapRector;
 use Rector\TypeDeclaration\Rector\FunctionLike\AddClosureParamTypeForArrayReduceRector;
 use Rector\TypeDeclaration\Rector\StmtsAwareInterface\SafeDeclareStrictTypesRector;
+use RectorLaravel\Rector\Class_\TablePropertyToTableAttributeRector;
 use RectorLaravel\Set\LaravelSetProvider;
 
 return RectorConfig::configure()
@@ -35,6 +36,7 @@ return RectorConfig::configure()
         RemoveDeadIfForeachForRector::class,
         // Skipped for now to keep the diff focused (no declare(strict_types=1) churn).
         SafeDeclareStrictTypesRector::class,
+        TablePropertyToTableAttributeRector::class,
     ])
     ->withPreparedSets(
         deadCode: true,

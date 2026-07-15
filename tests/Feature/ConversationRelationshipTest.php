@@ -1,6 +1,5 @@
 <?php
 
-use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -123,10 +122,11 @@ test('conversation model uses configured database connection', function (): void
     config(['ai.conversations.connection' => null]);
 });
 
-#[Table(name: 'users')]
 class ConversationRelationshipUser extends Model
 {
     use HasConversations;
+
+    protected $table = 'users';
 
     protected $guarded = [];
 }
