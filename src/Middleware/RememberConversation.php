@@ -4,23 +4,13 @@ namespace Laravel\Ai\Middleware;
 
 use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
-use Illuminate\Contracts\Cache\Lock;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
-use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Contracts\Agent;
-use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\ConversationStore;
-use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\RemembersConversations;
-use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\Contracts\VerifiesConversationOwnership;
-use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
-use Laravel\Ai\Responses\StreamableAgentResponse;
 use Throwable;
 
 class RememberConversation
@@ -43,59 +33,20 @@ class RememberConversation
 
         $conversation = $agent->currentConversation();
 
-        if ($conversation !== null && $prompt->resume !== null && $this->store instanceof VerifiesConversationOwnership
+        if ($conversation !== null && $prompt->resume !== null
             && ! $this->store->conversationBelongsTo($conversation, $agent->conversationParticipant()?->id)) {
             throw new AuthorizationException('This conversation does not belong to the current participant.');
         }
 
-        $lock = null;
-
-        if ($conversation !== null && $this->requiresPauseLock($prompt, $agent)) {
-            $lock = Cache::lock('ai:approval-resume:'.$conversation, 300);
-
-            if (! $lock->get()) {
-                throw new ApprovalMismatchException(
-                    'The pending tool calls have already been resumed or are being resumed.',
-                    $this->pendingApprovalsFor($agent),
-                );
-            }
-        }
-
-        try {
-            return $this->remember($prompt, $next, $lock);
-        } catch (Throwable $exception) {
-            $lock?->release();
-
-            throw $exception;
-        }
-    }
-
-    /**
-     * Determine whether the turn must hold the conversation's pause lock.
-     */
-    protected function requiresPauseLock(AgentPrompt $prompt, Agent $agent): bool
-    {
-        if ($prompt->resume !== null) {
-            return true;
-        }
-
-        return $agent instanceof HasTools && $this->pendingApprovalsFor($agent)->isNotEmpty();
+        return $this->remember($prompt, $next);
     }
 
     /**
      * Run the prompt and persist the conversation once it completes.
      */
-    protected function remember(AgentPrompt $prompt, Closure $next, ?Lock $lock = null)
+    protected function remember(AgentPrompt $prompt, Closure $next)
     {
-        $pending = $next($prompt);
-
-        if ($lock !== null && $pending instanceof StreamableAgentResponse) {
-            $pending->finally(fn () => $lock->release());
-
-            $lock = null;
-        }
-
-        return $pending->then(function ($response) use ($prompt, $lock) {
+        return $next($prompt)->then(function ($response) use ($prompt) {
             /** @var Agent&RemembersConversations $agent */
             $agent = $prompt->agent;
 
@@ -133,25 +84,7 @@ class RememberConversation
                 $agent->currentConversation(),
                 $agent->conversationParticipant(),
             );
-
-            $lock?->release();
         });
-    }
-
-    /**
-     * Get the pending approvals awaiting a decision in the agent's conversation.
-     *
-     * @return Collection<int, PendingApproval>
-     */
-    protected function pendingApprovalsFor(Agent $agent)
-    {
-        $messages = $agent instanceof Conversational ? [...$agent->messages()] : [];
-
-        $tools = $agent instanceof HasTools
-            ? array_values(array_filter([...$agent->tools()], fn ($tool) => $tool instanceof Tool))
-            : [];
-
-        return $this->provider->textGenerationLoop()->pendingApprovals($messages, $tools);
     }
 
     /**

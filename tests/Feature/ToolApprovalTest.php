@@ -17,29 +17,33 @@ use Tests\Fixtures\Agents\ConversationalAgent;
 use Tests\Fixtures\Agents\RememberingApprovableAgent;
 use Tests\Fixtures\Tools\ApprovableNumberGenerator;
 
-test('decision collections normalize boolean decisions', function () {
-    $approval = Decision::collection([
+test('decision maps normalize boolean decisions', function () {
+    $approval = Decision::normalize([
         'call-1' => true,
         'call-2' => false,
         'call-3' => Decision::edit(['path' => '/tmp/file']),
     ]);
 
-    expect($approval->decisions['call-1']->action)->toBe('approve')
-        ->and($approval->decisions['call-2']->action)->toBe('reject')
-        ->and($approval->decisions['call-3']->arguments)->toBe(['path' => '/tmp/file']);
+    expect($approval['call-1']->action)->toBe('approve')
+        ->and($approval['call-2']->action)->toBe('reject')
+        ->and($approval['call-3']->arguments)->toBe(['path' => '/tmp/file']);
 });
 
-test('decision collections reject a wildcard edit decision', function () {
-    Decision::collection(['*' => Decision::edit(['path' => '/tmp/file'])]);
+test('decision maps reject a wildcard edit decision', function () {
+    Decision::normalize(['*' => Decision::edit(['path' => '/tmp/file'])]);
 })->throws(InvalidArgumentException::class, 'The wildcard decision may not use the edit action.');
 
-test('decision collections reject values that are not decisions or booleans', function () {
-    Decision::collection(['call-1' => 'approve']);
+test('decision maps reject values that are not decisions or booleans', function () {
+    Decision::normalize(['call-1' => 'approve']);
 })->throws(InvalidArgumentException::class, 'Tool approval decisions must be Decision instances or booleans.');
 
-test('decision collections reject a nested decision collection so it cannot fall through to approval', function () {
-    Decision::collection(['call-1' => Decision::collection(['call-1' => false])]);
-})->throws(InvalidArgumentException::class, 'Tool approval decisions may not nest another decision collection.');
+test('decision maps reject a nested decision map so it cannot fall through to approval', function () {
+    Decision::normalize(['call-1' => ['call-1' => false]]);
+})->throws(InvalidArgumentException::class, 'Tool approval decisions must be Decision instances or booleans.');
+
+test('an empty decision map through prompt is rejected instead of silently resuming nothing', function () {
+    (new RememberingApprovableAgent)->forUser((object) ['id' => 1])->prompt([]);
+})->throws(InvalidArgumentException::class, 'Tool approval decisions may not be empty.');
 
 test('a blank rejection reason is treated as a bare rejection that stops the loop', function () {
     expect(Decision::reject('')->result)->toBeNull()
@@ -147,10 +151,10 @@ test('a paused stream dispatches the tool approval requested event', function ()
 test('approval resume prompts can be queued', function () {
     ConversationalAgent::fake();
 
-    (new ConversationalAgent)->queue(Decision::collection(['call-1' => true]));
+    (new ConversationalAgent)->queue(['call-1' => true]);
 
     ConversationalAgent::assertQueued(function ($prompt) {
-        return $prompt->resume?->decisions['call-1']->action === 'approve';
+        return ($prompt->resume['call-1'] ?? null)?->action === 'approve';
     });
 });
 
@@ -160,6 +164,6 @@ test('a bare decision widens to every pending call', function () {
     (new ConversationalAgent)->queue(Decision::approve());
 
     ConversationalAgent::assertQueued(function ($prompt) {
-        return $prompt->resume?->decisions['*']->action === 'approve';
+        return ($prompt->resume['*'] ?? null)?->action === 'approve';
     });
 });

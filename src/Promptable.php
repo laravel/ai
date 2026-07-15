@@ -54,7 +54,7 @@ trait Promptable
      * Invoke the agent with a given prompt, or resume a paused run with tool approval decisions.
      */
     public function prompt(
-        Decision|string $prompt,
+        Decision|array|string $prompt,
         array $attachments = [],
         Lab|array|string|null $provider = null,
         ?string $model = null,
@@ -81,7 +81,7 @@ trait Promptable
      * Invoke the agent with a given prompt and return a streamable response.
      */
     public function stream(
-        Decision|string $prompt,
+        Decision|array|string $prompt,
         array $attachments = [],
         Lab|array|string|null $provider = null,
         ?string $model = null,
@@ -97,7 +97,7 @@ trait Promptable
      */
     private function streamPrompt(
         string $prompt,
-        ?Decision $resume,
+        ?array $resume,
         array $attachments,
         Lab|array|string|null $provider,
         ?string $model,
@@ -105,6 +105,10 @@ trait Promptable
     {
         $providers = $this->getProvidersAndModelsForFailover($provider, $model);
         $resolvedTimeout = $this->getTimeout($timeout);
+
+        if ($resume !== null) {
+            $providers = array_slice($providers, 0, 1, true);
+        }
 
         $invocationId = (string) Str::uuid7();
 
@@ -161,7 +165,7 @@ trait Promptable
     /**
      * Invoke the agent in a queued job.
      */
-    public function queue(Decision|string $prompt, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
+    public function queue(Decision|array|string $prompt, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
     {
         [$prompt, $resume] = $this->extractResume($prompt);
 
@@ -181,25 +185,25 @@ trait Promptable
     /**
      * Split a prompt into its text and tool approval resume parts, widening a bare decision to every pending call.
      *
-     * @return array{string, ?Decision}
+     * @return array{string, ?array<string, Decision>}
      */
-    private function extractResume(Decision|string $prompt): array
+    private function extractResume(Decision|array|string $prompt): array
     {
         if (is_string($prompt)) {
             return [$prompt, null];
         }
 
-        if ($prompt->isCollection()) {
-            return ['', $prompt];
+        if (is_array($prompt)) {
+            return ['', Decision::normalize($prompt)];
         }
 
         if ($prompt->isEdited()) {
             throw new InvalidArgumentException(
-                'A bare edit decision has no tool call to target; pass Decision::collection([$id => Decision::edit(...)]) instead.'
+                'A bare edit decision has no tool call to target; pass [$id => Decision::edit(...)] instead.'
             );
         }
 
-        return ['', Decision::collection(['*' => $prompt])];
+        return ['', ['*' => $prompt]];
     }
 
     /**

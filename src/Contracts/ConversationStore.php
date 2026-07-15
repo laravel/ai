@@ -6,6 +6,7 @@ use Illuminate\Support\Collection;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Responses\Data\ToolResult;
 
 interface ConversationStore
 {
@@ -35,4 +36,16 @@ interface ConversationStore
      * @return Collection<int, Message>
      */
     public function getLatestConversationMessages(string $conversationId, int $limit): Collection;
+
+    /**
+     * Determine whether the conversation belongs to the given participant.
+     */
+    public function conversationBelongsTo(string $conversationId, string|int|null $participantId): bool;
+
+    /**
+     * Durably record resolved approval results on the paused turn before the run continues.
+     *
+     * @param  array<int, ToolResult>  $toolResults
+     */
+    public function storeApprovalResults(string $conversationId, string|int|null $participantId, array $toolResults): void;
 }

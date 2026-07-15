@@ -14,7 +14,6 @@ use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\HasTools;
-use Laravel\Ai\Contracts\RecordsApprovalResults;
 use Laravel\Ai\Contracts\RemembersConversations as RemembersConversationsContract;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\AgentPrompted;
@@ -121,8 +120,10 @@ trait GeneratesText
 
     /**
      * Get the tool approval to resume with, unless the agent's gateway is faked.
+     *
+     * @return array<string, Decision>|null
      */
-    protected function resumableApprovalFor(AgentPrompt $prompt): ?Decision
+    protected function resumableApprovalFor(AgentPrompt $prompt): ?array
     {
         if ($prompt->resume === null || Ai::hasFakeGatewayFor($prompt->agent::class)) {
             return null;
@@ -144,17 +145,17 @@ trait GeneratesText
             return null;
         }
 
-        /** @var Agent&RemembersConversationsContract $agent */
-        $store = app(ConversationStore::class);
-
-        if ($agent->currentConversation() === null || ! $store instanceof RecordsApprovalResults) {
+        if ($agent->currentConversation() === null) {
             return null;
         }
+
+        /** @var Agent&RemembersConversationsContract $agent */
+        $store = app(ConversationStore::class);
 
         $conversationId = $agent->currentConversation();
         $participantId = $agent->conversationParticipant()?->id;
 
-        return fn (array $toolResults) => $store->recordApprovalResults($conversationId, $participantId, $toolResults);
+        return fn (array $toolResults) => $store->storeApprovalResults($conversationId, $participantId, $toolResults);
     }
 
     /**

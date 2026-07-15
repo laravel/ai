@@ -10,13 +10,11 @@ class Decision
 {
     /**
      * @param  array<string, mixed>|null  $arguments
-     * @param  array<string, Decision>  $decisions  keyed by tool call id when this decision bundles a collection
      */
     private function __construct(
-        public readonly ?string $action = null,
+        public readonly string $action,
         public readonly ?string $result = null,
         public readonly ?array $arguments = null,
-        public readonly array $decisions = [],
     ) {}
 
     public static function approve(): self
@@ -38,12 +36,17 @@ class Decision
     }
 
     /**
-     * Bundle one decision per tool call id, accepting booleans as shorthand and a '*' wildcard for undecided calls.
+     * Normalize an id-keyed decision map, accepting booleans as shorthand and a '*' wildcard for undecided calls.
      *
      * @param  array<string, Decision|bool>  $decisions
+     * @return array<string, Decision>
      */
-    public static function collection(array $decisions): self
+    public static function normalize(array $decisions): array
     {
+        if ($decisions === []) {
+            throw new InvalidArgumentException('Tool approval decisions may not be empty.');
+        }
+
         $normalized = [];
 
         foreach ($decisions as $id => $decision) {
@@ -54,10 +57,6 @@ class Decision
                 default => throw new InvalidArgumentException('Tool approval decisions must be Decision instances or booleans.'),
             };
 
-            if ($decision->isCollection()) {
-                throw new InvalidArgumentException('Tool approval decisions may not nest another decision collection.');
-            }
-
             if ($id === '*' && $decision->isEdited()) {
                 throw new InvalidArgumentException('The wildcard decision may not use the edit action.');
             }
@@ -65,13 +64,15 @@ class Decision
             $normalized[$id] = $decision;
         }
 
-        return new self(decisions: $normalized);
+        return $normalized;
     }
 
     /**
-     * Extract tool approval decisions from a Vercel AI SDK "useChat" request, or null when it carries none.
+     * Extract tool approval decisions from a Vercel AI SDK "useChat" request, keyed by tool call id, or null when it carries none.
+     *
+     * @return array<string, Decision>|null
      */
-    public static function tryFrom(Request $request): ?self
+    public static function tryFrom(Request $request): ?array
     {
         $messages = $request->input('messages');
 
@@ -80,47 +81,6 @@ class Decision
         } catch (InvalidArgumentException $exception) {
             throw ValidationException::withMessages(['messages' => $exception->getMessage()]);
         }
-    }
-
-    /**
-     * Extract tool approval decisions from a list of Vercel AI SDK UI messages.
-     *
-     * @param  array<int, mixed>  $messages
-     */
-    private static function fromUiMessages(array $messages): ?self
-    {
-        $message = end($messages);
-
-        if (! is_array($message) || ($message['role'] ?? null) !== 'assistant') {
-            return null;
-        }
-
-        $decisions = [];
-
-        foreach ($message['parts'] ?? [] as $part) {
-            if (! is_array($part) || ($part['state'] ?? null) !== 'approval-responded') {
-                continue;
-            }
-
-            $reason = $part['approval']['reason'] ?? null;
-            $id = $part['toolCallId'] ?? null;
-
-            if (! is_string($id)
-                || ! is_bool($part['approval']['approved'] ?? null)
-                || ($reason !== null && ! is_string($reason))) {
-                throw new InvalidArgumentException('Tool approval response parts must contain a tool call id and an approval decision.');
-            }
-
-            if (array_key_exists($id, $decisions)) {
-                throw new InvalidArgumentException('Tool approval response parts contain conflicting decisions for the same tool call.');
-            }
-
-            $decisions[$id] = $part['approval']['approved']
-                ? self::approve()
-                : self::reject($reason);
-        }
-
-        return $decisions === [] ? null : self::collection($decisions);
     }
 
     public function isApproved(): bool
@@ -139,10 +99,48 @@ class Decision
     }
 
     /**
-     * Determine whether this decision bundles a collection rather than naming a single action.
+     * Extract tool approval decisions from a list of Vercel AI SDK UI messages.
+     *
+     * @param  array<int, mixed>  $messages
+     * @return array<string, Decision>|null
      */
-    public function isCollection(): bool
+    private static function fromUiMessages(array $messages): ?array
     {
-        return $this->action === null;
+        $message = end($messages);
+
+        if (! is_array($message) || ($message['role'] ?? null) !== 'assistant') {
+            return null;
+        }
+
+        $decisions = [];
+
+        foreach ($message['parts'] ?? [] as $part) {
+            if (! is_array($part) || ($part['state'] ?? null) !== 'approval-responded') {
+                continue;
+            }
+
+            $reason = $part['approval']['reason'] ?? null;
+            $id = $part['toolCallId'] ?? null;
+
+            if ($id === '*') {
+                throw new InvalidArgumentException('Tool approval response parts may not target the wildcard tool call id.');
+            }
+
+            if (! is_string($id)
+                || ! is_bool($part['approval']['approved'] ?? null)
+                || ($reason !== null && ! is_string($reason))) {
+                throw new InvalidArgumentException('Tool approval response parts must contain a tool call id and an approval decision.');
+            }
+
+            if (array_key_exists($id, $decisions)) {
+                throw new InvalidArgumentException('Tool approval response parts contain conflicting decisions for the same tool call.');
+            }
+
+            $decisions[$id] = $part['approval']['approved']
+                ? self::approve()
+                : self::reject($reason);
+        }
+
+        return $decisions === [] ? null : $decisions;
     }
 }

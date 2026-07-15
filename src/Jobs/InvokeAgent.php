@@ -14,6 +14,8 @@ class InvokeAgent implements ShouldQueue
 
     /**
      * Create a new job instance.
+     *
+     * @param  array<string, Decision>|null  $resume
      */
     public function __construct(
         public Agent $agent,
@@ -21,7 +23,7 @@ class InvokeAgent implements ShouldQueue
         public array $attachments = [],
         public Lab|array|string|null $provider = null,
         public ?string $model = null,
-        public ?Decision $resume = null) {}
+        public ?array $resume = null) {}
 
     /**
      * Execute the job.

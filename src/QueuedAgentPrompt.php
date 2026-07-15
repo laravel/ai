@@ -10,13 +10,16 @@ use Laravel\Ai\Enums\Lab;
 
 class QueuedAgentPrompt
 {
+    /**
+     * @param  array<string, Decision>|null  $resume
+     */
     public function __construct(
         public Agent $agent,
         public string $prompt,
         public Collection|array $attachments,
         public Lab|array|string|null $provider,
         public ?string $model,
-        public ?Decision $resume = null,
+        public ?array $resume = null,
     ) {}
 
     /**

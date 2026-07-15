@@ -21,7 +21,7 @@ interface Agent
      * Invoke the agent with a given prompt, or resume a paused run with tool approval decisions.
      */
     public function prompt(
-        Decision|string $prompt,
+        Decision|array|string $prompt,
         array $attachments = [],
         Lab|array|string|null $provider = null,
         ?string $model = null,
@@ -32,7 +32,7 @@ interface Agent
      * Invoke the agent with a given prompt and return a streamable response.
      */
     public function stream(
-        Decision|string $prompt,
+        Decision|array|string $prompt,
         array $attachments = [],
         Lab|array|string|null $provider = null,
         ?string $model = null,
@@ -43,7 +43,7 @@ interface Agent
      * Invoke the agent in a queued job.
      */
     public function queue(
-        Decision|string $prompt,
+        Decision|array|string $prompt,
         array $attachments = [],
         Lab|array|string|null $provider = null,
         ?string $model = null

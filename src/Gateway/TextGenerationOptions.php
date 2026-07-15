@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Gateway;
 
-use Laravel\Ai\Approvals\Approval;
 use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Attributes\MaxTokens;
 use Laravel\Ai\Attributes\Temperature;
@@ -10,6 +9,7 @@ use Laravel\Ai\Attributes\TopP;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Exceptions\ApprovalNotResumableException;
 use Laravel\Ai\ToolChoice;
 use ReflectionClass;
 
@@ -81,7 +81,7 @@ class TextGenerationOptions
             agent: $agent,
             topP: self::resolve($agent, $reflection, 'topP', TopP::class),
             toolChoice: self::resolveToolChoice($agent, $reflection),
-            resumableApprovals: Approval::resumableFor($agent),
+            resumableApprovals: ApprovalNotResumableException::resumableFor($agent),
         );
     }
 

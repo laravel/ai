@@ -2,8 +2,10 @@
 
 namespace Laravel\Ai\Exceptions;
 
-use Laravel\Ai\Approvals\Approval;
+use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\Conversational;
+use Laravel\Ai\Contracts\RemembersConversations as RemembersConversationsContract;
 
 class ApprovalNotResumableException extends AiException
 {
@@ -17,8 +19,25 @@ class ApprovalNotResumableException extends AiException
      */
     public static function throwUnlessResumable(Agent $agent): void
     {
-        if (! Approval::resumableFor($agent)) {
+        if (! static::resumableFor($agent)) {
             throw static::make();
         }
+    }
+
+    /**
+     * Determine whether the given agent can resume a paused approval from persisted history.
+     */
+    public static function resumableFor(Agent $agent): bool
+    {
+        if (! $agent instanceof Conversational) {
+            return false;
+        }
+
+        if (! in_array(RemembersConversations::class, class_uses_recursive($agent), true)) {
+            return true;
+        }
+
+        /** @var Agent&RemembersConversationsContract $agent */
+        return $agent->hasConversationParticipant();
     }
 }

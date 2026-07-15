@@ -146,10 +146,10 @@ describe('prompt responses', function () {
         expect($response->awaitingApproval())->toBeTrue()
             ->and($response->pendingApprovals)->toHaveCount(1);
 
-        (new ConversationalAgent)->prompt(Decision::collection(['call-1' => true]));
+        (new ConversationalAgent)->prompt(['call-1' => true]);
 
         ConversationalAgent::assertPrompted(function (AgentPrompt $prompt) {
-            return $prompt->resume?->decisions['call-1']->action === 'approve';
+            return ($prompt->resume['call-1'] ?? null)?->action === 'approve';
         });
     });
 });
@@ -353,4 +353,17 @@ describe('timeout handling', function () {
         expect($revised->timeout)->toEqual(150)
             ->and($revised->prompt)->toEqual('Revised prompt');
     });
+
+    test('a resume prompt cannot be revised into silently discarded text', function () {
+        $prompt = new AgentPrompt(
+            new AssistantAgent,
+            '',
+            [],
+            Ai::textProviderFor(new AssistantAgent, 'groq'),
+            'test-model',
+            resume: ['call-1' => Decision::approve()],
+        );
+
+        $prompt->append('extra context');
+    })->throws(InvalidArgumentException::class);
 });

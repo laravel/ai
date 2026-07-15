@@ -8,8 +8,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\ConversationStore;
-use Laravel\Ai\Contracts\RecordsApprovalResults;
-use Laravel\Ai\Contracts\VerifiesConversationOwnership;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
@@ -20,7 +18,7 @@ use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 
-class DatabaseConversationStore implements ConversationStore, RecordsApprovalResults, VerifiesConversationOwnership
+class DatabaseConversationStore implements ConversationStore
 {
     /**
      * Create a new conversation store instance.
@@ -35,7 +33,7 @@ class DatabaseConversationStore implements ConversationStore, RecordsApprovalRes
      *
      * @param  array<int, ToolResult>  $toolResults
      */
-    public function recordApprovalResults(string $conversationId, string|int|null $participantId, array $toolResults): void
+    public function storeApprovalResults(string $conversationId, string|int|null $participantId, array $toolResults): void
     {
         if ($toolResults === []) {
             return;
