@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
+use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\StoredDocument;
@@ -140,6 +141,58 @@ test('it stores sparse keyed tool calls and results as JSON arrays', function ()
 
     expect(array_is_list(json_decode((string) $record->tool_calls, true)))->toBeTrue()
         ->and(array_is_list(json_decode((string) $record->tool_results, true)))->toBeTrue();
+});
+
+test('a conversation is never owned by a participant-less caller', function (): void {
+    $store = new DatabaseConversationStore;
+
+    $ownedId = $store->storeConversation(1, 'Owned');
+    $guestId = $store->storeConversation(null, 'Guest');
+
+    expect($store->conversationBelongsTo($ownedId, 1))->toBeTrue()
+        ->and($store->conversationBelongsTo($guestId, null))->toBeFalse()
+        ->and($store->conversationBelongsTo($ownedId, null))->toBeFalse()
+        ->and($store->conversationBelongsTo($guestId, 1))->toBeFalse();
+});
+
+test('a bare rejection resume does not persist a blank assistant row', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Approval conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'paused-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => '',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => []]]),
+        'tool_results' => json_encode([['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => [], 'result' => 'The user rejected this tool call.', 'result_id' => null]]),
+        'usage' => '[]',
+        'meta' => '[]',
+        'approval_state' => json_encode(['pending' => []]),
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        '',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+        resume: ['call-1' => Decision::reject()],
+    );
+
+    $response = new AgentResponse('invocation-id', '', new Usage, new Meta);
+    $response->toolResults = collect([
+        new ToolResult('call-1', 'DeleteFile', [], 'The user rejected this tool call.'),
+    ]);
+
+    $store->storeAssistantMessage($conversationId, 1, $prompt, $response);
+
+    expect(DB::table('agent_conversation_messages')->where('role', 'assistant')->count())->toBe(1);
 });
 
 test('it reloads legacy sparse keyed tool calls and results as lists', function (): void {
@@ -320,6 +373,59 @@ test('it replays a resumed approval so the paused tool_use is answered', functio
 
     expect($messages)->toHaveCount(3)
         ->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[0]->toolCalls[0]->id)->toBe('call-1')
+        ->and($messages[1])->toBeInstanceOf(ToolResultMessage::class)
+        ->and($messages[1]->toolResults[0]->id)->toBe('call-1')
+        ->and($messages[2])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[2]->content)->toBe('Deleted x');
+});
+
+test('it keeps a tool call answered on a later row even after its paused row cleared the pending marker', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Tool conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => '',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'x'], 'result_id' => 'result-1'],
+        ]),
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'approval_state' => json_encode(['pending' => []]),
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-2',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => 'Deleted x',
+        'attachments' => '[]',
+        'tool_calls' => '[]',
+        'tool_results' => json_encode([
+            ['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'x'], 'result' => 'Deleted x', 'result_id' => 'result-1'],
+        ]),
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toHaveCount(3)
+        ->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[0]->toolCalls)->toHaveCount(1)
         ->and($messages[0]->toolCalls[0]->id)->toBe('call-1')
         ->and($messages[1])->toBeInstanceOf(ToolResultMessage::class)
         ->and($messages[1]->toolResults[0]->id)->toBe('call-1')

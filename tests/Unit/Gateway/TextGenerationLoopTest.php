@@ -278,7 +278,7 @@ test('a bare rejection stops the loop without another model call', function (): 
     expect($tool->calls)->toBe(0)
         ->and($gateway->generateCalls)->toBe(0)
         ->and($response->toolResults)->toHaveCount(1)
-        ->and($response->toolResults[0]->result)->toBe('Tool call rejected by approver.');
+        ->and($response->toolResults[0]->result)->toBe('The user rejected this tool call.');
 });
 
 test('a gated tool with approval disabled executes without pausing', function (): void {
@@ -327,7 +327,7 @@ test('a bare rejection stops the loop even beside an approved call', function ()
         ->and($gateway->generateCalls)->toBe(0)
         ->and($response->toolResults)->toHaveCount(2)
         ->and($response->toolResults[0]->result)->toBe('handled approved')
-        ->and($response->toolResults[1]->result)->toBe('Tool call rejected by approver.');
+        ->and($response->toolResults[1]->result)->toBe('The user rejected this tool call.');
 });
 
 test('a bare rejection beside an approved call still records the executed result before returning', function (): void {
@@ -431,7 +431,7 @@ test('a relaxed gate with no decision fails closed instead of auto-running the t
     );
 
     expect($tool->calls)->toBe(0)
-        ->and($response->toolResults->firstWhere('id', 'call-1')->result)->toBe('This tool call was not approved.');
+        ->and($response->toolResults->firstWhere('id', 'call-1')->result)->toBe('The user rejected this tool call.');
 });
 
 test('a resumed mixed batch merges its results into the pause turn answering message', function (): void {

@@ -67,13 +67,16 @@ class TextGenerationLoop
         $lastResult = null;
 
         if ($approval !== null) {
-            [$allMessages, $originalMessageCount, $shouldContinue, $approvalResults] = $this->resumeFromApproval($approval, $messages, $tools);
+            $resumption = $this->resumeFromApproval($approval, $messages, $tools);
+
+            $allMessages = $resumption->messages;
+            $originalMessageCount = $resumption->originalMessageCount;
 
             if ($recordApprovalResults !== null) {
-                $recordApprovalResults($approvalResults);
+                $recordApprovalResults($resumption->results);
             }
 
-            if (! $shouldContinue) {
+            if (! $resumption->shouldContinue) {
                 return (new TextResponse('', new Usage, new Meta($provider->name(), $model)))
                     ->withMessages(collect(array_slice($allMessages, $originalMessageCount)));
             }
@@ -151,11 +154,13 @@ class TextGenerationLoop
         $sawError = false;
 
         if ($approval !== null) {
-            [$allMessages, , $shouldContinue, $approvalResults, $rejectedToolCallIds, $failedToolCallIds] = $this->resumeFromApproval($approval, $messages, $tools);
+            $resumption = $this->resumeFromApproval($approval, $messages, $tools);
 
-            foreach ($approvalResults as $toolResult) {
-                $rejected = in_array($toolResult->id, $rejectedToolCallIds, true);
-                $failed = in_array($toolResult->id, $failedToolCallIds, true);
+            $allMessages = $resumption->messages;
+
+            foreach ($resumption->results as $toolResult) {
+                $rejected = in_array($toolResult->id, $resumption->rejectedToolCallIds, true);
+                $failed = in_array($toolResult->id, $resumption->failedToolCallIds, true);
 
                 yield (new ToolResultEvent(
                     $this->generateEventId(),
@@ -168,10 +173,10 @@ class TextGenerationLoop
             }
 
             if ($recordApprovalResults !== null) {
-                $recordApprovalResults($approvalResults);
+                $recordApprovalResults($resumption->results);
             }
 
-            if (! $shouldContinue) {
+            if (! $resumption->shouldContinue) {
                 yield (new StreamEnd(
                     $this->generateEventId(),
                     FinishReason::Stop->value,
@@ -359,9 +364,8 @@ class TextGenerationLoop
      * @param  array<string, Decision>  $approval
      * @param  Message[]  $messages
      * @param  Tool[]  $tools
-     * @return array{Message[], int, bool, array<int, ToolResult>, array<int, string>, array<int, string>}
      */
-    protected function resumeFromApproval(array $approval, array $messages, array $tools): array
+    protected function resumeFromApproval(array $approval, array $messages, array $tools): ApprovalResumption
     {
         $messages = $this->settleAbandonedToolCalls($messages, exceptLatestAssistantTurn: true);
         $originalMessageCount = count($messages);
@@ -372,7 +376,7 @@ class TextGenerationLoop
             [$messages, $originalMessageCount] = $this->appendApprovalResults($messages, $approvalResults, $originalMessageCount);
         }
 
-        return [$messages, $originalMessageCount, $shouldContinue, $approvalResults, $rejectedToolCallIds, $failedToolCallIds];
+        return new ApprovalResumption($messages, $originalMessageCount, $shouldContinue, $approvalResults, $rejectedToolCallIds, $failedToolCallIds);
     }
 
     /**
@@ -393,7 +397,7 @@ class TextGenerationLoop
         foreach ($pendingToolCalls as $toolCall) {
             $decision = $approval[$toolCall->id]
                 ?? $approval['*']
-                ?? Decision::reject('This tool call was not approved.');
+                ?? Decision::reject('The user rejected this tool call.');
 
             if ($decision->isRejected()) {
                 $rejectedToolCallIds[] = $toolCall->id;
@@ -403,7 +407,7 @@ class TextGenerationLoop
                     $toolCall->id,
                     $toolCall->name,
                     $toolCall->arguments,
-                    $decision->result ?? 'Tool call rejected by approver.',
+                    $decision->result ?? 'The user rejected this tool call.',
                     $toolCall->resultId,
                 );
 

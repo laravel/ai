@@ -84,7 +84,7 @@ test('a resumed stream may continue an existing client-side message', function (
 
 test('a rejected approval streams as a denied tool output', function () {
     $parts = vercelProtocolParts([
-        new ToolResult('event-1', new Data\ToolResult('call-1', 'DeleteFile', ['path' => 'a.txt'], 'Tool call rejected by approver.'), false, 'Tool call rejected by approver.', time(), denied: true),
+        new ToolResult('event-1', new Data\ToolResult('call-1', 'DeleteFile', ['path' => 'a.txt'], 'The user rejected this tool call.'), false, 'The user rejected this tool call.', time(), denied: true),
         new StreamEnd('event-2', 'stop', new Usage, time()),
     ]);
 

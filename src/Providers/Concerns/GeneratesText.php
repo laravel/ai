@@ -126,11 +126,15 @@ trait GeneratesText
      */
     protected function resumableApprovalFor(AgentPrompt $prompt): ?array
     {
-        if ($prompt->resume === null || Ai::hasFakeGatewayFor($prompt->agent::class)) {
-            return null;
-        }
+        return $this->resumesAgainstRealGateway($prompt) ? $prompt->resume : null;
+    }
 
-        return $prompt->resume;
+    /**
+     * Determine whether the prompt is a resume that runs tools against the real (non-faked) gateway.
+     */
+    protected function resumesAgainstRealGateway(AgentPrompt $prompt): bool
+    {
+        return $prompt->resume !== null && ! Ai::hasFakeGatewayFor($prompt->agent::class);
     }
 
     /**
@@ -140,9 +144,8 @@ trait GeneratesText
     {
         $agent = $prompt->agent;
 
-        if ($prompt->resume === null
-            || Ai::hasFakeGatewayFor($agent::class)
-            || ! in_array(RemembersConversations::class, class_uses_recursive($agent))) {
+        if (! $this->resumesAgainstRealGateway($prompt)
+            || ! in_array(RemembersConversations::class, class_uses_recursive($agent), true)) {
             return null;
         }
 

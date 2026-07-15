@@ -10,10 +10,10 @@ class PendingApproval implements Arrayable
      * @param  array<string, mixed>  $arguments
      */
     public function __construct(
-        public string $id,
-        public string $tool,
-        public array $arguments,
-        public ?string $reason = null,
+        public readonly string $id,
+        public readonly string $tool,
+        public readonly array $arguments,
+        public readonly ?string $reason = null,
     ) {}
 
     /**

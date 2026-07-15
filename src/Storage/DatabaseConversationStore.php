@@ -46,6 +46,7 @@ class DatabaseConversationStore implements ConversationStore
                 ->where('conversation_id', $conversationId)
                 ->when($participantId === null, fn ($query) => $query->whereNull('user_id'), fn ($query) => $query->where('user_id', $participantId))
                 ->where('role', 'assistant')
+                ->whereNotNull('approval_state')
                 ->orderByDesc('id')
                 ->lockForUpdate()
                 ->get()
@@ -81,7 +82,11 @@ class DatabaseConversationStore implements ConversationStore
             ->where('id', $conversationId)
             ->first();
 
-        return $conversation !== null && (string) $conversation->user_id === (string) $participantId;
+        if ($conversation === null || $conversation->user_id === null || $participantId === null) {
+            return false;
+        }
+
+        return (string) $conversation->user_id === (string) $participantId;
     }
 
     /**
@@ -159,6 +164,10 @@ class DatabaseConversationStore implements ConversationStore
             $existing = $this->existingToolResultIds($conversationId);
 
             $toolResults = $toolResults->reject(fn (ToolResult $result) => in_array($result->id, $existing, true))->values();
+
+            if (blank($response->text) && $response->toolCalls->isEmpty() && $toolResults->isEmpty()) {
+                return $messageId;
+            }
         }
 
         $this->table($this->messagesTable())->insert([
@@ -257,14 +266,19 @@ class DatabaseConversationStore implements ConversationStore
      */
     public function getLatestConversationMessages(string $conversationId, int $limit): Collection
     {
-        return $this->table($this->messagesTable())
+        $resolvedCallIds = $this->table($this->messagesTable())
             ->where('conversation_id', $conversationId)
             ->orderByDesc('id')
             ->limit($limit)
             ->get()
             ->reverse()
             ->values()
-            ->flatMap(function ($record): array {
+            ->flatMap(fn ($record) => collect(json_decode((string) $record->tool_results, true))->pluck('id'))
+            ->filter()
+            ->all();
+
+        return $records
+            ->flatMap(function ($record) use ($resolvedCallIds): array {
                 $toolCalls = collect(json_decode((string) $record->tool_calls, true))->values();
                 $toolResults = collect(json_decode((string) $record->tool_results, true))->values();
 
@@ -279,7 +293,7 @@ class DatabaseConversationStore implements ConversationStore
                 }
 
                 if ($toolCalls->isNotEmpty()) {
-                    return $this->reconstructToolTurn($record, $toolCalls, $toolResults);
+                    return $this->reconstructToolTurn($record, $toolCalls, $toolResults, $resolvedCallIds);
                 }
 
                 if ($toolResults->isNotEmpty()) {
@@ -303,9 +317,10 @@ class DatabaseConversationStore implements ConversationStore
      *
      * @param  Collection<int, array<string, mixed>>  $toolCalls
      * @param  Collection<int, array<string, mixed>>  $toolResults
+     * @param  array<int, string>  $resolvedCallIds  Ids of calls answered anywhere in the window.
      * @return array<int, Message>
      */
-    protected function reconstructToolTurn(object $record, Collection $toolCalls, Collection $toolResults): array
+    protected function reconstructToolTurn(object $record, Collection $toolCalls, Collection $toolResults, array $resolvedCallIds = []): array
     {
         $callIds = $toolCalls->pluck('id')->all();
 
@@ -348,9 +363,13 @@ class DatabaseConversationStore implements ConversationStore
             $messages[] = new ToolResultMessage($ownResults->map(ToolResult::fromArray(...))->values());
         }
 
-        // The answering turn keeps its still-pending calls when paused, or is plain text when complete.
-        if ($isPause) {
-            $messages[] = new AssistantMessage($record->content, $pendingCalls->map(ToolCall::fromArray(...))->values());
+        $keptCalls = $pendingCalls->filter(
+            fn (array $toolCall) => in_array($toolCall['id'], $pausedCallIds, true)
+                || in_array($toolCall['id'], $resolvedCallIds, true)
+        )->values();
+
+        if ($keptCalls->isNotEmpty()) {
+            $messages[] = new AssistantMessage($record->content, $keptCalls->map(ToolCall::fromArray(...))->values());
         } elseif (filled($record->content)) {
             $messages[] = new AssistantMessage($record->content);
         }

@@ -65,14 +65,6 @@ class AgentPrompt extends Prompt
     }
 
     /**
-     * Add new attachment to the prompt, returning a new prompt instance.
-     */
-    public function withAttachments(Collection|array $attachments): AgentPrompt
-    {
-        return $this->revise($this->prompt, $attachments);
-    }
-
-    /**
      * Revise the prompt and return a new prompt instance.
      */
     public function revise(string $prompt, Collection|array|null $attachments = null): AgentPrompt
