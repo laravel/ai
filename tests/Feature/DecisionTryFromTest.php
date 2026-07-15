@@ -36,8 +36,8 @@ test('tool approval decisions are extracted from a useChat request', function ()
     ]));
 
     expect($approval)->toBeArray()
-        ->and($approval['call-1']->action)->toBe('approve')
-        ->and($approval['call-2']->action)->toBe('reject')
+        ->and($approval['call-1']->isApproved())->toBeTrue()
+        ->and($approval['call-2']->isRejected())->toBeTrue()
         ->and($approval['call-2']->result)->toBe('Keep this file.');
 });
 
@@ -53,7 +53,7 @@ test('a denial without a reason becomes a bare rejection', function () {
         ]],
     ]));
 
-    expect($approval['call-1']->action)->toBe('reject')
+    expect($approval['call-1']->isRejected())->toBeTrue()
         ->and($approval['call-1']->result)->toBeNull();
 });
 
@@ -70,7 +70,7 @@ test('dynamic tool parts may carry approval responses', function () {
         ]],
     ]));
 
-    expect($approval['call-1']->action)->toBe('approve');
+    expect($approval['call-1']->isApproved())->toBeTrue();
 });
 
 test('parsing returns null when the request carries no messages', function () {

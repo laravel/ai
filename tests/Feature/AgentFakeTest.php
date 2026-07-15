@@ -145,7 +145,7 @@ describe('prompt responses', function (): void {
         (new ConversationalAgent)->prompt(['call-1' => true]);
 
         ConversationalAgent::assertPrompted(function (AgentPrompt $prompt) {
-            return ($prompt->resume['call-1'] ?? null)?->action === 'approve';
+            return ($prompt->resume['call-1'] ?? null)?->isApproved() === true;
         });
     });
 });

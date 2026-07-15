@@ -57,7 +57,7 @@ test('a remembered agent pauses for approval, persists the tool_use, and resumes
 
     expect(json_decode($assistantRow->tool_calls, true))->toHaveCount(1)
         ->and(json_decode($assistantRow->tool_calls, true)[0]['id'])->toBe('toolu_1')
-        ->and(json_decode($assistantRow->tool_results, true))->toBe([]);
+        ->and(json_decode($assistantRow->tool_results, true))->toBeEmpty();
 
     $resumed = (new RememberingApprovableAgent)
         ->continue($paused->conversationId, $user)
