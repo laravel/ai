@@ -48,9 +48,9 @@ class Decision
      *
      * @return array<string, Decision>
      */
-    public static function rejectAll(): array
+    public static function rejectAll(?string $result = null): array
     {
-        return ['*' => self::reject()];
+        return ['*' => self::reject($result)];
     }
 
     /**

@@ -51,6 +51,28 @@ test('a gated tool on a conversational agent with no conversation participant th
     (new RememberingApprovableAgent)->prompt('Generate a number', provider: 'anthropic');
 })->throws(ApprovalNotResumableException::class);
 
+test('a gated tool on a conversational agent with no participant throws before streaming a pause to the client', function () {
+    RememberingApprovableAgent::fake([
+        new ToolCall('toolu_1', 'ApprovableNumberGenerator', [], 'result-1'),
+    ]);
+
+    $stream = (new RememberingApprovableAgent)->stream('Generate a number');
+
+    $events = [];
+    $thrown = null;
+
+    try {
+        foreach ($stream as $event) {
+            $events[] = $event;
+        }
+    } catch (ApprovalNotResumableException $e) {
+        $thrown = $e;
+    }
+
+    expect($thrown)->toBeInstanceOf(ApprovalNotResumableException::class)
+        ->and(array_filter($events, fn ($event) => $event instanceof ToolApprovalRequest))->toBeEmpty();
+});
+
 test('a gated tool on a non-conversational agent throws before streaming a pause to the client', function () {
     StatelessApprovableAgent::fake([
         new ToolCall('toolu_1', 'ApprovableNumberGenerator', [], 'result-1'),

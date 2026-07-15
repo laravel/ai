@@ -275,7 +275,7 @@ class AgentCommand extends Command
             default: 'each',
         )) {
             'approve-all' => Decision::approveAll(),
-            'reject-all' => ['*' => Decision::reject('Rejected in terminal UI.')],
+            'reject-all' => Decision::rejectAll('Rejected in terminal UI.'),
             default => null,
         };
     }
