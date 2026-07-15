@@ -15,6 +15,7 @@ use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Exceptions\NoSuchToolException;
+use Laravel\Ai\Gateway\Concerns\HandlesToolApprovals;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
@@ -36,7 +37,7 @@ use Throwable;
 
 class TextGenerationLoop
 {
-    use InvokesTools;
+    use HandlesToolApprovals, InvokesTools;
 
     public function __construct(protected StepTextGateway $gateway)
     {
@@ -58,7 +59,7 @@ class TextGenerationLoop
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
         ?array $approval = null,
-        ?Closure $onApprovalResolved = null,
+        ?Closure $recordApprovalResults = null,
     ): TextResponse {
         $steps = new Collection;
         $maxSteps = $this->resolveMaxSteps($options, $tools);
@@ -68,7 +69,9 @@ class TextGenerationLoop
         if ($approval !== null) {
             [$allMessages, $originalMessageCount, $shouldContinue, $approvalResults] = $this->resumeFromApproval($approval, $messages, $tools);
 
-            $this->commitApprovalResults($onApprovalResolved, $approvalResults);
+            if ($recordApprovalResults !== null) {
+                $recordApprovalResults($approvalResults);
+            }
 
             if (! $shouldContinue) {
                 return (new TextResponse('', new Usage, new Meta($provider->name(), $model)))
@@ -139,7 +142,7 @@ class TextGenerationLoop
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
         ?array $approval = null,
-        ?Closure $onApprovalResolved = null,
+        ?Closure $recordApprovalResults = null,
     ): Generator {
         $maxSteps = $this->resolveMaxSteps($options, $tools);
         $continuationToken = null;
@@ -164,7 +167,9 @@ class TextGenerationLoop
                 ))->withInvocationId($invocationId);
             }
 
-            $this->commitApprovalResults($onApprovalResolved, $approvalResults);
+            if ($recordApprovalResults !== null) {
+                $recordApprovalResults($approvalResults);
+            }
 
             if (! $shouldContinue) {
                 yield (new StreamEnd(
@@ -359,7 +364,6 @@ class TextGenerationLoop
     protected function resumeFromApproval(array $approval, array $messages, array $tools): array
     {
         $messages = $this->settleAbandonedToolCalls($messages, exceptLatestAssistantTurn: true);
-
         $originalMessageCount = count($messages);
 
         [$approvalResults, $shouldContinue, $rejectedToolCallIds, $failedToolCallIds] = $this->resolveApprovalResults($approval, $messages, $tools);
@@ -369,18 +373,6 @@ class TextGenerationLoop
         }
 
         return [$messages, $originalMessageCount, $shouldContinue, $approvalResults, $rejectedToolCallIds, $failedToolCallIds];
-    }
-
-    /**
-     * Durably record resolved approval results before the run continues, even when the run will not continue.
-     *
-     * @param  array<int, ToolResult>  $approvalResults
-     */
-    protected function commitApprovalResults(?Closure $onApprovalResolved, array $approvalResults): void
-    {
-        if ($onApprovalResolved instanceof Closure && filled($approvalResults)) {
-            $onApprovalResolved($approvalResults);
-        }
     }
 
     /**
@@ -396,8 +388,7 @@ class TextGenerationLoop
         $toolResults = [];
         $rejectedToolCallIds = [];
         $failedToolCallIds = [];
-        $shouldContinue = false;
-        $bareRejection = false;
+        $hasBareRejection = false;
 
         foreach ($pendingToolCalls as $toolCall) {
             $decision = $approval[$toolCall->id]
@@ -406,6 +397,7 @@ class TextGenerationLoop
 
             if ($decision->isRejected()) {
                 $rejectedToolCallIds[] = $toolCall->id;
+                $hasBareRejection = $hasBareRejection || $decision->result === null;
 
                 $toolResults[] = new ToolResult(
                     $toolCall->id,
@@ -415,19 +407,10 @@ class TextGenerationLoop
                     $toolCall->resultId,
                 );
 
-                if ($decision->result !== null) {
-                    $shouldContinue = true;
-                } else {
-                    $bareRejection = true;
-                }
-
                 continue;
             }
 
-            $arguments = $decision->isEdited()
-                ? ($decision->arguments ?? $toolCall->arguments)
-                : $toolCall->arguments;
-
+            $arguments = $decision->arguments ?? $toolCall->arguments;
             $tool = $resolvedTools[$toolCall->id];
 
             if (! $tool instanceof Tool) {
@@ -448,32 +431,9 @@ class TextGenerationLoop
                 $result,
                 $toolCall->resultId,
             );
-
-            $shouldContinue = true;
         }
 
-        return [$toolResults, $shouldContinue && ! $bareRejection, $rejectedToolCallIds, $failedToolCallIds];
-    }
-
-    /**
-     * Get the pending approvals awaiting a decision in the given message history.
-     *
-     * @param  Message[]  $messages
-     * @param  Tool[]  $tools
-     * @return Collection<int, PendingApproval>
-     */
-    public function pendingApprovals(array $messages, array $tools): Collection
-    {
-        [$pendingToolCalls] = $this->pendingToolCalls($messages);
-
-        $approvals = $pendingToolCalls->mapWithKeys(fn (ToolCall $toolCall) => [
-            $toolCall->id => $this->approvalForTool($this->findTool($toolCall->name, $tools), $toolCall),
-        ]);
-
-        return $this->pendingApprovalsFor(
-            $pendingToolCalls->filter(fn (ToolCall $toolCall) => $approvals[$toolCall->id] instanceof Approval)->values(),
-            $approvals,
-        );
+        return [$toolResults, ! $hasBareRejection, $rejectedToolCallIds, $failedToolCallIds];
     }
 
     /**
@@ -482,11 +442,16 @@ class TextGenerationLoop
      * @param  array<string, Decision>  $approval
      * @param  Message[]  $messages
      * @param  Tool[]  $tools
-     * @return array{Collection<int, ToolCall>, Collection<string, ?Tool>, array<int, string>}
+     * @return array{Collection<int, ToolCall>, Collection<string, ?Tool>}
      */
     public function validateApproval(array $approval, array $messages, array $tools): array
     {
         [$pendingToolCalls, $resolvedToolCallIds] = $this->pendingToolCalls($messages);
+
+        $pendingIds = $pendingToolCalls->pluck('id');
+        $decisionIds = collect(array_keys($approval))->reject(
+            fn ($id) => $id === '*',
+        );
 
         $resolvedTools = $pendingToolCalls->mapWithKeys(fn (ToolCall $toolCall) => [
             $toolCall->id => $this->findTool($toolCall->name, $tools),
@@ -497,19 +462,13 @@ class TextGenerationLoop
         ]);
 
         $gated = $pendingToolCalls->filter(fn (ToolCall $toolCall) => $approvals[$toolCall->id] instanceof Approval);
-        $gatedIds = $gated->pluck('id')->all();
-        $decisionIds = array_values(array_diff(array_keys($approval), ['*']));
-
-        $unknown = array_values(array_diff($decisionIds, $pendingToolCalls->pluck('id')->all()));
-
+        $unknown = $decisionIds->diff($pendingIds);
         $missing = array_key_exists('*', $approval)
-            ? []
-            : array_values(array_diff($gatedIds, $decisionIds));
+            ? collect()
+            : $gated->pluck('id')->diff($decisionIds);
 
-        if ($unknown !== [] || $missing !== []) {
-            $alreadyResolved = array_values(array_intersect($unknown, $resolvedToolCallIds));
-
-            $message = $alreadyResolved !== []
+        if ($unknown->isNotEmpty() || $missing->isNotEmpty()) {
+            $message = $unknown->intersect($resolvedToolCallIds)->isNotEmpty()
                 ? 'Approval decisions include already-resolved tool call ids.'
                 : 'Approval decisions do not match the pending tool calls.';
 
@@ -520,149 +479,17 @@ class TextGenerationLoop
             throw new ApprovalMismatchException('There are no pending tool calls awaiting approval.', collect());
         }
 
-        return [$pendingToolCalls, $resolvedTools, $gatedIds];
+        return [$pendingToolCalls, $resolvedTools];
     }
 
     /**
-     * Resolve the approval requirement for an already-resolved tool, or null when it is not gated.
+     * Resolve the approval requirement for a tool call, or null when it is not gated.
      */
     protected function approvalForTool(?Tool $tool, ToolCall $toolCall): ?Approval
     {
         return $tool instanceof Approvable
             ? $tool->shouldRequestApproval(new Request($toolCall->arguments, $toolCall->id))
             : null;
-    }
-
-    /**
-     * @param  Message[]  $messages
-     * @return array{Collection<int, ToolCall>, array<int, string>}
-     */
-    protected function pendingToolCalls(array $messages): array
-    {
-        $resolved = collect($messages)
-            ->whereInstanceOf(ToolResultMessage::class)
-            ->flatMap(fn (ToolResultMessage $message) => $message->toolResults)
-            ->pluck('id')
-            ->all();
-
-        for ($index = count($messages) - 1; $index >= 0; $index--) {
-            $message = $messages[$index];
-
-            if (! $message instanceof AssistantMessage) {
-                continue;
-            }
-
-            return [
-                $message->toolCalls
-                    ->reject(fn (ToolCall $toolCall) => in_array($toolCall->id, $resolved, true))
-                    ->values(),
-                $resolved,
-            ];
-        }
-
-        return [collect(), $resolved];
-    }
-
-    /**
-     * Append a resume's tool results, merging into the pause turn's partial results so one assistant turn keeps one answering message.
-     *
-     * @param  Message[]  $messages
-     * @param  array<int, ToolResult>  $toolResults
-     * @return array{Message[], int}
-     */
-    protected function appendApprovalResults(array $messages, array $toolResults, int $originalMessageCount): array
-    {
-        $last = end($messages);
-
-        if ($last instanceof ToolResultMessage) {
-            array_pop($messages);
-
-            $originalMessageCount--;
-            $toolResults = [...$last->toolResults->all(), ...$toolResults];
-        }
-
-        $messages[] = new ToolResultMessage(collect($toolResults));
-
-        return [$messages, $originalMessageCount];
-    }
-
-    /**
-     * Settle unresolved tool calls from abandoned pauses so the history remains replayable, optionally leaving the latest assistant turn for a resume to decide.
-     *
-     * @param  Message[]  $messages
-     * @return Message[]
-     */
-    protected function settleAbandonedToolCalls(array $messages, bool $exceptLatestAssistantTurn = false): array
-    {
-        $resolved = collect($messages)
-            ->whereInstanceOf(ToolResultMessage::class)
-            ->flatMap(fn (ToolResultMessage $message) => $message->toolResults)
-            ->pluck('id')
-            ->flip()
-            ->all();
-
-        $bound = count($messages);
-
-        if ($exceptLatestAssistantTurn) {
-            for ($index = $bound - 1; $index >= 0; $index--) {
-                if ($messages[$index] instanceof AssistantMessage) {
-                    $bound = $index;
-
-                    break;
-                }
-            }
-        }
-
-        for ($index = 0; $index < $bound; $index++) {
-            $message = $messages[$index];
-
-            if (! $message instanceof AssistantMessage) {
-                continue;
-            }
-
-            $dangling = $message->toolCalls->reject(
-                fn (ToolCall $toolCall) => isset($resolved[$toolCall->id])
-            )->values();
-
-            if ($dangling->isEmpty()) {
-                continue;
-            }
-
-            $placeholders = $dangling->map(fn (ToolCall $toolCall) => new ToolResult(
-                $toolCall->id,
-                $toolCall->name,
-                $toolCall->arguments,
-                'This tool call was not executed because it was not approved before the conversation continued.',
-                $toolCall->resultId,
-            ));
-
-            $next = $messages[$index + 1] ?? null;
-
-            if ($next instanceof ToolResultMessage) {
-                $messages[$index + 1] = new ToolResultMessage($next->toolResults->concat($placeholders)->values());
-            } else {
-                array_splice($messages, $index + 1, 0, [new ToolResultMessage($placeholders->values())]);
-
-                $bound++;
-            }
-        }
-
-        return $messages;
-    }
-
-    /**
-     * @param  Collection<int, ToolCall>  $toolCalls
-     * @param  Collection<string, ?Approval>  $approvals
-     * @return Collection<int, PendingApproval>
-     */
-    protected function pendingApprovalsFor(Collection $toolCalls, Collection $approvals): Collection
-    {
-        return $toolCalls->map(fn (ToolCall $toolCall) => new PendingApproval(
-            $toolCall->id,
-            $toolCall->name,
-            $toolCall->arguments,
-            $approvals[$toolCall->id]?->reason,
-        ))->values();
     }
 
     protected function generateEventId(): string
