@@ -29,10 +29,10 @@ function multipartField(Request $request, string $name): ?string
 function multipartNestedField(Request $request, string $name): array
 {
     return collect($request->data())
-        ->reject(fn ($field) => isset($field['filename']))
-        ->filter(fn ($field) => (($field['name'] ?? null) === $name && is_array($field['contents'] ?? null))
+        ->reject(fn ($field): bool => isset($field['filename']))
+        ->filter(fn ($field): bool => (($field['name'] ?? null) === $name && is_array($field['contents'] ?? null))
             || preg_match('/^'.preg_quote($name, '/').'\[[^\]]*\]$/', $field['name'] ?? '') === 1)
-        ->flatMap(fn ($field) => is_array($field['contents'] ?? null) ? array_values($field['contents']) : [$field['contents'] ?? null])
+        ->flatMap(fn ($field): array => is_array($field['contents'] ?? null) ? array_values($field['contents']) : [$field['contents'] ?? null])
         ->values()
         ->all();
 }

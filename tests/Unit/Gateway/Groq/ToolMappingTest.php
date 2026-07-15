@@ -5,14 +5,14 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionTools;
 use Laravel\Ai\Tools\Request;
 
-test('tool parameters are not wrapped in schema definition', function () {
+test('tool parameters are not wrapped in schema definition', function (): void {
     $mapper = new class
     {
         use MapsChatCompletionTools;
 
         public function map(array $tools): array
         {
-            return array_map(fn ($tool) => $this->mapTool($tool), $tools);
+            return array_map($this->mapTool(...), $tools);
         }
     };
 
@@ -51,14 +51,14 @@ test('tool parameters are not wrapped in schema definition', function () {
         ->and($parameters['additionalProperties'])->toBeFalse();
 });
 
-test('tool with empty schema includes parameters', function () {
+test('tool with empty schema includes parameters', function (): void {
     $mapper = new class
     {
         use MapsChatCompletionTools;
 
         public function map(array $tools): array
         {
-            return array_map(fn ($tool) => $this->mapTool($tool), $tools);
+            return array_map($this->mapTool(...), $tools);
         }
     };
 

@@ -22,7 +22,7 @@ function fakeCohereBaseUrlRerankingResponse(): PromiseInterface
     ]);
 }
 
-test('cohere embedding requests use the configured base url', function () {
+test('cohere embedding requests use the configured base url', function (): void {
     config(['ai.providers.cohere' => [
         ...config('ai.providers.cohere'),
         'key' => 'test-key',
@@ -33,10 +33,10 @@ test('cohere embedding requests use the configured base url', function () {
 
     Embeddings::for(['Hello'])->generate(provider: 'cohere', model: 'embed-v4.0');
 
-    Http::assertSent(fn (Request $r) => $r->url() === 'http://localhost:8080/v2/embed');
+    Http::assertSent(fn (Request $r): bool => $r->url() === 'http://localhost:8080/v2/embed');
 });
 
-test('cohere reranking requests use the configured base url', function () {
+test('cohere reranking requests use the configured base url', function (): void {
     config(['ai.providers.cohere' => [
         ...config('ai.providers.cohere'),
         'key' => 'test-key',
@@ -47,10 +47,10 @@ test('cohere reranking requests use the configured base url', function () {
 
     Reranking::of(['doc1'])->rerank('What is AI?', provider: 'cohere', model: 'rerank-v3.5');
 
-    Http::assertSent(fn (Request $r) => $r->url() === 'http://localhost:8080/v2/rerank');
+    Http::assertSent(fn (Request $r): bool => $r->url() === 'http://localhost:8080/v2/rerank');
 });
 
-test('cohere requests fall back to the default base url', function () {
+test('cohere requests fall back to the default base url', function (): void {
     config(['ai.providers.cohere' => [
         ...config('ai.providers.cohere'),
         'key' => 'test-key',
@@ -60,5 +60,5 @@ test('cohere requests fall back to the default base url', function () {
 
     Embeddings::for(['Hello'])->generate(provider: 'cohere', model: 'embed-v4.0');
 
-    Http::assertSent(fn (Request $r) => $r->url() === 'https://api.cohere.com/v2/embed');
+    Http::assertSent(fn (Request $r): bool => $r->url() === 'https://api.cohere.com/v2/embed');
 });

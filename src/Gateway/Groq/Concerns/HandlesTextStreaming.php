@@ -158,7 +158,7 @@ trait HandlesTextStreaming
      */
     protected function mapStreamToolCalls(array $toolCalls): array
     {
-        return array_map(fn (array $toolCall) => new ToolCall(
+        return array_map(fn (array $toolCall): ToolCall => new ToolCall(
             $toolCall['id'] ?? '',
             $toolCall['name'] ?? '',
             json_decode($toolCall['arguments'] ?? '{}', true) ?? [],

@@ -1,6 +1,6 @@
 <?php
 
-test('can create an agent middleware class', function () {
+test('can create an agent middleware class', function (): void {
     $response = $this->artisan('make:agent-middleware', [
         'name' => 'TestMiddleware',
     ]);
@@ -15,7 +15,7 @@ test('can create an agent middleware class', function () {
         ->and($contents)->not->toContain('AgentPrompt');
 });
 
-test('may publish custom middleware stub', function () {
+test('may publish custom middleware stub', function (): void {
     $this->artisan('vendor:publish', [
         '--tag' => 'ai-stubs',
         '--force' => true,

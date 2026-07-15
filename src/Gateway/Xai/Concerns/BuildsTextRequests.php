@@ -83,7 +83,7 @@ trait BuildsTextRequests
         Provider $provider,
     ): array {
         if (filled($tools)) {
-            $body['tool_choice'] = $options?->toolChoice
+            $body['tool_choice'] = $options?->toolChoice instanceof ToolChoice
                 ? $this->mapToolChoice($options->toolChoice)
                 : 'auto';
             $body['tools'] = $this->mapTools($tools, $provider);
@@ -105,7 +105,7 @@ trait BuildsTextRequests
         $providerOptions = $options?->providerOptions($provider->driver());
 
         if (filled($providerOptions)) {
-            $body = array_merge($body, $providerOptions);
+            return array_merge($body, $providerOptions);
         }
 
         return $body;

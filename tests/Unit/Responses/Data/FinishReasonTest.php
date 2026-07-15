@@ -2,7 +2,7 @@
 
 use Laravel\Ai\Responses\Data\FinishReason;
 
-test('finish reason enum has expected cases', function () {
+test('finish reason enum has expected cases', function (): void {
     expect(FinishReason::Stop->value)->toBe('stop')
         ->and(FinishReason::ToolCalls->value)->toBe('tool_calls')
         ->and(FinishReason::Length->value)->toBe('length')

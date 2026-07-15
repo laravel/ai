@@ -7,7 +7,7 @@ use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Tests\Fixtures\Agents\AssistantAgent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.ollama' => [
         ...config('ai.providers.ollama'),
         'key' => '',
@@ -15,7 +15,7 @@ beforeEach(function () {
     ]]);
 });
 
-test('http error response throws request exception', function () {
+test('http error response throws request exception', function (): void {
     Http::fake([
         'localhost:11434/*' => Http::response([
             'error' => 'model not found',
@@ -28,7 +28,7 @@ test('http error response throws request exception', function () {
     );
 })->throws(RequestException::class);
 
-test('rate limit response throws rate limited exception', function () {
+test('rate limit response throws rate limited exception', function (): void {
     Http::fake([
         'localhost:11434/*' => Http::response([
             'error' => 'rate limit exceeded',
@@ -41,7 +41,7 @@ test('rate limit response throws rate limited exception', function () {
     );
 })->throws(RateLimitedException::class);
 
-test('overloaded response throws provider overloaded exception', function () {
+test('overloaded response throws provider overloaded exception', function (): void {
     Http::fake([
         'localhost:11434/*' => Http::response([
             'error' => 'server overloaded',
@@ -54,7 +54,7 @@ test('overloaded response throws provider overloaded exception', function () {
     );
 })->throws(ProviderOverloadedException::class);
 
-test('error in 200 response throws ai exception', function () {
+test('error in 200 response throws ai exception', function (): void {
     Http::fake([
         'localhost:11434/*' => Http::response([
             'error' => 'model "unknown-model" not found',

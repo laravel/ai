@@ -6,7 +6,7 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Tools\Request;
 
-test('tool invocation callbacks are restored after nested tool invocations', function () {
+test('tool invocation callbacks are restored after nested tool invocations', function (): void {
     $events = [];
 
     $gateway = new class
@@ -46,23 +46,23 @@ test('tool invocation callbacks are restored after nested tool invocations', fun
     };
 
     $gateway->onToolInvocation(
-        invoking: function (Tool $tool) use (&$events) {
-            $events[] = 'parent invoking '.((string) $tool->description());
+        invoking: function (Tool $tool) use (&$events): void {
+            $events[] = 'parent invoking '.($tool->description());
         },
-        invoked: function (Tool $tool, array $arguments, mixed $result) use (&$events) {
-            $events[] = 'parent invoked '.((string) $tool->description()).':'.$result;
+        invoked: function (Tool $tool, array $arguments, mixed $result) use (&$events): void {
+            $events[] = 'parent invoked '.($tool->description()).':'.$result;
         },
     );
 
-    $nestedTool = $makeTool('nested', fn () => 'nested result');
+    $nestedTool = $makeTool('nested', fn (): string => 'nested result');
 
-    $delegatingTool = $makeTool('delegating', function () use ($gateway, $nestedTool, &$events) {
+    $delegatingTool = $makeTool('delegating', function () use ($gateway, $nestedTool, &$events): string {
         $gateway->onToolInvocation(
-            invoking: function (Tool $tool) use (&$events) {
-                $events[] = 'sub invoking '.((string) $tool->description());
+            invoking: function (Tool $tool) use (&$events): void {
+                $events[] = 'sub invoking '.($tool->description());
             },
-            invoked: function (Tool $tool, array $arguments, mixed $result) use (&$events) {
-                $events[] = 'sub invoked '.((string) $tool->description()).':'.$result;
+            invoked: function (Tool $tool, array $arguments, mixed $result) use (&$events): void {
+                $events[] = 'sub invoked '.($tool->description()).':'.$result;
             },
         );
 
@@ -71,7 +71,7 @@ test('tool invocation callbacks are restored after nested tool invocations', fun
         return 'delegated result';
     });
 
-    $siblingTool = $makeTool('sibling', fn () => 'sibling result');
+    $siblingTool = $makeTool('sibling', fn (): string => 'sibling result');
 
     $gateway->invoke($delegatingTool);
     $gateway->invoke($siblingTool);

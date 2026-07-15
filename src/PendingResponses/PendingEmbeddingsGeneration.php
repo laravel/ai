@@ -21,7 +21,8 @@ use Laravel\Ai\Responses\QueuedEmbeddingsResponse;
 
 class PendingEmbeddingsGeneration
 {
-    use Conditionable, ResolvesProviderOptions;
+    use Conditionable;
+    use ResolvesProviderOptions;
 
     protected ?int $dimensions = null;
 
@@ -115,14 +116,14 @@ class PendingEmbeddingsGeneration
 
             $providerOptions = $this->resolveProviderOptions($provider);
 
-            if ($cached = $this->generateFromCache($provider, $model, $dimensions, $providerOptions)) {
+            if (($cached = $this->generateFromCache($provider, $model, $dimensions, $providerOptions)) instanceof EmbeddingsResponse) {
                 return $cached;
             }
 
             try {
                 return tap(
                     $provider->embeddings($this->inputs, $dimensions, $model, $this->timeout, $providerOptions),
-                    fn ($response) => $this->cacheEmbeddings($provider, $model, $dimensions, $providerOptions, $response)
+                    fn (EmbeddingsResponse $response) => $this->cacheEmbeddings($provider, $model, $dimensions, $providerOptions, $response)
                 );
             } catch (FailoverableException $e) {
                 $lastException = $e;
@@ -150,7 +151,7 @@ class PendingEmbeddingsGeneration
         $response = $this->cacheStore()->get($this->cacheKey($provider, $model, $dimensions, $providerOptions));
 
         if (! is_null($response)) {
-            $response = json_decode($response, true);
+            $response = json_decode((string) $response, true);
 
             return new EmbeddingsResponse($response['embeddings'], 0, new Meta(
                 provider: $response['meta']['provider'],
@@ -218,12 +219,12 @@ class PendingEmbeddingsGeneration
         }
 
         if (array_is_list($value)) {
-            return array_map(fn ($item) => $this->normalizeForFingerprint($item), $value);
+            return array_map($this->normalizeForFingerprint(...), $value);
         }
 
         ksort($value);
 
-        return array_map(fn ($item) => $this->normalizeForFingerprint($item), $value);
+        return array_map($this->normalizeForFingerprint(...), $value);
     }
 
     /**

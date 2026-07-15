@@ -3,7 +3,7 @@
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
-test('tool calls trigger follow up request', function () {
+test('tool calls trigger follow up request', function (): void {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence([
             $this->fakeUniqueToolCallResponse(),
@@ -47,7 +47,7 @@ test('tool calls trigger follow up request', function () {
         ->and($hasToolResult)->toBeTrue('Follow-up request should include user message with tool_result block');
 });
 
-test('server_tool_use input is serialized as object on follow-up replay', function () {
+test('server_tool_use input is serialized as object on follow-up replay', function (): void {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence([
             Http::response([
@@ -75,7 +75,7 @@ test('server_tool_use input is serialized as object on follow-up replay', functi
         ->not->toContain('"input":[]');
 });
 
-test('pause_turn resumes when last block is text following a web_search_tool_result', function () {
+test('pause_turn resumes when last block is text following a web_search_tool_result', function (): void {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence([
             Http::response([
@@ -112,7 +112,7 @@ test('pause_turn resumes when last block is text following a web_search_tool_res
     expect(Http::recorded())->toHaveCount(2);
 });
 
-test('full compose: pause_turn + server_tool_use replay with input cast and block order preserved', function () {
+test('full compose: pause_turn + server_tool_use replay with input cast and block order preserved', function (): void {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence([
             Http::response([
@@ -155,8 +155,8 @@ test('full compose: pause_turn + server_tool_use replay with input cast and bloc
     $recorded = Http::recorded();
     expect($recorded)->toHaveCount(2);
 
-    $payload = json_decode($recorded[1][0]->body(), false, 512, JSON_THROW_ON_ERROR);
-    $assistant = collect($payload->messages)->first(fn ($m) => $m->role === 'assistant');
+    $payload = json_decode((string) $recorded[1][0]->body(), false, 512, JSON_THROW_ON_ERROR);
+    $assistant = collect($payload->messages)->first(fn ($m): bool => $m->role === 'assistant');
 
     expect(array_column((array) $assistant->content, 'type'))->toBe([
         'server_tool_use',
@@ -171,7 +171,7 @@ test('full compose: pause_turn + server_tool_use replay with input cast and bloc
         ->and($serverBlocks[1]->input)->toBeInstanceOf(stdClass::class);
 });
 
-test('max steps limits tool call depth', function () {
+test('max steps limits tool call depth', function (): void {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence([
             $this->fakeUniqueToolCallResponse(),

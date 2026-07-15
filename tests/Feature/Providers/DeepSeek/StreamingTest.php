@@ -14,14 +14,14 @@ use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 
 uses(DeepSeekHelpers::class);
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.deepseek' => [
         ...config('ai.providers.deepseek'),
         'key' => 'test-key',
     ]]);
 });
 
-test('streaming emits text events', function () {
+test('streaming emits text events', function (): void {
     Http::fake([
         'api.deepseek.com/*' => Http::response(
             body: $this->ssePayload([
@@ -45,7 +45,7 @@ test('streaming emits text events', function () {
         ->and($events[count($events) - 1])->toBeInstanceOf(StreamEnd::class);
 });
 
-test('streaming handles tool calls', function () {
+test('streaming handles tool calls', function (): void {
     Http::fake([
         'api.deepseek.com/*' => Http::sequence([
             Http::response(
@@ -72,14 +72,14 @@ test('streaming handles tool calls', function () {
 
     $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
 
-    $toolCallEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolCallEvent));
+    $toolCallEvents = array_values(array_filter($events, fn ($e): bool => $e instanceof ToolCallEvent));
 
     expect($toolCallEvents)->not->toBeEmpty()
         ->and($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator')
         ->and($toolCallEvents[0]->toolCall->id)->toBe('call_1');
 });
 
-test('streaming error event stops stream', function () {
+test('streaming error event stops stream', function (): void {
     Http::fake([
         'api.deepseek.com/*' => Http::response(
             body: $this->ssePayload([
@@ -98,7 +98,7 @@ test('streaming error event stops stream', function () {
         ->and($events[0]->message)->toBe('Rate limit exceeded');
 });
 
-test('streaming captures usage from final chunk', function () {
+test('streaming captures usage from final chunk', function (): void {
     Http::fake([
         'api.deepseek.com/*' => Http::response(
             body: $this->ssePayload([
@@ -113,13 +113,13 @@ test('streaming captures usage from final chunk', function () {
 
     $events = $this->collectStreamEvents();
 
-    $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+    $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
 
     expect($streamEnd->usage->promptTokens)->toBe(42)
         ->and($streamEnd->usage->completionTokens)->toBe(10);
 });
 
-test('streaming captures cache hit and reasoning tokens', function () {
+test('streaming captures cache hit and reasoning tokens', function (): void {
     Http::fake([
         'api.deepseek.com/*' => Http::response(
             body: $this->ssePayload([
@@ -143,7 +143,7 @@ test('streaming captures cache hit and reasoning tokens', function () {
 
     $events = $this->collectStreamEvents();
 
-    $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+    $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
 
     expect($streamEnd->usage->promptTokens)->toBe(100)
         ->and($streamEnd->usage->completionTokens)->toBe(50)
@@ -152,7 +152,7 @@ test('streaming captures cache hit and reasoning tokens', function () {
         ->and($streamEnd->usage->reasoningTokens)->toBe(12);
 });
 
-test('streaming finish reason maps correctly', function (string $apiReason, $expected) {
+test('streaming finish reason maps correctly', function (string $apiReason, $expected): void {
     Http::fake([
         'api.deepseek.com/*' => Http::response(
             body: $this->ssePayload([
@@ -167,7 +167,7 @@ test('streaming finish reason maps correctly', function (string $apiReason, $exp
 
     $events = $this->collectStreamEvents();
 
-    $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+    $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
 
     expect($streamEnd->reason)->toBe($expected->value);
 })->with([

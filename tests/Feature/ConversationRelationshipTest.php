@@ -8,8 +8,8 @@ use Illuminate\Support\Facades\Schema;
 use Laravel\Ai\Concerns\HasConversations;
 use Laravel\Ai\Models\Conversation;
 
-uses(RefreshDatabase::class)->beforeEach(function () {
-    Schema::create('users', function (Blueprint $table) {
+uses(RefreshDatabase::class)->beforeEach(function (): void {
+    Schema::create('users', function (Blueprint $table): void {
         $table->id();
         $table->string('name');
         $table->timestamps();
@@ -21,7 +21,7 @@ uses(RefreshDatabase::class)->beforeEach(function () {
     ])->run();
 })->in(__FILE__);
 
-test('model can retrieve conversations using relationship', function () {
+test('model can retrieve conversations using relationship', function (): void {
     $user = ConversationRelationshipUser::create(['name' => 'Taylor']);
     $otherUser = ConversationRelationshipUser::create(['name' => 'Abigail']);
 
@@ -56,7 +56,7 @@ test('model can retrieve conversations using relationship', function () {
         ->and($conversations->first())->toBeInstanceOf(Conversation::class);
 });
 
-test('conversation can retrieve messages using relationship', function () {
+test('conversation can retrieve messages using relationship', function (): void {
     $user = ConversationRelationshipUser::create(['name' => 'Taylor']);
 
     $conversation = Conversation::create([
@@ -88,7 +88,7 @@ test('conversation can retrieve messages using relationship', function () {
         ->and($conversation->messages->first()->attachments)->toBeArray();
 });
 
-test('conversation model uses configured database connection', function () {
+test('conversation model uses configured database connection', function (): void {
     config(['database.connections.secondary' => [
         'driver' => 'sqlite',
         'database' => ':memory:',
@@ -96,7 +96,7 @@ test('conversation model uses configured database connection', function () {
         'foreign_key_constraints' => true,
     ]]);
 
-    Schema::connection('secondary')->create('agent_conversations', function (Blueprint $table) {
+    Schema::connection('secondary')->create('agent_conversations', function (Blueprint $table): void {
         $table->string('id', 36)->primary();
         $table->foreignId('user_id')->nullable();
         $table->string('title');
@@ -118,7 +118,7 @@ test('conversation model uses configured database connection', function () {
     expect($conversation)->not->toBeNull()
         ->and($conversation->title)->toBe('On Secondary DB')
         ->and(DB::table('agent_conversations')->where('id', 'secondary-conversation-1')->exists())->toBeFalse();
-})->after(function () {
+})->after(function (): void {
     config(['ai.conversations.connection' => null]);
 });
 

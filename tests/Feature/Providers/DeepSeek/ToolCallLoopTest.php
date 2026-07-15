@@ -3,17 +3,18 @@
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\NoSuchToolException;
+use Laravel\Ai\Responses\AgentResponse;
 use Tests\Fixtures\Agents\MultiStepToolAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.deepseek' => [
         ...config('ai.providers.deepseek'),
         'key' => 'test-key',
     ]]);
 });
 
-test('tool calls trigger follow up request', function () {
+test('tool calls trigger follow up request', function (): void {
     Http::fake([
         'api.deepseek.com/*' => Http::sequence([
             fakeUniqueDeepSeekToolCallResponse(),
@@ -30,7 +31,7 @@ test('tool calls trigger follow up request', function () {
 
     expect($recorded)->toHaveCount(2);
 
-    $followUpBody = json_decode($recorded[1][0]->body(), true);
+    $followUpBody = json_decode((string) $recorded[1][0]->body(), true);
 
     $hasAssistantWithToolCalls = false;
     $hasToolResult = false;
@@ -49,7 +50,7 @@ test('tool calls trigger follow up request', function () {
         ->and($hasToolResult)->toBeTrue();
 });
 
-test('max steps limits tool call depth', function () {
+test('max steps limits tool call depth', function (): void {
     Http::fake([
         'api.deepseek.com/*' => Http::sequence([
             fakeUniqueDeepSeekToolCallResponse(),
@@ -69,7 +70,7 @@ test('max steps limits tool call depth', function () {
     expect(count($recorded))->toBeLessThanOrEqual(3);
 });
 
-test('multi step tool loop returns accumulated response shape', function () {
+test('multi step tool loop returns accumulated response shape', function (): void {
     Http::fake([
         'api.deepseek.com/*' => Http::sequence([
             fakeUniqueDeepSeekToolCallResponse(),
@@ -92,7 +93,7 @@ test('multi step tool loop returns accumulated response shape', function () {
         ->and($response->usage->completionTokens)->toBe(11);
 });
 
-test('unknown tool call throws no such tool exception', function () {
+test('unknown tool call throws no such tool exception', function (): void {
     Http::fake([
         'api.deepseek.com/*' => Http::response([
             'id' => 'chatcmpl-tool-unknown',
@@ -121,7 +122,7 @@ test('unknown tool call throws no such tool exception', function () {
         ]),
     ]);
 
-    expect(fn () => (new MultiStepToolAgent)->prompt(
+    expect(fn (): AgentResponse => (new MultiStepToolAgent)->prompt(
         'Generate numbers',
         provider: 'deepseek',
     ))->toThrow(NoSuchToolException::class);

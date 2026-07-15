@@ -9,7 +9,7 @@ use Tests\Fixtures\Agents\ToolUsingAgent;
 
 use function Laravel\Ai\agent;
 
-test('tool parameters are not wrapped in schema definition', function () {
+test('tool parameters are not wrapped in schema definition', function (): void {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse('The number is 42'),
     ]);
@@ -19,7 +19,7 @@ test('tool parameters are not wrapped in schema definition', function () {
         provider: 'anthropic',
     );
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $tools = $request->data()['tools'] ?? [];
 
         foreach ($tools as $tool) {
@@ -35,7 +35,7 @@ test('tool parameters are not wrapped in schema definition', function () {
     });
 });
 
-test('unsupported provider tool throws logic exception', function () {
+test('unsupported provider tool throws logic exception', function (): void {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse(),
     ]);
@@ -49,21 +49,21 @@ test('unsupported provider tool throws logic exception', function () {
     );
 })->throws(LogicException::class, 'is not supported by Anthropic');
 
-test('tool with a name() method emits the declared name', function () {
+test('tool with a name() method emits the declared name', function (): void {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
     ]);
 
     (new NamedToolAgent('aliased_tool'))->prompt('Search', provider: 'anthropic');
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $names = collect($request->data()['tools'] ?? [])->pluck('name')->all();
 
         return in_array('aliased_tool', $names, true);
     });
 });
 
-test('web search tool sends allowed_domains', function () {
+test('web search tool sends allowed_domains', function (): void {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
     ]);
@@ -71,14 +71,14 @@ test('web search tool sends allowed_domains', function () {
     agent(tools: [(new WebSearch)->allow(['laravel.com', 'php.net'])])
         ->prompt('Search', provider: 'anthropic');
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $tool = collect($request->data()['tools'] ?? [])->firstWhere('name', 'web_search');
 
         return data_get($tool, 'allowed_domains') === ['laravel.com', 'php.net'];
     });
 });
 
-test('web search tool forwards anthropic provider options into the tool payload', function () {
+test('web search tool forwards anthropic provider options into the tool payload', function (): void {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
     ]);
@@ -87,7 +87,7 @@ test('web search tool forwards anthropic provider options into the tool payload'
         (new WebSearch)->withProviderOptions(['blocked_domains' => ['spam.com']]),
     ])->prompt('Search', provider: 'anthropic');
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $tool = collect($request->data()['tools'] ?? [])->firstWhere('name', 'web_search');
 
         return data_get($tool, 'blocked_domains') === ['spam.com'];
@@ -169,7 +169,7 @@ test('web fetch tool forwards a custom max_uses', function () {
     });
 });
 
-test('empty schema still includes input schema with type object', function () {
+test('empty schema still includes input schema with type object', function (): void {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse('The number is 42'),
     ]);
@@ -179,7 +179,7 @@ test('empty schema still includes input schema with type object', function () {
         provider: 'anthropic',
     );
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $tools = $request->data()['tools'] ?? [];
 
         foreach ($tools as $tool) {

@@ -6,7 +6,7 @@ use Laravel\Ai\Files\Audio;
 use Laravel\Ai\Files\Document;
 use Laravel\Ai\Files\Image;
 
-test('stored document toArray falls back to basename without touching the disk', function () {
+test('stored document toArray falls back to basename without touching the disk', function (): void {
     Storage::fake('docs');
 
     $array = Document::fromStorage('invoices/invoice-2026-04.pdf', 'docs')->toArray();
@@ -19,7 +19,7 @@ test('stored document toArray falls back to basename without touching the disk',
     ]);
 });
 
-test('stored audio toArray falls back to basename', function () {
+test('stored audio toArray falls back to basename', function (): void {
     Storage::fake('docs');
 
     $array = Audio::fromStorage('clips/hello.mp3', 'docs')->toArray();
@@ -29,7 +29,7 @@ test('stored audio toArray falls back to basename', function () {
     expect($array)->not->toHaveKey('mime');
 });
 
-test('stored image toArray falls back to basename', function () {
+test('stored image toArray falls back to basename', function (): void {
     Storage::fake('docs');
 
     $array = Image::fromStorage('photos/avatar.png', 'docs')->toArray();
@@ -39,7 +39,7 @@ test('stored image toArray falls back to basename', function () {
     expect($array)->not->toHaveKey('mime');
 });
 
-test('local image toArray uses basename and the raw mime property', function () {
+test('local image toArray uses basename and the raw mime property', function (): void {
     $path = tempnam(sys_get_temp_dir(), 'local-image');
     file_put_contents($path, 'data');
 
@@ -55,7 +55,7 @@ test('local image toArray uses basename and the raw mime property', function () 
     }
 });
 
-test('local image toArray returns the explicitly set mime type', function () {
+test('local image toArray returns the explicitly set mime type', function (): void {
     $path = tempnam(sys_get_temp_dir(), 'local-image');
     file_put_contents($path, 'data');
 
@@ -68,7 +68,7 @@ test('local image toArray returns the explicitly set mime type', function () {
     }
 });
 
-test('base64 document toArray reflects name and mime', function () {
+test('base64 document toArray reflects name and mime', function (): void {
     $doc = Document::fromString('hello world', 'text/plain')->as('greeting.txt');
 
     expect($doc->toArray())->toMatchArray([
@@ -78,7 +78,7 @@ test('base64 document toArray reflects name and mime', function () {
     ]);
 });
 
-test('remote document toArray never issues an HTTP request', function () {
+test('remote document toArray never issues an HTTP request', function (): void {
     Http::preventStrayRequests();
     Http::fake();
 
@@ -94,7 +94,7 @@ test('remote document toArray never issues an HTTP request', function () {
     Http::assertNothingSent();
 });
 
-test('remote image toArray returns the explicitly set mime type without HTTP calls', function () {
+test('remote image toArray returns the explicitly set mime type without HTTP calls', function (): void {
     Http::preventStrayRequests();
     Http::fake();
 
@@ -106,7 +106,7 @@ test('remote image toArray returns the explicitly set mime type without HTTP cal
     Http::assertNothingSent();
 });
 
-test('remote document toArray handles urls without a path component', function () {
+test('remote document toArray handles urls without a path component', function (): void {
     Http::preventStrayRequests();
     Http::fake();
 
@@ -126,7 +126,7 @@ test('remote document toArray handles urls without a path component', function (
     Http::assertNothingSent();
 });
 
-test('local image toArray does not touch the filesystem', function () {
+test('local image toArray does not touch the filesystem', function (): void {
     $path = '/tmp/this-file-definitely-does-not-exist-'.uniqid().'.png';
 
     $array = Image::fromPath($path)->toArray();

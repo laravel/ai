@@ -6,11 +6,11 @@ use Laravel\Ai\Embeddings;
 
 use function Laravel\Ai\agent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     $this->customUrl = 'http://localhost:1234';
 });
 
-test('ollama text requests use the configured base url', function () {
+test('ollama text requests use the configured base url', function (): void {
     configureOllamaProvider($this->customUrl);
 
     Http::fake([
@@ -32,7 +32,7 @@ test('ollama text requests use the configured base url', function () {
     ollamaAssertRequestSent('POST', "{$this->customUrl}/api/chat");
 });
 
-test('ollama requests fall back to the default base url', function () {
+test('ollama requests fall back to the default base url', function (): void {
     configureOllamaProvider();
 
     Http::fake([
@@ -54,7 +54,7 @@ test('ollama requests fall back to the default base url', function () {
     ollamaAssertRequestSent('POST', 'http://localhost:11434/api/chat');
 });
 
-test('ollama embeddings use the configured base url', function () {
+test('ollama embeddings use the configured base url', function (): void {
     configureOllamaProvider($this->customUrl);
 
     Http::fake([
@@ -88,6 +88,6 @@ function configureOllamaProvider(?string $url = null): void
 
 function ollamaAssertRequestSent(string $method, string $url): void
 {
-    Http::assertSent(fn (Request $request) => $request->method() === $method
+    Http::assertSent(fn (Request $request): bool => $request->method() === $method
         && $request->url() === $url);
 }

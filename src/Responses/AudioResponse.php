@@ -6,7 +6,7 @@ use Illuminate\Support\Str;
 use Laravel\Ai\Concerns\Storable;
 use Laravel\Ai\Responses\Data\Meta;
 
-class AudioResponse
+class AudioResponse implements \Stringable
 {
     use Storable;
 
@@ -28,7 +28,7 @@ class AudioResponse
      */
     protected function randomStorageName(): string
     {
-        return once(fn () => Str::random(40).match ($this->mime) {
+        return once(fn (): string => Str::random(40).match ($this->mime) {
             'audio/wav', 'audio/x-wav' => '.wav',
             default => '.mp3',
         });

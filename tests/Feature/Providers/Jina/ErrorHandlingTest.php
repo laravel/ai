@@ -7,14 +7,14 @@ use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Reranking;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.jina' => [
         ...config('ai.providers.jina'),
         'key' => 'test-key',
     ]]);
 });
 
-test('embeddings rate limit response throws rate limited exception', function () {
+test('embeddings rate limit response throws rate limited exception', function (): void {
     Http::fake([
         'api.jina.ai/*' => Http::response(['detail' => 'Rate limit exceeded'], 429),
     ]);
@@ -22,7 +22,7 @@ test('embeddings rate limit response throws rate limited exception', function ()
     Embeddings::for(['Hello'])->generate(provider: 'jina', model: 'jina-embeddings-v4');
 })->throws(RateLimitedException::class);
 
-test('embeddings overloaded response throws provider overloaded exception', function () {
+test('embeddings overloaded response throws provider overloaded exception', function (): void {
     Http::fake([
         'api.jina.ai/*' => Http::response(['detail' => 'Service overloaded'], 503),
     ]);
@@ -30,7 +30,7 @@ test('embeddings overloaded response throws provider overloaded exception', func
     Embeddings::for(['Hello'])->generate(provider: 'jina', model: 'jina-embeddings-v4');
 })->throws(ProviderOverloadedException::class);
 
-test('embeddings http error response throws request exception', function () {
+test('embeddings http error response throws request exception', function (): void {
     Http::fake([
         'api.jina.ai/*' => Http::response(['detail' => 'Unauthorized'], 401),
     ]);
@@ -38,7 +38,7 @@ test('embeddings http error response throws request exception', function () {
     Embeddings::for(['Hello'])->generate(provider: 'jina', model: 'jina-embeddings-v4');
 })->throws(RequestException::class);
 
-test('reranking rate limit response throws rate limited exception', function () {
+test('reranking rate limit response throws rate limited exception', function (): void {
     Http::fake([
         'api.jina.ai/*' => Http::response(['detail' => 'Rate limit exceeded'], 429),
     ]);
@@ -46,7 +46,7 @@ test('reranking rate limit response throws rate limited exception', function () 
     Reranking::of(['doc1'])->rerank('What is AI?', provider: 'jina', model: 'jina-reranker-v3');
 })->throws(RateLimitedException::class);
 
-test('reranking overloaded response throws provider overloaded exception', function () {
+test('reranking overloaded response throws provider overloaded exception', function (): void {
     Http::fake([
         'api.jina.ai/*' => Http::response(['detail' => 'Service overloaded'], 503),
     ]);
@@ -54,7 +54,7 @@ test('reranking overloaded response throws provider overloaded exception', funct
     Reranking::of(['doc1'])->rerank('What is AI?', provider: 'jina', model: 'jina-reranker-v3');
 })->throws(ProviderOverloadedException::class);
 
-test('reranking http error response throws request exception', function () {
+test('reranking http error response throws request exception', function (): void {
     Http::fake([
         'api.jina.ai/*' => Http::response(['detail' => 'Unauthorized'], 401),
     ]);

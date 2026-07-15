@@ -77,7 +77,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
         $data = $response->json();
 
         return new ImageResponse(
-            collect($data['data'] ?? [])->map(fn (array $image) => new GeneratedImage(
+            collect($data['data'] ?? [])->map(fn (array $image): GeneratedImage => new GeneratedImage(
                 $image['b64_json'] ?? '',
                 'image/png',
             )),
@@ -127,7 +127,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
         foreach ($attachments as $attachment) {
             if (! $attachment instanceof File && ! $attachment instanceof UploadedFile) {
                 throw new InvalidArgumentException(
-                    'Unsupported attachment type ['.get_class($attachment).']'
+                    'Unsupported attachment type ['.$attachment::class.']'
                 );
             }
 
@@ -135,7 +135,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
                 $attachment instanceof LocalImage => file_get_contents($attachment->path),
                 $attachment instanceof StoredImage => Storage::disk($attachment->disk)->get($attachment->path),
                 $attachment instanceof UploadedFile => $attachment->get(),
-                default => throw new InvalidArgumentException('Unsupported image attachment type ['.get_class($attachment).']'),
+                default => throw new InvalidArgumentException('Unsupported image attachment type ['.$attachment::class.']'),
             };
 
             $request = $request->attach($field, $content, 'image.png');
@@ -226,7 +226,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
 
         return new TranscriptionResponse(
             $data['text'] ?? '',
-            collect($data['segments'] ?? [])->map(fn (array $segment) => new TranscriptionSegment(
+            collect($data['segments'] ?? [])->map(fn (array $segment): TranscriptionSegment => new TranscriptionSegment(
                 $segment['text'] ?? '',
                 $segment['speaker'] ?? '',
                 $segment['start'] ?? 0,

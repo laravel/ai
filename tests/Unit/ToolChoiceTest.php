@@ -6,7 +6,7 @@ use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeToolChoiceAgent;
 use Tests\Fixtures\Agents\ToolChoiceAgent;
 
-test('constructor and tool() build the expected mode and tool name', function () {
+test('constructor and tool() build the expected mode and tool name', function (): void {
     expect((new ToolChoice(ToolChoice::auto))->mode)->toBe(ToolChoice::auto)
         ->and((new ToolChoice(ToolChoice::auto))->toolName)->toBeNull()
         ->and((new ToolChoice(ToolChoice::none))->mode)->toBe(ToolChoice::none)
@@ -15,17 +15,17 @@ test('constructor and tool() build the expected mode and tool name', function ()
         ->and(ToolChoice::tool('calculator')->toolName)->toBe('calculator');
 });
 
-test('tool mode requires a non-empty tool name', function () {
-    expect(fn () => new ToolChoice(ToolChoice::tool))->toThrow(InvalidArgumentException::class);
-    expect(fn () => new ToolChoice(ToolChoice::tool, ''))->toThrow(InvalidArgumentException::class);
+test('tool mode requires a non-empty tool name', function (): void {
+    expect(fn (): ToolChoice => new ToolChoice(ToolChoice::tool))->toThrow(InvalidArgumentException::class);
+    expect(fn (): ToolChoice => new ToolChoice(ToolChoice::tool, ''))->toThrow(InvalidArgumentException::class);
 });
 
-test('non-tool modes reject a tool name', function () {
-    expect(fn () => new ToolChoice(ToolChoice::auto, 'x'))->toThrow(InvalidArgumentException::class);
-    expect(fn () => new ToolChoice(ToolChoice::required, 'x'))->toThrow(InvalidArgumentException::class);
+test('non-tool modes reject a tool name', function (): void {
+    expect(fn (): ToolChoice => new ToolChoice(ToolChoice::auto, 'x'))->toThrow(InvalidArgumentException::class);
+    expect(fn (): ToolChoice => new ToolChoice(ToolChoice::required, 'x'))->toThrow(InvalidArgumentException::class);
 });
 
-test('from coerces instances and strings', function () {
+test('from coerces instances and strings', function (): void {
     $choice = new ToolChoice(ToolChoice::required);
 
     expect(ToolChoice::from($choice))->toBe($choice)
@@ -33,43 +33,43 @@ test('from coerces instances and strings', function () {
         ->and(ToolChoice::from('required')->mode)->toBe(ToolChoice::required);
 });
 
-test('from accepts array shorthand for tool selection', function () {
+test('from accepts array shorthand for tool selection', function (): void {
     expect(ToolChoice::from(['tool' => 'calculator'])->toolName)->toBe('calculator')
         ->and(ToolChoice::from(['toolName' => 'calculator'])->toolName)->toBe('calculator')
         ->and(ToolChoice::from(['name' => 'calculator'])->toolName)->toBe('calculator');
 });
 
-test('from rejects invalid values', function () {
-    expect(fn () => ToolChoice::from('bogus'))->toThrow(InvalidArgumentException::class);
-    expect(fn () => ToolChoice::from(['unexpected' => 'value']))->toThrow(InvalidArgumentException::class);
+test('from rejects invalid values', function (): void {
+    expect(fn (): ToolChoice => ToolChoice::from('bogus'))->toThrow(InvalidArgumentException::class);
+    expect(fn (): ToolChoice => ToolChoice::from(['unexpected' => 'value']))->toThrow(InvalidArgumentException::class);
 });
 
-test('options resolve tool choice from the attribute', function () {
+test('options resolve tool choice from the attribute', function (): void {
     $options = TextGenerationOptions::forAgent(new AttributeToolChoiceAgent);
 
     expect($options->toolChoice)->not->toBeNull()
         ->and($options->toolChoice->mode)->toBe(ToolChoice::required);
 });
 
-test('options resolve tool choice from the method over the attribute', function () {
+test('options resolve tool choice from the method over the attribute', function (): void {
     $options = TextGenerationOptions::forAgent(new ToolChoiceAgent(ToolChoice::tool('custom_named_tool')));
 
     expect($options->toolChoice->mode)->toBe(ToolChoice::tool)
         ->and($options->toolChoice->toolName)->toBe('custom_named_tool');
 });
 
-test('options coerce a plain string from the method', function () {
+test('options coerce a plain string from the method', function (): void {
     $options = TextGenerationOptions::forAgent(new ToolChoiceAgent('required'));
 
     expect($options->toolChoice->mode)->toBe(ToolChoice::required);
 });
 
-test('options leave tool choice null when the agent declares none', function () {
+test('options leave tool choice null when the agent declares none', function (): void {
     expect(TextGenerationOptions::forAgent(new AssistantAgent)->toolChoice)->toBeNull();
     expect(TextGenerationOptions::forAgent(new ToolChoiceAgent)->toolChoice)->toBeNull();
 });
 
-test('forStep releases a forced tool choice after the first step', function () {
+test('forStep releases a forced tool choice after the first step', function (): void {
     foreach ([ToolChoice::required, ToolChoice::tool] as $mode) {
         $options = new TextGenerationOptions(
             toolChoice: $mode === ToolChoice::tool ? ToolChoice::tool('calculator') : new ToolChoice($mode),
@@ -82,7 +82,7 @@ test('forStep releases a forced tool choice after the first step', function () {
     }
 });
 
-test('forStep keeps auto and none tool choices on every step', function () {
+test('forStep keeps auto and none tool choices on every step', function (): void {
     foreach ([ToolChoice::auto, ToolChoice::none] as $mode) {
         $options = new TextGenerationOptions(toolChoice: new ToolChoice($mode));
 
@@ -91,7 +91,7 @@ test('forStep keeps auto and none tool choices on every step', function () {
     }
 });
 
-test('forStep preserves other options when releasing the tool choice', function () {
+test('forStep preserves other options when releasing the tool choice', function (): void {
     $options = new TextGenerationOptions(
         maxSteps: 4,
         maxTokens: 256,
@@ -109,7 +109,7 @@ test('forStep preserves other options when releasing the tool choice', function 
         ->and($stepped->topP)->toBe(0.9);
 });
 
-test('forStep is a no-op when no tool choice is set', function () {
+test('forStep is a no-op when no tool choice is set', function (): void {
     $options = new TextGenerationOptions(maxSteps: 3);
 
     expect($options->forStep(2))->toBe($options);

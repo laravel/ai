@@ -2,11 +2,12 @@
 
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\NoSuchToolException;
+use Laravel\Ai\Responses\AgentResponse;
 use Tests\Fixtures\Agents\MultiStepToolAgent;
 use Tests\Fixtures\Agents\NamedToolAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
-test('tool calls trigger follow up request', function () {
+test('tool calls trigger follow up request', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::sequence([
             $this->fakeUniqueToolCallResponse(),
@@ -50,7 +51,7 @@ test('tool calls trigger follow up request', function () {
         ->and($hasFunctionResponse)->toBeTrue('Follow-up request should include user message with functionResponse');
 });
 
-test('max steps limits tool call depth', function () {
+test('max steps limits tool call depth', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::sequence([
             $this->fakeUniqueToolCallResponse(),
@@ -72,7 +73,7 @@ test('max steps limits tool call depth', function () {
     expect(count($recorded))->toBeLessThanOrEqual(3);
 });
 
-test('multi step tool loop returns accumulated response shape', function () {
+test('multi step tool loop returns accumulated response shape', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::sequence([
             $this->fakeUniqueToolCallResponse(),
@@ -95,7 +96,7 @@ test('multi step tool loop returns accumulated response shape', function () {
         ->and($response->usage->completionTokens)->toBe(15);
 });
 
-test('unregistered tool call throws', function () {
+test('unregistered tool call throws', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::sequence([
             $this->fakeToolCallResponse('NonExistentTool', 'call_missing'),
@@ -103,11 +104,11 @@ test('unregistered tool call throws', function () {
         ]),
     ]);
 
-    expect(fn () => (new ToolUsingAgent(fixed: true))->prompt('Generate', provider: 'gemini'))
+    expect(fn (): AgentResponse => (new ToolUsingAgent(fixed: true))->prompt('Generate', provider: 'gemini'))
         ->toThrow(NoSuchToolException::class);
 });
 
-test('function response includes id for gemini 3', function () {
+test('function response includes id for gemini 3', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::sequence([
             $this->fakeToolCallResponse('FixedNumberGenerator', 'call_abc123'),
@@ -139,7 +140,7 @@ test('function response includes id for gemini 3', function () {
         ->and($functionResponsePart['response'])->toHaveKeys(['name', 'content']);
 });
 
-test('parallel function calls preserve unique ids', function () {
+test('parallel function calls preserve unique ids', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::sequence([
             Http::response([
@@ -182,7 +183,7 @@ test('parallel function calls preserve unique ids', function () {
         ->toContain('call_2');
 });
 
-test('tool declaring a name() method routes the function call back to itself', function () {
+test('tool declaring a name() method routes the function call back to itself', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::sequence([
             $this->fakeToolCallResponse('aliased_tool', 'call_named_1'),
@@ -211,7 +212,7 @@ test('tool declaring a name() method routes the function call back to itself', f
         ->and($functionResponsePart['name'])->toBe('aliased_tool');
 });
 
-test('thinking parts are excluded from tool call continuation', function () {
+test('thinking parts are excluded from tool call continuation', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::sequence([
             Http::response([

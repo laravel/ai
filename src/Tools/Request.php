@@ -10,7 +10,9 @@ use Illuminate\Support\Traits\Macroable;
 
 class Request implements Arrayable, ArrayAccess
 {
-    use Conditionable, InteractsWithData, Macroable;
+    use Conditionable;
+    use InteractsWithData;
+    use Macroable;
 
     public function __construct(protected array $arguments = []) {}
 

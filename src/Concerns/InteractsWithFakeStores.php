@@ -114,18 +114,16 @@ trait InteractsWithFakeStores
     {
         if (is_string($callback)) {
             $name = $callback;
-            $callback = fn ($n) => $n === $name;
+            $callback = fn ($n): bool => $n === $name;
         }
 
         PHPUnit::assertTrue(
-            (new Collection($this->recordedStoreCreations))->contains(function (array $creation) use ($callback) {
-                return $callback(
-                    $creation['name'],
-                    $creation['description'],
-                    $creation['fileIds'],
-                    $creation['expiresWhenIdleFor'],
-                );
-            }),
+            (new Collection($this->recordedStoreCreations))->contains(fn (array $creation) => $callback(
+                $creation['name'],
+                $creation['description'],
+                $creation['fileIds'],
+                $creation['expiresWhenIdleFor'],
+            )),
             'An expected store creation was not recorded.'
         );
 
@@ -139,18 +137,16 @@ trait InteractsWithFakeStores
     {
         if (is_string($callback)) {
             $name = $callback;
-            $callback = fn ($n) => $n === $name;
+            $callback = fn ($n): bool => $n === $name;
         }
 
         PHPUnit::assertTrue(
-            (new Collection($this->recordedStoreCreations))->doesntContain(function (array $creation) use ($callback) {
-                return $callback(
-                    $creation['name'],
-                    $creation['description'],
-                    $creation['fileIds'],
-                    $creation['expiresWhenIdleFor'],
-                );
-            }),
+            (new Collection($this->recordedStoreCreations))->doesntContain(fn (array $creation) => $callback(
+                $creation['name'],
+                $creation['description'],
+                $creation['fileIds'],
+                $creation['expiresWhenIdleFor'],
+            )),
             'An unexpected store creation was recorded.'
         );
 
@@ -177,13 +173,11 @@ trait InteractsWithFakeStores
     {
         if (is_string($callback)) {
             $storeId = $callback;
-            $callback = fn ($id) => $id === $storeId;
+            $callback = fn ($id): bool => $id === $storeId;
         }
 
         PHPUnit::assertTrue(
-            (new Collection($this->recordedStoreDeletions))->contains(function (string $id) use ($callback) {
-                return $callback($id);
-            }),
+            (new Collection($this->recordedStoreDeletions))->contains(fn (string $id) => $callback($id)),
             'An expected store deletion was not recorded.'
         );
 
@@ -197,13 +191,11 @@ trait InteractsWithFakeStores
     {
         if (is_string($callback)) {
             $storeId = $callback;
-            $callback = fn ($id) => $id === $storeId;
+            $callback = fn ($id): bool => $id === $storeId;
         }
 
         PHPUnit::assertTrue(
-            (new Collection($this->recordedStoreDeletions))->doesntContain(function (string $id) use ($callback) {
-                return $callback($id);
-            }),
+            (new Collection($this->recordedStoreDeletions))->doesntContain(fn (string $id) => $callback($id)),
             'An unexpected store deletion was recorded.'
         );
 
@@ -231,9 +223,7 @@ trait InteractsWithFakeStores
         $callback = $this->fileMatchingCallback($storeId, $fileId);
 
         PHPUnit::assertTrue(
-            (new Collection($this->recordedFileAdditions))->contains(function (array $addition) use ($callback) {
-                return $callback($addition['storeId'], $addition['file']);
-            }),
+            (new Collection($this->recordedFileAdditions))->contains(fn (array $addition) => $callback($addition['storeId'], $addition['file'])),
             'An expected file addition was not recorded.'
         );
 
@@ -248,9 +238,7 @@ trait InteractsWithFakeStores
         $callback = $this->fileMatchingCallback($storeId, $fileId);
 
         PHPUnit::assertTrue(
-            (new Collection($this->recordedFileAdditions))->doesntContain(function (array $addition) use ($callback) {
-                return $callback($addition['storeId'], $addition['file']);
-            }),
+            (new Collection($this->recordedFileAdditions))->doesntContain(fn (array $addition) => $callback($addition['storeId'], $addition['file'])),
             'An unexpected file addition was recorded.'
         );
 
@@ -265,9 +253,7 @@ trait InteractsWithFakeStores
         $callback = $this->fileMatchingCallback($storeId, $fileId);
 
         PHPUnit::assertTrue(
-            (new Collection($this->recordedFileRemovals))->contains(function (array $removal) use ($callback) {
-                return $callback($removal['storeId'], $removal['fileId']);
-            }),
+            (new Collection($this->recordedFileRemovals))->contains(fn (array $removal) => $callback($removal['storeId'], $removal['fileId'])),
             'An expected file removal was not recorded.'
         );
 
@@ -282,9 +268,7 @@ trait InteractsWithFakeStores
         $callback = $this->fileMatchingCallback($storeId, $fileId);
 
         PHPUnit::assertTrue(
-            (new Collection($this->recordedFileRemovals))->doesntContain(function (array $removal) use ($callback) {
-                return $callback($removal['storeId'], $removal['fileId']);
-            }),
+            (new Collection($this->recordedFileRemovals))->doesntContain(fn (array $removal) => $callback($removal['storeId'], $removal['fileId'])),
             'An unexpected file removal was recorded.'
         );
 
@@ -304,7 +288,7 @@ trait InteractsWithFakeStores
         $expectedFileId = $fileId !== null ? (str_starts_with($fileId, 'fake_file_') ? $fileId : Files::fakeId($fileId))
             : null;
 
-        return fn ($s, $f) => $s === $expectedStoreId && $this->fileIdMatches($f, $expectedFileId);
+        return fn ($s, $f): bool => $s === $expectedStoreId && $this->fileIdMatches($f, $expectedFileId);
     }
 
     /**

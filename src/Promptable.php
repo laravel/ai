@@ -43,8 +43,8 @@ trait Promptable
     public static function make(...$arguments): static
     {
         return match (true) {
-            ! empty($arguments) && ! array_is_list($arguments) => Container::getInstance()->makeWith(static::class, $arguments),
-            ! empty($arguments) => new static(...$arguments),
+            $arguments !== [] && ! array_is_list($arguments) => Container::getInstance()->makeWith(static::class, $arguments),
+            $arguments !== [] => new static(...$arguments),
             default => Container::getInstance()->make(static::class),
         };
     }
@@ -60,7 +60,7 @@ trait Promptable
         ?int $timeout = null): AgentResponse
     {
         return $this->withModelFailover(
-            fn (TextProvider $provider, string $model) => $provider->prompt(
+            fn (TextProvider $provider, string $model): AgentResponse => $provider->prompt(
                 new AgentPrompt($this, $prompt, $attachments, $provider, $model, $this->getTimeout($timeout))
             ),
             $provider,
@@ -107,7 +107,7 @@ trait Promptable
                             new AgentPrompt($this, $prompt, $attachments, $provider, $model, $resolvedTimeout, $invocationId)
                         );
 
-                        $innerResponse->then(fn (StreamedAgentResponse $response) => $outer->adoptStateFrom($response));
+                        $innerResponse->then(fn (StreamedAgentResponse $response): StreamableAgentResponse => $outer->adoptStateFrom($response));
 
                         foreach ($innerResponse as $event) {
                             $started = true;
@@ -159,7 +159,7 @@ trait Promptable
         $without = WithoutBroadcasting::eventsFor($this);
 
         return $this->stream($prompt, $attachments, $provider, $model)
-            ->each(function (StreamEvent $event) use ($channels, $now, $without) {
+            ->each(function (StreamEvent $event) use ($channels, $now, $without): void {
                 if (WithoutBroadcasting::excludes($without, $event)) {
                     return;
                 }
@@ -262,7 +262,7 @@ trait Promptable
             } else {
                 $attributes = (new ReflectionClass($this))->getAttributes(ProviderAttribute::class);
 
-                $provider = ! empty($attributes) ? $attributes[0]->newInstance()->value : null;
+                $provider = $attributes === [] ? null : $attributes[0]->newInstance()->value;
             }
         }
 
@@ -272,7 +272,7 @@ trait Promptable
             } else {
                 $attributes = (new ReflectionClass($this))->getAttributes(ModelAttribute::class);
 
-                $model = ! empty($attributes) ? $attributes[0]->newInstance()->value : null;
+                $model = $attributes === [] ? null : $attributes[0]->newInstance()->value;
             }
         }
 
@@ -318,7 +318,7 @@ trait Promptable
 
         $attributes = (new ReflectionClass($this))->getAttributes(TimeoutAttribute::class);
 
-        if (! empty($attributes)) {
+        if ($attributes !== []) {
             return $attributes[0]->newInstance()->value;
         }
 

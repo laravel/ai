@@ -86,7 +86,7 @@ class TextGenerationOptions
      */
     public function forStep(int $stepNumber): self
     {
-        if ($stepNumber === 0 || $this->toolChoice === null) {
+        if ($stepNumber === 0 || ! $this->toolChoice instanceof ToolChoice) {
             return $this;
         }
 
@@ -100,7 +100,6 @@ class TextGenerationOptions
             temperature: $this->temperature,
             agent: $this->agent,
             topP: $this->topP,
-            toolChoice: null,
             middleware: $this->middleware,
         );
     }
@@ -141,7 +140,7 @@ class TextGenerationOptions
 
         $attributes = $reflection->getAttributes(ToolChoice::class);
 
-        return ! empty($attributes) ? $attributes[0]->newInstance() : null;
+        return $attributes === [] ? null : $attributes[0]->newInstance();
     }
 
     /**
@@ -165,6 +164,6 @@ class TextGenerationOptions
 
         $attributes = $reflection->getAttributes($attribute);
 
-        return ! empty($attributes) ? $attributes[0]->newInstance()->value : null;
+        return $attributes === [] ? null : $attributes[0]->newInstance()->value;
     }
 }

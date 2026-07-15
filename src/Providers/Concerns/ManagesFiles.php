@@ -38,7 +38,7 @@ trait ManagesFiles
 
         return tap(
             $this->fileGateway()->putFile($this, $file),
-            function (StoredFileResponse $response) use ($invocationId, $file) {
+            function (StoredFileResponse $response) use ($invocationId, $file): void {
                 $this->events->dispatch(new FileStored(
                     $invocationId, $this, $file, $response,
                 ));

@@ -9,14 +9,14 @@ use Tests\Fixtures\Agents\ToolUsingAgent;
 
 use function Laravel\Ai\agent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.ollama' => [
         ...config('ai.providers.ollama'),
         'key' => '',
     ]]);
 });
 
-test('user message maps to ollama format', function () {
+test('user message maps to ollama format', function (): void {
     Http::fake([
         '*' => $this->fakeTextResponse(),
     ]);
@@ -26,7 +26,7 @@ test('user message maps to ollama format', function () {
         provider: 'ollama',
     );
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $messages = $body['messages'];
         $userMessage = collect($messages)->firstWhere('role', 'user');
@@ -36,7 +36,7 @@ test('user message maps to ollama format', function () {
     });
 });
 
-test('tool result follow up uses tool_name not tool_call_id', function () {
+test('tool result follow up uses tool_name not tool_call_id', function (): void {
     Http::fake([
         '*' => Http::sequence([
             $this->fakeToolCallResponse(),
@@ -53,10 +53,10 @@ test('tool result follow up uses tool_name not tool_call_id', function () {
 
     expect($recorded)->toHaveCount(2);
 
-    $followUpBody = json_decode($recorded[1][0]->body(), true);
+    $followUpBody = json_decode((string) $recorded[1][0]->body(), true);
     $followUpMessages = $followUpBody['messages'];
 
-    $toolMsg = collect($followUpMessages)->first(fn ($m) => $m['role'] === 'tool');
+    $toolMsg = collect($followUpMessages)->first(fn ($m): bool => $m['role'] === 'tool');
 
     expect($toolMsg)->not->toBeNull()
         ->and($toolMsg)->toHaveKey('tool_name')
@@ -64,7 +64,7 @@ test('tool result follow up uses tool_name not tool_call_id', function () {
         ->and($toolMsg['tool_name'])->toBe('FixedNumberGenerator');
 });
 
-test('assistant tool call message uses function format without type', function () {
+test('assistant tool call message uses function format without type', function (): void {
     Http::fake([
         '*' => Http::sequence([
             $this->fakeToolCallResponse(),
@@ -78,11 +78,11 @@ test('assistant tool call message uses function format without type', function (
     );
 
     $recorded = Http::recorded();
-    $followUpBody = json_decode($recorded[1][0]->body(), true);
+    $followUpBody = json_decode((string) $recorded[1][0]->body(), true);
     $followUpMessages = $followUpBody['messages'];
 
     $assistantMsg = collect($followUpMessages)->first(
-        fn ($m) => $m['role'] === 'assistant' && isset($m['tool_calls'])
+        fn ($m): bool => $m['role'] === 'assistant' && isset($m['tool_calls'])
     );
 
     expect($assistantMsg)->not->toBeNull();
@@ -94,7 +94,7 @@ test('assistant tool call message uses function format without type', function (
         ->and($toolCall['function']['name'])->toBe('FixedNumberGenerator');
 });
 
-test('image attachment maps to images array with base64', function () {
+test('image attachment maps to images array with base64', function (): void {
     Http::fake([
         '*' => $this->fakeTextResponse('I see an image'),
     ]);
@@ -107,7 +107,7 @@ test('image attachment maps to images array with base64', function () {
         provider: 'ollama',
     );
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $userMessage = collect($body['messages'])->firstWhere('role', 'user');
 
@@ -117,7 +117,7 @@ test('image attachment maps to images array with base64', function () {
     });
 });
 
-test('document attachments throw exception', function () {
+test('document attachments throw exception', function (): void {
     Http::fake([
         '*' => $this->fakeTextResponse(),
     ]);

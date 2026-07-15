@@ -10,7 +10,7 @@ use Tests\Fixtures\Agents\MiddleManagerAgent;
 use Tests\Fixtures\Agents\OrchestratorAgent;
 use Tests\Fixtures\Agents\ResearchAgent;
 
-test('agent returned from tools is invoked when called by parent agent', function () {
+test('agent returned from tools is invoked when called by parent agent', function (): void {
     DelegatingAgent::fake([
         new ToolCall('call_123', 'research_agent', ['task' => 'Research Laravel']),
         'Research delegated.',
@@ -21,9 +21,7 @@ test('agent returned from tools is invoked when called by parent agent', functio
     $response = (new DelegatingAgent)->prompt('Delegate research about Laravel');
 
     DelegatingAgent::assertPrompted('Delegate research about Laravel');
-    ResearchAgent::assertPrompted(function (AgentPrompt $prompt) {
-        return $prompt->prompt === 'Research Laravel';
-    });
+    ResearchAgent::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->prompt === 'Research Laravel');
 
     expect($response->toolCalls)->toHaveCount(1)
         ->and($response->toolCalls->first()->name)->toBe('research_agent')
@@ -31,7 +29,7 @@ test('agent returned from tools is invoked when called by parent agent', functio
         ->and($response->toolResults->first()->result)->toBe('Research result');
 });
 
-test('research agent can be faked independently', function () {
+test('research agent can be faked independently', function (): void {
     ResearchAgent::fake(['Research result']);
 
     $response = (new ResearchAgent)->prompt('Research topic');
@@ -39,14 +37,14 @@ test('research agent can be faked independently', function () {
     expect($response->text)->toBe('Research result');
 });
 
-test('agent tool uses name and description from agent when defined', function () {
+test('agent tool uses name and description from agent when defined', function (): void {
     $tool = new AgentTool(new ResearchAgent);
 
     expect($tool->name())->toBe('research_agent')
         ->and($tool->description())->toBe('Research a topic in depth and return a summary.');
 });
 
-test('agent tool falls back to class basename for name when has tool metadata is not implemented', function () {
+test('agent tool falls back to class basename for name when has tool metadata is not implemented', function (): void {
     $agent = new class implements Agent
     {
         use Promptable;
@@ -65,7 +63,7 @@ test('agent tool falls back to class basename for name when has tool metadata is
         ->toStartWith("Delegates a task to the {$name} sub-agent");
 });
 
-test('agent tool falls back to a generic description that does not leak instructions', function () {
+test('agent tool falls back to a generic description that does not leak instructions', function (): void {
     $agent = new class implements Agent
     {
         use Promptable;
@@ -85,7 +83,7 @@ test('agent tool falls back to a generic description that does not leak instruct
         ->not->toContain('long internal instructions');
 });
 
-test('framework wraps an agent in tools automatically when resolving', function () {
+test('framework wraps an agent in tools automatically when resolving', function (): void {
     $tools = (new DelegatingAgent)->tools();
 
     $resolved = array_map(
@@ -97,7 +95,7 @@ test('framework wraps an agent in tools automatically when resolving', function 
         ->and($resolved[0]->agent())->toBeInstanceOf(ResearchAgent::class);
 });
 
-test('nested agent delegates through a middle manager to a research agent', function () {
+test('nested agent delegates through a middle manager to a research agent', function (): void {
     OrchestratorAgent::fake([
         new ToolCall('call_001', 'middle_manager', ['task' => 'Deep-dive on Laravel caching']),
         'Delegated to middle manager.',
@@ -113,12 +111,8 @@ test('nested agent delegates through a middle manager to a research agent', func
     $response = (new OrchestratorAgent)->prompt('Do a deep dive on Laravel caching');
 
     OrchestratorAgent::assertPrompted('Do a deep dive on Laravel caching');
-    MiddleManagerAgent::assertPrompted(function (AgentPrompt $prompt) {
-        return $prompt->prompt === 'Deep-dive on Laravel caching';
-    });
-    ResearchAgent::assertPrompted(function (AgentPrompt $prompt) {
-        return $prompt->prompt === 'Research Laravel caching internals';
-    });
+    MiddleManagerAgent::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->prompt === 'Deep-dive on Laravel caching');
+    ResearchAgent::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->prompt === 'Research Laravel caching internals');
 
     expect($response->toolCalls)->toHaveCount(1)
         ->and($response->toolCalls->first()->name)->toBe('middle_manager')
