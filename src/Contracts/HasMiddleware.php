@@ -2,10 +2,14 @@
 
 namespace Laravel\Ai\Contracts;
 
+use Laravel\Ai\Middleware\Middleware;
+
 interface HasMiddleware
 {
     /**
-     * Get the middleware that should run around each of the agent's generation steps.
+     * Get the agent's middleware, run around each generation step.
+     *
+     * @return Middleware[]
      */
     public function middleware(): array;
 }

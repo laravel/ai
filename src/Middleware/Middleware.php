@@ -1,15 +1,14 @@
 <?php
 
-namespace {{ namespace }};
+namespace Laravel\Ai\Middleware;
 
 use Closure;
 use Laravel\Ai\Gateway\PendingStep;
-use Laravel\Ai\Middleware\Middleware;
 
-class {{ class }} extends Middleware
+abstract class Middleware
 {
     /**
-     * Handle the pending generation step.
+     * Handle a single generation step.
      */
     public function handle(PendingStep $step, Closure $next)
     {

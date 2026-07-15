@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway;
 use Generator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
@@ -86,7 +87,7 @@ class TextGenerationLoop
                     $pending->schema,
                     $pending->options,
                     $pending->timeout,
-                    $stepContext,
+                    $pending->context,
                 );
             } else {
                 $lastResult = $outcome;
@@ -185,7 +186,7 @@ class TextGenerationLoop
                     $pending->schema,
                     $pending->options,
                     $pending->timeout,
-                    $stepContext,
+                    $pending->context,
                 );
 
                 foreach ($stream as $event) {
@@ -229,7 +230,7 @@ class TextGenerationLoop
             if ($shouldContinue) {
                 foreach ($toolResults as $toolResult) {
                     yield (new ToolResultEvent(
-                        strtolower((string) Str::uuid7()),
+                        $this->eventId(),
                         $toolResult,
                         true,
                         null,
@@ -257,7 +258,7 @@ class TextGenerationLoop
 
         if ($reason !== null) {
             yield (new StreamEnd(
-                strtolower((string) Str::uuid7()),
+                $this->eventId(),
                 $reason->value,
                 $accumulatedUsage,
                 time(),
@@ -280,10 +281,24 @@ class TextGenerationLoop
             $through[] = $pipe;
         }
 
-        return pipeline()
+        $outcome = pipeline()
             ->send($pending)
             ->through($through)
             ->thenReturn();
+
+        if (! $outcome instanceof PendingStep && ! $outcome instanceof StepResponse) {
+            throw new InvalidArgumentException('Agent middleware must return $next($step) or a StepResponse.');
+        }
+
+        return $outcome;
+    }
+
+    /**
+     * Generate a lowercased UUIDv7 for a stream event id.
+     */
+    protected function eventId(): string
+    {
+        return strtolower((string) Str::uuid7());
     }
 
     /**
@@ -291,20 +306,20 @@ class TextGenerationLoop
      */
     protected function shortCircuitedStepEvents(string $invocationId, PendingStep $pending, StepResponse $result): Generator
     {
-        $messageId = strtolower((string) Str::uuid7());
+        $messageId = $this->eventId();
 
         yield (new StreamStart(
-            strtolower((string) Str::uuid7()), $pending->provider->name(), $pending->model, time()
+            $this->eventId(), $pending->provider->name(), $pending->model, time()
         ))->withInvocationId($invocationId);
 
         if ($result->text !== '') {
-            yield (new TextStart(strtolower((string) Str::uuid7()), $messageId, time()))->withInvocationId($invocationId);
-            yield (new TextDelta(strtolower((string) Str::uuid7()), $messageId, $result->text, time()))->withInvocationId($invocationId);
-            yield (new TextEnd(strtolower((string) Str::uuid7()), $messageId, time()))->withInvocationId($invocationId);
+            yield (new TextStart($this->eventId(), $messageId, time()))->withInvocationId($invocationId);
+            yield (new TextDelta($this->eventId(), $messageId, $result->text, time()))->withInvocationId($invocationId);
+            yield (new TextEnd($this->eventId(), $messageId, time()))->withInvocationId($invocationId);
         }
 
         foreach ($result->toolCalls as $toolCall) {
-            yield (new ToolCallEvent(strtolower((string) Str::uuid7()), $toolCall, time()))->withInvocationId($invocationId);
+            yield (new ToolCallEvent($this->eventId(), $toolCall, time()))->withInvocationId($invocationId);
         }
     }
 

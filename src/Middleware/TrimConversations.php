@@ -7,7 +7,7 @@ use Laravel\Ai\Gateway\PendingStep;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\MessageRole;
 
-class TrimConversations
+class TrimConversations extends Middleware
 {
     /**
      * Create a new conversation trimming middleware.

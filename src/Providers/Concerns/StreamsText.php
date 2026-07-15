@@ -4,6 +4,7 @@ namespace Laravel\Ai\Providers\Concerns;
 
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Events\AgentStreamed;
@@ -15,8 +16,6 @@ use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 
-use function Laravel\Ai\pipeline;
-
 trait StreamsText
 {
     /**
@@ -26,52 +25,55 @@ trait StreamsText
     {
         $invocationId = $prompt->invocationId ?? (string) Str::uuid7();
 
-        $processedPrompt = null;
+        $agent = $prompt->agent;
 
-        return pipeline()
-            ->send($prompt)
-            ->through($this->gatherMiddlewareFor($prompt->agent))
-            ->then(function (AgentPrompt $prompt) use ($invocationId, &$processedPrompt) {
-                $processedPrompt = $prompt;
+        if ($agent instanceof HasStructuredOutput) {
+            throw new InvalidArgumentException('Streaming structured output is not currently supported.');
+        }
 
-                $agent = $prompt->agent;
+        if (Ai::hasFakeGatewayFor($agent::class)) {
+            Ai::recordPrompt($prompt);
+        }
 
-                if ($agent instanceof HasStructuredOutput) {
-                    throw new InvalidArgumentException('Streaming structured output is not currently supported.');
-                }
+        $middleware = $this->gatherMiddlewareFor($agent);
 
-                $meta = new Meta($this->name(), $prompt->model);
+        $recorder = $this->conversationRecorderFor($agent);
 
-                return new StreamableAgentResponse(
+        $meta = new Meta($this->name(), $prompt->model);
+
+        return (new StreamableAgentResponse(
+            $invocationId,
+            function () use ($invocationId, $prompt, $agent, $middleware) {
+                $this->events->dispatch(new StreamingAgent($invocationId, $prompt));
+
+                $messages = [
+                    ...($agent instanceof Conversational ? $agent->messages() : []),
+                    new UserMessage($prompt->prompt, $prompt->attachments->all()),
+                ];
+
+                $this->listenForToolInvocations($invocationId, $agent);
+
+                yield from $this->textGenerationLoop()->stream(
                     $invocationId,
-                    function () use ($invocationId, $prompt, $agent) {
-                        $this->events->dispatch(new StreamingAgent($invocationId, $prompt));
-
-                        $messages = [
-                            ...($agent instanceof Conversational ? $agent->messages() : []),
-                            new UserMessage($prompt->prompt, $prompt->attachments->all()),
-                        ];
-
-                        $this->listenForToolInvocations($invocationId, $agent);
-
-                        yield from $this->textGenerationLoop()->stream(
-                            $invocationId,
-                            $this,
-                            $prompt->model,
-                            (string) $agent->instructions(),
-                            $messages,
-                            $this->resolveTools($agent),
-                            null,
-                            TextGenerationOptions::forAgent($agent),
-                            $prompt->timeout,
-                        );
-                    },
-                    $meta,
+                    $this,
+                    $prompt->model,
+                    (string) $agent->instructions(),
+                    $messages,
+                    $this->resolveTools($agent),
+                    null,
+                    TextGenerationOptions::forAgent($agent)->withMiddleware($middleware),
+                    $prompt->timeout,
                 );
-            })->then(function (StreamedAgentResponse $response) use ($invocationId, $prompt, &$processedPrompt) {
-                $this->events->dispatch(
-                    new AgentStreamed($invocationId, $processedPrompt ?? $prompt, $response)
-                );
-            });
+            },
+            $meta,
+        ))->then(function (StreamedAgentResponse $response) use ($invocationId, $prompt, $recorder) {
+            if ($recorder !== null) {
+                $recorder($prompt, $response);
+            }
+
+            $this->events->dispatch(
+                new AgentStreamed($invocationId, $prompt, $response)
+            );
+        });
     }
 }

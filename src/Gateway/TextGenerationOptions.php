@@ -10,11 +10,15 @@ use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Middleware\Middleware;
 use Laravel\Ai\ToolChoice;
 use ReflectionClass;
 
 class TextGenerationOptions
 {
+    /**
+     * @param  Middleware[]  $middleware
+     */
     public function __construct(
         public readonly ?int $maxSteps = null,
         public readonly ?int $maxTokens = null,
@@ -22,18 +26,43 @@ class TextGenerationOptions
         public readonly ?Agent $agent = null,
         public readonly ?float $topP = null,
         public readonly ?ToolChoice $toolChoice = null,
+        public readonly array $middleware = [],
     ) {
         //
     }
 
     /**
-     * Get the agent's middleware to run around each generation step.
+     * Get the middleware to run around the generation.
+     *
+     * @return Middleware[]
      */
     public function middleware(): array
     {
+        if ($this->middleware !== []) {
+            return $this->middleware;
+        }
+
         return $this->agent instanceof HasMiddleware
             ? $this->agent->middleware()
             : [];
+    }
+
+    /**
+     * Return a copy of the options with the given middleware.
+     *
+     * @param  Middleware[]  $middleware
+     */
+    public function withMiddleware(array $middleware): self
+    {
+        return new self(
+            maxSteps: $this->maxSteps,
+            maxTokens: $this->maxTokens,
+            temperature: $this->temperature,
+            agent: $this->agent,
+            topP: $this->topP,
+            toolChoice: $this->toolChoice,
+            middleware: $middleware,
+        );
     }
 
     /**
@@ -72,6 +101,7 @@ class TextGenerationOptions
             agent: $this->agent,
             topP: $this->topP,
             toolChoice: null,
+            middleware: $this->middleware,
         );
     }
 

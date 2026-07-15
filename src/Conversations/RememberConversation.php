@@ -1,8 +1,7 @@
 <?php
 
-namespace Laravel\Ai\Middleware;
+namespace Laravel\Ai\Conversations;
 
-use Closure;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
@@ -10,12 +9,13 @@ use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\RemembersConversations;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
+use Laravel\Ai\Responses\AgentResponse;
 use Throwable;
 
 class RememberConversation
 {
     /**
-     * Create a new middleware instance.
+     * Create a new conversation recorder instance.
      */
     public function __construct(
         protected ConversationStore $store,
@@ -23,47 +23,45 @@ class RememberConversation
     ) {}
 
     /**
-     * Handle the incoming prompt.
+     * Persist the conversation once the response has completed.
      */
-    public function handle(AgentPrompt $prompt, Closure $next)
+    public function __invoke(AgentPrompt $prompt, AgentResponse $response): void
     {
-        return $next($prompt)->then(function ($response) use ($prompt) {
-            /** @var Agent&RemembersConversations $agent */
-            $agent = $prompt->agent;
+        /** @var Agent&RemembersConversations $agent */
+        $agent = $prompt->agent;
 
-            // Create conversation if necessary...
-            if (! $agent->currentConversation()) {
-                $conversationId = $this->store->storeConversation(
-                    $agent->conversationParticipant()?->id,
-                    $this->generateTitle($prompt->prompt)
-                );
-
-                $agent->continue(
-                    $conversationId,
-                    $agent->conversationParticipant()
-                );
-            }
-
-            // Record user message...
-            $this->store->storeUserMessage(
-                $agent->currentConversation(),
+        // Create conversation if necessary...
+        if (! $agent->currentConversation()) {
+            $conversationId = $this->store->storeConversation(
                 $agent->conversationParticipant()?->id,
-                $prompt
+                $this->generateTitle($prompt->prompt)
             );
 
-            // Record assistant message...
-            $this->store->storeAssistantMessage(
-                $agent->currentConversation(),
-                $agent->conversationParticipant()?->id,
-                $prompt,
-                $response
+            $agent->continue(
+                $conversationId,
+                $agent->conversationParticipant()
             );
+        }
 
-            $response->withinConversation(
-                $agent->currentConversation(),
-                $agent->conversationParticipant(),
-            );
-        });
+        // Record user message...
+        $this->store->storeUserMessage(
+            $agent->currentConversation(),
+            $agent->conversationParticipant()?->id,
+            $prompt
+        );
+
+        // Record assistant message...
+        $this->store->storeAssistantMessage(
+            $agent->currentConversation(),
+            $agent->conversationParticipant()?->id,
+            $prompt,
+            $response
+        );
+
+        $response->withinConversation(
+            $agent->currentConversation(),
+            $agent->conversationParticipant(),
+        );
     }
 
     /**

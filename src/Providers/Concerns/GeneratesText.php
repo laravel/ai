@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Providers\Concerns;
 
-use Closure;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
@@ -10,24 +9,24 @@ use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\RemembersConversations as RemembersConversationsContract;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Conversations\RememberConversation;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\UserMessage;
-use Laravel\Ai\Middleware\RememberConversation;
+use Laravel\Ai\Middleware\Middleware;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Tools\ToolResolver;
-
-use function Laravel\Ai\pipeline;
 
 trait GeneratesText
 {
@@ -40,74 +39,85 @@ trait GeneratesText
     {
         $invocationId = (string) Str::uuid7();
 
-        $processedPrompt = null;
+        $agent = $prompt->agent;
 
-        $response = pipeline()
-            ->send($prompt)
-            ->through($this->gatherMiddlewareFor($prompt->agent))
-            ->then(function (AgentPrompt $prompt) use ($invocationId, &$processedPrompt) {
-                $processedPrompt = $prompt;
+        if (Ai::hasFakeGatewayFor($agent::class)) {
+            Ai::recordPrompt($prompt);
+        }
 
-                $this->events->dispatch(new PromptingAgent($invocationId, $prompt));
+        $middleware = $this->gatherMiddlewareFor($agent);
 
-                $agent = $prompt->agent;
+        $recorder = $this->conversationRecorderFor($agent);
 
-                $messages = [
-                    ...($agent instanceof Conversational ? $agent->messages() : []),
-                    new UserMessage($prompt->prompt, $prompt->attachments->all()),
-                ];
+        $this->events->dispatch(new PromptingAgent($invocationId, $prompt));
 
-                $this->listenForToolInvocations($invocationId, $agent);
+        $messages = [
+            ...($agent instanceof Conversational ? $agent->messages() : []),
+            new UserMessage($prompt->prompt, $prompt->attachments->all()),
+        ];
 
-                $schema = $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null;
+        $this->listenForToolInvocations($invocationId, $agent);
 
-                $response = $this->textGenerationLoop()->generate(
-                    $this,
-                    $prompt->model,
-                    (string) $agent->instructions(),
-                    $messages,
-                    $this->resolveTools($agent),
-                    $schema,
-                    TextGenerationOptions::forAgent($agent),
-                    $prompt->timeout,
-                );
+        $schema = $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null;
 
-                return $response instanceof StructuredTextResponse
-                    ? (new StructuredAgentResponse($invocationId, $response->structured, $response->text, $response->usage, $response->meta))
-                        ->withToolCallsAndResults($response->toolCalls, $response->toolResults)
-                        ->withSteps($response->steps)
-                    : (new AgentResponse($invocationId, $response->text, $response->usage, $response->meta))
-                        ->withMessages($response->messages)
-                        ->withToolCallsAndResults($response->toolCalls, $response->toolResults)
-                        ->withSteps($response->steps);
-            });
+        $result = $this->textGenerationLoop()->generate(
+            $this,
+            $prompt->model,
+            (string) $agent->instructions(),
+            $messages,
+            $this->resolveTools($agent),
+            $schema,
+            TextGenerationOptions::forAgent($agent)->withMiddleware($middleware),
+            $prompt->timeout,
+        );
+
+        if ($result instanceof StructuredTextResponse) {
+            $response = new StructuredAgentResponse($invocationId, $result->structured, $result->text, $result->usage, $result->meta);
+
+            $response->withToolCallsAndResults($result->toolCalls, $result->toolResults)
+                ->withSteps($result->steps);
+        } else {
+            $response = new AgentResponse($invocationId, $result->text, $result->usage, $result->meta);
+
+            $response->withMessages($result->messages)
+                ->withToolCallsAndResults($result->toolCalls, $result->toolResults)
+                ->withSteps($result->steps);
+        }
+
+        if ($recorder !== null) {
+            $response->then(fn (AgentResponse $response) => $recorder($prompt, $response));
+        }
 
         $this->events->dispatch(
-            new AgentPrompted($invocationId, $processedPrompt ?? $prompt, $response)
+            new AgentPrompted($invocationId, $prompt, $response)
         );
 
         return $response;
     }
 
     /**
-     * Gather the middleware for the given agent.
+     * Gather the step middleware for the given agent.
+     *
+     * @return Middleware[]
      */
     protected function gatherMiddlewareFor(Agent $agent): array
     {
-        $middleware = Ai::hasFakeGatewayFor($agent::class) ? [function (AgentPrompt $prompt, Closure $next) {
-            Ai::recordPrompt($prompt);
+        return $agent instanceof HasMiddleware ? $agent->middleware() : [];
+    }
 
-            return $next($prompt);
-        }] : [];
-
-        if (in_array(RemembersConversations::class, class_uses_recursive($agent))) {
-            /** @var Agent&RemembersConversationsContract $agent */
-            if ($agent->hasConversationParticipant()) {
-                $middleware[] = new RememberConversation(resolve(ConversationStore::class), $this);
-            }
+    /**
+     * Get the conversation recorder for the given agent, if it remembers conversations.
+     */
+    protected function conversationRecorderFor(Agent $agent): ?RememberConversation
+    {
+        if (! in_array(RemembersConversations::class, class_uses_recursive($agent))) {
+            return null;
         }
 
-        return $middleware;
+        /** @var Agent&RemembersConversationsContract $agent */
+        return $agent->hasConversationParticipant()
+            ? new RememberConversation(resolve(ConversationStore::class), $this)
+            : null;
     }
 
     /**
