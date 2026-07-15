@@ -266,13 +266,16 @@ class DatabaseConversationStore implements ConversationStore
      */
     public function getLatestConversationMessages(string $conversationId, int $limit): Collection
     {
-        $resolvedCallIds = $this->table($this->messagesTable())
+        $records = $this->table($this->messagesTable())
             ->where('conversation_id', $conversationId)
             ->orderByDesc('id')
             ->limit($limit)
             ->get()
             ->reverse()
-            ->values()
+            ->values();
+
+        // A call resolved after an approval pause lands on a later row than the call, so gather every result id across the window to keep those calls while dropping legacy dangling ones.
+        $resolvedCallIds = $records
             ->flatMap(fn ($record) => collect(json_decode((string) $record->tool_results, true))->pluck('id'))
             ->filter()
             ->all();
