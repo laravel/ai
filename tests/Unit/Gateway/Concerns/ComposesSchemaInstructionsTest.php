@@ -3,7 +3,7 @@
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Gateway\Concerns\ComposesSchemaInstructions;
 
-beforeEach(function () {
+beforeEach(function (): void {
     $this->trait = new class
     {
         use ComposesSchemaInstructions {
@@ -14,17 +14,17 @@ beforeEach(function () {
     $this->factory = new JsonSchemaTypeFactory;
 });
 
-test('returns instructions unchanged when schema is blank', function () {
+test('returns instructions unchanged when schema is blank', function (): void {
     expect($this->trait->composeInstructions('Be helpful.', null))
         ->toBe('Be helpful.');
 });
 
-test('returns null when both instructions and schema are blank', function () {
+test('returns null when both instructions and schema are blank', function (): void {
     expect($this->trait->composeInstructions(null, null))
         ->toBeNull();
 });
 
-test('appends schema instruction when instructions are blank', function () {
+test('appends schema instruction when instructions are blank', function (): void {
     $schema = ['name' => $this->factory->string()->description('The name')];
 
     $result = $this->trait->composeInstructions(null, $schema);
@@ -32,7 +32,7 @@ test('appends schema instruction when instructions are blank', function () {
     expect($result)->toContain('JSON object');
 });
 
-test('prepends instructions before schema instruction', function () {
+test('prepends instructions before schema instruction', function (): void {
     $schema = ['name' => $this->factory->string()->description('The name')];
 
     $result = $this->trait->composeInstructions('Be concise.', $schema);
@@ -41,7 +41,7 @@ test('prepends instructions before schema instruction', function () {
     expect($result)->toContain('JSON object');
 });
 
-test('non-ascii characters in schema descriptions are not unicode-escaped', function () {
+test('non-ascii characters in schema descriptions are not unicode-escaped', function (): void {
     $schema = ['name' => $this->factory->string()->description('名前を入力してください')];
 
     $result = $this->trait->composeInstructions(null, $schema);

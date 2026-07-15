@@ -8,11 +8,11 @@ use Laravel\Ai\Stores;
 
 use function Laravel\Ai\agent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     $this->customUrl = 'http://localhost:1234/v1';
 });
 
-test('openai text requests use the configured base url', function () {
+test('openai text requests use the configured base url', function (): void {
     configureOpenAiProvider($this->customUrl);
 
     Http::fake([
@@ -43,16 +43,14 @@ test('openai text requests use the configured base url', function () {
     openAiAssertRequestSent('POST', "{$this->customUrl}/responses");
 });
 
-test('openai file requests use the configured base url', function () {
+test('openai file requests use the configured base url', function (): void {
     configureOpenAiProvider($this->customUrl);
 
-    Http::fake(function (Request $request) {
-        return match ([$request->method(), $request->url()]) {
-            ['POST', "{$this->customUrl}/files"] => Http::response(['id' => 'file_123']),
-            ['GET', "{$this->customUrl}/files/file_123"] => Http::response(['id' => 'file_123']),
-            ['DELETE', "{$this->customUrl}/files/file_123"] => Http::response(),
-            default => Http::response(['unexpected_url' => $request->url()], 500),
-        };
+    Http::fake(fn (Request $request) => match ([$request->method(), $request->url()]) {
+        ['POST', "{$this->customUrl}/files"] => Http::response(['id' => 'file_123']),
+        ['GET', "{$this->customUrl}/files/file_123"] => Http::response(['id' => 'file_123']),
+        ['DELETE', "{$this->customUrl}/files/file_123"] => Http::response(),
+        default => Http::response(['unexpected_url' => $request->url()], 500),
     });
 
     $stored = Files::put(
@@ -73,27 +71,25 @@ test('openai file requests use the configured base url', function () {
     openAiAssertRequestSent('DELETE', "{$this->customUrl}/files/file_123");
 });
 
-test('openai store requests use the configured base url', function () {
+test('openai store requests use the configured base url', function (): void {
     configureOpenAiProvider($this->customUrl);
 
-    Http::fake(function (Request $request) {
-        return match ([$request->method(), $request->url()]) {
-            ['POST', "{$this->customUrl}/vector_stores"] => Http::response(['id' => 'vs_123']),
-            ['GET', "{$this->customUrl}/vector_stores/vs_123"] => Http::response([
-                'id' => 'vs_123',
-                'name' => 'Local Store',
-                'status' => 'completed',
-                'file_counts' => [
-                    'completed' => 0,
-                    'in_progress' => 0,
-                    'failed' => 0,
-                ],
-            ]),
-            ['POST', "{$this->customUrl}/vector_stores/vs_123/files"] => Http::response(['id' => 'vsfile_123']),
-            ['DELETE', "{$this->customUrl}/vector_stores/vs_123/files/vsfile_123"] => Http::response(['deleted' => true]),
-            ['DELETE', "{$this->customUrl}/vector_stores/vs_123"] => Http::response(['deleted' => true]),
-            default => Http::response(['unexpected_url' => $request->url()], 500),
-        };
+    Http::fake(fn (Request $request) => match ([$request->method(), $request->url()]) {
+        ['POST', "{$this->customUrl}/vector_stores"] => Http::response(['id' => 'vs_123']),
+        ['GET', "{$this->customUrl}/vector_stores/vs_123"] => Http::response([
+            'id' => 'vs_123',
+            'name' => 'Local Store',
+            'status' => 'completed',
+            'file_counts' => [
+                'completed' => 0,
+                'in_progress' => 0,
+                'failed' => 0,
+            ],
+        ]),
+        ['POST', "{$this->customUrl}/vector_stores/vs_123/files"] => Http::response(['id' => 'vsfile_123']),
+        ['DELETE', "{$this->customUrl}/vector_stores/vs_123/files/vsfile_123"] => Http::response(['deleted' => true]),
+        ['DELETE', "{$this->customUrl}/vector_stores/vs_123"] => Http::response(['deleted' => true]),
+        default => Http::response(['unexpected_url' => $request->url()], 500),
     });
 
     $store = Stores::create('Local Store', provider: 'openai');
@@ -115,7 +111,7 @@ test('openai store requests use the configured base url', function () {
     openAiAssertRequestSent('DELETE', "{$this->customUrl}/vector_stores/vs_123");
 });
 
-test('openai requests fall back to the default base url', function () {
+test('openai requests fall back to the default base url', function (): void {
     configureOpenAiProvider();
 
     Http::fake([
@@ -157,6 +153,6 @@ function configureOpenAiProvider(?string $url = null): void
 
 function openAiAssertRequestSent(string $method, string $url): void
 {
-    Http::assertSent(fn (Request $request) => $request->method() === $method
+    Http::assertSent(fn (Request $request): bool => $request->method() === $method
         && $request->url() === $url);
 }

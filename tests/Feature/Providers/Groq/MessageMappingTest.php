@@ -10,14 +10,14 @@ use Tests\Fixtures\Agents\ToolUsingAgent;
 
 use function Laravel\Ai\agent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.groq' => [
         ...config('ai.providers.groq'),
         'key' => 'test-key',
     ]]);
 });
 
-test('user message maps to groq format', function () {
+test('user message maps to groq format', function (): void {
     Http::fake([
         'api.groq.com/*' => fakeGroqResponse(),
     ]);
@@ -27,7 +27,7 @@ test('user message maps to groq format', function () {
         provider: 'groq',
     );
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $messages = $body['messages'];
         $userMessage = collect($messages)->firstWhere('role', 'user');
@@ -37,7 +37,7 @@ test('user message maps to groq format', function () {
     });
 });
 
-test('tool result follow up maps assistant and tool result messages', function () {
+test('tool result follow up maps assistant and tool result messages', function (): void {
     Http::fake([
         'api.groq.com/*' => Http::sequence([
             fakeGroqToolCallResponse(),
@@ -54,7 +54,7 @@ test('tool result follow up maps assistant and tool result messages', function (
 
     expect($recorded)->toHaveCount(2);
 
-    $followUpBody = json_decode($recorded[1][0]->body(), true);
+    $followUpBody = json_decode((string) $recorded[1][0]->body(), true);
     $followUpMessages = $followUpBody['messages'];
 
     $hasAssistantWithToolCalls = false;
@@ -73,15 +73,15 @@ test('tool result follow up maps assistant and tool result messages', function (
     expect($hasAssistantWithToolCalls)->toBeTrue()
         ->and($hasToolResult)->toBeTrue();
 
-    $assistantMsg = collect($followUpMessages)->last(fn ($m) => $m['role'] === 'assistant' && isset($m['tool_calls']));
-    $toolMsg = collect($followUpMessages)->last(fn ($m) => $m['role'] === 'tool');
+    $assistantMsg = collect($followUpMessages)->last(fn ($m): bool => $m['role'] === 'assistant' && isset($m['tool_calls']));
+    $toolMsg = collect($followUpMessages)->last(fn ($m): bool => $m['role'] === 'tool');
 
     expect($assistantMsg['tool_calls'][0]['function']['name'])->toBe('FixedNumberGenerator')
         ->and($toolMsg['tool_call_id'])->toBe($assistantMsg['tool_calls'][0]['id'])
         ->and($toolMsg['content'])->not->toBeEmpty();
 });
 
-test('image attachment maps to image url content block', function () {
+test('image attachment maps to image url content block', function (): void {
     Http::fake([
         'api.groq.com/*' => fakeGroqResponse('I see an image'),
     ]);
@@ -94,7 +94,7 @@ test('image attachment maps to image url content block', function () {
         provider: 'groq',
     );
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $userMessage = collect($body['messages'])->firstWhere('role', 'user');
         $content = $userMessage['content'];
@@ -102,12 +102,12 @@ test('image attachment maps to image url content block', function () {
         $imageBlock = collect($content)->firstWhere('type', 'image_url');
 
         return $imageBlock !== null
-            && str_contains($imageBlock['image_url']['url'], 'image/png')
-            && str_contains($imageBlock['image_url']['url'], base64_encode('fake-image-data'));
+            && str_contains((string) $imageBlock['image_url']['url'], 'image/png')
+            && str_contains((string) $imageBlock['image_url']['url'], base64_encode('fake-image-data'));
     });
 });
 
-test('local image attachment without explicit mime type detects mime from file', function () {
+test('local image attachment without explicit mime type detects mime from file', function (): void {
     Http::fake([
         'api.groq.com/*' => fakeGroqResponse('I see an image'),
     ]);
@@ -118,18 +118,18 @@ test('local image attachment without explicit mime type detects mime from file',
         provider: 'groq',
     );
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $userMessage = collect($body['messages'])->firstWhere('role', 'user');
         $imageBlock = collect($userMessage['content'])->firstWhere('type', 'image_url');
 
         return $imageBlock !== null
-            && str_starts_with($imageBlock['image_url']['url'], 'data:image/png;base64,')
-            && ! str_contains($imageBlock['image_url']['url'], 'data:;base64,');
+            && str_starts_with((string) $imageBlock['image_url']['url'], 'data:image/png;base64,')
+            && ! str_contains((string) $imageBlock['image_url']['url'], 'data:;base64,');
     });
 });
 
-test('document attachments throw exception', function () {
+test('document attachments throw exception', function (): void {
     Http::fake([
         'api.groq.com/*' => fakeGroqResponse(),
     ]);

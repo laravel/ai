@@ -61,9 +61,7 @@ trait InteractsWithFakeFiles
     public function assertFileUploaded(Closure $callback): self
     {
         PHPUnit::assertTrue(
-            (new Collection($this->recordedFileUploads))->contains(function (array $upload) use ($callback) {
-                return $callback($upload['file']);
-            }),
+            (new Collection($this->recordedFileUploads))->contains(fn (array $upload) => $callback($upload['file'])),
             'An expected file upload was not recorded.'
         );
 
@@ -76,9 +74,7 @@ trait InteractsWithFakeFiles
     public function assertFileNotUploaded(Closure $callback): self
     {
         PHPUnit::assertTrue(
-            (new Collection($this->recordedFileUploads))->doesntContain(function (array $upload) use ($callback) {
-                return $callback($upload['file']);
-            }),
+            (new Collection($this->recordedFileUploads))->doesntContain(fn (array $upload) => $callback($upload['file'])),
             'An unexpected file upload was recorded.'
         );
 
@@ -105,13 +101,11 @@ trait InteractsWithFakeFiles
     {
         if (is_string($callback)) {
             $fileId = $callback;
-            $callback = fn ($id) => $id === $fileId;
+            $callback = fn ($id): bool => $id === $fileId;
         }
 
         PHPUnit::assertTrue(
-            (new Collection($this->recordedFileDeletions))->contains(function (string $id) use ($callback) {
-                return $callback($id);
-            }),
+            (new Collection($this->recordedFileDeletions))->contains(fn (string $id) => $callback($id)),
             'An expected file deletion was not recorded.'
         );
 
@@ -125,13 +119,11 @@ trait InteractsWithFakeFiles
     {
         if (is_string($callback)) {
             $fileId = $callback;
-            $callback = fn ($id) => $id === $fileId;
+            $callback = fn ($id): bool => $id === $fileId;
         }
 
         PHPUnit::assertTrue(
-            (new Collection($this->recordedFileDeletions))->doesntContain(function (string $id) use ($callback) {
-                return $callback($id);
-            }),
+            (new Collection($this->recordedFileDeletions))->doesntContain(fn (string $id) => $callback($id)),
             'An unexpected file deletion was recorded.'
         );
 

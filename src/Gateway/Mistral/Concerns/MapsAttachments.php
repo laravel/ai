@@ -20,10 +20,10 @@ trait MapsAttachments
      */
     protected function mapAttachments(Collection $attachments): array
     {
-        return $attachments->map(function ($attachment) {
+        return $attachments->map(function ($attachment): array {
             if (! $attachment instanceof File && ! $attachment instanceof UploadedFile) {
                 throw new InvalidArgumentException(
-                    'Unsupported attachment type ['.get_class($attachment).']'
+                    'Unsupported attachment type ['.$attachment::class.']'
                 );
             }
 
@@ -43,7 +43,7 @@ trait MapsAttachments
                 $attachment instanceof StoredImage => [
                     'type' => 'image_url',
                     'image_url' => ['url' => 'data:'.($attachment->mimeType() ?? 'image/png').';base64,'.base64_encode(
-                        Storage::disk($attachment->disk)->get($attachment->path)
+                        (string) Storage::disk($attachment->disk)->get($attachment->path)
                     )],
                 ],
                 $attachment instanceof UploadedFile && $this->isImage($attachment) => [
@@ -56,7 +56,7 @@ trait MapsAttachments
                     'document_name' => $attachment->name ?? basename($attachment->url),
                 ],
                 default => throw new InvalidArgumentException(
-                    'Mistral only supports image attachments and remote document URLs. Unsupported attachment type ['.get_class($attachment).'].'
+                    'Mistral only supports image attachments and remote document URLs. Unsupported attachment type ['.$attachment::class.'].'
                 ),
             };
         })->all();
@@ -72,6 +72,7 @@ trait MapsAttachments
             'image/png',
             'image/gif',
             'image/webp',
-        ]);
+        ],
+            true);
     }
 }

@@ -35,21 +35,21 @@ class NoProviderOptionsAgent implements Agent
     }
 }
 
-it('normalizes a string driver name to a Lab enum so the documented match idiom works', function () {
+it('normalizes a string driver name to a Lab enum so the documented match idiom works', function (): void {
     $options = TextGenerationOptions::forAgent(new ProviderOptionsAgent);
 
     expect($options->providerOptions('openrouter'))
         ->toBe(['reasoning' => ['effort' => 'medium']]);
 });
 
-it('accepts a Lab enum directly without re-normalizing', function () {
+it('accepts a Lab enum directly without re-normalizing', function (): void {
     $options = TextGenerationOptions::forAgent(new ProviderOptionsAgent);
 
     expect($options->providerOptions(Lab::Anthropic))
         ->toBe(['thinking' => ['type' => 'enabled']]);
 });
 
-it('passes the raw string through when it does not match any Lab case', function () {
+it('passes the raw string through when it does not match any Lab case', function (): void {
     $agent = new class implements Agent, HasProviderOptions
     {
         use Promptable;
@@ -71,7 +71,7 @@ it('passes the raw string through when it does not match any Lab case', function
         ->toBe(['received' => 'unknown-driver']);
 });
 
-it('returns null when the agent does not implement HasProviderOptions', function () {
+it('returns null when the agent does not implement HasProviderOptions', function (): void {
     $options = TextGenerationOptions::forAgent(new NoProviderOptionsAgent);
 
     expect($options->providerOptions('openai'))->toBeNull();

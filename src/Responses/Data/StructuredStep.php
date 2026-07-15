@@ -24,6 +24,7 @@ class StructuredStep extends Step
     /**
      * Get the instance as an array.
      */
+    #[\Override]
     public function toArray(): array
     {
         return [...parent::toArray(), 'structured' => $this->structured];
@@ -32,6 +33,7 @@ class StructuredStep extends Step
     /**
      * Get the JSON serializable representation of the instance.
      */
+    #[\Override]
     public function jsonSerialize(): mixed
     {
         return $this->toArray();

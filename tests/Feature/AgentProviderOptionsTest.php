@@ -6,7 +6,7 @@ use Laravel\Ai\Prompts\AgentPrompt;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ProviderOptionsAgent;
 
-test('text generation options can extract provider options for openai', function () {
+test('text generation options can extract provider options for openai', function (): void {
     $options = TextGenerationOptions::forAgent(new ProviderOptionsAgent);
 
     $providerOptions = $options->providerOptions(Lab::OpenAI);
@@ -18,7 +18,7 @@ test('text generation options can extract provider options for openai', function
         ], 'frequency_penalty' => 0.5, 'presence_penalty' => 0.3]);
 });
 
-test('text generation options can extract provider options for anthropic', function () {
+test('text generation options can extract provider options for anthropic', function (): void {
     $options = TextGenerationOptions::forAgent(new ProviderOptionsAgent);
 
     $providerOptions = $options->providerOptions(Lab::Anthropic);
@@ -30,7 +30,7 @@ test('text generation options can extract provider options for anthropic', funct
         ]]);
 });
 
-test('text generation options accept string provider', function () {
+test('text generation options accept string provider', function (): void {
     $options = TextGenerationOptions::forAgent(new ProviderOptionsAgent);
 
     $providerOptions = $options->providerOptions('openai');
@@ -41,7 +41,7 @@ test('text generation options accept string provider', function () {
         ], 'frequency_penalty' => 0.5, 'presence_penalty' => 0.3]);
 });
 
-test('text generation options return empty array for unknown provider', function () {
+test('text generation options return empty array for unknown provider', function (): void {
     $options = TextGenerationOptions::forAgent(new ProviderOptionsAgent);
 
     $providerOptions = $options->providerOptions(Lab::Cohere);
@@ -49,18 +49,18 @@ test('text generation options return empty array for unknown provider', function
     expect($providerOptions)->toBeEmpty();
 });
 
-test('text generation options have null provider options when agent does not implement interface', function () {
+test('text generation options have null provider options when agent does not implement interface', function (): void {
     $options = TextGenerationOptions::forAgent(new AssistantAgent);
 
     expect($options->providerOptions(Lab::OpenAI))->toBeNull();
 });
 
-test('provider options are passed through when prompting', function () {
+test('provider options are passed through when prompting', function (): void {
     ProviderOptionsAgent::fake();
 
     (new ProviderOptionsAgent)->prompt('Hello');
 
-    ProviderOptionsAgent::assertPrompted(function (AgentPrompt $prompt) {
+    ProviderOptionsAgent::assertPrompted(function (AgentPrompt $prompt): bool {
         $options = TextGenerationOptions::forAgent($prompt->agent);
 
         return $options->providerOptions(Lab::OpenAI) === [
@@ -73,12 +73,12 @@ test('provider options are passed through when prompting', function () {
     });
 });
 
-test('provider options default to null when not provided', function () {
+test('provider options default to null when not provided', function (): void {
     AssistantAgent::fake();
 
     (new AssistantAgent)->prompt('Hello');
 
-    AssistantAgent::assertPrompted(function (AgentPrompt $prompt) {
+    AssistantAgent::assertPrompted(function (AgentPrompt $prompt): bool {
         $options = TextGenerationOptions::forAgent($prompt->agent);
 
         return $options->providerOptions(Lab::OpenAI) === null;

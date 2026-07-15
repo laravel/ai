@@ -23,7 +23,7 @@ function fakeJinaBaseUrlRerankingResponse(): PromiseInterface
     ]);
 }
 
-test('jina embedding requests use the configured base url', function () {
+test('jina embedding requests use the configured base url', function (): void {
     config(['ai.providers.jina' => [
         ...config('ai.providers.jina'),
         'key' => 'test-key',
@@ -34,10 +34,10 @@ test('jina embedding requests use the configured base url', function () {
 
     Embeddings::for(['Hello'])->generate(provider: 'jina', model: 'jina-embeddings-v4');
 
-    Http::assertSent(fn (Request $r) => $r->url() === 'http://localhost:8080/v1/embeddings');
+    Http::assertSent(fn (Request $r): bool => $r->url() === 'http://localhost:8080/v1/embeddings');
 });
 
-test('jina reranking requests use the configured base url', function () {
+test('jina reranking requests use the configured base url', function (): void {
     config(['ai.providers.jina' => [
         ...config('ai.providers.jina'),
         'key' => 'test-key',
@@ -48,10 +48,10 @@ test('jina reranking requests use the configured base url', function () {
 
     Reranking::of(['doc1'])->rerank('What is AI?', provider: 'jina', model: 'jina-reranker-v3');
 
-    Http::assertSent(fn (Request $r) => $r->url() === 'http://localhost:8080/v1/rerank');
+    Http::assertSent(fn (Request $r): bool => $r->url() === 'http://localhost:8080/v1/rerank');
 });
 
-test('jina requests fall back to the default base url', function () {
+test('jina requests fall back to the default base url', function (): void {
     config(['ai.providers.jina' => array_diff_key(
         [...config('ai.providers.jina'), 'key' => 'test-key'],
         ['url' => null],
@@ -61,5 +61,5 @@ test('jina requests fall back to the default base url', function () {
 
     Embeddings::for(['Hello'])->generate(provider: 'jina', model: 'jina-embeddings-v4');
 
-    Http::assertSent(fn (Request $r) => $r->url() === 'https://api.jina.ai/v1/embeddings');
+    Http::assertSent(fn (Request $r): bool => $r->url() === 'https://api.jina.ai/v1/embeddings');
 });

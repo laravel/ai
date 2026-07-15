@@ -9,7 +9,7 @@ use Tests\Fixtures\Tools\RandomNumberGenerator;
 
 use function Laravel\Ai\agent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.azure' => [
         ...config('ai.providers.azure'),
         'key' => 'test-key',
@@ -18,41 +18,41 @@ beforeEach(function () {
     ]]);
 });
 
-test('request includes model and input', function () {
+test('request includes model and input', function (): void {
     Http::fake(['*' => fakeAzureResponse('Hello')]);
 
     agent()->prompt('Hi there', provider: 'azure', model: 'gpt-4o');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['model'] === 'gpt-4o'
             && is_array($body['input'])
-            && collect($body['input'])->contains(fn ($m) => $m['role'] === 'user'
-                && collect($m['content'])->contains(fn ($c) => ($c['text'] ?? '') === 'Hi there'));
+            && collect($body['input'])->contains(fn ($m): bool => $m['role'] === 'user'
+                && collect($m['content'])->contains(fn ($c): bool => ($c['text'] ?? '') === 'Hi there'));
     });
 });
 
-test('system instructions are sent as system message in input', function () {
+test('system instructions are sent as system message in input', function (): void {
     Http::fake(['*' => fakeAzureResponse('Hello')]);
 
     (new AssistantAgent)->prompt('Hello', provider: 'azure');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $systemMsg = collect($body['input'])->firstWhere('role', 'system');
 
         return $systemMsg !== null
-            && str_contains($systemMsg['content'], 'helpful assistant');
+            && str_contains((string) $systemMsg['content'], 'helpful assistant');
     });
 });
 
-test('temperature and max tokens are included when set via attributes', function () {
+test('temperature and max tokens are included when set via attributes', function (): void {
     Http::fake(['*' => fakeAzureResponse('Hello')]);
 
     (new AttributeAgent)->prompt('Hello', provider: 'azure');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return data_get($body, 'temperature') === 0.7
@@ -60,12 +60,12 @@ test('temperature and max tokens are included when set via attributes', function
     });
 });
 
-test('temperature and max tokens are excluded when not set', function () {
+test('temperature and max tokens are excluded when not set', function (): void {
     Http::fake(['*' => fakeAzureResponse('Hello')]);
 
     agent()->prompt('Hello', provider: 'azure');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return ! array_key_exists('temperature', $body)
@@ -73,26 +73,26 @@ test('temperature and max tokens are excluded when not set', function () {
     });
 });
 
-test('tools include tool choice auto', function () {
+test('tools include tool choice auto', function (): void {
     Http::fake(['*' => fakeAzureResponse('42')]);
 
     agent(tools: [new RandomNumberGenerator])->prompt('Give me a number', provider: 'azure');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['tool_choice'] === 'auto'
             && is_array($body['tools'])
-            && count($body['tools']) > 0;
+            && $body['tools'] !== [];
     });
 });
 
-test('request without tools excludes tool fields', function () {
+test('request without tools excludes tool fields', function (): void {
     Http::fake(['*' => fakeAzureResponse('Hello')]);
 
     agent()->prompt('Hello', provider: 'azure');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return ! array_key_exists('tools', $body)
@@ -100,12 +100,12 @@ test('request without tools excludes tool fields', function () {
     });
 });
 
-test('structured output includes json schema text format', function () {
+test('structured output includes json schema text format', function (): void {
     Http::fake(['*' => fakeAzureResponse('{"symbol": "Au"}')]);
 
     (new StructuredAgent)->prompt('What is the symbol for Gold?', provider: 'azure');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $format = data_get($body, 'text.format');
 
@@ -116,19 +116,19 @@ test('structured output includes json schema text format', function () {
     });
 });
 
-test('request without schema excludes text format', function () {
+test('request without schema excludes text format', function (): void {
     Http::fake(['*' => fakeAzureResponse('Hello')]);
 
     agent()->prompt('Hello', provider: 'azure');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return ! array_key_exists('text', $body);
     });
 });
 
-test('streaming request includes stream flag', function () {
+test('streaming request includes stream flag', function (): void {
     Http::fake(['*' => Http::response(
         body: "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\",\"model\":\"gpt-4o\",\"status\":\"in_progress\",\"output\":[]}}\n\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"Hi\",\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0}\n\ndata: {\"type\":\"response.output_text.done\",\"text\":\"Hi\",\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"model\":\"gpt-4o\",\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"status\":\"completed\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"Hi\"}]}],\"usage\":{\"input_tokens\":1,\"output_tokens\":1,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens_details\":{\"reasoning_tokens\":0}}}}\n\n",
     )]);
@@ -139,34 +139,30 @@ test('streaming request includes stream flag', function () {
         //
     }
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['stream'] === true;
     });
 });
 
-test('request sends api-key header authentication', function () {
+test('request sends api-key header authentication', function (): void {
     Http::fake(['*' => fakeAzureResponse('Hello')]);
 
     agent()->prompt('Hello', provider: 'azure');
 
-    Http::assertSent(function (Request $request) {
-        return $request->hasHeader('api-key', 'test-key');
-    });
+    Http::assertSent(fn (Request $request) => $request->hasHeader('api-key', 'test-key'));
 });
 
-test('request does not include api-version query parameter', function () {
+test('request does not include api-version query parameter', function (): void {
     Http::fake(['*' => fakeAzureResponse('Hello')]);
 
     agent()->prompt('Hello', provider: 'azure');
 
-    Http::assertSent(function (Request $request) {
-        return ! str_contains($request->url(), 'api-version');
-    });
+    Http::assertSent(fn (Request $request): bool => ! str_contains($request->url(), 'api-version'));
 });
 
-test('response text is correctly parsed', function () {
+test('response text is correctly parsed', function (): void {
     Http::fake(['*' => fakeAzureResponse('Laravel is great')]);
 
     $response = agent()->prompt('Tell me about Laravel', provider: 'azure');
@@ -175,7 +171,7 @@ test('response text is correctly parsed', function () {
         ->and($response->meta->provider)->toBe('azure');
 });
 
-test('response usage is correctly parsed', function () {
+test('response usage is correctly parsed', function (): void {
     Http::fake(['*' => Http::response([
         'id' => 'resp_azure_123',
         'status' => 'completed',
@@ -197,7 +193,7 @@ test('response usage is correctly parsed', function () {
         ->and($response->usage->completionTokens)->toBe(5);
 });
 
-test('structured response is correctly parsed', function () {
+test('structured response is correctly parsed', function (): void {
     Http::fake(['*' => fakeAzureResponse('{"symbol": "Au"}')]);
 
     $response = (new StructuredAgent)->prompt('What is the symbol for Gold?', provider: 'azure');

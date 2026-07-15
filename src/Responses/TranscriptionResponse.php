@@ -7,7 +7,7 @@ use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
 use Laravel\Ai\Responses\Data\Usage;
 
-class TranscriptionResponse
+class TranscriptionResponse implements \Stringable
 {
     public string $text;
 

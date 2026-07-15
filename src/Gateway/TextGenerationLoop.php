@@ -319,7 +319,7 @@ class TextGenerationLoop
             return max(1, $options->maxSteps);
         }
 
-        return count($tools) > 0 ? (int) round(count($tools) * 1.5) : 5;
+        return $tools !== [] ? (int) round(count($tools) * 1.5) : 5;
     }
 
     /**
@@ -343,10 +343,10 @@ class TextGenerationLoop
      */
     protected function executeToolCalls(array $toolCalls, array $tools): array
     {
-        return array_map(function (ToolCall $toolCall) use ($tools) {
+        return array_map(function (ToolCall $toolCall) use ($tools): ToolResult {
             $tool = $this->findTool($toolCall->name, $tools);
 
-            if ($tool === null) {
+            if (! $tool instanceof Tool) {
                 throw new NoSuchToolException($toolCall->name);
             }
 
@@ -387,7 +387,7 @@ class TextGenerationLoop
         $finalStep = $steps->last();
 
         $totalUsage = $steps->reduce(
-            fn (Usage $carry, Step $step) => $carry->add($step->usage),
+            fn (Usage $carry, Step $step): Usage => $carry->add($step->usage),
             new Usage,
         );
 
@@ -400,8 +400,8 @@ class TextGenerationLoop
                 $totalUsage,
                 $finalStep->meta,
             ))->withToolCallsAndResults(
-                toolCalls: $steps->flatMap(fn (Step $s) => $s->toolCalls),
-                toolResults: $steps->flatMap(fn (Step $s) => $s->toolResults),
+                toolCalls: $steps->flatMap(fn (Step $s): array => $s->toolCalls),
+                toolResults: $steps->flatMap(fn (Step $s): array => $s->toolResults),
             )->withSteps($steps);
         }
 

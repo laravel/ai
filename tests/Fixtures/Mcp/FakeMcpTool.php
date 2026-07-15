@@ -29,6 +29,7 @@ class FakeMcpTool extends Tool
     /**
      * @param  array<string, mixed>  $arguments
      */
+    #[\Override]
     public function call(array $arguments = []): ToolResult
     {
         return $this->fakeClient->callTool($this->name, $arguments);

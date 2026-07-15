@@ -14,7 +14,8 @@ use Laravel\Ai\Transcription;
 
 class RemoteAudio extends Audio implements Arrayable, JsonSerializable, StorableFile, TranscribableAudio
 {
-    use CanBeUploadedToProvider, HasRemoteContent;
+    use CanBeUploadedToProvider;
+    use HasRemoteContent;
 
     public function __construct(public string $url, ?string $mimeType = null)
     {

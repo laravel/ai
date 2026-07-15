@@ -22,6 +22,7 @@ class S3Document extends Document implements Arrayable, JsonSerializable
     /**
      * Get the displayable name of the file.
      */
+    #[\Override]
     public function name(): ?string
     {
         $path = parse_url($this->url, PHP_URL_PATH);
@@ -42,6 +43,7 @@ class S3Document extends Document implements Arrayable, JsonSerializable
     /**
      * Get the file's MIME type.
      */
+    #[\Override]
     public function mimeType(): ?string
     {
         return $this->mime;

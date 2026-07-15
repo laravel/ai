@@ -141,9 +141,9 @@ class DatabaseConversationStore implements ConversationStore
             ->get()
             ->reverse()
             ->values()
-            ->flatMap(function ($record) {
-                $toolCalls = collect(json_decode($record->tool_calls, true))->values();
-                $toolResults = collect(json_decode($record->tool_results, true))->values();
+            ->flatMap(function ($record): array {
+                $toolCalls = collect(json_decode((string) $record->tool_calls, true))->values();
+                $toolResults = collect(json_decode((string) $record->tool_results, true))->values();
 
                 if ($record->role === 'user') {
                     $attachments = $this->rehydrateAttachments($record->attachments);
@@ -196,7 +196,7 @@ class DatabaseConversationStore implements ConversationStore
         }
 
         return collect($decoded)
-            ->map(function (mixed $attachment) {
+            ->map(function (mixed $attachment): ?File {
                 if (! is_array($attachment)) {
                     throw new InvalidArgumentException('Stored conversation attachment entries must be objects.');
                 }

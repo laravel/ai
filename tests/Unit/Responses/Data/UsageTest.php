@@ -2,7 +2,7 @@
 
 use Laravel\Ai\Responses\Data\Usage;
 
-test('usage defaults all tokens to zero', function () {
+test('usage defaults all tokens to zero', function (): void {
     $usage = new Usage;
 
     expect($usage->promptTokens)->toBe(0)
@@ -12,7 +12,7 @@ test('usage defaults all tokens to zero', function () {
         ->and($usage->reasoningTokens)->toBe(0);
 });
 
-test('usage accepts token values in constructor', function () {
+test('usage accepts token values in constructor', function (): void {
     $usage = new Usage(100, 50, 25, 10, 5);
 
     expect($usage->promptTokens)->toBe(100)
@@ -22,7 +22,7 @@ test('usage accepts token values in constructor', function () {
         ->and($usage->reasoningTokens)->toBe(5);
 });
 
-test('usage add returns new instance with summed tokens', function () {
+test('usage add returns new instance with summed tokens', function (): void {
     $usage1 = new Usage(100, 50, 25, 10, 5);
     $usage2 = new Usage(50, 25, 10, 5, 0);
 
@@ -35,7 +35,7 @@ test('usage add returns new instance with summed tokens', function () {
         ->and($combined->reasoningTokens)->toBe(5);
 });
 
-test('usage add does not mutate original', function () {
+test('usage add does not mutate original', function (): void {
     $usage1 = new Usage(100, 50, 25, 10, 5);
     $usage2 = new Usage(50, 25, 10, 5, 0);
 
@@ -45,7 +45,7 @@ test('usage add does not mutate original', function () {
         ->and($usage1->completionTokens)->toBe(50);
 });
 
-test('usage to array includes all token fields', function () {
+test('usage to array includes all token fields', function (): void {
     $usage = new Usage(100, 50, 25, 10, 5);
 
     $array = $usage->toArray();
@@ -57,7 +57,7 @@ test('usage to array includes all token fields', function () {
         ->and($array['reasoning_tokens'])->toBe(5);
 });
 
-test('usage json serialize returns to array', function () {
+test('usage json serialize returns to array', function (): void {
     $usage = new Usage(200, 100, 50, 20, 10);
 
     $json = $usage->jsonSerialize();

@@ -28,8 +28,8 @@ class CopyFile extends FilesystemTool
 
         try {
             $copied = $this->disk()->copy($from, $to);
-        } catch (Throwable $e) {
-            return "Unable to copy [{$from}] to [{$to}]: {$e->getMessage()}";
+        } catch (Throwable $throwable) {
+            return "Unable to copy [{$from}] to [{$to}]: {$throwable->getMessage()}";
         }
 
         return $copied

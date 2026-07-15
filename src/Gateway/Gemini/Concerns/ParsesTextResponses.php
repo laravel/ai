@@ -99,7 +99,7 @@ trait ParsesTextResponses
     {
         return array_values(array_filter(
             $parts,
-            fn (array $part) => ! $this->isThinkingPart($part),
+            fn (array $part): bool => ! $this->isThinkingPart($part),
         ));
     }
 
@@ -127,7 +127,7 @@ trait ParsesTextResponses
         return array_values(
             array_map(
                 fn (array $part) => $part['functionCall'],
-                array_filter($parts, fn (array $part) => isset($part['functionCall']))
+                array_filter($parts, fn (array $part): bool => isset($part['functionCall']))
             )
         );
     }
@@ -139,7 +139,7 @@ trait ParsesTextResponses
      */
     protected function mapToolCalls(array $rawToolCalls): array
     {
-        return array_map(function (array $fc) {
+        return array_map(function (array $fc): ToolCall {
             $id = $fc['id'] ?? (string) Str::uuid7();
 
             return new ToolCall(
@@ -184,7 +184,7 @@ trait ParsesTextResponses
             }
         }
 
-        foreach ($referencedIndices as $index => $_) {
+        foreach (array_keys($referencedIndices) as $index) {
             $web = $groundingChunks[$index]['web'] ?? [];
 
             if (isset($web['uri'])) {

@@ -3,7 +3,7 @@
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config([
         'ai.providers.cohere' => [...config('ai.providers.cohere'), 'key' => 'test-key'],
         'ai.default_for_embeddings' => 'cohere',
@@ -18,14 +18,14 @@ beforeEach(function () {
     ]);
 });
 
-test('cache is used when enabled explicitly', function () {
+test('cache is used when enabled explicitly', function (): void {
     Embeddings::for(['Hello'])->cache(3600)->generate(provider: 'cohere', model: 'embed-v4.0');
     Embeddings::for(['Hello'])->cache(3600)->generate(provider: 'cohere', model: 'embed-v4.0');
 
     expect(Http::recorded())->toHaveCount(1);
 });
 
-test('cache is used when enabled globally via config', function () {
+test('cache is used when enabled globally via config', function (): void {
     config(['ai.caching.embeddings.cache' => true]);
 
     Embeddings::for(['Hello'])->generate(provider: 'cohere', model: 'embed-v4.0');
@@ -34,7 +34,7 @@ test('cache is used when enabled globally via config', function () {
     expect(Http::recorded())->toHaveCount(1);
 });
 
-test('zero cache seconds bypasses an existing cached entry', function () {
+test('zero cache seconds bypasses an existing cached entry', function (): void {
     Embeddings::for(['Hello'])->cache(3600)->generate(provider: 'cohere', model: 'embed-v4.0');
 
     expect(Http::recorded())->toHaveCount(1);
@@ -44,7 +44,7 @@ test('zero cache seconds bypasses an existing cached entry', function () {
     expect(Http::recorded())->toHaveCount(2);
 });
 
-test('negative cache seconds bypasses an existing cached entry', function () {
+test('negative cache seconds bypasses an existing cached entry', function (): void {
     Embeddings::for(['Hello'])->cache(3600)->generate(provider: 'cohere', model: 'embed-v4.0');
 
     expect(Http::recorded())->toHaveCount(1);
@@ -54,7 +54,7 @@ test('negative cache seconds bypasses an existing cached entry', function () {
     expect(Http::recorded())->toHaveCount(2);
 });
 
-test('toEmbeddings honors cache false even when enabled globally', function () {
+test('toEmbeddings honors cache false even when enabled globally', function (): void {
     config(['ai.caching.embeddings.cache' => true]);
 
     str('hello world')->toEmbeddings(provider: 'cohere', model: 'embed-v4.0', cache: false);
@@ -63,7 +63,7 @@ test('toEmbeddings honors cache false even when enabled globally', function () {
     expect(Http::recorded())->toHaveCount(2);
 });
 
-test('toEmbeddings uses cache when enabled globally', function () {
+test('toEmbeddings uses cache when enabled globally', function (): void {
     config(['ai.caching.embeddings.cache' => true]);
 
     str('hello world')->toEmbeddings(provider: 'cohere', model: 'embed-v4.0');
