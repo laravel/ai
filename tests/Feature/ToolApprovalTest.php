@@ -1,7 +1,6 @@
 <?php
 
 use Illuminate\Contracts\Support\Responsable;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
@@ -24,8 +23,9 @@ test('decision maps normalize boolean decisions', function () {
         'call-3' => Decision::edit(['path' => '/tmp/file']),
     ]);
 
-    expect($approval['call-1']->action)->toBe('approve')
-        ->and($approval['call-2']->action)->toBe('reject')
+    expect($approval['call-1']->isApproved())->toBeTrue()
+        ->and($approval['call-2']->isRejected())->toBeTrue()
+        ->and($approval['call-3']->isEdited())->toBeTrue()
         ->and($approval['call-3']->arguments)->toBe(['path' => '/tmp/file']);
 });
 
@@ -60,21 +60,22 @@ test('the blanket helpers approve or reject every pending call', function () {
         ->and($rejectAll['*']->result)->toBeNull();
 });
 
-test('the approval response adapter renders awaiting approval and complete payloads', function () {
+test('a paused response exposes everything a controller needs to build its own approval envelope', function () {
     $pending = new PendingApproval('call-1', 'DeleteFile', ['path' => 'config/app.php'], 'Deletes a file');
 
     $paused = AgentResponse::fakeAwaitingApproval([$pending])->withinConversation('conversation-1');
+
+    expect($paused->awaitingApproval())->toBeTrue()
+        ->and($paused->conversationId)->toBe('conversation-1')
+        ->and($paused->pendingApprovals->toArray())->toBe([$pending->toArray()]);
+});
+
+test('a completed response exposes its reply and conversation without an envelope', function () {
     $complete = (new AgentResponse('invocation-1', 'Done', new Usage, new Meta))->withinConversation('conversation-1');
 
-    expect($paused->toApprovalResponse()->toResponse(Request::create('/'))->getData(true))->toBe([
-        'status' => 'awaiting_approval',
-        'conversation_id' => 'conversation-1',
-        'approvals' => [$pending->toArray()],
-    ])->and($complete->toApprovalResponse()->toResponse(Request::create('/'))->getData(true))->toBe([
-        'status' => 'complete',
-        'conversation_id' => 'conversation-1',
-        'reply' => 'Done',
-    ]);
+    expect($complete->awaitingApproval())->toBeFalse()
+        ->and($complete->conversationId)->toBe('conversation-1')
+        ->and($complete->text)->toBe('Done');
 });
 
 test('agent responses are not globally responsable so a normal reply still renders as text', function () {
@@ -159,7 +160,7 @@ test('approval resume prompts can be queued', function () {
     (new ConversationalAgent)->queue(['call-1' => true]);
 
     ConversationalAgent::assertQueued(function ($prompt) {
-        return ($prompt->resume['call-1'] ?? null)?->action === 'approve';
+        return ($prompt->resume['call-1'] ?? null)?->isApproved() === true;
     });
 });
 
@@ -169,6 +170,6 @@ test('the blanket approve helper widens to every pending call', function () {
     (new ConversationalAgent)->queue(Decision::approveAll());
 
     ConversationalAgent::assertQueued(function ($prompt) {
-        return ($prompt->resume['*'] ?? null)?->action === 'approve';
+        return ($prompt->resume['*'] ?? null)?->isApproved() === true;
     });
 });

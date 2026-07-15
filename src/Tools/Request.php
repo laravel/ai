@@ -14,7 +14,10 @@ class Request implements Arrayable, ArrayAccess
     use InteractsWithData;
     use Macroable;
 
-    public function __construct(protected array $arguments = [], protected ?string $toolCallId = null) {}
+    public function __construct(protected array $arguments = [], protected ?string $toolCallId = null)
+    {
+        //
+    }
 
     /**
      * Get the stable provider tool-call id, usable as an external idempotency key.

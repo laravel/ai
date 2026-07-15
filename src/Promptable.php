@@ -62,10 +62,10 @@ trait Promptable
         ?string $model = null,
         ?int $timeout = null): AgentResponse
     {
-        [$prompt, $resume] = $this->extractResume($prompt);
+        [$text, $resume] = $this->extractResume($prompt);
 
         $run = fn (TextProvider $provider, string $model): AgentResponse => $provider->prompt(
-            new AgentPrompt($this, $prompt, $attachments, $provider, $model, $this->getTimeout($timeout), resume: $resume)
+            new AgentPrompt($this, $text, $attachments, $provider, $model, $this->getTimeout($timeout), resume: $resume)
         );
 
         if ($resume !== null) {
@@ -91,9 +91,9 @@ trait Promptable
         ?string $model = null,
         ?int $timeout = null): StreamableAgentResponse
     {
-        [$prompt, $resume] = $this->extractResume($prompt);
+        [$text, $resume] = $this->extractResume($prompt);
 
-        return $this->streamPrompt($prompt, $resume, $attachments, $provider, $model, $timeout);
+        return $this->streamPrompt($text, $resume, $attachments, $provider, $model, $timeout);
     }
 
     /**
@@ -173,18 +173,18 @@ trait Promptable
      */
     public function queue(array|string $prompt, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
     {
-        [$prompt, $resume] = $this->extractResume($prompt);
+        [$text, $resume] = $this->extractResume($prompt);
 
         if (static::isFaked()) {
             Ai::recordPrompt(
-                new QueuedAgentPrompt($this, $prompt, $attachments, $provider, $model, $resume),
+                new QueuedAgentPrompt($this, $text, $attachments, $provider, $model, $resume),
             );
 
             return new QueuedAgentResponse(new FakePendingDispatch);
         }
 
         return new QueuedAgentResponse(
-            InvokeAgent::dispatch($this, $prompt, $attachments, $provider, $model, $resume)
+            InvokeAgent::dispatch($this, $text, $attachments, $provider, $model, $resume)
         );
     }
 

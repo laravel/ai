@@ -68,12 +68,4 @@ class AgentResponse extends TextResponse
 
         return $this;
     }
-
-    /**
-     * Wrap the response in an explicit approval-aware HTTP adapter that renders the JSON envelope.
-     */
-    public function toApprovalResponse(): ApprovalResponse
-    {
-        return new ApprovalResponse($this);
-    }
 }
