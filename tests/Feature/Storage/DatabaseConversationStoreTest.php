@@ -293,7 +293,7 @@ test('it replays a resumed approval so the paused tool_use is answered', functio
         'tool_results' => '[]',
         'usage' => '[]',
         'meta' => '[]',
-        'approval_state' => json_encode(['version' => 1, 'pending' => ['call-1']]),
+        'approval_state' => json_encode(['pending' => ['call-1']]),
         'created_at' => now(),
         'updated_at' => now(),
     ]);
@@ -348,7 +348,7 @@ test('it splits a mid-run pause row so an executed call is answered before the s
         ]),
         'usage' => '[]',
         'meta' => '[]',
-        'approval_state' => json_encode(['version' => 1, 'pending' => ['call-2']]),
+        'approval_state' => json_encode(['pending' => ['call-2']]),
         'created_at' => now(),
         'updated_at' => now(),
     ]);
@@ -388,7 +388,7 @@ test('it preserves provider content blocks when a mixed pause carries an execute
         ]),
         'usage' => '[]',
         'meta' => json_encode(['provider_content_blocks' => [['type' => 'thinking', 'signature' => 'sig-1']]]),
-        'approval_state' => json_encode(['version' => 1, 'pending' => ['call-2']]),
+        'approval_state' => json_encode(['pending' => ['call-2']]),
         'created_at' => now(),
         'updated_at' => now(),
     ]);
@@ -450,7 +450,7 @@ test('it merges a re-paused turn text into the new tool_use message rather than 
         'tool_results' => '[]',
         'usage' => '[]',
         'meta' => '[]',
-        'approval_state' => json_encode(['version' => 1, 'pending' => ['call-1']]),
+        'approval_state' => json_encode(['pending' => ['call-1']]),
         'created_at' => now(),
         'updated_at' => now(),
     ]);
@@ -471,7 +471,7 @@ test('it merges a re-paused turn text into the new tool_use message rather than 
         ]),
         'usage' => '[]',
         'meta' => '[]',
-        'approval_state' => json_encode(['version' => 1, 'pending' => ['call-2']]),
+        'approval_state' => json_encode(['pending' => ['call-2']]),
         'created_at' => now(),
         'updated_at' => now(),
     ]);

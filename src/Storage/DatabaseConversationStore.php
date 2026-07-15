@@ -66,7 +66,7 @@ class DatabaseConversationStore implements ConversationStore
                 ->where('id', $row->id)
                 ->update([
                     'tool_results' => json_encode($merged),
-                    'approval_state' => json_encode(['version' => 1, 'pending' => $pending]),
+                    'approval_state' => json_encode(['pending' => $pending]),
                     'updated_at' => now(),
                 ]);
         });
@@ -208,7 +208,6 @@ class DatabaseConversationStore implements ConversationStore
         }
 
         return json_encode([
-            'version' => 1,
             'pending' => $response->pendingApprovals->pluck('id')->values()->all(),
         ]);
     }
