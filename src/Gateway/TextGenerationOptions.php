@@ -9,7 +9,6 @@ use Laravel\Ai\Attributes\TopP;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Enums\Lab;
-use Laravel\Ai\Exceptions\ApprovalNotResumableException;
 use Laravel\Ai\ToolChoice;
 use ReflectionClass;
 
@@ -22,7 +21,6 @@ class TextGenerationOptions
         public readonly ?Agent $agent = null,
         public readonly ?float $topP = null,
         public readonly ?ToolChoice $toolChoice = null,
-        public readonly bool $resumableApprovals = true,
     ) {
         //
     }
@@ -63,7 +61,6 @@ class TextGenerationOptions
             agent: $this->agent,
             topP: $this->topP,
             toolChoice: null,
-            resumableApprovals: $this->resumableApprovals,
         );
     }
 
@@ -81,7 +78,6 @@ class TextGenerationOptions
             agent: $agent,
             topP: self::resolve($agent, $reflection, 'topP', TopP::class),
             toolChoice: self::resolveToolChoice($agent, $reflection),
-            resumableApprovals: ApprovalNotResumableException::resumableFor($agent),
         );
     }
 

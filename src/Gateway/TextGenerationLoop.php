@@ -14,7 +14,6 @@ use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
-use Laravel\Ai\Exceptions\ApprovalNotResumableException;
 use Laravel\Ai\Exceptions\NoSuchToolException;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -106,7 +105,6 @@ class TextGenerationLoop
                     $lastResult->toolCalls,
                     $stepContext->isFinalStep,
                     $tools,
-                    $options?->resumableApprovals ?? true,
                 );
 
             $steps->push($this->buildStep($lastResult, $toolResults));
@@ -233,7 +231,6 @@ class TextGenerationLoop
                     $result->toolCalls,
                     $stepContext->isFinalStep,
                     $tools,
-                    $options?->resumableApprovals ?? true,
                 );
 
             foreach ($toolResults as $toolResult) {
@@ -303,13 +300,13 @@ class TextGenerationLoop
      * @param  Tool[]  $tools
      * @return array{array<int, ToolResult>, Collection<int, PendingApproval>}
      */
-    protected function continuationToolResults(FinishReason $reason, array $toolCalls, bool $isFinalStep, array $tools, bool $resumableApprovals = true): array
+    protected function continuationToolResults(FinishReason $reason, array $toolCalls, bool $isFinalStep, array $tools): array
     {
         if ($reason !== FinishReason::ToolCalls || blank($toolCalls)) {
             return [[], collect()];
         }
 
-        return $this->approvalAwareToolResults($toolCalls, $tools, $resumableApprovals, $isFinalStep);
+        return $this->approvalAwareToolResults($toolCalls, $tools, $isFinalStep);
     }
 
     /**
@@ -317,7 +314,7 @@ class TextGenerationLoop
      * @param  Tool[]  $tools
      * @return array{array<int, ToolResult>, Collection<int, PendingApproval>}
      */
-    protected function approvalAwareToolResults(array $toolCalls, array $tools, bool $resumableApprovals = true, bool $isFinalStep = false): array
+    protected function approvalAwareToolResults(array $toolCalls, array $tools, bool $isFinalStep = false): array
     {
         $pendingApprovals = collect();
         $resolved = [];
@@ -343,10 +340,6 @@ class TextGenerationLoop
             }
 
             $resolved[] = [$toolCall, $tool];
-        }
-
-        if ($pendingApprovals->isNotEmpty() && ! $resumableApprovals) {
-            throw ApprovalNotResumableException::make();
         }
 
         $toolResults = array_map(function (array $pair) use ($isFinalStep) {

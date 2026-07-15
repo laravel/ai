@@ -73,7 +73,7 @@ test('a gated tool on a non-conversational agent throws before streaming a pause
         ->and(array_filter($events, fn ($event) => $event instanceof ToolApprovalRequest))->toBeEmpty();
 });
 
-test('ungated companion tools do not run when the pause is not resumable', function () {
+test('a non-resumable pause still throws, running its step like any other before it does', function () {
     SideEffectRecorder::$invocations = 0;
 
     Http::fake([
@@ -101,7 +101,9 @@ test('ungated companion tools do not run when the pause is not resumable', funct
         ]),
     ]);
 
+    // The pause is rejected because the agent cannot resume; its ungated companion runs
+    // first, exactly as tool calls in any earlier step would have.
     expect(fn () => (new StatelessMixedToolsAgent)->prompt('Record and generate', provider: 'anthropic'))
         ->toThrow(ApprovalNotResumableException::class)
-        ->and(SideEffectRecorder::$invocations)->toBe(0);
+        ->and(SideEffectRecorder::$invocations)->toBe(1);
 });
