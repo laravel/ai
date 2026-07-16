@@ -65,13 +65,22 @@ class DatabaseConversationStore implements ConversationStore
                 collect($toolResults)->reject(fn (ToolResult $result) => $existing->contains('id', $result->id))
             );
 
-            $pending = collect(((array) json_decode($row->approval_state ?? 'null', true))['pending'] ?? [])->except($resultIds);
+            $state = (array) json_decode($row->approval_state ?? 'null', true);
+
+            $pending = collect($state['pending'] ?? [])->except($resultIds);
+
+            // Keep the marker after resolution so it records each call's outcome and bounds the resume dedup scan to ever-paused rows...
+            $resolved = collect($state['resolved'] ?? [])->merge(
+                collect($toolResults)
+                    ->filter(fn (ToolResult $result) => array_key_exists($result->id, $state['pending'] ?? []))
+                    ->mapWithKeys(fn (ToolResult $result) => [$result->id => ['status' => $result->denied ? 'rejected' : 'approved']])
+            );
 
             $this->table($this->messagesTable())
                 ->where('id', $row->id)
                 ->update([
                     'tool_results' => $merged->values()->toJson(),
-                    'approval_state' => $pending->isEmpty() ? null : json_encode(['pending' => $pending->all()]),
+                    'approval_state' => json_encode(['pending' => $pending->all(), 'resolved' => $resolved->all()]),
                     'updated_at' => now(),
                 ]);
         });
@@ -181,7 +190,7 @@ class DatabaseConversationStore implements ConversationStore
     }
 
     /**
-     * Get every tool-result id already recorded in the conversation.
+     * Get every tool-result id recorded on the conversation's approval-paused rows, the only rows a resume can duplicate.
      *
      * @return array<int, string>
      */
@@ -190,6 +199,7 @@ class DatabaseConversationStore implements ConversationStore
         return $this->table($this->messagesTable())
             ->where('conversation_id', $conversationId)
             ->where('role', 'assistant')
+            ->whereNotNull('approval_state')
             ->where('tool_results', '!=', '[]')
             ->pluck('tool_results')
             ->flatMap(fn ($results) => collect(json_decode($results, true))->pluck('id'))
