@@ -322,8 +322,6 @@ class PendingEmbeddingsGeneration
                     is_array($this->providerOptions) ? $this->providerOptions : [],
                 )
             );
-
-            return new QueuedEmbeddingsResponse(new FakePendingDispatch);
         }
 
         return new QueuedEmbeddingsResponse(

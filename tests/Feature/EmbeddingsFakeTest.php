@@ -1,13 +1,16 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Files\Audio;
 use Laravel\Ai\Files\Document;
 use Laravel\Ai\Files\Image;
 use Laravel\Ai\Files\Video;
+use Laravel\Ai\Jobs\GenerateEmbeddings;
 use Laravel\Ai\Prompts\EmbeddingsPrompt;
+use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Prompts\QueuedEmbeddingsPrompt;
 
 test('embeddings reject empty input list', function (): void {
@@ -284,6 +287,51 @@ describe('queued embeddings', function (): void {
         ])->queue();
 
         Embeddings::assertQueued(fn (QueuedEmbeddingsPrompt $prompt) => ! $prompt->contains('Hello'));
+    });
+
+    test('queued embeddings can be faked and then callback is executed', function (): void {
+        Embeddings::fake([
+            [
+                array_fill(0, 3, 0.1),
+                array_fill(0, 3, 0.2),
+            ],
+        ]);
+
+        $GLOBALS['embeddingsResponse'] = null;
+
+        Embeddings::for(['Hello world'])->queue()->then(function ($response): void {
+            $GLOBALS['embeddingsResponse'] = $response;
+        });
+
+        Embeddings::assertQueued(fn (QueuedEmbeddingsPrompt $prompt): bool => $prompt->contains('Hello'));
+
+        expect($GLOBALS['embeddingsResponse'])->toBeInstanceOf(EmbeddingsResponse::class);
+        expect($GLOBALS['embeddingsResponse']->embeddings)->toEqual([
+                array_fill(0, 3, 0.1),
+                array_fill(0, 3, 0.2),
+        ]);
+    });
+
+    test('queued embeddings can be faked and then callback is not executed if queue is faked', function (): void {
+        Embeddings::fake([
+            [
+                array_fill(0, 3, 0.1),
+                array_fill(0, 3, 0.2),
+            ],
+        ]);
+        Queue::fake();
+
+        $GLOBALS['embeddingsResponse'] = null;
+
+        Embeddings::for(['Hello world'])->queue()->then(function ($response): void {
+            $GLOBALS['embeddingsResponse'] = $response;
+        });
+
+        Embeddings::assertQueued(fn (QueuedEmbeddingsPrompt $prompt): bool => $prompt->contains('Hello'));
+
+        expect($GLOBALS['embeddingsResponse'])->toBeNull();
+
+        Queue::assertPushed(GenerateEmbeddings::class);
     });
 
     test('can assert no embeddings were queued', function (): void {
