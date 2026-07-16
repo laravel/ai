@@ -52,8 +52,8 @@ class WebSearch extends ProviderTool
      */
     public function hasLocation(): bool
     {
-        return isset($this->city) ||
-            isset($this->region) ||
-            isset($this->country);
+        return $this->city !== null ||
+            $this->region !== null ||
+            $this->country !== null;
     }
 }

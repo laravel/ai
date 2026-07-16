@@ -7,19 +7,19 @@ use Laravel\Ai\Embeddings;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.mistral' => [
         ...config('ai.providers.mistral'),
         'key' => 'test-key',
     ]]);
 });
 
-test('embeddings request includes model and input', function () {
+test('embeddings request includes model and input', function (): void {
     Http::fake(['*' => fakeEmbeddingsResponse()]);
 
     Embeddings::for(['Hello world'])->generate(provider: 'mistral', model: 'mistral-embed');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['model'] === 'mistral-embed'
@@ -28,7 +28,7 @@ test('embeddings request includes model and input', function () {
     });
 });
 
-test('embeddings response is correctly parsed', function () {
+test('embeddings response is correctly parsed', function (): void {
     Http::fake(['*' => fakeEmbeddingsResponse()]);
 
     $response = Embeddings::for(['Hello world'])->generate(provider: 'mistral', model: 'mistral-embed');
@@ -39,17 +39,15 @@ test('embeddings response is correctly parsed', function () {
         ->and($response->meta->provider)->toBe('mistral');
 });
 
-test('embeddings request sends bearer token', function () {
+test('embeddings request sends bearer token', function (): void {
     Http::fake(['*' => fakeEmbeddingsResponse()]);
 
     Embeddings::for(['Hello'])->generate(provider: 'mistral', model: 'mistral-embed');
 
-    Http::assertSent(function (Request $request) {
-        return $request->hasHeader('Authorization', 'Bearer test-key');
-    });
+    Http::assertSent(fn (Request $request) => $request->hasHeader('Authorization', 'Bearer test-key'));
 });
 
-test('multiple inputs return multiple embeddings', function () {
+test('multiple inputs return multiple embeddings', function (): void {
     Http::fake(['*' => Http::response([
         'id' => 'embd-123',
         'object' => 'list',
@@ -66,7 +64,7 @@ test('multiple inputs return multiple embeddings', function () {
     expect($response->embeddings)->toHaveCount(2);
 });
 
-test('embeddings rate limit response throws rate limited exception', function () {
+test('embeddings rate limit response throws rate limited exception', function (): void {
     Http::fake([
         'api.mistral.ai/*' => Http::response([
             'object' => 'error',
@@ -78,7 +76,7 @@ test('embeddings rate limit response throws rate limited exception', function ()
     Embeddings::for(['Hello'])->generate(provider: 'mistral', model: 'mistral-embed');
 })->throws(RateLimitedException::class);
 
-test('embeddings overloaded response throws provider overloaded exception', function () {
+test('embeddings overloaded response throws provider overloaded exception', function (): void {
     Http::fake([
         'api.mistral.ai/*' => Http::response([
             'object' => 'error',
@@ -90,7 +88,7 @@ test('embeddings overloaded response throws provider overloaded exception', func
     Embeddings::for(['Hello'])->generate(provider: 'mistral', model: 'mistral-embed');
 })->throws(ProviderOverloadedException::class);
 
-test('embeddings http error response throws request exception', function () {
+test('embeddings http error response throws request exception', function (): void {
     Http::fake([
         'api.mistral.ai/*' => Http::response([
             'object' => 'error',
@@ -101,6 +99,22 @@ test('embeddings http error response throws request exception', function () {
 
     Embeddings::for(['Hello'])->generate(provider: 'mistral', model: 'mistral-embed');
 })->throws(RequestException::class);
+
+test('embeddings request includes provider options in the request body', function (): void {
+    Http::fake(['*' => fakeEmbeddingsResponse()]);
+
+    Embeddings::for(['Hello'])
+        ->withProviderOptions(['output_dimension' => 256, 'output_dtype' => 'float'])
+        ->generate(provider: 'mistral', model: 'mistral-embed');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+
+        return $body['output_dimension'] === 256
+            && $body['output_dtype'] === 'float'
+            && $body['model'] === 'mistral-embed';
+    });
+});
 
 function fakeEmbeddingsResponse()
 {

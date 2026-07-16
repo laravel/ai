@@ -6,10 +6,13 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Files\File;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
+use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -61,6 +64,8 @@ class DatabaseConversationStore implements ConversationStore
     {
         $messageId = (string) Str::uuid7();
 
+        $now = now();
+
         $this->table($this->messagesTable())->insert([
             'id' => $messageId,
             'conversation_id' => $conversationId,
@@ -73,9 +78,11 @@ class DatabaseConversationStore implements ConversationStore
             'tool_results' => '[]',
             'usage' => '[]',
             'meta' => '[]',
-            'created_at' => now(),
-            'updated_at' => now(),
+            'created_at' => $now,
+            'updated_at' => $now,
         ]);
+
+        $this->touchConversation($conversationId, $now);
 
         return $messageId;
     }
@@ -86,6 +93,8 @@ class DatabaseConversationStore implements ConversationStore
     public function storeAssistantMessage(string $conversationId, string|int|null $userId, AgentPrompt $prompt, AgentResponse $response): string
     {
         $messageId = (string) Str::uuid7();
+
+        $now = now();
 
         $this->table($this->messagesTable())->insert([
             'id' => $messageId,
@@ -99,11 +108,23 @@ class DatabaseConversationStore implements ConversationStore
             'tool_results' => json_encode($response->toolResults->values()),
             'usage' => json_encode($response->usage),
             'meta' => json_encode($response->meta),
-            'created_at' => now(),
-            'updated_at' => now(),
+            'created_at' => $now,
+            'updated_at' => $now,
         ]);
 
+        $this->touchConversation($conversationId, $now);
+
         return $messageId;
+    }
+
+    /**
+     * Update the conversation's activity timestamp.
+     */
+    protected function touchConversation(string $conversationId, mixed $timestamp): void
+    {
+        $this->table($this->conversationsTable())
+            ->where('id', $conversationId)
+            ->update(['updated_at' => $timestamp]);
     }
 
     /**
@@ -120,39 +141,39 @@ class DatabaseConversationStore implements ConversationStore
             ->get()
             ->reverse()
             ->values()
-            ->flatMap(function ($record) {
-                $toolCalls = collect(json_decode($record->tool_calls, true))->values();
-                $toolResults = collect(json_decode($record->tool_results, true))->values();
+            ->flatMap(function ($record): array {
+                $toolCalls = collect(json_decode((string) $record->tool_calls, true))->values();
+                $toolResults = collect(json_decode((string) $record->tool_results, true))->values();
 
                 if ($record->role === 'user') {
+                    $attachments = $this->rehydrateAttachments($record->attachments);
+
+                    if ($attachments->isNotEmpty()) {
+                        return [new UserMessage($record->content, $attachments)];
+                    }
+
                     return [new Message('user', $record->content)];
                 }
 
                 if ($toolCalls->isNotEmpty()) {
-                    $messages = [];
+                    if ($toolResults->isEmpty()) {
+                        return filled($record->content)
+                            ? [new AssistantMessage($record->content)]
+                            : [];
+                    }
 
-                    $messages[] = new AssistantMessage(
-                        $record->content ?: '',
-                        $toolCalls->map(fn ($toolCall) => new ToolCall(
-                            id: $toolCall['id'],
-                            name: $toolCall['name'],
-                            arguments: $toolCall['arguments'],
-                            resultId: $toolCall['result_id'] ?? null,
-                            reasoningId: $toolCall['reasoning_id'] ?? null,
-                            reasoningSummary: $toolCall['reasoning_summary'] ?? null,
-                        ))
-                    );
+                    $messages = [
+                        new AssistantMessage(
+                            '',
+                            $toolCalls->map(ToolCall::fromArray(...)),
+                        ),
+                        new ToolResultMessage(
+                            $toolResults->map(ToolResult::fromArray(...)),
+                        ),
+                    ];
 
-                    if ($toolResults->isNotEmpty()) {
-                        $messages[] = new ToolResultMessage(
-                            $toolResults->map(fn ($toolResult) => new ToolResult(
-                                id: $toolResult['id'],
-                                name: $toolResult['name'],
-                                arguments: $toolResult['arguments'],
-                                result: $toolResult['result'],
-                                resultId: $toolResult['result_id'] ?? null,
-                            ))
-                        );
+                    if (filled($record->content)) {
+                        $messages[] = new AssistantMessage($record->content);
                     }
 
                     return $messages;
@@ -160,6 +181,30 @@ class DatabaseConversationStore implements ConversationStore
 
                 return [new AssistantMessage($record->content)];
             });
+    }
+
+    protected function rehydrateAttachments(string $attachments): Collection
+    {
+        $decoded = json_decode($attachments, true);
+
+        if (! is_array($decoded) || ! array_is_list($decoded)) {
+            throw new InvalidArgumentException('Stored conversation attachments must be a JSON array.');
+        }
+
+        if ($decoded === []) {
+            return collect();
+        }
+
+        return collect($decoded)
+            ->map(function (mixed $attachment): ?File {
+                if (! is_array($attachment)) {
+                    throw new InvalidArgumentException('Stored conversation attachment entries must be objects.');
+                }
+
+                return File::fromArray($attachment);
+            })
+            ->filter()
+            ->values();
     }
 
     /**

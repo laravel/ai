@@ -6,7 +6,11 @@
 /phpunit.xml
 /tmp
 /vendor
+/workbench/storage
+/workbench/node_modules
+/workbench/public/build
 CLAUDE.md
 .env
 .claude
 AGENTS.md
+.zed

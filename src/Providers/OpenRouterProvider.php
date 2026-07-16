@@ -3,22 +3,33 @@
 namespace Laravel\Ai\Providers;
 
 use Illuminate\Contracts\Events\Dispatcher;
+use Laravel\Ai\Contracts\Gateway\AudioGateway;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
-use Laravel\Ai\Contracts\Gateway\TextGateway;
+use Laravel\Ai\Contracts\Gateway\StepTextGateway;
+use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
+use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
+use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\OpenRouter\OpenRouterGateway;
+use Laravel\Ai\Providers\Tools\WebSearch;
 
-class OpenRouterProvider extends Provider implements EmbeddingProvider, ImageProvider, TextProvider
+class OpenRouterProvider extends Provider implements AudioProvider, EmbeddingProvider, ImageProvider, SupportsWebSearch, TextProvider, TranscriptionProvider
 {
+    use Concerns\GeneratesAudio;
     use Concerns\GeneratesEmbeddings;
     use Concerns\GeneratesImages;
     use Concerns\GeneratesText;
+    use Concerns\GeneratesTranscriptions;
+    use Concerns\HasAudioGateway;
     use Concerns\HasEmbeddingGateway;
     use Concerns\HasImageGateway;
     use Concerns\HasTextGateway;
+    use Concerns\HasTranscriptionGateway;
     use Concerns\StreamsText;
 
     public function __construct(protected array $config, protected Dispatcher $events)
@@ -27,9 +38,26 @@ class OpenRouterProvider extends Provider implements EmbeddingProvider, ImagePro
     }
 
     /**
+     * Get the web search tool options for the provider.
+     */
+    public function webSearchToolOptions(WebSearch $search): array
+    {
+        $options = $search->providerOptions(Lab::OpenRouter);
+
+        $parameters = array_filter([
+            'max_results' => $search->maxSearches,
+            'allowed_domains' => filled($search->allowedDomains) ? $search->allowedDomains : null,
+        ]) + $options;
+
+        return array_filter([
+            'parameters' => filled($parameters) ? $parameters : null,
+        ]);
+    }
+
+    /**
      * Get the provider's text gateway.
      */
-    public function textGateway(): TextGateway
+    public function textGateway(): StepTextGateway
     {
         return $this->textGateway ??= new OpenRouterGateway($this->events);
     }
@@ -100,6 +128,38 @@ class OpenRouterProvider extends Provider implements EmbeddingProvider, ImagePro
                 default => null,
             },
         ]);
+    }
+
+    /**
+     * Get the provider's audio gateway.
+     */
+    public function audioGateway(): AudioGateway
+    {
+        return $this->audioGateway ??= new OpenRouterGateway($this->events);
+    }
+
+    /**
+     * Get the name of the default audio (TTS) model.
+     */
+    public function defaultAudioModel(): string
+    {
+        return $this->config['models']['audio']['default'] ?? 'google/gemini-3.1-flash-tts-preview';
+    }
+
+    /**
+     * Get the provider's transcription gateway.
+     */
+    public function transcriptionGateway(): TranscriptionGateway
+    {
+        return $this->transcriptionGateway ??= new OpenRouterGateway($this->events);
+    }
+
+    /**
+     * Get the name of the default transcription (STT) model.
+     */
+    public function defaultTranscriptionModel(): string
+    {
+        return $this->config['models']['transcription']['default'] ?? 'openai/whisper-1';
     }
 
     /**

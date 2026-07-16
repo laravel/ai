@@ -3,6 +3,7 @@
 namespace Laravel\Ai;
 
 use Closure;
+use InvalidArgumentException;
 use Laravel\Ai\Files\Audio;
 use Laravel\Ai\Files\Document;
 use Laravel\Ai\Files\Image;
@@ -16,6 +17,8 @@ class Embeddings
      * Get embedding vectors representing the given inputs.
      *
      * @param  array<int, string|Audio|Document|Image|Video>  $inputs
+     *
+     * @throws InvalidArgumentException if the given inputs are not a list, are empty, or contain an unsupported input type.
      */
     public static function for(array $inputs): PendingEmbeddingsGeneration
     {
@@ -95,13 +98,13 @@ class Embeddings
     {
         // Generate random values...
         $values = array_map(
-            fn () => (mt_rand() / mt_getrandmax()) * 2 - 1,
+            fn (): float|int => (mt_rand() / mt_getrandmax()) * 2 - 1,
             range(1, $dimensions)
         );
 
         // Normalize the vector (unit length)...
-        $magnitude = sqrt(array_sum(array_map(fn ($v) => $v * $v, $values)));
+        $magnitude = sqrt(array_sum(array_map(fn ($v): int|float => $v * $v, $values)));
 
-        return array_map(fn ($v) => $v / $magnitude, $values);
+        return array_map(fn ($v): float => $v / $magnitude, $values);
     }
 }

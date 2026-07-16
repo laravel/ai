@@ -4,7 +4,7 @@ use Illuminate\Support\Collection;
 use Laravel\Ai\Tools\Request;
 use Laravel\Ai\Tools\SimilaritySearch;
 
-test('search results are returned', function () {
+test('search results are returned', function (): void {
     $data = [
         [
             'id' => 1,
@@ -16,9 +16,7 @@ test('search results are returned', function () {
         ],
     ];
 
-    $search = new SimilaritySearch(using: function (string $query) use ($data) {
-        return $data;
-    });
+    $search = new SimilaritySearch(using: fn (string $query): array => $data);
 
     $results = $search->handle(new Request([
         'query' => 'Test query',
@@ -27,7 +25,15 @@ test('search results are returned', function () {
     expect(str_contains($results, json_encode($data, JSON_PRETTY_PRINT)))->toBeTrue();
 });
 
-test('using model creates similarity search', function () {
+test('using model rejects blank model class', function (): void {
+    SimilaritySearch::usingModel('', 'embedding');
+})->throws(InvalidArgumentException::class, 'A model class name is required for similarity search.');
+
+test('using model rejects blank column name', function (): void {
+    SimilaritySearch::usingModel(FakeVectorModel::class, '  ');
+})->throws(InvalidArgumentException::class, 'A vector column name is required for similarity search.');
+
+test('using model creates similarity search', function (): void {
     $search = SimilaritySearch::usingModel(
         FakeVectorModel::class,
         'embedding',
@@ -43,7 +49,7 @@ test('using model creates similarity search', function () {
         ->toContain('Second document');
 });
 
-test('using model applies custom query closure', function () {
+test('using model applies custom query closure', function (): void {
     $search = SimilaritySearch::usingModel(
         FakeVectorModel::class,
         'embedding',
@@ -58,7 +64,7 @@ test('using model applies custom query closure', function () {
     expect($results)->toContain('Relevant results found.');
 });
 
-test('using model excludes embedding column from results', function () {
+test('using model excludes embedding column from results', function (): void {
     $search = SimilaritySearch::usingModel(
         FakeVectorModel::class,
         'embedding',

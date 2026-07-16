@@ -26,7 +26,7 @@ trait MapsAttachments
      */
     protected function mapAttachments(Collection $attachments): array
     {
-        return $attachments->map(function (File|UploadedFile $attachment) {
+        return $attachments->map(function (File|UploadedFile $attachment): array {
             $mapped = match (true) {
                 $attachment instanceof ProviderImage => [
                     'type' => 'image',
@@ -64,7 +64,7 @@ trait MapsAttachments
                         'type' => 'base64',
                         'media_type' => $attachment->mimeType(),
                         'data' => base64_encode(
-                            Storage::disk($attachment->disk)->get($attachment->path)
+                            (string) Storage::disk($attachment->disk)->get($attachment->path)
                         ),
                     ],
                 ],
@@ -79,16 +79,16 @@ trait MapsAttachments
                     'type' => 'document',
                     'source' => $this->documentSource(
                         $attachment->mime,
-                        fn () => base64_decode($attachment->base64),
-                        fn () => $attachment->base64,
+                        fn (): string => base64_decode($attachment->base64),
+                        fn (): string => $attachment->base64,
                     ),
                 ],
                 $attachment instanceof LocalDocument => [
                     'type' => 'document',
                     'source' => $this->documentSource(
                         $attachment->mimeType(),
-                        fn () => file_get_contents($attachment->path),
-                        fn () => base64_encode(file_get_contents($attachment->path)),
+                        fn (): string|false => file_get_contents($attachment->path),
+                        fn (): string => base64_encode(file_get_contents($attachment->path)),
                     ),
                 ],
                 $attachment instanceof RemoteDocument => [
@@ -103,7 +103,7 @@ trait MapsAttachments
                     'source' => $this->documentSource(
                         $attachment->mimeType(),
                         fn () => Storage::disk($attachment->disk)->get($attachment->path),
-                        fn () => base64_encode(Storage::disk($attachment->disk)->get($attachment->path)),
+                        fn (): string => base64_encode((string) Storage::disk($attachment->disk)->get($attachment->path)),
                     ),
                 ],
                 $attachment instanceof UploadedFile && $this->isImage($attachment) => [
@@ -119,10 +119,10 @@ trait MapsAttachments
                     'source' => $this->documentSource(
                         $attachment->getClientMimeType(),
                         fn () => $attachment->get(),
-                        fn () => base64_encode($attachment->get()),
+                        fn (): string => base64_encode($attachment->get()),
                     ),
                 ],
-                default => throw new InvalidArgumentException('Unsupported attachment type ['.get_class($attachment).']'),
+                default => throw new InvalidArgumentException('Unsupported attachment type ['.$attachment::class.']'),
             };
 
             if (($mapped['type'] ?? '') === 'document' && $attachment instanceof File && filled($attachment->name)) {
@@ -167,6 +167,7 @@ trait MapsAttachments
             'image/png',
             'image/gif',
             'image/webp',
-        ]);
+        ],
+            true);
     }
 }

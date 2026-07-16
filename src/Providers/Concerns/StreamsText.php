@@ -24,14 +24,14 @@ trait StreamsText
      */
     public function stream(AgentPrompt $prompt): StreamableAgentResponse
     {
-        $invocationId = (string) Str::uuid7();
+        $invocationId = $prompt->invocationId ?? (string) Str::uuid7();
 
         $processedPrompt = null;
 
         return pipeline()
             ->send($prompt)
             ->through($this->gatherMiddlewareFor($prompt->agent))
-            ->then(function (AgentPrompt $prompt) use ($invocationId, &$processedPrompt) {
+            ->then(function (AgentPrompt $prompt) use ($invocationId, &$processedPrompt): StreamableAgentResponse {
                 $processedPrompt = $prompt;
 
                 $agent = $prompt->agent;
@@ -54,7 +54,7 @@ trait StreamsText
 
                         $this->listenForToolInvocations($invocationId, $agent);
 
-                        yield from $this->textGateway()->streamText(
+                        yield from $this->textGenerationLoop()->stream(
                             $invocationId,
                             $this,
                             $prompt->model,
@@ -68,9 +68,9 @@ trait StreamsText
                     },
                     $meta,
                 );
-            })->then(function (StreamedAgentResponse $response) use ($invocationId, &$processedPrompt) {
+            })->then(function (StreamedAgentResponse $response) use ($invocationId, $prompt, &$processedPrompt): void {
                 $this->events->dispatch(
-                    new AgentStreamed($invocationId, $processedPrompt, $response)
+                    new AgentStreamed($invocationId, $processedPrompt ?? $prompt, $response)
                 );
             });
     }

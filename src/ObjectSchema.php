@@ -12,7 +12,7 @@ class ObjectSchema extends Schema
     public function __construct(
         array $schema,
         string $name = 'schema_definition',
-        bool $strict = true
+        bool $strict = false
     ) {
         parent::__construct(
             schema: (new ObjectType($schema))->withoutAdditionalProperties(),
@@ -26,6 +26,7 @@ class ObjectSchema extends Schema
      *
      * @return array<string, mixed>
      */
+    #[\Override]
     public function toSchema(): array
     {
         return static::disableAdditionalProperties(parent::toSchema());
@@ -53,6 +54,12 @@ class ObjectSchema extends Schema
 
         if (is_array($schema['items'] ?? null)) {
             $schema['items'] = static::disableAdditionalProperties($schema['items']);
+        }
+
+        foreach ($schema['anyOf'] ?? [] as $key => $branch) {
+            if (is_array($branch)) {
+                $schema['anyOf'][$key] = static::disableAdditionalProperties($branch);
+            }
         }
 
         return $schema;

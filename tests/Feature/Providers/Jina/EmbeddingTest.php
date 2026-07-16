@@ -5,19 +5,19 @@ use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.jina' => [
         ...config('ai.providers.jina'),
         'key' => 'test-key',
     ]]);
 });
 
-test('embeddings request includes model, input, and dimensions', function () {
+test('embeddings request includes model, input, and dimensions', function (): void {
     Http::fake(['*' => fakeJinaEmbeddingsResponse()]);
 
     Embeddings::for(['Hello world'])->dimensions(1024)->generate(provider: 'jina', model: 'jina-embeddings-v4');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['model'] === 'jina-embeddings-v4'
@@ -28,7 +28,7 @@ test('embeddings request includes model, input, and dimensions', function () {
     });
 });
 
-test('embeddings response is correctly parsed', function () {
+test('embeddings response is correctly parsed', function (): void {
     Http::fake(['*' => fakeJinaEmbeddingsResponse()]);
 
     $response = Embeddings::for(['Hello world'])->generate(provider: 'jina', model: 'jina-embeddings-v4');
@@ -40,7 +40,7 @@ test('embeddings response is correctly parsed', function () {
         ->and($response->meta->model)->toBe('jina-embeddings-v4');
 });
 
-test('embeddings request sends bearer token', function () {
+test('embeddings request sends bearer token', function (): void {
     Http::fake(['*' => fakeJinaEmbeddingsResponse()]);
 
     Embeddings::for(['Hello'])->generate(provider: 'jina', model: 'jina-embeddings-v4');
@@ -48,21 +48,21 @@ test('embeddings request sends bearer token', function () {
     Http::assertSent(fn (Request $request) => $request->hasHeader('Authorization', 'Bearer test-key'));
 });
 
-test('embeddings use default model when none specified', function () {
+test('embeddings use default model when none specified', function (): void {
     Http::fake(['*' => fakeJinaEmbeddingsResponse()]);
 
     Embeddings::for(['Hello'])->generate(provider: 'jina');
 
-    Http::assertSent(fn (Request $request) => json_decode($request->body(), true)['model'] === 'jina-embeddings-v4');
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['model'] === 'jina-embeddings-v4');
 });
 
-test('embeddings throw when the API returns an error', function () {
+test('embeddings throw when the API returns an error', function (): void {
     Http::fake(['*' => Http::response(['detail' => 'unauthorized'], 401)]);
 
     Embeddings::for(['Hello'])->generate(provider: 'jina', model: 'jina-embeddings-v4');
 })->throws(RequestException::class);
 
-test('multiple inputs return multiple embeddings', function () {
+test('multiple inputs return multiple embeddings', function (): void {
     Http::fake(['*' => Http::response([
         'model' => 'jina-embeddings-v4',
         'object' => 'list',
@@ -79,12 +79,28 @@ test('multiple inputs return multiple embeddings', function () {
         ->and($response->embeddings[1])->toBe([0.4, 0.5, 0.6]);
 });
 
-test('embeddings default to 2048 dimensions when none specified', function () {
+test('embeddings default to 2048 dimensions when none specified', function (): void {
     Http::fake(['*' => fakeJinaEmbeddingsResponse()]);
 
     Embeddings::for(['Hello'])->generate(provider: 'jina', model: 'jina-embeddings-v4');
 
-    Http::assertSent(fn (Request $request) => json_decode($request->body(), true)['dimensions'] === 2048);
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['dimensions'] === 2048);
+});
+
+test('embeddings request includes provider options and overrides default task', function (): void {
+    Http::fake(['*' => fakeJinaEmbeddingsResponse()]);
+
+    Embeddings::for(['Hello'])
+        ->withProviderOptions(['task' => 'retrieval.query', 'late_chunking' => true])
+        ->generate(provider: 'jina', model: 'jina-embeddings-v4');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+
+        return $body['task'] === 'retrieval.query'
+            && $body['late_chunking'] === true
+            && $body['model'] === 'jina-embeddings-v4';
+    });
 });
 
 function fakeJinaEmbeddingsResponse()

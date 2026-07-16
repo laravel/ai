@@ -16,7 +16,7 @@ function fakeElevenBaseUrlTranscriptionResponse(): PromiseInterface
     return Http::response(['text' => 'Hello world']);
 }
 
-test('elevenlabs audio requests use the configured base url', function () {
+test('elevenlabs audio requests use the configured base url', function (): void {
     config(['ai.providers.eleven' => [
         ...config('ai.providers.eleven'),
         'key' => 'test-key',
@@ -27,10 +27,10 @@ test('elevenlabs audio requests use the configured base url', function () {
 
     Audio::of('Hello')->generate(provider: 'eleven', model: 'eleven_multilingual_v2');
 
-    Http::assertSent(fn (Request $r) => str_starts_with($r->url(), 'http://localhost:8080/v1/text-to-speech/'));
+    Http::assertSent(fn (Request $r): bool => str_starts_with($r->url(), 'http://localhost:8080/v1/text-to-speech/'));
 });
 
-test('elevenlabs transcription requests use the configured base url', function () {
+test('elevenlabs transcription requests use the configured base url', function (): void {
     config(['ai.providers.eleven' => [
         ...config('ai.providers.eleven'),
         'key' => 'test-key',
@@ -42,10 +42,10 @@ test('elevenlabs transcription requests use the configured base url', function (
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
         ->generate(provider: 'eleven', model: 'scribe_v2');
 
-    Http::assertSent(fn (Request $r) => $r->url() === 'http://localhost:8080/v1/speech-to-text');
+    Http::assertSent(fn (Request $r): bool => $r->url() === 'http://localhost:8080/v1/speech-to-text');
 });
 
-test('elevenlabs requests fall back to the default base url', function () {
+test('elevenlabs requests fall back to the default base url', function (): void {
     config(['ai.providers.eleven' => array_diff_key(
         [...config('ai.providers.eleven'), 'key' => 'test-key'],
         ['url' => null],
@@ -55,5 +55,5 @@ test('elevenlabs requests fall back to the default base url', function () {
 
     Audio::of('Hello')->generate(provider: 'eleven', model: 'eleven_multilingual_v2');
 
-    Http::assertSent(fn (Request $r) => str_starts_with($r->url(), 'https://api.elevenlabs.io/v1/text-to-speech/'));
+    Http::assertSent(fn (Request $r): bool => str_starts_with($r->url(), 'https://api.elevenlabs.io/v1/text-to-speech/'));
 });

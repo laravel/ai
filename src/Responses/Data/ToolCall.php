@@ -14,7 +14,24 @@ class ToolCall implements Arrayable, JsonSerializable
         public ?string $resultId = null,
         public ?string $reasoningId = null,
         public ?array $reasoningSummary = null,
+        public ?string $reasoningEncryptedContent = null,
     ) {}
+
+    /**
+     * Reconstruct an instance from a previously serialized toArray() payload.
+     */
+    public static function fromArray(array $data): self
+    {
+        return new self(
+            id: $data['id'],
+            name: $data['name'],
+            arguments: $data['arguments'],
+            resultId: $data['result_id'] ?? null,
+            reasoningId: $data['reasoning_id'] ?? null,
+            reasoningSummary: $data['reasoning_summary'] ?? null,
+            reasoningEncryptedContent: $data['reasoning_encrypted_content'] ?? null,
+        );
+    }
 
     /**
      * Get the instance as an array.
@@ -28,6 +45,7 @@ class ToolCall implements Arrayable, JsonSerializable
             'result_id' => $this->resultId,
             'reasoning_id' => $this->reasoningId,
             'reasoning_summary' => $this->reasoningSummary,
+            'reasoning_encrypted_content' => $this->reasoningEncryptedContent,
         ];
     }
 

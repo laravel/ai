@@ -12,6 +12,7 @@ use Laravel\Ai\FakePendingDispatch;
 use Laravel\Ai\Files\LocalAudio;
 use Laravel\Ai\Files\StoredAudio;
 use Laravel\Ai\Jobs\GenerateTranscription;
+use Laravel\Ai\PendingResponses\Concerns\ResolvesProviderOptions;
 use Laravel\Ai\Prompts\QueuedTranscriptionPrompt;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\QueuedTranscriptionResponse;
@@ -21,6 +22,7 @@ use LogicException;
 class PendingTranscriptionGeneration
 {
     use Conditionable;
+    use ResolvesProviderOptions;
 
     protected ?string $language = null;
 
@@ -64,6 +66,8 @@ class PendingTranscriptionGeneration
 
     /**
      * Generate the transcription.
+     *
+     * @throws FailoverableException if every configured provider fails to generate the transcription.
      */
     public function generate(Lab|array|string|null $provider = null, ?string $model = null): TranscriptionResponse
     {
@@ -78,8 +82,10 @@ class PendingTranscriptionGeneration
 
             $model ??= $provider->defaultTranscriptionModel();
 
+            $providerOptions = $this->resolveProviderOptions($provider);
+
             try {
-                return $provider->transcribe($this->audio, $this->language, $this->diarize, $model, $this->timeout);
+                return $provider->transcribe($this->audio, $this->language, $this->diarize, $model, $this->timeout, $providerOptions);
             } catch (FailoverableException $e) {
                 $lastException = $e;
 
@@ -94,6 +100,8 @@ class PendingTranscriptionGeneration
 
     /**
      * Queue the generation of the transcription.
+     *
+     * @throws LogicException if the audio attachment is not a local audio or an audio file stored on a filesystem disk.
      */
     public function queue(Lab|array|string|null $provider = null, ?string $model = null): QueuedTranscriptionResponse
     {
@@ -109,7 +117,8 @@ class PendingTranscriptionGeneration
                     $this->language,
                     $this->diarize,
                     $provider,
-                    $model
+                    $model,
+                    is_array($this->providerOptions) ? $this->providerOptions : [],
                 )
             );
 

@@ -29,11 +29,7 @@ trait GroqHelpers
         $lines = [];
 
         foreach ($events as $event) {
-            if ($event === '[DONE]') {
-                $lines[] = 'data: [DONE]';
-            } else {
-                $lines[] = 'data: '.json_encode($event);
-            }
+            $lines[] = $event === '[DONE]' ? 'data: [DONE]' : 'data: '.json_encode($event);
         }
 
         return implode("\n\n", $lines)."\n\n";

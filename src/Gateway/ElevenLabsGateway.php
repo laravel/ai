@@ -53,6 +53,8 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
 
     /**
      * Generate text from the given audio.
+     *
+     * @param  array<string, mixed>  $providerOptions
      */
     public function generateTranscription(
         TranscriptionProvider $provider,
@@ -60,15 +62,16 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
         TranscribableAudio $audio,
         ?string $language = null,
         bool $diarize = false,
-        int $timeout = 30
+        int $timeout = 30,
+        array $providerOptions = [],
     ): TranscriptionResponse {
         $response = $this->withErrorHandling($provider->name(), fn () => $this->client($provider, $timeout)
-            ->attach('file', $audio->content(), 'file', ['Content-Type' => $audio->mimeType()])
-            ->post('speech-to-text', [
+            ->attach('file', $audio->content(), 'file', array_filter(['Content-Type' => $audio->mimeType()]))
+            ->post('speech-to-text', array_merge($providerOptions, array_filter([
                 'model_id' => $model,
                 'language' => $language,
                 'diarize' => $diarize ? 'true' : 'false',
-            ])->throw());
+            ])))->throw());
 
         $response = $response->json();
 
@@ -78,7 +81,7 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
 
         return new TranscriptionResponse(
             $response['text'],
-            (new Collection($segments))->map(function ($segment) {
+            (new Collection($segments))->map(function (array $segment) {
                 if ($segment['type'] !== 'word') {
                     return;
                 }
@@ -101,7 +104,7 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
     protected function client(AudioProvider|TranscriptionProvider $provider, int $timeout = 30): PendingRequest
     {
         return Http::baseUrl($this->baseUrl($provider))
-            ->withHeaders(['xi-api-key' => $provider->providerCredentials()['key']])
+            ->withHeaders(array_filter(['xi-api-key' => $provider->providerCredentials()['key']]))
             ->timeout($timeout);
     }
 

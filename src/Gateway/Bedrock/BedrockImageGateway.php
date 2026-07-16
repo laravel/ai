@@ -5,7 +5,7 @@ namespace Laravel\Ai\Gateway\Bedrock;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
-use Laravel\Ai\Files\Image as ImageFile;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Gateway\Bedrock\Concerns\CreatesBedrockClient;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Responses\Data\GeneratedImage;
@@ -22,9 +22,9 @@ class BedrockImageGateway implements ImageGateway
     /**
      * Generate an image using AWS Bedrock.
      *
-     * @param  array<ImageFile>  $attachments
-     * @param  '3:2'|'2:3'|'1:1'  $size
-     * @param  'low'|'medium'|'high'  $quality
+     * @param  array<Image>  $attachments
+     * @param  '3:2'|'2:3'|'1:1'|null  $size
+     * @param  'low'|'medium'|'high'|null  $quality
      */
     public function generateImage(
         ImageProvider $provider,
@@ -48,11 +48,11 @@ class BedrockImageGateway implements ImageGateway
                     'body' => json_encode($this->prepareImageRequestBody($model, $prompt, $size, $options)),
                 ]),
             );
-        } catch (Throwable $e) {
-            throw BedrockException::toAiException($e, $provider->name(), $model);
+        } catch (Throwable $throwable) {
+            throw BedrockException::toAiException($throwable, $provider->name(), $model);
         }
 
-        $result = json_decode($response->get('body')->getContents(), true);
+        $result = json_decode((string) $response->get('body')->getContents(), true);
 
         return new ImageResponse(
             $this->parseImageResponse($model, $result),
@@ -111,7 +111,7 @@ class BedrockImageGateway implements ImageGateway
             || str_starts_with($model, 'amazon.titan-image')
             || str_starts_with($model, 'amazon.nova-canvas')) {
             return (new Collection($result['images'] ?? []))
-                ->map(fn ($image) => new GeneratedImage($image ?? '', 'image/png'));
+                ->map(fn ($image): GeneratedImage => new GeneratedImage($image ?? '', 'image/png'));
         }
 
         return new Collection;

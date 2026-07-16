@@ -40,6 +40,7 @@ class SpyOpenAiGateway extends OpenAiGateway
 {
     public array $capturedTimeouts = [];
 
+    #[Override]
     protected function client(Provider $provider, ?int $timeout = null): PendingRequest
     {
         $this->capturedTimeouts[] = $timeout;
@@ -52,6 +53,7 @@ class SpyAnthropicGateway extends AnthropicGateway
 {
     public array $capturedTimeouts = [];
 
+    #[Override]
     protected function client(Provider $provider, ?int $timeout = null): PendingRequest
     {
         $this->capturedTimeouts[] = $timeout;
@@ -64,6 +66,7 @@ class SpyGroqGateway extends GroqGateway
 {
     public array $capturedTimeouts = [];
 
+    #[Override]
     protected function client(Provider $provider, ?int $timeout = null): PendingRequest
     {
         $this->capturedTimeouts[] = $timeout;
@@ -76,6 +79,7 @@ class SpyGeminiGateway extends GeminiGateway
 {
     public array $capturedTimeouts = [];
 
+    #[Override]
     protected function client(Provider $provider, ?int $timeout = null): PendingRequest
     {
         $this->capturedTimeouts[] = $timeout;
@@ -210,7 +214,7 @@ function timeoutFakeGeminiToolCallResponse(): PromiseInterface
             'candidatesTokenCount' => 5,
             'totalTokenCount' => 15,
         ],
-        'modelVersion' => 'gemini-3-flash-preview',
+        'modelVersion' => 'gemini-3.5-flash',
     ]);
 }
 
@@ -229,11 +233,11 @@ function timeoutFakeGeminiTextResponse(string $text): PromiseInterface
             'candidatesTokenCount' => 5,
             'totalTokenCount' => 15,
         ],
-        'modelVersion' => 'gemini-3-flash-preview',
+        'modelVersion' => 'gemini-3.5-flash',
     ]);
 }
 
-test('openai timeout is preserved in tool call follow up', function () {
+test('openai timeout is preserved in tool call follow up', function (): void {
     Http::fake([
         '*' => Http::sequence([
             timeoutFakeOpenAiToolCallResponse(),
@@ -246,7 +250,7 @@ test('openai timeout is preserved in tool call follow up', function () {
     $spy = new SpyOpenAiGateway(app(Dispatcher::class));
     $manager = app(AiManager::class);
     $manager->purge('openai');
-    $manager->extend('openai', fn ($app, array $config) => new OpenAiProvider(
+    $manager->extend('openai', fn ($app, array $config): OpenAiProvider => new OpenAiProvider(
         $spy, $config, app(Dispatcher::class),
     ));
 
@@ -257,7 +261,7 @@ test('openai timeout is preserved in tool call follow up', function () {
         ->and($spy->capturedTimeouts[1])->toBe(300);
 });
 
-test('anthropic timeout is preserved in tool call follow up', function () {
+test('anthropic timeout is preserved in tool call follow up', function (): void {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence([
             timeoutFakeAnthropicToolCallResponse(),
@@ -270,7 +274,7 @@ test('anthropic timeout is preserved in tool call follow up', function () {
     $spy = new SpyAnthropicGateway(app(Dispatcher::class));
     $manager = app(AiManager::class);
     $manager->purge('anthropic');
-    $manager->extend('anthropic', fn ($app, array $config) => new AnthropicProvider(
+    $manager->extend('anthropic', fn ($app, array $config): AnthropicProvider => new AnthropicProvider(
         $spy, $config, app(Dispatcher::class),
     ));
 
@@ -281,7 +285,7 @@ test('anthropic timeout is preserved in tool call follow up', function () {
         ->and($spy->capturedTimeouts[1])->toBe(300);
 });
 
-test('groq timeout is preserved in tool call follow up', function () {
+test('groq timeout is preserved in tool call follow up', function (): void {
     Http::fake([
         '*' => Http::sequence([
             timeoutFakeGroqToolCallResponse(),
@@ -295,7 +299,7 @@ test('groq timeout is preserved in tool call follow up', function () {
 
     $manager = app(AiManager::class);
     $manager->purge('groq');
-    $manager->extend('groq', function ($app, array $config) use ($spy) {
+    $manager->extend('groq', function ($app, array $config) use ($spy): GroqProvider {
         $provider = new GroqProvider($config, app(Dispatcher::class));
         $provider->useTextGateway($spy);
 
@@ -309,7 +313,7 @@ test('groq timeout is preserved in tool call follow up', function () {
         ->and($spy->capturedTimeouts[1])->toBe(300);
 });
 
-test('gemini timeout is preserved in tool call follow up', function () {
+test('gemini timeout is preserved in tool call follow up', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::sequence([
             timeoutFakeGeminiToolCallResponse(),
@@ -322,7 +326,7 @@ test('gemini timeout is preserved in tool call follow up', function () {
     $spy = new SpyGeminiGateway(app(Dispatcher::class));
     $manager = app(AiManager::class);
     $manager->purge('gemini');
-    $manager->extend('gemini', fn ($app, array $config) => new GeminiProvider(
+    $manager->extend('gemini', fn ($app, array $config): GeminiProvider => new GeminiProvider(
         $spy, $config, app(Dispatcher::class),
     ));
 

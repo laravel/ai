@@ -3,10 +3,12 @@
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Exceptions\InsufficientCreditsException;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Tests\Fixtures\Agents\AssistantAgent;
 
-test('http error response throws request exception', function () {
+test('http error response throws request exception', function (): void {
     Http::fake([
         'api.anthropic.com/*' => Http::response([
             'type' => 'error',
@@ -23,7 +25,7 @@ test('http error response throws request exception', function () {
     );
 })->throws(RequestException::class);
 
-test('rate limit response throws rate limited exception', function () {
+test('rate limit response throws rate limited exception', function (): void {
     Http::fake([
         'api.anthropic.com/*' => Http::response([
             'type' => 'error',
@@ -40,7 +42,30 @@ test('rate limit response throws rate limited exception', function () {
     );
 })->throws(RateLimitedException::class);
 
-test('error in 200 response throws ai exception', function () {
+test('insufficient credit response throws insufficient credits exception', function (string $message): void {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response([
+            'type' => 'error',
+            'error' => [
+                'type' => 'invalid_request_error',
+                'message' => $message,
+            ],
+        ], 400),
+    ]);
+
+    (new AssistantAgent)->prompt(
+        'Hi',
+        provider: 'anthropic',
+    );
+})->with([
+    'credit balance' => ['Your credit balance is too low to access the API.'],
+    'insufficient' => ['You have insufficient funds to complete this request.'],
+    'quota exceeded' => ['Your monthly quota exceeded the configured limit.'],
+    'exceeded your current quota' => ['You have exceeded your current quota, please check your plan.'],
+    'billing' => ['There is a billing issue with your account; please update your payment method.'],
+])->throws(InsufficientCreditsException::class);
+
+test('error in 200 response throws ai exception', function (): void {
     Http::fake([
         'api.anthropic.com/*' => Http::response([
             'type' => 'error',
@@ -56,3 +81,20 @@ test('error in 200 response throws ai exception', function () {
         provider: 'anthropic',
     );
 })->throws(AiException::class, 'api_error');
+
+test('529 overloaded response throws provider overloaded exception', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response([
+            'type' => 'error',
+            'error' => [
+                'type' => 'overloaded_error',
+                'message' => 'Overloaded',
+            ],
+        ], 529),
+    ]);
+
+    (new AssistantAgent)->prompt(
+        'Hi',
+        provider: 'anthropic',
+    );
+})->throws(ProviderOverloadedException::class);

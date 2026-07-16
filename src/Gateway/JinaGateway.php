@@ -23,6 +23,7 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
      * Generate embedding vectors representing the given inputs.
      *
      * @param  string[]  $inputs
+     * @param  array<string, mixed>  $providerOptions
      */
     public function generateEmbeddings(
         EmbeddingProvider $provider,
@@ -30,15 +31,19 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
         array $inputs,
         int $dimensions,
         int $timeout = 30,
+        array $providerOptions = [],
     ): EmbeddingsResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('/embeddings', [
-                'model' => $model,
-                'input' => array_map(fn (string $text) => ['text' => $text], $inputs),
-                'dimensions' => $dimensions,
-                'task' => 'retrieval.passage',
-            ]),
+            fn () => $this->client($provider, $timeout)->post('/embeddings', array_merge(
+                ['task' => 'retrieval.passage'],
+                $providerOptions,
+                [
+                    'model' => $model,
+                    'input' => array_map(fn (string $text): array => ['text' => $text], $inputs),
+                    'dimensions' => $dimensions,
+                ],
+            )),
         );
 
         $data = $response->json();
@@ -76,7 +81,7 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
 
         $data = $response->json();
 
-        $results = (new Collection($data['results']))->map(fn (array $result) => new RankedDocument(
+        $results = (new Collection($data['results']))->map(fn (array $result): RankedDocument => new RankedDocument(
             index: $result['index'],
             document: $documents[$result['index']],
             score: $result['relevance_score'],

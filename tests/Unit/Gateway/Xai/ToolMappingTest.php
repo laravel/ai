@@ -6,7 +6,7 @@ use Laravel\Ai\Gateway\Xai\Concerns\MapsTools;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Tools\Request;
 
-test('tool parameters are not wrapped in schema definition', function () {
+test('tool parameters are not wrapped in schema definition', function (): void {
     $mapper = new class
     {
         use MapsTools;
@@ -54,7 +54,7 @@ test('tool parameters are not wrapped in schema definition', function () {
         ->and($parameters['additionalProperties'])->toBeFalse();
 });
 
-test('tool with empty schema includes parameters', function () {
+test('tool with empty schema includes parameters', function (): void {
     $mapper = new class
     {
         use MapsTools;

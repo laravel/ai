@@ -3,7 +3,9 @@
 namespace Laravel\Ai\Files;
 
 use Illuminate\Contracts\Support\Arrayable;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\Storage;
+use InvalidArgumentException;
 use JsonSerializable;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
@@ -13,7 +15,12 @@ class StoredVideo extends Video implements Arrayable, JsonSerializable, Storable
 {
     use CanBeUploadedToProvider;
 
-    public function __construct(public string $path, public ?string $disk = null) {}
+    public function __construct(public string $path, public ?string $disk = null)
+    {
+        if (blank($path)) {
+            throw new InvalidArgumentException('Video file path cannot be empty.');
+        }
+    }
 
     /**
      * Get the raw representation of the file.
@@ -27,6 +34,7 @@ class StoredVideo extends Video implements Arrayable, JsonSerializable, Storable
     /**
      * Get the displayable name of the file.
      */
+    #[\Override]
     public function name(): ?string
     {
         return $this->name ?? basename($this->path);
@@ -35,9 +43,13 @@ class StoredVideo extends Video implements Arrayable, JsonSerializable, Storable
     /**
      * Get the file's MIME type.
      */
+    #[\Override]
     public function mimeType(): ?string
     {
-        return $this->mime ?? (Storage::disk($this->disk)->mimeType($this->path) ?: null);
+        /** @var FilesystemAdapter $disk */
+        $disk = Storage::disk($this->disk);
+
+        return $this->mime ?? ($disk->mimeType($this->path) ?: null);
     }
 
     /**

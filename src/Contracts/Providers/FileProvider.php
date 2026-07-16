@@ -7,7 +7,7 @@ use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Responses\FileResponse;
 use Laravel\Ai\Responses\StoredFileResponse;
 
-interface FileProvider
+interface FileProvider extends Provider
 {
     /**
      * Get a file by its ID.

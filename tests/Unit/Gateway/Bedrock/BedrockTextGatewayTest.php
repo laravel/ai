@@ -11,6 +11,7 @@ use Laravel\Ai\Files\Image;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\ProviderImage;
 use Laravel\Ai\Files\RemoteImage;
+use Laravel\Ai\Files\S3Document;
 use Laravel\Ai\Gateway\Bedrock\BedrockTextGateway;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -20,6 +21,7 @@ use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Tools\Request;
+use Tests\Fixtures\Agents\ProviderOptionsAgent;
 use Tests\Fixtures\Tools\NamedTool;
 
 function textGateway(): object
@@ -93,7 +95,7 @@ function textGateway(): object
             return $this->resolveMaxSteps($tools, $options);
         }
 
-        public function callGetDocumentFormat(Document $document): string
+        public function callGetDocumentFormat(Document $document): ?string
         {
             return $this->getDocumentFormat($document);
         }
@@ -103,7 +105,7 @@ function textGateway(): object
             return $this->formatUserMessage($message);
         }
 
-        public function callGetImageFormat(Image $image)
+        public function callGetImageFormat(Image $image): string
         {
             return $this->getImageFormat($image);
         }
@@ -128,7 +130,7 @@ class BedrockSampleTool implements Tool
     }
 }
 
-test('user message is formatted with text block', function () {
+test('user message is formatted with text block', function (): void {
     $formatted = textGateway()->callFormatMessages([
         new UserMessage('hello'),
     ]);
@@ -138,7 +140,7 @@ test('user message is formatted with text block', function () {
     ]);
 });
 
-test('assistant message is formatted with text block', function () {
+test('assistant message is formatted with text block', function (): void {
     $formatted = textGateway()->callFormatMessages([
         new AssistantMessage('hi there'),
     ]);
@@ -148,7 +150,7 @@ test('assistant message is formatted with text block', function () {
     ]);
 });
 
-test('assistant message with tool calls is formatted with tool use blocks', function () {
+test('assistant message with tool calls is formatted with tool use blocks', function (): void {
     $assistant = new AssistantMessage('calling tool', new Collection([
         new ToolCall('tool-1', 'RandomGenerator', ['n' => 5]),
     ]));
@@ -168,7 +170,7 @@ test('assistant message with tool calls is formatted with tool use blocks', func
     ]);
 });
 
-test('assistant message with empty tool input is formatted as a json object', function () {
+test('assistant message with empty tool input is formatted as a json object', function (): void {
     $assistant = new AssistantMessage('', new Collection([
         new ToolCall('tool-1', 'NoArgGenerator', []),
     ]));
@@ -180,7 +182,30 @@ test('assistant message with empty tool input is formatted as a json object', fu
         ->and(json_encode($input))->toBe('{}');
 });
 
-test('tool result message is formatted with tool result blocks', function () {
+test('assistant message with providerContentBlocks is formatted verbatim', function (): void {
+    $message = new AssistantMessage(
+        'Hello',
+        new Collection([new ToolCall('tool-1', 'doIt', [])]),
+        providerContentBlocks: [
+            ['reasoningContent' => ['reasoningText' => ['text' => 'think', 'signature' => 'sig']]],
+            ['text' => 'Hello'],
+            ['toolUse' => ['toolUseId' => 'tool-1', 'name' => 'doIt', 'input' => []]],
+        ],
+    );
+
+    $formatted = textGateway()->callFormatMessages([$message]);
+    $content = $formatted[0]['content'];
+
+    expect($formatted[0]['role'])->toBe('assistant')
+        ->and($content[0])->toBe(['reasoningContent' => ['reasoningText' => ['text' => 'think', 'signature' => 'sig']]])
+        ->and($content[1])->toBe(['text' => 'Hello'])
+        ->and($content[2]['toolUse']['toolUseId'])->toBe('tool-1')
+        ->and($content[2]['toolUse']['name'])->toBe('doIt')
+        ->and($content[2]['toolUse']['input'])->toBeInstanceOf(stdClass::class)
+        ->and(json_encode($content[2]['toolUse']['input']))->toBe('{}');
+});
+
+test('tool result message is formatted with tool result blocks', function (): void {
     $message = new ToolResultMessage(new Collection([
         new ToolResult('tool-1', 'RandomGenerator', [], 'the result'),
     ]));
@@ -198,7 +223,7 @@ test('tool result message is formatted with tool result blocks', function () {
     ]);
 });
 
-test('tool result non-string results are json encoded', function () {
+test('tool result non-string results are json encoded', function (): void {
     $message = new ToolResultMessage(new Collection([
         new ToolResult('tool-1', 'RandomGenerator', [], ['answer' => 42]),
     ]));
@@ -209,7 +234,7 @@ test('tool result non-string results are json encoded', function () {
         ->toBe('{"answer":42}');
 });
 
-test('generic non assistant message falls back to user role', function () {
+test('generic non assistant message falls back to user role', function (): void {
     $formatted = textGateway()->callFormatMessages([
         new Message('tool_result', 'tool output'),
     ]);
@@ -220,7 +245,7 @@ test('generic non assistant message falls back to user role', function () {
     ]);
 });
 
-test('array shaped message is formatted', function () {
+test('array shaped message is formatted', function (): void {
     $formatted = textGateway()->callFormatMessages([
         ['role' => 'assistant', 'content' => 'hello'],
     ]);
@@ -231,7 +256,7 @@ test('array shaped message is formatted', function () {
     ]);
 });
 
-test('user message with pdf document attachment produces document block', function () {
+test('user message with pdf document attachment produces document block', function (): void {
     $user = new UserMessage('here', [new Base64Document(base64_encode('pdf-bytes'), 'application/pdf')]);
 
     $formatted = textGateway()->callFormatUserMessage($user);
@@ -243,23 +268,63 @@ test('user message with pdf document attachment produces document block', functi
         ->and($formatted['content'][1]['document']['source']['bytes'])->toBe('pdf-bytes');
 });
 
-test('document format maps common mime types', function () {
-    $gateway = textGateway();
+test('s3 document attachment is sent as s3Location reference', function (): void {
+    $document = (new S3Document('s3://my-bucket/path/report.pdf', null, 'application/pdf'))->as('report');
+    $user = new UserMessage('summarize this', [$document]);
 
-    expect($gateway->callGetDocumentFormat(new Base64Document('', 'application/pdf')))->toBe('pdf');
-    expect($gateway->callGetDocumentFormat(new Base64Document('', 'text/csv')))->toBe('csv');
-    expect($gateway->callGetDocumentFormat(new Base64Document('', 'application/msword')))->toBe('doc');
-    expect($gateway->callGetDocumentFormat(new Base64Document('', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')))->toBe('docx');
-    expect($gateway->callGetDocumentFormat(new Base64Document('', 'application/vnd.ms-excel')))->toBe('xls');
-    expect($gateway->callGetDocumentFormat(new Base64Document('', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')))->toBe('xlsx');
-    expect($gateway->callGetDocumentFormat(new Base64Document('', 'text/html')))->toBe('html');
-    expect($gateway->callGetDocumentFormat(new Base64Document('', 'text/markdown')))->toBe('md');
-    expect($gateway->callGetDocumentFormat(new Base64Document('', 'text/x-markdown')))->toBe('md');
-    expect($gateway->callGetDocumentFormat(new Base64Document('', 'text/plain; charset=utf-8')))->toBe('txt');
-    expect($gateway->callGetDocumentFormat(new Base64Document('', null)))->toBe('txt');
+    $formatted = textGateway()->callFormatUserMessage($user);
+
+    expect($formatted['content'][1]['document']['format'])->toBe('pdf')
+        ->and($formatted['content'][1]['document']['name'])->toBe('report')
+        ->and($formatted['content'][1]['document']['source'])->toEqual([
+            's3Location' => ['uri' => 's3://my-bucket/path/report.pdf'],
+        ]);
 });
 
-test('user message with base64 image attachment produces image block', function () {
+test('s3 document attachment includes bucketOwner when set', function (): void {
+    $document = (new S3Document('s3://my-bucket/path/report.pdf', '123456789012', 'application/pdf'))->as('report');
+    $user = new UserMessage('summarize this', [$document]);
+
+    $formatted = textGateway()->callFormatUserMessage($user);
+
+    expect($formatted['content'][1]['document']['source'])->toEqual([
+        's3Location' => [
+            'uri' => 's3://my-bucket/path/report.pdf',
+            'bucketOwner' => '123456789012',
+        ],
+    ]);
+});
+
+test('s3 document can be created with constructor from s3 url', function (): void {
+    $document = new S3Document('s3://my-bucket/path/report.pdf');
+
+    expect($document)->toBeInstanceOf(S3Document::class)
+        ->and($document->url)->toBe('s3://my-bucket/path/report.pdf');
+});
+
+test('s3 document content throws unsupported exception', function (): void {
+    $document = new S3Document('s3://my-bucket/path/report.pdf');
+
+    $document->content();
+})->throws(InvalidArgumentException::class);
+
+test('document format maps common mime types', function (): void {
+    $gateway = textGateway();
+
+    expect($gateway->callGetDocumentFormat(new Base64Document(base64_encode('doc-bytes'), 'application/pdf')))->toBe('pdf');
+    expect($gateway->callGetDocumentFormat(new Base64Document(base64_encode('doc-bytes'), 'text/csv')))->toBe('csv');
+    expect($gateway->callGetDocumentFormat(new Base64Document(base64_encode('doc-bytes'), 'application/msword')))->toBe('doc');
+    expect($gateway->callGetDocumentFormat(new Base64Document(base64_encode('doc-bytes'), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')))->toBe('docx');
+    expect($gateway->callGetDocumentFormat(new Base64Document(base64_encode('doc-bytes'), 'application/vnd.ms-excel')))->toBe('xls');
+    expect($gateway->callGetDocumentFormat(new Base64Document(base64_encode('doc-bytes'), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')))->toBe('xlsx');
+    expect($gateway->callGetDocumentFormat(new Base64Document(base64_encode('doc-bytes'), 'text/html')))->toBe('html');
+    expect($gateway->callGetDocumentFormat(new Base64Document(base64_encode('doc-bytes'), 'text/markdown')))->toBe('md');
+    expect($gateway->callGetDocumentFormat(new Base64Document(base64_encode('doc-bytes'), 'text/x-markdown')))->toBe('md');
+    expect($gateway->callGetDocumentFormat(new Base64Document(base64_encode('doc-bytes'), 'text/plain; charset=utf-8')))->toBe('txt');
+    expect($gateway->callGetDocumentFormat(new Base64Document(base64_encode('doc-bytes'))))->toBeNull();
+});
+
+test('user message with base64 image attachment produces image block', function (): void {
     $user = new UserMessage('see this', [new Base64Image(base64_encode('image-bytes'), 'image/png')]);
 
     $formatted = textGateway()->callFormatUserMessage($user);
@@ -274,7 +339,7 @@ test('user message with base64 image attachment produces image block', function 
         ]);
 });
 
-test('local image attachment is read from disk into bytes', function () {
+test('local image attachment is read from disk into bytes', function (): void {
     $tmp = tempnam(sys_get_temp_dir(), 'bedrock-image-');
     file_put_contents($tmp, 'local-image-bytes');
 
@@ -294,45 +359,45 @@ test('local image attachment is read from disk into bytes', function () {
     }
 });
 
-test('remote image attachment is rejected', function () {
+test('remote image attachment is rejected', function (): void {
     expect(fn () => textGateway()->callMapAttachments(new Collection([
         new RemoteImage('https://example.com/cat.png', 'image/png'),
     ])))->toThrow(InvalidArgumentException::class, 'Remote attachments are not supported by Bedrock');
 });
 
-test('provider image attachment is rejected', function () {
+test('provider image attachment is rejected', function (): void {
     expect(fn () => textGateway()->callMapAttachments(new Collection([
         new ProviderImage('img_123'),
     ])))->toThrow(InvalidArgumentException::class, 'Provider-stored attachments are not supported by Bedrock');
 });
 
-test('uploaded file attachment is rejected as unsupported', function () {
+test('uploaded file attachment is rejected as unsupported', function (): void {
     expect(fn () => textGateway()->callMapAttachments(new Collection([
         TestingFile::create('cat.png'),
     ])))->toThrow(InvalidArgumentException::class, 'Unsupported attachment type');
 });
 
-test('image format maps common image mime types', function () {
+test('image format maps common image mime types', function (): void {
     $gateway = textGateway();
 
-    expect($gateway->callGetImageFormat(new Base64Image('', 'image/png')))->toBe('png');
-    expect($gateway->callGetImageFormat(new Base64Image('', 'image/jpeg')))->toBe('jpeg');
-    expect($gateway->callGetImageFormat(new Base64Image('', 'image/jpg')))->toBe('jpeg');
-    expect($gateway->callGetImageFormat(new Base64Image('', 'image/gif')))->toBe('gif');
-    expect($gateway->callGetImageFormat(new Base64Image('', 'image/webp')))->toBe('webp');
+    expect($gateway->callGetImageFormat(new Base64Image(base64_encode('image-bytes'), 'image/png')))->toBe('png');
+    expect($gateway->callGetImageFormat(new Base64Image(base64_encode('image-bytes'), 'image/jpeg')))->toBe('jpeg');
+    expect($gateway->callGetImageFormat(new Base64Image(base64_encode('image-bytes'), 'image/jpg')))->toBe('jpeg');
+    expect($gateway->callGetImageFormat(new Base64Image(base64_encode('image-bytes'), 'image/gif')))->toBe('gif');
+    expect($gateway->callGetImageFormat(new Base64Image(base64_encode('image-bytes'), 'image/webp')))->toBe('webp');
 });
 
-test('image format throws when mime type is unsupported', function () {
-    expect(fn () => textGateway()->callGetImageFormat(new Base64Image('', 'image/unsupported')))
+test('image format throws when mime type is unsupported', function (): void {
+    expect(fn () => textGateway()->callGetImageFormat(new Base64Image(base64_encode('image-bytes'), 'image/unsupported')))
         ->toThrow(InvalidArgumentException::class, 'Unsupported image MIME type [image/unsupported]');
 });
 
-test('image format throws when mime type is missing', function () {
-    expect(fn () => textGateway()->callGetImageFormat(new Base64Image('', null)))
+test('image format throws when mime type is missing', function (): void {
+    expect(fn () => textGateway()->callGetImageFormat(new Base64Image(base64_encode('image-bytes'), null)))
         ->toThrow(InvalidArgumentException::class, 'Unable to determine MIME type');
 });
 
-test('format tools produces converse tool specs', function () {
+test('format tools produces converse tool specs', function (): void {
     $tools = [new BedrockSampleTool];
 
     $formatted = textGateway()->callFormatTools($tools);
@@ -343,20 +408,20 @@ test('format tools produces converse tool specs', function () {
         ->and($formatted[0]['toolSpec']['inputSchema']['json'])->toBeArray();
 });
 
-test('format tools uses a tool name() method when present', function () {
+test('format tools uses a tool name() method when present', function (): void {
     $formatted = textGateway()->callFormatTools([new NamedTool('aliased_tool')]);
 
     expect($formatted)->toHaveCount(1)
         ->and($formatted[0]['toolSpec']['name'])->toBe('aliased_tool');
 });
 
-test('format tools ignores non tool values', function () {
+test('format tools ignores non tool values', function (): void {
     $formatted = textGateway()->callFormatTools([new BedrockSampleTool, 'not-a-tool']);
 
     expect($formatted)->toHaveCount(1);
 });
 
-test('build schema tools prepends structured output tool', function () {
+test('build schema tools prepends structured output tool', function (): void {
     $schemaTools = textGateway()->callBuildSchemaTools([], [new BedrockSampleTool]);
 
     expect($schemaTools)->toHaveCount(2)
@@ -365,18 +430,18 @@ test('build schema tools prepends structured output tool', function () {
         ->and($schemaTools[1]['toolSpec']['name'])->toBe('BedrockSampleTool');
 });
 
-test('build tool config returns null when no tools present', function () {
+test('build tool config returns null when no tools present', function (): void {
     expect(textGateway()->callBuildToolConfig(null, null, true, false))->toBeNull();
 });
 
-test('build tool config returns formatted tools when no schema present', function () {
+test('build tool config returns formatted tools when no schema present', function (): void {
     $formatted = [['toolSpec' => ['name' => 'X']]];
 
     expect(textGateway()->callBuildToolConfig(null, $formatted, false, false))
         ->toEqual(['tools' => $formatted]);
 });
 
-test('build tool config uses auto tool choice on non final schema step', function () {
+test('build tool config uses auto tool choice on non final schema step', function (): void {
     $schemaTools = [['toolSpec' => ['name' => 'structured_output']]];
 
     $config = textGateway()->callBuildToolConfig($schemaTools, null, false, false);
@@ -385,7 +450,7 @@ test('build tool config uses auto tool choice on non final schema step', functio
         ->and($config['toolChoice'])->toHaveKey('auto');
 });
 
-test('build tool config forces structured tool on final schema step', function () {
+test('build tool config forces structured tool on final schema step', function (): void {
     $schemaTools = [['toolSpec' => ['name' => 'structured_output']]];
 
     $config = textGateway()->callBuildToolConfig($schemaTools, null, false, true);
@@ -393,7 +458,7 @@ test('build tool config forces structured tool on final schema step', function (
     expect($config['toolChoice'])->toEqual(['tool' => ['name' => 'structured_output']]);
 });
 
-test('build tool config forces structured tool when no real tools provided', function () {
+test('build tool config forces structured tool when no real tools provided', function (): void {
     $schemaTools = [['toolSpec' => ['name' => 'structured_output']]];
 
     $config = textGateway()->callBuildToolConfig($schemaTools, null, true, false);
@@ -401,11 +466,11 @@ test('build tool config forces structured tool when no real tools provided', fun
     expect($config['toolChoice'])->toEqual(['tool' => ['name' => 'structured_output']]);
 });
 
-test('build inference config is empty without options', function () {
+test('build inference config is empty without options', function (): void {
     expect(textGateway()->callBuildInferenceConfig(null))->toEqual([]);
 });
 
-test('build inference config maps max tokens and temperature', function () {
+test('build inference config maps max tokens and temperature', function (): void {
     $options = new TextGenerationOptions(maxTokens: 500, temperature: 0.7);
 
     expect(textGateway()->callBuildInferenceConfig($options))->toEqual([
@@ -414,7 +479,7 @@ test('build inference config maps max tokens and temperature', function () {
     ]);
 });
 
-test('build inference config includes temperature of zero', function () {
+test('build inference config includes temperature of zero', function (): void {
     $options = new TextGenerationOptions(temperature: 0.0);
 
     expect(textGateway()->callBuildInferenceConfig($options))->toEqual([
@@ -422,7 +487,7 @@ test('build inference config includes temperature of zero', function () {
     ]);
 });
 
-test('build assistant conversation message omits text block when empty', function () {
+test('build assistant conversation message omits text block when empty', function (): void {
     $message = textGateway()->callBuildAssistantConversationMessage('', [
         new ToolCall('t-1', 'X', []),
     ]);
@@ -431,7 +496,7 @@ test('build assistant conversation message omits text block when empty', functio
         ->and($message['content'][0]['toolUse']['name'])->toBe('X');
 });
 
-test('build assistant conversation message includes text and tool calls', function () {
+test('build assistant conversation message includes text and tool calls', function (): void {
     $message = textGateway()->callBuildAssistantConversationMessage('thinking', [
         new ToolCall('t-1', 'X', ['a' => 1]),
     ]);
@@ -442,7 +507,7 @@ test('build assistant conversation message includes text and tool calls', functi
     ]);
 });
 
-test('build tool result conversation message uses array form', function () {
+test('build tool result conversation message uses array form', function (): void {
     $message = textGateway()->callBuildToolResultConversationMessage([
         new ToolResult('t-1', 'X', [], ['out' => true]),
     ]);
@@ -458,23 +523,23 @@ test('build tool result conversation message uses array form', function () {
     ]);
 });
 
-test('resolve max steps returns one when no tools', function () {
+test('resolve max steps returns one when no tools', function (): void {
     expect(textGateway()->callResolveMaxSteps([], null))->toBe(1);
 });
 
-test('resolve max steps honors explicit option', function () {
+test('resolve max steps honors explicit option', function (): void {
     $options = new TextGenerationOptions(maxSteps: 10);
 
     expect(textGateway()->callResolveMaxSteps([new BedrockSampleTool], $options))->toBe(10);
 });
 
-test('resolve max steps falls back to tool count times one and a half', function () {
+test('resolve max steps falls back to tool count times one and a half', function (): void {
     $tools = [new BedrockSampleTool, new BedrockSampleTool];
 
     expect(textGateway()->callResolveMaxSteps($tools, null))->toBe(3);
 });
 
-test('build converse parameters attaches system instructions', function () {
+test('build converse parameters attaches system instructions', function (): void {
     $params = textGateway()->callBuildConverseParameters(
         'claude-sonnet',
         'you are helpful',
@@ -493,7 +558,7 @@ test('build converse parameters attaches system instructions', function () {
         ->and($params)->not->toHaveKey('inferenceConfig');
 });
 
-test('build converse parameters includes tool config and inference config when present', function () {
+test('build converse parameters includes tool config and inference config when present', function (): void {
     $formattedTools = [['toolSpec' => ['name' => 'X']]];
     $options = new TextGenerationOptions(maxTokens: 100);
 
@@ -511,4 +576,47 @@ test('build converse parameters includes tool config and inference config when p
     expect($params)->not->toHaveKey('system')
         ->and($params['toolConfig'])->toEqual(['tools' => $formattedTools])
         ->and($params['inferenceConfig'])->toEqual(['maxTokens' => 100]);
+});
+
+test('build converse parameters flat-merges agent provider options for bedrock', function (): void {
+    $options = TextGenerationOptions::forAgent(new ProviderOptionsAgent);
+
+    $params = textGateway()->callBuildConverseParameters(
+        'claude-sonnet',
+        null,
+        [['role' => 'user', 'content' => [['text' => 'hi']]]],
+        null,
+        null,
+        true,
+        $options,
+        false,
+    );
+
+    expect($params['additionalModelRequestFields'])->toEqual([
+        'thinking' => [
+            'type' => 'adaptive',
+        ],
+        'output_config' => [
+            'effort' => 'high',
+        ],
+    ])->and($params['guardrailConfig'])->toEqual([
+        'guardrailIdentifier' => 'gr-1',
+        'guardrailVersion' => '1',
+    ]);
+});
+
+test('build converse parameters omits provider options when agent has none', function (): void {
+    $params = textGateway()->callBuildConverseParameters(
+        'claude-sonnet',
+        null,
+        [['role' => 'user', 'content' => [['text' => 'hi']]]],
+        null,
+        null,
+        true,
+        null,
+        false,
+    );
+
+    expect($params)->not->toHaveKey('additionalModelRequestFields')
+        ->and($params)->not->toHaveKey('guardrailConfig');
 });

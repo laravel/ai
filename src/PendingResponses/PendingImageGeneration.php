@@ -3,6 +3,7 @@
 namespace Laravel\Ai\PendingResponses;
 
 use Illuminate\Support\Traits\Conditionable;
+use InvalidArgumentException;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
@@ -30,9 +31,12 @@ class PendingImageGeneration
 
     public ?int $timeout = null;
 
-    public function __construct(
-        public string $prompt,
-    ) {}
+    public function __construct(public string $prompt)
+    {
+        if (blank($prompt)) {
+            throw new InvalidArgumentException('A prompt is required to generate an image.');
+        }
+    }
 
     /**
      * Provide the reference images that should be sent with the request.
@@ -110,6 +114,8 @@ class PendingImageGeneration
 
     /**
      * Generate the image.
+     *
+     * @throws FailoverableException if every configured provider fails to generate the image.
      */
     public function generate(Lab|array|string|null $provider = null, ?string $model = null): ImageResponse
     {
@@ -142,6 +148,8 @@ class PendingImageGeneration
 
     /**
      * Queue the generation of an image.
+     *
+     * @throws LogicException if any attachment is not a local image or an image stored on a filesystem disk.
      */
     public function queue(Lab|array|string|null $provider = null, ?string $model = null): QueuedImageResponse
     {

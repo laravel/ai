@@ -7,7 +7,7 @@ use Laravel\Ai\Events\GeneratingAudio;
 use Laravel\Ai\Files;
 use Laravel\Ai\Transcription;
 
-test('audio can be generated', function (string $provider, string $apiKey) {
+test('audio can be generated', function (string $provider, string $apiKey): void {
     requiresApiKey($apiKey);
 
     Event::fake();
@@ -18,11 +18,11 @@ test('audio can be generated', function (string $provider, string $apiKey) {
         ->and($response->audio)->not->toBeEmpty()
         ->and($response->mimeType())->not->toBeNull();
 
-    Event::assertDispatched(GeneratingAudio::class, fn (GeneratingAudio $event) => $event->prompt->timeout === 30);
-    Event::assertDispatched(AudioGenerated::class, fn (AudioGenerated $event) => $event->prompt->timeout === 30);
+    Event::assertDispatched(GeneratingAudio::class, fn (GeneratingAudio $event): bool => $event->prompt->timeout === 30);
+    Event::assertDispatched(AudioGenerated::class, fn (AudioGenerated $event): bool => $event->prompt->timeout === 30);
 })->with('tts-providers');
 
-test('transcription can be generated from local path', function (string $provider, string $apiKey) {
+test('transcription can be generated from local path', function (string $provider, string $apiKey): void {
     requiresApiKey($apiKey);
 
     $transcription = Files\Audio::fromPath(__DIR__.'/../Fixtures/audio.mp3')
@@ -32,7 +32,7 @@ test('transcription can be generated from local path', function (string $provide
     expect(str_contains(strtolower((string) $transcription), 'how are you today'))->toBeTrue();
 })->with('transcription-providers');
 
-test('audio can be transcribed after generation', function (string $provider, string $apiKey) {
+test('audio can be transcribed after generation', function (string $provider, string $apiKey): void {
     requiresApiKey($apiKey);
 
     $audio = Audio::of('Hello there! How are you today?')->generate(provider: $provider);
@@ -43,7 +43,7 @@ test('audio can be transcribed after generation', function (string $provider, st
     expect(str_contains(strtolower((string) $transcription), 'how are you today'))->toBeTrue();
 })->with('tts-providers');
 
-test('transcription can be diarized', function (string $provider, string $apiKey) {
+test('transcription can be diarized', function (string $provider, string $apiKey): void {
     requiresApiKey($apiKey);
 
     $audio = Audio::of('Hello there! How are you today?')->generate(provider: $provider);
@@ -54,4 +54,4 @@ test('transcription can be diarized', function (string $provider, string $apiKey
 
     expect(str_contains(strtolower((string) $transcription), 'how are you today'))->toBeTrue()
         ->and($transcription->segments->count())->toBeGreaterThan(0);
-})->with('tts-providers');
+})->with('diarization-providers');

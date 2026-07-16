@@ -3,19 +3,33 @@
 namespace Laravel\Ai\Gateway\Gemini\Concerns;
 
 use Illuminate\Support\Arr;
-use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\ToolResult;
+use Laravel\Ai\ToolChoice;
 
 trait BuildsTextRequests
 {
     /**
+     * Build the request body for the current text generation step.
+     */
+    protected function buildStepBody(
+        Provider $provider,
+        string $model,
+        ?string $instructions,
+        array $messages,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options,
+        StepContext $stepContext,
+    ): array {
+        return $this->buildTextRequestBody($provider, $instructions, $messages, $tools, $schema, $options);
+    }
+
+    /**
      * Build the request body for the Gemini generateContent API.
-     *
-     * Returns a tuple of [request body, contents array] so the contents
-     * can be tracked for tool loop history resending.
      */
     protected function buildTextRequestBody(
         Provider $provider,
@@ -27,20 +41,6 @@ trait BuildsTextRequests
     ): array {
         $contents = $this->mapMessagesToContents($messages);
 
-        return [$this->assembleRequestBody($contents, $instructions, $tools, $schema, $options, $provider), $contents];
-    }
-
-    /**
-     * Rebuild the request body for a tool-loop continuation.
-     */
-    protected function rebuildContinuationBody(
-        array $contents,
-        ?string $instructions,
-        array $tools,
-        ?array $schema,
-        ?TextGenerationOptions $options,
-        Provider $provider,
-    ): array {
         return $this->assembleRequestBody($contents, $instructions, $tools, $schema, $options, $provider);
     }
 
@@ -65,6 +65,12 @@ trait BuildsTextRequests
 
         if (filled($tools)) {
             $body['tools'] = $this->mapTools($tools, $provider);
+
+            if ($options?->toolChoice instanceof ToolChoice) {
+                $body['tool_config'] = [
+                    'function_calling_config' => $this->functionCallingConfig($options->toolChoice),
+                ];
+            }
         }
 
         $generationConfig = [];
@@ -83,7 +89,16 @@ trait BuildsTextRequests
             'topP' => $options?->topP,
         ]));
 
-        $providerOptions = $options?->providerOptions(Lab::tryFrom($provider->driver()) ?? $provider->driver());
+        $providerOptions = $options?->providerOptions($provider->driver()) ?? [];
+
+        // Hoist keys that need to be passed at top level, as everything else is passed in generationConfig
+        $topLevelKeys = ['cachedContent'];
+        foreach ($topLevelKeys as $key) {
+            if (array_key_exists($key, $providerOptions)) {
+                $body[$key] = $providerOptions[$key];
+                unset($providerOptions[$key]);
+            }
+        }
 
         if (filled($providerOptions)) {
             $generationConfig = array_merge($generationConfig, $providerOptions);
@@ -103,7 +118,7 @@ trait BuildsTextRequests
      */
     protected function buildFunctionResponseParts(array $toolResults): array
     {
-        return array_values(array_map(function ($result) {
+        return array_values(array_map(function ($result): array {
             $functionResponse = [
                 'name' => $result->name,
                 'response' => [
@@ -126,5 +141,23 @@ trait BuildsTextRequests
     protected function buildResponseSchema(array $schema): array
     {
         return (new ObjectSchema($schema))->toSchema();
+    }
+
+    /**
+     * Map a tool choice to the Gemini function_calling_config block.
+     *
+     * @return array<string, mixed>
+     */
+    protected function functionCallingConfig(ToolChoice $choice): array
+    {
+        return match ($choice->mode) {
+            ToolChoice::auto => ['mode' => 'AUTO'],
+            ToolChoice::none => ['mode' => 'NONE'],
+            ToolChoice::required => ['mode' => 'ANY'],
+            ToolChoice::tool => [
+                'mode' => 'ANY',
+                'allowed_function_names' => [$choice->toolName],
+            ],
+        };
     }
 }

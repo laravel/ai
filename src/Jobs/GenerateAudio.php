@@ -6,10 +6,12 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\PendingResponses\PendingAudioGeneration;
+use Laravel\Ai\Responses\AudioResponse;
 
 class GenerateAudio implements ShouldQueue
 {
-    use Concerns\InvokesQueuedResponseCallbacks, Queueable;
+    use Concerns\InvokesQueuedResponseCallbacks;
+    use Queueable;
 
     /**
      * Create a new job instance.
@@ -24,7 +26,7 @@ class GenerateAudio implements ShouldQueue
      */
     public function handle(): void
     {
-        $this->withCallbacks(fn () => $this->pendingAudio->generate(
+        $this->withCallbacks(fn (): AudioResponse => $this->pendingAudio->generate(
             $this->provider,
             $this->model,
         ));

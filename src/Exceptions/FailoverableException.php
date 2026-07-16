@@ -2,7 +2,9 @@
 
 namespace Laravel\Ai\Exceptions;
 
-interface FailoverableException
+use Throwable;
+
+interface FailoverableException extends Throwable
 {
     //
 }

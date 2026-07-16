@@ -4,6 +4,7 @@ namespace Laravel\Ai\PendingResponses;
 
 use BackedEnum;
 use Illuminate\Support\Traits\Conditionable;
+use InvalidArgumentException;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
@@ -27,7 +28,11 @@ class PendingAudioGeneration
 
     public function __construct(
         protected string $text,
-    ) {}
+    ) {
+        if (blank($text)) {
+            throw new InvalidArgumentException('Text content is required to generate audio.');
+        }
+    }
 
     /**
      * Specify a specific voice for the generated audio.
@@ -81,6 +86,8 @@ class PendingAudioGeneration
 
     /**
      * Generate the audio.
+     *
+     * @throws FailoverableException if every configured provider fails to generate the audio.
      */
     public function generate(Lab|array|string|null $provider = null, ?string $model = null): AudioResponse
     {

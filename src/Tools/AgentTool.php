@@ -46,8 +46,8 @@ class AgentTool implements Tool
     {
         try {
             return $this->agent->prompt((string) $request['task'])->text;
-        } catch (Throwable $e) {
-            return 'Agent failed: '.$e->getMessage();
+        } catch (Throwable $throwable) {
+            return 'Agent failed: '.$throwable->getMessage();
         }
     }
 

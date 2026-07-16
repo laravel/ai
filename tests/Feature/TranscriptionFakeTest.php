@@ -10,10 +10,22 @@ use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\TranscriptionResponse;
 use Laravel\Ai\Transcription;
 
-test('transcriptions can be faked', function () {
+test('transcription rejects empty audio string', function (): void {
+    Transcription::fake();
+
+    Transcription::of('')->generate();
+})->throws(InvalidArgumentException::class, 'Base64 audio content cannot be empty.');
+
+test('transcription rejects empty base64 audio', function (): void {
+    Transcription::fake();
+
+    Transcription::fromBase64('')->generate();
+})->throws(InvalidArgumentException::class, 'Base64 audio content cannot be empty.');
+
+test('transcriptions can be faked', function (): void {
     Transcription::fake([
         'First transcription',
-        fn (TranscriptionPrompt $prompt) => 'Second transcription',
+        fn (TranscriptionPrompt $prompt): string => 'Second transcription',
         new TranscriptionResponse(
             'Third transcription',
             new Collection([new TranscriptionSegment('Third transcription', 'Speaker 1', 0.0, 1.0)]),
@@ -32,17 +44,17 @@ test('transcriptions can be faked', function () {
     expect($response->text)->toEqual('Third transcription');
 
     // Assertion tests...
-    Transcription::assertGenerated(fn (TranscriptionPrompt $prompt) => true);
-    Transcription::assertNotGenerated(fn (TranscriptionPrompt $prompt) => $prompt->language === 'fr');
+    Transcription::assertGenerated(fn (TranscriptionPrompt $prompt): true => true);
+    Transcription::assertNotGenerated(fn (TranscriptionPrompt $prompt): bool => $prompt->language === 'fr');
 });
 
-test('can assert no transcriptions were generated', function () {
+test('can assert no transcriptions were generated', function (): void {
     Transcription::fake();
 
     Transcription::assertNothingGenerated();
 });
 
-test('transcriptions can be faked with no predefined responses', function () {
+test('transcriptions can be faked with no predefined responses', function (): void {
     Transcription::fake();
 
     $response = Transcription::of(base64_encode('audio-1'))->generate();
@@ -52,10 +64,10 @@ test('transcriptions can be faked with no predefined responses', function () {
     expect($response->text)->toEqual('Fake transcription text.');
 });
 
-test('transcriptions can be faked with a single closure that is invoked for every generation', function () {
+test('transcriptions can be faked with a single closure that is invoked for every generation', function (): void {
     $counter = 0;
 
-    Transcription::fake(function (TranscriptionPrompt $prompt) use (&$counter) {
+    Transcription::fake(function (TranscriptionPrompt $prompt) use (&$counter): string {
         $counter++;
 
         return "Transcription {$counter}";
@@ -68,31 +80,39 @@ test('transcriptions can be faked with a single closure that is invoked for ever
     expect($response->text)->toEqual('Transcription 2');
 });
 
-test('transcriptions can prevent stray generations', function () {
+test('transcriptions can prevent stray generations', function (): void {
     Transcription::fake()->preventStrayTranscriptions();
 
     Transcription::of(base64_encode('audio'))->generate();
 })->throws(RuntimeException::class);
 
-test('fake closures can throw exceptions', function () {
-    Transcription::fake(function () {
+test('fake closures can throw exceptions', function (): void {
+    Transcription::fake(function (): void {
         throw new Exception('Something went wrong');
     });
 
     Transcription::of(base64_encode('audio'))->generate();
 })->throws(Exception::class);
 
-test('transcription language and diarize are recorded', function () {
+test('transcription language and diarize are recorded', function (): void {
     Transcription::fake();
 
     Transcription::of(base64_encode('audio'))->language('en')->diarize()->generate();
 
-    Transcription::assertGenerated(function (TranscriptionPrompt $prompt) {
-        return $prompt->language === 'en' && $prompt->isDiarized();
-    });
+    Transcription::assertGenerated(fn (TranscriptionPrompt $prompt): bool => $prompt->language === 'en' && $prompt->isDiarized());
 });
 
-test('fake transcriptions include segments', function () {
+test('transcription provider options are recorded', function (): void {
+    Transcription::fake();
+
+    Transcription::of(base64_encode('audio'))
+        ->withProviderOptions(['prompt' => 'Laravel Forge and Vapor'])
+        ->generate();
+
+    Transcription::assertGenerated(fn (TranscriptionPrompt $prompt): bool => ($prompt->providerOptions['prompt'] ?? null) === 'Laravel Forge and Vapor');
+});
+
+test('fake transcriptions include segments', function (): void {
     Transcription::fake(['Hello world']);
 
     $response = Transcription::of(base64_encode('audio'))->generate();
@@ -102,61 +122,63 @@ test('fake transcriptions include segments', function () {
         ->and($response->segments[0]->speaker)->toEqual('Speaker 1');
 });
 
-test('queued transcriptions can be faked', function () {
+test('queued transcriptions can be faked', function (): void {
     Transcription::fake();
 
     Transcription::fromPath('/path/to/audio.mp3')->queue();
 
-    Transcription::assertQueued(fn (QueuedTranscriptionPrompt $prompt) => $prompt->audio->path === '/path/to/audio.mp3');
-    Transcription::assertNotQueued(fn (QueuedTranscriptionPrompt $prompt) => $prompt->audio->path === '/path/to/other.mp3');
+    Transcription::assertQueued(fn (QueuedTranscriptionPrompt $prompt): bool => $prompt->audio->path === '/path/to/audio.mp3');
+    Transcription::assertNotQueued(fn (QueuedTranscriptionPrompt $prompt): bool => $prompt->audio->path === '/path/to/other.mp3');
 
-    Transcription::assertQueued(function (QueuedTranscriptionPrompt $prompt) {
-        return $prompt->audio->path === '/path/to/audio.mp3';
-    });
+    Transcription::assertQueued(fn (QueuedTranscriptionPrompt $prompt): bool => $prompt->audio->path === '/path/to/audio.mp3');
 
-    Transcription::assertNotQueued(function (QueuedTranscriptionPrompt $prompt) {
-        return $prompt->audio->path === '/path/to/other.mp3';
-    });
+    Transcription::assertNotQueued(fn (QueuedTranscriptionPrompt $prompt): bool => $prompt->audio->path === '/path/to/other.mp3');
 });
 
-test('can assert no transcriptions were queued', function () {
+test('can assert no transcriptions were queued', function (): void {
     Transcription::fake();
 
     Transcription::assertNothingQueued();
 });
 
-test('generate accepts ai provider enum', function () {
+test('generate accepts ai provider enum', function (): void {
     Transcription::fake();
 
     Transcription::of(base64_encode('audio'))->generate(provider: Lab::OpenAI);
 
-    Transcription::assertGenerated(fn (TranscriptionPrompt $prompt) => true);
+    Transcription::assertGenerated(fn (TranscriptionPrompt $prompt): true => true);
 });
 
-test('queued transcription accepts ai provider enum', function () {
+test('queued transcription accepts ai provider enum', function (): void {
     Transcription::fake();
 
     Transcription::fromPath('/path/to/audio.mp3')->queue(provider: Lab::ElevenLabs);
 
-    Transcription::assertQueued(fn (QueuedTranscriptionPrompt $prompt) => $prompt->provider === Lab::ElevenLabs);
+    Transcription::assertQueued(fn (QueuedTranscriptionPrompt $prompt): bool => $prompt->provider === Lab::ElevenLabs);
 });
 
-test('queued transcription language and diarize are recorded', function () {
+test('queued transcription language and diarize are recorded', function (): void {
     Transcription::fake();
 
     Transcription::fromPath('/path/to/audio.mp3')->language('es')->diarize()->queue();
 
-    Transcription::assertQueued(function (QueuedTranscriptionPrompt $prompt) {
-        return $prompt->language === 'es' && $prompt->isDiarized();
-    });
+    Transcription::assertQueued(fn (QueuedTranscriptionPrompt $prompt): bool => $prompt->language === 'es' && $prompt->isDiarized());
 });
 
-test('transcription can have timeouts', function () {
+test('queued transcription provider options are recorded', function (): void {
+    Transcription::fake();
+
+    Transcription::fromPath('/path/to/audio.mp3')
+        ->withProviderOptions(['prompt' => 'Laravel Forge and Vapor'])
+        ->queue();
+
+    Transcription::assertQueued(fn (QueuedTranscriptionPrompt $prompt): bool => ($prompt->providerOptions['prompt'] ?? null) === 'Laravel Forge and Vapor');
+});
+
+test('transcription can have timeouts', function (): void {
     Transcription::fake();
 
     Transcription::of(base64_encode('audio'))->timeout(60)->generate();
 
-    Transcription::assertGenerated(function (TranscriptionPrompt $prompt) {
-        return $prompt->timeout === 60;
-    });
+    Transcription::assertGenerated(fn (TranscriptionPrompt $prompt): bool => $prompt->timeout === 60);
 });

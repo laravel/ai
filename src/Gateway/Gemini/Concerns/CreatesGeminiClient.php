@@ -14,7 +14,7 @@ trait CreatesGeminiClient
     protected function client(Provider $provider, ?int $timeout = null): PendingRequest
     {
         return Http::baseUrl($this->baseUrl($provider))
-            ->withHeaders(['x-goog-api-key' => $provider->providerCredentials()['key']])
+            ->withHeaders(array_filter(['x-goog-api-key' => $provider->providerCredentials()['key']]))
             ->timeout($timeout ?? 60)
             ->throw();
     }

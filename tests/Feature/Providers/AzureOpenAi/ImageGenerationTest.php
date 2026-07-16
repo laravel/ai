@@ -2,11 +2,14 @@
 
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Image;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.azure' => [
         ...config('ai.providers.azure'),
         'key' => 'test-key',
@@ -23,14 +26,14 @@ function fakeAzureImageResponse(): PromiseInterface
     ]);
 }
 
-test('image request uses correct deployment and url', function () {
+test('image request uses correct deployment and url', function (): void {
     Http::fake([
         '*' => fakeAzureImageResponse(),
     ]);
 
     Image::of('A red apple')->generate(provider: 'azure', model: 'gpt-image-1');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $request->url() === 'https://test-resource.openai.azure.com/openai/v1/images/generations'
@@ -38,77 +41,77 @@ test('image request uses correct deployment and url', function () {
     });
 });
 
-test('image request does not include quality when not specified', function () {
+test('image request does not include quality when not specified', function (): void {
     Http::fake([
         '*' => fakeAzureImageResponse(),
     ]);
 
     Image::of('A red apple')->generate(provider: 'azure', model: 'gpt-image-1');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return ! array_key_exists('quality', $body);
     });
 });
 
-test('image request includes quality when explicitly specified', function () {
+test('image request includes quality when explicitly specified', function (): void {
     Http::fake([
         '*' => fakeAzureImageResponse(),
     ]);
 
     Image::of('A red apple')->quality('high')->generate(provider: 'azure', model: 'gpt-image-1');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['quality'] === 'high';
     });
 });
 
-test('image request includes size when specified', function () {
+test('image request includes size when specified', function (): void {
     Http::fake([
         '*' => fakeAzureImageResponse(),
     ]);
 
     Image::of('A red apple')->square()->generate(provider: 'azure', model: 'gpt-image-1');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['size'] === '1024x1024';
     });
 });
 
-test('image request does not include size when not specified', function () {
+test('image request does not include size when not specified', function (): void {
     Http::fake([
         '*' => fakeAzureImageResponse(),
     ]);
 
     Image::of('A red apple')->generate(provider: 'azure', model: 'gpt-image-1');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return ! array_key_exists('size', $body);
     });
 });
 
-test('image request always includes moderation low', function () {
+test('image request always includes moderation low', function (): void {
     Http::fake([
         '*' => fakeAzureImageResponse(),
     ]);
 
     Image::of('A red apple')->generate(provider: 'azure', model: 'gpt-image-1');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return ($body['moderation'] ?? null) === 'low';
     });
 });
 
-test('image generation throws when attachments are passed', function () {
+test('image generation throws when attachments are passed', function (): void {
     Http::fake([
         '*' => fakeAzureImageResponse(),
     ]);
@@ -116,23 +119,23 @@ test('image generation throws when attachments are passed', function () {
     Image::of('Add a leaf to the apple')
         ->attachments([new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')])
         ->generate(provider: 'azure', model: 'gpt-image-1');
-})->throws(LogicException::class, 'The Azure OpenAI provider does not support image edits.');
+})->throws(LogicException::class, 'Azure OpenAI does not support image editing.');
 
-test('image generation request omits response_format', function () {
+test('image generation request omits response_format', function (): void {
     Http::fake([
         '*' => fakeAzureImageResponse(),
     ]);
 
     Image::of('A red apple')->generate(provider: 'azure', model: 'gpt-image-1');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return ! array_key_exists('response_format', $body);
     });
 });
 
-test('image response includes usage tokens', function () {
+test('image response includes usage tokens', function (): void {
     Http::fake([
         '*' => Http::response([
             'data' => [[
@@ -155,7 +158,7 @@ test('image response includes usage tokens', function () {
         ->and($response->usage->completionTokens)->toBe(1024);
 });
 
-test('image response subtracts cached tokens from prompt tokens', function () {
+test('image response subtracts cached tokens from prompt tokens', function (): void {
     Http::fake([
         '*' => Http::response([
             'data' => [[
@@ -179,7 +182,7 @@ test('image response subtracts cached tokens from prompt tokens', function () {
         ->and($response->usage->completionTokens)->toBe(1024);
 });
 
-test('image response defaults to zero usage when not returned', function () {
+test('image response defaults to zero usage when not returned', function (): void {
     Http::fake([
         '*' => fakeAzureImageResponse(),
     ]);
@@ -190,7 +193,7 @@ test('image response defaults to zero usage when not returned', function () {
         ->and($response->usage->completionTokens)->toBe(0);
 });
 
-test('default image model falls back to gpt-image-1', function () {
+test('default image model falls back to gpt-image-1', function (): void {
     config(['ai.providers.azure.image_deployment' => null]);
 
     Http::fake([
@@ -199,9 +202,55 @@ test('default image model falls back to gpt-image-1', function () {
 
     Image::of('A red apple')->generate(provider: 'azure');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['model'] === 'gpt-image-1';
     });
 });
+
+test('image rate limit response throws rate limited exception', function (): void {
+    Http::fake([
+        'test-resource.openai.azure.com/*' => Http::response([
+            'error' => [
+                'code' => '429',
+                'message' => 'Requests to the Generations_Create Operation under Azure OpenAI API have exceeded call rate limit of your current OpenAI S0 pricing tier.',
+            ],
+        ], 429),
+    ]);
+
+    Image::of('A red apple')->generate(provider: 'azure', model: 'gpt-image-1');
+})->throws(RateLimitedException::class);
+
+test('image overloaded response throws provider overloaded exception', function (): void {
+    Http::fake([
+        'test-resource.openai.azure.com/*' => Http::response([
+            'error' => [
+                'code' => 'ServiceUnavailable',
+                'message' => 'The server is currently overloaded. Please try again later.',
+            ],
+        ], 503),
+    ]);
+
+    Image::of('A red apple')->generate(provider: 'azure', model: 'gpt-image-1');
+})->throws(ProviderOverloadedException::class);
+
+test('image http error response throws request exception', function (): void {
+    Http::fake([
+        'test-resource.openai.azure.com/*' => Http::response([
+            'error' => [
+                'code' => 'contentFilter',
+                'message' => 'Your task failed as a result of our safety system. Image generations failure reason: The generated image was filtered as a result of our content policy.',
+                'innererror' => [
+                    'code' => 'ResponsibleAIPolicyViolation',
+                    'content_filter_result' => [
+                        'sexual' => ['filtered' => false, 'severity' => 'safe'],
+                        'violence' => ['filtered' => true, 'severity' => 'medium'],
+                    ],
+                ],
+            ],
+        ], 400),
+    ]);
+
+    Image::of('A red apple')->generate(provider: 'azure', model: 'gpt-image-1');
+})->throws(RequestException::class);

@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Prompts\ImagePrompt;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
@@ -26,8 +27,8 @@ class FakeImageGateway implements ImageGateway
     /**
      * Generate an image.
      *
-     * @param  array<ImageAttachment>  $attachments
-     * @param  'low'|'medium'|'high'  $quality
+     * @param  array<Image>  $attachments
+     * @param  'low'|'medium'|'high'|null  $quality
      */
     public function generateImage(
         ImageProvider $provider,
@@ -54,7 +55,7 @@ class FakeImageGateway implements ImageGateway
 
         return tap($this->marshalResponse(
             $response, $provider, $model, $prompt
-        ), fn () => $this->currentResponseIndex++);
+        ), fn (): int => $this->currentResponseIndex++);
     }
 
     /**
@@ -80,7 +81,7 @@ class FakeImageGateway implements ImageGateway
 
         if (is_string($response)) {
             return new ImageResponse(
-                new Collection([new GeneratedImage($response)]),
+                new Collection([new GeneratedImage($response, 'image/png')]),
                 new Usage,
                 new Meta($provider->name(), $model),
             );

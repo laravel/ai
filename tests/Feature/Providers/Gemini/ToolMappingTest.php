@@ -4,13 +4,14 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Tests\Fixtures\Agents\NamedToolAgent;
+use Tests\Fixtures\Agents\NestedObjectToolAgent;
 use Tests\Fixtures\Agents\NullableToolAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 use function Laravel\Ai\agent;
 
-test('empty schema omits parameters key', function () {
+test('empty schema omits parameters key', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('The number is 42'),
     ]);
@@ -20,7 +21,7 @@ test('empty schema omits parameters key', function () {
         provider: 'gemini',
     );
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $tools = $request->data()['tools'] ?? [];
 
         foreach ($tools as $toolGroup) {
@@ -35,7 +36,7 @@ test('empty schema omits parameters key', function () {
     });
 });
 
-test('tool parameters exclude additional properties', function () {
+test('tool parameters exclude additional properties', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('The number is 42'),
     ]);
@@ -45,7 +46,7 @@ test('tool parameters exclude additional properties', function () {
         provider: 'gemini',
     );
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $tools = $request->data()['tools'] ?? [];
 
         foreach ($tools as $toolGroup) {
@@ -61,14 +62,50 @@ test('tool parameters exclude additional properties', function () {
     });
 });
 
-test('nullable tool parameters use OpenAPI-style nullable format', function () {
+test('nested object parameters recursively exclude additional properties', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    (new NestedObjectToolAgent)->prompt('Test nested params', provider: 'gemini');
+
+    $hasAdditionalProperties = function ($node) use (&$hasAdditionalProperties): bool {
+        if (! is_array($node)) {
+            return false;
+        }
+
+        if (array_key_exists('additionalProperties', $node)) {
+            return true;
+        }
+
+        foreach ($node as $value) {
+            if ($hasAdditionalProperties($value)) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+
+    Http::assertSent(function ($request) use ($hasAdditionalProperties): bool {
+        $params = $request->data()['tools'][0]['function_declarations'][0]['parameters'];
+
+        // The nested object lives under the array's items and must survive the strip.
+        expect($params['properties']['items']['items']['properties'])
+            ->toHaveKeys(['name', 'description']);
+
+        return $hasAdditionalProperties($params) === false;
+    });
+});
+
+test('nullable tool parameters use OpenAPI-style nullable format', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('ok'),
     ]);
 
     (new NullableToolAgent)->prompt('Test nullable params', provider: 'gemini');
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $props = $request->data()['tools'][0]['function_declarations'][0]['parameters']['properties'];
 
         return $props['name'] === ['type' => 'string']
@@ -77,14 +114,14 @@ test('nullable tool parameters use OpenAPI-style nullable format', function () {
     });
 });
 
-test('tool with a name() method emits the declared name', function () {
+test('tool with a name() method emits the declared name', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('ok'),
     ]);
 
     (new NamedToolAgent('aliased_tool'))->prompt('Search', provider: 'gemini');
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $names = [];
 
         foreach ($request->data()['tools'] ?? [] as $toolGroup) {
@@ -97,14 +134,14 @@ test('tool with a name() method emits the declared name', function () {
     });
 });
 
-test('tool without a name() method falls back to class basename', function () {
+test('tool without a name() method falls back to class basename', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('ok'),
     ]);
 
     (new ToolUsingAgent(fixed: true))->prompt('Generate', provider: 'gemini');
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $names = [];
 
         foreach ($request->data()['tools'] ?? [] as $toolGroup) {
@@ -117,7 +154,7 @@ test('tool without a name() method falls back to class basename', function () {
     });
 });
 
-test('provider tools are sent without function_calling_config', function () {
+test('provider tools are sent without function_calling_config', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('ok'),
     ]);
@@ -127,7 +164,7 @@ test('provider tools are sent without function_calling_config', function () {
         tools: [new FileSearch(['fileSearchStores/store123'])],
     )->prompt('Question?', provider: 'gemini');
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $body = $request->data();
         $tools = $body['tools'] ?? [];
 
@@ -137,7 +174,7 @@ test('provider tools are sent without function_calling_config', function () {
     });
 });
 
-test('mixed function and provider tools are sent without tool_config', function () {
+test('mixed function and provider tools are sent without tool_config', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('ok'),
     ]);
@@ -147,12 +184,12 @@ test('mixed function and provider tools are sent without tool_config', function 
         tools: [new FixedNumberGenerator, new WebSearch],
     )->prompt('Generate', provider: 'gemini');
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $body = $request->data();
         $tools = $body['tools'] ?? [];
 
-        $hasFunctionDeclarations = collect($tools)->contains(fn ($tool) => isset($tool['function_declarations']));
-        $hasGoogleSearch = collect($tools)->contains(fn ($tool) => isset($tool['google_search']));
+        $hasFunctionDeclarations = collect($tools)->contains(fn ($tool): bool => isset($tool['function_declarations']));
+        $hasGoogleSearch = collect($tools)->contains(fn ($tool): bool => isset($tool['google_search']));
 
         return $hasFunctionDeclarations
             && $hasGoogleSearch
@@ -160,7 +197,7 @@ test('mixed function and provider tools are sent without tool_config', function 
     });
 });
 
-test('tools are wrapped in function declarations', function () {
+test('tools are wrapped in function declarations', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('The number is 42'),
     ]);
@@ -170,7 +207,7 @@ test('tools are wrapped in function declarations', function () {
         provider: 'gemini',
     );
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $tools = $request->data()['tools'] ?? [];
 
         if (! isset($tools[0]['function_declarations']) || count($tools[0]['function_declarations']) === 0) {

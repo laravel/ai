@@ -14,8 +14,8 @@ use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 
-describe('text streaming', function () {
-    test('streaming emits text events', function () {
+describe('text streaming', function (): void {
+    test('streaming emits text events', function (): void {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::response(
                 body: $this->ssePayload([
@@ -38,7 +38,7 @@ describe('text streaming', function () {
             ->and($events[count($events) - 1])->toBeInstanceOf(StreamEnd::class);
     });
 
-    test('streaming uses sse endpoint with alt parameter', function () {
+    test('streaming uses sse endpoint with alt parameter', function (): void {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::response(
                 body: $this->ssePayload([
@@ -51,14 +51,12 @@ describe('text streaming', function () {
 
         $this->collectStreamEvents();
 
-        Http::assertSent(function ($request) {
-            return str_contains($request->url(), 'streamGenerateContent?alt=sse');
-        });
+        Http::assertSent(fn ($request): bool => str_contains((string) $request->url(), 'streamGenerateContent?alt=sse'));
     });
 });
 
-describe('tool calls', function () {
-    test('streaming handles tool calls', function () {
+describe('tool calls', function (): void {
+    test('streaming handles tool calls', function (): void {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::sequence([
                 Http::response(
@@ -86,13 +84,50 @@ describe('tool calls', function () {
 
         $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
 
-        $toolCallEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolCallEvent));
+        $toolCallEvents = array_values(array_filter($events, fn ($e): bool => $e instanceof ToolCallEvent));
 
         expect($toolCallEvents)->not->toBeEmpty()
             ->and($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator');
     });
 
-    test('streaming thinking parts are excluded from tool call continuation', function () {
+    test('streaming tool loop emits a single stream end with accumulated usage', function (): void {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::sequence([
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->geminiChunkWithUsage([[
+                            'functionCall' => [
+                                'id' => 'call_1',
+                                'name' => 'FixedNumberGenerator',
+                                'args' => (object) [],
+                            ],
+                        ]], 10, 5),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->geminiChunkWithUsage([['text' => 'The number is 72019']], 20, 10),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+            ]),
+        ]);
+
+        $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+        $streamEnds = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd));
+
+        expect($streamEnds)->toHaveCount(1)
+            ->and($streamEnds[0]->reason)->toBe(FinishReason::Stop->value)
+            ->and($streamEnds[0]->usage)
+            ->promptTokens->toBe(30)
+            ->completionTokens->toBe(15);
+    });
+
+    test('streaming thinking parts are excluded from tool call continuation', function (): void {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::sequence([
                 Http::response(
@@ -133,8 +168,8 @@ describe('tool calls', function () {
     });
 });
 
-describe('thinking blocks', function () {
-    test('streaming handles thinking parts', function () {
+describe('thinking blocks', function (): void {
+    test('streaming handles thinking parts', function (): void {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::response(
                 body: $this->ssePayload([
@@ -155,13 +190,13 @@ describe('thinking blocks', function () {
             ReasoningEnd::class,
         ]);
 
-        $reasoningDelta = array_values(array_filter($events, fn ($e) => $e instanceof ReasoningDelta))[0];
+        $reasoningDelta = array_values(array_filter($events, fn ($e): bool => $e instanceof ReasoningDelta))[0];
         expect($reasoningDelta->delta)->toBe('Let me think...');
     });
 });
 
-describe('error handling', function () {
-    test('streaming error event stops stream', function () {
+describe('error handling', function (): void {
+    test('streaming error event stops stream', function (): void {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::response(
                 body: $this->ssePayload([
@@ -179,8 +214,8 @@ describe('error handling', function () {
     });
 });
 
-describe('usage tracking', function () {
-    test('streaming captures usage from final chunk', function () {
+describe('usage tracking', function (): void {
+    test('streaming captures usage from final chunk', function (): void {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::response(
                 body: $this->ssePayload([
@@ -194,7 +229,7 @@ describe('usage tracking', function () {
 
         $events = $this->collectStreamEvents();
 
-        $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+        $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
 
         expect($streamEnd->usage)
             ->promptTokens->toBe(37)
@@ -202,7 +237,7 @@ describe('usage tracking', function () {
             ->cacheReadInputTokens->toBe(5);
     });
 
-    test('streaming finish reason maps correctly', function (string $geminiReason, $expected) {
+    test('streaming finish reason maps correctly', function (string $geminiReason, $expected): void {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::response(
                 body: $this->ssePayload([
@@ -216,7 +251,7 @@ describe('usage tracking', function () {
 
         $events = $this->collectStreamEvents();
 
-        $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+        $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
 
         expect($streamEnd->reason)->toBe($expected->value);
     })->with([

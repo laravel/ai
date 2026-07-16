@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Providers\DeepSeek;
 
+use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\AssistantAgent;
 
 trait DeepSeekHelpers
@@ -29,11 +30,7 @@ trait DeepSeekHelpers
         $lines = [];
 
         foreach ($events as $event) {
-            if ($event === '[DONE]') {
-                $lines[] = 'data: [DONE]';
-            } else {
-                $lines[] = 'data: '.json_encode($event);
-            }
+            $lines[] = $event === '[DONE]' ? 'data: [DONE]' : 'data: '.json_encode($event);
         }
 
         return implode("\n\n", $lines)."\n\n";
@@ -111,5 +108,35 @@ trait DeepSeekHelpers
                 'finish_reason' => null,
             ]],
         ];
+    }
+
+    /**
+     * Get the decoded messages array from a recorded request.
+     */
+    protected function requestMessages(int $requestIndex = 0): array
+    {
+        $recorded = Http::recorded();
+
+        return json_decode($recorded[$requestIndex][0]->body(), true)['messages'] ?? [];
+    }
+
+    /**
+     * Find the first message matching the given criteria.
+     */
+    protected function findMessage(array $messages, string $role, ?string $has = null): ?array
+    {
+        return collect($messages)->first(
+            fn (array $m): bool => $m['role'] === $role && ($has === null || isset($m[$has]))
+        );
+    }
+
+    /**
+     * Filter messages by role.
+     *
+     * @return array<array>
+     */
+    protected function filterMessages(array $messages, string $role): array
+    {
+        return collect($messages)->filter(fn (array $m): bool => $m['role'] === $role)->values()->all();
     }
 }

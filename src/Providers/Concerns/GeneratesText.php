@@ -13,6 +13,7 @@ use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Contracts\RemembersConversations as RemembersConversationsContract;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\InvokingTool;
@@ -24,7 +25,11 @@ use Laravel\Ai\Middleware\RememberConversation;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StructuredAgentResponse;
+use Laravel\Ai\Responses\StructuredTextResponse;
+use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Tools\AgentTool;
+use Laravel\Ai\Tools\McpServerTool;
+use Laravel\Ai\Tools\McpTool;
 
 use function Laravel\Ai\pipeline;
 
@@ -44,7 +49,7 @@ trait GeneratesText
         $response = pipeline()
             ->send($prompt)
             ->through($this->gatherMiddlewareFor($prompt->agent))
-            ->then(function (AgentPrompt $prompt) use ($invocationId, &$processedPrompt) {
+            ->then(function (AgentPrompt $prompt) use ($invocationId, &$processedPrompt): TextResponse {
                 $processedPrompt = $prompt;
 
                 $this->events->dispatch(new PromptingAgent($invocationId, $prompt));
@@ -60,7 +65,7 @@ trait GeneratesText
 
                 $schema = $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null;
 
-                $response = $this->textGateway()->generateText(
+                $response = $this->textGenerationLoop()->generate(
                     $this,
                     $prompt->model,
                     (string) $agent->instructions(),
@@ -71,7 +76,7 @@ trait GeneratesText
                     $prompt->timeout,
                 );
 
-                return ! empty($schema)
+                return $response instanceof StructuredTextResponse
                     ? (new StructuredAgentResponse($invocationId, $response->structured, $response->text, $response->usage, $response->meta))
                         ->withToolCallsAndResults($response->toolCalls, $response->toolResults)
                         ->withSteps($response->steps)
@@ -99,9 +104,11 @@ trait GeneratesText
             return $next($prompt);
         }] : [];
 
-        if (in_array(RemembersConversations::class, class_uses_recursive($agent))
-            && $agent->hasConversationParticipant()) {
-            $middleware[] = new RememberConversation(resolve(ConversationStore::class), $this);
+        if (in_array(RemembersConversations::class, class_uses_recursive($agent))) {
+            /** @var Agent&RemembersConversationsContract $agent */
+            if ($agent->hasConversationParticipant()) {
+                $middleware[] = new RememberConversation(resolve(ConversationStore::class), $this);
+            }
         }
 
         return $agent instanceof HasMiddleware
@@ -119,9 +126,23 @@ trait GeneratesText
         }
 
         return array_map(
-            fn ($tool) => $tool instanceof Agent ? new AgentTool($tool) : $tool,
+            fn ($tool) => $this->resolveTool($tool),
             [...$agent->tools()],
         );
+    }
+
+    /**
+     * Resolve a tool returned by the agent into a native tool instance when needed.
+     */
+    protected function resolveTool(mixed $tool): mixed
+    {
+        return match (true) {
+            $tool instanceof Agent => new AgentTool($tool),
+            $tool instanceof Tool => $tool,
+            McpTool::supports($tool) => new McpTool($tool),
+            McpServerTool::supports($tool) => new McpServerTool($tool),
+            default => $tool,
+        };
     }
 
     /**
@@ -129,15 +150,15 @@ trait GeneratesText
      */
     protected function listenForToolInvocations(string $invocationId, Agent $agent): void
     {
-        $this->textGateway()->onToolInvocation(
-            invoking: function (Tool $tool, array $arguments) use ($invocationId, $agent) {
+        $this->textGenerationLoop()->onToolInvocation(
+            invoking: function (Tool $tool, array $arguments) use ($invocationId, $agent): void {
                 $this->currentToolInvocationId = (string) Str::uuid7();
 
                 $this->events->dispatch(new InvokingTool(
                     $invocationId, $this->currentToolInvocationId, $agent, $tool, $arguments
                 ));
             },
-            invoked: function (Tool $tool, array $arguments, mixed $result) use ($invocationId, $agent) {
+            invoked: function (Tool $tool, array $arguments, mixed $result) use ($invocationId, $agent): void {
                 $this->events->dispatch(new ToolInvoked(
                     $invocationId, $this->currentToolInvocationId, $agent, $tool, $arguments, $result
                 ));

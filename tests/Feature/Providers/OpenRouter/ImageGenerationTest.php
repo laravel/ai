@@ -2,12 +2,15 @@
 
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Image;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.openrouter' => [
         ...config('ai.providers.openrouter'),
         'key' => 'test-key',
@@ -34,28 +37,28 @@ function fakeOpenRouterImageResponse(string $mimeType = 'image/png', string $con
     ]);
 }
 
-test('image request includes model, messages, and modalities', function () {
+test('image request includes model, messages, and modalities', function (): void {
     Http::fake(['openrouter.ai/*' => fakeOpenRouterImageResponse()]);
 
     Image::of('A blue circle')->generate(provider: 'openrouter', model: 'google/gemini-2.5-flash-image');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return str_contains($request->url(), 'chat/completions')
             && $body['model'] === 'google/gemini-2.5-flash-image'
-            && $body['modalities'] === ['image', 'text']
+            && $body['modalities'] === ['image']
             && $body['messages'][0]['role'] === 'user'
             && $body['messages'][0]['content'] === 'A blue circle';
     });
 });
 
-test('image request maps size to image_config aspect_ratio', function () {
+test('image request maps size to image_config aspect_ratio', function (): void {
     Http::fake(['openrouter.ai/*' => fakeOpenRouterImageResponse()]);
 
     Image::of('A sunset')->landscape()->generate(provider: 'openrouter', model: 'google/gemini-2.5-flash-image');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return data_get($body, 'image_config.aspect_ratio') === '3:2'
@@ -63,12 +66,12 @@ test('image request maps size to image_config aspect_ratio', function () {
     });
 });
 
-test('image request maps quality to image_config image_size', function (string $quality, string $expectedSize) {
+test('image request maps quality to image_config image_size', function (string $quality, string $expectedSize): void {
     Http::fake(['openrouter.ai/*' => fakeOpenRouterImageResponse()]);
 
     Image::of('A sunset')->quality($quality)->generate(provider: 'openrouter', model: 'google/gemini-2.5-flash-image');
 
-    Http::assertSent(function (Request $request) use ($expectedSize) {
+    Http::assertSent(function (Request $request) use ($expectedSize): bool {
         $body = json_decode($request->body(), true);
 
         return data_get($body, 'image_config.image_size') === $expectedSize;
@@ -79,19 +82,19 @@ test('image request maps quality to image_config image_size', function (string $
     'high maps to 4K' => ['high', '4K'],
 ]);
 
-test('image request omits image_config when no size or quality is given', function () {
+test('image request omits image_config when no size or quality is given', function (): void {
     Http::fake(['openrouter.ai/*' => fakeOpenRouterImageResponse()]);
 
     Image::of('A sunset')->generate(provider: 'openrouter', model: 'google/gemini-2.5-flash-image');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return ! array_key_exists('image_config', $body);
     });
 });
 
-test('image response is correctly parsed', function () {
+test('image response is correctly parsed', function (): void {
     Http::fake(['openrouter.ai/*' => fakeOpenRouterImageResponse('image/png', 'fake-image')]);
 
     $response = Image::of('A blue circle')->generate(provider: 'openrouter', model: 'google/gemini-2.5-flash-image');
@@ -103,7 +106,7 @@ test('image response is correctly parsed', function () {
         ->and($response->meta->model)->toBe('google/gemini-2.5-flash-image');
 });
 
-test('usage tokens are parsed from response', function () {
+test('usage tokens are parsed from response', function (): void {
     Http::fake(['openrouter.ai/*' => fakeOpenRouterImageResponse()]);
 
     $response = Image::of('A blue circle')->generate(provider: 'openrouter', model: 'google/gemini-2.5-flash-image');
@@ -112,7 +115,7 @@ test('usage tokens are parsed from response', function () {
         ->and($response->usage->completionTokens)->toBe(20);
 });
 
-test('multiple images in response are all returned', function () {
+test('multiple images in response are all returned', function (): void {
     Http::fake([
         'openrouter.ai/*' => Http::response([
             'choices' => [[
@@ -135,7 +138,7 @@ test('multiple images in response are all returned', function () {
         ->and($response->images[1]->mime)->toBe('image/jpeg');
 });
 
-test('empty images collection returned when response contains no images', function () {
+test('empty images collection returned when response contains no images', function (): void {
     Http::fake([
         'openrouter.ai/*' => Http::response([
             'choices' => [[
@@ -149,14 +152,14 @@ test('empty images collection returned when response contains no images', functi
     expect($response->images)->toHaveCount(0);
 });
 
-test('attachments are sent as image_url content parts', function () {
+test('attachments are sent as image_url content parts', function (): void {
     Http::fake(['openrouter.ai/*' => fakeOpenRouterImageResponse()]);
 
     $attachment = new Base64Image(base64_encode('source-image'), 'image/jpeg');
 
     Image::of('Edit this image')->attachments([$attachment])->generate(provider: 'openrouter', model: 'google/gemini-2.5-flash-image');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $content = $body['messages'][0]['content'];
 
@@ -164,18 +167,18 @@ test('attachments are sent as image_url content parts', function () {
             && $content[0]['type'] === 'text'
             && $content[0]['text'] === 'Edit this image'
             && $content[1]['type'] === 'image_url'
-            && str_starts_with($content[1]['image_url']['url'], 'data:image/jpeg;base64,');
+            && str_starts_with((string) $content[1]['image_url']['url'], 'data:image/jpeg;base64,');
     });
 });
 
-test('remote image attachments are passed as url without downloading', function () {
+test('remote image attachments are passed as url without downloading', function (): void {
     Http::fake(['openrouter.ai/*' => fakeOpenRouterImageResponse()]);
 
     $attachment = new RemoteImage('https://example.com/photo.jpg', 'image/jpeg');
 
     Image::of('Edit this image')->attachments([$attachment])->generate(provider: 'openrouter', model: 'google/gemini-2.5-flash-image');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $content = $body['messages'][0]['content'];
 
@@ -185,12 +188,49 @@ test('remote image attachments are passed as url without downloading', function 
     });
 });
 
-test('request sends bearer token authorization', function () {
+test('request sends bearer token authorization', function (): void {
     Http::fake(['openrouter.ai/*' => fakeOpenRouterImageResponse()]);
 
     Image::of('A blue circle')->generate(provider: 'openrouter', model: 'google/gemini-2.5-flash-image');
 
-    Http::assertSent(function (Request $request) {
-        return $request->hasHeader('Authorization', 'Bearer test-key');
-    });
+    Http::assertSent(fn (Request $request) => $request->hasHeader('Authorization', 'Bearer test-key'));
 });
+
+test('image rate limit response throws rate limited exception', function (): void {
+    Http::fake([
+        'openrouter.ai/*' => Http::response([
+            'error' => [
+                'type' => 'rate_limit_error',
+                'message' => 'Rate limit exceeded',
+            ],
+        ], 429),
+    ]);
+
+    Image::of('A blue circle')->generate(provider: 'openrouter', model: 'google/gemini-2.5-flash-image');
+})->throws(RateLimitedException::class);
+
+test('image overloaded response throws provider overloaded exception', function (): void {
+    Http::fake([
+        'openrouter.ai/*' => Http::response([
+            'error' => [
+                'type' => 'server_error',
+                'message' => 'The server is currently overloaded. Please try again later.',
+            ],
+        ], 503),
+    ]);
+
+    Image::of('A blue circle')->generate(provider: 'openrouter', model: 'google/gemini-2.5-flash-image');
+})->throws(ProviderOverloadedException::class);
+
+test('image http error response throws request exception', function (): void {
+    Http::fake([
+        'openrouter.ai/*' => Http::response([
+            'error' => [
+                'type' => 'invalid_request_error',
+                'message' => 'Invalid model',
+            ],
+        ], 400),
+    ]);
+
+    Image::of('A blue circle')->generate(provider: 'openrouter', model: 'google/gemini-2.5-flash-image');
+})->throws(RequestException::class);
