@@ -379,44 +379,7 @@ test('storing approval results for a conversation with no paused row throws', fu
     ]);
 })->throws(ApprovalMismatchException::class, 'The approval results do not match a paused conversation turn.');
 
-test('resolving approval results keeps the pause marker with the outcomes on the tool results', function (): void {
-    $store = new DatabaseConversationStore;
-    $conversationId = $store->storeConversation(1, 'Tool conversation');
-
-    DB::table('agent_conversation_messages')->insert([
-        'id' => 'message-1',
-        'conversation_id' => $conversationId,
-        'user_id' => 1,
-        'agent' => ToolUsingAgent::class,
-        'role' => 'assistant',
-        'content' => '',
-        'attachments' => '[]',
-        'tool_calls' => json_encode([
-            ['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'x'], 'result_id' => 'result-1'],
-            ['id' => 'call-2', 'name' => 'delete_file', 'arguments' => ['path' => 'y'], 'result_id' => 'result-2'],
-        ]),
-        'tool_results' => '[]',
-        'usage' => '[]',
-        'meta' => '[]',
-        'approval_state' => json_encode(['pending' => ['call-1' => null, 'call-2' => null]]),
-        'created_at' => now(),
-        'updated_at' => now(),
-    ]);
-
-    $store->storeApprovalResults($conversationId, 1, [
-        new ToolResult('call-1', 'delete_file', ['path' => 'x'], 'Deleted x'),
-        new ToolResult('call-2', 'delete_file', ['path' => 'y'], 'The user rejected this tool call.', denied: true),
-    ]);
-
-    $row = DB::table('agent_conversation_messages')->where('id', 'message-1')->first();
-    $results = collect(json_decode($row->tool_results, true));
-
-    expect(json_decode($row->approval_state, true))->toBe(['pending' => []])
-        ->and($results->firstWhere('id', 'call-1'))->not->toHaveKey('denied')
-        ->and($results->firstWhere('id', 'call-2')['denied'])->toBeTrue();
-});
-
-test('a partial resolve keeps the remaining pending calls on the marker', function (): void {
+test('resolving approval results progressively empties the pause marker while outcomes land on the tool results', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Tool conversation');
 
@@ -444,9 +407,19 @@ test('a partial resolve keeps the remaining pending calls on the marker', functi
         new ToolResult('call-1', 'delete_file', ['path' => 'x'], 'Deleted x'),
     ]);
 
-    $state = json_decode(DB::table('agent_conversation_messages')->where('id', 'message-1')->value('approval_state'), true);
+    $partial = json_decode(DB::table('agent_conversation_messages')->where('id', 'message-1')->value('approval_state'), true);
 
-    expect($state)->toBe(['pending' => ['call-2' => 'Deletes y']]);
+    $store->storeApprovalResults($conversationId, 1, [
+        new ToolResult('call-2', 'delete_file', ['path' => 'y'], 'The user rejected this tool call.', denied: true),
+    ]);
+
+    $row = DB::table('agent_conversation_messages')->where('id', 'message-1')->first();
+    $results = collect(json_decode($row->tool_results, true));
+
+    expect($partial)->toBe(['pending' => ['call-2' => 'Deletes y']])
+        ->and(json_decode($row->approval_state, true))->toBe(['pending' => []])
+        ->and($results->firstWhere('id', 'call-1'))->not->toHaveKey('denied')
+        ->and($results->firstWhere('id', 'call-2')['denied'])->toBeTrue();
 });
 
 test('it keeps a tool call answered on a later row even after its paused row cleared the pending marker', function (): void {

@@ -9,7 +9,7 @@ use Tests\Fixtures\Agents\StatelessApprovableAgent;
 use Tests\Fixtures\Agents\StatelessMixedToolsAgent;
 use Tests\Fixtures\Tools\SideEffectRecorder;
 
-test('a gated tool on a non-conversational agent throws when it pauses', function () {
+test('a gated tool on a non-resumable agent throws when it pauses', function (string $agent) {
     Http::fake([
         'api.anthropic.com/*' => Http::response([
             'id' => 'msg_tool_1',
@@ -27,36 +27,18 @@ test('a gated tool on a non-conversational agent throws when it pauses', functio
         ]),
     ]);
 
-    (new StatelessApprovableAgent)->prompt('Generate a number', provider: 'anthropic');
-})->throws(ApprovalNotResumableException::class);
+    (new $agent)->prompt('Generate a number', provider: 'anthropic');
+})->throws(ApprovalNotResumableException::class)->with([
+    'non-conversational agent' => StatelessApprovableAgent::class,
+    'conversational agent without a participant' => RememberingApprovableAgent::class,
+]);
 
-test('a gated tool on a conversational agent with no conversation participant throws when it pauses', function () {
-    Http::fake([
-        'api.anthropic.com/*' => Http::response([
-            'id' => 'msg_tool_1',
-            'type' => 'message',
-            'role' => 'assistant',
-            'model' => 'claude-sonnet-4-6',
-            'content' => [[
-                'type' => 'tool_use',
-                'id' => 'toolu_1',
-                'name' => 'ApprovableNumberGenerator',
-                'input' => (object) [],
-            ]],
-            'stop_reason' => 'tool_use',
-            'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
-        ]),
-    ]);
-
-    (new RememberingApprovableAgent)->prompt('Generate a number', provider: 'anthropic');
-})->throws(ApprovalNotResumableException::class);
-
-test('a gated tool on a conversational agent with no participant throws before streaming a pause to the client', function () {
-    RememberingApprovableAgent::fake([
+test('a gated tool on a non-resumable agent throws before streaming a pause to the client', function (string $agent) {
+    $agent::fake([
         new ToolCall('toolu_1', 'ApprovableNumberGenerator', [], 'result-1'),
     ]);
 
-    $stream = (new RememberingApprovableAgent)->stream('Generate a number');
+    $stream = (new $agent)->stream('Generate a number');
 
     $events = [];
     $thrown = null;
@@ -71,29 +53,10 @@ test('a gated tool on a conversational agent with no participant throws before s
 
     expect($thrown)->toBeInstanceOf(ApprovalNotResumableException::class)
         ->and(array_filter($events, fn ($event) => $event instanceof ToolApprovalRequest))->toBeEmpty();
-});
-
-test('a gated tool on a non-conversational agent throws before streaming a pause to the client', function () {
-    StatelessApprovableAgent::fake([
-        new ToolCall('toolu_1', 'ApprovableNumberGenerator', [], 'result-1'),
-    ]);
-
-    $stream = (new StatelessApprovableAgent)->stream('Generate a number');
-
-    $events = [];
-    $thrown = null;
-
-    try {
-        foreach ($stream as $event) {
-            $events[] = $event;
-        }
-    } catch (ApprovalNotResumableException $e) {
-        $thrown = $e;
-    }
-
-    expect($thrown)->toBeInstanceOf(ApprovalNotResumableException::class)
-        ->and(array_filter($events, fn ($event) => $event instanceof ToolApprovalRequest))->toBeEmpty();
-});
+})->with([
+    'non-conversational agent' => StatelessApprovableAgent::class,
+    'conversational agent without a participant' => RememberingApprovableAgent::class,
+]);
 
 test('a non-resumable pause runs its step, then throws', function () {
     SideEffectRecorder::$invocations = 0;
