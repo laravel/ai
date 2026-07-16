@@ -65,22 +65,14 @@ class DatabaseConversationStore implements ConversationStore
                 collect($toolResults)->reject(fn (ToolResult $result) => $existing->contains('id', $result->id))
             );
 
-            $state = (array) json_decode($row->approval_state ?? 'null', true);
+            $pending = collect(((array) json_decode($row->approval_state ?? 'null', true))['pending'] ?? [])->except($resultIds);
 
-            $pending = collect($state['pending'] ?? [])->except($resultIds);
-
-            // Keep the marker after resolution so it records each call's outcome and bounds the resume dedup scan to ever-paused rows...
-            $resolved = collect($state['resolved'] ?? [])->merge(
-                collect($toolResults)
-                    ->filter(fn (ToolResult $result) => array_key_exists($result->id, $state['pending'] ?? []))
-                    ->mapWithKeys(fn (ToolResult $result) => [$result->id => ['status' => $result->denied ? 'rejected' : 'approved']])
-            );
-
+            // Keep the marker after resolution so the resume dedup scan stays bounded to ever-paused rows, while each call's outcome lives in the merged tool results...
             $this->table($this->messagesTable())
                 ->where('id', $row->id)
                 ->update([
                     'tool_results' => $merged->values()->toJson(),
-                    'approval_state' => json_encode(['pending' => $pending->all(), 'resolved' => $resolved->all()]),
+                    'approval_state' => json_encode(['pending' => $pending->all()]),
                     'updated_at' => now(),
                 ]);
         });

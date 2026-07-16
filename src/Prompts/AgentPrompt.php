@@ -4,7 +4,6 @@ namespace Laravel\Ai\Prompts;
 
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
-use InvalidArgumentException;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -70,7 +69,7 @@ class AgentPrompt extends Prompt
     public function revise(string $prompt, Collection|array|null $attachments = null): AgentPrompt
     {
         if ($this->resume !== null) {
-            throw new InvalidArgumentException('A prompt resuming from tool approval cannot be revised; its continuation is driven by the recorded tool results, not prompt text.');
+            return $this;
         }
 
         if (is_array($attachments)) {

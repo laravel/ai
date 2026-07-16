@@ -334,7 +334,7 @@ describe('timeout handling', function (): void {
             ->and($revised->prompt)->toEqual('Revised prompt');
     });
 
-    test('a resume prompt cannot be revised into silently discarded text', function () {
+    test('revising a resume prompt is a no-op since it carries no prompt text', function () {
         $prompt = new AgentPrompt(
             new AssistantAgent,
             '',
@@ -344,6 +344,10 @@ describe('timeout handling', function (): void {
             resume: ['call-1' => Decision::approve()],
         );
 
-        $prompt->append('extra context');
-    })->throws(InvalidArgumentException::class);
+        $revised = $prompt->append('extra context');
+
+        expect($revised)->toBe($prompt)
+            ->and($revised->prompt)->toBe('')
+            ->and($revised->resume)->toBe($prompt->resume);
+    });
 });

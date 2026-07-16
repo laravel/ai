@@ -379,7 +379,7 @@ test('storing approval results for a conversation with no paused row throws', fu
     ]);
 })->throws(ApprovalMismatchException::class, 'The approval results do not match a paused conversation turn.');
 
-test('resolving approval results keeps the pause marker with a per-call outcome', function (): void {
+test('resolving approval results keeps the pause marker with the outcomes on the tool results', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Tool conversation');
 
@@ -408,16 +408,15 @@ test('resolving approval results keeps the pause marker with a per-call outcome'
         new ToolResult('call-2', 'delete_file', ['path' => 'y'], 'The user rejected this tool call.', denied: true),
     ]);
 
-    $state = json_decode(DB::table('agent_conversation_messages')->where('id', 'message-1')->value('approval_state'), true);
+    $row = DB::table('agent_conversation_messages')->where('id', 'message-1')->first();
+    $results = collect(json_decode($row->tool_results, true));
 
-    expect($state['pending'])->toBe([])
-        ->and($state['resolved'])->toBe([
-            'call-1' => ['status' => 'approved'],
-            'call-2' => ['status' => 'rejected'],
-        ]);
+    expect(json_decode($row->approval_state, true))->toBe(['pending' => []])
+        ->and($results->firstWhere('id', 'call-1'))->not->toHaveKey('denied')
+        ->and($results->firstWhere('id', 'call-2')['denied'])->toBeTrue();
 });
 
-test('a partial resolve keeps the remaining pending calls beside the resolved outcomes', function (): void {
+test('a partial resolve keeps the remaining pending calls on the marker', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Tool conversation');
 
@@ -447,8 +446,7 @@ test('a partial resolve keeps the remaining pending calls beside the resolved ou
 
     $state = json_decode(DB::table('agent_conversation_messages')->where('id', 'message-1')->value('approval_state'), true);
 
-    expect($state['pending'])->toBe(['call-2' => 'Deletes y'])
-        ->and($state['resolved'])->toBe(['call-1' => ['status' => 'approved']]);
+    expect($state)->toBe(['pending' => ['call-2' => 'Deletes y']]);
 });
 
 test('it keeps a tool call answered on a later row even after its paused row cleared the pending marker', function (): void {
