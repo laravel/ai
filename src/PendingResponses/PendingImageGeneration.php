@@ -166,8 +166,6 @@ class PendingImageGeneration
                     $model
                 )
             );
-
-            return new QueuedImageResponse(new FakePendingDispatch);
         }
 
         return new QueuedImageResponse(
