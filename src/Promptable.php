@@ -203,8 +203,10 @@ trait Promptable
 
     /**
      * Invoke the agent with a given prompt and broadcast the streamed events.
+     *
+     * @param  array<string, Decision|bool>|string  $prompt
      */
-    public function broadcast(string $prompt, Channel|array $channels, array $attachments = [], bool $now = false, Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
+    public function broadcast(array|string $prompt, Channel|array $channels, array $attachments = [], bool $now = false, Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
     {
         $without = WithoutBroadcasting::eventsFor($this);
 
@@ -220,27 +222,33 @@ trait Promptable
 
     /**
      * Invoke the agent with a given prompt and broadcast the streamed events immediately.
+     *
+     * @param  array<string, Decision|bool>|string  $prompt
      */
-    public function broadcastNow(string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
+    public function broadcastNow(array|string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
     {
         return $this->broadcast($prompt, $channels, $attachments, now: true, provider: $provider, model: $model);
     }
 
     /**
      * Invoke the agent with a given prompt and broadcast the streamed events.
+     *
+     * @param  array<string, Decision|bool>|string  $prompt
      */
-    public function broadcastOnQueue(string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
+    public function broadcastOnQueue(array|string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
     {
+        [$text, $resume] = $this->extractResume($prompt);
+
         if (static::isFaked()) {
             Ai::recordPrompt(
-                new QueuedAgentPrompt($this, $prompt, $attachments, $provider, $model),
+                new QueuedAgentPrompt($this, $text, $attachments, $provider, $model, $resume),
             );
 
             return new QueuedAgentResponse(new FakePendingDispatch);
         }
 
         return new QueuedAgentResponse(
-            BroadcastAgent::dispatch($this, $prompt, $channels, $attachments, $provider, $model)
+            BroadcastAgent::dispatch($this, $text, $channels, $attachments, $provider, $model, $resume)
         );
     }
 

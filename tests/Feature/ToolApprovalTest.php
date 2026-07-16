@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Broadcasting\Channel;
 use Illuminate\Contracts\Support\Responsable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
@@ -180,6 +181,28 @@ test('approval resume prompts can be queued', function () {
     ConversationalAgent::fake();
 
     (new ConversationalAgent)->queue(['call-1' => true]);
+
+    ConversationalAgent::assertQueued(function ($prompt) {
+        return ($prompt->resume['call-1'] ?? null)?->isApproved() === true;
+    });
+});
+
+test('approval resume prompts can be broadcast', function () {
+    ConversationalAgent::fake();
+
+    (new ConversationalAgent)
+        ->broadcast(['call-1' => true], new Channel('approvals'))
+        ->each(fn () => true);
+
+    ConversationalAgent::assertPrompted(function ($prompt) {
+        return ($prompt->resume['call-1'] ?? null)?->isApproved() === true;
+    });
+});
+
+test('approval resume prompts can be broadcast on the queue', function () {
+    ConversationalAgent::fake();
+
+    (new ConversationalAgent)->broadcastOnQueue(['call-1' => true], new Channel('approvals'));
 
     ConversationalAgent::assertQueued(function ($prompt) {
         return ($prompt->resume['call-1'] ?? null)?->isApproved() === true;

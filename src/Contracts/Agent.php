@@ -57,9 +57,11 @@ interface Agent
 
     /**
      * Invoke the agent with a given prompt and broadcast the streamed events.
+     *
+     * @param  array<string, Decision|bool>|string  $prompt
      */
     public function broadcast(
-        string $prompt,
+        array|string $prompt,
         Channel|array $channels,
         array $attachments = [],
         bool $now = false,
@@ -69,9 +71,11 @@ interface Agent
 
     /**
      * Invoke the agent with a given prompt and broadcast the streamed events immediately.
+     *
+     * @param  array<string, Decision|bool>|string  $prompt
      */
     public function broadcastNow(
-        string $prompt,
+        array|string $prompt,
         Channel|array $channels,
         array $attachments = [],
         Lab|array|string|null $provider = null,
@@ -80,9 +84,11 @@ interface Agent
 
     /**
      * Queue the agent with a given prompt and broadcast the streamed events.
+     *
+     * @param  array<string, Decision|bool>|string  $prompt
      */
     public function broadcastOnQueue(
-        string $prompt,
+        array|string $prompt,
         Channel|array $channels,
         array $attachments = [],
         Lab|array|string|null $provider = null,
