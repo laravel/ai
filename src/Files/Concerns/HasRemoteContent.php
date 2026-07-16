@@ -37,6 +37,26 @@ trait HasRemoteContent
     }
 
     /**
+     * Get the declared MIME type without fetching the remote resource.
+     */
+    public function declaredMimeType(): ?string
+    {
+        return $this->mime;
+    }
+
+    /**
+     * Set the file's MIME type.
+     *
+     * @return $this
+     */
+    public function withMimeType(string $mimeType): static
+    {
+        $this->mime = $mimeType;
+
+        return $this;
+    }
+
+    /**
      * Get the HTTP response for the remote file.
      */
     protected function response(): Response
