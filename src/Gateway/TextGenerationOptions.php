@@ -17,7 +17,7 @@ use ReflectionClass;
 class TextGenerationOptions
 {
     /**
-     * @param  Middleware[]  $middleware
+     * @param  Middleware[]|null  $middleware
      */
     public function __construct(
         public readonly ?int $maxSteps = null,
@@ -26,25 +26,21 @@ class TextGenerationOptions
         public readonly ?Agent $agent = null,
         public readonly ?float $topP = null,
         public readonly ?ToolChoice $toolChoice = null,
-        public readonly array $middleware = [],
+        public readonly ?array $middleware = null,
     ) {
         //
     }
 
     /**
-     * Get the middleware to run around the generation.
+     * Get the middleware to run around the generation, falling back to the agent's middleware when none was given.
      *
      * @return Middleware[]
      */
     public function middleware(): array
     {
-        if ($this->middleware !== []) {
-            return $this->middleware;
-        }
-
-        return $this->agent instanceof HasMiddleware
+        return $this->middleware ?? ($this->agent instanceof HasMiddleware
             ? $this->agent->middleware()
-            : [];
+            : []);
     }
 
     /**

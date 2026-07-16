@@ -4,6 +4,7 @@ namespace Laravel\Ai\Providers\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
@@ -19,6 +20,7 @@ use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\ToolInvoked;
+use Laravel\Ai\Gateway\PendingStep;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Middleware\Middleware;
@@ -96,13 +98,23 @@ trait GeneratesText
     }
 
     /**
-     * Gather the step middleware for the given agent.
+     * Gather the step middleware for the given agent, failing early when an entry does not honor the middleware contract.
      *
      * @return Middleware[]
      */
     protected function gatherMiddlewareFor(Agent $agent): array
     {
-        return $agent instanceof HasMiddleware ? $agent->middleware() : [];
+        $middleware = $agent instanceof HasMiddleware ? $agent->middleware() : [];
+
+        foreach ($middleware as $pipe) {
+            if (! $pipe instanceof Middleware) {
+                throw new InvalidArgumentException(
+                    'Agent middleware must extend ['.Middleware::class.'] and receive a ['.PendingStep::class.'].'
+                );
+            }
+        }
+
+        return $middleware;
     }
 
     /**
@@ -130,9 +142,17 @@ trait GeneratesText
         }
 
         return array_map(
-            fn ($tool) => ToolResolver::resolve($tool),
+            fn ($tool) => $this->resolveTool($tool),
             [...$agent->tools()],
         );
+    }
+
+    /**
+     * Resolve a tool returned by the agent into a native tool instance when needed.
+     */
+    protected function resolveTool(mixed $tool): mixed
+    {
+        return ToolResolver::resolve($tool);
     }
 
     /**

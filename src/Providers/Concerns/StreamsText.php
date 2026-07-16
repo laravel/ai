@@ -27,12 +27,12 @@ trait StreamsText
 
         $agent = $prompt->agent;
 
-        if ($agent instanceof HasStructuredOutput) {
-            throw new InvalidArgumentException('Streaming structured output is not currently supported.');
-        }
-
         if (Ai::hasFakeGatewayFor($agent::class)) {
             Ai::recordPrompt($prompt);
+        }
+
+        if ($agent instanceof HasStructuredOutput) {
+            throw new InvalidArgumentException('Streaming structured output is not currently supported.');
         }
 
         $middleware = $this->gatherMiddlewareFor($agent);

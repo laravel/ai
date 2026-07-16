@@ -11,6 +11,7 @@ use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamEvent;
+use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Symfony\Component\HttpFoundation\Response;
 use Traversable;
@@ -164,6 +165,13 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
         $this->events = new Collection($events);
         $this->text = TextDelta::combine($events);
         $this->usage = StreamEnd::combineUsage($events);
+
+        $start = $this->events->last(fn (StreamEvent $event): bool => $event instanceof StreamStart);
+
+        if ($start instanceof StreamStart && $this->meta instanceof Meta) {
+            $this->meta->provider = $start->provider;
+            $this->meta->model = $start->model;
+        }
 
         $this->streamedResponse = new StreamedAgentResponse(
             $this->invocationId,

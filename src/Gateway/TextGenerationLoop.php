@@ -78,6 +78,8 @@ class TextGenerationLoop
             if ($outcome instanceof PendingStep) {
                 $pending = $outcome;
 
+                $maxSteps = max($maxSteps, $this->resolveMaxSteps($pending->options, $pending->tools));
+
                 $lastResult = $this->gateway->generateTextStep(
                     $pending->provider,
                     $pending->model,
@@ -90,7 +92,7 @@ class TextGenerationLoop
                     $pending->context,
                 );
             } else {
-                $lastResult = $outcome;
+                $lastResult = $this->resolveShortCircuitedStep($pending, $outcome);
             }
 
             if ($lastResult->finishReason === FinishReason::Continue) {
@@ -176,6 +178,8 @@ class TextGenerationLoop
             if ($outcome instanceof PendingStep) {
                 $pending = $outcome;
 
+                $maxSteps = max($maxSteps, $this->resolveMaxSteps($pending->options, $pending->tools));
+
                 $stream = $this->gateway->generateStreamStep(
                     $invocationId,
                     $pending->provider,
@@ -230,7 +234,7 @@ class TextGenerationLoop
             if ($shouldContinue) {
                 foreach ($toolResults as $toolResult) {
                     yield (new ToolResultEvent(
-                        $this->eventId(),
+                        $this->generateEventId(),
                         $toolResult,
                         true,
                         null,
@@ -258,7 +262,7 @@ class TextGenerationLoop
 
         if ($reason !== null) {
             yield (new StreamEnd(
-                $this->eventId(),
+                $this->generateEventId(),
                 $reason->value,
                 $accumulatedUsage,
                 time(),
@@ -267,18 +271,20 @@ class TextGenerationLoop
     }
 
     /**
-     * Run the pending step through the given middleware, updating the given step by reference so short-circuits still see earlier transforms.
+     * Run the pending step through the given middleware, tracking the step each middleware receives so short-circuited tool calls execute against it.
      */
     protected function sendThroughMiddleware(PendingStep &$pending, array $middleware): PendingStep|StepResponse
     {
+        if ($middleware === []) {
+            return $pending;
+        }
+
         $through = [];
 
         foreach ($middleware as $pipe) {
-            $through[] = function ($step, $next) use (&$pending) {
-                return $next($pending = $step);
+            $through[] = function (PendingStep $step, $next) use ($pipe, &$pending) {
+                return $pipe->handle($pending = $step, $next);
             };
-
-            $through[] = $pipe;
         }
 
         $outcome = pipeline()
@@ -294,9 +300,23 @@ class TextGenerationLoop
     }
 
     /**
+     * Backfill the structured output of a short-circuited step by decoding its text when the step requested a schema.
+     */
+    protected function resolveShortCircuitedStep(PendingStep $pending, StepResponse $result): StepResponse
+    {
+        if ($pending->schema !== null && $result->structured === null) {
+            $structured = json_decode($result->text, true);
+
+            $result->structured = is_array($structured) ? $structured : null;
+        }
+
+        return $result;
+    }
+
+    /**
      * Generate a lowercased UUIDv7 for a stream event id.
      */
-    protected function eventId(): string
+    protected function generateEventId(): string
     {
         return strtolower((string) Str::uuid7());
     }
@@ -306,20 +326,20 @@ class TextGenerationLoop
      */
     protected function shortCircuitedStepEvents(string $invocationId, PendingStep $pending, StepResponse $result): Generator
     {
-        $messageId = $this->eventId();
+        $messageId = $this->generateEventId();
 
         yield (new StreamStart(
-            $this->eventId(), $pending->provider->name(), $pending->model, time()
+            $this->generateEventId(), $pending->provider->name(), $pending->model, time()
         ))->withInvocationId($invocationId);
 
         if ($result->text !== '') {
-            yield (new TextStart($this->eventId(), $messageId, time()))->withInvocationId($invocationId);
-            yield (new TextDelta($this->eventId(), $messageId, $result->text, time()))->withInvocationId($invocationId);
-            yield (new TextEnd($this->eventId(), $messageId, time()))->withInvocationId($invocationId);
+            yield (new TextStart($this->generateEventId(), $messageId, time()))->withInvocationId($invocationId);
+            yield (new TextDelta($this->generateEventId(), $messageId, $result->text, time()))->withInvocationId($invocationId);
+            yield (new TextEnd($this->generateEventId(), $messageId, time()))->withInvocationId($invocationId);
         }
 
         foreach ($result->toolCalls as $toolCall) {
-            yield (new ToolCallEvent($this->eventId(), $toolCall, time()))->withInvocationId($invocationId);
+            yield (new ToolCallEvent($this->generateEventId(), $toolCall, time()))->withInvocationId($invocationId);
         }
     }
 

@@ -10,8 +10,5 @@ abstract class Middleware
     /**
      * Handle a single generation step.
      */
-    public function handle(PendingStep $step, Closure $next)
-    {
-        return $next($step);
-    }
+    abstract public function handle(PendingStep $step, Closure $next);
 }

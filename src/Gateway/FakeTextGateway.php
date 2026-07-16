@@ -109,9 +109,8 @@ class FakeTextGateway implements StepTextGateway
     {
         $message = (new Collection($messages))->last(fn ($message): bool => $message instanceof UserMessage);
 
-        /** @var UserMessage $message */
         $response = $this->nextResponse(
-            $provider, $model, $message->content, $message->attachments, $schema
+            $provider, $model, $message?->content ?? '', $message?->attachments ?? new Collection, $schema
         );
 
         return $this->toStepResponse($response, $provider, $model);
