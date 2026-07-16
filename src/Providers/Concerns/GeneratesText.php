@@ -62,9 +62,9 @@ trait GeneratesText
 
                 $agent = $prompt->agent;
 
-                $messages = [
+                $messages = $this->withoutForeignProviderContentBlocks([
                     ...($agent instanceof Conversational ? $agent->messages() : []),
-                ];
+                ]);
 
                 if ($prompt->resume === null) {
                     $messages[] = new UserMessage($prompt->prompt, $prompt->attachments->all());

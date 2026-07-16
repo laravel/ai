@@ -10,6 +10,8 @@ use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\RemembersConversations as RemembersConversationsContract;
+use Laravel\Ai\Messages\AssistantMessage;
+use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Prompts\AgentPrompt;
 
 trait ResumesToolApprovals
@@ -22,6 +24,26 @@ trait ResumesToolApprovals
     protected function resumableApprovalFor(AgentPrompt $prompt): ?array
     {
         return $this->resumesAgainstRealGateway($prompt) ? $prompt->resume : null;
+    }
+
+    /**
+     * Replace another provider's raw paused-turn replay state with its generic mapping, since raw blocks are only valid verbatim on the provider that produced them.
+     *
+     * @param  array<int, Message>  $messages
+     * @return array<int, Message>
+     */
+    protected function withoutForeignProviderContentBlocks(array $messages): array
+    {
+        return array_map(function (Message $message): Message {
+            if ($message instanceof AssistantMessage
+                && filled($message->providerContentBlocks)
+                && $message->providerContentBlocksProvider !== null
+                && $message->providerContentBlocksProvider !== $this->name()) {
+                return new AssistantMessage($message->content, $message->toolCalls);
+            }
+
+            return $message;
+        }, $messages);
     }
 
     /**

@@ -340,10 +340,12 @@ class DatabaseConversationStore implements ConversationStore
             $messages[] = new ToolResultMessage($priorResults->map(ToolResult::fromArray(...))->values());
         }
 
-        $providerContentBlocks = ((array) json_decode($record->meta ?? '[]', true))['provider_content_blocks'] ?? [];
+        $meta = (array) json_decode($record->meta ?? '[]', true);
+
+        $providerContentBlocks = $meta['provider_content_blocks'] ?? [];
 
         if ($isPause && filled($providerContentBlocks)) {
-            $messages[] = new AssistantMessage($record->content, $toolCalls->map(ToolCall::fromArray(...))->values(), $providerContentBlocks);
+            $messages[] = new AssistantMessage($record->content, $toolCalls->map(ToolCall::fromArray(...))->values(), $providerContentBlocks, $meta['provider'] ?? null);
 
             if ($ownResults->isNotEmpty()) {
                 $messages[] = new ToolResultMessage($ownResults->map(ToolResult::fromArray(...))->values());

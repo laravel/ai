@@ -127,6 +127,74 @@ test('a resumed approval replays the paused turn provider content blocks', funct
         ->and(collect($assistantTurn['content'])->firstWhere('type', 'tool_use')['id'])->toBe('toolu_1');
 });
 
+test('a resume on a different provider falls back to the generic mapping instead of replaying foreign blocks', function () {
+    Config::set('ai.conversations.generate_title', false);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            Http::response([
+                'id' => 'msg_tool_1',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [
+                    [
+                        'type' => 'thinking',
+                        'thinking' => 'Deciding whether to call the tool.',
+                        'signature' => 'signature-1',
+                    ],
+                    [
+                        'type' => 'tool_use',
+                        'id' => 'toolu_1',
+                        'name' => 'ApprovableNumberGenerator',
+                        'input' => (object) [],
+                    ],
+                ],
+                'stop_reason' => 'tool_use',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+            Http::response([
+                'id' => 'msg_2',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [['type' => 'text', 'text' => 'The number is 72019.']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+        ]),
+    ]);
+
+    $user = (object) ['id' => 1];
+
+    $paused = (new RememberingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
+
+    expect($paused->awaitingApproval())->toBeTrue();
+
+    // Rewrite the paused row as if the pause had happened on a failover provider...
+    DB::table('agent_conversation_messages')
+        ->where('conversation_id', $paused->conversationId)
+        ->where('role', 'assistant')
+        ->get()
+        ->each(function ($row) {
+            $meta = json_decode($row->meta, true);
+            $meta['provider'] = 'openai';
+
+            DB::table('agent_conversation_messages')->where('id', $row->id)->update(['meta' => json_encode($meta)]);
+        });
+
+    (new RememberingApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->prompt(['toolu_1' => true], provider: 'anthropic');
+
+    $resumeMessages = collect(Http::recorded())->last()[0]->data()['messages'];
+
+    $assistantTurn = collect($resumeMessages)->firstWhere('role', 'assistant');
+
+    expect(collect($assistantTurn['content'])->firstWhere('type', 'thinking'))->toBeNull()
+        ->and(collect($assistantTurn['content'])->firstWhere('type', 'tool_use')['id'])->toBe('toolu_1');
+});
+
 test('a resume that pauses again can itself be resumed', function () {
     Config::set('ai.conversations.generate_title', false);
 
