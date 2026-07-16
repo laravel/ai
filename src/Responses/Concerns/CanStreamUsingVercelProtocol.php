@@ -41,6 +41,7 @@ trait CanStreamUsingVercelProtocol
                             'type' => 'tool-approval-request',
                             'toolCallId' => $pendingApproval->id,
                             'approvalId' => $pendingApproval->id,
+                            'reason' => $pendingApproval->reason,
                         ]);
                     }
 

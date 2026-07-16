@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
@@ -32,6 +33,8 @@ class DatabaseConversationStore implements ConversationStore
      * Durably record resolved approval results on the paused turn before the run continues.
      *
      * @param  array<int, ToolResult>  $toolResults
+     *
+     * @throws ApprovalMismatchException when no paused row matches the resolved results
      */
     public function storeApprovalResults(string $conversationId, string|int|null $participantId, array $toolResults): void
     {
@@ -53,23 +56,22 @@ class DatabaseConversationStore implements ConversationStore
                 ->first(fn ($record) => array_intersect($this->pausedCallIds($record), $resultIds) !== []);
 
             if ($row === null) {
-                return;
+                throw new ApprovalMismatchException('The approval results do not match a paused conversation turn.', collect());
             }
 
-            $merged = array_merge(
-                json_decode($row->tool_results, true) ?: [],
-                json_decode(json_encode($toolResults), true),
+            $existing = collect(json_decode($row->tool_results, true) ?: []);
+
+            $merged = $existing->merge(
+                collect($toolResults)->reject(fn (ToolResult $result) => $existing->contains('id', $result->id))
             );
 
-            $pending = collect(((array) json_decode($row->approval_state ?? 'null', true))['pending'] ?? [])
-                ->except($resultIds)
-                ->all();
+            $pending = collect(((array) json_decode($row->approval_state ?? 'null', true))['pending'] ?? [])->except($resultIds);
 
             $this->table($this->messagesTable())
                 ->where('id', $row->id)
                 ->update([
-                    'tool_results' => json_encode($merged),
-                    'approval_state' => json_encode(['pending' => $pending]),
+                    'tool_results' => $merged->values()->toJson(),
+                    'approval_state' => $pending->isEmpty() ? null : json_encode(['pending' => $pending->all()]),
                     'updated_at' => now(),
                 ]);
         });
@@ -136,9 +138,9 @@ class DatabaseConversationStore implements ConversationStore
     }
 
     /**
-     * Store a new assistant message for the given conversation and return its ID.
+     * Store a new assistant message for the given conversation, or null when nothing was stored.
      */
-    public function storeAssistantMessage(string $conversationId, string|int|null $userId, AgentPrompt $prompt, AgentResponse $response): string
+    public function storeAssistantMessage(string $conversationId, string|int|null $userId, AgentPrompt $prompt, AgentResponse $response): ?string
     {
         $messageId = (string) Str::uuid7();
 
@@ -152,7 +154,7 @@ class DatabaseConversationStore implements ConversationStore
             $toolResults = $toolResults->reject(fn (ToolResult $result) => in_array($result->id, $existing, true))->values();
 
             if (blank($response->text) && $response->toolCalls->isEmpty() && $toolResults->isEmpty()) {
-                return $messageId;
+                return null;
             }
         }
 
@@ -187,6 +189,8 @@ class DatabaseConversationStore implements ConversationStore
     {
         return $this->table($this->messagesTable())
             ->where('conversation_id', $conversationId)
+            ->where('role', 'assistant')
+            ->where('tool_results', '!=', '[]')
             ->pluck('tool_results')
             ->flatMap(fn ($results) => collect(json_decode($results, true))->pluck('id'))
             ->filter()

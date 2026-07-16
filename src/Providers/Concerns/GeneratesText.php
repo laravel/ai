@@ -6,7 +6,6 @@ use Closure;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
-use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
@@ -20,6 +19,7 @@ use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\ToolApprovalRequested;
+use Laravel\Ai\Events\ToolApprovalResolved;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Exceptions\ApprovalNotResumableException;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -38,6 +38,8 @@ use function Laravel\Ai\pipeline;
 
 trait GeneratesText
 {
+    use ResumesToolApprovals;
+
     protected string $currentToolInvocationId;
 
     /**
@@ -48,11 +50,12 @@ trait GeneratesText
         $invocationId = (string) Str::uuid7();
 
         $processedPrompt = null;
+        $resolvedApprovalResults = null;
 
         $response = pipeline()
             ->send($prompt)
             ->through($this->gatherMiddlewareFor($prompt->agent))
-            ->then(function (AgentPrompt $prompt) use ($invocationId, &$processedPrompt): TextResponse {
+            ->then(function (AgentPrompt $prompt) use ($invocationId, &$processedPrompt, &$resolvedApprovalResults): TextResponse {
                 $processedPrompt = $prompt;
 
                 $this->events->dispatch(new PromptingAgent($invocationId, $prompt));
@@ -81,7 +84,7 @@ trait GeneratesText
                     TextGenerationOptions::forAgent($agent),
                     $prompt->timeout,
                     $this->resumableApprovalFor($prompt),
-                    $this->approvalResultRecorderFor($prompt),
+                    $this->approvalResultRecorderFor($prompt, $resolvedApprovalResults),
                 );
 
                 if ($response->awaitingApproval()) {
@@ -116,50 +119,17 @@ trait GeneratesText
             ));
         }
 
+        if ($resolvedApprovalResults !== null) {
+            $this->events->dispatch(new ToolApprovalResolved(
+                $invocationId,
+                $prompt->agent,
+                $resolvedApprovalResults,
+                $response->conversationId,
+                $response->conversationUser,
+            ));
+        }
+
         return $response;
-    }
-
-    /**
-     * Get the tool approval to resume with, unless the agent's gateway is faked.
-     *
-     * @return array<string, Decision>|null
-     */
-    protected function resumableApprovalFor(AgentPrompt $prompt): ?array
-    {
-        return $this->resumesAgainstRealGateway($prompt) ? $prompt->resume : null;
-    }
-
-    /**
-     * Determine whether the prompt is a resume that runs tools against the real (non-faked) gateway.
-     */
-    protected function resumesAgainstRealGateway(AgentPrompt $prompt): bool
-    {
-        return $prompt->resume !== null && ! Ai::hasFakeGatewayFor($prompt->agent::class);
-    }
-
-    /**
-     * Get a callback that durably records resolved approval results before the run continues, if the store supports it.
-     */
-    protected function approvalResultRecorderFor(AgentPrompt $prompt): ?Closure
-    {
-        $agent = $prompt->agent;
-
-        if (! $this->resumesAgainstRealGateway($prompt)
-            || ! in_array(RemembersConversations::class, class_uses_recursive($agent), true)) {
-            return null;
-        }
-
-        /** @var Agent&RemembersConversationsContract $agent */
-        if ($agent->currentConversation() === null) {
-            return null;
-        }
-
-        $store = app(ConversationStore::class);
-
-        $conversationId = $agent->currentConversation();
-        $participantId = $agent->conversationParticipant()?->id;
-
-        return fn (array $toolResults) => $store->storeApprovalResults($conversationId, $participantId, $toolResults);
     }
 
     /**

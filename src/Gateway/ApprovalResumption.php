@@ -9,16 +9,15 @@ class ApprovalResumption
 {
     /**
      * @param  Message[]  $messages
+     * @param  Message[]  $newMessages
      * @param  array<int, ToolResult>  $results
-     * @param  array<int, string>  $rejectedToolCallIds
      * @param  array<int, string>  $failedToolCallIds
      */
     public function __construct(
         public array $messages,
-        public int $originalMessageCount,
+        public array $newMessages,
         public bool $shouldContinue,
         public array $results,
-        public array $rejectedToolCallIds,
         public array $failedToolCallIds,
     ) {}
 }

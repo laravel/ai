@@ -50,22 +50,23 @@ trait HandlesToolApprovals
      *
      * @param  Message[]  $messages
      * @param  array<int, ToolResult>  $toolResults
-     * @return array{Message[], int}
+     * @return array{Message[], Message[]}
      */
-    protected function appendApprovalResults(array $messages, array $toolResults, int $originalMessageCount): array
+    protected function appendApprovalResults(array $messages, array $toolResults): array
     {
         $last = end($messages);
 
         if ($last instanceof ToolResultMessage) {
             array_pop($messages);
 
-            $originalMessageCount--;
             $toolResults = [...$last->toolResults->all(), ...$toolResults];
         }
 
-        $messages[] = new ToolResultMessage(collect($toolResults));
+        $answer = new ToolResultMessage(collect($toolResults));
 
-        return [$messages, $originalMessageCount];
+        $messages[] = $answer;
+
+        return [$messages, [$answer]];
     }
 
     /**
@@ -83,28 +84,24 @@ trait HandlesToolApprovals
             ->flip()
             ->all();
 
-        $bound = count($messages);
+        $bound = $exceptLatestAssistantTurn ? $this->latestAssistantTurnIndex($messages) : count($messages);
 
-        if ($exceptLatestAssistantTurn) {
-            for ($index = $bound - 1; $index >= 0; $index--) {
-                if ($messages[$index] instanceof AssistantMessage) {
-                    $bound = $index;
+        $output = [];
 
-                    break;
-                }
-            }
-        }
-
-        for ($index = 0; $index < $bound; $index++) {
+        for ($index = 0, $count = count($messages); $index < $count; $index++) {
             $message = $messages[$index];
 
-            if (! $message instanceof AssistantMessage) {
+            if ($index >= $bound || ! $message instanceof AssistantMessage) {
+                $output[] = $message;
+
                 continue;
             }
 
             $dangling = $message->toolCalls->reject(
                 fn (ToolCall $toolCall) => isset($resolved[$toolCall->id])
             )->values();
+
+            $output[] = $message;
 
             if ($dangling->isEmpty()) {
                 continue;
@@ -116,20 +113,37 @@ trait HandlesToolApprovals
                 $toolCall->arguments,
                 'This tool call was not executed because it was not approved before the conversation continued.',
                 $toolCall->resultId,
+                denied: true,
             ));
 
             $next = $messages[$index + 1] ?? null;
 
             if ($next instanceof ToolResultMessage) {
-                $messages[$index + 1] = new ToolResultMessage($next->toolResults->concat($placeholders)->values());
-            } else {
-                array_splice($messages, $index + 1, 0, [new ToolResultMessage($placeholders->values())]);
+                $output[] = new ToolResultMessage($next->toolResults->concat($placeholders)->values());
 
-                $bound++;
+                $index++;
+            } else {
+                $output[] = new ToolResultMessage($placeholders->values());
             }
         }
 
-        return $messages;
+        return $output;
+    }
+
+    /**
+     * Find the index of the latest assistant message, or the message count when there is none.
+     *
+     * @param  Message[]  $messages
+     */
+    protected function latestAssistantTurnIndex(array $messages): int
+    {
+        for ($index = count($messages) - 1; $index >= 0; $index--) {
+            if ($messages[$index] instanceof AssistantMessage) {
+                return $index;
+            }
+        }
+
+        return count($messages);
     }
 
     /**

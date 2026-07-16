@@ -500,6 +500,41 @@ test('a plain generation settles an abandoned pause before calling the model', f
         ->and($response->text)->toBe('Sure, moving on.');
 });
 
+test('a plain generation settles multiple abandoned turns in one pass, each keeping its own placeholder', function (): void {
+    $tool = new TextGenerationLoopApprovableTool;
+    $firstCall = new ToolCall('call-1', TextGenerationLoopApprovableTool::class, ['value' => 'danger'], 'call-1');
+    $secondCall = new ToolCall('call-2', TextGenerationLoopApprovableTool::class, ['value' => 'also danger'], 'call-2');
+    $gateway = new TextGenerationLoopFakeGateway([
+        new StepResponse('Sure, moving on.', [], FinishReason::Stop, new Usage, new Meta('fake', 'model')),
+    ]);
+
+    (new TextGenerationLoop($gateway))->generate(
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [
+            new AssistantMessage('', collect([$firstCall])),
+            new Message('user', 'Never mind, do something else.'),
+            new AssistantMessage('', collect([$secondCall])),
+            new Message('user', 'Never mind that either, just say hi.'),
+        ],
+        [$tool],
+        null,
+        new TextGenerationOptions(maxSteps: 2),
+        null,
+    );
+
+    $settled = $gateway->messages[0];
+
+    expect($settled)->toHaveCount(6)
+        ->and($settled[1])->toBeInstanceOf(ToolResultMessage::class)
+        ->and($settled[1]->toolResults->first()->id)->toBe('call-1')
+        ->and($settled[2]->content)->toBe('Never mind, do something else.')
+        ->and($settled[4])->toBeInstanceOf(ToolResultMessage::class)
+        ->and($settled[4]->toolResults->first()->id)->toBe('call-2')
+        ->and($settled[5]->content)->toBe('Never mind that either, just say hi.');
+});
+
 test('a stale approval with no pending gated calls is rejected', function (): void {
     $tool = new TextGenerationLoopApprovableTool;
     $toolCall = new ToolCall('call-1', TextGenerationLoopApprovableTool::class, ['value' => 'approved'], 'call-1');

@@ -9,6 +9,7 @@ use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Events\AgentStreamed;
 use Laravel\Ai\Events\StreamingAgent;
 use Laravel\Ai\Events\ToolApprovalRequested;
+use Laravel\Ai\Events\ToolApprovalResolved;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
@@ -21,6 +22,8 @@ use function Laravel\Ai\pipeline;
 
 trait StreamsText
 {
+    use ResumesToolApprovals;
+
     /**
      * Stream the response from the given agent.
      */
@@ -29,11 +32,12 @@ trait StreamsText
         $invocationId = $prompt->invocationId ?? (string) Str::uuid7();
 
         $processedPrompt = null;
+        $resolvedApprovalResults = null;
 
         return pipeline()
             ->send($prompt)
             ->through($this->gatherMiddlewareFor($prompt->agent))
-            ->then(function (AgentPrompt $prompt) use ($invocationId, &$processedPrompt): StreamableAgentResponse {
+            ->then(function (AgentPrompt $prompt) use ($invocationId, &$processedPrompt, &$resolvedApprovalResults): StreamableAgentResponse {
                 $processedPrompt = $prompt;
 
                 $agent = $prompt->agent;
@@ -54,15 +58,16 @@ trait StreamsText
 
                 $tools = $this->resolveTools($agent);
                 $approval = $this->resumableApprovalFor($prompt);
-                $recordApprovalResults = $this->approvalResultRecorderFor($prompt);
+                $recordApprovalResults = $this->approvalResultRecorderFor($prompt, $resolvedApprovalResults);
 
-                if ($approval !== null) {
-                    $this->textGenerationLoop()->validateApproval($approval, $messages, $tools);
-                }
+                // Validate eagerly so a mismatch throws before the stream begins, then thread the result into stream() so it isn't re-validated there.
+                $validatedApproval = $approval !== null
+                    ? $this->textGenerationLoop()->validateApproval($approval, $messages, $tools)
+                    : null;
 
                 return new StreamableAgentResponse(
                     $invocationId,
-                    function () use ($invocationId, $prompt, $agent, $messages, $tools, $approval, $recordApprovalResults) {
+                    function () use ($invocationId, $prompt, $agent, $messages, $tools, $approval, $recordApprovalResults, $validatedApproval) {
                         $this->events->dispatch(new StreamingAgent($invocationId, $prompt));
 
                         $this->listenForToolInvocations($invocationId, $agent);
@@ -79,6 +84,7 @@ trait StreamsText
                             $prompt->timeout,
                             $approval,
                             $recordApprovalResults,
+                            $validatedApproval,
                         ) as $event) {
                             if ($event instanceof ToolApprovalRequest) {
                                 $this->throwIfNotResumable($agent);
@@ -89,7 +95,7 @@ trait StreamsText
                     },
                     $meta,
                 );
-            })->then(function (StreamedAgentResponse $response) use ($invocationId, $prompt, &$processedPrompt): void {
+            })->then(function (StreamedAgentResponse $response) use ($invocationId, $prompt, &$processedPrompt, &$resolvedApprovalResults): void {
                 $this->events->dispatch(
                     new AgentStreamed($invocationId, $processedPrompt ?? $prompt, $response)
                 );
@@ -99,6 +105,16 @@ trait StreamsText
                         $invocationId,
                         $prompt->agent,
                         $response->pendingApprovals,
+                        $response->conversationId,
+                        $response->conversationUser,
+                    ));
+                }
+
+                if ($resolvedApprovalResults !== null) {
+                    $this->events->dispatch(new ToolApprovalResolved(
+                        $invocationId,
+                        $prompt->agent,
+                        $resolvedApprovalResults,
                         $response->conversationId,
                         $response->conversationUser,
                     ));

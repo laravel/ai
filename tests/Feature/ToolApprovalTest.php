@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Events\ToolApprovalRequested;
+use Laravel\Ai\Events\ToolApprovalResolved;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
@@ -192,5 +193,168 @@ test('the blanket approve helper widens to every pending call', function () {
 
     ConversationalAgent::assertQueued(function ($prompt) {
         return ($prompt->resume['*'] ?? null)?->isApproved() === true;
+    });
+});
+
+test('a run that only pauses does not dispatch the tool approval resolved event', function () {
+    Config::set('ai.conversations.generate_title', false);
+
+    Event::fake([ToolApprovalResolved::class]);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::response([
+            'id' => 'msg_tool_1',
+            'type' => 'message',
+            'role' => 'assistant',
+            'model' => 'claude-sonnet-4-6',
+            'content' => [[
+                'type' => 'tool_use',
+                'id' => 'toolu_1',
+                'name' => 'ApprovableNumberGenerator',
+                'input' => (object) [],
+            ]],
+            'stop_reason' => 'tool_use',
+            'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+        ]),
+    ]);
+
+    (new RememberingApprovableAgent)->forUser((object) ['id' => 1])->prompt('Generate a number', provider: 'anthropic');
+
+    Event::assertNotDispatched(ToolApprovalResolved::class);
+});
+
+test('an approved resume dispatches the tool approval resolved event with the resolved tool results', function () {
+    Config::set('ai.conversations.generate_title', false);
+
+    Event::fake([ToolApprovalResolved::class]);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            Http::response([
+                'id' => 'msg_tool_1',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [[
+                    'type' => 'tool_use',
+                    'id' => 'toolu_1',
+                    'name' => 'ApprovableNumberGenerator',
+                    'input' => (object) [],
+                ]],
+                'stop_reason' => 'tool_use',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+            Http::response([
+                'id' => 'msg_2',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [['type' => 'text', 'text' => 'The number is 72019.']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+        ]),
+    ]);
+
+    $user = (object) ['id' => 1];
+
+    $paused = (new RememberingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
+
+    (new RememberingApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->prompt(['toolu_1' => true], provider: 'anthropic');
+
+    Event::assertDispatched(ToolApprovalResolved::class, function (ToolApprovalResolved $event) {
+        return $event->toolResults->count() === 1
+            && $event->toolResults[0]->id === 'toolu_1'
+            && $event->toolResults[0]->denied === false
+            && $event->conversationId !== null;
+    });
+});
+
+test('a rejected resume dispatches the tool approval resolved event with a denied result', function () {
+    Config::set('ai.conversations.generate_title', false);
+
+    Event::fake([ToolApprovalResolved::class]);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::response([
+            'id' => 'msg_tool_1',
+            'type' => 'message',
+            'role' => 'assistant',
+            'model' => 'claude-sonnet-4-6',
+            'content' => [[
+                'type' => 'tool_use',
+                'id' => 'toolu_1',
+                'name' => 'ApprovableNumberGenerator',
+                'input' => (object) [],
+            ]],
+            'stop_reason' => 'tool_use',
+            'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+        ]),
+    ]);
+
+    $user = (object) ['id' => 1];
+
+    $paused = (new RememberingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
+
+    (new RememberingApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->prompt(['toolu_1' => false], provider: 'anthropic');
+
+    Event::assertDispatched(ToolApprovalResolved::class, function (ToolApprovalResolved $event) {
+        return $event->toolResults->count() === 1
+            && $event->toolResults[0]->id === 'toolu_1'
+            && $event->toolResults[0]->denied === true;
+    });
+});
+
+test('an approved streamed resume dispatches the tool approval resolved event', function () {
+    Config::set('ai.conversations.generate_title', false);
+
+    Event::fake([ToolApprovalResolved::class]);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            Http::response([
+                'id' => 'msg_tool_1',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [[
+                    'type' => 'tool_use',
+                    'id' => 'toolu_1',
+                    'name' => 'ApprovableNumberGenerator',
+                    'input' => (object) [],
+                ]],
+                'stop_reason' => 'tool_use',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+            Http::response([
+                'id' => 'msg_2',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [['type' => 'text', 'text' => 'The number is 72019.']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+        ]),
+    ]);
+
+    $user = (object) ['id' => 1];
+
+    $paused = (new RememberingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
+
+    $response = (new RememberingApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->stream(['toolu_1' => true], provider: 'anthropic');
+
+    $response->each(fn () => true);
+
+    Event::assertDispatched(ToolApprovalResolved::class, function (ToolApprovalResolved $event) {
+        return $event->toolResults->count() === 1
+            && $event->toolResults[0]->id === 'toolu_1'
+            && $event->toolResults[0]->denied === false;
     });
 });

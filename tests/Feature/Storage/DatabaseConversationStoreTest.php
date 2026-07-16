@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\StoredDocument;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -178,9 +179,10 @@ test('a bare rejection resume does not persist a blank assistant row', function 
         new ToolResult('call-1', 'DeleteFile', [], 'The user rejected this tool call.'),
     ]);
 
-    $store->storeAssistantMessage($conversationId, 1, $prompt, $response);
+    $messageId = $store->storeAssistantMessage($conversationId, 1, $prompt, $response);
 
-    expect(DB::table('agent_conversation_messages')->where('role', 'assistant')->count())->toBe(1);
+    expect($messageId)->toBeNull()
+        ->and(DB::table('agent_conversation_messages')->where('role', 'assistant')->count())->toBe(1);
 });
 
 test('it reloads legacy sparse keyed tool calls and results as lists', function (): void {
@@ -367,6 +369,15 @@ test('it replays a resumed approval so the paused tool_use is answered', functio
         ->and($messages[2])->toBeInstanceOf(AssistantMessage::class)
         ->and($messages[2]->content)->toBe('Deleted x');
 });
+
+test('storing approval results for a conversation with no paused row throws', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Tool conversation');
+
+    $store->storeApprovalResults($conversationId, 1, [
+        new ToolResult('call-1', 'delete_file', ['path' => 'x'], 'Deleted x'),
+    ]);
+})->throws(ApprovalMismatchException::class, 'The approval results do not match a paused conversation turn.');
 
 test('it keeps a tool call answered on a later row even after its paused row cleared the pending marker', function (): void {
     $store = new DatabaseConversationStore;

@@ -5,6 +5,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Exceptions\RateLimitedException;
+use Laravel\Ai\Messages\ToolResultMessage;
+use Laravel\Ai\Storage\DatabaseConversationStore;
 use Tests\Fixtures\Agents\RememberingApprovableAgent;
 use Tests\Fixtures\Tools\ApprovableNumberGenerator;
 
@@ -312,6 +314,52 @@ test('a streamed resume with mismatched decisions throws before the stream begin
     expect($resumed->text)->toBe('The number is 72019.');
 });
 
+test('a valid streamed resume checks a gated tool call for approval exactly once', function () {
+    Config::set('ai.conversations.generate_title', false);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            Http::response([
+                'id' => 'msg_tool_1',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [[
+                    'type' => 'tool_use',
+                    'id' => 'toolu_1',
+                    'name' => 'ApprovableNumberGenerator',
+                    'input' => (object) [],
+                ]],
+                'stop_reason' => 'tool_use',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+            Http::response([
+                'id' => 'msg_2',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [['type' => 'text', 'text' => 'The number is 72019.']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+        ]),
+    ]);
+
+    $user = (object) ['id' => 1];
+
+    $paused = (new RememberingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
+
+    ApprovableNumberGenerator::$approvalChecks = 0;
+
+    $response = (new RememberingApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->stream(['toolu_1' => true], provider: 'anthropic');
+
+    $response->each(fn () => true);
+
+    expect(ApprovableNumberGenerator::$approvalChecks)->toBe(1);
+});
+
 test('a resume does not fail over to another provider and re-run the approved tool', function () {
     Config::set('ai.conversations.generate_title', false);
 
@@ -393,6 +441,52 @@ test('a successful resume records the approved result exactly once across histor
         ->filter(fn ($id) => $id === 'toolu_1');
 
     expect($recorded)->toHaveCount(1);
+});
+
+test('a rejected resume stores and rehydrates the tool result as denied', function () {
+    Config::set('ai.conversations.generate_title', false);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::response([
+            'id' => 'msg_tool_1',
+            'type' => 'message',
+            'role' => 'assistant',
+            'model' => 'claude-sonnet-4-6',
+            'content' => [[
+                'type' => 'tool_use',
+                'id' => 'toolu_1',
+                'name' => 'ApprovableNumberGenerator',
+                'input' => (object) [],
+            ]],
+            'stop_reason' => 'tool_use',
+            'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+        ]),
+    ]);
+
+    $user = (object) ['id' => 1];
+
+    $paused = (new RememberingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
+
+    $rejected = (new RememberingApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->prompt(['toolu_1' => false], provider: 'anthropic');
+
+    expect($rejected->awaitingApproval())->toBeFalse();
+
+    $assistantRow = DB::table('agent_conversation_messages')
+        ->where('conversation_id', $paused->conversationId)
+        ->where('role', 'assistant')
+        ->latest('id')
+        ->first();
+
+    expect(json_decode($assistantRow->tool_results, true)[0]['denied'])->toBeTrue();
+
+    $store = new DatabaseConversationStore;
+    $messages = $store->getLatestConversationMessages($paused->conversationId, 10);
+
+    $toolResultMessage = $messages->first(fn ($message) => $message instanceof ToolResultMessage);
+
+    expect($toolResultMessage->toolResults->first()->denied)->toBeTrue();
 });
 
 test('a resume that fails after the tool runs does not re-execute the tool on retry', function () {

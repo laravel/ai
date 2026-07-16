@@ -48,7 +48,7 @@ test('a paused stream emits an approval request part for each pending approval',
     expect($parts)->toBe([
         ['type' => 'start', 'messageId' => 'msg-1'],
         ['type' => 'tool-input-available', 'toolCallId' => 'call-1', 'toolName' => 'DeleteFile', 'input' => ['path' => 'a.txt']],
-        ['type' => 'tool-approval-request', 'toolCallId' => 'call-1', 'approvalId' => 'call-1'],
+        ['type' => 'tool-approval-request', 'toolCallId' => 'call-1', 'approvalId' => 'call-1', 'reason' => 'Destructive operation.'],
         ['type' => 'finish'],
         ['type' => 'done'],
     ]);

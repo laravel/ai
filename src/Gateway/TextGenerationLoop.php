@@ -70,7 +70,7 @@ class TextGenerationLoop
             $resumption = $this->resumeFromApproval($approval, $messages, $tools);
 
             $allMessages = $resumption->messages;
-            $originalMessageCount = $resumption->originalMessageCount;
+            $newMessages = $resumption->newMessages;
 
             if ($recordApprovalResults !== null) {
                 $recordApprovalResults($resumption->results);
@@ -78,11 +78,11 @@ class TextGenerationLoop
 
             if (! $resumption->shouldContinue) {
                 return (new TextResponse('', new Usage, new Meta($provider->name(), $model)))
-                    ->withMessages(collect(array_slice($allMessages, $originalMessageCount)));
+                    ->withMessages(collect($newMessages));
             }
         } else {
             $allMessages = $this->settleAbandonedToolCalls($messages);
-            $originalMessageCount = count($allMessages);
+            $newMessages = [];
         }
 
         for ($step = 0; $step < $maxSteps; $step++) {
@@ -108,14 +108,18 @@ class TextGenerationLoop
 
             $steps->push($this->buildStep($lastResult, $toolResults));
 
-            $allMessages[] = $this->buildAssistantMessage($lastResult);
+            $assistantMessage = $this->buildAssistantMessage($lastResult);
+            $allMessages[] = $assistantMessage;
+            $newMessages[] = $assistantMessage;
 
             if (filled($toolResults)) {
-                $allMessages[] = new ToolResultMessage(collect($toolResults));
+                $toolResultMessage = new ToolResultMessage(collect($toolResults));
+                $allMessages[] = $toolResultMessage;
+                $newMessages[] = $toolResultMessage;
             }
 
             if ($pendingApprovals->isNotEmpty()) {
-                return $this->buildFinalResponse($steps, $allMessages, $originalMessageCount, $lastResult)
+                return $this->buildFinalResponse($steps, $newMessages, $lastResult)
                     ->withPendingApprovals($pendingApprovals);
             }
 
@@ -126,13 +130,14 @@ class TextGenerationLoop
             $continuationToken = $lastResult->continuationToken;
         }
 
-        return $this->buildFinalResponse($steps, $allMessages, $originalMessageCount, $lastResult);
+        return $this->buildFinalResponse($steps, $newMessages, $lastResult);
     }
 
     /**
      * @param  Tool[]  $tools
      * @param  array<string, mixed>|null  $schema
      * @param  array<string, Decision>|null  $approval
+     * @param  array{Collection<int, ToolCall>, Collection<string, ?Tool>}|null  $validatedApproval  the caller's own eager validateApproval() result, reused instead of re-validating
      */
     public function stream(
         string $invocationId,
@@ -146,6 +151,7 @@ class TextGenerationLoop
         ?int $timeout = null,
         ?array $approval = null,
         ?Closure $recordApprovalResults = null,
+        ?array $validatedApproval = null,
     ): Generator {
         $maxSteps = $this->resolveMaxSteps($options, $tools);
         $continuationToken = null;
@@ -154,26 +160,25 @@ class TextGenerationLoop
         $sawError = false;
 
         if ($approval !== null) {
-            $resumption = $this->resumeFromApproval($approval, $messages, $tools);
+            $resumption = $this->resumeFromApproval($approval, $messages, $tools, $validatedApproval);
 
             $allMessages = $resumption->messages;
 
+            if ($recordApprovalResults !== null) {
+                $recordApprovalResults($resumption->results);
+            }
+
             foreach ($resumption->results as $toolResult) {
-                $rejected = in_array($toolResult->id, $resumption->rejectedToolCallIds, true);
                 $failed = in_array($toolResult->id, $resumption->failedToolCallIds, true);
 
                 yield (new ToolResultEvent(
                     $this->generateEventId(),
                     $toolResult,
-                    ! $rejected && ! $failed,
-                    $rejected || $failed ? $toolResult->result : null,
+                    ! $toolResult->denied && ! $failed,
+                    $toolResult->denied || $failed ? $toolResult->result : null,
                     time(),
-                    denied: $rejected,
+                    denied: $toolResult->denied,
                 ))->withInvocationId($invocationId);
-            }
-
-            if ($recordApprovalResults !== null) {
-                $recordApprovalResults($resumption->results);
             }
 
             if (! $resumption->shouldContinue) {
@@ -364,33 +369,35 @@ class TextGenerationLoop
      * @param  array<string, Decision>  $approval
      * @param  Message[]  $messages
      * @param  Tool[]  $tools
+     * @param  array{Collection<int, ToolCall>, Collection<string, ?Tool>}|null  $validatedApproval  a caller's own eager validateApproval() result, reused instead of re-validating
      */
-    protected function resumeFromApproval(array $approval, array $messages, array $tools): ApprovalResumption
+    protected function resumeFromApproval(array $approval, array $messages, array $tools, ?array $validatedApproval = null): ApprovalResumption
     {
         $messages = $this->settleAbandonedToolCalls($messages, exceptLatestAssistantTurn: true);
-        $originalMessageCount = count($messages);
 
-        [$approvalResults, $shouldContinue, $rejectedToolCallIds, $failedToolCallIds] = $this->resolveApprovalResults($approval, $messages, $tools);
+        [$approvalResults, $shouldContinue, $failedToolCallIds] = $this->resolveApprovalResults($approval, $messages, $tools, $validatedApproval);
+
+        $newMessages = [];
 
         if (filled($approvalResults)) {
-            [$messages, $originalMessageCount] = $this->appendApprovalResults($messages, $approvalResults, $originalMessageCount);
+            [$messages, $newMessages] = $this->appendApprovalResults($messages, $approvalResults);
         }
 
-        return new ApprovalResumption($messages, $originalMessageCount, $shouldContinue, $approvalResults, $rejectedToolCallIds, $failedToolCallIds);
+        return new ApprovalResumption($messages, $newMessages, $shouldContinue, $approvalResults, $failedToolCallIds);
     }
 
     /**
      * @param  array<string, Decision>  $approval
      * @param  Message[]  $messages
      * @param  Tool[]  $tools
-     * @return array{array<int, ToolResult>, bool, array<int, string>, array<int, string>}
+     * @param  array{Collection<int, ToolCall>, Collection<string, ?Tool>}|null  $validatedApproval  a caller's own eager validateApproval() result, reused instead of re-validating
+     * @return array{array<int, ToolResult>, bool, array<int, string>}
      */
-    protected function resolveApprovalResults(array $approval, array $messages, array $tools): array
+    protected function resolveApprovalResults(array $approval, array $messages, array $tools, ?array $validatedApproval = null): array
     {
-        [$pendingToolCalls, $resolvedTools] = $this->validateApproval($approval, $messages, $tools);
+        [$pendingToolCalls, $resolvedTools] = $validatedApproval ?? $this->validateApproval($approval, $messages, $tools);
 
         $toolResults = [];
-        $rejectedToolCallIds = [];
         $failedToolCallIds = [];
         $hasBareRejection = false;
 
@@ -400,7 +407,6 @@ class TextGenerationLoop
                 ?? Decision::reject('The user rejected this tool call.');
 
             if ($decision->isRejected()) {
-                $rejectedToolCallIds[] = $toolCall->id;
                 $hasBareRejection = $hasBareRejection || $decision->result === null;
 
                 $toolResults[] = new ToolResult(
@@ -409,6 +415,7 @@ class TextGenerationLoop
                     $toolCall->arguments,
                     $decision->result ?? 'The user rejected this tool call.',
                     $toolCall->resultId,
+                    denied: true,
                 );
 
                 continue;
@@ -437,7 +444,7 @@ class TextGenerationLoop
             );
         }
 
-        return [$toolResults, ! $hasBareRejection, $rejectedToolCallIds, $failedToolCallIds];
+        return [$toolResults, ! $hasBareRejection, $failedToolCallIds];
     }
 
     /**
@@ -530,8 +537,7 @@ class TextGenerationLoop
      */
     protected function buildFinalResponse(
         Collection $steps,
-        array $allMessages,
-        int $originalMessageCount,
+        array $newMessages,
         ?StepResponse $lastResult,
     ): TextResponse {
         $finalStep = $steps->last();
@@ -541,7 +547,7 @@ class TextGenerationLoop
             new Usage,
         );
 
-        $newMessages = collect(array_slice($allMessages, $originalMessageCount))->values();
+        $newMessages = collect($newMessages)->values();
 
         if ($lastResult?->structured !== null) {
             return (new StructuredTextResponse(

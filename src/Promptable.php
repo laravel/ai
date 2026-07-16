@@ -70,7 +70,7 @@ trait Promptable
 
         if ($resume !== null) {
             [$provider, $model] = $this->iterateProvidersWithFailover(
-                $this->getProvidersAndModelsForFailover($provider, $model)
+                $this->providersForResume($provider, $model)
             )->current();
 
             return $run($provider, $model);
@@ -107,12 +107,10 @@ trait Promptable
         ?string $model,
         ?int $timeout): StreamableAgentResponse
     {
-        $providers = $this->getProvidersAndModelsForFailover($provider, $model);
+        $providers = $resume !== null
+            ? $this->providersForResume($provider, $model)
+            : $this->getProvidersAndModelsForFailover($provider, $model);
         $resolvedTimeout = $this->getTimeout($timeout);
-
-        if ($resume !== null) {
-            $providers = array_slice($providers, 0, 1, true);
-        }
 
         $invocationId = (string) Str::uuid7();
 
@@ -276,6 +274,14 @@ trait Promptable
         }
 
         return $providers;
+    }
+
+    /**
+     * Get the single provider / model pair a resume must run against, since a resume may not fail over to a different provider.
+     */
+    private function providersForResume(Lab|array|string|null $provider, ?string $model): array
+    {
+        return array_slice($this->getProvidersAndModelsForFailover($provider, $model), 0, 1, true);
     }
 
     /**

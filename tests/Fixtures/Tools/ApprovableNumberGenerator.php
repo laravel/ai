@@ -3,6 +3,7 @@
 namespace Tests\Fixtures\Tools;
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Laravel\Ai\Approvals\Approval;
 use Laravel\Ai\Concerns\InteractsWithApproval;
 use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\Tool;
@@ -10,9 +11,13 @@ use Laravel\Ai\Tools\Request;
 
 class ApprovableNumberGenerator implements Approvable, Tool
 {
-    use InteractsWithApproval;
+    use InteractsWithApproval {
+        shouldRequestApproval as protected traitShouldRequestApproval;
+    }
 
     public static int $invocations = 0;
+
+    public static int $approvalChecks = 0;
 
     public function description(): string
     {
@@ -29,5 +34,12 @@ class ApprovableNumberGenerator implements Approvable, Tool
     public function schema(JsonSchema $schema): array
     {
         return [];
+    }
+
+    public function shouldRequestApproval(Request $request): ?Approval
+    {
+        static::$approvalChecks++;
+
+        return $this->traitShouldRequestApproval($request);
     }
 }
