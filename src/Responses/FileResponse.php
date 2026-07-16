@@ -10,6 +10,7 @@ class FileResponse
         public readonly string $id,
         ?string $mimeType = null,
         public readonly ?string $content = null,
+        public readonly ?string $uri = null,
     ) {
         $this->mime = $mimeType;
     }
@@ -28,5 +29,13 @@ class FileResponse
     public function content(): ?string
     {
         return $this->content;
+    }
+
+    /**
+     * Get the provider URI for the file.
+     */
+    public function uri(): ?string
+    {
+        return $this->uri;
     }
 }

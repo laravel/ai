@@ -32,6 +32,7 @@ class GeminiFileGateway implements FileGateway
         return new FileResponse(
             id: $response->json('name'),
             mimeType: $response->json('mimeType'),
+            uri: $response->json('uri'),
         );
     }
 

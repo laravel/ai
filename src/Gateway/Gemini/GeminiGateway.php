@@ -13,7 +13,7 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
-use Laravel\Ai\Files\Image;
+use Laravel\Ai\Files\Image as ImageFile;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\Concerns\WrapsPcmAudio;
@@ -36,6 +36,7 @@ class GeminiGateway implements Gateway, StepTextGateway
     use Concerns\CreatesGeminiClient;
     use Concerns\HandlesTextStreaming;
     use Concerns\MapsAttachments;
+    use Concerns\MapsEmbeddingInputs;
     use Concerns\MapsMessages;
     use Concerns\MapsTools;
     use Concerns\ParsesTextResponses;
@@ -106,7 +107,7 @@ class GeminiGateway implements Gateway, StepTextGateway
     /**
      * Generate an image.
      *
-     * @param  array<Image>  $attachments
+     * @param  array<ImageFile>  $attachments
      * @param  '3:2'|'2:3'|'1:1'|null  $size
      * @param  'low'|'medium'|'high'|null  $quality
      */
@@ -171,10 +172,16 @@ class GeminiGateway implements Gateway, StepTextGateway
         int $timeout = 30,
         array $providerOptions = [],
     ): EmbeddingsResponse {
-        $requests = array_map(fn (string $input): array => array_merge($providerOptions, [
+        $model = $this->normalizeEmbeddingModel($model);
+
+        if ($this->usesEmbedContentEndpoint($model, $inputs)) {
+            return $this->generateEmbedContentEmbeddings($provider, $model, $inputs, $dimensions, $timeout, $providerOptions);
+        }
+
+        $requests = array_map(fn (mixed $input): array => array_merge($providerOptions, [
             'model' => "models/{$model}",
-            'content' => ['parts' => [['text' => $input]]],
-            'output_dimensionality' => $dimensions,
+            'content' => ['parts' => [$this->mapEmbeddingInput($provider, $input)]],
+            'outputDimensionality' => $dimensions,
         ]), $inputs);
 
         $response = $this->withErrorHandling(
@@ -187,10 +194,62 @@ class GeminiGateway implements Gateway, StepTextGateway
         $data = $response->json();
 
         return new EmbeddingsResponse(
-            (new Collection($data['embeddings'] ?? []))->pluck('values')->all(),
+            $this->parseEmbeddingValues($data),
             $data['usageMetadata']['promptTokenCount'] ?? 0,
             new Meta($provider->name(), $model),
         );
+    }
+
+    /**
+     * Determine if embeddings should be generated through Gemini's single content endpoint.
+     */
+    protected function usesEmbedContentEndpoint(string $model, array $inputs): bool
+    {
+        return $this->isGeminiEmbedding2Model($model) || $this->hasMultimodalEmbeddingInputs($inputs);
+    }
+
+    /**
+     * Generate embeddings through Gemini's single content endpoint.
+     */
+    protected function generateEmbedContentEmbeddings(
+        EmbeddingProvider $provider,
+        string $model,
+        array $inputs,
+        int $dimensions,
+        int $timeout = 30,
+        array $providerOptions = [],
+    ): EmbeddingsResponse {
+        $embeddings = [];
+        $tokens = 0;
+
+        foreach ($inputs as $input) {
+            $data = $this->withErrorHandling(
+                $provider->name(),
+                fn () => $this->client($provider, $timeout)->post("models/{$model}:embedContent", array_merge($providerOptions, [
+                    'content' => ['parts' => [$this->mapEmbeddingInput($provider, $input)]],
+                    'outputDimensionality' => $dimensions,
+                ])),
+            )->json();
+
+            $embeddings = array_merge($embeddings, $this->parseEmbeddingValues($data));
+            $tokens += $data['usageMetadata']['promptTokenCount'] ?? 0;
+        }
+
+        return new EmbeddingsResponse(
+            $embeddings,
+            $tokens,
+            new Meta($provider->name(), $model),
+        );
+    }
+
+    /**
+     * Parse Gemini embedding values from either embedding response shape.
+     */
+    protected function parseEmbeddingValues(array $data): array
+    {
+        return isset($data['embedding']['values'])
+            ? [$data['embedding']['values']]
+            : (new Collection($data['embeddings'] ?? []))->pluck('values')->all();
     }
 
     /**
