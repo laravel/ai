@@ -1,16 +1,16 @@
 <?php
 
-use Laravel\Ai\Image;
-use Laravel\Ai\Enums\Lab;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Queue;
+use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Image;
 use Laravel\Ai\Jobs\GenerateImage;
 use Laravel\Ai\Prompts\ImagePrompt;
-use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
-use Illuminate\Support\Facades\Queue;
-use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Prompts\QueuedImagePrompt;
 use Laravel\Ai\Responses\Data\GeneratedImage;
+use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\ImageResponse;
 
 test('image rejects empty prompt', function (): void {
     Image::fake();

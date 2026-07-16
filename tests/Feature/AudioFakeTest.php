@@ -1,15 +1,15 @@
 <?php
 
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
 use Laravel\Ai\Audio;
 use Laravel\Ai\Enums\Lab;
-use Illuminate\Support\Str;
 use Laravel\Ai\Jobs\GenerateAudio;
 use Laravel\Ai\Prompts\AudioPrompt;
-use Laravel\Ai\Responses\Data\Meta;
-use Illuminate\Support\Facades\Queue;
-use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Prompts\QueuedAudioPrompt;
 use Laravel\Ai\Providers\ElevenLabsProvider;
+use Laravel\Ai\Responses\AudioResponse;
+use Laravel\Ai\Responses\Data\Meta;
 
 test('audio rejects empty text', function (): void {
     Audio::fake();

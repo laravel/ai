@@ -1,17 +1,16 @@
 <?php
 
-use Laravel\Ai\Enums\Lab;
-use Laravel\Ai\Transcription;
 use Illuminate\Support\Collection;
-use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
 use Illuminate\Support\Facades\Queue;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Jobs\GenerateTranscription;
-use Laravel\Ai\Prompts\TranscriptionPrompt;
-use Laravel\Ai\Responses\TranscriptionResponse;
 use Laravel\Ai\Prompts\QueuedTranscriptionPrompt;
+use Laravel\Ai\Prompts\TranscriptionPrompt;
+use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
-use Laravel\Ai\PendingResponses\PendingTranscriptionGeneration;
+use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\TranscriptionResponse;
+use Laravel\Ai\Transcription;
 
 test('transcription rejects empty audio string', function (): void {
     Transcription::fake();

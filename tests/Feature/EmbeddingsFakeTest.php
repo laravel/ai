@@ -10,8 +10,8 @@ use Laravel\Ai\Files\Image;
 use Laravel\Ai\Files\Video;
 use Laravel\Ai\Jobs\GenerateEmbeddings;
 use Laravel\Ai\Prompts\EmbeddingsPrompt;
-use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Prompts\QueuedEmbeddingsPrompt;
+use Laravel\Ai\Responses\EmbeddingsResponse;
 
 test('embeddings reject empty input list', function (): void {
     Embeddings::fake();
@@ -307,8 +307,8 @@ describe('queued embeddings', function (): void {
 
         expect($GLOBALS['embeddingsResponse'])->toBeInstanceOf(EmbeddingsResponse::class);
         expect($GLOBALS['embeddingsResponse']->embeddings)->toEqual([
-                array_fill(0, 3, 0.1),
-                array_fill(0, 3, 0.2),
+            array_fill(0, 3, 0.1),
+            array_fill(0, 3, 0.2),
         ]);
     });
 
