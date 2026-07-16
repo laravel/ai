@@ -121,8 +121,6 @@ class PendingTranscriptionGeneration
                     is_array($this->providerOptions) ? $this->providerOptions : [],
                 )
             );
-
-            return new QueuedTranscriptionResponse(new FakePendingDispatch);
         }
 
         return new QueuedTranscriptionResponse(
