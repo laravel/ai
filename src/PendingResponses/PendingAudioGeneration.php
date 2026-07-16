@@ -134,8 +134,6 @@ class PendingAudioGeneration
                     $this->timeout,
                 )
             );
-
-            return new QueuedAudioResponse(new FakePendingDispatch);
         }
 
         return new QueuedAudioResponse(
