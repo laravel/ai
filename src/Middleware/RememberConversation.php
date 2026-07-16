@@ -28,14 +28,6 @@ class RememberConversation
      */
     public function handle(AgentPrompt $prompt, Closure $next)
     {
-        return $this->remember($prompt, $next);
-    }
-
-    /**
-     * Run the prompt and persist the conversation once it completes.
-     */
-    protected function remember(AgentPrompt $prompt, Closure $next)
-    {
         return $next($prompt)->then(function (AgentResponse $response) use ($prompt): void {
             /** @var Agent&RemembersConversations $agent */
             $agent = $prompt->agent;
@@ -44,7 +36,7 @@ class RememberConversation
             if (! $agent->currentConversation()) {
                 $conversationId = $this->store->storeConversation(
                     $agent->conversationParticipant()?->id,
-                    $this->generateTitle($prompt->resume !== null ? 'Tool approval' : $prompt->prompt)
+                    $this->generateTitle($prompt->prompt)
                 );
 
                 $agent->continue(

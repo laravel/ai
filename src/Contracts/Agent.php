@@ -45,6 +45,8 @@ interface Agent
 
     /**
      * Invoke the agent in a queued job.
+     *
+     * @param  array<string, Decision|bool>|string  $prompt
      */
     public function queue(
         array|string $prompt,

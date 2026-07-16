@@ -90,6 +90,14 @@ class AgentPrompt extends Prompt
     }
 
     /**
+     * Add new attachment to the prompt, returning a new prompt instance.
+     */
+    public function withAttachments(Collection|array $attachments): AgentPrompt
+    {
+        return $this->revise($this->prompt, $attachments);
+    }
+
+    /**
      * Get the provider instance.
      */
     public function provider(): TextProvider
