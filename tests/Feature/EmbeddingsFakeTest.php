@@ -1,7 +1,12 @@
 <?php
 
+use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Files\Audio;
+use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\Image;
+use Laravel\Ai\Files\Video;
 use Laravel\Ai\Prompts\EmbeddingsPrompt;
 use Laravel\Ai\Prompts\QueuedEmbeddingsPrompt;
 
@@ -33,7 +38,7 @@ test('embeddings reject non-string inputs', function (): void {
     Embeddings::fake();
 
     Embeddings::for([123])->generate();
-})->throws(InvalidArgumentException::class, 'The input at index 0 must be a non-blank string.');
+})->throws(InvalidArgumentException::class, 'The input at index 0 must be a string or an image, audio, document, or video file.');
 
 test('embeddings report the offending index for blank inputs', function (): void {
     Embeddings::fake();
@@ -68,7 +73,7 @@ describe('generating embeddings', function (): void {
         expect($response)->toHaveCount(3);
     });
 
-    test('can iterate over response', function () {
+    test('can iterate over response', function (): void {
         Embeddings::fake([
             [
                 array_fill(0, 3, 0.1),
@@ -89,6 +94,52 @@ describe('generating embeddings', function (): void {
             array_fill(0, 3, 0.2),
         ]);
     });
+
+    test('can fake embeddings with image input', function (): void {
+        Embeddings::fake();
+
+        $response = Embeddings::for([
+            Image::fromBase64(base64_encode('image-bytes'), 'image/png'),
+        ])->generate();
+
+        expect($response)->toHaveCount(1);
+    });
+
+    test('can fake embeddings with audio input', function (): void {
+        Embeddings::fake();
+
+        $response = Embeddings::for([
+            Audio::fromBase64(base64_encode('audio-bytes'), 'audio/mpeg'),
+        ])->generate();
+
+        expect($response)->toHaveCount(1);
+    });
+
+    test('can fake embeddings with document input', function (): void {
+        Embeddings::fake();
+
+        $response = Embeddings::for([
+            Document::fromBase64(base64_encode('%PDF-1.4 fake'), 'application/pdf'),
+        ])->generate();
+
+        expect($response)->toHaveCount(1);
+    });
+
+    test('can fake embeddings with video input', function (): void {
+        Embeddings::fake();
+
+        $response = Embeddings::for([
+            Video::fromBase64(base64_encode('video-bytes'), 'video/mp4'),
+        ])->generate();
+
+        expect($response)->toHaveCount(1);
+    });
+
+    test('non-text embeddings inputs are rejected by text-only providers', function (): void {
+        Embeddings::for([
+            Image::fromBase64(base64_encode('image-bytes'), 'image/png'),
+        ])->generate(provider: 'openai');
+    })->throws(InvalidArgumentException::class, 'Provider [openai] only supports text embeddings inputs.');
 
     test('can fake embeddings with custom response', function (): void {
         $customEmbedding = array_fill(0, 100, 0.5);
@@ -215,6 +266,26 @@ describe('queued embeddings', function (): void {
         Embeddings::assertNotQueued(fn (QueuedEmbeddingsPrompt $prompt): bool => in_array('Goodbye', $prompt->inputs));
     });
 
+    test('contains ignores non-text inputs', function (): void {
+        Embeddings::fake();
+
+        Embeddings::for([
+            Image::fromBase64(base64_encode('image-bytes'), 'image/png'),
+        ])->generate();
+
+        Embeddings::assertGenerated(fn (EmbeddingsPrompt $prompt) => ! $prompt->contains('Hello'));
+    });
+
+    test('queued contains ignores non-text inputs', function (): void {
+        Embeddings::fake();
+
+        Embeddings::for([
+            Video::fromBase64(base64_encode('video-bytes'), 'video/mp4'),
+        ])->queue();
+
+        Embeddings::assertQueued(fn (QueuedEmbeddingsPrompt $prompt) => ! $prompt->contains('Hello'));
+    });
+
     test('can assert no embeddings were queued', function (): void {
         Embeddings::fake();
 
@@ -236,6 +307,83 @@ describe('queued embeddings', function (): void {
 
         Embeddings::assertQueued(fn (QueuedEmbeddingsPrompt $prompt): bool => $prompt->timeout === 90 && $prompt->count() === 1);
     });
+
+    test('cached embeddings with media inputs use content hashes', function () {
+        config([
+            'cache.default' => 'array',
+            'ai.caching.embeddings.store' => 'array',
+        ]);
+
+        $path = tempnam(sys_get_temp_dir(), 'ai-embedding-');
+
+        file_put_contents($path, 'first-version');
+
+        try {
+            $calls = 0;
+
+            Embeddings::fake(function (EmbeddingsPrompt $prompt) use (&$calls) {
+                $calls++;
+
+                return array_map(
+                    fn () => array_fill(0, $prompt->dimensions, 0.1),
+                    $prompt->inputs
+                );
+            });
+
+            $request = fn () => Embeddings::for([
+                Document::fromPath($path),
+            ])->cache(60)->generate();
+
+            $request();
+            $request();
+
+            file_put_contents($path, 'second-version');
+
+            $request();
+
+            expect($calls)->toBe(2);
+        } finally {
+            @unlink($path);
+        }
+    });
+
+    test('cached remote embeddings do not fetch remote metadata', function () {
+        config([
+            'cache.default' => 'array',
+            'ai.caching.embeddings.store' => 'array',
+        ]);
+
+        Http::preventStrayRequests();
+
+        $calls = 0;
+
+        Embeddings::fake(function () use (&$calls) {
+            $calls++;
+
+            return [array_fill(0, 100, 0.1)];
+        });
+
+        $request = fn () => Embeddings::for([
+            Document::fromUrl('https://example.com/manual.pdf'),
+        ])->cache(60)->generate();
+
+        $request();
+        $request();
+
+        expect($calls)->toBe(1);
+        Http::assertNothingSent();
+    });
+
+    test('cached embeddings reject unsupported input types with an invalid argument exception', function () {
+        config([
+            'cache.default' => 'array',
+            'ai.caching.embeddings.store' => 'array',
+        ]);
+
+        Embeddings::fake();
+
+        Embeddings::for([123])->cache(60)->generate();
+    })->throws(InvalidArgumentException::class, 'The input at index 0 must be a string or an image, audio, document, or video file.');
 });
 
 describe('provider enum support', function (): void {
