@@ -39,6 +39,9 @@ class TextGenerationLoop
 {
     use HandlesToolApprovals, InvokesTools;
 
+    /**
+     * Create a new text generation loop instance.
+     */
     public function __construct(protected StepTextGateway $gateway)
     {
         $this->initializeToolCallbacks();
@@ -509,11 +512,17 @@ class TextGenerationLoop
             : null;
     }
 
+    /**
+     * Generate a unique stream event ID.
+     */
     protected function generateEventId(): string
     {
         return strtolower((string) Str::uuid7());
     }
 
+    /**
+     * Build an assistant message from the given step response.
+     */
     protected function buildAssistantMessage(StepResponse $result): AssistantMessage
     {
         return new AssistantMessage(
