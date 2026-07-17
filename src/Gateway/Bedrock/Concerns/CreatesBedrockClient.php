@@ -12,7 +12,7 @@ use Laravel\Ai\Providers\Provider;
 trait CreatesBedrockClient
 {
     /**
-     * The memoized assume role credential providers, keyed by region and role ARN.
+     * The memoized assume role credential providers, keyed by the resolved credential configuration.
      *
      * @var array<string, Closure>
      */
@@ -30,7 +30,7 @@ trait CreatesBedrockClient
         $clientConfig = [
             'region' => $config['region'] ?? 'us-east-1',
             'version' => '2023-09-30',
-            ...$this->resolveAuthConfig($credentials, $config),
+            ...$this->resolveAuthConfig($credentials, $config, $timeout),
         ];
 
         if ($timeout) {
@@ -45,7 +45,7 @@ trait CreatesBedrockClient
      * @param  array<string, mixed>  $config
      * @return array<string, mixed>
      */
-    protected function resolveAuthConfig(array $credentials, array $config): array
+    protected function resolveAuthConfig(array $credentials, array $config, ?int $timeout = null): array
     {
         if (! empty($credentials['key'])) {
             return [
@@ -55,7 +55,7 @@ trait CreatesBedrockClient
         }
 
         if (! empty($config['assume_role']['arn'])) {
-            return ['credentials' => $this->assumeRoleCredentialProvider($credentials, $config)];
+            return ['credentials' => $this->assumeRoleCredentialProvider($credentials, $config, $timeout)];
         }
 
         return $this->resolveSourceAuthConfig($credentials, $config);
@@ -96,13 +96,13 @@ trait CreatesBedrockClient
      * @param  array<string, mixed>  $credentials
      * @param  array<string, mixed>  $config
      */
-    protected function assumeRoleCredentialProvider(array $credentials, array $config): Closure
+    protected function assumeRoleCredentialProvider(array $credentials, array $config, ?int $timeout = null): Closure
     {
-        $key = ($config['region'] ?? 'us-east-1').'|'.$config['assume_role']['arn'];
+        $key = hash('xxh128', serialize([$credentials, $config, $timeout]));
 
         return $this->assumeRoleProviders[$key] ??= CredentialProvider::memoize(
             new AssumeRoleCredentialProvider([
-                'client' => $this->createStsClient($credentials, $config),
+                'client' => $this->createStsClient($credentials, $config, $timeout),
                 'assume_role_params' => $this->assumeRoleParameters($config['assume_role']),
             ])
         );
@@ -114,13 +114,19 @@ trait CreatesBedrockClient
      * @param  array<string, mixed>  $credentials
      * @param  array<string, mixed>  $config
      */
-    protected function createStsClient(array $credentials, array $config): StsClient
+    protected function createStsClient(array $credentials, array $config, ?int $timeout = null): StsClient
     {
-        return new StsClient([
+        $clientConfig = [
             'region' => $config['region'] ?? 'us-east-1',
             'version' => 'latest',
             ...$this->resolveSourceAuthConfig($credentials, $config),
-        ]);
+        ];
+
+        if ($timeout) {
+            $clientConfig['http'] = ['timeout' => $timeout];
+        }
+
+        return new StsClient($clientConfig);
     }
 
     /**
