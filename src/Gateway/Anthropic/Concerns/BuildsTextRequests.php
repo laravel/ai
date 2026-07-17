@@ -3,10 +3,11 @@
 namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Illuminate\Support\Arr;
-use Laravel\Ai\Enums\Lab;
+use InvalidArgumentException;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\ToolChoice;
 
 trait BuildsTextRequests
 {
@@ -34,7 +35,7 @@ trait BuildsTextRequests
 
         $mappedTools = filled($tools) ? $this->mapTools($tools, $provider) : [];
 
-        $providerOptions = $options?->providerOptions(Lab::Anthropic) ?? [];
+        $providerOptions = $options?->providerOptions($provider->driver()) ?? [];
 
         if (filled($schema) && $this->supportsNativeStructuredOutput($provider)) {
             $body['output_config'] = [
@@ -55,7 +56,7 @@ trait BuildsTextRequests
 
             if (filled($mappedTools)) {
                 $body['tools'] = $mappedTools;
-                $body['tool_choice'] = $this->resolveToolChoice($schema, $tools, $providerOptions);
+                $body['tool_choice'] = $this->resolveToolChoice($schema, $tools, $providerOptions, $options?->toolChoice);
             }
         }
 
@@ -69,20 +70,37 @@ trait BuildsTextRequests
 
     /**
      * Determine the tool_choice strategy for the request.
-     *
-     * Thinking mode only supports "auto" -- forced tool selection causes an API error.
-     *
-     * Without thinking: structured-only forces the synthetic tool, tools+schema uses "any".
      */
-    protected function resolveToolChoice(?array $schema, array $tools, array $providerOptions): array
+    protected function resolveToolChoice(?array $schema, array $tools, array $providerOptions, ?ToolChoice $toolChoice = null): array
     {
-        if (! filled($schema) || isset($providerOptions['thinking'])) {
+        $thinking = isset($providerOptions['thinking']);
+
+        if (filled($schema)) {
+            if ($thinking) {
+                return ['type' => 'auto'];
+            }
+
+            return filled($tools)
+                ? ['type' => 'any']
+                : ['type' => 'tool', 'name' => 'output_structured_data'];
+        }
+
+        if (! $toolChoice instanceof ToolChoice) {
             return ['type' => 'auto'];
         }
 
-        return filled($tools)
-            ? ['type' => 'any']
-            : ['type' => 'tool', 'name' => 'output_structured_data'];
+        if ($thinking && in_array($toolChoice->mode, [ToolChoice::required, ToolChoice::tool], true)) {
+            throw new InvalidArgumentException(
+                'Anthropic cannot force tool use while extended thinking is enabled. Use ToolChoice::auto or ToolChoice::none, or disable thinking.'
+            );
+        }
+
+        return match ($toolChoice->mode) {
+            ToolChoice::auto => ['type' => 'auto'],
+            ToolChoice::none => ['type' => 'none'],
+            ToolChoice::required => ['type' => 'any'],
+            ToolChoice::tool => ['type' => 'tool', 'name' => $toolChoice->toolName],
+        };
     }
 
     /**
@@ -90,9 +108,13 @@ trait BuildsTextRequests
      */
     protected function supportsNativeStructuredOutput(Provider $provider): bool
     {
-        $beta = $provider->additionalConfiguration()['anthropic_beta'] ?? '';
+        $config = $provider->additionalConfiguration();
 
-        return str_contains($beta, 'structured-outputs');
+        if (array_key_exists('use_native_structured_output', $config)) {
+            return (bool) $config['use_native_structured_output'];
+        }
+
+        return true;
     }
 
     /**

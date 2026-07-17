@@ -3,7 +3,7 @@
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\AssistantAgent;
 
-test('anthropic requests use the configured base url', function () {
+test('anthropic requests use the configured base url', function (): void {
     config(['ai.providers.anthropic.url' => 'https://custom-proxy.example.com/v1']);
 
     Http::fake([
@@ -15,12 +15,10 @@ test('anthropic requests use the configured base url', function () {
         provider: 'anthropic',
     );
 
-    Http::assertSent(function ($request) {
-        return $request->url() === 'https://custom-proxy.example.com/v1/messages';
-    });
+    Http::assertSent(fn ($request): bool => $request->url() === 'https://custom-proxy.example.com/v1/messages');
 });
 
-test('anthropic requests fall back to the default base url', function () {
+test('anthropic requests fall back to the default base url', function (): void {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse(),
     ]);
@@ -30,7 +28,5 @@ test('anthropic requests fall back to the default base url', function () {
         provider: 'anthropic',
     );
 
-    Http::assertSent(function ($request) {
-        return $request->url() === 'https://api.anthropic.com/v1/messages';
-    });
+    Http::assertSent(fn ($request): bool => $request->url() === 'https://api.anthropic.com/v1/messages');
 });

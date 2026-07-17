@@ -52,8 +52,9 @@ class StructuredAgentResponse extends AgentResponse implements Arrayable, ArrayA
     /**
      * Get the string representation of the object.
      */
+    #[\Override]
     public function __toString(): string
     {
-        return json_encode($this->structured);
+        return (string) json_encode($this->structured);
     }
 }

@@ -17,6 +17,7 @@ use Laravel\Ai\Files\ProviderDocument;
 use Laravel\Ai\Files\ProviderImage;
 use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Files\RemoteImage;
+use Laravel\Ai\Files\S3Document;
 use Laravel\Ai\Files\StoredDocument;
 use Laravel\Ai\Files\StoredImage;
 
@@ -27,27 +28,26 @@ trait MapsAttachments
      */
     protected function mapAttachments(Collection $attachments): array
     {
-        return $attachments->map(function (File|UploadedFile $attachment) {
-            return match (true) {
-                $attachment instanceof Base64Document,
-                $attachment instanceof LocalDocument,
-                $attachment instanceof StoredDocument => $this->buildDocumentBlock($attachment),
-                $attachment instanceof Base64Image => $this->buildImageBlock($attachment, $attachment->content()),
-                $attachment instanceof LocalImage => $this->buildImageBlock($attachment, file_get_contents($attachment->path)),
-                $attachment instanceof StoredImage => $this->buildImageBlock(
-                    $attachment,
-                    Storage::disk($attachment->disk)->get($attachment->path),
-                ),
-                $attachment instanceof RemoteDocument,
-                $attachment instanceof RemoteImage => throw new InvalidArgumentException(
-                    'Remote attachments are not supported by Bedrock; download the file and pass it as a Base64, Local, or Stored attachment.'
-                ),
-                $attachment instanceof ProviderDocument,
-                $attachment instanceof ProviderImage => throw new InvalidArgumentException(
-                    'Provider-stored attachments are not supported by Bedrock.'
-                ),
-                default => throw new InvalidArgumentException('Unsupported attachment type ['.get_class($attachment).'].'),
-            };
+        return $attachments->map(fn (File|UploadedFile $attachment) => match (true) {
+            $attachment instanceof Base64Document,
+            $attachment instanceof LocalDocument,
+            $attachment instanceof S3Document,
+            $attachment instanceof StoredDocument => $this->buildDocumentBlock($attachment),
+            $attachment instanceof Base64Image => $this->buildImageBlock($attachment, $attachment->content()),
+            $attachment instanceof LocalImage => $this->buildImageBlock($attachment, file_get_contents($attachment->path)),
+            $attachment instanceof StoredImage => $this->buildImageBlock(
+                $attachment,
+                Storage::disk($attachment->disk)->get($attachment->path),
+            ),
+            $attachment instanceof RemoteDocument,
+            $attachment instanceof RemoteImage => throw new InvalidArgumentException(
+                'Remote attachments are not supported by Bedrock; download the file and pass it as a Base64, Local, or Stored attachment.'
+            ),
+            $attachment instanceof ProviderDocument,
+            $attachment instanceof ProviderImage => throw new InvalidArgumentException(
+                'Provider-stored attachments are not supported by Bedrock.'
+            ),
+            default => throw new InvalidArgumentException('Unsupported attachment type ['.$attachment::class.'].'),
         })->all();
     }
 
@@ -56,14 +56,22 @@ trait MapsAttachments
      */
     protected function buildDocumentBlock(Document $document): array
     {
+        $source = match (true) {
+            $document instanceof S3Document => [
+                's3Location' => array_filter([
+                    'uri' => $document->url,
+                    'bucketOwner' => $document->bucketOwner,
+                ]),
+            ],
+            default => ['bytes' => $document->content()],
+        };
+
         return [
-            'document' => [
+            'document' => array_filter([
                 'format' => $this->getDocumentFormat($document),
                 'name' => $this->getDocumentName($document),
-                'source' => [
-                    'bytes' => $document->content(),
-                ],
-            ],
+                'source' => $source,
+            ]),
         ];
     }
 
@@ -85,9 +93,13 @@ trait MapsAttachments
     /**
      * Map a Document's MIME type to a Bedrock document format.
      */
-    protected function getDocumentFormat(Document $document): string
+    protected function getDocumentFormat(Document $document): ?string
     {
-        $mime = strtolower(trim(strtok($document->mimeType() ?? 'text/plain', ';')));
+        $mime = strtolower(trim(strtok($document->mimeType() ?? '', ';')));
+
+        if ($mime === '' || $mime === '0') {
+            return null;
+        }
 
         return match ($mime) {
             'application/pdf' => 'pdf',
@@ -98,7 +110,8 @@ trait MapsAttachments
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
             'text/html' => 'html',
             'text/markdown', 'text/x-markdown' => 'md',
-            default => 'txt',
+            'text/plain' => 'txt',
+            default => null,
         };
     }
 
@@ -114,7 +127,7 @@ trait MapsAttachments
         $name = pathinfo($name, PATHINFO_FILENAME) ?: $name;
         $name = preg_replace('/[^A-Za-z0-9\-\(\)\[\] ]+/', '-', $name);
 
-        return trim(preg_replace('/\s+/', ' ', $name)) ?: 'document';
+        return trim((string) preg_replace('/\s+/', ' ', (string) $name)) ?: 'document';
     }
 
     /**

@@ -40,7 +40,7 @@ class FakeFileGateway implements FileGateway
 
         return tap($this->marshalGetResponse(
             $response, $fileId
-        ), fn () => $this->currentResponseIndex++);
+        ), fn (): int => $this->currentResponseIndex++);
     }
 
     /**

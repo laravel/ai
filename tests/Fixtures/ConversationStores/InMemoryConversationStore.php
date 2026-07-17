@@ -17,7 +17,7 @@ class InMemoryConversationStore implements ConversationStore
     public function latestConversationId(string|int $userId): ?string
     {
         return collect($this->conversations)
-            ->filter(fn ($conversation) => $conversation['user_id'] == $userId)
+            ->filter(fn ($conversation): bool => $conversation['user_id'] == $userId)
             ->keys()
             ->last();
     }

@@ -2,12 +2,14 @@
 
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Providers\Tools\FileSearch;
+use Laravel\Ai\Providers\Tools\WebFetch;
+use Laravel\Ai\Providers\Tools\WebSearch;
 use Tests\Fixtures\Agents\NamedToolAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
 use function Laravel\Ai\agent;
 
-test('tool parameters are not wrapped in schema definition', function () {
+test('tool parameters are not wrapped in schema definition', function (): void {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse('The number is 42'),
     ]);
@@ -17,7 +19,7 @@ test('tool parameters are not wrapped in schema definition', function () {
         provider: 'anthropic',
     );
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $tools = $request->data()['tools'] ?? [];
 
         foreach ($tools as $tool) {
@@ -33,7 +35,7 @@ test('tool parameters are not wrapped in schema definition', function () {
     });
 });
 
-test('unsupported provider tool throws logic exception', function () {
+test('unsupported provider tool throws logic exception', function (): void {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse(),
     ]);
@@ -47,21 +49,127 @@ test('unsupported provider tool throws logic exception', function () {
     );
 })->throws(LogicException::class, 'is not supported by Anthropic');
 
-test('tool with a name() method emits the declared name', function () {
+test('tool with a name() method emits the declared name', function (): void {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
     ]);
 
     (new NamedToolAgent('aliased_tool'))->prompt('Search', provider: 'anthropic');
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $names = collect($request->data()['tools'] ?? [])->pluck('name')->all();
 
         return in_array('aliased_tool', $names, true);
     });
 });
 
-test('empty schema still includes input schema with type object', function () {
+test('web search tool sends allowed_domains', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [(new WebSearch)->allow(['laravel.com', 'php.net'])])
+        ->prompt('Search', provider: 'anthropic');
+
+    Http::assertSent(function ($request): bool {
+        $tool = collect($request->data()['tools'] ?? [])->firstWhere('name', 'web_search');
+
+        return data_get($tool, 'allowed_domains') === ['laravel.com', 'php.net'];
+    });
+});
+
+test('web search tool forwards anthropic provider options into the tool payload', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [
+        (new WebSearch)->withProviderOptions(['blocked_domains' => ['spam.com']]),
+    ])->prompt('Search', provider: 'anthropic');
+
+    Http::assertSent(function ($request): bool {
+        $tool = collect($request->data()['tools'] ?? [])->firstWhere('name', 'web_search');
+
+        return data_get($tool, 'blocked_domains') === ['spam.com'];
+    });
+});
+
+test('web search tool sends user_location when location is set', function () {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [(new WebSearch)->location(city: 'Warsaw', country: 'PL')])
+        ->prompt('Search', provider: 'anthropic');
+
+    Http::assertSent(function ($request) {
+        $tool = collect($request->data()['tools'] ?? [])->firstWhere('name', 'web_search');
+
+        return data_get($tool, 'user_location.type') === 'approximate'
+            && data_get($tool, 'user_location.city') === 'Warsaw'
+            && data_get($tool, 'user_location.country') === 'PL';
+    });
+});
+
+test('web search tool omits user_location when no location set', function () {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [new WebSearch])->prompt('Search', provider: 'anthropic');
+
+    Http::assertSent(function ($request) {
+        $tool = collect($request->data()['tools'] ?? [])->firstWhere('name', 'web_search');
+
+        return ! array_key_exists('user_location', $tool);
+    });
+});
+
+test('web fetch tool sends allowed_domains', function () {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [(new WebFetch)->allow(['laravel.com', 'php.net'])])
+        ->prompt('Fetch', provider: 'anthropic');
+
+    Http::assertSent(function ($request) {
+        $tool = collect($request->data()['tools'] ?? [])->firstWhere('name', 'web_fetch');
+
+        return data_get($tool, 'type') === 'web_fetch_20250910'
+            && data_get($tool, 'allowed_domains') === ['laravel.com', 'php.net'];
+    });
+});
+
+test('web fetch tool defaults max_uses to ten', function () {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [new WebFetch])->prompt('Fetch', provider: 'anthropic');
+
+    Http::assertSent(function ($request) {
+        $tool = collect($request->data()['tools'] ?? [])->firstWhere('name', 'web_fetch');
+
+        return data_get($tool, 'max_uses') === 10;
+    });
+});
+
+test('web fetch tool forwards a custom max_uses', function () {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [(new WebFetch)->max(3)])->prompt('Fetch', provider: 'anthropic');
+
+    Http::assertSent(function ($request) {
+        $tool = collect($request->data()['tools'] ?? [])->firstWhere('name', 'web_fetch');
+
+        return data_get($tool, 'max_uses') === 3;
+    });
+});
+
+test('empty schema still includes input schema with type object', function (): void {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse('The number is 42'),
     ]);
@@ -71,7 +179,7 @@ test('empty schema still includes input schema with type object', function () {
         provider: 'anthropic',
     );
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $tools = $request->data()['tools'] ?? [];
 
         foreach ($tools as $tool) {

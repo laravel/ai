@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Providers\FileProvider;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\PreparesStorableFiles;
 use Laravel\Ai\Providers\Provider;
@@ -24,9 +25,9 @@ class GeminiFileGateway implements FileGateway
     {
         $fileId = str_starts_with($fileId, 'files/') ? $fileId : "files/{$fileId}";
 
-        $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders([
+        $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders(array_filter([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
-        ])->get($this->baseUrl($provider)."/{$fileId}")->throw());
+        ]))->get($this->baseUrl($provider)."/{$fileId}")->throw());
 
         return new FileResponse(
             id: $response->json('name'),
@@ -45,13 +46,15 @@ class GeminiFileGateway implements FileGateway
 
         $uploadUrl = str_replace('/v1beta', '/upload/v1beta', $this->baseUrl($provider));
 
-        $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders([
+        $providerOptions = $this->resolveProviderOptions($file, Lab::Gemini);
+
+        $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders(array_filter([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
-        ])->attach(
+        ]))->attach(
             'file', $content, $name, ['Content-Type' => $mime]
-        )->post("{$uploadUrl}/files", [
+        )->post("{$uploadUrl}/files", array_replace_recursive([
             'file' => ['display_name' => $name],
-        ])->throw());
+        ], $providerOptions))->throw());
 
         return new StoredFileResponse($response->json('file.name'));
     }
@@ -63,9 +66,9 @@ class GeminiFileGateway implements FileGateway
     {
         $fileId = str_starts_with($fileId, 'files/') ? $fileId : "files/{$fileId}";
 
-        $this->withErrorHandling($provider->name(), fn () => Http::withHeaders([
+        $this->withErrorHandling($provider->name(), fn () => Http::withHeaders(array_filter([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
-        ])->delete($this->baseUrl($provider)."/{$fileId}")->throw());
+        ]))->delete($this->baseUrl($provider)."/{$fileId}")->throw());
     }
 
     /**

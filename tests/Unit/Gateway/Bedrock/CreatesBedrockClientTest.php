@@ -56,7 +56,7 @@ function assumeRoleConfig(array $assumeRole = [], array $config = []): array
     ];
 }
 
-test('bearer token credentials use http bearer auth scheme', function () {
+test('bearer token credentials use http bearer auth scheme', function (): void {
     $config = bedrockClientTrait()->resolve(
         ['key' => 'bedrock-token'],
         [],
@@ -68,7 +68,7 @@ test('bearer token credentials use http bearer auth scheme', function () {
     ]);
 });
 
-test('bearer token takes priority over iam credentials', function () {
+test('bearer token takes priority over iam credentials', function (): void {
     $config = bedrockClientTrait()->resolve(
         [
             'key' => 'bedrock-token',
@@ -82,7 +82,7 @@ test('bearer token takes priority over iam credentials', function () {
         ->and($config)->not->toHaveKey('credentials');
 });
 
-test('iam credentials produce key and secret', function () {
+test('iam credentials produce key and secret', function (): void {
     $config = bedrockClientTrait()->resolve(
         [
             'access_key_id' => 'AKIA123',
@@ -99,7 +99,7 @@ test('iam credentials produce key and secret', function () {
     ]);
 });
 
-test('session token is included when provided with iam credentials', function () {
+test('session token is included when provided with iam credentials', function (): void {
     $config = bedrockClientTrait()->resolve(
         [
             'access_key_id' => 'AKIA123',
@@ -116,13 +116,13 @@ test('session token is included when provided with iam credentials', function ()
     ]);
 });
 
-test('empty credentials with default provider enabled returns empty config', function () {
+test('empty credentials with default provider enabled returns empty config', function (): void {
     $config = bedrockClientTrait()->resolve([], []);
 
     expect($config)->toEqual([]);
 });
 
-test('empty credentials with default provider disabled returns false credentials', function () {
+test('empty credentials with default provider disabled returns false credentials', function (): void {
     $config = bedrockClientTrait()->resolve(
         [],
         ['use_default_credential_provider' => false],
@@ -131,7 +131,7 @@ test('empty credentials with default provider disabled returns false credentials
     expect($config)->toEqual(['credentials' => false]);
 });
 
-test('partial iam credentials fall back to default provider', function () {
+test('partial iam credentials fall back to default provider', function (): void {
     $config = bedrockClientTrait()->resolve(
         ['access_key_id' => 'AKIA123'],
         [],
@@ -140,14 +140,14 @@ test('partial iam credentials fall back to default provider', function () {
     expect($config)->toEqual([]);
 });
 
-test('assume role produces a callable credential provider', function () {
+test('assume role produces a callable credential provider', function (): void {
     $config = bedrockClientTrait()->resolve([], assumeRoleConfig());
 
     expect($config)->toHaveKey('credentials')
         ->and($config['credentials'])->toBeCallable();
 });
 
-test('assume role sends the configured parameters to sts', function () {
+test('assume role sends the configured parameters to sts', function (): void {
     $handler = new MockHandler([stsAssumeRoleResult()]);
 
     $config = bedrockClientTrait($handler)->resolve([], assumeRoleConfig([
@@ -169,7 +169,7 @@ test('assume role sends the configured parameters to sts', function () {
         ->and($credentials->getSecurityToken())->toBe('assumed-token');
 });
 
-test('assume role omits duration seconds when not configured', function () {
+test('assume role omits duration seconds when not configured', function (): void {
     $handler = new MockHandler([stsAssumeRoleResult()]);
 
     $config = bedrockClientTrait($handler)->resolve([], assumeRoleConfig());
@@ -179,7 +179,7 @@ test('assume role omits duration seconds when not configured', function () {
     expect($handler->getLastCommand()->toArray())->not->toHaveKey('DurationSeconds');
 });
 
-test('assume role omits external id when not configured', function () {
+test('assume role omits external id when not configured', function (): void {
     $handler = new MockHandler([stsAssumeRoleResult()]);
 
     $config = bedrockClientTrait($handler)->resolve([], assumeRoleConfig());
@@ -189,7 +189,7 @@ test('assume role omits external id when not configured', function () {
     expect($handler->getLastCommand()->toArray())->not->toHaveKey('ExternalId');
 });
 
-test('assume role uses a stable default session name', function () {
+test('assume role uses a stable default session name', function (): void {
     $handler = new MockHandler([stsAssumeRoleResult(), stsAssumeRoleResult()]);
 
     $first = bedrockClientTrait($handler)->resolve([], assumeRoleConfig());
@@ -205,7 +205,7 @@ test('assume role uses a stable default session name', function () {
         ->and($secondSession)->toBe($firstSession);
 });
 
-test('assume role credentials are memoized across client creations', function () {
+test('assume role credentials are memoized across client creations', function (): void {
     $handler = new MockHandler([stsAssumeRoleResult()]);
 
     $trait = bedrockClientTrait($handler);
@@ -222,7 +222,7 @@ test('assume role credentials are memoized across client creations', function ()
         ->and($secondCredentials->getAccessKeyId())->toBe($firstCredentials->getAccessKeyId());
 });
 
-test('assume role providers are memoized per region and role', function () {
+test('assume role providers are memoized per region and role', function (): void {
     $trait = bedrockClientTrait(new MockHandler([stsAssumeRoleResult()]));
 
     $west = $trait->resolve([], assumeRoleConfig());
@@ -231,32 +231,32 @@ test('assume role providers are memoized per region and role', function () {
     expect($west['credentials'])->not->toBe($east['credentials']);
 });
 
-test('assume role is not used when arn is empty', function () {
+test('assume role is not used when arn is empty', function (): void {
     $config = bedrockClientTrait()->resolve([], ['assume_role' => ['arn' => null]]);
 
     expect($config)->toEqual([]);
 });
 
-test('assume role is not used when arn is an empty string', function () {
+test('assume role is not used when arn is an empty string', function (): void {
     $config = bedrockClientTrait()->resolve([], ['assume_role' => ['arn' => '']]);
 
     expect($config)->toEqual([]);
 });
 
-test('assume role is not used when not configured at all', function () {
+test('assume role is not used when not configured at all', function (): void {
     $config = bedrockClientTrait()->resolve([], ['region' => 'us-west-2']);
 
     expect($config)->toEqual([]);
 });
 
-test('bearer token takes priority over assume role', function () {
+test('bearer token takes priority over assume role', function (): void {
     $config = bedrockClientTrait()->resolve(['key' => 'bedrock-token'], assumeRoleConfig());
 
     expect($config)->toHaveKey('token')
         ->and($config)->not->toHaveKey('credentials');
 });
 
-test('assume role takes priority over static iam credentials', function () {
+test('assume role takes priority over static iam credentials', function (): void {
     $config = bedrockClientTrait()->resolve(
         ['access_key_id' => 'AKIA123', 'secret_access_key' => 'secret'],
         assumeRoleConfig(),
@@ -265,7 +265,7 @@ test('assume role takes priority over static iam credentials', function () {
     expect($config['credentials'])->toBeCallable();
 });
 
-test('static iam credentials are used as the assume role source', function () {
+test('static iam credentials are used as the assume role source', function (): void {
     $trait = bedrockClientTrait(new MockHandler([stsAssumeRoleResult()]));
 
     $trait->resolve(
@@ -278,7 +278,7 @@ test('static iam credentials are used as the assume role source', function () {
     ]);
 });
 
-test('assume role source uses the default credential chain when no static credentials exist', function () {
+test('assume role source uses the default credential chain when no static credentials exist', function (): void {
     $trait = bedrockClientTrait(new MockHandler([stsAssumeRoleResult()]));
 
     $trait->resolve([], assumeRoleConfig());
@@ -286,7 +286,7 @@ test('assume role source uses the default credential chain when no static creden
     expect($trait->stsSourceConfig)->toEqual([]);
 });
 
-test('assume role source honors a disabled default credential provider', function () {
+test('assume role source honors a disabled default credential provider', function (): void {
     $trait = bedrockClientTrait(new MockHandler([stsAssumeRoleResult()]));
 
     $trait->resolve([], assumeRoleConfig(config: ['use_default_credential_provider' => false]));

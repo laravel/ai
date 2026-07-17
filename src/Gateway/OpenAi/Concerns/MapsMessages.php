@@ -2,18 +2,20 @@
 
 namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
+use Illuminate\Support\Arr;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\MessageRole;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
+use Laravel\Ai\Providers\Provider;
 
 trait MapsMessages
 {
     /**
      * Map the given Laravel messages to OpenAI Responses API input format.
      */
-    protected function mapMessagesToInput(array $messages, ?string $instructions = null): array
+    protected function mapMessagesToInput(array $messages, ?string $instructions, Provider $provider): array
     {
         $input = [];
 
@@ -28,7 +30,7 @@ trait MapsMessages
             $message = Message::tryFrom($message);
 
             match ($message->role) {
-                MessageRole::User => $this->mapUserMessage($message, $input),
+                MessageRole::User => $this->mapUserMessage($message, $input, $provider),
                 MessageRole::Assistant => $this->mapAssistantMessage($message, $input),
                 MessageRole::ToolResult => $this->mapToolResultMessage($message, $input),
             };
@@ -40,14 +42,14 @@ trait MapsMessages
     /**
      * Map a user message to OpenAI format.
      */
-    protected function mapUserMessage(UserMessage|Message $message, array &$input): void
+    protected function mapUserMessage(UserMessage|Message $message, array &$input, Provider $provider): void
     {
         $content = [
             ['type' => 'input_text', 'text' => $message->content],
         ];
 
         if ($message instanceof UserMessage && $message->attachments->isNotEmpty()) {
-            $content = array_merge($content, $this->mapAttachments($message->attachments));
+            $content = array_merge($content, $this->mapAttachments($message->attachments, $provider));
         }
 
         $input[] = [
@@ -65,11 +67,12 @@ trait MapsMessages
             $reasoningBlocks = $message->toolCalls
                 ->whereNotNull('reasoningId')
                 ->unique('reasoningId')
-                ->map(fn ($toolCall) => [
+                ->map(fn ($toolCall) => Arr::whereNotNull([
                     'type' => 'reasoning',
                     'id' => $toolCall->reasoningId,
                     'summary' => $toolCall->reasoningSummary ?? [],
-                ])
+                    'encrypted_content' => $toolCall->reasoningEncryptedContent,
+                ]))
                 ->values()
                 ->all();
 

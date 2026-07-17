@@ -8,7 +8,7 @@ use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Image;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.xai' => [
         ...config('ai.providers.xai'),
         'key' => 'test-key',
@@ -24,14 +24,14 @@ function fakeXaiImageResponse(): PromiseInterface
     ]);
 }
 
-test('image request includes model, prompt, and b64_json response format', function () {
+test('image request includes model, prompt, and b64_json response format', function (): void {
     Http::fake([
         '*' => fakeXaiImageResponse(),
     ]);
 
     Image::of('A red apple')->generate(provider: 'xai', model: 'grok-imagine-image');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['model'] === 'grok-imagine-image'
@@ -42,35 +42,35 @@ test('image request includes model, prompt, and b64_json response format', funct
     });
 });
 
-test('omits size when provided because xAI does not support it', function () {
+test('omits size when provided because xAI does not support it', function (): void {
     Http::fake([
         '*' => fakeXaiImageResponse(),
     ]);
 
     Image::of('A red apple')->square()->generate(provider: 'xai', model: 'grok-imagine-image');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return ! array_key_exists('size', $body);
     });
 });
 
-test('omits quality when provided because xAI does not support it', function () {
+test('omits quality when provided because xAI does not support it', function (): void {
     Http::fake([
         '*' => fakeXaiImageResponse(),
     ]);
 
     Image::of('A red apple')->quality('high')->generate(provider: 'xai', model: 'grok-imagine-image');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return ! array_key_exists('quality', $body);
     });
 });
 
-test('image response is correctly parsed', function () {
+test('image response is correctly parsed', function (): void {
     Http::fake([
         '*' => fakeXaiImageResponse(),
     ]);
@@ -83,19 +83,17 @@ test('image response is correctly parsed', function () {
         ->and($response->meta->provider)->toBe('xai');
 });
 
-test('request sends bearer token authorization', function () {
+test('request sends bearer token authorization', function (): void {
     Http::fake([
         '*' => fakeXaiImageResponse(),
     ]);
 
     Image::of('A red apple')->generate(provider: 'xai', model: 'grok-imagine-image');
 
-    Http::assertSent(function (Request $request) {
-        return $request->hasHeader('Authorization', 'Bearer test-key');
-    });
+    Http::assertSent(fn (Request $request) => $request->hasHeader('Authorization', 'Bearer test-key'));
 });
 
-test('image rate limit response throws rate limited exception', function () {
+test('image rate limit response throws rate limited exception', function (): void {
     Http::fake([
         'api.x.ai/*' => Http::response([
             'error' => [
@@ -108,7 +106,7 @@ test('image rate limit response throws rate limited exception', function () {
     Image::of('A red apple')->generate(provider: 'xai', model: 'grok-imagine-image');
 })->throws(RateLimitedException::class);
 
-test('image overloaded response throws provider overloaded exception', function () {
+test('image overloaded response throws provider overloaded exception', function (): void {
     Http::fake([
         'api.x.ai/*' => Http::response([
             'error' => [
@@ -121,7 +119,7 @@ test('image overloaded response throws provider overloaded exception', function 
     Image::of('A red apple')->generate(provider: 'xai', model: 'grok-imagine-image');
 })->throws(ProviderOverloadedException::class);
 
-test('image http error response throws request exception', function () {
+test('image http error response throws request exception', function (): void {
     Http::fake([
         'api.x.ai/*' => Http::response([
             'error' => [

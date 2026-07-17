@@ -23,9 +23,9 @@ class GeminiStoreGateway implements StoreGateway
     {
         $storeId = $this->normalizeStoreId($storeId);
 
-        $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders([
+        $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders(array_filter([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
-        ])->get($this->baseUrl($provider)."/{$storeId}")->throw());
+        ]))->get($this->baseUrl($provider)."/{$storeId}")->throw());
 
         return new Store(
             provider: $provider,
@@ -52,9 +52,9 @@ class GeminiStoreGateway implements StoreGateway
     ): Store {
         $fileIds ??= new Collection;
 
-        $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders([
+        $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders(array_filter([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
-        ])->post($this->baseUrl($provider).'/fileSearchStores', [
+        ]))->post($this->baseUrl($provider).'/fileSearchStores', [
             'displayName' => $name,
         ])->throw());
 
@@ -77,14 +77,14 @@ class GeminiStoreGateway implements StoreGateway
         $storeId = $this->normalizeStoreId($storeId);
         $fileId = $this->normalizeFileId($fileId);
 
-        $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders([
+        $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders(array_filter([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
-        ])->post($this->baseUrl($provider)."/{$storeId}:importFile", array_filter([
+        ]))->post($this->baseUrl($provider)."/{$storeId}:importFile", array_filter([
             'fileName' => $fileId,
-            'customMetadata' => ! empty($metadata) ? $this->formatMetadata($metadata) : null,
+            'customMetadata' => $metadata === [] ? null : $this->formatMetadata($metadata),
         ]))->throw());
 
-        return basename($response->json('name'));
+        return basename((string) $response->json('name'));
     }
 
     /**
@@ -92,12 +92,10 @@ class GeminiStoreGateway implements StoreGateway
      */
     protected function formatMetadata(array $metadata): array
     {
-        return (new Collection($metadata))->map(function ($value, $key) {
-            return match (true) {
-                is_numeric($value) => ['key' => $key, 'numericValue' => $value],
-                is_array($value) => ['key' => $key, 'stringListValue' => ['values' => $value]],
-                default => ['key' => $key, 'stringValue' => (string) $value],
-            };
+        return (new Collection($metadata))->map(fn ($value, $key): array => match (true) {
+            is_numeric($value) => ['key' => $key, 'numericValue' => $value],
+            is_array($value) => ['key' => $key, 'stringListValue' => ['values' => $value]],
+            default => ['key' => $key, 'stringValue' => (string) $value],
         })->values()->all();
     }
 
@@ -109,9 +107,9 @@ class GeminiStoreGateway implements StoreGateway
         $storeId = $this->normalizeStoreId($storeId);
         $documentId = $this->normalizeDocumentId($storeId, $documentId);
 
-        $this->withErrorHandling($provider->name(), fn () => Http::withHeaders([
+        $this->withErrorHandling($provider->name(), fn () => Http::withHeaders(array_filter([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
-        ])->delete($this->baseUrl($provider)."/{$documentId}", [
+        ]))->delete($this->baseUrl($provider)."/{$documentId}", [
             'force' => true,
         ])->throw());
 
@@ -125,9 +123,9 @@ class GeminiStoreGateway implements StoreGateway
     {
         $storeId = $this->normalizeStoreId($storeId);
 
-        $this->withErrorHandling($provider->name(), fn () => Http::withHeaders([
+        $this->withErrorHandling($provider->name(), fn () => Http::withHeaders(array_filter([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
-        ])->delete($this->baseUrl($provider)."/{$storeId}")->throw());
+        ]))->delete($this->baseUrl($provider)."/{$storeId}")->throw());
 
         return true;
     }

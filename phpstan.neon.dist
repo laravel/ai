@@ -1,0 +1,9 @@
+parameters:
+  paths:
+    - config
+    - src
+    - database
+
+  level: 2
+
+  treatPhpDocTypesAsCertain: false

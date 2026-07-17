@@ -4,15 +4,26 @@ namespace Laravel\Ai\Gateway\Xai;
 
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
-use Laravel\Ai\Contracts\Gateway\TextGateway;
+use Laravel\Ai\Contracts\Files\TranscribableAudio;
+use Laravel\Ai\Contracts\Gateway\Gateway;
+use Laravel\Ai\Contracts\Gateway\StepTextGateway;
+use Laravel\Ai\Contracts\Providers\AudioProvider;
+use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
+use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
-use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
+use Laravel\Ai\Gateway\StepContext;
+use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
-use Laravel\Ai\Responses\TextResponse;
+use Laravel\Ai\Responses\AudioResponse;
+use Laravel\Ai\Responses\EmbeddingsResponse;
+use Laravel\Ai\Responses\ImageResponse;
+use Laravel\Ai\Responses\TranscriptionResponse;
+use LogicException;
 
-class XaiGateway implements TextGateway
+class XaiGateway implements Gateway, StepTextGateway
 {
     use Concerns\BuildsTextRequests;
     use Concerns\CreatesXaiClient;
@@ -22,30 +33,25 @@ class XaiGateway implements TextGateway
     use Concerns\MapsTools;
     use Concerns\ParsesTextResponses;
     use HandlesFailoverErrors;
-    use InvokesTools;
     use ParsesServerSentEvents;
 
-    public function __construct(protected Dispatcher $events)
-    {
-        $this->initializeToolCallbacks();
-    }
+    public function __construct(protected Dispatcher $events) {}
 
     /**
      * {@inheritdoc}
      */
-    public function generateText(
+    public function generateTextStep(
         TextProvider $provider,
         string $model,
         ?string $instructions,
-        array $messages = [],
-        array $tools = [],
-        ?array $schema = null,
-        ?TextGenerationOptions $options = null,
-        ?int $timeout = null,
-    ): TextResponse {
-        $body = $this->buildTextRequestBody(
-            $provider, $model, $instructions, $messages, $tools, $schema, $options,
-        );
+        array $messages,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options,
+        ?int $timeout,
+        StepContext $stepContext,
+    ): StepResponse {
+        $body = $this->buildStepBody($provider, $model, $instructions, $messages, $tools, $schema, $options, $stepContext);
 
         $response = $this->withErrorHandling(
             $provider->name(),
@@ -56,26 +62,25 @@ class XaiGateway implements TextGateway
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, filled($schema), $tools, $schema, $options, $timeout);
+        return $this->parseTextResponse($data, $provider, filled($schema));
     }
 
     /**
      * {@inheritdoc}
      */
-    public function streamText(
+    public function generateStreamStep(
         string $invocationId,
         TextProvider $provider,
         string $model,
         ?string $instructions,
-        array $messages = [],
-        array $tools = [],
-        ?array $schema = null,
-        ?TextGenerationOptions $options = null,
-        ?int $timeout = null,
+        array $messages,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options,
+        ?int $timeout,
+        StepContext $stepContext,
     ): Generator {
-        $body = $this->buildTextRequestBody(
-            $provider, $model, $instructions, $messages, $tools, $schema, $options,
-        );
+        $body = $this->buildStepBody($provider, $model, $instructions, $messages, $tools, $schema, $options, $stepContext);
 
         $body['stream'] = true;
 
@@ -86,10 +91,69 @@ class XaiGateway implements TextGateway
                 ->post('responses', $body),
         );
 
-        yield from $this->processTextStream(
-            $invocationId, $provider, $model, $tools, $schema, $options,
+        return yield from $this->processTextStream(
+            $invocationId,
+            $provider,
+            $model,
             $response->getBody(),
-            timeout: $timeout,
         );
+    }
+
+    /**
+     * @throws LogicException
+     */
+    public function generateImage(
+        ImageProvider $provider,
+        string $model,
+        string $prompt,
+        array $attachments = [],
+        ?string $size = null,
+        ?string $quality = null,
+        ?int $timeout = null,
+    ): ImageResponse {
+        throw new LogicException('Use XaiImageGateway for image generation.');
+    }
+
+    /**
+     * @throws LogicException
+     */
+    public function generateAudio(
+        AudioProvider $provider,
+        string $model,
+        string $text,
+        string $voice,
+        ?string $instructions = null,
+        int $timeout = 30,
+    ): AudioResponse {
+        throw new LogicException('xAI does not support audio generation.');
+    }
+
+    /**
+     * @throws LogicException
+     */
+    public function generateTranscription(
+        TranscriptionProvider $provider,
+        string $model,
+        TranscribableAudio $audio,
+        ?string $language = null,
+        bool $diarize = false,
+        int $timeout = 30,
+        array $providerOptions = [],
+    ): TranscriptionResponse {
+        throw new LogicException('xAI does not support transcription generation.');
+    }
+
+    /**
+     * @throws LogicException
+     */
+    public function generateEmbeddings(
+        EmbeddingProvider $provider,
+        string $model,
+        array $inputs,
+        int $dimensions,
+        int $timeout = 30,
+        array $providerOptions = [],
+    ): EmbeddingsResponse {
+        throw new LogicException('xAI does not support embedding generation.');
     }
 }

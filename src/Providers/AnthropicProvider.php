@@ -7,6 +7,7 @@ use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Anthropic\AnthropicFileGateway;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
@@ -26,9 +27,9 @@ class AnthropicProvider extends Provider implements FileProvider, SupportsWebFet
     {
         return array_filter([
             'max_uses' => $fetch->maxSearches ?? 10,
-            'allowed_domains' => ! empty($fetch->allowedDomains)
-                ? $fetch->allowedDomains
-                : null,
+            'allowed_domains' => $fetch->allowedDomains === []
+                ? null
+                : $fetch->allowedDomains,
         ]);
     }
 
@@ -39,9 +40,9 @@ class AnthropicProvider extends Provider implements FileProvider, SupportsWebFet
     {
         return array_filter([
             'max_uses' => $search->maxSearches,
-            'allowed_domains' => ! empty($search->allowedDomains)
-                ? $search->allowedDomains
-                : null,
+            'allowed_domains' => $search->allowedDomains === []
+                ? null
+                : $search->allowedDomains,
             'user_location' => $search->hasLocation()
                 ? array_filter([
                     'type' => 'approximate',
@@ -50,7 +51,7 @@ class AnthropicProvider extends Provider implements FileProvider, SupportsWebFet
                     'country' => $search->country,
                 ])
                 : null,
-        ]);
+        ]) + $search->providerOptions(Lab::Anthropic);
     }
 
     /**
@@ -58,7 +59,7 @@ class AnthropicProvider extends Provider implements FileProvider, SupportsWebFet
      */
     public function defaultTextModel(): string
     {
-        return $this->config['models']['text']['default'] ?? 'claude-sonnet-4-6';
+        return $this->config['models']['text']['default'] ?? 'claude-sonnet-5';
     }
 
     /**
@@ -74,7 +75,7 @@ class AnthropicProvider extends Provider implements FileProvider, SupportsWebFet
      */
     public function smartestTextModel(): string
     {
-        return $this->config['models']['text']['smartest'] ?? 'claude-opus-4-7';
+        return $this->config['models']['text']['smartest'] ?? 'claude-opus-4-8';
     }
 
     /**

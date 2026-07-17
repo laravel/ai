@@ -9,23 +9,23 @@ function callAudioFilename(TranscribableAudio $audio): string
 {
     $dispatcher = new class implements Dispatcher
     {
-        public function listen($events, $listener = null) {}
+        public function listen($events, $listener = null): void {}
 
-        public function hasListeners($eventName) {}
+        public function hasListeners($eventName): void {}
 
-        public function subscribe($subscriber) {}
+        public function subscribe($subscriber): void {}
 
-        public function until($event, $payload = []) {}
+        public function until($event, $payload = []): void {}
 
-        public function dispatch($event, $payload = [], $halt = false) {}
+        public function dispatch($event, $payload = [], $halt = false): void {}
 
-        public function push($event, $payload = []) {}
+        public function push($event, $payload = []): void {}
 
-        public function flush($event) {}
+        public function flush($event): void {}
 
-        public function forget($event) {}
+        public function forget($event): void {}
 
-        public function forgetPushed() {}
+        public function forgetPushed(): void {}
     };
 
     $gateway = new OpenAiGateway($dispatcher);
@@ -35,55 +35,55 @@ function callAudioFilename(TranscribableAudio $audio): string
     return $method->invoke($gateway, $audio);
 }
 
-test('webm audio gets webm extension', function () {
+test('webm audio gets webm extension', function (): void {
     $audio = new Base64Audio(base64_encode('fake'), 'audio/webm');
 
     expect(callAudioFilename($audio))->toEqual('audio.webm');
 });
 
-test('ogg audio gets ogg extension', function () {
+test('ogg audio gets ogg extension', function (): void {
     $audio = new Base64Audio(base64_encode('fake'), 'audio/ogg');
 
     expect(callAudioFilename($audio))->toEqual('audio.ogg');
 });
 
-test('wav audio gets wav extension', function () {
+test('wav audio gets wav extension', function (): void {
     $audio = new Base64Audio(base64_encode('fake'), 'audio/wav');
 
     expect(callAudioFilename($audio))->toEqual('audio.wav');
 });
 
-test('m4a audio gets m4a extension', function () {
+test('m4a audio gets m4a extension', function (): void {
     $audio = new Base64Audio(base64_encode('fake'), 'audio/m4a');
 
     expect(callAudioFilename($audio))->toEqual('audio.m4a');
 });
 
-test('flac audio gets flac extension', function () {
+test('flac audio gets flac extension', function (): void {
     $audio = new Base64Audio(base64_encode('fake'), 'audio/flac');
 
     expect(callAudioFilename($audio))->toEqual('audio.flac');
 });
 
-test('mp3 audio gets mp3 extension', function () {
+test('mp3 audio gets mp3 extension', function (): void {
     $audio = new Base64Audio(base64_encode('fake'), 'audio/mpeg');
 
     expect(callAudioFilename($audio))->toEqual('audio.mp3');
 });
 
-test('unknown mime defaults to mp3', function () {
+test('unknown mime defaults to mp3', function (): void {
     $audio = new Base64Audio(base64_encode('fake'), 'audio/unknown');
 
     expect(callAudioFilename($audio))->toEqual('audio.mp3');
 });
 
-test('null mime defaults to mp3', function () {
-    $audio = new Base64Audio(base64_encode('fake'), null);
+test('null mime defaults to mp3', function (): void {
+    $audio = new Base64Audio(base64_encode('fake'));
 
     expect(callAudioFilename($audio))->toEqual('audio.mp3');
 });
 
-test('custom name via as method is respected', function () {
+test('custom name via as method is respected', function (): void {
     $audio = (new Base64Audio(base64_encode('fake'), 'audio/webm'))->as('my-recording.webm');
 
     expect(callAudioFilename($audio))->toEqual('my-recording.webm');

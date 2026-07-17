@@ -15,8 +15,8 @@ use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 
-describe('text streaming', function () {
-    test('streaming emits text events', function () {
+describe('text streaming', function (): void {
+    test('streaming emits text events', function (): void {
         Http::fake([
             'api.anthropic.com/*' => Http::response(
                 body: $this->ssePayload([
@@ -43,8 +43,8 @@ describe('text streaming', function () {
     });
 });
 
-describe('tool calls', function () {
-    test('streaming handles tool calls', function () {
+describe('tool calls', function (): void {
+    test('streaming handles tool calls', function (): void {
         Http::fake([
             'api.anthropic.com/*' => Http::sequence([
                 Http::response(
@@ -72,15 +72,15 @@ describe('tool calls', function () {
 
         $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
 
-        $toolCallEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolCallEvent));
+        $toolCallEvents = array_values(array_filter($events, fn ($e): bool => $e instanceof ToolCallEvent));
 
         expect($toolCallEvents)->not->toBeEmpty()
             ->and($toolCallEvents[0]->toolCall)->name->toBe('FixedNumberGenerator')->id->toBe('toolu_1');
     });
 });
 
-describe('thinking blocks', function () {
-    test('streaming handles thinking blocks', function () {
+describe('thinking blocks', function (): void {
+    test('streaming handles thinking blocks', function (): void {
         Http::fake([
             'api.anthropic.com/*' => Http::response(
                 body: $this->ssePayload([
@@ -106,11 +106,11 @@ describe('thinking blocks', function () {
             ReasoningEnd::class,
         ]);
 
-        $reasoningDelta = array_values(array_filter($events, fn ($e) => $e instanceof ReasoningDelta))[0];
+        $reasoningDelta = array_values(array_filter($events, fn ($e): bool => $e instanceof ReasoningDelta))[0];
         expect($reasoningDelta->delta)->toBe('Let me think...');
     });
 
-    test('streaming handles server tool use', function () {
+    test('streaming handles server tool use', function (): void {
         Http::fake([
             'api.anthropic.com/*' => Http::response(
                 body: $this->ssePayload([
@@ -129,14 +129,14 @@ describe('thinking blocks', function () {
 
         $events = $this->collectStreamEvents();
 
-        $providerEvents = array_values(array_filter($events, fn ($e) => $e instanceof ProviderToolEvent));
+        $providerEvents = array_values(array_filter($events, fn ($e): bool => $e instanceof ProviderToolEvent));
 
         expect($providerEvents)->toHaveCount(2)
             ->and($providerEvents[0])->status->toBe('started')->itemId->toBe('srvtoolu_1')
             ->and($providerEvents[1]->status)->toBe('completed');
     });
 
-    test('streaming handles provider tool results', function () {
+    test('streaming handles provider tool results', function (): void {
         Http::fake([
             'api.anthropic.com/*' => Http::response(
                 body: $this->ssePayload([
@@ -155,15 +155,15 @@ describe('thinking blocks', function () {
 
         $events = $this->collectStreamEvents();
 
-        $providerEvents = array_values(array_filter($events, fn ($e) => $e instanceof ProviderToolEvent));
+        $providerEvents = array_values(array_filter($events, fn ($e): bool => $e instanceof ProviderToolEvent));
 
         expect($providerEvents)->not->toBeEmpty()
             ->and($providerEvents[0])->status->toBe('result_received')->type->toBe('web_search_tool_result');
     });
 });
 
-describe('pause_turn', function () {
-    test('streaming pause_turn triggers follow-up stream with assistant replayed', function () {
+describe('pause_turn', function (): void {
+    test('streaming pause_turn triggers follow-up stream with assistant replayed', function (): void {
         Http::fake([
             'api.anthropic.com/*' => Http::sequence([
                 Http::response(
@@ -204,14 +204,14 @@ describe('pause_turn', function () {
             ->and($lastMessage['content'][0]['input'])->toBeInstanceOf(stdClass::class)
             ->and($lastMessage['content'][0]['input']->query)->toBe('laravel ai');
 
-        $textDeltas = array_values(array_filter($events, fn ($e) => $e instanceof TextDelta));
+        $textDeltas = array_values(array_filter($events, fn ($e): bool => $e instanceof TextDelta));
         expect($textDeltas)->not->toBeEmpty()
             ->and($textDeltas[0]->delta)->toBe('Resumed');
     });
 });
 
-describe('error handling', function () {
-    test('streaming error event stops stream', function () {
+describe('error handling', function (): void {
+    test('streaming error event stops stream', function (): void {
         Http::fake([
             'api.anthropic.com/*' => Http::response(
                 body: $this->ssePayload([
@@ -229,8 +229,8 @@ describe('error handling', function () {
     });
 });
 
-describe('usage tracking', function () {
-    test('streaming captures input tokens from message start', function () {
+describe('usage tracking', function (): void {
+    test('streaming captures input tokens from message start', function (): void {
         Http::fake([
             'api.anthropic.com/*' => Http::response(
                 body: $this->ssePayload([
@@ -261,7 +261,7 @@ describe('usage tracking', function () {
 
         $events = $this->collectStreamEvents();
 
-        $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+        $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
 
         expect($streamEnd->usage)
             ->promptTokens->toBe(42)
@@ -270,7 +270,7 @@ describe('usage tracking', function () {
             ->cacheReadInputTokens->toBe(50);
     });
 
-    test('streaming finish reason maps correctly', function (string $apiReason, $expected) {
+    test('streaming finish reason maps correctly', function (string $apiReason, $expected): void {
         Http::fake([
             'api.anthropic.com/*' => Http::response(
                 body: $this->ssePayload([
@@ -287,13 +287,13 @@ describe('usage tracking', function () {
 
         $events = $this->collectStreamEvents();
 
-        $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+        $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
 
         expect($streamEnd->reason)->toBe($expected->value);
     })->with([
         'end_turn maps to Stop' => ['end_turn', FinishReason::Stop],
         'stop_sequence maps to Stop' => ['stop_sequence', FinishReason::Stop],
         'max_tokens maps to Length' => ['max_tokens', FinishReason::Length],
-        'tool_use maps to ToolCalls without tool blocks (StreamEnd still emitted)' => ['tool_use', FinishReason::ToolCalls],
+        'tool_use without tool blocks normalizes to Stop (StreamEnd still emitted)' => ['tool_use', FinishReason::Stop],
     ]);
 });

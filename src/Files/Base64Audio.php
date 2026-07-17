@@ -4,6 +4,7 @@ namespace Laravel\Ai\Files;
 
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Http\UploadedFile;
+use InvalidArgumentException;
 use JsonSerializable;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
@@ -17,6 +18,10 @@ class Base64Audio extends Audio implements Arrayable, JsonSerializable, Storable
 
     public function __construct(public string $base64, ?string $mimeType = null)
     {
+        if (blank($base64)) {
+            throw new InvalidArgumentException('Base64 audio content cannot be empty.');
+        }
+
         $this->mime = $mimeType;
     }
 
@@ -25,7 +30,7 @@ class Base64Audio extends Audio implements Arrayable, JsonSerializable, Storable
      */
     public static function fromUpload(UploadedFile $file, ?string $mimeType = null): self
     {
-        return new static(
+        return new self(
             base64_encode($file->getContent()),
             mimeType: $mimeType ?? $file->getClientMimeType(),
         );
@@ -42,6 +47,7 @@ class Base64Audio extends Audio implements Arrayable, JsonSerializable, Storable
     /**
      * Get the file's MIME type.
      */
+    #[\Override]
     public function mimeType(): ?string
     {
         return $this->mime;

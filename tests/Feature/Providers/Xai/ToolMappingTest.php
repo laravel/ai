@@ -9,21 +9,21 @@ use Tests\Fixtures\Tools\RandomNumberGenerator;
 
 use function Laravel\Ai\agent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.xai' => [
         ...config('ai.providers.xai'),
         'key' => 'test-key',
     ]]);
 });
 
-test('tool with parameters includes correct schema', function () {
+test('tool with parameters includes correct schema', function (): void {
     Http::fake([
         '*' => fakeXaiToolMappingResponse('42'),
     ]);
 
     agent(tools: [new RandomNumberGenerator])->prompt('Give me a random number', provider: 'xai');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'function');
 
@@ -36,14 +36,14 @@ test('tool with parameters includes correct schema', function () {
     });
 });
 
-test('tool with empty schema includes parameters', function () {
+test('tool with empty schema includes parameters', function (): void {
     Http::fake([
         '*' => fakeXaiToolMappingResponse('72019'),
     ]);
 
     agent(tools: [new FixedNumberGenerator])->prompt('Give me a random number', provider: 'xai');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'function');
 
@@ -55,12 +55,12 @@ test('tool with empty schema includes parameters', function () {
     });
 });
 
-test('tool with a name() method emits the declared name', function () {
+test('tool with a name() method emits the declared name', function (): void {
     Http::fake(['*' => fakeXaiToolMappingResponse('ok')]);
 
     agent(tools: [new NamedTool('my_custom_tool')])->prompt('Hi', provider: 'xai');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $names = collect(data_get($body, 'tools'))->pluck('name')->all();
 
@@ -68,14 +68,14 @@ test('tool with a name() method emits the declared name', function () {
     });
 });
 
-test('tool parameters are not wrapped in schema definition', function () {
+test('tool parameters are not wrapped in schema definition', function (): void {
     Http::fake([
         '*' => fakeXaiToolMappingResponse('done'),
     ]);
 
     agent(tools: [new RandomNumberGenerator])->prompt('Give me a random number', provider: 'xai');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'function');
 

@@ -1,13 +1,18 @@
 <?php
 
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Files\RemoteImage;
+use Laravel\Ai\Files\StoredDocument;
 use Laravel\Ai\Messages\AssistantMessage;
+use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
+use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
@@ -18,7 +23,7 @@ use Laravel\Ai\Storage\DatabaseConversationStore;
 use Tests\Fixtures\Agents\RememberingToolUsingAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
-test('it writes conversations to the default tables', function () {
+test('it writes conversations to the default tables', function (): void {
     $store = new DatabaseConversationStore;
 
     $conversationId = $store->storeConversation(1, 'Hello');
@@ -26,7 +31,7 @@ test('it writes conversations to the default tables', function () {
     expect(DB::table('agent_conversations')->where('id', $conversationId)->where('title', 'Hello')->exists())->toBeTrue();
 });
 
-test('it writes to overridden table names from config', function () {
+test('it writes to overridden table names from config', function (): void {
     Config::set('ai.conversations.tables.conversations', 'custom_conversations');
     Config::set('ai.conversations.tables.messages', 'custom_conversation_messages');
 
@@ -39,7 +44,7 @@ test('it writes to overridden table names from config', function () {
         ->and(DB::table('agent_conversations')->where('id', $conversationId)->exists())->toBeFalse();
 });
 
-test('it routes queries through the configured connection', function () {
+test('it routes queries through the configured connection', function (): void {
     Config::set('database.connections.secondary', [
         'driver' => 'sqlite',
         'database' => ':memory:',
@@ -56,7 +61,7 @@ test('it routes queries through the configured connection', function () {
         ->and(DB::table('agent_conversations')->where('id', $conversationId)->exists())->toBeFalse();
 });
 
-test('it persists tool calls and results from a remembered agent prompt', function () {
+test('it persists tool calls and results from a remembered agent prompt', function (): void {
     Http::fake([
         '*' => Http::sequence([
             Http::response([
@@ -74,7 +79,7 @@ test('it persists tool calls and results from a remembered agent prompt', functi
                     'finishReason' => 'STOP',
                 ]],
                 'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5, 'totalTokenCount' => 15],
-                'modelVersion' => 'gemini-3-flash-preview',
+                'modelVersion' => 'gemini-3.5-flash',
             ]),
             Http::response([
                 'candidates' => [[
@@ -85,7 +90,7 @@ test('it persists tool calls and results from a remembered agent prompt', functi
                     'finishReason' => 'STOP',
                 ]],
                 'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5, 'totalTokenCount' => 15],
-                'modelVersion' => 'gemini-3-flash-preview',
+                'modelVersion' => 'gemini-3.5-flash',
             ]),
         ]),
     ]);
@@ -101,11 +106,11 @@ test('it persists tool calls and results from a remembered agent prompt', functi
         ->where('role', 'assistant')
         ->first();
 
-    expect(json_decode($record->tool_calls, true))->toBeList()
-        ->and(json_decode($record->tool_results, true))->toBeList();
+    expect(json_decode((string) $record->tool_calls, true))->toBeList()
+        ->and(json_decode((string) $record->tool_results, true))->toBeList();
 });
 
-test('it stores sparse keyed tool calls and results as JSON arrays', function () {
+test('it stores sparse keyed tool calls and results as JSON arrays', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Tool conversation');
 
@@ -133,11 +138,11 @@ test('it stores sparse keyed tool calls and results as JSON arrays', function ()
         ->where('role', 'assistant')
         ->first();
 
-    expect(array_is_list(json_decode($record->tool_calls, true)))->toBeTrue()
-        ->and(array_is_list(json_decode($record->tool_results, true)))->toBeTrue();
+    expect(array_is_list(json_decode((string) $record->tool_calls, true)))->toBeTrue()
+        ->and(array_is_list(json_decode((string) $record->tool_results, true)))->toBeTrue();
 });
 
-test('it reloads legacy sparse keyed tool calls and results as lists', function () {
+test('it reloads legacy sparse keyed tool calls and results as lists', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation(1, 'Tool conversation');
 
@@ -165,11 +170,319 @@ test('it reloads legacy sparse keyed tool calls and results as lists', function 
 
     $messages = $store->getLatestConversationMessages($conversationId, 10);
 
-    expect($messages)->toHaveCount(2)
+    expect($messages)->toHaveCount(3)
         ->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
         ->and($messages[0]->toolCalls->keys()->all())->toBe([0, 1])
         ->and($messages[1])->toBeInstanceOf(ToolResultMessage::class)
-        ->and($messages[1]->toolResults->keys()->all())->toBe([0, 1]);
+        ->and($messages[1]->toolResults->keys()->all())->toBe([0, 1])
+        ->and($messages[2])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[2]->content)->toBe('The order has shipped.');
+});
+
+test('it replays stored tool conversations before the final assistant response', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Tool conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => 'The order has shipped.',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call-1', 'name' => 'lookup_order', 'arguments' => ['id' => 1], 'result_id' => 'result-1'],
+        ]),
+        'tool_results' => json_encode([
+            ['id' => 'call-1', 'name' => 'lookup_order', 'arguments' => ['id' => 1], 'result' => ['status' => 'shipped'], 'result_id' => 'result-1'],
+        ]),
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toHaveCount(3)
+        ->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[0]->content)->toBe('')
+        ->and($messages[0]->toolCalls)->toHaveCount(1)
+        ->and($messages[0]->toolCalls[0]->resultId)->toBe('result-1')
+        ->and($messages[1])->toBeInstanceOf(ToolResultMessage::class)
+        ->and($messages[1]->toolResults)->toHaveCount(1)
+        ->and($messages[1]->toolResults[0]->resultId)->toBe('result-1')
+        ->and($messages[2])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[2]->content)->toBe('The order has shipped.')
+        ->and($messages[2]->toolCalls)->toBeEmpty();
+});
+
+test('it drops resultless tool calls and replays only the final assistant text', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Tool conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => 'The order has shipped.',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call-1', 'name' => 'lookup_order', 'arguments' => ['id' => 1], 'result_id' => 'result-1'],
+        ]),
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toHaveCount(1)
+        ->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[0]->content)->toBe('The order has shipped.')
+        ->and($messages[0]->toolCalls)->toBeEmpty();
+});
+
+test('it drops resultless tool calls with no final text entirely', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Tool conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => '',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call-1', 'name' => 'lookup_order', 'arguments' => ['id' => 1], 'result_id' => 'result-1'],
+        ]),
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toBeEmpty();
+});
+
+test('it rehydrates reasoning encrypted content on stored tool calls', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Reasoning conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => 'Looking that up.',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            [
+                'id' => 'call-1',
+                'name' => 'lookup_order',
+                'arguments' => ['id' => 1],
+                'reasoning_id' => 'rs_1',
+                'reasoning_summary' => [],
+                'reasoning_encrypted_content' => 'enc-blob-1',
+            ],
+        ]),
+        'tool_results' => json_encode([
+            ['id' => 'call-1', 'name' => 'lookup_order', 'arguments' => ['id' => 1], 'result' => ['status' => 'shipped']],
+        ]),
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages[0]->toolCalls->first())
+        ->reasoningId->toBe('rs_1')
+        ->reasoningEncryptedContent->toBe('enc-blob-1');
+});
+
+test('it rehydrates legacy tool calls that predate reasoning encrypted content', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Legacy conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => 'Looking that up.',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call-1', 'name' => 'lookup_order', 'arguments' => ['id' => 1]],
+        ]),
+        'tool_results' => json_encode([
+            ['id' => 'call-1', 'name' => 'lookup_order', 'arguments' => ['id' => 1], 'result' => ['status' => 'shipped']],
+        ]),
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages[0]->toolCalls->first())
+        ->reasoningId->toBeNull()
+        ->reasoningSummary->toBeNull()
+        ->reasoningEncryptedContent->toBeNull();
+});
+
+test('user messages with stored attachments are rehydrated as UserMessage', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Attachment conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'user',
+        'content' => 'Describe this image.',
+        'attachments' => json_encode([
+            ['type' => 'remote-image', 'url' => 'https://example.com/photo.jpg', 'mime' => 'image/jpeg', 'name' => null],
+        ]),
+        'tool_calls' => '[]',
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toHaveCount(1)
+        ->and($messages[0])->toBeInstanceOf(UserMessage::class)
+        ->and($messages[0]->content)->toBe('Describe this image.')
+        ->and($messages[0]->attachments)->toHaveCount(1)
+        ->and($messages[0]->attachments->first())->toBeInstanceOf(RemoteImage::class)
+        ->and($messages[0]->attachments->first()->url)->toBe('https://example.com/photo.jpg');
+});
+
+test('user messages with multiple attachment types are all rehydrated', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Multi-attachment conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'user',
+        'content' => 'Analyze these files.',
+        'attachments' => json_encode([
+            ['type' => 'remote-image', 'url' => 'https://example.com/photo.jpg', 'mime' => 'image/jpeg', 'name' => null],
+            ['type' => 'stored-document', 'path' => 'docs/report.pdf', 'disk' => 'local', 'name' => 'report.pdf'],
+        ]),
+        'tool_calls' => '[]',
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages[0])->toBeInstanceOf(UserMessage::class)
+        ->and($messages[0]->attachments)->toHaveCount(2)
+        ->and($messages[0]->attachments[0])->toBeInstanceOf(RemoteImage::class)
+        ->and($messages[0]->attachments[1])->toBeInstanceOf(StoredDocument::class)
+        ->and($messages[0]->attachments[1]->path)->toBe('docs/report.pdf');
+});
+
+test('user messages with no attachments are returned as plain Message', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Plain conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'user',
+        'content' => 'Hello.',
+        'attachments' => '[]',
+        'tool_calls' => '[]',
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages[0])->toBeInstanceOf(Message::class)
+        ->and($messages[0])->not->toBeInstanceOf(UserMessage::class);
+});
+
+test('malformed stored attachment JSON fails loudly', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Malformed attachment conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'user',
+        'content' => 'Describe this image.',
+        'attachments' => json_encode(['type' => 'remote-image', 'url' => 'https://example.com/photo.jpg']),
+        'tool_calls' => '[]',
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    expect(fn (): Collection => $store->getLatestConversationMessages($conversationId, 10))
+        ->toThrow(InvalidArgumentException::class, 'Stored conversation attachments must be a JSON array.');
+});
+
+test('malformed known stored attachments fail loudly', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation(1, 'Malformed attachment conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'user_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'user',
+        'content' => 'Describe this image.',
+        'attachments' => json_encode([
+            ['type' => 'remote-image', 'mime' => 'image/jpeg'],
+        ]),
+        'tool_calls' => '[]',
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    expect(fn (): Collection => $store->getLatestConversationMessages($conversationId, 10))
+        ->toThrow(InvalidArgumentException::class, 'Cannot reconstruct [remote-image] attachment because [url] is missing or invalid.');
 });
 
 function createConversationSchema(?string $connection = null): void
@@ -179,14 +492,14 @@ function createConversationSchema(?string $connection = null): void
     $conversationsTable = config('ai.conversations.tables.conversations', 'agent_conversations');
     $messagesTable = config('ai.conversations.tables.messages', 'agent_conversation_messages');
 
-    $schema->create($conversationsTable, function (Blueprint $table) {
+    $schema->create($conversationsTable, function (Blueprint $table): void {
         $table->string('id', 36)->primary();
         $table->foreignId('user_id')->nullable();
         $table->string('title');
         $table->timestamps();
     });
 
-    $schema->create($messagesTable, function (Blueprint $table) {
+    $schema->create($messagesTable, function (Blueprint $table): void {
         $table->string('id', 36)->primary();
         $table->string('conversation_id', 36)->index();
         $table->foreignId('user_id')->nullable();

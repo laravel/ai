@@ -5,7 +5,7 @@ use Illuminate\Support\Facades\Http;
 
 use function Laravel\Ai\agent;
 
-test('azure text requests use the v1 responses endpoint', function () {
+test('azure text requests use the v1 responses endpoint', function (): void {
     configureAzureProvider('https://my-resource.cognitiveservices.azure.com', deployment: 'gpt-4o');
 
     Http::fake(['*' => fakeAzureResponse('Hello from Azure')]);
@@ -17,29 +17,25 @@ test('azure text requests use the v1 responses endpoint', function () {
     azureAssertRequestSent('POST', 'https://my-resource.cognitiveservices.azure.com/openai/v1/responses');
 });
 
-test('azure requests do not include api-version query parameter', function () {
+test('azure requests do not include api-version query parameter', function (): void {
     configureAzureProvider('https://my-resource.cognitiveservices.azure.com');
 
     Http::fake(['*' => fakeAzureResponse()]);
 
     agent()->prompt('Hello', provider: 'azure');
 
-    Http::assertSent(function (Request $request) {
-        return ! str_contains($request->url(), 'api-version');
-    });
+    Http::assertSent(fn (Request $request): bool => ! str_contains($request->url(), 'api-version'));
 });
 
-test('azure requests use api-key header not bearer token', function () {
+test('azure requests use api-key header not bearer token', function (): void {
     configureAzureProvider('https://my-resource.cognitiveservices.azure.com');
 
     Http::fake(['*' => fakeAzureResponse()]);
 
     agent()->prompt('Hello', provider: 'azure');
 
-    Http::assertSent(function (Request $request) {
-        return $request->hasHeader('api-key', 'test-key')
-            && ! $request->hasHeader('Authorization', 'Bearer test-key');
-    });
+    Http::assertSent(fn (Request $request): bool => $request->hasHeader('api-key', 'test-key')
+        && ! $request->hasHeader('Authorization', 'Bearer test-key'));
 });
 
 function configureAzureProvider(?string $url = null, ?string $apiVersion = null, string $deployment = 'gpt-4o'): void
@@ -54,7 +50,7 @@ function configureAzureProvider(?string $url = null, ?string $apiVersion = null,
 
 function azureAssertRequestSent(string $method, string $url): void
 {
-    Http::assertSent(function (Request $request) use ($method, $url) {
+    Http::assertSent(function (Request $request) use ($method, $url): bool {
         $requestUrl = strtok($request->url(), '?');
 
         return $request->method() === $method

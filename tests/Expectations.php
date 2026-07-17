@@ -1,6 +1,6 @@
 <?php
 
-expect()->extend('toBeValidAgentResponse', function (?string $provider = null) {
+expect()->extend('toBeValidAgentResponse', function (?string $provider = null): object {
     $this->text->not->toBeEmpty()
         ->steps->not->toBeEmpty();
 
@@ -11,7 +11,7 @@ expect()->extend('toBeValidAgentResponse', function (?string $provider = null) {
     return $this;
 });
 
-expect()->extend('toContainStreamEventTypes', function (array $eventClasses) {
+expect()->extend('toContainStreamEventTypes', function (array $eventClasses): object {
     $types = array_map(fn ($e) => $e::class, $this->value);
 
     foreach ($eventClasses as $class) {
@@ -21,7 +21,7 @@ expect()->extend('toContainStreamEventTypes', function (array $eventClasses) {
     return $this;
 });
 
-expect()->extend('toHaveUsage', function (int $promptTokens, int $completionTokens) {
+expect()->extend('toHaveUsage', function (int $promptTokens, int $completionTokens): object {
     $this->usage->promptTokens->toBe($promptTokens)
         ->usage->completionTokens->toBe($completionTokens);
 
