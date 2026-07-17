@@ -133,33 +133,6 @@ trait GeneratesText
     }
 
     /**
-     * Throw when a pause has surfaced on an agent that cannot resume it from persisted history.
-     */
-    protected function throwIfNotResumable(Agent $agent): void
-    {
-        if (! $this->agentCanResumeApprovals($agent)) {
-            throw ApprovalNotResumableException::make();
-        }
-    }
-
-    /**
-     * Determine whether the given agent can resume a paused approval from persisted history.
-     */
-    protected function agentCanResumeApprovals(Agent $agent): bool
-    {
-        if (! $agent instanceof Conversational) {
-            return false;
-        }
-
-        if (! in_array(RemembersConversations::class, class_uses_recursive($agent), true)) {
-            return true;
-        }
-
-        /** @var Agent&RemembersConversationsContract $agent */
-        return $agent->hasConversationParticipant();
-    }
-
-    /**
      * Gather the middleware for the given agent.
      */
     protected function gatherMiddlewareFor(Agent $agent): array
@@ -230,5 +203,32 @@ trait GeneratesText
                 ));
             },
         );
+    }
+
+    /**
+     * Throw when a pause has surfaced on an agent that cannot resume it from persisted history.
+     */
+    protected function throwIfNotResumable(Agent $agent): void
+    {
+        if (! $this->agentCanResumeApprovals($agent)) {
+            throw ApprovalNotResumableException::make();
+        }
+    }
+
+    /**
+     * Determine whether the given agent can resume a paused approval from persisted history.
+     */
+    protected function agentCanResumeApprovals(Agent $agent): bool
+    {
+        if (! $agent instanceof Conversational) {
+            return false;
+        }
+
+        if (! in_array(RemembersConversations::class, class_uses_recursive($agent), true)) {
+            return true;
+        }
+
+        /** @var Agent&RemembersConversationsContract $agent */
+        return $agent->hasConversationParticipant();
     }
 }
