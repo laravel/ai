@@ -8,12 +8,12 @@ use Laravel\Ai\Tools\Request;
 interface Approvable
 {
     /**
-     * Configure the tool to require approval before execution.
+     * Indicate that the tool requires approval before execution.
      */
     public function requireApproval(?string $reason = null): static;
 
     /**
-     * Configure the tool to execute without approval.
+     * Indicate that the tool may execute without approval.
      */
     public function withoutApproval(): static;
 

@@ -10,7 +10,7 @@ trait InteractsWithApprovals
     protected Approval|bool|null $approvalRequirement = null;
 
     /**
-     * Configure the tool to require approval before execution.
+     * Indicate that the tool requires approval before execution.
      */
     public function requireApproval(?string $reason = null): static
     {
@@ -20,7 +20,7 @@ trait InteractsWithApprovals
     }
 
     /**
-     * Configure the tool to execute without approval.
+     * Indicate that the tool may execute without approval.
      */
     public function withoutApproval(): static
     {
