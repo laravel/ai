@@ -4,14 +4,14 @@ namespace Tests\Fixtures\Tools;
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Approvals\Approval;
-use Laravel\Ai\Concerns\InteractsWithApproval;
+use Laravel\Ai\Concerns\InteractsWithApprovals;
 use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
 
 class ApprovableNumberGenerator implements Approvable, Tool
 {
-    use InteractsWithApproval {
+    use InteractsWithApprovals {
         shouldRequestApproval as protected traitShouldRequestApproval;
     }
 

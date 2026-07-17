@@ -3,7 +3,7 @@
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Approvals\Approval;
 use Laravel\Ai\Approvals\Decision;
-use Laravel\Ai\Concerns\InteractsWithApproval;
+use Laravel\Ai\Concerns\InteractsWithApprovals;
 use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -873,7 +873,7 @@ class TextGenerationLoopCountingTool implements Tool
 
 class TextGenerationLoopApprovableTool extends TextGenerationLoopCountingTool implements Approvable
 {
-    use InteractsWithApproval;
+    use InteractsWithApprovals;
 
     public array $handledArguments = [];
 
