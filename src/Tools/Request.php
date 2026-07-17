@@ -20,7 +20,7 @@ class Request implements Arrayable, ArrayAccess
     }
 
     /**
-     * Get the stable provider tool-call id, usable as an external idempotency key.
+     * Get the stable provider tool-call ID, usable as an external idempotency key.
      */
     public function toolCallId(): ?string
     {
