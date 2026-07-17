@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\Gemini;
 
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\Gateway;
@@ -174,13 +175,9 @@ class GeminiGateway implements Gateway, StepTextGateway
     ): EmbeddingsResponse {
         $model = $this->normalizeEmbeddingModel($model);
 
-        if ($this->usesEmbedContentEndpoint($model, $inputs)) {
-            return $this->generateEmbedContentEmbeddings($provider, $model, $inputs, $dimensions, $timeout, $providerOptions);
-        }
-
-        $requests = array_map(fn (mixed $input): array => array_merge($providerOptions, [
+        $requests = array_map(fn (mixed $input): array => array_merge(Arr::except($providerOptions, 'output_dimensionality'), [
             'model' => "models/{$model}",
-            'content' => ['parts' => [$this->mapEmbeddingInput($provider, $input)]],
+            'content' => ['parts' => [$this->mapEmbeddingInput($input)]],
             'outputDimensionality' => $dimensions,
         ]), $inputs);
 
@@ -194,62 +191,10 @@ class GeminiGateway implements Gateway, StepTextGateway
         $data = $response->json();
 
         return new EmbeddingsResponse(
-            $this->parseEmbeddingValues($data),
+            (new Collection($data['embeddings'] ?? []))->pluck('values')->all(),
             $data['usageMetadata']['promptTokenCount'] ?? 0,
             new Meta($provider->name(), $model),
         );
-    }
-
-    /**
-     * Determine if embeddings should be generated through Gemini's single content endpoint.
-     */
-    protected function usesEmbedContentEndpoint(string $model, array $inputs): bool
-    {
-        return $this->isGeminiEmbedding2Model($model) || $this->hasMultimodalEmbeddingInputs($inputs);
-    }
-
-    /**
-     * Generate embeddings through Gemini's single content endpoint.
-     */
-    protected function generateEmbedContentEmbeddings(
-        EmbeddingProvider $provider,
-        string $model,
-        array $inputs,
-        int $dimensions,
-        int $timeout = 30,
-        array $providerOptions = [],
-    ): EmbeddingsResponse {
-        $embeddings = [];
-        $tokens = 0;
-
-        foreach ($inputs as $input) {
-            $data = $this->withErrorHandling(
-                $provider->name(),
-                fn () => $this->client($provider, $timeout)->post("models/{$model}:embedContent", array_merge($providerOptions, [
-                    'content' => ['parts' => [$this->mapEmbeddingInput($provider, $input)]],
-                    'outputDimensionality' => $dimensions,
-                ])),
-            )->json();
-
-            $embeddings = array_merge($embeddings, $this->parseEmbeddingValues($data));
-            $tokens += $data['usageMetadata']['promptTokenCount'] ?? 0;
-        }
-
-        return new EmbeddingsResponse(
-            $embeddings,
-            $tokens,
-            new Meta($provider->name(), $model),
-        );
-    }
-
-    /**
-     * Parse Gemini embedding values from either embedding response shape.
-     */
-    protected function parseEmbeddingValues(array $data): array
-    {
-        return isset($data['embedding']['values'])
-            ? [$data['embedding']['values']]
-            : (new Collection($data['embeddings'] ?? []))->pluck('values')->all();
     }
 
     /**

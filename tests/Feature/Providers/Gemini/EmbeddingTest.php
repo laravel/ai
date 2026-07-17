@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
+use Laravel\Ai\Files\Audio;
+use Laravel\Ai\Files\Document;
 use Laravel\Ai\Files\Image;
 use Laravel\Ai\Files\Video;
 
@@ -29,12 +31,10 @@ function fakeGeminiEmbeddingsResponse(): PromiseInterface
     ]);
 }
 
-function fakeGeminiEmbeddingResponse(array $values = [0.1, 0.2, 0.3], int $tokens = 10): PromiseInterface
+function fakeGeminiBatchEmbeddingsResponse(array $embeddings = [[0.1, 0.2, 0.3]], int $tokens = 10): PromiseInterface
 {
     return Http::response([
-        'embedding' => [
-            'values' => $values,
-        ],
+        'embeddings' => array_map(fn (array $values): array => ['values' => $values], $embeddings),
         'usageMetadata' => [
             'promptTokenCount' => $tokens,
         ],
@@ -106,24 +106,17 @@ test('multiple inputs are sent as separate requests in the batch', function (): 
     expect($response->embeddings)->toHaveCount(2);
 });
 
-test('gemini embedding 2 inputs are sent as separate embedContent requests', function (): void {
-    $responses = [
-        ['embedding' => ['values' => [0.1, 0.2, 0.3]], 'usageMetadata' => ['promptTokenCount' => 10]],
-        ['embedding' => ['values' => [0.4, 0.5, 0.6]], 'usageMetadata' => ['promptTokenCount' => 20]],
-    ];
-
-    Http::fake(function () use (&$responses) {
-        return Http::response(array_shift($responses));
-    });
+test('gemini embedding 2 inputs are sent in a single batch request', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => fakeGeminiBatchEmbeddingsResponse([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]], 30),
+    ]);
 
     $response = Embeddings::for(['Hello', 'World'])->generate(provider: 'gemini', model: 'gemini-embedding-2');
 
-    Http::assertSentCount(2);
-    Http::assertSent(fn (Request $request) => str_contains($request->url(), 'models/gemini-embedding-2:embedContent')
-        && data_get($request->data(), 'content.parts.0.text') === 'Hello');
-    Http::assertSent(fn (Request $request) => str_contains($request->url(), 'models/gemini-embedding-2:embedContent')
-        && data_get($request->data(), 'content.parts.0.text') === 'World');
-    Http::assertNotSent(fn (Request $request) => str_contains($request->url(), ':batchEmbedContents'));
+    Http::assertSentCount(1);
+    Http::assertSent(fn (Request $request) => str_contains($request->url(), 'models/gemini-embedding-2:batchEmbedContents')
+        && data_get($request->data(), 'requests.0.content.parts.0.text') === 'Hello'
+        && data_get($request->data(), 'requests.1.content.parts.0.text') === 'World');
 
     expect($response->embeddings)->toBe([
         [0.1, 0.2, 0.3],
@@ -151,9 +144,9 @@ test('multimodal embeddings require an embedding 2 model', function (): void {
     ])->generate(provider: 'gemini', model: 'gemini-embedding-001');
 })->throws(InvalidArgumentException::class, 'gemini-embedding-2');
 
-test('base64 image embeddings are sent as inline data through embedContent', function (): void {
+test('base64 image embeddings are sent as inline data', function (): void {
     Http::fake([
-        'generativelanguage.googleapis.com/*' => fakeGeminiEmbeddingResponse(),
+        'generativelanguage.googleapis.com/*' => fakeGeminiBatchEmbeddingsResponse(),
     ]);
 
     Embeddings::for([
@@ -163,15 +156,15 @@ test('base64 image embeddings are sent as inline data through embedContent', fun
     Http::assertSent(function (Request $request) {
         $body = json_decode($request->body(), true);
 
-        return str_contains($request->url(), 'models/gemini-embedding-2:embedContent')
-            && data_get($body, 'content.parts.0.inlineData.mimeType') === 'image/png'
-            && data_get($body, 'content.parts.0.inlineData.data') === base64_encode('image-bytes');
+        return str_contains($request->url(), 'models/gemini-embedding-2:batchEmbedContents')
+            && data_get($body, 'requests.0.content.parts.0.inlineData.mimeType') === 'image/png'
+            && data_get($body, 'requests.0.content.parts.0.inlineData.data') === base64_encode('image-bytes');
     });
 });
 
-test('text mixed with media inputs is sent as separate embedContent requests', function (): void {
+test('text mixed with media inputs is sent in a single batch request', function (): void {
     Http::fake([
-        'generativelanguage.googleapis.com/*' => fakeGeminiEmbeddingResponse(),
+        'generativelanguage.googleapis.com/*' => fakeGeminiBatchEmbeddingsResponse(),
     ]);
 
     Embeddings::for([
@@ -179,38 +172,74 @@ test('text mixed with media inputs is sent as separate embedContent requests', f
         Image::fromBase64(base64_encode('image-bytes'), 'image/png'),
     ])->generate(provider: 'gemini', model: 'gemini-embedding-2');
 
-    Http::assertSentCount(2);
-    Http::assertSent(fn (Request $request) => str_contains($request->url(), 'models/gemini-embedding-2:embedContent')
-        && data_get($request->data(), 'content.parts.0.text') === 'Hello world');
-    Http::assertSent(fn (Request $request) => str_contains($request->url(), 'models/gemini-embedding-2:embedContent')
-        && data_get($request->data(), 'content.parts.0.inlineData.data') === base64_encode('image-bytes'));
+    Http::assertSentCount(1);
+    Http::assertSent(fn (Request $request) => str_contains($request->url(), 'models/gemini-embedding-2:batchEmbedContents')
+        && data_get($request->data(), 'requests.0.content.parts.0.text') === 'Hello world'
+        && data_get($request->data(), 'requests.1.content.parts.0.inlineData.data') === base64_encode('image-bytes'));
 });
 
-test('provider file embeddings resolve to Gemini file uris', function (): void {
-    Http::fake(function (Request $request) {
-        return match ([$request->method(), $request->url()]) {
-            ['GET', 'https://generativelanguage.googleapis.com/v1beta/files/file_123'] => Http::response([
-                'name' => 'files/file_123',
-                'mimeType' => 'image/png',
-                'uri' => 'https://generativelanguage.googleapis.com/v1beta/files/file_123',
-            ]),
-            ['POST', 'https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent'] => fakeGeminiEmbeddingResponse(),
-            default => Http::response(['unexpected_url' => $request->url()], 500),
-        };
-    });
+test('base64 audio embeddings are sent as inline data', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => fakeGeminiBatchEmbeddingsResponse(),
+    ]);
 
     Embeddings::for([
-        Image::fromId('file_123'),
+        Audio::fromBase64(base64_encode('audio-bytes'), 'audio/mpeg'),
     ])->generate(provider: 'gemini', model: 'gemini-embedding-2');
 
-    Http::assertSent(fn (Request $request) => $request->method() === 'POST'
-        && data_get($request->data(), 'content.parts.0.fileData.fileUri') === 'https://generativelanguage.googleapis.com/v1beta/files/file_123'
-        && data_get($request->data(), 'content.parts.0.fileData.mimeType') === 'image/png');
+    Http::assertSent(fn (Request $request) => data_get($request->data(), 'requests.0.content.parts.0.inlineData.mimeType') === 'audio/mpeg'
+        && data_get($request->data(), 'requests.0.content.parts.0.inlineData.data') === base64_encode('audio-bytes'));
+});
+
+test('base64 document embeddings are sent as inline data', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => fakeGeminiBatchEmbeddingsResponse(),
+    ]);
+
+    Embeddings::for([
+        Document::fromBase64(base64_encode('document-bytes'), 'application/pdf'),
+    ])->generate(provider: 'gemini', model: 'gemini-embedding-2');
+
+    Http::assertSent(fn (Request $request) => data_get($request->data(), 'requests.0.content.parts.0.inlineData.mimeType') === 'application/pdf'
+        && data_get($request->data(), 'requests.0.content.parts.0.inlineData.data') === base64_encode('document-bytes'));
+});
+
+test('local file embeddings are sent as inline data', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => fakeGeminiBatchEmbeddingsResponse(),
+    ]);
+
+    $path = tempnam(sys_get_temp_dir(), 'gemini-embedding-test');
+    file_put_contents($path, 'image-bytes');
+
+    try {
+        Embeddings::for([
+            Image::fromPath($path, 'image/png'),
+        ])->generate(provider: 'gemini', model: 'gemini-embedding-2');
+    } finally {
+        unlink($path);
+    }
+
+    Http::assertSent(fn (Request $request) => data_get($request->data(), 'requests.0.content.parts.0.inlineData.data') === base64_encode('image-bytes'));
+});
+
+test('provider file embeddings are sent as file data', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => fakeGeminiBatchEmbeddingsResponse(),
+    ]);
+
+    Embeddings::for([
+        Image::fromId('files/file_123'),
+    ])->generate(provider: 'gemini', model: 'gemini-embedding-2');
+
+    Http::assertSentCount(1);
+    Http::assertSent(fn (Request $request) => str_contains($request->url(), 'models/gemini-embedding-2:batchEmbedContents')
+        && data_get($request->data(), 'requests.0.content.parts.0.fileData.fileUri') === 'files/file_123');
 });
 
 test('multimodal embeddings accept canonical model names', function (): void {
     Http::fake([
-        'generativelanguage.googleapis.com/*' => fakeGeminiEmbeddingResponse(),
+        'generativelanguage.googleapis.com/*' => fakeGeminiBatchEmbeddingsResponse(),
     ]);
 
     Embeddings::for([
@@ -218,13 +247,13 @@ test('multimodal embeddings accept canonical model names', function (): void {
     ])->generate(provider: 'gemini', model: 'models/gemini-embedding-2');
 
     Http::assertSent(fn (Request $request) => $request->method() === 'POST'
-        && str_contains($request->url(), 'models/gemini-embedding-2:embedContent')
+        && str_contains($request->url(), 'models/gemini-embedding-2:batchEmbedContents')
         && ! str_contains($request->url(), 'models/models/'));
 });
 
 test('multimodal embeddings still accept preview model', function (): void {
     Http::fake([
-        'generativelanguage.googleapis.com/*' => fakeGeminiEmbeddingResponse(),
+        'generativelanguage.googleapis.com/*' => fakeGeminiBatchEmbeddingsResponse(),
     ]);
 
     Embeddings::for([
@@ -232,12 +261,12 @@ test('multimodal embeddings still accept preview model', function (): void {
     ])->generate(provider: 'gemini', model: 'gemini-embedding-2-preview');
 
     Http::assertSent(fn (Request $request) => $request->method() === 'POST'
-        && str_contains($request->url(), 'models/gemini-embedding-2-preview:embedContent'));
+        && str_contains($request->url(), 'models/gemini-embedding-2-preview:batchEmbedContents'));
 });
 
 test('remote video embeddings preserve file uris', function (): void {
     Http::fake([
-        'generativelanguage.googleapis.com/*' => fakeGeminiEmbeddingResponse(),
+        'generativelanguage.googleapis.com/*' => fakeGeminiBatchEmbeddingsResponse(),
     ]);
 
     Embeddings::for([
@@ -245,7 +274,7 @@ test('remote video embeddings preserve file uris', function (): void {
     ])->generate(provider: 'gemini', model: 'gemini-embedding-2');
 
     Http::assertSent(fn (Request $request) => $request->method() === 'POST'
-        && data_get($request->data(), 'content.parts.0.fileData.fileUri') === 'https://www.youtube.com/watch?v=demo');
+        && data_get($request->data(), 'requests.0.content.parts.0.fileData.fileUri') === 'https://www.youtube.com/watch?v=demo');
 });
 
 test('missing embeddings key in response returns empty array', function (): void {
@@ -352,6 +381,7 @@ test('gemini provider options cannot override framework controlled per-request k
             'model' => 'hijacked',
             'content' => ['hijacked'],
             'outputDimensionality' => 1,
+            'output_dimensionality' => 1,
         ])
         ->generate(provider: 'gemini', model: 'gemini-embedding-001');
 
@@ -361,6 +391,7 @@ test('gemini provider options cannot override framework controlled per-request k
 
         return $req['model'] === 'models/gemini-embedding-001'
             && $req['content'] === ['parts' => [['text' => 'Hello']]]
-            && $req['outputDimensionality'] === 3072;
+            && $req['outputDimensionality'] === 3072
+            && ! array_key_exists('output_dimensionality', $req);
     });
 });

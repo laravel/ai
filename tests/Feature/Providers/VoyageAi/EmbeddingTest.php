@@ -89,10 +89,57 @@ test('image embeddings use the multimodal endpoint', function (): void {
         return $request->url() === 'https://api.voyageai.com/v1/multimodalembeddings'
             && data_get($body, 'inputs.0.content.0.type') === 'image_base64'
             && data_get($body, 'inputs.0.content.0.image_base64') === 'data:image/png;base64,'.base64_encode('image-bytes')
-            && data_get($body, 'output_dimension') === 1024;
+            && ! array_key_exists('output_dimension', $body);
     });
 
     expect($response->embeddings)->toHaveCount(1);
+});
+
+test('text-only inputs use the multimodal endpoint for multimodal models', function (): void {
+    Http::fake(['*' => fakeVoyageEmbeddingsResponse()]);
+
+    Embeddings::for(['red sneakers'])->dimensions(1024)->generate(provider: 'voyageai', model: 'voyage-multimodal-3.5');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return $request->url() === 'https://api.voyageai.com/v1/multimodalembeddings'
+            && data_get($body, 'inputs.0.content.0.type') === 'text'
+            && data_get($body, 'inputs.0.content.0.text') === 'red sneakers';
+    });
+});
+
+test('unsupported dimensions are rejected for voyage-multimodal-3', function (): void {
+    Embeddings::for([
+        Image::fromBase64(base64_encode('image-bytes'), 'image/png'),
+    ])->dimensions(512)->generate(provider: 'voyageai', model: 'voyage-multimodal-3');
+})->throws(InvalidArgumentException::class, 'only supports 1024 dimension embeddings');
+
+test('multimodal embeddings send output dimension for models that support it', function (): void {
+    Http::fake(['*' => fakeVoyageEmbeddingsResponse()]);
+
+    Embeddings::for([
+        Image::fromBase64(base64_encode('image-bytes'), 'image/png'),
+    ])->dimensions(512)->generate(provider: 'voyageai', model: 'voyage-multimodal-3.5');
+
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['output_dimension'] === 512);
+});
+
+test('multimodal embeddings forward provider options', function (): void {
+    Http::fake(['*' => fakeVoyageEmbeddingsResponse()]);
+
+    Embeddings::for([
+        Image::fromBase64(base64_encode('image-bytes'), 'image/png'),
+    ])->withProviderOptions(['input_type' => 'query', 'model' => 'hijacked'])
+        ->dimensions(1024)
+        ->generate(provider: 'voyageai', model: 'voyage-multimodal-3.5');
+
+    Http::assertSent(function (Request $request) {
+        $body = json_decode($request->body(), true);
+
+        return data_get($body, 'input_type') === 'query'
+            && data_get($body, 'model') === 'voyage-multimodal-3.5';
+    });
 });
 
 test('image embeddings require a multimodal model', function (): void {

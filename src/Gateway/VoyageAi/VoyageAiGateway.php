@@ -30,8 +30,8 @@ class VoyageAiGateway implements EmbeddingGateway, RerankingGateway
         int $timeout = 30,
         array $providerOptions = [],
     ): EmbeddingsResponse {
-        if ($this->hasMultimodalEmbeddingInputs($inputs)) {
-            return $this->generateMultimodalEmbeddings($provider, $model, $inputs, $dimensions, $timeout);
+        if ($this->usesMultimodalEmbeddingEndpoint($model, $inputs)) {
+            return $this->generateMultimodalEmbeddings($provider, $model, $inputs, $dimensions, $timeout, $providerOptions);
         }
 
         $data = $this->withErrorHandling(

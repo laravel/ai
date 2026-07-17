@@ -179,12 +179,12 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     protected function validateEmbeddingInputs(array $inputs, string $model): void
     {
+        $model = str_starts_with($model, 'models/') ? substr($model, 7) : $model;
+
         foreach ($inputs as $input) {
             if (is_string($input)) {
                 continue;
             }
-
-            $model = str_starts_with($model, 'models/') ? substr($model, 7) : $model;
 
             if (! $this->isGeminiMultimodalEmbeddingModel($model)) {
                 throw new InvalidArgumentException(

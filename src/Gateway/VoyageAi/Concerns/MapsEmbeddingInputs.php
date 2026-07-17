@@ -6,6 +6,8 @@ use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
+use Laravel\Ai\Files\Base64Image;
+use Laravel\Ai\Files\Base64Video;
 use Laravel\Ai\Files\Image as ImageFile;
 use Laravel\Ai\Files\ProviderImage;
 use Laravel\Ai\Files\RemoteImage;
@@ -17,11 +19,12 @@ use Laravel\Ai\Responses\EmbeddingsResponse;
 trait MapsEmbeddingInputs
 {
     /**
-     * Determine if any embeddings input requires the multimodal endpoint.
+     * Determine if the model or inputs require Voyage AI's multimodal endpoint.
      */
-    protected function hasMultimodalEmbeddingInputs(array $inputs): bool
+    protected function usesMultimodalEmbeddingEndpoint(string $model, array $inputs): bool
     {
-        return (new Collection($inputs))->contains(fn ($input) => ! is_string($input));
+        return in_array($model, ['voyage-multimodal-3.5', 'voyage-multimodal-3'], true)
+            || array_any($inputs, fn ($input) => ! is_string($input));
     }
 
     /**
@@ -33,18 +36,24 @@ trait MapsEmbeddingInputs
         array $inputs,
         int $dimensions,
         int $timeout = 30,
+        array $providerOptions = [],
     ): EmbeddingsResponse {
+        if ($model === 'voyage-multimodal-3' && $dimensions !== 1024) {
+            throw new InvalidArgumentException(
+                'Model [voyage-multimodal-3] only supports 1024 dimension embeddings. Use [voyage-multimodal-3.5] for other dimensions.'
+            );
+        }
+
         $this->validateMultimodalEmbeddingInputSources($inputs);
 
         $data = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('/multimodalembeddings', [
+            fn () => $this->client($provider, $timeout)->post('/multimodalembeddings', array_merge($providerOptions, [
                 'model' => $model,
                 'inputs' => array_map(fn (mixed $input) => [
                     'content' => [$this->mapMultimodalEmbeddingInput($input)],
                 ], $inputs),
-                'output_dimension' => $dimensions,
-            ]),
+            ], $model === 'voyage-multimodal-3' ? [] : ['output_dimension' => $dimensions])),
         )->json();
 
         return new EmbeddingsResponse(
@@ -115,6 +124,24 @@ trait MapsEmbeddingInputs
             return [
                 'type' => 'video_url',
                 'video_url' => $input->url,
+            ];
+        }
+
+        if ($input instanceof Base64Image) {
+            $mime = $input->mimeType() ?? 'image/png';
+
+            return [
+                'type' => 'image_base64',
+                'image_base64' => "data:{$mime};base64,".$input->base64,
+            ];
+        }
+
+        if ($input instanceof Base64Video) {
+            $mime = $input->mimeType() ?? 'video/mp4';
+
+            return [
+                'type' => 'video_base64',
+                'video_base64' => "data:{$mime};base64,".$input->base64,
             ];
         }
 
