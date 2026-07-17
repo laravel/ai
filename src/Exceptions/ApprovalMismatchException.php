@@ -10,6 +10,8 @@ use Symfony\Component\HttpFoundation\Response;
 class ApprovalMismatchException extends AiException
 {
     /**
+     * Create a new approval mismatch exception.
+     *
      * @param  Collection<int, PendingApproval>  $pendingApprovals
      */
     public function __construct(string $message, public Collection $pendingApprovals)
@@ -17,6 +19,9 @@ class ApprovalMismatchException extends AiException
         parent::__construct($message);
     }
 
+    /**
+     * Render the exception as an HTTP response.
+     */
     public function render(Request $request): Response
     {
         return response()->json([
