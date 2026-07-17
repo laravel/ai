@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Prompts\AgentPrompt;
@@ -7,15 +8,17 @@ use Laravel\Ai\Responses\AgentResponse;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
 
 test('it threads the participant type into latestConversationId when continuing the last conversation', function () {
-    $participant = new class
+    $participant = new class extends Model
     {
-        public int $id = 7;
+        protected $guarded = [];
 
         public function getMorphClass(): string
         {
             return 'admin';
         }
     };
+
+    $participant->id = 7;
 
     $store = new class implements ConversationStore
     {
@@ -100,18 +103,18 @@ test('it continues the last conversation through a store that ignores the partic
 });
 
 test('it resolves the participant id via getKey for models with custom primary keys', function () {
-    $participant = new class
+    $participant = new class extends Model
     {
-        public function getKey(): string
-        {
-            return 'uuid-123';
-        }
+        protected $guarded = [];
 
-        public function getMorphClass(): string
-        {
-            return 'admin';
-        }
+        protected $primaryKey = 'uuid';
+
+        protected $keyType = 'string';
+
+        public $incrementing = false;
     };
+
+    $participant->uuid = 'uuid-123';
 
     $store = new class implements ConversationStore
     {

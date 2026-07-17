@@ -67,7 +67,7 @@ class Conversation extends Model
      */
     public static function participantType(object $participant): string
     {
-        return method_exists($participant, 'getMorphClass')
+        return $participant instanceof Model
             ? $participant->getMorphClass()
             : $participant::class;
     }
@@ -77,7 +77,7 @@ class Conversation extends Model
      */
     public static function participantKey(object $participant): string|int
     {
-        return method_exists($participant, 'getKey')
+        return $participant instanceof Model
             ? $participant->getKey()
             : $participant->id;
     }
