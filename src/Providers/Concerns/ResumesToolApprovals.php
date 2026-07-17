@@ -51,7 +51,7 @@ trait ResumesToolApprovals
      */
     protected function resumesAgainstRealGateway(AgentPrompt $prompt): bool
     {
-        return $prompt->isApprovalContinuation() && ! Ai::hasFakeGatewayFor($prompt->agent::class);
+        return $prompt->hasApprovalDecisions() && ! Ai::hasFakeGatewayFor($prompt->agent::class);
     }
 
     /**

@@ -15,9 +15,9 @@ abstract class Prompt
     ) {}
 
     /**
-     * Determine whether the prompt continues a paused tool approval.
+     * Determine whether the prompt has tool approval decisions.
      */
-    public function isApprovalContinuation(): bool
+    public function hasApprovalDecisions(): bool
     {
         return $this->approvalDecisions !== null;
     }

@@ -66,7 +66,7 @@ trait GeneratesText
                     ...($agent instanceof Conversational ? $agent->messages() : []),
                 ]);
 
-                if (! $prompt->isApprovalContinuation()) {
+                if (! $prompt->hasApprovalDecisions()) {
                     $messages[] = new UserMessage($prompt->prompt, $prompt->attachments->all());
                 }
 

@@ -46,7 +46,7 @@ class RememberConversation
             }
 
             // Record user message...
-            if (! $prompt->isApprovalContinuation()) {
+            if (! $prompt->hasApprovalDecisions()) {
                 $this->store->storeUserMessage(
                     $agent->currentConversation(),
                     $agent->conversationParticipant()?->id,

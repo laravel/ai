@@ -65,7 +65,7 @@ class AgentPrompt extends Prompt
      */
     public function revise(string $prompt, Collection|array|null $attachments = null): AgentPrompt
     {
-        if ($this->isApprovalContinuation()) {
+        if ($this->hasApprovalDecisions()) {
             return $this;
         }
 
