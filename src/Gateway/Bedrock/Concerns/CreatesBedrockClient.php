@@ -28,7 +28,7 @@ trait CreatesBedrockClient
         $config = $provider->additionalConfiguration();
 
         $clientConfig = [
-            'region' => $config['region'] ?? 'us-east-1',
+            'region' => $this->bedrockRegion($config),
             'version' => '2023-09-30',
             ...$this->resolveAuthConfig($credentials, $config, $timeout),
         ];
@@ -38,6 +38,16 @@ trait CreatesBedrockClient
         }
 
         return new BedrockRuntimeClient($clientConfig);
+    }
+
+    /**
+     * Resolve the configured region, falling back to the default.
+     *
+     * @param  array<string, mixed>  $config
+     */
+    protected function bedrockRegion(array $config): string
+    {
+        return $config['region'] ?? 'us-east-1';
     }
 
     /**
@@ -84,6 +94,7 @@ trait CreatesBedrockClient
         }
 
         if (! ($config['use_default_credential_provider'] ?? true)) {
+            // Disabling the default chain without static credentials leaves an assume-role source empty; STS will reject it.
             return ['credentials' => false];
         }
 
@@ -98,7 +109,7 @@ trait CreatesBedrockClient
      */
     protected function assumeRoleCredentialProvider(array $credentials, array $config, ?int $timeout = null): Closure
     {
-        $key = hash('xxh128', serialize([$credentials, $config, $timeout]));
+        $key = hash('xxh128', serialize([$credentials, $config]));
 
         return $this->assumeRoleProviders[$key] ??= CredentialProvider::memoize(
             new AssumeRoleCredentialProvider([
@@ -117,7 +128,7 @@ trait CreatesBedrockClient
     protected function createStsClient(array $credentials, array $config, ?int $timeout = null): StsClient
     {
         $clientConfig = [
-            'region' => $config['region'] ?? 'us-east-1',
+            'region' => $this->bedrockRegion($config),
             'version' => 'latest',
             ...$this->resolveSourceAuthConfig($credentials, $config),
         ];
