@@ -16,8 +16,8 @@ return new class extends AiMigration
 
         Schema::create($conversationsTable, function (Blueprint $table) {
             $table->string('id', 36)->primary();
-            $table->unsignedBigInteger('participant_id')->nullable();
             $table->string('participant_type')->nullable();
+            $table->unsignedBigInteger('participant_id')->nullable();
             $table->string('title');
             $table->timestamps();
 
@@ -27,8 +27,8 @@ return new class extends AiMigration
         Schema::create($messagesTable, function (Blueprint $table) {
             $table->string('id', 36)->primary();
             $table->string('conversation_id', 36)->index();
-            $table->unsignedBigInteger('participant_id')->nullable();
             $table->string('participant_type')->nullable();
+            $table->unsignedBigInteger('participant_id')->nullable();
             $table->string('agent');
             $table->string('role', 25);
             $table->text('content');
