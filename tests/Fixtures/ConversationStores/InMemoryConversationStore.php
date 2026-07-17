@@ -14,25 +14,25 @@ class InMemoryConversationStore implements ConversationStore
 
     public array $messages = [];
 
-    public function latestConversationId(string|int $participantId, ?string $participantType = null): ?string
+    public function latestConversationId(string $participantType, string|int $participantId): ?string
     {
         return collect($this->conversations)
-            ->filter(fn ($conversation): bool => $conversation['participant_id'] == $participantId
-                && $conversation['participant_type'] === $participantType)
+            ->filter(fn ($conversation): bool => $conversation['participant_type'] === $participantType
+                && $conversation['participant_id'] == $participantId)
             ->keys()
             ->last();
     }
 
-    public function storeConversation(string|int|null $participantId, string $title, ?string $participantType = null): string
+    public function storeConversation(string $participantType, string|int $participantId, string $title): string
     {
         $id = (string) Str::uuid7();
 
-        $this->conversations[$id] = ['participant_id' => $participantId, 'participant_type' => $participantType, 'title' => $title];
+        $this->conversations[$id] = ['participant_type' => $participantType, 'participant_id' => $participantId, 'title' => $title];
 
         return $id;
     }
 
-    public function storeUserMessage(string $conversationId, string|int|null $participantId, AgentPrompt $prompt, ?string $participantType = null): string
+    public function storeUserMessage(string $conversationId, string $participantType, string|int $participantId, AgentPrompt $prompt): string
     {
         $id = (string) Str::uuid7();
 
@@ -46,7 +46,7 @@ class InMemoryConversationStore implements ConversationStore
         return $id;
     }
 
-    public function storeAssistantMessage(string $conversationId, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response, ?string $participantType = null): string
+    public function storeAssistantMessage(string $conversationId, string $participantType, string|int $participantId, AgentPrompt $prompt, AgentResponse $response): string
     {
         $id = (string) Str::uuid7();
 

@@ -26,7 +26,7 @@ use Tests\Fixtures\Agents\ToolUsingAgent;
 test('it writes conversations to the default tables', function (): void {
     $store = new DatabaseConversationStore;
 
-    $conversationId = $store->storeConversation(1, 'Hello', null);
+    $conversationId = $store->storeConversation('user', 1, 'Hello');
 
     expect(DB::table('agent_conversations')->where('id', $conversationId)->where('title', 'Hello')->exists())->toBeTrue();
 });
@@ -38,7 +38,7 @@ test('it writes to overridden table names from config', function (): void {
     createConversationSchema();
 
     $store = new DatabaseConversationStore;
-    $conversationId = $store->storeConversation(1, 'Hello', null);
+    $conversationId = $store->storeConversation('user', 1, 'Hello');
 
     expect(DB::table('custom_conversations')->where('id', $conversationId)->exists())->toBeTrue()
         ->and(DB::table('agent_conversations')->where('id', $conversationId)->exists())->toBeFalse();
@@ -55,7 +55,7 @@ test('it routes queries through the configured connection', function (): void {
     createConversationSchema('secondary');
 
     $store = new DatabaseConversationStore('secondary');
-    $conversationId = $store->storeConversation(1, 'Hello', null);
+    $conversationId = $store->storeConversation('user', 1, 'Hello');
 
     expect(DB::connection('secondary')->table('agent_conversations')->where('id', $conversationId)->exists())->toBeTrue()
         ->and(DB::table('agent_conversations')->where('id', $conversationId)->exists())->toBeFalse();
@@ -96,7 +96,7 @@ test('it persists tool calls and results from a remembered agent prompt', functi
     ]);
 
     $user = (object) ['id' => 1];
-    $conversationId = (new DatabaseConversationStore)->storeConversation($user->id, 'Tool conversation', null);
+    $conversationId = (new DatabaseConversationStore)->storeConversation('user', $user->id, 'Tool conversation');
 
     (new RememberingToolUsingAgent)
         ->continue($conversationId, $user)
@@ -112,7 +112,7 @@ test('it persists tool calls and results from a remembered agent prompt', functi
 
 test('it stores sparse keyed tool calls and results as JSON arrays', function (): void {
     $store = new DatabaseConversationStore;
-    $conversationId = $store->storeConversation(1, 'Tool conversation', null);
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
 
     $prompt = new AgentPrompt(
         new ToolUsingAgent,
@@ -132,7 +132,7 @@ test('it stores sparse keyed tool calls and results as JSON arrays', function ()
         8 => new ToolResult('call-2', 'lookup_carrier', ['id' => 1], ['carrier' => 'UPS']),
     ]);
 
-    $store->storeAssistantMessage($conversationId, 1, $prompt, $response);
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
 
     $record = DB::table('agent_conversation_messages')
         ->where('role', 'assistant')
@@ -144,11 +144,12 @@ test('it stores sparse keyed tool calls and results as JSON arrays', function ()
 
 test('it reloads legacy sparse keyed tool calls and results as lists', function (): void {
     $store = new DatabaseConversationStore;
-    $conversationId = $store->storeConversation(1, 'Tool conversation', null);
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
 
     DB::table('agent_conversation_messages')->insert([
         'id' => 'message-1',
         'conversation_id' => $conversationId,
+        'participant_type' => 'user',
         'participant_id' => 1,
         'agent' => ToolUsingAgent::class,
         'role' => 'assistant',
@@ -181,11 +182,12 @@ test('it reloads legacy sparse keyed tool calls and results as lists', function 
 
 test('it replays stored tool conversations before the final assistant response', function (): void {
     $store = new DatabaseConversationStore;
-    $conversationId = $store->storeConversation(1, 'Tool conversation');
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
 
     DB::table('agent_conversation_messages')->insert([
         'id' => 'message-1',
         'conversation_id' => $conversationId,
+        'participant_type' => 'user',
         'participant_id' => 1,
         'agent' => ToolUsingAgent::class,
         'role' => 'assistant',
@@ -220,11 +222,12 @@ test('it replays stored tool conversations before the final assistant response',
 
 test('it drops resultless tool calls and replays only the final assistant text', function (): void {
     $store = new DatabaseConversationStore;
-    $conversationId = $store->storeConversation(1, 'Tool conversation');
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
 
     DB::table('agent_conversation_messages')->insert([
         'id' => 'message-1',
         'conversation_id' => $conversationId,
+        'participant_type' => 'user',
         'participant_id' => 1,
         'agent' => ToolUsingAgent::class,
         'role' => 'assistant',
@@ -250,11 +253,12 @@ test('it drops resultless tool calls and replays only the final assistant text',
 
 test('it drops resultless tool calls with no final text entirely', function (): void {
     $store = new DatabaseConversationStore;
-    $conversationId = $store->storeConversation(1, 'Tool conversation');
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
 
     DB::table('agent_conversation_messages')->insert([
         'id' => 'message-1',
         'conversation_id' => $conversationId,
+        'participant_type' => 'user',
         'participant_id' => 1,
         'agent' => ToolUsingAgent::class,
         'role' => 'assistant',
@@ -277,11 +281,12 @@ test('it drops resultless tool calls with no final text entirely', function (): 
 
 test('it rehydrates reasoning encrypted content on stored tool calls', function (): void {
     $store = new DatabaseConversationStore;
-    $conversationId = $store->storeConversation(1, 'Reasoning conversation', null);
+    $conversationId = $store->storeConversation('user', 1, 'Reasoning conversation');
 
     DB::table('agent_conversation_messages')->insert([
         'id' => 'message-1',
         'conversation_id' => $conversationId,
+        'participant_type' => 'user',
         'participant_id' => 1,
         'agent' => ToolUsingAgent::class,
         'role' => 'assistant',
@@ -315,11 +320,12 @@ test('it rehydrates reasoning encrypted content on stored tool calls', function 
 
 test('it rehydrates legacy tool calls that predate reasoning encrypted content', function (): void {
     $store = new DatabaseConversationStore;
-    $conversationId = $store->storeConversation(1, 'Legacy conversation', null);
+    $conversationId = $store->storeConversation('user', 1, 'Legacy conversation');
 
     DB::table('agent_conversation_messages')->insert([
         'id' => 'message-1',
         'conversation_id' => $conversationId,
+        'participant_type' => 'user',
         'participant_id' => 1,
         'agent' => ToolUsingAgent::class,
         'role' => 'assistant',
@@ -347,11 +353,12 @@ test('it rehydrates legacy tool calls that predate reasoning encrypted content',
 
 test('user messages with stored attachments are rehydrated as UserMessage', function (): void {
     $store = new DatabaseConversationStore;
-    $conversationId = $store->storeConversation(1, 'Attachment conversation', null);
+    $conversationId = $store->storeConversation('user', 1, 'Attachment conversation');
 
     DB::table('agent_conversation_messages')->insert([
         'id' => 'message-1',
         'conversation_id' => $conversationId,
+        'participant_type' => 'user',
         'participant_id' => 1,
         'agent' => ToolUsingAgent::class,
         'role' => 'user',
@@ -379,11 +386,12 @@ test('user messages with stored attachments are rehydrated as UserMessage', func
 
 test('user messages with multiple attachment types are all rehydrated', function (): void {
     $store = new DatabaseConversationStore;
-    $conversationId = $store->storeConversation(1, 'Multi-attachment conversation', null);
+    $conversationId = $store->storeConversation('user', 1, 'Multi-attachment conversation');
 
     DB::table('agent_conversation_messages')->insert([
         'id' => 'message-1',
         'conversation_id' => $conversationId,
+        'participant_type' => 'user',
         'participant_id' => 1,
         'agent' => ToolUsingAgent::class,
         'role' => 'user',
@@ -411,11 +419,12 @@ test('user messages with multiple attachment types are all rehydrated', function
 
 test('user messages with no attachments are returned as plain Message', function (): void {
     $store = new DatabaseConversationStore;
-    $conversationId = $store->storeConversation(1, 'Plain conversation', null);
+    $conversationId = $store->storeConversation('user', 1, 'Plain conversation');
 
     DB::table('agent_conversation_messages')->insert([
         'id' => 'message-1',
         'conversation_id' => $conversationId,
+        'participant_type' => 'user',
         'participant_id' => 1,
         'agent' => ToolUsingAgent::class,
         'role' => 'user',
@@ -437,11 +446,12 @@ test('user messages with no attachments are returned as plain Message', function
 
 test('malformed stored attachment JSON fails loudly', function (): void {
     $store = new DatabaseConversationStore;
-    $conversationId = $store->storeConversation(1, 'Malformed attachment conversation', null);
+    $conversationId = $store->storeConversation('user', 1, 'Malformed attachment conversation');
 
     DB::table('agent_conversation_messages')->insert([
         'id' => 'message-1',
         'conversation_id' => $conversationId,
+        'participant_type' => 'user',
         'participant_id' => 1,
         'agent' => ToolUsingAgent::class,
         'role' => 'user',
@@ -461,11 +471,12 @@ test('malformed stored attachment JSON fails loudly', function (): void {
 
 test('malformed known stored attachments fail loudly', function (): void {
     $store = new DatabaseConversationStore;
-    $conversationId = $store->storeConversation(1, 'Malformed attachment conversation', null);
+    $conversationId = $store->storeConversation('user', 1, 'Malformed attachment conversation');
 
     DB::table('agent_conversation_messages')->insert([
         'id' => 'message-1',
         'conversation_id' => $conversationId,
+        'participant_type' => 'user',
         'participant_id' => 1,
         'agent' => ToolUsingAgent::class,
         'role' => 'user',
@@ -508,70 +519,13 @@ test('it scopes conversations by participant type so shared ids no longer collid
         }
     };
 
-    $userConversation = $store->storeConversation($user->id, 'User chat', 'user');
-    $adminConversation = $store->storeConversation($admin->id, 'Admin chat', 'admin');
+    $userConversation = $store->storeConversation('user', $user->id, 'User chat');
+    $adminConversation = $store->storeConversation('admin', $admin->id, 'Admin chat');
 
     // Despite sharing id 1, each participant only resolves its own conversation...
-    expect($store->latestConversationId($user->id, 'user'))->toBe($userConversation)
-        ->and($store->latestConversationId($admin->id, 'admin'))->toBe($adminConversation)
+    expect($store->latestConversationId('user', $user->id))->toBe($userConversation)
+        ->and($store->latestConversationId('admin', $admin->id))->toBe($adminConversation)
         ->and($userConversation)->not->toBe($adminConversation);
-});
-
-test('a null participant type only matches conversations stored without one', function (): void {
-    $store = new DatabaseConversationStore;
-
-    $user = new class
-    {
-        public int $id = 1;
-
-        public function getMorphClass(): string
-        {
-            return 'user';
-        }
-    };
-
-    $userConversation = $store->storeConversation($user->id, 'User chat', null);
-    $typedConversation = $store->storeConversation($user->id, 'Typed chat', 'user');
-
-    // A null type only resolves null-type rows; a typed lookup only resolves typed rows...
-    expect($store->latestConversationId($user->id, null))->toBe($userConversation)
-        ->and($store->latestConversationId($user->id, 'user'))->toBe($typedConversation);
-});
-
-test('it keeps working against a legacy user_id schema without a participant_type column', function (): void {
-    Config::set('ai.conversations.tables.conversations', 'legacy_conversations');
-    Config::set('ai.conversations.tables.messages', 'legacy_conversation_messages');
-
-    Schema::create('legacy_conversations', function (Blueprint $table): void {
-        $table->string('id', 36)->primary();
-        $table->foreignId('user_id')->nullable();
-        $table->string('title');
-        $table->timestamps();
-    });
-
-    Schema::create('legacy_conversation_messages', function (Blueprint $table): void {
-        $table->string('id', 36)->primary();
-        $table->string('conversation_id', 36)->index();
-        $table->foreignId('user_id')->nullable();
-        $table->string('agent');
-        $table->string('role', 25);
-        $table->text('content');
-        $table->text('attachments');
-        $table->text('tool_calls');
-        $table->text('tool_results');
-        $table->text('usage');
-        $table->text('meta');
-        $table->timestamps();
-    });
-
-    $store = new DatabaseConversationStore;
-
-    // The type argument is ignored on the legacy schema, and writes land in user_id...
-    $conversationId = $store->storeConversation(1, 'Legacy chat', 'user');
-
-    expect(DB::table('legacy_conversations')->where('id', $conversationId)->where('user_id', 1)->exists())->toBeTrue()
-        ->and($store->latestConversationId(1, 'user'))->toBe($conversationId)
-        ->and($store->latestConversationId(1, null))->toBe($conversationId);
 });
 
 function createConversationSchema(?string $connection = null): void
@@ -583,8 +537,8 @@ function createConversationSchema(?string $connection = null): void
 
     $schema->create($conversationsTable, function (Blueprint $table): void {
         $table->string('id', 36)->primary();
-        $table->unsignedBigInteger('participant_id')->nullable();
-        $table->string('participant_type')->nullable();
+        $table->string('participant_type');
+        $table->unsignedBigInteger('participant_id');
         $table->string('title');
         $table->timestamps();
     });
@@ -592,8 +546,8 @@ function createConversationSchema(?string $connection = null): void
     $schema->create($messagesTable, function (Blueprint $table): void {
         $table->string('id', 36)->primary();
         $table->string('conversation_id', 36)->index();
-        $table->unsignedBigInteger('participant_id')->nullable();
-        $table->string('participant_type')->nullable();
+        $table->string('participant_type');
+        $table->unsignedBigInteger('participant_id');
         $table->string('agent');
         $table->string('role', 25);
         $table->text('content');

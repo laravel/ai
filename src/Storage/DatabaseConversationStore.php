@@ -5,7 +5,6 @@ namespace Laravel\Ai\Storage;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\ConversationStore;
@@ -32,43 +31,30 @@ class DatabaseConversationStore implements ConversationStore
     /**
      * Get the most recent conversation ID for a given participant.
      */
-    public function latestConversationId(string|int $participantId, ?string $participantType = null): ?string
+    public function latestConversationId(string $participantType, string|int $participantId): ?string
     {
-        $table = $this->conversationsTable();
-
-        $query = $this->table($table)
-            ->where($this->ownerColumnFor($table), $participantId)
-            ->orderBy('updated_at', 'desc');
-
-        if ($this->hasTypeColumn($table)) {
-            $query->where('participant_type', $participantType);
-        }
-
-        return $query->first()?->id;
+        return $this->table($this->conversationsTable())
+            ->where('participant_type', $participantType)
+            ->where('participant_id', $participantId)
+            ->orderBy('updated_at', 'desc')
+            ->first()?->id;
     }
 
     /**
      * Store a new conversation and return its ID.
      */
-    public function storeConversation(string|int|null $participantId, string $title, ?string $participantType = null): string
+    public function storeConversation(string $participantType, string|int $participantId, string $title): string
     {
         $conversationId = (string) Str::uuid7();
 
-        $table = $this->conversationsTable();
-
-        $row = [
+        $this->table($this->conversationsTable())->insert([
             'id' => $conversationId,
-            $this->ownerColumnFor($table) => $participantId,
+            'participant_type' => $participantType,
+            'participant_id' => $participantId,
             'title' => $title,
             'created_at' => now(),
             'updated_at' => now(),
-        ];
-
-        if ($this->hasTypeColumn($table)) {
-            $row['participant_type'] = $participantType;
-        }
-
-        $this->table($table)->insert($row);
+        ]);
 
         return $conversationId;
     }
@@ -76,15 +62,13 @@ class DatabaseConversationStore implements ConversationStore
     /**
      * Store a new user message for the given conversation and return its ID.
      */
-    public function storeUserMessage(string $conversationId, string|int|null $participantId, AgentPrompt $prompt, ?string $participantType = null): string
+    public function storeUserMessage(string $conversationId, string $participantType, string|int $participantId, AgentPrompt $prompt): string
     {
         $messageId = (string) Str::uuid7();
 
         $now = now();
 
-        $table = $this->messagesTable();
-
-        $this->table($table)->insert($this->messageAttributes($messageId, $table, $conversationId, $participantId, $participantType, $now, [
+        $this->table($this->messagesTable())->insert($this->messageAttributes($messageId, $conversationId, $participantType, $participantId, $now, [
             'agent' => $prompt->agent::class,
             'role' => 'user',
             'content' => $prompt->prompt,
@@ -103,15 +87,13 @@ class DatabaseConversationStore implements ConversationStore
     /**
      * Store a new assistant message for the given conversation and return its ID.
      */
-    public function storeAssistantMessage(string $conversationId, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response, ?string $participantType = null): string
+    public function storeAssistantMessage(string $conversationId, string $participantType, string|int $participantId, AgentPrompt $prompt, AgentResponse $response): string
     {
         $messageId = (string) Str::uuid7();
 
         $now = now();
 
-        $table = $this->messagesTable();
-
-        $this->table($table)->insert($this->messageAttributes($messageId, $table, $conversationId, $participantId, $participantType, $now, [
+        $this->table($this->messagesTable())->insert($this->messageAttributes($messageId, $conversationId, $participantType, $participantId, $now, [
             'agent' => $prompt->agent::class,
             'role' => 'assistant',
             'content' => $response->text,
@@ -138,50 +120,21 @@ class DatabaseConversationStore implements ConversationStore
     }
 
     /**
-     * Build the message row attributes, adapting to the installed schema.
+     * Build the message row attributes.
      *
      * @param  array<string, mixed>  $attributes
      * @return array<string, mixed>
      */
-    protected function messageAttributes(string $messageId, string $table, string $conversationId, string|int|null $participantId, ?string $participantType, mixed $now, array $attributes): array
+    protected function messageAttributes(string $messageId, string $conversationId, string $participantType, string|int $participantId, mixed $now, array $attributes): array
     {
-        $row = array_merge($attributes, [
+        return array_merge($attributes, [
             'id' => $messageId,
             'conversation_id' => $conversationId,
-            $this->ownerColumnFor($table) => $participantId,
+            'participant_type' => $participantType,
+            'participant_id' => $participantId,
             'created_at' => $now,
             'updated_at' => $now,
         ]);
-
-        if ($this->hasTypeColumn($table)) {
-            $row['participant_type'] = $participantType;
-        }
-
-        return $row;
-    }
-
-    /**
-     * Resolve the owner column for the given table, supporting legacy user_id schemas.
-     */
-    protected function ownerColumnFor(string $table): string
-    {
-        return $this->schema()->hasColumn($table, 'participant_id') ? 'participant_id' : 'user_id';
-    }
-
-    /**
-     * Determine whether the given table records a participant type.
-     */
-    protected function hasTypeColumn(string $table): bool
-    {
-        return $this->schema()->hasColumn($table, 'participant_type');
-    }
-
-    /**
-     * Get the configured connection's schema builder.
-     */
-    protected function schema()
-    {
-        return Schema::connection($this->connection);
     }
 
     /**

@@ -33,15 +33,16 @@ class RememberConversation
             /** @var Agent&RemembersConversations $agent */
             $agent = $prompt->agent;
 
+            /** @var object $participant */
             $participant = $agent->conversationParticipant();
             $participantType = Conversation::participantType($participant);
 
             // Create conversation if necessary...
             if (! $agent->currentConversation()) {
                 $conversationId = $this->store->storeConversation(
-                    $participant?->id,
-                    $this->generateTitle($prompt->prompt),
                     $participantType,
+                    $participant->id,
+                    $this->generateTitle($prompt->prompt),
                 );
 
                 $agent->continue($conversationId, $participant);
@@ -50,18 +51,18 @@ class RememberConversation
             // Record user message...
             $this->store->storeUserMessage(
                 $agent->currentConversation(),
-                $participant?->id,
-                $prompt,
                 $participantType,
+                $participant->id,
+                $prompt,
             );
 
             // Record assistant message...
             $this->store->storeAssistantMessage(
                 $agent->currentConversation(),
-                $participant?->id,
+                $participantType,
+                $participant->id,
                 $prompt,
                 $response,
-                $participantType,
             );
 
             $response->withinConversation(

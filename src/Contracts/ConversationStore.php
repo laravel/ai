@@ -12,22 +12,22 @@ interface ConversationStore
     /**
      * Get the most recent conversation ID for a given participant.
      */
-    public function latestConversationId(string|int $participantId, ?string $participantType = null): ?string;
+    public function latestConversationId(string $participantType, string|int $participantId): ?string;
 
     /**
      * Store a new conversation and return its ID.
      */
-    public function storeConversation(string|int|null $participantId, string $title, ?string $participantType = null): string;
+    public function storeConversation(string $participantType, string|int $participantId, string $title): string;
 
     /**
      * Store a new user message for the given conversation and return its ID.
      */
-    public function storeUserMessage(string $conversationId, string|int|null $participantId, AgentPrompt $prompt, ?string $participantType = null): string;
+    public function storeUserMessage(string $conversationId, string $participantType, string|int $participantId, AgentPrompt $prompt): string;
 
     /**
      * Store a new assistant message for the given conversation and return its ID.
      */
-    public function storeAssistantMessage(string $conversationId, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response, ?string $participantType = null): string;
+    public function storeAssistantMessage(string $conversationId, string $participantType, string|int $participantId, AgentPrompt $prompt, AgentResponse $response): string;
 
     /**
      * Get the latest messages for the given conversation.

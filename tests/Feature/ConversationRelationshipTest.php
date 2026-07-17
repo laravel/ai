@@ -28,32 +28,32 @@ test('model can retrieve conversations using relationship', function (): void {
     DB::table('agent_conversations')->insert([
         [
             'id' => 'conversation-1',
-            'participant_id' => $user->id,
             'participant_type' => $user->getMorphClass(),
+            'participant_id' => $user->id,
             'title' => 'First Conversation',
             'created_at' => now()->subMinutes(10),
             'updated_at' => now()->subMinutes(10),
         ],
         [
             'id' => 'conversation-2',
-            'participant_id' => $user->id,
             'participant_type' => $user->getMorphClass(),
+            'participant_id' => $user->id,
             'title' => 'Second Conversation',
             'created_at' => now()->subMinutes(5),
             'updated_at' => now()->subMinutes(5),
         ],
         [
             'id' => 'conversation-3',
-            'participant_id' => $otherUser->id,
             'participant_type' => $otherUser->getMorphClass(),
+            'participant_id' => $otherUser->id,
             'title' => 'Other Conversation',
             'created_at' => now(),
             'updated_at' => now(),
         ],
         [
             'id' => 'conversation-4',
-            'participant_id' => $user->id,
             'participant_type' => 'admin',
+            'participant_id' => $user->id,
             'title' => 'Colliding Admin Conversation',
             'created_at' => now(),
             'updated_at' => now(),
@@ -72,6 +72,7 @@ test('conversation can retrieve messages using relationship', function (): void 
 
     $conversation = Conversation::create([
         'id' => 'conversation-1',
+        'participant_type' => $user->getMorphClass(),
         'participant_id' => $user->id,
         'title' => 'Conversation',
     ]);
@@ -80,6 +81,7 @@ test('conversation can retrieve messages using relationship', function (): void 
         [
             'id' => 'message-1',
             'conversation_id' => $conversation->id,
+            'participant_type' => $user->getMorphClass(),
             'participant_id' => $user->id,
             'agent' => 'Agent',
             'role' => 'user',
@@ -109,7 +111,8 @@ test('conversation model uses configured database connection', function (): void
 
     Schema::connection('secondary')->create('agent_conversations', function (Blueprint $table): void {
         $table->string('id', 36)->primary();
-        $table->foreignId('user_id')->nullable();
+        $table->string('participant_type');
+        $table->unsignedBigInteger('participant_id');
         $table->string('title');
         $table->timestamps();
     });
@@ -118,7 +121,8 @@ test('conversation model uses configured database connection', function (): void
 
     DB::connection('secondary')->table('agent_conversations')->insert([
         'id' => 'secondary-conversation-1',
-        'user_id' => 1,
+        'participant_type' => ConversationRelationshipUser::class,
+        'participant_id' => 1,
         'title' => 'On Secondary DB',
         'created_at' => now(),
         'updated_at' => now(),

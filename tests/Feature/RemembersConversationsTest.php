@@ -21,24 +21,24 @@ test('it threads the participant type into latestConversationId when continuing 
     {
         public ?string $receivedType = null;
 
-        public function latestConversationId(string|int $participantId, ?string $participantType = null): ?string
+        public function latestConversationId(string $participantType, string|int $participantId): ?string
         {
             $this->receivedType = $participantType;
 
             return $participantType === 'admin' ? 'conversation-admin' : null;
         }
 
-        public function storeConversation(string|int|null $participantId, string $title, ?string $participantType = null): string
+        public function storeConversation(string $participantType, string|int $participantId, string $title): string
         {
             return 'conversation-1';
         }
 
-        public function storeUserMessage(string $conversationId, string|int|null $participantId, AgentPrompt $prompt, ?string $participantType = null): string
+        public function storeUserMessage(string $conversationId, string $participantType, string|int $participantId, AgentPrompt $prompt): string
         {
             return 'user-1';
         }
 
-        public function storeAssistantMessage(string $conversationId, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response, ?string $participantType = null): string
+        public function storeAssistantMessage(string $conversationId, string $participantType, string|int $participantId, AgentPrompt $prompt, AgentResponse $response): string
         {
             return 'assistant-1';
         }
@@ -66,22 +66,22 @@ test('it continues the last conversation through a store that ignores the partic
 
     $store = new class implements ConversationStore
     {
-        public function latestConversationId(string|int $participantId, ?string $participantType = null): ?string
+        public function latestConversationId(string $participantType, string|int $participantId): ?string
         {
             return 'conversation-1';
         }
 
-        public function storeConversation(string|int|null $participantId, string $title, ?string $participantType = null): string
+        public function storeConversation(string $participantType, string|int $participantId, string $title): string
         {
             return 'conversation-1';
         }
 
-        public function storeUserMessage(string $conversationId, string|int|null $participantId, AgentPrompt $prompt, ?string $participantType = null): string
+        public function storeUserMessage(string $conversationId, string $participantType, string|int $participantId, AgentPrompt $prompt): string
         {
             return 'user-1';
         }
 
-        public function storeAssistantMessage(string $conversationId, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response, ?string $participantType = null): string
+        public function storeAssistantMessage(string $conversationId, string $participantType, string|int $participantId, AgentPrompt $prompt, AgentResponse $response): string
         {
             return 'assistant-1';
         }
