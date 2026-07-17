@@ -6,6 +6,8 @@ use Generator;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
+use Laravel\Ai\Streaming\Events\ToolCall;
+use Laravel\Ai\Streaming\Events\ToolResult;
 use Symfony\Component\HttpFoundation\Response;
 
 trait CanStreamUsingVercelProtocol
@@ -21,6 +23,8 @@ trait CanStreamUsingVercelProtocol
         {
             public bool $streamStarted = false;
 
+            public array $toolCalls = [];
+
             public ?array $lastStreamEndEvent = null;
         };
 
@@ -33,6 +37,18 @@ trait CanStreamUsingVercelProtocol
                     }
 
                     $state->streamStarted = true;
+                }
+
+                // Track tool calls initiated within this stream.
+                if ($event instanceof ToolCall) {
+                    $state->toolCalls[$event->toolCall->id] = true;
+                }
+
+                // A result without a local call is valid only when continuing the client message that contains the call...
+                if ($event instanceof ToolResult
+                    && ! isset($state->toolCalls[$event->toolResult->id])
+                    && $this->vercelProtocolMessageId === null) {
+                    continue;
                 }
 
                 if ($event instanceof ToolApprovalRequest) {

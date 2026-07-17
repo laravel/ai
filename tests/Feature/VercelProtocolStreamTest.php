@@ -60,10 +60,10 @@ test('a resumed stream emits the approved tool output for the prior turn tool ca
         new StreamStart('msg-2', 'anthropic', 'claude-sonnet-4-6', time()),
         new TextDelta('event-2', 'msg-2', 'Done.', time()),
         new StreamEnd('event-3', 'stop', new Usage, time()),
-    ]);
+    ], messageId: 'client-message-1');
 
     expect($parts)->toBe([
-        ['type' => 'start', 'messageId' => 'invocation-1'],
+        ['type' => 'start', 'messageId' => 'client-message-1'],
         ['type' => 'tool-output-available', 'toolCallId' => 'call-1', 'output' => 'deleted'],
         ['type' => 'text-delta', 'id' => 'msg-2', 'delta' => 'Done.'],
         ['type' => 'finish'],
@@ -86,11 +86,23 @@ test('a rejected approval streams as a denied tool output', function () {
     $parts = vercelProtocolParts([
         new ToolResult('event-1', new Data\ToolResult('call-1', 'DeleteFile', ['path' => 'a.txt'], 'The user rejected this tool call.'), false, 'The user rejected this tool call.', time(), denied: true),
         new StreamEnd('event-2', 'stop', new Usage, time()),
+    ], messageId: 'client-message-1');
+
+    expect($parts)->toBe([
+        ['type' => 'start', 'messageId' => 'client-message-1'],
+        ['type' => 'tool-output-denied', 'toolCallId' => 'call-1'],
+        ['type' => 'finish'],
+        ['type' => 'done'],
+    ]);
+});
+
+test('a tool result without a prior call or existing message is skipped', function () {
+    $parts = vercelProtocolParts([
+        new ToolResult('event-1', new Data\ToolResult('call-1', 'DeleteFile', ['path' => 'a.txt'], 'deleted'), true, null, time()),
+        new StreamEnd('event-2', 'stop', new Usage, time()),
     ]);
 
     expect($parts)->toBe([
-        ['type' => 'start', 'messageId' => 'invocation-1'],
-        ['type' => 'tool-output-denied', 'toolCallId' => 'call-1'],
         ['type' => 'finish'],
         ['type' => 'done'],
     ]);
