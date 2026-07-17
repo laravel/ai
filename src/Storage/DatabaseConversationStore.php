@@ -30,55 +30,6 @@ class DatabaseConversationStore implements ConversationStore
     }
 
     /**
-     * Durably record resolved approval results on the paused turn before the run continues.
-     *
-     * @param  array<int, ToolResult>  $toolResults
-     *
-     * @throws ApprovalMismatchException when no paused row matches the resolved results
-     */
-    public function storeApprovalResults(string $conversationId, string|int|null $participantId, array $toolResults): void
-    {
-        if ($toolResults === []) {
-            return;
-        }
-
-        $resultIds = array_map(fn (ToolResult $result) => $result->id, $toolResults);
-
-        DB::connection($this->connection)->transaction(function () use ($conversationId, $participantId, $toolResults, $resultIds) {
-            $row = $this->table($this->messagesTable())
-                ->where('conversation_id', $conversationId)
-                ->when($participantId === null, fn ($query) => $query->whereNull('user_id'), fn ($query) => $query->where('user_id', $participantId))
-                ->where('role', 'assistant')
-                ->whereNotNull('approval_state')
-                ->orderByDesc('id')
-                ->lockForUpdate()
-                ->get()
-                ->first(fn ($record) => array_intersect($this->pausedCallIds($record), $resultIds) !== []);
-
-            if ($row === null) {
-                throw new ApprovalMismatchException('The approval results do not match a paused conversation turn.', collect());
-            }
-
-            $existing = collect(json_decode($row->tool_results, true) ?: []);
-
-            $merged = $existing->merge(
-                collect($toolResults)->reject(fn (ToolResult $result) => $existing->contains('id', $result->id))
-            );
-
-            $pending = collect(((array) json_decode($row->approval_state ?? 'null', true))['pending'] ?? [])->except($resultIds);
-
-            // Keep the marker after resolution so the resume dedup scan stays bounded to ever-paused rows, while each call's outcome lives in the merged tool results...
-            $this->table($this->messagesTable())
-                ->where('id', $row->id)
-                ->update([
-                    'tool_results' => $merged->values()->toJson(),
-                    'approval_state' => json_encode(['pending' => $pending->all()]),
-                    'updated_at' => now(),
-                ]);
-        });
-    }
-
-    /**
      * Get the most recent conversation ID for a given user.
      */
     public function latestConversationId(string|int $userId): ?string
@@ -182,7 +133,7 @@ class DatabaseConversationStore implements ConversationStore
     }
 
     /**
-     * Get every tool-result id recorded on the conversation's approval-paused rows, the only rows a resume can duplicate.
+     * Get every tool-result ID recorded on the conversation's approval-paused rows, the only rows a resume can duplicate.
      *
      * @return array<int, string>
      */
@@ -200,7 +151,7 @@ class DatabaseConversationStore implements ConversationStore
     }
 
     /**
-     * Mark a paused assistant row with the tool-call ids awaiting a decision, or null when the turn is not a pause.
+     * Mark a paused assistant row with the tool-call IDs awaiting a decision, or null when the turn is not a pause.
      */
     protected function approvalState(AgentResponse $response): ?string
     {
@@ -214,7 +165,7 @@ class DatabaseConversationStore implements ConversationStore
     }
 
     /**
-     * Get the tool-call ids a stored row recorded as awaiting a decision.
+     * Get the tool-call IDs a stored row recorded as awaiting a decision.
      *
      * @return array<int, string>
      */
@@ -266,7 +217,7 @@ class DatabaseConversationStore implements ConversationStore
             ->reverse()
             ->values();
 
-        // A call resolved after an approval pause lands on a later row than the call, so gather every result id across the window to keep those calls while dropping legacy dangling ones.
+        // A call resolved after an approval pause lands on a later row than the call, so gather every result ID across the window to keep those calls while dropping legacy dangling ones...
         $resolvedCallIds = $records
             ->flatMap(fn ($record) => collect(json_decode((string) $record->tool_results, true))->pluck('id'))
             ->filter()
@@ -354,7 +305,7 @@ class DatabaseConversationStore implements ConversationStore
             return $messages;
         }
 
-        // Calls already answered this turn are replayed with their results.
+        // Calls already answered this turn are replayed with their results...
         if ($resolvedCalls->isNotEmpty()) {
             $messages[] = new AssistantMessage('', $resolvedCalls->map(ToolCall::fromArray(...))->values());
             $messages[] = new ToolResultMessage($ownResults->map(ToolResult::fromArray(...))->values());
@@ -374,6 +325,11 @@ class DatabaseConversationStore implements ConversationStore
         return $messages;
     }
 
+    /**
+     * Rehydrate attachments from their stored JSON representation.
+     *
+     * @return Collection<int, File>
+     */
     protected function rehydrateAttachments(string $attachments): Collection
     {
         $decoded = json_decode($attachments, true);
@@ -396,6 +352,55 @@ class DatabaseConversationStore implements ConversationStore
             })
             ->filter()
             ->values();
+    }
+
+    /**
+     * Durably record resolved approval results on the paused turn before the run continues.
+     *
+     * @param  array<int, ToolResult>  $toolResults
+     *
+     * @throws ApprovalMismatchException when no paused row matches the resolved results
+     */
+    public function storeApprovalResults(string $conversationId, string|int|null $participantId, array $toolResults): void
+    {
+        if ($toolResults === []) {
+            return;
+        }
+
+        $resultIds = array_map(fn (ToolResult $result) => $result->id, $toolResults);
+
+        DB::connection($this->connection)->transaction(function () use ($conversationId, $participantId, $toolResults, $resultIds) {
+            $row = $this->table($this->messagesTable())
+                ->where('conversation_id', $conversationId)
+                ->when($participantId === null, fn ($query) => $query->whereNull('user_id'), fn ($query) => $query->where('user_id', $participantId))
+                ->where('role', 'assistant')
+                ->whereNotNull('approval_state')
+                ->orderByDesc('id')
+                ->lockForUpdate()
+                ->get()
+                ->first(fn ($record) => array_intersect($this->pausedCallIds($record), $resultIds) !== []);
+
+            if ($row === null) {
+                throw new ApprovalMismatchException('The approval results do not match a paused conversation turn.', collect());
+            }
+
+            $existing = collect(json_decode($row->tool_results, true) ?: []);
+
+            $merged = $existing->merge(
+                collect($toolResults)->reject(fn (ToolResult $result) => $existing->contains('id', $result->id))
+            );
+
+            $pending = collect(((array) json_decode($row->approval_state ?? 'null', true))['pending'] ?? [])->except($resultIds);
+
+            // Keep the marker after resolution so the resume dedup scan stays bounded to ever-paused rows, while each call's outcome lives in the merged tool results...
+            $this->table($this->messagesTable())
+                ->where('id', $row->id)
+                ->update([
+                    'tool_results' => $merged->values()->toJson(),
+                    'approval_state' => json_encode(['pending' => $pending->all()]),
+                    'updated_at' => now(),
+                ]);
+        });
     }
 
     /**
