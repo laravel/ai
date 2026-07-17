@@ -46,6 +46,16 @@ class AgentResponse extends TextResponse
     }
 
     /**
+     * Execute a callback with this response.
+     */
+    public function then(callable $callback): self
+    {
+        $callback($this);
+
+        return $this;
+    }
+
+    /**
      * Get the raw provider replay state for the paused assistant turn, if any.
      *
      * @return array<int, array<string, mixed>>
@@ -57,15 +67,5 @@ class AgentResponse extends TextResponse
         }
 
         return $this->messages->whereInstanceOf(AssistantMessage::class)->last()?->providerContentBlocks ?? [];
-    }
-
-    /**
-     * Execute a callback with this response.
-     */
-    public function then(callable $callback): self
-    {
-        $callback($this);
-
-        return $this;
     }
 }
