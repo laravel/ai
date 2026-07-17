@@ -15,11 +15,17 @@ class Decision
         public readonly ?array $arguments = null,
     ) {}
 
+    /**
+     * Approve the pending tool call.
+     */
     public static function approve(): self
     {
         return new self('approve');
     }
 
+    /**
+     * Reject the pending tool call.
+     */
     public static function reject(?string $result = null): self
     {
         return new self('reject', result: blank($result) ? null : $result);
@@ -85,16 +91,25 @@ class Decision
         return $normalized;
     }
 
+    /**
+     * Determine whether the tool call was approved.
+     */
     public function isApproved(): bool
     {
         return $this->action === 'approve';
     }
 
+    /**
+     * Determine whether the tool call was rejected.
+     */
     public function isRejected(): bool
     {
         return $this->action === 'reject';
     }
 
+    /**
+     * Determine whether the tool call arguments were edited.
+     */
     public function isEdited(): bool
     {
         return $this->action === 'edit';
