@@ -383,7 +383,13 @@ class TextGenerationLoop
             [$messages, $newMessages] = $this->appendApprovalResults($messages, $approvalResults);
         }
 
-        return new ApprovalResumption($messages, $newMessages, $shouldContinue, $approvalResults, $failedToolCallIds);
+        return new ApprovalResumption(
+            messages: $messages,
+            newMessages: $newMessages,
+            results: $approvalResults,
+            failedToolCallIds: $failedToolCallIds,
+            shouldContinue: $shouldContinue,
+        );
     }
 
     /**

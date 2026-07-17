@@ -16,8 +16,8 @@ class ApprovalResumption
     public function __construct(
         public array $messages,
         public array $newMessages,
-        public bool $shouldContinue,
         public array $results,
         public array $failedToolCallIds,
+        public bool $shouldContinue,
     ) {}
 }
