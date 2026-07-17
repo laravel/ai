@@ -30,6 +30,9 @@ class TextResponse implements \Stringable
     /** @var Collection<int, PendingApproval> */
     public Collection $pendingApprovals;
 
+    /**
+     * Create a new text response instance.
+     */
     public function __construct(public string $text, public Usage $usage, public Meta $meta)
     {
         $this->messages = new Collection;
@@ -107,6 +110,9 @@ class TextResponse implements \Stringable
         return $this;
     }
 
+    /**
+     * Determine whether the response is awaiting tool approval.
+     */
     public function awaitingApproval(): bool
     {
         return $this->pendingApprovals->isNotEmpty();
