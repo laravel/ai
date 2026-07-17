@@ -5,6 +5,7 @@ namespace Laravel\Ai\Models;
 use Illuminate\Database\Eloquent\Attributes\WithoutIncrementing;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 #[WithoutIncrementing]
 class Conversation extends Model
@@ -34,6 +35,16 @@ class Conversation extends Model
     }
 
     /**
+     * Get the participant that owns the conversation.
+     *
+     * @return MorphTo<Model, $this>
+     */
+    public function participant(): MorphTo
+    {
+        return $this->morphTo();
+    }
+
+    /**
      * Get the table associated with the model.
      */
     #[\Override]
@@ -59,5 +70,15 @@ class Conversation extends Model
         return method_exists($participant, 'getMorphClass')
             ? $participant->getMorphClass()
             : $participant::class;
+    }
+
+    /**
+     * Resolve the participant_id key to record for the participant.
+     */
+    public static function participantKey(object $participant): string|int
+    {
+        return method_exists($participant, 'getKey')
+            ? $participant->getKey()
+            : $participant->id;
     }
 }

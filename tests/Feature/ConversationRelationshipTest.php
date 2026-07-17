@@ -101,6 +101,20 @@ test('conversation can retrieve messages using relationship', function (): void 
         ->and($conversation->messages->first()->attachments)->toBeArray();
 });
 
+test('conversation can retrieve its participant using relationship', function (): void {
+    $user = ConversationRelationshipUser::create(['name' => 'Taylor']);
+
+    $conversation = Conversation::create([
+        'id' => 'conversation-1',
+        'participant_type' => $user->getMorphClass(),
+        'participant_id' => $user->id,
+        'title' => 'Conversation',
+    ]);
+
+    expect($conversation->participant)->toBeInstanceOf(ConversationRelationshipUser::class)
+        ->and($conversation->participant->is($user))->toBeTrue();
+});
+
 test('conversation model uses configured database connection', function (): void {
     config(['database.connections.secondary' => [
         'driver' => 'sqlite',
