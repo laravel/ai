@@ -60,7 +60,7 @@ trait StreamsText
                 $approval = $this->resumableApprovalFor($prompt);
                 $recordApprovalResults = $this->approvalResultRecorderFor($prompt, $resolvedApprovalResults);
 
-                // Validate eagerly so a mismatch throws before the stream begins, then thread the result into stream() so it isn't re-validated there.
+                // Validate eagerly so a mismatch throws before the stream begins, then thread the result into stream() so it isn't re-validated there...
                 $validatedApproval = $approval !== null
                     ? $this->textGenerationLoop()->validateApproval($approval, $messages, $tools)
                     : null;
