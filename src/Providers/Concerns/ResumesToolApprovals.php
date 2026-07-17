@@ -23,7 +23,7 @@ trait ResumesToolApprovals
      */
     protected function resumableApprovalFor(AgentPrompt $prompt): ?array
     {
-        return $this->resumesAgainstRealGateway($prompt) ? $prompt->resume : null;
+        return $this->resumesAgainstRealGateway($prompt) ? $prompt->approvalDecisions->all() : null;
     }
 
     /**
@@ -51,7 +51,7 @@ trait ResumesToolApprovals
      */
     protected function resumesAgainstRealGateway(AgentPrompt $prompt): bool
     {
-        return $prompt->resume !== null && ! Ai::hasFakeGatewayFor($prompt->agent::class);
+        return $prompt->isApprovalContinuation() && ! Ai::hasFakeGatewayFor($prompt->agent::class);
     }
 
     /**

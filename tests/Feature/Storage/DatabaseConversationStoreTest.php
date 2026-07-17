@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Ai\Approvals\Decision;
+use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Files\RemoteImage;
@@ -171,7 +172,7 @@ test('a bare rejection resume does not persist a blank assistant row', function 
         [],
         Mockery::mock(TextProvider::class),
         'test-model',
-        resume: ['call-1' => Decision::reject()],
+        approvalDecisions: Decisions::from(['call-1' => Decision::reject()]),
     );
 
     $response = new AgentResponse('invocation-id', '', new Usage, new Meta);

@@ -46,7 +46,7 @@ trait InteractsWithApprovals
     /**
      * Determine whether the tool needs approval for the given request.
      */
-    protected function needsApproval(Request $request): bool|Approval
+    protected function needsApproval(Request $request): Approval|bool
     {
         return true;
     }

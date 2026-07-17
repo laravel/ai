@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Approvals\Decision;
+use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Events\ToolApprovalRequested;
 use Laravel\Ai\Events\ToolApprovalResolved;
@@ -56,9 +57,20 @@ test('decision maps normalize booleans, blank reasons, and blanket helpers', fun
         ->and(Decision::reject('')->result)->toBeNull()
         ->and(Decision::reject('   ')->result)->toBeNull()
         ->and(Decision::reject('Already handled')->result)->toBe('Already handled')
-        ->and($approveAll['*']->isApproved())->toBeTrue()
-        ->and($rejectAll['*']->isRejected())->toBeTrue()
-        ->and($rejectAll['*']->result)->toBeNull();
+        ->and($approveAll->get('*')->isApproved())->toBeTrue()
+        ->and($rejectAll->get('*')->isRejected())->toBeTrue()
+        ->and($rejectAll->get('*')->result)->toBeNull();
+});
+
+test('decision maps may approve or reject every remaining tool call', function () {
+    $approved = Decisions::from(['call-1' => false])->approveRemaining();
+    $rejected = Decisions::from(['call-1' => true])->rejectRemaining('Not now');
+
+    expect($approved->get('call-1')->isRejected())->toBeTrue()
+        ->and($approved->get('*')->isApproved())->toBeTrue()
+        ->and($rejected->get('call-1')->isApproved())->toBeTrue()
+        ->and($rejected->get('*')->isRejected())->toBeTrue()
+        ->and($rejected->get('*')->result)->toBe('Not now');
 });
 
 test('invalid decision maps are rejected', function () {
@@ -68,7 +80,7 @@ test('invalid decision maps are rejected', function () {
         ->toThrow(InvalidArgumentException::class, 'Tool approval decisions must be Decision instances or booleans.')
         ->and(fn () => Decision::normalize(['call-1' => ['call-1' => false]]))
         ->toThrow(InvalidArgumentException::class, 'Tool approval decisions must be Decision instances or booleans.')
-        ->and(fn () => (new RememberingApprovableAgent)->forUser((object) ['id' => 1])->prompt([]))
+        ->and(fn () => (new RememberingApprovableAgent)->forUser((object) ['id' => 1])->prompt(Decisions::from([])))
         ->toThrow(InvalidArgumentException::class, 'Tool approval decisions may not be empty.');
 });
 
@@ -160,30 +172,30 @@ test('a paused stream dispatches the tool approval requested event', function ()
 test('approval resumes flow through queue and broadcast delivery styles', function () {
     ConversationalAgent::fake();
 
-    (new ConversationalAgent)->queue(['call-1' => true]);
+    (new ConversationalAgent)->queue(Decisions::from(['call-1' => true]));
 
     ConversationalAgent::assertQueued(function ($prompt) {
-        return ($prompt->resume['call-1'] ?? null)?->isApproved() === true;
+        return $prompt->approvalDecisions?->get('call-1')?->isApproved() === true;
     });
 
     (new ConversationalAgent)
-        ->broadcast(['call-1' => true], new Channel('approvals'))
+        ->broadcast(Decisions::from(['call-1' => true]), new Channel('approvals'))
         ->each(fn () => true);
 
     ConversationalAgent::assertPrompted(function ($prompt) {
-        return ($prompt->resume['call-1'] ?? null)?->isApproved() === true;
+        return $prompt->approvalDecisions?->get('call-1')?->isApproved() === true;
     });
 
-    (new ConversationalAgent)->broadcastOnQueue(['call-1' => true], new Channel('approvals'));
+    (new ConversationalAgent)->broadcastOnQueue(Decisions::from(['call-1' => true]), new Channel('approvals'));
 
     ConversationalAgent::assertQueued(function ($prompt) {
-        return ($prompt->resume['call-1'] ?? null)?->isApproved() === true;
+        return $prompt->approvalDecisions?->get('call-1')?->isApproved() === true;
     });
 
     (new ConversationalAgent)->queue(Decision::approveAll());
 
     ConversationalAgent::assertQueued(function ($prompt) {
-        return ($prompt->resume['*'] ?? null)?->isApproved() === true;
+        return $prompt->approvalDecisions?->get('*')?->isApproved() === true;
     });
 });
 
@@ -247,7 +259,7 @@ test('a mixed resume dispatches the tool approval resolved event with approved a
 
     (new RememberingApprovableAgent)
         ->continue($paused->conversationId, $user)
-        ->prompt(['toolu_1' => true, 'toolu_2' => false], provider: 'anthropic');
+        ->prompt(Decisions::from(['toolu_1' => true, 'toolu_2' => false]), provider: 'anthropic');
 
     Event::assertDispatched(ToolApprovalResolved::class, function (ToolApprovalResolved $event) {
         return $event->toolResults->count() === 2
@@ -298,7 +310,7 @@ test('an approved streamed resume dispatches the tool approval resolved event', 
 
     $response = (new RememberingApprovableAgent)
         ->continue($paused->conversationId, $user)
-        ->stream(['toolu_1' => true], provider: 'anthropic');
+        ->stream(Decisions::from(['toolu_1' => true]), provider: 'anthropic');
 
     $response->each(fn () => true);
 

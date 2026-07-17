@@ -2,6 +2,7 @@
 
 use Laravel\Ai\Ai;
 use Laravel\Ai\Approvals\Decision;
+use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Prompts\AgentPrompt;
@@ -142,10 +143,10 @@ describe('prompt responses', function (): void {
         expect($response->awaitingApproval())->toBeTrue()
             ->and($response->pendingApprovals)->toHaveCount(1);
 
-        (new ConversationalAgent)->prompt(['call-1' => true]);
+        (new ConversationalAgent)->prompt(Decisions::from(['call-1' => true]));
 
         ConversationalAgent::assertPrompted(function (AgentPrompt $prompt) {
-            return ($prompt->resume['call-1'] ?? null)?->isApproved() === true;
+            return $prompt->approvalDecisions?->get('call-1')?->isApproved() === true;
         });
     });
 });
@@ -341,13 +342,13 @@ describe('timeout handling', function (): void {
             [],
             Ai::textProviderFor(new AssistantAgent, 'groq'),
             'test-model',
-            resume: ['call-1' => Decision::approve()],
+            approvalDecisions: Decisions::from(['call-1' => Decision::approve()]),
         );
 
         $revised = $prompt->append('extra context');
 
         expect($revised)->toBe($prompt)
             ->and($revised->prompt)->toBe('')
-            ->and($revised->resume)->toBe($prompt->resume);
+            ->and($revised->approvalDecisions)->toBe($prompt->approvalDecisions);
     });
 });

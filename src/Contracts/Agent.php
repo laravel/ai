@@ -3,7 +3,7 @@
 namespace Laravel\Ai\Contracts;
 
 use Illuminate\Broadcasting\Channel;
-use Laravel\Ai\Approvals\Decision;
+use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\QueuedAgentResponse;
@@ -19,11 +19,9 @@ interface Agent
 
     /**
      * Invoke the agent with a given prompt, or resume a paused run with tool approval decisions.
-     *
-     * @param  array<string, Decision|bool>|string  $prompt
      */
     public function prompt(
-        array|string $prompt,
+        Decisions|string $prompt,
         array $attachments = [],
         Lab|array|string|null $provider = null,
         ?string $model = null,
@@ -32,11 +30,9 @@ interface Agent
 
     /**
      * Invoke the agent with a given prompt and return a streamable response.
-     *
-     * @param  array<string, Decision|bool>|string  $prompt
      */
     public function stream(
-        array|string $prompt,
+        Decisions|string $prompt,
         array $attachments = [],
         Lab|array|string|null $provider = null,
         ?string $model = null,
@@ -45,11 +41,9 @@ interface Agent
 
     /**
      * Invoke the agent in a queued job.
-     *
-     * @param  array<string, Decision|bool>|string  $prompt
      */
     public function queue(
-        array|string $prompt,
+        Decisions|string $prompt,
         array $attachments = [],
         Lab|array|string|null $provider = null,
         ?string $model = null
@@ -57,11 +51,9 @@ interface Agent
 
     /**
      * Invoke the agent with a given prompt and broadcast the streamed events.
-     *
-     * @param  array<string, Decision|bool>|string  $prompt
      */
     public function broadcast(
-        array|string $prompt,
+        Decisions|string $prompt,
         Channel|array $channels,
         array $attachments = [],
         bool $now = false,
@@ -71,11 +63,9 @@ interface Agent
 
     /**
      * Invoke the agent with a given prompt and broadcast the streamed events immediately.
-     *
-     * @param  array<string, Decision|bool>|string  $prompt
      */
     public function broadcastNow(
-        array|string $prompt,
+        Decisions|string $prompt,
         Channel|array $channels,
         array $attachments = [],
         Lab|array|string|null $provider = null,
@@ -84,11 +74,9 @@ interface Agent
 
     /**
      * Queue the agent with a given prompt and broadcast the streamed events.
-     *
-     * @param  array<string, Decision|bool>|string  $prompt
      */
     public function broadcastOnQueue(
-        array|string $prompt,
+        Decisions|string $prompt,
         Channel|array $channels,
         array $attachments = [],
         Lab|array|string|null $provider = null,

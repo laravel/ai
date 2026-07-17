@@ -879,7 +879,7 @@ class TextGenerationLoopApprovableTool extends TextGenerationLoopCountingTool im
 
     public ?string $approvalToolCallId = null;
 
-    protected function needsApproval(Request $request): bool|Approval
+    protected function needsApproval(Request $request): Approval|bool
     {
         $this->approvalToolCallId = $request->toolCallId();
 

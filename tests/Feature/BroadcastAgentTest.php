@@ -6,6 +6,7 @@ use Illuminate\Broadcasting\Channel;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Event;
 use Laravel\Ai\Approvals\Decision;
+use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Jobs\BroadcastAgent;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Tests\Fixtures\Agents\AssistantAgent;
@@ -67,15 +68,14 @@ test('a resume streams the decision map instead of the prompt', function (): voi
 
     $job = new BroadcastAgent(
         agent: new ConversationalAgent,
-        prompt: '',
         channels: new Channel('test-channel'),
-        resume: ['call-1' => Decision::approve()],
+        prompt: Decisions::from(['call-1' => Decision::approve()]),
     );
 
     $job->handle();
 
     ConversationalAgent::assertPrompted(function ($prompt) {
-        return ($prompt->resume['call-1'] ?? null)?->isApproved() === true;
+        return $prompt->approvalDecisions?->get('call-1')?->isApproved() === true;
     });
 });
 

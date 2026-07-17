@@ -100,7 +100,7 @@ class DatabaseConversationStore implements ConversationStore
 
         $toolResults = $response->toolResults->values();
 
-        if ($prompt->resume !== null) {
+        if ($prompt->isApprovalContinuation()) {
             $existing = $this->existingToolResultIds($conversationId);
 
             $toolResults = $toolResults->reject(fn (ToolResult $result) => in_array($result->id, $existing, true))->values();

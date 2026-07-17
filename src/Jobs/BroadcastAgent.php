@@ -6,7 +6,7 @@ use Illuminate\Broadcasting\Channel;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Str;
-use Laravel\Ai\Approvals\Decision;
+use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Attributes\WithoutBroadcasting;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Enums\Lab;
@@ -27,17 +27,14 @@ class BroadcastAgent implements ShouldQueue
 
     /**
      * Create a new job instance.
-     *
-     * @param  array<string, Decision>|null  $resume
      */
     public function __construct(
         public Agent $agent,
-        public string $prompt,
+        public Decisions|string $prompt,
         public Channel|array $channels,
         public array $attachments = [],
         public Lab|array|string|null $provider = null,
         public ?string $model = null,
-        public ?array $resume = null,
     ) {
         $this->invocationId = (string) Str::uuid7();
     }
@@ -51,7 +48,7 @@ class BroadcastAgent implements ShouldQueue
 
         $without = WithoutBroadcasting::eventsFor($this->agent);
 
-        $this->agent->stream($this->resume ?? $this->prompt, $this->attachments, $this->provider, $this->model)
+        $this->agent->stream($this->prompt, $this->attachments, $this->provider, $this->model)
             ->each(function (StreamEvent $event) use ($without): void {
                 if (WithoutBroadcasting::excludes($without, $event)) {
                     return;

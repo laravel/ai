@@ -6,6 +6,7 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use Laravel\Ai\Approvals\Decision;
+use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
@@ -234,19 +235,18 @@ class AgentCommand extends Command
      * Collect a decision for every pending approval, offering a bulk shortcut when several are queued.
      *
      * @param  Collection<int, PendingApproval>  $pendingApprovals
-     * @return array<string, Decision>
      */
-    private function requestApprovals(Collection $pendingApprovals): array
+    private function requestApprovals(Collection $pendingApprovals): Decisions
     {
         if ($pendingApprovals->count() > 1 && ($bulk = $this->requestBulkDecision($pendingApprovals)) !== null) {
             return $bulk;
         }
 
-        return $pendingApprovals
+        return Decisions::from($pendingApprovals
             ->mapWithKeys(fn (PendingApproval $approval) => [
                 $approval->id => $this->requestApproval($approval),
             ])
-            ->all();
+            ->all());
     }
 
     /**
@@ -255,9 +255,8 @@ class AgentCommand extends Command
      * Returns null when the user chooses to decide each approval individually.
      *
      * @param  Collection<int, PendingApproval>  $pendingApprovals
-     * @return array<string, Decision>|null
      */
-    private function requestBulkDecision(Collection $pendingApprovals): ?array
+    private function requestBulkDecision(Collection $pendingApprovals): ?Decisions
     {
         $tools = $pendingApprovals
             ->map(fn (PendingApproval $approval) => $approval->tool)

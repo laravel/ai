@@ -41,22 +41,18 @@ class Decision
 
     /**
      * A blanket approval for every pending tool call.
-     *
-     * @return array<string, Decision>
      */
-    public static function approveAll(): array
+    public static function approveAll(): Decisions
     {
-        return ['*' => self::approve()];
+        return Decisions::from(['*' => self::approve()]);
     }
 
     /**
      * A blanket rejection for every pending tool call.
-     *
-     * @return array<string, Decision>
      */
-    public static function rejectAll(?string $result = null): array
+    public static function rejectAll(?string $result = null): Decisions
     {
-        return ['*' => self::reject($result)];
+        return Decisions::from(['*' => self::reject($result)]);
     }
 
     /**
