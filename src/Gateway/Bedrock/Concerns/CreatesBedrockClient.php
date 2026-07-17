@@ -6,10 +6,18 @@ use Aws\BedrockRuntime\BedrockRuntimeClient;
 use Aws\Credentials\AssumeRoleCredentialProvider;
 use Aws\Credentials\CredentialProvider;
 use Aws\Sts\StsClient;
+use Closure;
 use Laravel\Ai\Providers\Provider;
 
 trait CreatesBedrockClient
 {
+    /**
+     * The memoized assume role credential providers, keyed by region and role ARN.
+     *
+     * @var array<string, Closure>
+     */
+    protected array $assumeRoleProviders = [];
+
     /**
      * Create a new Bedrock client instance.
      */
@@ -46,6 +54,22 @@ trait CreatesBedrockClient
             ];
         }
 
+        if (! empty($config['assume_role']['arn'])) {
+            return ['credentials' => $this->assumeRoleCredentialProvider($credentials, $config)];
+        }
+
+        return $this->resolveSourceAuthConfig($credentials, $config);
+    }
+
+    /**
+     * Resolve the auth configuration for static, or automatically discovered, credentials.
+     *
+     * @param  array<string, mixed>  $credentials
+     * @param  array<string, mixed>  $config
+     * @return array<string, mixed>
+     */
+    protected function resolveSourceAuthConfig(array $credentials, array $config): array
+    {
         if (! empty($credentials['access_key_id']) && ! empty($credentials['secret_access_key'])) {
             $awsCredentials = [
                 'key' => $credentials['access_key_id'],
@@ -59,10 +83,6 @@ trait CreatesBedrockClient
             return ['credentials' => $awsCredentials];
         }
 
-        if (! empty($config['assume_role_arn'])) {
-            return ['credentials' => $this->assumeRoleCredentialProvider($config)];
-        }
-
         if (! ($config['use_default_credential_provider'] ?? true)) {
             return ['credentials' => false];
         }
@@ -71,33 +91,51 @@ trait CreatesBedrockClient
     }
 
     /**
-     * Create a memoized assume-role credential provider.
+     * Resolve a memoized credential provider that assumes the configured role.
      *
+     * @param  array<string, mixed>  $credentials
      * @param  array<string, mixed>  $config
      */
-    protected function assumeRoleCredentialProvider(array $config): callable
+    protected function assumeRoleCredentialProvider(array $credentials, array $config): Closure
     {
-        $region = $config['region'] ?? 'us-east-1';
+        $key = ($config['region'] ?? 'us-east-1').'|'.$config['assume_role']['arn'];
 
-        $stsClient = new StsClient([
-            'region' => $region,
+        return $this->assumeRoleProviders[$key] ??= CredentialProvider::memoize(
+            new AssumeRoleCredentialProvider([
+                'client' => $this->createStsClient($credentials, $config),
+                'assume_role_params' => $this->assumeRoleParameters($config['assume_role']),
+            ])
+        );
+    }
+
+    /**
+     * Create the STS client used to assume the configured role.
+     *
+     * @param  array<string, mixed>  $credentials
+     * @param  array<string, mixed>  $config
+     */
+    protected function createStsClient(array $credentials, array $config): StsClient
+    {
+        return new StsClient([
+            'region' => $config['region'] ?? 'us-east-1',
             'version' => 'latest',
+            ...$this->resolveSourceAuthConfig($credentials, $config),
         ]);
+    }
 
-        $assumeRoleParams = [
-            'RoleArn' => $config['assume_role_arn'],
-            'RoleSessionName' => $config['assume_role_session_name']
-                ?? 'laravel-ai-bedrock-'.bin2hex(random_bytes(4)),
-            'DurationSeconds' => (int) ($config['assume_role_duration_seconds'] ?? 3600),
-        ];
-
-        if (! empty($config['assume_role_external_id'])) {
-            $assumeRoleParams['ExternalId'] = $config['assume_role_external_id'];
-        }
-
-        return CredentialProvider::memoize(new AssumeRoleCredentialProvider([
-            'client' => $stsClient,
-            'assume_role_params' => $assumeRoleParams,
-        ]));
+    /**
+     * Build the parameters for the STS assume role request.
+     *
+     * @param  array<string, mixed>  $assumeRole
+     * @return array<string, mixed>
+     */
+    protected function assumeRoleParameters(array $assumeRole): array
+    {
+        return array_filter([
+            'RoleArn' => $assumeRole['arn'],
+            'RoleSessionName' => ($assumeRole['session_name'] ?? null) ?: 'laravel-ai-bedrock',
+            'DurationSeconds' => (int) ($assumeRole['duration_seconds'] ?? 0),
+            'ExternalId' => $assumeRole['external_id'] ?? null,
+        ]);
     }
 }
