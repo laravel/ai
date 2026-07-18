@@ -17,12 +17,22 @@ class TextDelta extends StreamEvent
 
     /**
      * Combine the text deltas in the given collection of events into a single string.
+     *
+     * Deltas from a multi-step generation carry a distinct message ID per step,
+     * and each step's text is a self-contained utterance (typically narration
+     * around a tool call). Steps are therefore joined with a blank line instead
+     * of being run together mid-sentence.
      */
     public static function combine(Collection|array $events): string
     {
         $events = is_array($events) ? new Collection($events) : $events;
 
-        return $events->whereInstanceOf(TextDelta::class)->map->delta->join('');
+        return $events->whereInstanceOf(TextDelta::class)
+            ->groupBy(fn (TextDelta $event) => $event->messageId)
+            ->map(fn (Collection $deltas) => $deltas->map(fn (TextDelta $event) => $event->delta)->join(''))
+            ->filter(fn (string $text) => trim($text) !== '')
+            ->values()
+            ->join("\n\n");
     }
 
     /**

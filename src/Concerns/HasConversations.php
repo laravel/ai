@@ -2,7 +2,7 @@
 
 namespace Laravel\Ai\Concerns;
 
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Laravel\Ai\Models\Conversation;
 
 trait HasConversations
@@ -10,10 +10,10 @@ trait HasConversations
     /**
      * Get the conversations for the model.
      *
-     * @return HasMany<Conversation, $this>
+     * @return MorphMany<Conversation, $this>
      */
-    public function conversations(): HasMany
+    public function conversations(): MorphMany
     {
-        return $this->hasMany(Conversation::class, 'user_id');
+        return $this->morphMany(Conversation::class, 'participant');
     }
 }

@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Files;
 
 use Illuminate\Contracts\Support\Arrayable;
+use InvalidArgumentException;
 use JsonSerializable;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
@@ -13,6 +14,10 @@ class Base64Image extends Image implements Arrayable, JsonSerializable, Storable
 
     public function __construct(public string $base64, ?string $mimeType = null)
     {
+        if (blank($base64)) {
+            throw new InvalidArgumentException('Base64 image content cannot be empty.');
+        }
+
         $this->mime = $mimeType;
     }
 
@@ -27,6 +32,7 @@ class Base64Image extends Image implements Arrayable, JsonSerializable, Storable
     /**
      * Get the file's MIME type.
      */
+    #[\Override]
     public function mimeType(): ?string
     {
         return $this->mime;

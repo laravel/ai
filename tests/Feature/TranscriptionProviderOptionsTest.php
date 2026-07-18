@@ -8,24 +8,24 @@ use Laravel\Ai\Prompts\QueuedTranscriptionPrompt;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Transcription;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config([
         'ai.providers.openai' => [...config('ai.providers.openai'), 'key' => 'test-key'],
         'ai.providers.mistral' => [...config('ai.providers.mistral'), 'key' => 'test-key'],
     ]);
 });
 
-test('flat provider options are sent on the transcription request', function () {
+test('flat provider options are sent on the transcription request', function (): void {
     Http::fake(['*' => Http::response(['text' => 'Hello', 'usage' => ['input_tokens' => 1, 'total_tokens' => 2]])]);
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
-        ->providerOptions(['prompt' => 'Laravel Forge and Vapor'])
+        ->withProviderOptions(['prompt' => 'Laravel Forge and Vapor'])
         ->generate(provider: 'openai', model: 'gpt-4o-transcribe');
 
-    Http::assertSent(fn (Request $request) => str_contains($request->body(), 'Laravel Forge and Vapor'));
+    Http::assertSent(fn (Request $request): bool => str_contains($request->body(), 'Laravel Forge and Vapor'));
 });
 
-test('closure resolver receives the resolved provider and applies per-provider options', function () {
+test('closure resolver receives the resolved provider and applies per-provider options', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::response(['text' => 'Hello', 'usage' => ['input_tokens' => 1, 'total_tokens' => 2]]),
         'api.mistral.ai/*' => Http::response(['text' => 'Hello', 'usage' => ['prompt_tokens' => 1, 'completion_tokens' => 1]]),
@@ -34,7 +34,7 @@ test('closure resolver receives the resolved provider and applies per-provider o
     $seen = [];
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
-        ->providerOptions(function (Provider $provider) use (&$seen) {
+        ->withProviderOptions(function (Provider $provider) use (&$seen): array {
             $seen[] = $provider->driver();
 
             return $provider->driver() === 'openai'
@@ -45,28 +45,28 @@ test('closure resolver receives the resolved provider and applies per-provider o
 
     expect($seen)->toBe(['openai']);
 
-    Http::assertSent(fn (Request $request) => str_contains($request->body(), 'OpenAI hint'));
+    Http::assertSent(fn (Request $request): bool => str_contains($request->body(), 'OpenAI hint'));
 });
 
-test('closure provider options are not recorded on the queued prompt fake', function () {
+test('closure provider options are not recorded on the queued prompt fake', function (): void {
     Transcription::fake();
 
     Transcription::fromPath('/path/to/audio.mp3')
-        ->providerOptions(fn (Provider $provider) => ['prompt' => 'hint'])
+        ->withProviderOptions(fn (Provider $provider): array => ['prompt' => 'hint'])
         ->queue(provider: 'openai');
 
     Transcription::assertQueued(
-        fn (QueuedTranscriptionPrompt $prompt) => $prompt->providerOptions === [],
+        fn (QueuedTranscriptionPrompt $prompt): bool => $prompt->providerOptions === [],
     );
 });
 
-test('closure provider options survive queue serialization round-trip', function () {
+test('closure provider options survive queue serialization round-trip', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::response(['text' => 'Hello', 'usage' => ['input_tokens' => 1, 'total_tokens' => 2]]),
     ]);
 
     $pending = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
-        ->providerOptions(fn (Provider $provider) => ['prompt' => 'Serialized hint']);
+        ->withProviderOptions(fn (Provider $provider): array => ['prompt' => 'Serialized hint']);
 
     $job = new GenerateTranscription($pending, 'openai', 'gpt-4o-transcribe');
 
@@ -76,17 +76,17 @@ test('closure provider options survive queue serialization round-trip', function
 
     $restored->handle();
 
-    Http::assertSent(fn (Request $request) => str_contains($request->body(), 'Serialized hint'));
+    Http::assertSent(fn (Request $request): bool => str_contains($request->body(), 'Serialized hint'));
 });
 
-test('closure resolver returning null is treated as no options', function () {
+test('closure resolver returning null is treated as no options', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::response(['text' => 'Hello', 'usage' => ['input_tokens' => 1, 'total_tokens' => 2]]),
     ]);
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
-        ->providerOptions(fn () => null)
+        ->withProviderOptions(fn (): null => null)
         ->generate(provider: 'openai', model: 'gpt-4o-transcribe');
 
-    Http::assertSent(fn (Request $request) => ! str_contains($request->body(), 'prompt'));
+    Http::assertSent(fn (Request $request): bool => ! str_contains($request->body(), 'prompt'));
 });

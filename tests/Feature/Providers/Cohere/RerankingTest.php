@@ -8,20 +8,20 @@ use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Reranking;
 use Laravel\Ai\Responses\Data\RankedDocument;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.cohere' => [
         ...config('ai.providers.cohere'),
         'key' => 'test-key',
     ]]);
 });
 
-test('reranking request includes model, query, and documents', function () {
+test('reranking request includes model, query, and documents', function (): void {
     Http::fake(['*' => fakeCohereRerankingResponse()]);
 
     Reranking::of(['Laravel is a PHP framework', 'React is a JS library'])
         ->rerank('What is Laravel?', provider: 'cohere', model: 'rerank-v3.5');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['model'] === 'rerank-v3.5'
@@ -32,17 +32,17 @@ test('reranking request includes model, query, and documents', function () {
     });
 });
 
-test('reranking request includes top_n when limit set', function () {
+test('reranking request includes top_n when limit set', function (): void {
     Http::fake(['*' => fakeCohereRerankingResponse()]);
 
     Reranking::of(['Doc A', 'Doc B', 'Doc C'])
         ->limit(2)
         ->rerank('query', provider: 'cohere', model: 'rerank-v3.5');
 
-    Http::assertSent(fn (Request $request) => json_decode($request->body(), true)['top_n'] === 2);
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['top_n'] === 2);
 });
 
-test('reranking response is correctly parsed into RankedDocuments', function () {
+test('reranking response is correctly parsed into RankedDocuments', function (): void {
     Http::fake(['*' => fakeCohereRerankingResponse()]);
 
     $response = Reranking::of(['Laravel is a PHP framework', 'React is a JS library'])
@@ -57,7 +57,7 @@ test('reranking response is correctly parsed into RankedDocuments', function () 
         ->and($response->meta->model)->toBe('rerank-v3.5');
 });
 
-test('reranking request sends bearer token', function () {
+test('reranking request sends bearer token', function (): void {
     Http::fake(['*' => fakeCohereRerankingResponse()]);
 
     Reranking::of(['Doc A', 'Doc B'])->rerank('query', provider: 'cohere', model: 'rerank-v3.5');
@@ -65,15 +65,15 @@ test('reranking request sends bearer token', function () {
     Http::assertSent(fn (Request $request) => $request->hasHeader('Authorization', 'Bearer test-key'));
 });
 
-test('reranking uses default model when none specified', function () {
+test('reranking uses default model when none specified', function (): void {
     Http::fake(['*' => fakeCohereRerankingResponse()]);
 
     Reranking::of(['Doc A', 'Doc B'])->rerank('query', provider: 'cohere');
 
-    Http::assertSent(fn (Request $request) => json_decode($request->body(), true)['model'] === 'rerank-v3.5');
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['model'] === 'rerank-v3.5');
 });
 
-test('reranking maps documents by index when results are returned out of order', function () {
+test('reranking maps documents by index when results are returned out of order', function (): void {
     Http::fake(['*' => Http::response([
         'results' => [
             ['index' => 2, 'relevance_score' => 0.91],
@@ -94,19 +94,19 @@ test('reranking maps documents by index when results are returned out of order',
         ->and($ranked[1]->document)->toBe('Doc A');
 });
 
-test('reranking throws when the API returns an error', function () {
+test('reranking throws when the API returns an error', function (): void {
     Http::fake(['*' => Http::response(['message' => 'unauthorized'], 401)]);
 
     Reranking::of(['Doc A', 'Doc B'])->rerank('query', provider: 'cohere', model: 'rerank-v3.5');
 })->throws(RequestException::class);
 
-test('reranking rate limit response throws rate limited exception', function () {
+test('reranking rate limit response throws rate limited exception', function (): void {
     Http::fake(['api.cohere.com/*' => Http::response(['message' => 'rate limit exceeded'], 429)]);
 
     Reranking::of(['Doc A', 'Doc B'])->rerank('query', provider: 'cohere', model: 'rerank-v3.5');
 })->throws(RateLimitedException::class);
 
-test('reranking overloaded response throws provider overloaded exception', function () {
+test('reranking overloaded response throws provider overloaded exception', function (): void {
     Http::fake(['api.cohere.com/*' => Http::response(['message' => 'service unavailable'], 503)]);
 
     Reranking::of(['Doc A', 'Doc B'])->rerank('query', provider: 'cohere', model: 'rerank-v3.5');

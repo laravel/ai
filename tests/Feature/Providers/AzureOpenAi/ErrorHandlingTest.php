@@ -7,7 +7,7 @@ use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Tests\Fixtures\Agents\AssistantAgent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.azure' => [
         ...config('ai.providers.azure'),
         'key' => 'test-key',
@@ -16,7 +16,7 @@ beforeEach(function () {
     ]]);
 });
 
-test('http error response throws request exception', function () {
+test('http error response throws request exception', function (): void {
     Http::fake([
         'my-resource.cognitiveservices.azure.com/*' => Http::response([
             'error' => [
@@ -32,7 +32,7 @@ test('http error response throws request exception', function () {
     );
 })->throws(RequestException::class);
 
-test('rate limit response throws rate limited exception', function () {
+test('rate limit response throws rate limited exception', function (): void {
     Http::fake([
         'my-resource.cognitiveservices.azure.com/*' => Http::response([
             'error' => [
@@ -48,7 +48,7 @@ test('rate limit response throws rate limited exception', function () {
     );
 })->throws(RateLimitedException::class);
 
-test('overloaded response throws provider overloaded exception', function () {
+test('overloaded response throws provider overloaded exception', function (): void {
     Http::fake([
         'my-resource.cognitiveservices.azure.com/*' => Http::response([
             'error' => [
@@ -64,7 +64,7 @@ test('overloaded response throws provider overloaded exception', function () {
     );
 })->throws(ProviderOverloadedException::class);
 
-test('error in 200 response throws ai exception', function () {
+test('error in 200 response throws ai exception', function (): void {
     Http::fake([
         'my-resource.cognitiveservices.azure.com/*' => Http::response([
             'error' => [

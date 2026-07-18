@@ -54,9 +54,7 @@ trait InteractsWithFakeImages
     public function assertImageGenerated(Closure $callback): self
     {
         PHPUnit::assertTrue(
-            (new Collection($this->recordedImageGenerations))->contains(function (ImagePrompt $prompt) use ($callback) {
-                return $callback($prompt);
-            }),
+            (new Collection($this->recordedImageGenerations))->contains(fn (ImagePrompt $prompt) => $callback($prompt)),
             'An expected image generation was not recorded.'
         );
 
@@ -69,9 +67,7 @@ trait InteractsWithFakeImages
     public function assertImageNotGenerated(Closure $callback): self
     {
         PHPUnit::assertTrue(
-            (new Collection($this->recordedImageGenerations))->doesntContain(function (ImagePrompt $prompt) use ($callback) {
-                return $callback($prompt);
-            }),
+            (new Collection($this->recordedImageGenerations))->doesntContain(fn (ImagePrompt $prompt) => $callback($prompt)),
             'An unexpected image generation was recorded.'
         );
 
@@ -97,9 +93,7 @@ trait InteractsWithFakeImages
     public function assertImageQueued(Closure $callback): self
     {
         PHPUnit::assertTrue(
-            (new Collection($this->recordedQueuedImageGenerations))->contains(function (QueuedImagePrompt $prompt) use ($callback) {
-                return $callback($prompt);
-            }),
+            (new Collection($this->recordedQueuedImageGenerations))->contains(fn (QueuedImagePrompt $prompt) => $callback($prompt)),
             'An expected queued image generation was not recorded.'
         );
 
@@ -112,9 +106,7 @@ trait InteractsWithFakeImages
     public function assertImageNotQueued(Closure $callback): self
     {
         PHPUnit::assertTrue(
-            (new Collection($this->recordedQueuedImageGenerations))->doesntContain(function (QueuedImagePrompt $prompt) use ($callback) {
-                return $callback($prompt);
-            }),
+            (new Collection($this->recordedQueuedImageGenerations))->doesntContain(fn (QueuedImagePrompt $prompt) => $callback($prompt)),
             'An unexpected queued image generation was recorded.'
         );
 

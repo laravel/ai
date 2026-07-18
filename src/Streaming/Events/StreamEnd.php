@@ -25,8 +25,7 @@ class StreamEnd extends StreamEvent
 
         return $events->whereInstanceOf(StreamEnd::class)
             ->values()
-            ->map
-            ->usage
+            ->map(fn (StreamEnd $event): Usage => $event->usage)
             ->reduce(fn ($a, $b) => $a->add($b), new Usage);
     }
 

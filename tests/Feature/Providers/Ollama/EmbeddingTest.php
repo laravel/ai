@@ -7,19 +7,20 @@ use Laravel\Ai\Embeddings;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.ollama' => [
         ...config('ai.providers.ollama'),
         'key' => '',
+        'url' => 'http://localhost:11434',
     ]]);
 });
 
-test('embeddings request includes model and input', function () {
+test('embeddings request includes model and input', function (): void {
     Http::fake(['*' => fakeOllamaEmbeddingsResponse()]);
 
     Embeddings::for(['Hello world'])->generate(provider: 'ollama', model: 'nomic-embed-text');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['model'] === 'nomic-embed-text'
@@ -28,7 +29,7 @@ test('embeddings request includes model and input', function () {
     });
 });
 
-test('embeddings response is correctly parsed', function () {
+test('embeddings response is correctly parsed', function (): void {
     Http::fake(['*' => fakeOllamaEmbeddingsResponse()]);
 
     $response = Embeddings::for(['Hello world'])->generate(provider: 'ollama', model: 'nomic-embed-text');
@@ -39,7 +40,7 @@ test('embeddings response is correctly parsed', function () {
         ->and($response->meta->provider)->toBe('ollama');
 });
 
-test('multiple inputs return multiple embeddings', function () {
+test('multiple inputs return multiple embeddings', function (): void {
     Http::fake(['*' => Http::response([
         'model' => 'nomic-embed-text',
         'embeddings' => [
@@ -54,7 +55,7 @@ test('multiple inputs return multiple embeddings', function () {
     expect($response->embeddings)->toHaveCount(2);
 });
 
-test('embeddings request sends bearer token when key is set', function () {
+test('embeddings request sends bearer token when key is set', function (): void {
     config(['ai.providers.ollama' => [
         ...config('ai.providers.ollama'),
         'key' => 'test-key',
@@ -64,22 +65,18 @@ test('embeddings request sends bearer token when key is set', function () {
 
     Embeddings::for(['Hello'])->generate(provider: 'ollama', model: 'nomic-embed-text');
 
-    Http::assertSent(function (Request $request) {
-        return $request->hasHeader('Authorization', 'Bearer test-key');
-    });
+    Http::assertSent(fn (Request $request) => $request->hasHeader('Authorization', 'Bearer test-key'));
 });
 
-test('embeddings request sends no authorization header when key is empty', function () {
+test('embeddings request sends no authorization header when key is empty', function (): void {
     Http::fake(['*' => fakeOllamaEmbeddingsResponse()]);
 
     Embeddings::for(['Hello'])->generate(provider: 'ollama', model: 'nomic-embed-text');
 
-    Http::assertSent(function (Request $request) {
-        return ! $request->hasHeader('Authorization');
-    });
+    Http::assertSent(fn (Request $request): bool => ! $request->hasHeader('Authorization'));
 });
 
-test('embeddings rate limit response throws rate limited exception', function () {
+test('embeddings rate limit response throws rate limited exception', function (): void {
     Http::fake([
         'localhost:11434/*' => Http::response([
             'error' => 'rate limit exceeded',
@@ -89,7 +86,7 @@ test('embeddings rate limit response throws rate limited exception', function ()
     Embeddings::for(['Hello'])->generate(provider: 'ollama', model: 'nomic-embed-text');
 })->throws(RateLimitedException::class);
 
-test('embeddings overloaded response throws provider overloaded exception', function () {
+test('embeddings overloaded response throws provider overloaded exception', function (): void {
     Http::fake([
         'localhost:11434/*' => Http::response([
             'error' => 'server overloaded',
@@ -99,7 +96,7 @@ test('embeddings overloaded response throws provider overloaded exception', func
     Embeddings::for(['Hello'])->generate(provider: 'ollama', model: 'nomic-embed-text');
 })->throws(ProviderOverloadedException::class);
 
-test('embeddings http error response throws request exception', function () {
+test('embeddings http error response throws request exception', function (): void {
     Http::fake([
         'localhost:11434/*' => Http::response([
             'error' => 'model not found',
@@ -109,14 +106,14 @@ test('embeddings http error response throws request exception', function () {
     Embeddings::for(['Hello'])->generate(provider: 'ollama', model: 'nomic-embed-text');
 })->throws(RequestException::class);
 
-test('embeddings request includes provider options in the request body', function () {
+test('embeddings request includes provider options in the request body', function (): void {
     Http::fake(['*' => fakeOllamaEmbeddingsResponse()]);
 
     Embeddings::for(['Hello'])
-        ->providerOptions(['truncate' => false, 'keep_alive' => '5m'])
+        ->withProviderOptions(['truncate' => false, 'keep_alive' => '5m'])
         ->generate(provider: 'ollama', model: 'nomic-embed-text');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['truncate'] === false

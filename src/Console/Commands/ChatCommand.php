@@ -2,7 +2,10 @@
 
 namespace Laravel\Ai\Console\Commands;
 
+use Illuminate\Console\Attributes\Description;
+use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StructuredAgentResponse;
 
 use function Laravel\Ai\agent;
@@ -10,22 +13,10 @@ use function Laravel\Prompts\note;
 use function Laravel\Prompts\spin;
 use function Laravel\Prompts\textarea;
 
+#[Description('Chat with one of your agents')]
+#[Signature('agent:chat')]
 class ChatCommand extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
-    protected $signature = 'agent:chat';
-
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
-    protected $description = 'Chat with one of your agents';
-
     /**
      * Execute the console command.
      */
@@ -39,7 +30,7 @@ class ChatCommand extends Command
             $prompt = textarea('Prompt...');
 
             $response = spin(
-                fn () => $agent->prompt($prompt),
+                fn (): AgentResponse => $agent->prompt($prompt),
                 message: 'Thinking...',
             );
 
@@ -47,7 +38,7 @@ class ChatCommand extends Command
                 $response = json_encode($response->structured, JSON_PRETTY_PRINT);
             }
 
-            note((string) $response.PHP_EOL);
+            note($response.PHP_EOL);
         }
 
         return Command::SUCCESS;

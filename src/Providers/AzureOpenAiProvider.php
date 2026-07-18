@@ -3,22 +3,35 @@
 namespace Laravel\Ai\Providers;
 
 use Illuminate\Contracts\Events\Dispatcher;
+use InvalidArgumentException;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
+use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
-use Laravel\Ai\Contracts\Gateway\TextGateway;
+use Laravel\Ai\Contracts\Gateway\StepTextGateway;
+use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
+use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
+use Laravel\Ai\Contracts\Providers\StoreProvider;
+use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Gateway\AzureOpenAi\AzureOpenAiFileGateway;
 use Laravel\Ai\Gateway\AzureOpenAi\AzureOpenAiGateway;
+use Laravel\Ai\Gateway\AzureOpenAi\AzureOpenAiStoreGateway;
+use Laravel\Ai\Providers\Tools\FileSearch;
 
-class AzureOpenAiProvider extends Provider implements EmbeddingProvider, ImageProvider, TextProvider
+class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FileProvider, ImageProvider, StoreProvider, SupportsFileSearch, TextProvider
 {
     use Concerns\GeneratesEmbeddings;
     use Concerns\GeneratesImages;
     use Concerns\GeneratesText;
     use Concerns\HasEmbeddingGateway;
+    use Concerns\HasFileGateway;
     use Concerns\HasImageGateway;
+    use Concerns\HasStoreGateway;
     use Concerns\HasTextGateway;
+    use Concerns\ManagesFiles;
+    use Concerns\ManagesStores;
     use Concerns\StreamsText;
 
     protected ?AzureOpenAiGateway $azureGateway = null;
@@ -39,7 +52,7 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, ImagePr
     /**
      * Get the provider's text gateway.
      */
-    public function textGateway(): TextGateway
+    public function textGateway(): StepTextGateway
     {
         return $this->textGateway ??= $this->azureGateway();
     }
@@ -57,6 +70,7 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, ImagePr
      *
      * Azure OpenAI uses API key authentication via the `api-key` header.
      */
+    #[\Override]
     public function providerCredentials(): array
     {
         return [
@@ -137,8 +151,23 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, ImagePr
     }
 
     /**
+     * Get the file search tool options for the provider.
+     */
+    public function fileSearchToolOptions(FileSearch $search): array
+    {
+        if (filled($search->filters)) {
+            throw new InvalidArgumentException('Azure OpenAI does not support file search metadata filters.');
+        }
+
+        return array_filter([
+            'vector_store_ids' => $search->ids(),
+        ]);
+    }
+
+    /**
      * Get the provider connection configuration other than the driver, key, and name.
      */
+    #[\Override]
     public function additionalConfiguration(): array
     {
         return [
@@ -146,5 +175,21 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, ImagePr
             'api_version' => $this->config['api_version'] ?? '2025-04-01-preview',
             'store' => $this->config['store'] ?? true,
         ];
+    }
+
+    /**
+     * Get the provider's file gateway.
+     */
+    public function fileGateway(): FileGateway
+    {
+        return $this->fileGateway ??= new AzureOpenAiFileGateway;
+    }
+
+    /**
+     * Get the provider's store gateway.
+     */
+    public function storeGateway(): StoreGateway
+    {
+        return $this->storeGateway ??= new AzureOpenAiStoreGateway;
     }
 }

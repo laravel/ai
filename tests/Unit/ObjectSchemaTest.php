@@ -3,7 +3,7 @@
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\ObjectSchema;
 
-test('nested objects include additional properties false', function () {
+test('nested objects include additional properties false', function (): void {
     $schema = new JsonSchemaTypeFactory;
 
     $objectSchema = new ObjectSchema([
@@ -20,7 +20,7 @@ test('nested objects include additional properties false', function () {
         ->and($result['properties']['address']['additionalProperties'])->toBeFalse();
 });
 
-test('objects nested in arrays include additional properties false', function () {
+test('objects nested in arrays include additional properties false', function (): void {
     $schema = new JsonSchemaTypeFactory;
 
     $objectSchema = new ObjectSchema([
@@ -38,7 +38,7 @@ test('objects nested in arrays include additional properties false', function ()
         ->and($result['properties']['items']['items']['additionalProperties'])->toBeFalse();
 });
 
-test('deeply nested objects include additional properties false', function () {
+test('deeply nested objects include additional properties false', function (): void {
     $schema = new JsonSchemaTypeFactory;
 
     $objectSchema = new ObjectSchema([
@@ -58,7 +58,7 @@ test('deeply nested objects include additional properties false', function () {
         ->and($result['properties']['user']['properties']['contact']['additionalProperties'])->toBeFalse();
 });
 
-test('objects in nested arrays include additional properties false', function () {
+test('objects in nested arrays include additional properties false', function (): void {
     $schema = new JsonSchemaTypeFactory;
 
     $objectSchema = new ObjectSchema([
@@ -76,7 +76,7 @@ test('objects in nested arrays include additional properties false', function ()
     expect($result['properties']['matrix']['items']['items']['additionalProperties'])->toBeFalse();
 });
 
-test('nullable nested objects include additional properties false', function () {
+test('nullable nested objects include additional properties false', function (): void {
     $schema = new JsonSchemaTypeFactory;
 
     $objectSchema = new ObjectSchema([

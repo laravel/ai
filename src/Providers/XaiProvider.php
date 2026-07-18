@@ -4,7 +4,7 @@ namespace Laravel\Ai\Providers;
 
 use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
-use Laravel\Ai\Contracts\Gateway\TextGateway;
+use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Gateway\Xai\XaiGateway;
@@ -26,7 +26,7 @@ class XaiProvider extends Provider implements ImageProvider, TextProvider
     /**
      * Get the provider's text gateway.
      */
-    public function textGateway(): TextGateway
+    public function textGateway(): StepTextGateway
     {
         return $this->textGateway ??= new XaiGateway($this->events);
     }
@@ -36,7 +36,7 @@ class XaiProvider extends Provider implements ImageProvider, TextProvider
      */
     public function defaultTextModel(): string
     {
-        return $this->config['models']['text']['default'] ?? 'grok-4-1-fast-reasoning';
+        return $this->config['models']['text']['default'] ?? 'grok-4.20-non-reasoning';
     }
 
     /**
@@ -44,7 +44,7 @@ class XaiProvider extends Provider implements ImageProvider, TextProvider
      */
     public function cheapestTextModel(): string
     {
-        return $this->config['models']['text']['cheapest'] ?? 'grok-4-1-fast-reasoning';
+        return $this->config['models']['text']['cheapest'] ?? 'grok-4.20-non-reasoning';
     }
 
     /**
@@ -52,7 +52,7 @@ class XaiProvider extends Provider implements ImageProvider, TextProvider
      */
     public function smartestTextModel(): string
     {
-        return $this->config['models']['text']['smartest'] ?? 'grok-4-1-fast-reasoning';
+        return $this->config['models']['text']['smartest'] ?? 'grok-4.3';
     }
 
     /**
