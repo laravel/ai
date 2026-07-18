@@ -13,7 +13,6 @@ use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\HasTools;
-use Laravel\Ai\Contracts\RemembersConversations as RemembersConversationsContract;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\InvokingTool;
@@ -144,10 +143,7 @@ trait GeneratesText
         }] : [];
 
         if (in_array(RemembersConversations::class, class_uses_recursive($agent))) {
-            /** @var Agent&RemembersConversationsContract $agent */
-            if ($agent->hasConversationParticipant()) {
-                $middleware[] = new RememberConversation(resolve(ConversationStore::class), $this);
-            }
+            $middleware[] = new RememberConversation(resolve(ConversationStore::class), $this);
         }
 
         return $agent instanceof HasMiddleware
@@ -220,15 +216,6 @@ trait GeneratesText
      */
     protected function agentCanResumeApprovals(Agent $agent): bool
     {
-        if (! $agent instanceof Conversational) {
-            return false;
-        }
-
-        if (! in_array(RemembersConversations::class, class_uses_recursive($agent), true)) {
-            return true;
-        }
-
-        /** @var Agent&RemembersConversationsContract $agent */
-        return $agent->hasConversationParticipant();
+        return $agent instanceof Conversational;
     }
 }

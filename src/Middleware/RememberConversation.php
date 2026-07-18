@@ -32,6 +32,10 @@ class RememberConversation
             /** @var Agent&RemembersConversations $agent */
             $agent = $prompt->agent;
 
+            if (! $this->shouldRemember($agent, $prompt, $response)) {
+                return;
+            }
+
             // Create conversation if necessary...
             if (! $agent->currentConversation()) {
                 $conversationId = $this->store->storeConversation(
@@ -67,6 +71,19 @@ class RememberConversation
                 $agent->conversationParticipant(),
             );
         });
+    }
+
+    /**
+     * Determine whether this turn should be persisted.
+     *
+     * @param  Agent&RemembersConversations  $agent
+     */
+    protected function shouldRemember(Agent $agent, AgentPrompt $prompt, AgentResponse $response): bool
+    {
+        return $agent->hasConversationParticipant()
+            || $agent->currentConversation() !== null
+            || $response->awaitingApproval()
+            || $prompt->hasApprovalDecisions();
     }
 
     /**

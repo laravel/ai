@@ -22,9 +22,9 @@ trait RemembersConversations
     }
 
     /**
-     * Continue an existing conversation as the given user.
+     * Continue an existing conversation, optionally as the given user.
      */
-    public function continue(string $conversationId, object $as): static
+    public function continue(string $conversationId, ?object $as = null): static
     {
         $this->conversationId = $conversationId;
         $this->conversationUser = $as;

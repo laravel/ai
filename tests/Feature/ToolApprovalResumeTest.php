@@ -71,6 +71,65 @@ test('a remembered agent pauses for approval, persists the tool_use, and resumes
         ->and($resumed->toolResults[0]->result)->toBe('72019');
 });
 
+test('an ownerless remembered agent pauses for approval and resumes without a participant', function () {
+    Config::set('ai.conversations.generate_title', false);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            Http::response([
+                'id' => 'msg_tool_1',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [[
+                    'type' => 'tool_use',
+                    'id' => 'toolu_1',
+                    'name' => 'ApprovableNumberGenerator',
+                    'input' => (object) [],
+                ]],
+                'stop_reason' => 'tool_use',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+            Http::response([
+                'id' => 'msg_2',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [['type' => 'text', 'text' => 'The number is 72019.']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+        ]),
+    ]);
+
+    $paused = (new RememberingApprovableAgent)->prompt('Generate a number', provider: 'anthropic');
+
+    expect($paused->awaitingApproval())->toBeTrue()
+        ->and($paused->pendingApprovals)->toHaveCount(1)
+        ->and($paused->pendingApprovals[0]->id)->toBe('toolu_1')
+        ->and($paused->conversationId)->not->toBeNull()
+        ->and($paused->conversationUser)->toBeNull();
+
+    $assistantRow = DB::table('agent_conversation_messages')
+        ->where('conversation_id', $paused->conversationId)
+        ->where('role', 'assistant')
+        ->latest('id')
+        ->first();
+
+    expect($assistantRow->user_id)->toBeNull()
+        ->and(json_decode($assistantRow->tool_calls, true)[0]['id'])->toBe('toolu_1')
+        ->and(json_decode($assistantRow->tool_results, true))->toBeEmpty();
+
+    $resumed = (new RememberingApprovableAgent)
+        ->continue($paused->conversationId)
+        ->prompt(Decisions::from(['toolu_1' => true]), provider: 'anthropic');
+
+    expect($resumed->awaitingApproval())->toBeFalse()
+        ->and($resumed->text)->toBe('The number is 72019.')
+        ->and($resumed->toolResults)->toHaveCount(1)
+        ->and($resumed->toolResults[0]->result)->toBe('72019');
+});
+
 test('a resumed approval replays the paused turn provider content blocks', function () {
     Config::set('ai.conversations.generate_title', false);
 
