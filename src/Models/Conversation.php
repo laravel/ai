@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\WithoutIncrementing;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use InvalidArgumentException;
 
 #[WithoutIncrementing]
 class Conversation extends Model
@@ -77,8 +78,12 @@ class Conversation extends Model
      */
     public static function participantKey(object $participant): string|int
     {
-        return $participant instanceof Model
-            ? $participant->getKey()
-            : $participant->id;
+        if ($participant instanceof Model) {
+            return $participant->getKey();
+        }
+
+        return $participant->id ?? throw new InvalidArgumentException(
+            'The conversation participant must be an Eloquent model or expose an [id] property.'
+        );
     }
 }
