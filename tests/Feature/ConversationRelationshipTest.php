@@ -126,7 +126,7 @@ test('conversation model uses configured database connection', function (): void
     Schema::connection('secondary')->create('agent_conversations', function (Blueprint $table): void {
         $table->string('id', 36)->primary();
         $table->string('participant_type');
-        $table->unsignedBigInteger('participant_id');
+        $table->string('participant_id');
         $table->string('title');
         $table->timestamps();
     });

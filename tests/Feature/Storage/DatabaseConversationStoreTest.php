@@ -538,7 +538,7 @@ function createConversationSchema(?string $connection = null): void
     $schema->create($conversationsTable, function (Blueprint $table): void {
         $table->string('id', 36)->primary();
         $table->string('participant_type');
-        $table->unsignedBigInteger('participant_id');
+        $table->string('participant_id');
         $table->string('title');
         $table->timestamps();
     });
@@ -547,7 +547,7 @@ function createConversationSchema(?string $connection = null): void
         $table->string('id', 36)->primary();
         $table->string('conversation_id', 36)->index();
         $table->string('participant_type');
-        $table->unsignedBigInteger('participant_id');
+        $table->string('participant_id');
         $table->string('agent');
         $table->string('role', 25);
         $table->text('content');
