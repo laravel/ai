@@ -10,20 +10,50 @@ class SchemaNormalizer
      * Type-specific constraint keywords the deserializer rejects on a multi-type union.
      */
     private const TYPE_KEYWORDS = [
-        'minLength', 'maxLength', 'pattern', 'format',
-        'minimum', 'maximum', 'multipleOf',
-        'items', 'minItems', 'maxItems', 'uniqueItems',
-        'properties', 'required', 'additionalProperties',
+        'minLength',
+        'maxLength',
+        'pattern',
+        'format',
+        'minimum',
+        'maximum',
+        'multipleOf',
+        'items',
+        'minItems',
+        'maxItems',
+        'uniqueItems',
+        'properties',
+        'required',
+        'additionalProperties',
     ];
 
     /**
      * Keywords the deserializer cannot represent and that are dropped.
      */
     private const UNSUPPORTED = [
-        '$schema', '$id', '$anchor', '$comment', 'not', 'if', 'then', 'else',
-        'patternProperties', 'dependentSchemas', 'dependentRequired', 'unevaluatedProperties',
-        'contains', 'minContains', 'maxContains', 'prefixItems', 'examples', 'deprecated',
-        'readOnly', 'writeOnly', 'minProperties', 'maxProperties', 'exclusiveMinimum', 'exclusiveMaximum',
+        '$schema',
+        '$id',
+        '$anchor',
+        '$comment',
+        'not',
+        'if',
+        'then',
+        'else',
+        'patternProperties',
+        'dependentSchemas',
+        'dependentRequired',
+        'unevaluatedProperties',
+        'contains',
+        'minContains',
+        'maxContains',
+        'prefixItems',
+        'examples',
+        'deprecated',
+        'readOnly',
+        'writeOnly',
+        'minProperties',
+        'maxProperties',
+        'exclusiveMinimum',
+        'exclusiveMaximum',
     ];
 
     /**
@@ -311,8 +341,11 @@ class SchemaNormalizer
         }
 
         if ($resolved !== []) {
-            $schema = $this->mergeObjectVariants($schema, $resolved)
-                ?? $this->mergeSchema($schema, $this->firstObjectBranch($resolved) ?? $resolved[0]);
+            $objects = array_values(array_filter($resolved, $this->isObjectBranch(...)));
+
+            $schema = count($objects) >= 2
+                ? $this->reduceObjectGroup($objects, $schema)
+                : $this->mergeSchema($schema, $objects[0] ?? $resolved[0]);
         }
 
         if (! $nullable) {
@@ -323,24 +356,6 @@ class SchemaNormalizer
         $schema['type'] = array_values(array_unique([...(is_array($type) ? $type : [$type]), 'null']));
 
         return $schema;
-    }
-
-    /**
-     * Union every plain-object variant's properties, ignoring scalar branches; null when fewer than two objects remain.
-     *
-     * @param  array<string, mixed>  $schema
-     * @param  array<int, array<string, mixed>>  $branches
-     * @return array<string, mixed>|null
-     */
-    private function mergeObjectVariants(array $schema, array $branches): ?array
-    {
-        $objects = array_values(array_filter($branches, $this->isObjectBranch(...)));
-
-        if (count($objects) < 2) {
-            return null;
-        }
-
-        return $this->reduceObjectGroup($objects, $schema);
     }
 
     /**
@@ -466,7 +481,7 @@ class SchemaNormalizer
             }
         }
 
-        $types = array_values(array_unique(array_filter($types, fn ($type): bool => $type !== null)));
+        $types = array_values(array_unique(array_filter($types, fn($type): bool => $type !== null)));
 
         if (! isset($merged['items']) && $types !== []) {
             $merged['type'] = count($types) === 1 ? $types[0] : $types;
@@ -490,23 +505,6 @@ class SchemaNormalizer
     }
 
     /**
-     * Find the first branch whose type resolves to a plain object, used as a structure-preserving fallback.
-     *
-     * @param  array<int, array<string, mixed>>  $branches
-     * @return array<string, mixed>|null
-     */
-    private function firstObjectBranch(array $branches): ?array
-    {
-        foreach ($branches as $branch) {
-            if ($this->isObjectBranch($branch)) {
-                return $branch;
-            }
-        }
-
-        return null;
-    }
-
-    /**
      * Determine whether a normalized branch's type is a plain object, optionally nullable.
      *
      * @param  array<string, mixed>  $branch
@@ -514,7 +512,7 @@ class SchemaNormalizer
     private function isObjectBranch(array $branch): bool
     {
         $type = $branch['type'] ?? null;
-        $nonNull = array_values(array_filter(is_array($type) ? $type : [$type], fn ($value): bool => $value !== 'null'));
+        $nonNull = array_values(array_filter(is_array($type) ? $type : [$type], fn($value): bool => $value !== 'null'));
 
         return $nonNull === ['object'];
     }
@@ -584,8 +582,8 @@ class SchemaNormalizer
             return $schema;
         }
 
-        $valid = array_values(array_filter($type, fn ($value): bool => in_array($value, self::TYPES, true)));
-        $nonNull = array_values(array_filter($valid, fn ($value): bool => $value !== 'null'));
+        $valid = array_values(array_filter($type, fn($value): bool => in_array($value, self::TYPES, true)));
+        $nonNull = array_values(array_filter($valid, fn($value): bool => $value !== 'null'));
 
         if ($nonNull === []) {
             unset($schema['type']);
@@ -662,7 +660,7 @@ class SchemaNormalizer
             if (is_array($schema['required'] ?? null)) {
                 $schema['required'] = array_values(array_filter(
                     $schema['required'],
-                    fn ($name): bool => is_string($name) && array_key_exists($name, $properties),
+                    fn($name): bool => is_string($name) && array_key_exists($name, $properties),
                 ));
             }
         }
@@ -693,9 +691,9 @@ class SchemaNormalizer
         }
 
         $type = $schema['type'] ?? null;
-        $nonNull = array_filter(is_array($type) ? $type : [$type], fn ($t): bool => $t !== 'null');
+        $nonNull = array_filter(is_array($type) ? $type : [$type], fn($t): bool => $t !== 'null');
 
-        if ($nonNull !== [] && array_filter($nonNull, fn ($t): bool => ! in_array($t, self::TYPES, true)) === []) {
+        if ($nonNull !== [] && array_filter($nonNull, fn($t): bool => ! in_array($t, self::TYPES, true)) === []) {
             return $schema;
         }
 
