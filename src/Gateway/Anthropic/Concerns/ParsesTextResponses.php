@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Illuminate\Support\Collection;
 use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
@@ -14,6 +15,8 @@ use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
 {
+    use DecodesStructuredOutput;
+
     /**
      * Validate the Anthropic response data.
      *
@@ -63,7 +66,7 @@ trait ParsesTextResponses
         $toolCalls = $this->extractToolCalls($content);
         $citations = $this->extractCitations($content);
 
-        $realToolCalls = array_values(array_filter($toolCalls, fn (ToolCall $tc) => $tc->name !== 'output_structured_data'));
+        $realToolCalls = array_values(array_filter($toolCalls, fn (ToolCall $tc): bool => $tc->name !== 'output_structured_data'));
         $hasStructuredToolCall = count($realToolCalls) < count($toolCalls);
 
         $structuredData = null;
@@ -72,12 +75,12 @@ trait ParsesTextResponses
             $structuredData = $this->extractStructuredOutput($content);
 
             if (empty($structuredData) && filled($text)) {
-                $structuredData = json_decode($text, true) ?? [];
+                $structuredData = $this->decodeStructuredOutput($text);
             }
         }
 
         // If the only tool call was the synthetic structured output, this is really a stop.
-        if ($finishReason === FinishReason::ToolCalls && empty($realToolCalls)) {
+        if ($finishReason === FinishReason::ToolCalls && $realToolCalls === []) {
             $finishReason = FinishReason::Stop;
         }
 
@@ -97,7 +100,7 @@ trait ParsesTextResponses
      */
     protected function extractText(array $content): string
     {
-        $textBlocks = array_filter($content, fn (array $block) => ($block['type'] ?? '') === 'text');
+        $textBlocks = array_filter($content, fn (array $block): bool => ($block['type'] ?? '') === 'text');
 
         return implode('', array_column($textBlocks, 'text'));
     }
@@ -109,9 +112,9 @@ trait ParsesTextResponses
      */
     protected function extractToolCalls(array $content): array
     {
-        $toolUseBlocks = array_filter($content, fn (array $block) => ($block['type'] ?? '') === 'tool_use');
+        $toolUseBlocks = array_filter($content, fn (array $block): bool => ($block['type'] ?? '') === 'tool_use');
 
-        return array_values(array_map(fn (array $block) => new ToolCall(
+        return array_values(array_map(fn (array $block): ToolCall => new ToolCall(
             $block['id'] ?? '',
             $block['name'] ?? '',
             $block['input'] ?? [],

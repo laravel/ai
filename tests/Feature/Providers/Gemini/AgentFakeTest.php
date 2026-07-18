@@ -2,7 +2,7 @@
 
 use Tests\Fixtures\Agents\GeminiAgent;
 
-test('gemini agent can be faked', function () {
+test('gemini agent can be faked', function (): void {
     GeminiAgent::fake(['Test response']);
 
     $response = (new GeminiAgent)->prompt('Hello');
@@ -10,15 +10,15 @@ test('gemini agent can be faked', function () {
     expect($response->text)->toBe('Test response');
 });
 
-test('gemini agent fake with closure', function () {
-    GeminiAgent::fake(fn (string $prompt) => "Echo: {$prompt}");
+test('gemini agent fake with closure', function (): void {
+    GeminiAgent::fake(fn (string $prompt): string => "Echo: {$prompt}");
 
     $response = (new GeminiAgent)->prompt('Hello world');
 
     expect($response->text)->toBe('Echo: Hello world');
 });
 
-test('gemini agent fake with no predefined responses', function () {
+test('gemini agent fake with no predefined responses', function (): void {
     GeminiAgent::fake();
 
     $response = (new GeminiAgent)->prompt('Hello');
@@ -26,7 +26,7 @@ test('gemini agent fake with no predefined responses', function () {
     expect($response->text)->toBe('Fake response for prompt: Hello');
 });
 
-test('gemini agent fake records prompts', function () {
+test('gemini agent fake records prompts', function (): void {
     GeminiAgent::fake();
 
     (new GeminiAgent)->prompt('Hello');
@@ -35,11 +35,11 @@ test('gemini agent fake records prompts', function () {
     GeminiAgent::assertNotPrompted('Goodbye');
 });
 
-test('gemini agent stream can be faked', function () {
+test('gemini agent stream can be faked', function (): void {
     GeminiAgent::fake(['Streamed response']);
 
     $response = (new GeminiAgent)->stream('Hello');
-    $response->each(fn () => true);
+    $response->each(fn (): true => true);
 
     expect($response->text)->toBe('Streamed response');
 });

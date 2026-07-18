@@ -7,19 +7,20 @@ use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Exceptions\NoSuchToolException;
 use Laravel\Ai\Promptable;
+use Laravel\Ai\Responses\AgentResponse;
 use Tests\Fixtures\Agents\MultiStepToolAgent;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 use function Laravel\Ai\agent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.openrouter' => [
         ...config('ai.providers.openrouter'),
         'key' => 'test-key',
     ]]);
 });
 
-test('tool calls trigger follow up request', function () {
+test('tool calls trigger follow up request', function (): void {
     Http::fake([
         '*' => Http::sequence([
             fakeOpenRouterToolCallResponse(),
@@ -31,10 +32,10 @@ test('tool calls trigger follow up request', function () {
 
     expect($response->text)->toBe('The number is 72019');
 
-    $requests = Http::recorded(fn (Request $r) => true);
+    $requests = Http::recorded(fn (Request $r): true => true);
     expect(count($requests))->toBeGreaterThanOrEqual(2);
 
-    $followUpBody = json_decode($requests[1][0]->body(), true);
+    $followUpBody = json_decode((string) $requests[1][0]->body(), true);
     $messages = $followUpBody['messages'];
 
     $assistantMsg = collect($messages)->firstWhere('role', 'assistant');
@@ -46,7 +47,7 @@ test('tool calls trigger follow up request', function () {
         ->and($toolMsg['tool_call_id'])->toBe('call_123');
 });
 
-test('max steps limits tool call depth', function () {
+test('max steps limits tool call depth', function (): void {
     Http::fake([
         '*' => Http::sequence([
             fakeOpenRouterToolCallResponse(),
@@ -73,12 +74,12 @@ test('max steps limits tool call depth', function () {
 
     $agent->prompt('Keep calling tools', provider: 'openrouter');
 
-    $requests = Http::recorded(fn (Request $r) => true);
+    $requests = Http::recorded(fn (Request $r): true => true);
 
     expect(count($requests))->toBeLessThanOrEqual(3);
 });
 
-test('multi step tool loop returns accumulated response shape', function () {
+test('multi step tool loop returns accumulated response shape', function (): void {
     Http::fake([
         '*' => Http::sequence([
             fakeOpenRouterToolCallResponse(),
@@ -98,7 +99,7 @@ test('multi step tool loop returns accumulated response shape', function () {
         ->and($response->usage->completionTokens)->toBe(11);
 });
 
-test('unregistered tool call throws no such tool exception', function () {
+test('unregistered tool call throws no such tool exception', function (): void {
     Http::fake([
         '*' => Http::response([
             'id' => 'chatcmpl-tool-123',
@@ -121,6 +122,6 @@ test('unregistered tool call throws no such tool exception', function () {
         ]),
     ]);
 
-    expect(fn () => agent(tools: [new FixedNumberGenerator])->prompt('Give me a number', provider: 'openrouter'))
+    expect(fn (): AgentResponse => agent(tools: [new FixedNumberGenerator])->prompt('Give me a number', provider: 'openrouter'))
         ->toThrow(NoSuchToolException::class);
 });

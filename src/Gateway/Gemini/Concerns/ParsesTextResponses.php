@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\Gemini\Concerns;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
@@ -15,6 +16,8 @@ use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
 {
+    use DecodesStructuredOutput;
+
     /**
      * Validate the Gemini response data.
      *
@@ -52,7 +55,7 @@ trait ParsesTextResponses
             finishReason: $this->extractFinishReason($data, $rawToolCalls),
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model, $this->extractCitations($data)),
-            structured: $structured ? (json_decode($text, true) ?? []) : null,
+            structured: $structured ? $this->decodeStructuredOutput($text) : null,
             providerContentBlocks: $this->sanitizeRequestParts($this->excludeThinkingParts($parts)),
         );
     }
@@ -96,7 +99,7 @@ trait ParsesTextResponses
     {
         return array_values(array_filter(
             $parts,
-            fn (array $part) => ! $this->isThinkingPart($part),
+            fn (array $part): bool => ! $this->isThinkingPart($part),
         ));
     }
 
@@ -124,7 +127,7 @@ trait ParsesTextResponses
         return array_values(
             array_map(
                 fn (array $part) => $part['functionCall'],
-                array_filter($parts, fn (array $part) => isset($part['functionCall']))
+                array_filter($parts, fn (array $part): bool => isset($part['functionCall']))
             )
         );
     }
@@ -136,7 +139,7 @@ trait ParsesTextResponses
      */
     protected function mapToolCalls(array $rawToolCalls): array
     {
-        return array_map(function (array $fc) {
+        return array_map(function (array $fc): ToolCall {
             $id = $fc['id'] ?? (string) Str::uuid7();
 
             return new ToolCall(
@@ -181,7 +184,7 @@ trait ParsesTextResponses
             }
         }
 
-        foreach ($referencedIndices as $index => $_) {
+        foreach (array_keys($referencedIndices) as $index) {
             $web = $groundingChunks[$index]['web'] ?? [];
 
             if (isset($web['uri'])) {

@@ -11,7 +11,7 @@ use Laravel\Ai\Contracts\Tool;
 
 class SimilaritySearch implements Tool
 {
-    protected ?string $description;
+    protected ?string $description = null;
 
     protected bool $rerank = false;
 
@@ -46,11 +46,11 @@ class SimilaritySearch implements Tool
         return new self(function (string $queryString) use ($model, $column, $minSimilarity, $limit, $query) {
             $pendingQuery = $model::query()->whereVectorSimilarTo($column, $queryString, $minSimilarity);
 
-            if ($query) {
+            if ($query instanceof Closure) {
                 $pendingQuery = $query($pendingQuery);
             }
 
-            if ($limit) {
+            if ($limit !== 0) {
                 $pendingQuery->limit($limit);
             }
 

@@ -2,7 +2,7 @@
 
 use Laravel\Ai\Image;
 
-test('images can be generated', function (string $provider, string $apiKey, string $model) {
+test('images can be generated', function (string $provider, string $apiKey, string $model): void {
     requiresApiKey($apiKey);
 
     $response = Image::of('Donut sitting on a kitchen counter.')
@@ -11,7 +11,7 @@ test('images can be generated', function (string $provider, string $apiKey, stri
     expect($response->meta->provider)->toEqual($provider);
 })->with('image-providers');
 
-test('images can be generated with square size', function (string $provider, string $apiKey, string $model) {
+test('images can be generated with square size', function (string $provider, string $apiKey, string $model): void {
     requiresApiKey($apiKey);
 
     $response = Image::of('Donut sitting on a kitchen counter.')

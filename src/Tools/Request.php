@@ -10,9 +10,22 @@ use Illuminate\Support\Traits\Macroable;
 
 class Request implements Arrayable, ArrayAccess
 {
-    use Conditionable, InteractsWithData, Macroable;
+    use Conditionable;
+    use InteractsWithData;
+    use Macroable;
 
-    public function __construct(protected array $arguments = []) {}
+    public function __construct(protected array $arguments = [], protected ?string $toolCallId = null)
+    {
+        //
+    }
+
+    /**
+     * Get the stable provider tool-call ID, usable as an external idempotency key.
+     */
+    public function toolCallId(): ?string
+    {
+        return $this->toolCallId;
+    }
 
     /**
      * @param  array<array-key, string>|array-key|null  $keys

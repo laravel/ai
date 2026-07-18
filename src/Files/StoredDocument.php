@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Files;
 
 use Illuminate\Contracts\Support\Arrayable;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 use JsonSerializable;
@@ -35,6 +36,7 @@ class StoredDocument extends Document implements Arrayable, JsonSerializable, St
     /**
      * Get the displayable name of the file.
      */
+    #[\Override]
     public function name(): ?string
     {
         return $this->name ?? basename($this->path);
@@ -43,9 +45,13 @@ class StoredDocument extends Document implements Arrayable, JsonSerializable, St
     /**
      * Get the file's MIME type.
      */
+    #[\Override]
     public function mimeType(): ?string
     {
-        return $this->mime ?? Storage::disk($this->disk)->mimeType($this->path);
+        /** @var FilesystemAdapter $disk */
+        $disk = Storage::disk($this->disk);
+
+        return $this->mime ?? $disk->mimeType($this->path);
     }
 
     /**

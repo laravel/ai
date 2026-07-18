@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Console\Commands;
 
+use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\GeneratorCommand;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Input\InputInterface;
@@ -11,6 +12,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 use function Laravel\Prompts\confirm;
 
 #[AsCommand(name: 'make:agent')]
+#[Description('Create a new agent')]
 class MakeAgentCommand extends GeneratorCommand
 {
     /**
@@ -19,13 +21,6 @@ class MakeAgentCommand extends GeneratorCommand
      * @var string
      */
     protected $name = 'make:agent';
-
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
-    protected $description = 'Create a new agent';
 
     /**
      * The type of class being generated.
@@ -40,6 +35,7 @@ class MakeAgentCommand extends GeneratorCommand
      * @param  string  $rootNamespace
      * @return string
      */
+    #[\Override]
     protected function getDefaultNamespace($rootNamespace)
     {
         return $rootNamespace.'\Ai\Agents';
@@ -77,6 +73,7 @@ class MakeAgentCommand extends GeneratorCommand
      *
      * @return array
      */
+    #[\Override]
     protected function getOptions()
     {
         return [
@@ -90,6 +87,7 @@ class MakeAgentCommand extends GeneratorCommand
      *
      * @return void
      */
+    #[\Override]
     protected function afterPromptingForMissingArguments(InputInterface $input, OutputInterface $output)
     {
         if ($this->didReceiveOptions($input)) {

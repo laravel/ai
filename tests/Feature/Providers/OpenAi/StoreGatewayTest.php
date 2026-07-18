@@ -7,7 +7,7 @@ use Laravel\Ai\Stores;
 
 use function Illuminate\Support\days;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.openai' => [
         ...config('ai.providers.openai'),
         'key' => 'test-key',
@@ -33,7 +33,7 @@ function fakeOpenAiStoreResponse(string $id = 'vs-123', string $name = 'Test Sto
     ];
 }
 
-test('get store sends correct request', function () {
+test('get store sends correct request', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::response(fakeOpenAiStoreResponse()),
     ]);
@@ -47,14 +47,12 @@ test('get store sends correct request', function () {
         ->and($store->fileCounts->failed)->toBe(0)
         ->and($store->ready)->toBeTrue();
 
-    Http::assertSent(function (Request $request) {
-        return $request->method() === 'GET'
-            && $request->url() === 'https://api.openai.com/v1/vector_stores/vs-123'
-            && $request->hasHeader('Authorization', 'Bearer test-key');
-    });
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'GET'
+        && $request->url() === 'https://api.openai.com/v1/vector_stores/vs-123'
+        && $request->hasHeader('Authorization', 'Bearer test-key'));
 });
 
-test('create store sends correct request', function () {
+test('create store sends correct request', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::response(fakeOpenAiStoreResponse()),
     ]);
@@ -64,48 +62,42 @@ test('create store sends correct request', function () {
     expect($store->id)->toBe('vs-123')
         ->and($store->name)->toBe('Test Store');
 
-    Http::assertSent(function (Request $request) {
-        return $request->method() === 'POST'
-            && $request->url() === 'https://api.openai.com/v1/vector_stores'
-            && ($request->data()['name'] ?? null) === 'Test Store';
-    });
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'POST'
+        && $request->url() === 'https://api.openai.com/v1/vector_stores'
+        && ($request->data()['name'] ?? null) === 'Test Store');
 });
 
-test('create store maps description to metadata', function () {
+test('create store maps description to metadata', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::response(fakeOpenAiStoreResponse()),
     ]);
 
     Stores::create('Test Store', description: 'A test store', provider: 'openai');
 
-    Http::assertSent(function (Request $request) {
-        return $request->method() === 'POST'
-            && ! array_key_exists('description', $request->data())
-            && ($request->data()['metadata'] ?? null) === ['description' => 'A test store'];
-    });
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'POST'
+        && ! array_key_exists('description', $request->data())
+        && ($request->data()['metadata'] ?? null) === ['description' => 'A test store']);
 });
 
-test('create store includes file ids in request', function () {
+test('create store includes file ids in request', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::response(fakeOpenAiStoreResponse()),
     ]);
 
     Stores::create('Test Store', fileIds: ['file-1', 'file-2'], provider: 'openai');
 
-    Http::assertSent(function (Request $request) {
-        return $request->method() === 'POST'
-            && ($request->data()['file_ids'] ?? null) === ['file-1', 'file-2'];
-    });
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'POST'
+        && ($request->data()['file_ids'] ?? null) === ['file-1', 'file-2']);
 });
 
-test('create store includes expiration when provided', function () {
+test('create store includes expiration when provided', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::response(fakeOpenAiStoreResponse()),
     ]);
 
     Stores::create('Expiring Store', expiresWhenIdleFor: days(7), provider: 'openai');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         if ($request->method() !== 'POST') {
             return false;
         }
@@ -117,7 +109,7 @@ test('create store includes expiration when provided', function () {
     });
 });
 
-test('add file sends correct request', function () {
+test('add file sends correct request', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::response(['id' => 'doc-456']),
     ]);
@@ -127,14 +119,12 @@ test('add file sends correct request', function () {
 
     expect($documentId)->toBe('doc-456');
 
-    Http::assertSent(function (Request $request) {
-        return $request->method() === 'POST'
-            && $request->url() === 'https://api.openai.com/v1/vector_stores/vs-123/files'
-            && ($request->data()['file_id'] ?? null) === 'file-789';
-    });
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'POST'
+        && $request->url() === 'https://api.openai.com/v1/vector_stores/vs-123/files'
+        && ($request->data()['file_id'] ?? null) === 'file-789');
 });
 
-test('add file with metadata includes attributes', function () {
+test('add file with metadata includes attributes', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::response(['id' => 'doc-456']),
     ]);
@@ -142,12 +132,10 @@ test('add file with metadata includes attributes', function () {
     $provider = openAiProvider();
     $provider->storeGateway()->addFile($provider, 'vs-123', 'file-789', ['company' => 'laravel']);
 
-    Http::assertSent(function (Request $request) {
-        return ($request->data()['attributes'] ?? null) === ['company' => 'laravel'];
-    });
+    Http::assertSent(fn (Request $request): bool => ($request->data()['attributes'] ?? null) === ['company' => 'laravel']);
 });
 
-test('remove file sends correct request', function () {
+test('remove file sends correct request', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::response(['deleted' => true]),
     ]);
@@ -157,13 +145,11 @@ test('remove file sends correct request', function () {
 
     expect($result)->toBeTrue();
 
-    Http::assertSent(function (Request $request) {
-        return $request->method() === 'DELETE'
-            && $request->url() === 'https://api.openai.com/v1/vector_stores/vs-123/files/doc-456';
-    });
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'DELETE'
+        && $request->url() === 'https://api.openai.com/v1/vector_stores/vs-123/files/doc-456');
 });
 
-test('delete store sends correct request', function () {
+test('delete store sends correct request', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::response(['deleted' => true]),
     ]);
@@ -172,9 +158,7 @@ test('delete store sends correct request', function () {
 
     expect($result)->toBeTrue();
 
-    Http::assertSent(function (Request $request) {
-        return $request->method() === 'DELETE'
-            && $request->url() === 'https://api.openai.com/v1/vector_stores/vs-123'
-            && $request->hasHeader('Authorization', 'Bearer test-key');
-    });
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'DELETE'
+        && $request->url() === 'https://api.openai.com/v1/vector_stores/vs-123'
+        && $request->hasHeader('Authorization', 'Bearer test-key'));
 });

@@ -7,14 +7,14 @@ use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Transcription;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.eleven' => [
         ...config('ai.providers.eleven'),
         'key' => 'test-key',
     ]]);
 });
 
-test('audio rate limit response throws rate limited exception', function () {
+test('audio rate limit response throws rate limited exception', function (): void {
     Http::fake([
         'api.elevenlabs.io/*' => Http::response(['detail' => 'Rate limit exceeded'], 429),
     ]);
@@ -22,7 +22,7 @@ test('audio rate limit response throws rate limited exception', function () {
     Audio::of('Hello world')->generate(provider: 'eleven', model: 'eleven_multilingual_v2');
 })->throws(RateLimitedException::class);
 
-test('audio overloaded response throws provider overloaded exception', function () {
+test('audio overloaded response throws provider overloaded exception', function (): void {
     Http::fake([
         'api.elevenlabs.io/*' => Http::response(['detail' => 'Service overloaded'], 503),
     ]);
@@ -30,7 +30,7 @@ test('audio overloaded response throws provider overloaded exception', function 
     Audio::of('Hello world')->generate(provider: 'eleven', model: 'eleven_multilingual_v2');
 })->throws(ProviderOverloadedException::class);
 
-test('audio http error response throws request exception', function () {
+test('audio http error response throws request exception', function (): void {
     Http::fake([
         'api.elevenlabs.io/*' => Http::response(['detail' => 'Unauthorized'], 401),
     ]);
@@ -38,7 +38,7 @@ test('audio http error response throws request exception', function () {
     Audio::of('Hello world')->generate(provider: 'eleven', model: 'eleven_multilingual_v2');
 })->throws(RequestException::class);
 
-test('transcription rate limit response throws rate limited exception', function () {
+test('transcription rate limit response throws rate limited exception', function (): void {
     Http::fake([
         'api.elevenlabs.io/*' => Http::response(['detail' => 'Rate limit exceeded'], 429),
     ]);
@@ -46,7 +46,7 @@ test('transcription rate limit response throws rate limited exception', function
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'eleven');
 })->throws(RateLimitedException::class);
 
-test('transcription overloaded response throws provider overloaded exception', function () {
+test('transcription overloaded response throws provider overloaded exception', function (): void {
     Http::fake([
         'api.elevenlabs.io/*' => Http::response(['detail' => 'Service overloaded'], 503),
     ]);
@@ -54,7 +54,7 @@ test('transcription overloaded response throws provider overloaded exception', f
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'eleven');
 })->throws(ProviderOverloadedException::class);
 
-test('transcription http error response throws request exception', function () {
+test('transcription http error response throws request exception', function (): void {
     Http::fake([
         'api.elevenlabs.io/*' => Http::response(['detail' => 'Unauthorized'], 401),
     ]);

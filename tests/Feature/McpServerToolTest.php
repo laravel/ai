@@ -6,7 +6,7 @@ use Laravel\Ai\Promptable;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Tests\Fixtures\Mcp\FakeMcpServerTool;
 
-test('agents can return mcp server tools directly', function () {
+test('agents can return mcp server tools directly', function (): void {
     $serverTool = new FakeMcpServerTool;
 
     $agent = new class($serverTool) implements Agent, HasTools

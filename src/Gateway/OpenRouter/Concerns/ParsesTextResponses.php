@@ -2,16 +2,21 @@
 
 namespace Laravel\Ai\Gateway\OpenRouter\Concerns;
 
+use Illuminate\Support\Collection;
 use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Responses\Data\UrlCitation;
 use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
 {
+    use DecodesStructuredOutput;
+
     /**
      * Validate the OpenRouter response data.
      *
@@ -41,8 +46,9 @@ trait ParsesTextResponses
         $model = $data['model'] ?? '';
 
         $text = $message['content'] ?? '';
+        $citations = $this->extractCitations($message);
 
-        $toolCalls = array_map(fn (array $toolCall) => new ToolCall(
+        $toolCalls = array_map(fn (array $toolCall): ToolCall => new ToolCall(
             $toolCall['id'] ?? '',
             $toolCall['function']['name'] ?? '',
             json_decode($toolCall['function']['arguments'] ?? '{}', true) ?? [],
@@ -54,9 +60,32 @@ trait ParsesTextResponses
             toolCalls: $toolCalls,
             finishReason: $this->extractFinishReason($choice),
             usage: $this->extractUsage($data),
-            meta: new Meta($provider->name(), $model),
-            structured: $structured ? (json_decode($text, true) ?? []) : null,
+            meta: new Meta($provider->name(), $model, $citations),
+            structured: $structured ? $this->decodeStructuredOutput($text) : null,
         );
+    }
+
+    /**
+     * Extract URL citations from the message annotations array.
+     */
+    protected function extractCitations(array $message): Collection
+    {
+        $citations = new Collection;
+
+        foreach ($message['annotations'] ?? [] as $annotation) {
+            if (($annotation['type'] ?? '') === 'url_citation') {
+                $urlCitation = $annotation['url_citation'] ?? [];
+
+                $citations->push(new UrlCitation(
+                    $urlCitation['url'] ?? '',
+                    $urlCitation['title'] ?? null,
+                    isset($urlCitation['start_index']) ? (int) $urlCitation['start_index'] : null,
+                    isset($urlCitation['end_index']) ? (int) $urlCitation['end_index'] : null,
+                ));
+            }
+        }
+
+        return $citations->values();
     }
 
     /**

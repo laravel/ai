@@ -19,14 +19,14 @@ use Tests\Fixtures\Agents\ToolUsingAgent;
 
 uses(DeepSeekHelpers::class);
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.deepseek' => [
         ...config('ai.providers.deepseek'),
         'key' => 'test-key',
     ]]);
 });
 
-test('preserves reasoning content across tool-call loops', function () {
+test('preserves reasoning content across tool-call loops', function (): void {
     Http::fake([
         'api.deepseek.com/*' => Http::sequence([
             Http::response([
@@ -66,7 +66,7 @@ test('preserves reasoning content across tool-call loops', function () {
         ->and($assistantMsg['tool_calls'][0]['function']['name'])->toBe('FixedNumberGenerator');
 });
 
-test('emits reasoning start, delta, and end events while streaming', function () {
+test('emits reasoning start, delta, and end events while streaming', function (): void {
     Http::fake([
         'api.deepseek.com/*' => Http::response(
             body: $this->ssePayload([
@@ -96,7 +96,7 @@ test('emits reasoning start, delta, and end events while streaming', function ()
         ->and($events[9])->toBeInstanceOf(StreamEnd::class);
 });
 
-test('preserves reasoning content across streaming tool-call loops', function () {
+test('preserves reasoning content across streaming tool-call loops', function (): void {
     Http::fake([
         'api.deepseek.com/*' => Http::sequence([
             Http::response(
@@ -131,7 +131,7 @@ test('preserves reasoning content across streaming tool-call loops', function ()
         ->and($assistantMsg['tool_calls'][0]['function']['name'])->toBe('FixedNumberGenerator');
 });
 
-test('strips reasoning from deepseek-reasoner historical messages without tool calls', function () {
+test('strips reasoning from deepseek-reasoner historical messages without tool calls', function (): void {
     Http::fake([
         'api.deepseek.com/*' => Http::response([
             'id' => 'chatcmpl-reasoner-2',
@@ -155,7 +155,7 @@ test('strips reasoning from deepseek-reasoner historical messages without tool c
         ->and($assistantMsg)->not->toHaveKey('tool_calls');
 });
 
-test('defaults reasoning content to empty string when historical reasoning is empty', function () {
+test('defaults reasoning content to empty string when historical reasoning is empty', function (): void {
     Http::fake(['api.deepseek.com/*' => fakeDeepSeekResponse('Here you go.')]);
 
     (new HistoricalToolCallWithEmptyReasoningAgent)->prompt('tell me more', provider: 'deepseek');
@@ -171,7 +171,7 @@ test('defaults reasoning content to empty string when historical reasoning is em
     expect($this->filterMessages($messages, 'tool'))->toHaveCount(1);
 });
 
-test('defaults reasoning content to empty string when historical reasoning is missing', function () {
+test('defaults reasoning content to empty string when historical reasoning is missing', function (): void {
     Http::fake(['api.deepseek.com/*' => fakeDeepSeekResponse('Sure, here is the info.')]);
 
     (new HistoricalToolCallWithoutReasoningAgent)->prompt('tell me more', provider: 'deepseek');
@@ -187,7 +187,7 @@ test('defaults reasoning content to empty string when historical reasoning is mi
     expect($this->filterMessages($messages, 'tool'))->toHaveCount(1);
 });
 
-test('preserves tool calls when historical reasoning content is present', function () {
+test('preserves tool calls when historical reasoning content is present', function (): void {
     Http::fake(['api.deepseek.com/*' => fakeDeepSeekResponse('Here you go.')]);
 
     (new HistoricalToolCallWithReasoningAgent)->prompt('tell me more', provider: 'deepseek');

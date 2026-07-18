@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Providers\FileProvider;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\PreparesStorableFiles;
 use Laravel\Ai\Providers\Provider;
@@ -44,11 +45,13 @@ class AnthropicFileGateway implements FileGateway
     ): StoredFileResponse {
         [$content, $mime, $name] = $this->prepareStorableFile($file);
 
+        $providerOptions = $this->resolveProviderOptions($file, Lab::Anthropic);
+
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider)
                 ->attach('file', $content, $name, ['Content-Type' => $mime])
-                ->post('files'),
+                ->post('files', $providerOptions),
         );
 
         return new StoredFileResponse($response->json('id'));

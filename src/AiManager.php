@@ -30,6 +30,7 @@ use Laravel\Ai\Providers\GroqProvider;
 use Laravel\Ai\Providers\JinaProvider;
 use Laravel\Ai\Providers\MistralProvider;
 use Laravel\Ai\Providers\OllamaProvider;
+use Laravel\Ai\Providers\OpenAiCompatibleProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Providers\OpenRouterProvider;
 use Laravel\Ai\Providers\Provider;
@@ -63,7 +64,7 @@ class AiManager extends MultipleInstanceManager
      */
     public function audioProvider(?string $name = null): AudioProvider
     {
-        return tap($this->instance($name), function ($instance) {
+        return tap($this->instance($name), function ($instance): void {
             if (! $instance instanceof AudioProvider) {
                 throw new LogicException('Provider ['.$instance::class.'] does not support audio generation.');
             }
@@ -91,7 +92,7 @@ class AiManager extends MultipleInstanceManager
      */
     public function embeddingProvider(?string $name = null): EmbeddingProvider
     {
-        return tap($this->instance($name), function ($instance) {
+        return tap($this->instance($name), function ($instance): void {
             if (! $instance instanceof EmbeddingProvider) {
                 throw new LogicException('Provider ['.$instance::class.'] does not support embedding generation.');
             }
@@ -119,7 +120,7 @@ class AiManager extends MultipleInstanceManager
      */
     public function rerankingProvider(?string $name = null): RerankingProvider
     {
-        return tap($this->instance($name), function ($instance) {
+        return tap($this->instance($name), function ($instance): void {
             if (! $instance instanceof RerankingProvider) {
                 throw new LogicException('Provider ['.$instance::class.'] does not support reranking.');
             }
@@ -147,7 +148,7 @@ class AiManager extends MultipleInstanceManager
      */
     public function imageProvider(?string $name = null): ImageProvider
     {
-        return tap($this->instance($name), function ($instance) {
+        return tap($this->instance($name), function ($instance): void {
             if (! $instance instanceof ImageProvider) {
                 throw new LogicException('Provider ['.$instance::class.'] does not support image generation.');
             }
@@ -203,7 +204,7 @@ class AiManager extends MultipleInstanceManager
      */
     public function textProvider(?string $name = null): TextProvider
     {
-        return tap($this->instance($name), function ($instance) {
+        return tap($this->instance($name), function ($instance): void {
             if (! $instance instanceof TextProvider) {
                 throw new LogicException('Provider ['.$instance::class.'] does not support text generation.');
             }
@@ -231,7 +232,7 @@ class AiManager extends MultipleInstanceManager
      */
     public function transcriptionProvider(?string $name = null): TranscriptionProvider
     {
-        return tap($this->instance($name), function ($instance) {
+        return tap($this->instance($name), function ($instance): void {
             if (! $instance instanceof TranscriptionProvider) {
                 throw new LogicException('Provider ['.$instance::class.'] does not support transcription generation.');
             }
@@ -259,7 +260,7 @@ class AiManager extends MultipleInstanceManager
      */
     public function fileProvider(?string $name = null): FileProvider
     {
-        return tap($this->instance($name), function ($instance) {
+        return tap($this->instance($name), function ($instance): void {
             if (! $instance instanceof FileProvider) {
                 throw new LogicException('Provider ['.$instance::class.'] does not support file management.');
             }
@@ -287,7 +288,7 @@ class AiManager extends MultipleInstanceManager
      */
     public function storeProvider(?string $name = null): StoreProvider
     {
-        return tap($this->instance($name), function ($instance) {
+        return tap($this->instance($name), function ($instance): void {
             if (! $instance instanceof StoreProvider) {
                 throw new LogicException('Provider ['.$instance::class.'] does not support store management.');
             }
@@ -438,6 +439,17 @@ class AiManager extends MultipleInstanceManager
     {
         return new OpenAiProvider(
             new OpenAiGateway($this->app['events']),
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create an OpenAI-compatible powered instance.
+     */
+    public function createOpenaiCompatibleDriver(array $config): OpenAiCompatibleProvider
+    {
+        return new OpenAiCompatibleProvider(
             $config,
             $this->app->make(Dispatcher::class)
         );

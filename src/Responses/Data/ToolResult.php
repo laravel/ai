@@ -13,6 +13,7 @@ class ToolResult implements Arrayable, JsonSerializable
         public array $arguments,
         public mixed $result,
         public ?string $resultId = null,
+        public bool $denied = false,
     ) {}
 
     /**
@@ -26,11 +27,12 @@ class ToolResult implements Arrayable, JsonSerializable
             arguments: $data['arguments'],
             result: $data['result'],
             resultId: $data['result_id'] ?? null,
+            denied: $data['denied'] ?? false,
         );
     }
 
     /**
-     * Get the instance as an array.
+     * Get the instance as an array, only including the denied key when the result is a rejection.
      */
     public function toArray(): array
     {
@@ -40,6 +42,7 @@ class ToolResult implements Arrayable, JsonSerializable
             'arguments' => $this->arguments,
             'result' => $this->result,
             'result_id' => $this->resultId,
+            ...($this->denied ? ['denied' => true] : []),
         ];
     }
 

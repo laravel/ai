@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\Groq\Concerns;
 
 use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
@@ -12,6 +13,8 @@ use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
 {
+    use DecodesStructuredOutput;
+
     /**
      * Validate the Groq response data.
      *
@@ -45,7 +48,7 @@ trait ParsesTextResponses
         $usage = $this->extractUsage($data);
         $finishReason = $this->extractFinishReason($choice);
 
-        $mappedToolCalls = array_map(fn (array $toolCall) => new ToolCall(
+        $mappedToolCalls = array_map(fn (array $toolCall): ToolCall => new ToolCall(
             $toolCall['id'] ?? '',
             $toolCall['function']['name'] ?? '',
             json_decode($toolCall['function']['arguments'] ?? '{}', true) ?? [],
@@ -58,7 +61,7 @@ trait ParsesTextResponses
             finishReason: $finishReason,
             usage: $usage,
             meta: new Meta($provider->name(), $model),
-            structured: $structured ? (json_decode($text, true) ?? []) : null,
+            structured: $structured ? $this->decodeStructuredOutput($text) : null,
         );
     }
 

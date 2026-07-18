@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\Ollama\Concerns;
 
 use Illuminate\Support\Str;
 use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
@@ -13,6 +14,8 @@ use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
 {
+    use DecodesStructuredOutput;
+
     /**
      * Validate the Ollama response data.
      *
@@ -42,7 +45,7 @@ trait ParsesTextResponses
         $text = $message['content'] ?? '';
         $rawToolCalls = $message['tool_calls'] ?? [];
 
-        $mappedToolCalls = array_map(function (array $toolCall) {
+        $mappedToolCalls = array_map(function (array $toolCall): ToolCall {
             $id = $toolCall['id'] ?? (string) Str::uuid7();
 
             return new ToolCall(
@@ -59,7 +62,7 @@ trait ParsesTextResponses
             finishReason: filled($mappedToolCalls) ? FinishReason::ToolCalls : $this->extractFinishReason($data),
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model),
-            structured: $structured ? (json_decode($text, true) ?? []) : null,
+            structured: $structured ? $this->decodeStructuredOutput($text) : null,
         );
     }
 

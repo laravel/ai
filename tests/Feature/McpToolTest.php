@@ -9,7 +9,7 @@ use Tests\Fixtures\Mcp\FakeMcpClient;
 use Tests\Fixtures\Mcp\FakeMcpTool;
 use Tests\Fixtures\Mcp\FakeMcpToolResult;
 
-test('agents can return mcp client tools directly', function () {
+test('agents can return mcp client tools directly', function (): void {
     $client = new FakeMcpClient;
     $mcpTool = new FakeMcpTool($client, 'search', null, 'Search records.', [
         'type' => 'object',
@@ -63,7 +63,7 @@ test('agents can return mcp client tools directly', function () {
     );
 });
 
-test('it runs mcp client tools whose schema uses unrepresentable json schema', function () {
+test('it runs mcp client tools whose schema uses unrepresentable json schema', function (): void {
     $client = new FakeMcpClient;
 
     $union = new McpTool(new FakeMcpTool($client, 'set_value', null, 'Set a value.', [
