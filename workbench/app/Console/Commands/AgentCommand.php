@@ -5,9 +5,9 @@ namespace Workbench\App\Console\Commands;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
-use Laravel\Ai\Approvals\Approval;
+use Laravel\Ai\Approvals\Decision;
+use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Approvals\PendingApproval;
-use Laravel\Ai\Approvals\ToolApproval;
 use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
@@ -236,19 +236,17 @@ class AgentCommand extends Command
      *
      * @param  Collection<int, PendingApproval>  $pendingApprovals
      */
-    private function requestApprovals(Collection $pendingApprovals): ToolApproval
+    private function requestApprovals(Collection $pendingApprovals): Decisions
     {
         if ($pendingApprovals->count() > 1 && ($bulk = $this->requestBulkDecision($pendingApprovals)) !== null) {
             return $bulk;
         }
 
-        return ToolApproval::from(
-            $pendingApprovals
-                ->mapWithKeys(fn (PendingApproval $approval) => [
-                    $approval->id => $this->requestApproval($approval),
-                ])
-                ->all()
-        );
+        return Decisions::from($pendingApprovals
+            ->mapWithKeys(fn (PendingApproval $approval) => [
+                $approval->id => $this->requestApproval($approval),
+            ])
+            ->all());
     }
 
     /**
@@ -258,7 +256,7 @@ class AgentCommand extends Command
      *
      * @param  Collection<int, PendingApproval>  $pendingApprovals
      */
-    private function requestBulkDecision(Collection $pendingApprovals): ?ToolApproval
+    private function requestBulkDecision(Collection $pendingApprovals): ?Decisions
     {
         $tools = $pendingApprovals
             ->map(fn (PendingApproval $approval) => $approval->tool)
@@ -275,8 +273,8 @@ class AgentCommand extends Command
             ],
             default: 'each',
         )) {
-            'approve-all' => ToolApproval::approveAll(),
-            'reject-all' => ToolApproval::rejectAll('Rejected in terminal UI.'),
+            'approve-all' => Decision::approveAll(),
+            'reject-all' => Decision::rejectAll('Rejected in terminal UI.'),
             default => null,
         };
     }
@@ -468,7 +466,7 @@ class AgentCommand extends Command
     /**
      * Ask for a yes/no decision using the same y/n controls as the upstream TUI.
      */
-    private function requestApproval(PendingApproval $approval): Approval
+    private function requestApproval(PendingApproval $approval): Decision
     {
         note("Tool approval required · {$approval->tool}\n".$this->formatValue($approval->arguments));
 
@@ -480,7 +478,7 @@ class AgentCommand extends Command
             hint: $approval->reason ?? 'This tool requires your approval.',
         );
 
-        return $approved ? Approval::approve() : Approval::reject('Rejected in terminal UI.');
+        return $approved ? Decision::approve() : Decision::reject('Rejected in terminal UI.');
     }
 
     /**

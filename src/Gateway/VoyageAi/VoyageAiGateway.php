@@ -16,13 +16,11 @@ use Laravel\Ai\Responses\RerankingResponse;
 class VoyageAiGateway implements EmbeddingGateway, RerankingGateway
 {
     use Concerns\CreatesVoyageAiClient;
+    use Concerns\MapsEmbeddingInputs;
     use HandlesFailoverErrors;
 
     /**
-     * Generate embedding vectors representing the given inputs.
-     *
-     * @param  string[]  $inputs
-     * @param  array<string, mixed>  $providerOptions
+     * {@inheritdoc}
      */
     public function generateEmbeddings(
         EmbeddingProvider $provider,
@@ -32,6 +30,10 @@ class VoyageAiGateway implements EmbeddingGateway, RerankingGateway
         int $timeout = 30,
         array $providerOptions = [],
     ): EmbeddingsResponse {
+        if ($this->usesMultimodalEmbeddingEndpoint($model, $inputs)) {
+            return $this->generateMultimodalEmbeddings($provider, $model, $inputs, $dimensions, $timeout, $providerOptions);
+        }
+
         $data = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post('/embeddings', array_merge($providerOptions, [

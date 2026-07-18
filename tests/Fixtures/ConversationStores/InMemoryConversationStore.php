@@ -23,7 +23,7 @@ class InMemoryConversationStore implements ConversationStore
             ->last();
     }
 
-    public function storeConversation(string $participantType, string|int $participantId, string $title): string
+    public function storeConversation(?string $participantType, string|int|null $participantId, string $title): string
     {
         $id = (string) Str::uuid7();
 
@@ -32,7 +32,7 @@ class InMemoryConversationStore implements ConversationStore
         return $id;
     }
 
-    public function storeUserMessage(string $conversationId, string $participantType, string|int $participantId, AgentPrompt $prompt): string
+    public function storeUserMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt): string
     {
         $id = (string) Str::uuid7();
 
@@ -46,7 +46,7 @@ class InMemoryConversationStore implements ConversationStore
         return $id;
     }
 
-    public function storeAssistantMessage(string $conversationId, string $participantType, string|int $participantId, AgentPrompt $prompt, AgentResponse $response): string
+    public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): ?string
     {
         $id = (string) Str::uuid7();
 
@@ -66,5 +66,10 @@ class InMemoryConversationStore implements ConversationStore
             ->where('conversation_id', $conversationId)
             ->take($limit)
             ->values();
+    }
+
+    public function storeApprovalResults(string $conversationId, ?string $participantType, string|int|null $participantId, array $toolResults): void
+    {
+        //
     }
 }

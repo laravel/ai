@@ -5,7 +5,9 @@ namespace Laravel\Ai;
 use Closure;
 use Illuminate\Support\Collection;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Str;
 use Illuminate\Support\Stringable;
+use Laravel\Ai\Agents\SummarizeAgent;
 use Laravel\Ai\Console\Commands\ChatCommand;
 use Laravel\Ai\Console\Commands\MakeAgentCommand;
 use Laravel\Ai\Console\Commands\MakeAgentMiddlewareCommand;
@@ -98,6 +100,24 @@ class AiServiceProvider extends ServiceProvider
 
             return $request->generate(provider: $provider, model: $model);
         });
+
+        // Summarize macros...
+        Stringable::macro('summarize', fn (
+            int $sentences = 3,
+            Lab|array|string|null $provider = null,
+            ?string $model = null,
+            ?int $timeout = null,
+        ): string => (new SummarizeAgent($sentences))
+            ->prompt($this->value(), provider: $provider, model: $model, timeout: $timeout)->text);
+
+        Str::macro('summarize', fn (
+            string $value,
+            int $sentences = 3,
+            Lab|array|string|null $provider = null,
+            ?string $model = null,
+            ?int $timeout = null,
+        ): string => (new SummarizeAgent($sentences))
+            ->prompt($value, provider: $provider, model: $model, timeout: $timeout)->text);
 
         // Reranking macro...
         Collection::macro('rerank', function (

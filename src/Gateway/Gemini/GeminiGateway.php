@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\Gemini;
 
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\Gateway;
@@ -13,7 +14,7 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
-use Laravel\Ai\Files\Image;
+use Laravel\Ai\Files\Image as ImageFile;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\Concerns\WrapsPcmAudio;
@@ -36,6 +37,7 @@ class GeminiGateway implements Gateway, StepTextGateway
     use Concerns\CreatesGeminiClient;
     use Concerns\HandlesTextStreaming;
     use Concerns\MapsAttachments;
+    use Concerns\MapsEmbeddingInputs;
     use Concerns\MapsMessages;
     use Concerns\MapsTools;
     use Concerns\ParsesTextResponses;
@@ -106,7 +108,7 @@ class GeminiGateway implements Gateway, StepTextGateway
     /**
      * Generate an image.
      *
-     * @param  array<Image>  $attachments
+     * @param  array<ImageFile>  $attachments
      * @param  '3:2'|'2:3'|'1:1'|null  $size
      * @param  'low'|'medium'|'high'|null  $quality
      */
@@ -171,10 +173,12 @@ class GeminiGateway implements Gateway, StepTextGateway
         int $timeout = 30,
         array $providerOptions = [],
     ): EmbeddingsResponse {
-        $requests = array_map(fn (string $input): array => array_merge($providerOptions, [
+        $model = $this->normalizeEmbeddingModel($model);
+
+        $requests = array_map(fn (mixed $input): array => array_merge(Arr::except($providerOptions, 'output_dimensionality'), [
             'model' => "models/{$model}",
-            'content' => ['parts' => [['text' => $input]]],
-            'output_dimensionality' => $dimensions,
+            'content' => ['parts' => [$this->mapEmbeddingInput($input)]],
+            'outputDimensionality' => $dimensions,
         ]), $inputs);
 
         $response = $this->withErrorHandling(

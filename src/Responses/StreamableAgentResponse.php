@@ -34,6 +34,8 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
 
     protected bool $usesVercelProtocol = false;
 
+    protected ?string $vercelProtocolMessageId = null;
+
     protected ?StreamedAgentResponse $streamedResponse = null;
 
     public function __construct(
@@ -111,9 +113,10 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
      *
      * See: https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol
      */
-    public function usingVercelDataProtocol(bool $value = true): self
+    public function usingVercelDataProtocol(bool $value = true, ?string $messageId = null): self
     {
         $this->usesVercelProtocol = $value;
+        $this->vercelProtocolMessageId = $messageId;
 
         return $this;
     }

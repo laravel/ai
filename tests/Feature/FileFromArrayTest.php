@@ -3,18 +3,22 @@
 use Laravel\Ai\Files\Base64Audio;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Base64Image;
+use Laravel\Ai\Files\Base64Video;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Files\LocalAudio;
 use Laravel\Ai\Files\LocalDocument;
 use Laravel\Ai\Files\LocalImage;
+use Laravel\Ai\Files\LocalVideo;
 use Laravel\Ai\Files\ProviderDocument;
 use Laravel\Ai\Files\ProviderImage;
 use Laravel\Ai\Files\RemoteAudio;
 use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Files\RemoteImage;
+use Laravel\Ai\Files\RemoteVideo;
 use Laravel\Ai\Files\StoredAudio;
 use Laravel\Ai\Files\StoredDocument;
 use Laravel\Ai\Files\StoredImage;
+use Laravel\Ai\Files\StoredVideo;
 
 dataset('attachment types', [
     'base64-image' => [fn (): Base64Image => (new Base64Image('aGVsbG8=', 'image/png'))->as('hi.png'), Base64Image::class, ['base64' => 'aGVsbG8=', 'mime' => 'image/png']],
@@ -31,6 +35,10 @@ dataset('attachment types', [
     'local-audio' => [fn (): LocalAudio => (new LocalAudio('/tmp/a.mp3', 'audio/mpeg'))->as('a.mp3'), LocalAudio::class, ['path' => '/tmp/a.mp3', 'mime' => 'audio/mpeg']],
     'stored-audio' => [fn (): StoredAudio => (new StoredAudio('clips/a.mp3', 'local'))->as('a.mp3'), StoredAudio::class, ['path' => 'clips/a.mp3', 'disk' => 'local']],
     'remote-audio' => [fn (): RemoteAudio => (new RemoteAudio('https://x/y.mp3', 'audio/mpeg'))->as('y.mp3'), RemoteAudio::class, ['url' => 'https://x/y.mp3', 'mime' => 'audio/mpeg']],
+    'base64-video' => [fn (): Base64Video => (new Base64Video('aGVsbG8=', 'video/mp4'))->as('a.mp4'), Base64Video::class, ['base64' => 'aGVsbG8=', 'mime' => 'video/mp4']],
+    'local-video' => [fn (): LocalVideo => (new LocalVideo('/tmp/a.mp4', 'video/mp4'))->as('a.mp4'), LocalVideo::class, ['path' => '/tmp/a.mp4', 'mime' => 'video/mp4']],
+    'stored-video' => [fn (): StoredVideo => (new StoredVideo('clips/a.mp4', 'local'))->as('a.mp4'), StoredVideo::class, ['path' => 'clips/a.mp4', 'disk' => 'local']],
+    'remote-video' => [fn (): RemoteVideo => (new RemoteVideo('https://x/y.mp4', 'video/mp4'))->as('y.mp4'), RemoteVideo::class, ['url' => 'https://x/y.mp4', 'mime' => 'video/mp4']],
 ]);
 
 dataset('malformed attachment types', [
@@ -48,6 +56,10 @@ dataset('malformed attachment types', [
     'local-audio' => [['type' => 'local-audio'], 'path'],
     'stored-audio' => [['type' => 'stored-audio'], 'path'],
     'remote-audio' => [['type' => 'remote-audio'], 'url'],
+    'base64-video' => [['type' => 'base64-video'], 'base64'],
+    'local-video' => [['type' => 'local-video'], 'path'],
+    'stored-video' => [['type' => 'stored-video'], 'path'],
+    'remote-video' => [['type' => 'remote-video'], 'url'],
 ]);
 
 test('File::fromArray round-trips attachment types', function (Closure $factory, string $class, array $properties): void {

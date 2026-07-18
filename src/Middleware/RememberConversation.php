@@ -33,10 +33,13 @@ class RememberConversation
             /** @var Agent&RemembersConversations $agent */
             $agent = $prompt->agent;
 
-            /** @var object $participant */
+            if (! $this->shouldRemember($agent, $prompt, $response)) {
+                return;
+            }
+
             $participant = $agent->conversationParticipant();
-            $participantType = Conversation::participantType($participant);
-            $participantId = Conversation::participantKey($participant);
+            $participantType = $participant === null ? null : Conversation::participantType($participant);
+            $participantId = $participant === null ? null : Conversation::participantKey($participant);
 
             // Create conversation if necessary...
             if (! $agent->currentConversation()) {
@@ -50,12 +53,14 @@ class RememberConversation
             }
 
             // Record user message...
-            $this->store->storeUserMessage(
-                $agent->currentConversation(),
-                $participantType,
-                $participantId,
-                $prompt,
-            );
+            if (! $prompt->hasApprovalDecisions()) {
+                $this->store->storeUserMessage(
+                    $agent->currentConversation(),
+                    $participantType,
+                    $participantId,
+                    $prompt,
+                );
+            }
 
             // Record assistant message...
             $this->store->storeAssistantMessage(
@@ -71,6 +76,19 @@ class RememberConversation
                 $participant,
             );
         });
+    }
+
+    /**
+     * Determine whether this turn should be persisted.
+     *
+     * @param  Agent&RemembersConversations  $agent
+     */
+    protected function shouldRemember(Agent $agent, AgentPrompt $prompt, AgentResponse $response): bool
+    {
+        return $agent->hasConversationParticipant()
+            || $agent->currentConversation() !== null
+            || $response->awaitingApproval()
+            || $prompt->hasApprovalDecisions();
     }
 
     /**

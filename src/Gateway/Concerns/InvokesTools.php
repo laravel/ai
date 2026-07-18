@@ -32,7 +32,7 @@ trait InvokesTools
     /**
      * Execute the given tool with the given arguments.
      */
-    protected function executeTool(Tool $tool, array $arguments): string
+    protected function executeTool(Tool $tool, array $arguments, ?string $toolCallId = null): string
     {
         $callbacks = $this->pushToolInvocationCallbacks();
 
@@ -40,7 +40,7 @@ trait InvokesTools
             call_user_func($callbacks['invoking'], $tool, $arguments);
 
             return (string) tap(
-                $tool->handle(new Request($arguments)),
+                $tool->handle(new Request($arguments, $toolCallId)),
                 fn ($result): mixed => call_user_func($callbacks['invoked'], $tool, $arguments, $result)
             );
         } finally {

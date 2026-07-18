@@ -3,6 +3,7 @@
 use Laravel\Ai\Files\RemoteAudio;
 use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Files\RemoteImage;
+use Laravel\Ai\Files\RemoteVideo;
 
 test('remote document rejects empty url', function (): void {
     new RemoteDocument('');
@@ -27,3 +28,11 @@ test('remote audio rejects empty url', function (): void {
 test('remote audio rejects whitespace-only url', function (): void {
     new RemoteAudio("  \t\n");
 })->throws(InvalidArgumentException::class, 'Remote audio URL cannot be empty.');
+
+test('remote video rejects empty url', function (): void {
+    new RemoteVideo('');
+})->throws(InvalidArgumentException::class, 'Remote video URL cannot be empty.');
+
+test('remote video rejects whitespace-only url', function (): void {
+    new RemoteVideo("  \t\n");
+})->throws(InvalidArgumentException::class, 'Remote video URL cannot be empty.');

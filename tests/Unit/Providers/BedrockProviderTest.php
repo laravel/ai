@@ -241,3 +241,37 @@ test('reuses gateway instances', function (): void {
 
     expect($gateway1)->toBe($gateway2);
 });
+
+test('returns assume role configuration when provided', function () {
+    $config = [
+        'region' => 'us-west-2',
+        'assume_role' => [
+            'arn' => 'arn:aws:iam::123456789012:role/test-role',
+            'session_name' => 'my-session',
+            'duration_seconds' => 900,
+            'external_id' => 'ext-123',
+        ],
+    ];
+
+    $provider = new BedrockProvider($config, $this->dispatcher);
+    $additionalConfig = $provider->additionalConfiguration();
+
+    expect($additionalConfig['assume_role'])->toBe([
+        'arn' => 'arn:aws:iam::123456789012:role/test-role',
+        'session_name' => 'my-session',
+        'duration_seconds' => 900,
+        'external_id' => 'ext-123',
+    ]);
+});
+
+test('assume role configuration defaults to null when not set', function () {
+    $provider = new BedrockProvider([], $this->dispatcher);
+    $additionalConfig = $provider->additionalConfiguration();
+
+    expect($additionalConfig['assume_role'])->toBe([
+        'arn' => null,
+        'session_name' => null,
+        'duration_seconds' => null,
+        'external_id' => null,
+    ]);
+});

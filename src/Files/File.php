@@ -44,6 +44,10 @@ abstract class File implements HasName, HasProviderOptions
             'local-audio' => new LocalAudio(self::value($data, 'path', $type), $data['mime'] ?? null),
             'stored-audio' => new StoredAudio(self::value($data, 'path', $type), $data['disk'] ?? null),
             'remote-audio' => new RemoteAudio(self::value($data, 'url', $type), $data['mime'] ?? null),
+            'base64-video' => new Base64Video(self::value($data, 'base64', $type), $data['mime'] ?? null),
+            'local-video' => new LocalVideo(self::value($data, 'path', $type), $data['mime'] ?? null),
+            'stored-video' => new StoredVideo(self::value($data, 'path', $type), $data['disk'] ?? null),
+            'remote-video' => new RemoteVideo(self::value($data, 'url', $type), $data['mime'] ?? null),
             default => null,
         };
 

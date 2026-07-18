@@ -3,10 +3,21 @@
 namespace Laravel\Ai\Gateway\Bedrock\Concerns;
 
 use Aws\BedrockRuntime\BedrockRuntimeClient;
+use Aws\Credentials\AssumeRoleCredentialProvider;
+use Aws\Credentials\CredentialProvider;
+use Aws\Sts\StsClient;
+use Closure;
 use Laravel\Ai\Providers\Provider;
 
 trait CreatesBedrockClient
 {
+    /**
+     * The memoized assume role credential providers, keyed by the resolved credential configuration.
+     *
+     * @var array<string, Closure>
+     */
+    protected array $assumeRoleProviders = [];
+
     /**
      * Create a new Bedrock client instance.
      */
@@ -17,9 +28,9 @@ trait CreatesBedrockClient
         $config = $provider->additionalConfiguration();
 
         $clientConfig = [
-            'region' => $config['region'] ?? 'us-east-1',
+            'region' => $this->bedrockRegion($config),
             'version' => '2023-09-30',
-            ...$this->resolveAuthConfig($credentials, $config),
+            ...$this->resolveAuthConfig($credentials, $config, $timeout),
         ];
 
         if ($timeout) {
@@ -30,11 +41,21 @@ trait CreatesBedrockClient
     }
 
     /**
+     * Resolve the configured region, falling back to the default.
+     *
+     * @param  array<string, mixed>  $config
+     */
+    protected function bedrockRegion(array $config): string
+    {
+        return $config['region'] ?? 'us-east-1';
+    }
+
+    /**
      * @param  array<string, mixed>  $credentials
      * @param  array<string, mixed>  $config
      * @return array<string, mixed>
      */
-    protected function resolveAuthConfig(array $credentials, array $config): array
+    protected function resolveAuthConfig(array $credentials, array $config, ?int $timeout = null): array
     {
         if (! empty($credentials['key'])) {
             return [
@@ -43,6 +64,22 @@ trait CreatesBedrockClient
             ];
         }
 
+        if (! empty($config['assume_role']['arn'])) {
+            return ['credentials' => $this->assumeRoleCredentialProvider($credentials, $config, $timeout)];
+        }
+
+        return $this->resolveSourceAuthConfig($credentials, $config);
+    }
+
+    /**
+     * Resolve the auth configuration for static, or automatically discovered, credentials.
+     *
+     * @param  array<string, mixed>  $credentials
+     * @param  array<string, mixed>  $config
+     * @return array<string, mixed>
+     */
+    protected function resolveSourceAuthConfig(array $credentials, array $config): array
+    {
         if (! empty($credentials['access_key_id']) && ! empty($credentials['secret_access_key'])) {
             $awsCredentials = [
                 'key' => $credentials['access_key_id'],
@@ -57,9 +94,65 @@ trait CreatesBedrockClient
         }
 
         if (! ($config['use_default_credential_provider'] ?? true)) {
+            // Disabling the default chain without static credentials leaves an assume-role source empty; STS will reject it.
             return ['credentials' => false];
         }
 
         return [];
+    }
+
+    /**
+     * Resolve a memoized credential provider that assumes the configured role.
+     *
+     * @param  array<string, mixed>  $credentials
+     * @param  array<string, mixed>  $config
+     */
+    protected function assumeRoleCredentialProvider(array $credentials, array $config, ?int $timeout = null): Closure
+    {
+        $key = hash('xxh128', serialize([$credentials, $config]));
+
+        return $this->assumeRoleProviders[$key] ??= CredentialProvider::memoize(
+            new AssumeRoleCredentialProvider([
+                'client' => $this->createStsClient($credentials, $config, $timeout),
+                'assume_role_params' => $this->assumeRoleParameters($config['assume_role']),
+            ])
+        );
+    }
+
+    /**
+     * Create the STS client used to assume the configured role.
+     *
+     * @param  array<string, mixed>  $credentials
+     * @param  array<string, mixed>  $config
+     */
+    protected function createStsClient(array $credentials, array $config, ?int $timeout = null): StsClient
+    {
+        $clientConfig = [
+            'region' => $this->bedrockRegion($config),
+            'version' => 'latest',
+            ...$this->resolveSourceAuthConfig($credentials, $config),
+        ];
+
+        if ($timeout) {
+            $clientConfig['http'] = ['timeout' => $timeout];
+        }
+
+        return new StsClient($clientConfig);
+    }
+
+    /**
+     * Build the parameters for the STS assume role request.
+     *
+     * @param  array<string, mixed>  $assumeRole
+     * @return array<string, mixed>
+     */
+    protected function assumeRoleParameters(array $assumeRole): array
+    {
+        return array_filter([
+            'RoleArn' => $assumeRole['arn'],
+            'RoleSessionName' => ($assumeRole['session_name'] ?? null) ?: 'laravel-ai-bedrock',
+            'DurationSeconds' => (int) ($assumeRole['duration_seconds'] ?? 0),
+            'ExternalId' => $assumeRole['external_id'] ?? null,
+        ]);
     }
 }

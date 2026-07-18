@@ -31,17 +31,17 @@ test('it threads the participant type into latestConversationId when continuing 
             return $participantType === 'admin' ? 'conversation-admin' : null;
         }
 
-        public function storeConversation(string $participantType, string|int $participantId, string $title): string
+        public function storeConversation(?string $participantType, string|int|null $participantId, string $title): string
         {
             return 'conversation-1';
         }
 
-        public function storeUserMessage(string $conversationId, string $participantType, string|int $participantId, AgentPrompt $prompt): string
+        public function storeUserMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt): string
         {
             return 'user-1';
         }
 
-        public function storeAssistantMessage(string $conversationId, string $participantType, string|int $participantId, AgentPrompt $prompt, AgentResponse $response): string
+        public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): ?string
         {
             return 'assistant-1';
         }
@@ -49,6 +49,11 @@ test('it threads the participant type into latestConversationId when continuing 
         public function getLatestConversationMessages(string $conversationId, int $limit): Collection
         {
             return new Collection;
+        }
+
+        public function storeApprovalResults(string $conversationId, ?string $participantType, string|int|null $participantId, array $toolResults): void
+        {
+            //
         }
     };
 
@@ -74,17 +79,17 @@ test('it continues the last conversation through a store that ignores the partic
             return 'conversation-1';
         }
 
-        public function storeConversation(string $participantType, string|int $participantId, string $title): string
+        public function storeConversation(?string $participantType, string|int|null $participantId, string $title): string
         {
             return 'conversation-1';
         }
 
-        public function storeUserMessage(string $conversationId, string $participantType, string|int $participantId, AgentPrompt $prompt): string
+        public function storeUserMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt): string
         {
             return 'user-1';
         }
 
-        public function storeAssistantMessage(string $conversationId, string $participantType, string|int $participantId, AgentPrompt $prompt, AgentResponse $response): string
+        public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): ?string
         {
             return 'assistant-1';
         }
@@ -92,6 +97,11 @@ test('it continues the last conversation through a store that ignores the partic
         public function getLatestConversationMessages(string $conversationId, int $limit): Collection
         {
             return new Collection;
+        }
+
+        public function storeApprovalResults(string $conversationId, ?string $participantType, string|int|null $participantId, array $toolResults): void
+        {
+            //
         }
     };
 
@@ -127,17 +137,17 @@ test('it resolves the participant id via getKey for models with custom primary k
             return 'conversation-1';
         }
 
-        public function storeConversation(string $participantType, string|int $participantId, string $title): string
+        public function storeConversation(?string $participantType, string|int|null $participantId, string $title): string
         {
             return 'conversation-1';
         }
 
-        public function storeUserMessage(string $conversationId, string $participantType, string|int $participantId, AgentPrompt $prompt): string
+        public function storeUserMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt): string
         {
             return 'user-1';
         }
 
-        public function storeAssistantMessage(string $conversationId, string $participantType, string|int $participantId, AgentPrompt $prompt, AgentResponse $response): string
+        public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): ?string
         {
             return 'assistant-1';
         }
@@ -145,6 +155,11 @@ test('it resolves the participant id via getKey for models with custom primary k
         public function getLatestConversationMessages(string $conversationId, int $limit): Collection
         {
             return new Collection;
+        }
+
+        public function storeApprovalResults(string $conversationId, ?string $participantType, string|int|null $participantId, array $toolResults): void
+        {
+            //
         }
     };
 

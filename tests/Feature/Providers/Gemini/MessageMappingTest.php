@@ -7,6 +7,7 @@ use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Base64Document;
+use Laravel\Ai\Files\Base64Video;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
@@ -186,6 +187,33 @@ test('base64 pdf document maps to inline data', function (): void {
             if (isset($part['inlineData'])) {
                 return $part['inlineData']['mimeType'] === 'application/pdf'
                     && $part['inlineData']['data'] === base64_encode('fake-pdf-content');
+            }
+        }
+
+        return false;
+    });
+});
+
+test('base64 video attachment maps to inline data', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('I see a video'),
+    ]);
+
+    $video = new Base64Video(base64_encode('fake-video-content'), 'video/mp4');
+
+    agent('You are helpful.')->prompt(
+        'What is in this video?',
+        attachments: [$video],
+        provider: 'gemini',
+    );
+
+    Http::assertSent(function ($request): bool {
+        $parts = $request->data()['contents'][0]['parts'];
+
+        foreach ($parts as $part) {
+            if (isset($part['inlineData'])) {
+                return $part['inlineData']['mimeType'] === 'video/mp4'
+                    && $part['inlineData']['data'] === base64_encode('fake-video-content');
             }
         }
 

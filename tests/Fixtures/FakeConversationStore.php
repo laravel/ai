@@ -14,17 +14,17 @@ class FakeConversationStore implements ConversationStore
         return null;
     }
 
-    public function storeConversation(string $participantType, string|int $participantId, string $title): string
+    public function storeConversation(?string $participantType, string|int|null $participantId, string $title): string
     {
         return 'conversation-123';
     }
 
-    public function storeUserMessage(string $conversationId, string $participantType, string|int $participantId, AgentPrompt $prompt): string
+    public function storeUserMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt): string
     {
         return 'user-message-123';
     }
 
-    public function storeAssistantMessage(string $conversationId, string $participantType, string|int $participantId, AgentPrompt $prompt, AgentResponse $response): string
+    public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): ?string
     {
         return 'assistant-message-123';
     }
@@ -32,5 +32,10 @@ class FakeConversationStore implements ConversationStore
     public function getLatestConversationMessages(string $conversationId, int $limit): Collection
     {
         return new Collection;
+    }
+
+    public function storeApprovalResults(string $conversationId, ?string $participantType, string|int|null $participantId, array $toolResults): void
+    {
+        //
     }
 }

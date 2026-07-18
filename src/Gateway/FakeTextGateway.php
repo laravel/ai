@@ -109,9 +109,11 @@ class FakeTextGateway implements StepTextGateway
     {
         $message = (new Collection($messages))->last(fn ($message): bool => $message instanceof UserMessage);
 
-        /** @var UserMessage $message */
+        $prompt = $message instanceof UserMessage ? $message->content : '';
+        $attachments = $message instanceof UserMessage ? $message->attachments : new Collection;
+
         $response = $this->nextResponse(
-            $provider, $model, $message->content, $message->attachments, $schema
+            $provider, $model, $prompt, $attachments, $schema
         );
 
         return $this->toStepResponse($response, $provider, $model);
@@ -131,6 +133,13 @@ class FakeTextGateway implements StepTextGateway
         if ($response instanceof StructuredTextResponse) {
             return new StepResponse(
                 $response->text, [], FinishReason::Stop, $response->usage, $response->meta, $response->structured
+            );
+        }
+
+        if ($response instanceof TextResponse && $response->awaitingApproval()) {
+            return new StepResponse(
+                $response->text, [], FinishReason::Stop, $response->usage, $response->meta,
+                pendingApprovals: $response->pendingApprovals->all(),
             );
         }
 

@@ -50,6 +50,12 @@ class BedrockProvider extends Provider implements EmbeddingProvider, ImageProvid
         return [
             'region' => $this->config['region'] ?? 'us-east-1',
             'use_default_credential_provider' => $this->config['use_default_credential_provider'] ?? true,
+            'assume_role' => [
+                'arn' => $this->config['assume_role']['arn'] ?? null,
+                'session_name' => $this->config['assume_role']['session_name'] ?? null,
+                'duration_seconds' => $this->config['assume_role']['duration_seconds'] ?? null,
+                'external_id' => $this->config['assume_role']['external_id'] ?? null,
+            ],
         ];
     }
 

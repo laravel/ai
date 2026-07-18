@@ -1,6 +1,9 @@
 <?php
 
 use Laravel\Ai\Ai;
+use Laravel\Ai\Approvals\Decision;
+use Laravel\Ai\Approvals\Decisions;
+use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\QueuedAgentPrompt;
@@ -16,6 +19,7 @@ use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use PHPUnit\Framework\AssertionFailedError;
 use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\ConversationalAgent;
 use Tests\Fixtures\Agents\EmptySchemaStructuredAgent;
 use Tests\Fixtures\Agents\MultiStepToolAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
@@ -124,6 +128,26 @@ describe('prompt responses', function (): void {
         expect($response)->toBeInstanceOf(AgentResponse::class)
             ->and($response)->not->toBeInstanceOf(StructuredAgentResponse::class)
             ->and($response->text)->toEqual('Hello');
+    });
+
+    test('agents can fake paused approval responses and assert resume prompts', function () {
+        ConversationalAgent::fake([
+            AgentResponse::fakeAwaitingApproval([
+                new PendingApproval('call-1', 'DeleteFile', ['path' => 'config/app.php'], 'Deletes a file'),
+            ]),
+            'Resumed',
+        ]);
+
+        $response = (new ConversationalAgent)->prompt('Delete config/app.php');
+
+        expect($response->awaitingApproval())->toBeTrue()
+            ->and($response->pendingApprovals)->toHaveCount(1);
+
+        (new ConversationalAgent)->prompt(Decisions::from(['call-1' => true]));
+
+        ConversationalAgent::assertPrompted(function (AgentPrompt $prompt) {
+            return $prompt->approvalDecisions?->get('call-1')?->isApproved() === true;
+        });
     });
 });
 
@@ -309,5 +333,22 @@ describe('timeout handling', function (): void {
 
         expect($revised->timeout)->toEqual(150)
             ->and($revised->prompt)->toEqual('Revised prompt');
+    });
+
+    test('revising a resume prompt is a no-op since it carries no prompt text', function () {
+        $prompt = new AgentPrompt(
+            new AssistantAgent,
+            '',
+            [],
+            Ai::textProviderFor(new AssistantAgent, 'groq'),
+            'test-model',
+            approvalDecisions: Decisions::from(['call-1' => Decision::approve()]),
+        );
+
+        $revised = $prompt->append('extra context');
+
+        expect($revised)->toBe($prompt)
+            ->and($revised->prompt)->toBe('')
+            ->and($revised->approvalDecisions)->toBe($prompt->approvalDecisions);
     });
 });

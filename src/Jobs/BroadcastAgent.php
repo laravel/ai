@@ -6,6 +6,7 @@ use Illuminate\Broadcasting\Channel;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Str;
+use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Attributes\WithoutBroadcasting;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Enums\Lab;
@@ -29,7 +30,7 @@ class BroadcastAgent implements ShouldQueue
      */
     public function __construct(
         public Agent $agent,
-        public string $prompt,
+        public Decisions|string $prompt,
         public Channel|array $channels,
         public array $attachments = [],
         public Lab|array|string|null $provider = null,

@@ -4,6 +4,10 @@ namespace Laravel\Ai;
 
 use Closure;
 use InvalidArgumentException;
+use Laravel\Ai\Files\Audio;
+use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\Image;
+use Laravel\Ai\Files\Video;
 use Laravel\Ai\Gateway\FakeEmbeddingGateway;
 use Laravel\Ai\PendingResponses\PendingEmbeddingsGeneration;
 
@@ -12,9 +16,9 @@ class Embeddings
     /**
      * Get embedding vectors representing the given inputs.
      *
-     * @param  string[]  $inputs
+     * @param  array<int, string|Audio|Document|Image|Video>  $inputs
      *
-     * @throws InvalidArgumentException if the given inputs are not a list, are empty, are not strings, or contain only blank strings.
+     * @throws InvalidArgumentException if the given inputs are not a list, are empty, or contain an unsupported input type.
      */
     public static function for(array $inputs): PendingEmbeddingsGeneration
     {

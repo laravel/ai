@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Providers;
 
 use Illuminate\Support\Collection;
+use InvalidArgumentException;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
@@ -171,6 +172,36 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
     public function defaultEmbeddingsDimensions(): int
     {
         return $this->config['models']['embeddings']['dimensions'] ?? 3072;
+    }
+
+    /**
+     * Validate embeddings inputs against Gemini's supported media types.
+     */
+    protected function validateEmbeddingInputs(array $inputs, string $model): void
+    {
+        $model = str_starts_with($model, 'models/') ? substr($model, 7) : $model;
+
+        foreach ($inputs as $input) {
+            if (is_string($input)) {
+                continue;
+            }
+
+            if (! $this->isGeminiMultimodalEmbeddingModel($model)) {
+                throw new InvalidArgumentException(
+                    "Model [{$model}] does not support Gemini multimodal embeddings. Use [gemini-embedding-2] or [gemini-embedding-2-preview]."
+                );
+            }
+
+            return;
+        }
+    }
+
+    /**
+     * Determine if the given model supports Gemini multimodal embeddings.
+     */
+    protected function isGeminiMultimodalEmbeddingModel(string $model): bool
+    {
+        return in_array($model, ['gemini-embedding-2', 'gemini-embedding-2-preview'], true);
     }
 
     /**
