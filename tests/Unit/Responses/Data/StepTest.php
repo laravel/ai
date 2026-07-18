@@ -5,7 +5,7 @@ use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Step;
 use Laravel\Ai\Responses\Data\Usage;
 
-test('step stores text tool calls and other properties', function () {
+test('step stores text tool calls and other properties', function (): void {
     $usage = new Usage(10, 5);
     $meta = new Meta('openai', 'gpt-4o');
     $step = new Step(
@@ -25,7 +25,7 @@ test('step stores text tool calls and other properties', function () {
         ->and($step->meta)->toBe($meta);
 });
 
-test('step to array returns all properties including serialized usage and meta', function () {
+test('step to array returns all properties including serialized usage and meta', function (): void {
     $usage = new Usage(10, 5);
     $meta = new Meta('openai', 'gpt-4o');
     $step = new Step('test', [], [], FinishReason::Stop, $usage, $meta);
@@ -40,9 +40,9 @@ test('step to array returns all properties including serialized usage and meta',
         ->and($array['meta'])->toBe($meta);
 });
 
-test('step json serialize returns to array', function () {
+test('step json serialize returns to array', function (): void {
     $usage = new Usage(0, 0);
-    $meta = new Meta(null, null);
+    $meta = new Meta;
     $step = new Step('', [], [], FinishReason::Unknown, $usage, $meta);
 
     expect($step->jsonSerialize())->toBe($step->toArray());

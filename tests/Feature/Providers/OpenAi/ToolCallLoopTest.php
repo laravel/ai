@@ -3,16 +3,17 @@
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\MultiStepToolAgent;
+use Tests\Fixtures\Agents\ToolChoiceAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.openai' => [
         ...config('ai.providers.openai'),
         'key' => 'test-key',
     ]]);
 });
 
-test('tool calls trigger follow up request', function () {
+test('tool calls trigger follow up request', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::sequence([
             fakeUniqueOpenAiToolCallResponse(),
@@ -29,7 +30,7 @@ test('tool calls trigger follow up request', function () {
 
     expect($recorded)->toHaveCount(2);
 
-    $followUpBody = json_decode($recorded[1][0]->body(), true);
+    $followUpBody = json_decode((string) $recorded[1][0]->body(), true);
 
     expect($followUpBody)->toHaveKey('previous_response_id');
 
@@ -44,7 +45,7 @@ test('tool calls trigger follow up request', function () {
     expect($hasFunctionCallOutput)->toBeTrue();
 });
 
-test('max steps limits tool call depth', function () {
+test('max steps limits tool call depth', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::sequence([
             fakeUniqueOpenAiToolCallResponse(),
@@ -64,7 +65,7 @@ test('max steps limits tool call depth', function () {
     expect(count($recorded))->toBeLessThanOrEqual(3);
 });
 
-test('multi step tool loop returns accumulated response shape', function () {
+test('multi step tool loop returns accumulated response shape', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::sequence([
             fakeUniqueOpenAiToolCallResponse(),
@@ -86,6 +87,46 @@ test('multi step tool loop returns accumulated response shape', function () {
         ->and($response->usage->promptTokens)->toBe(21)
         ->and($response->usage->completionTokens)->toBe(11);
 });
+
+test('a forced tool choice is released on the follow up request', function (): void {
+    Http::fake([
+        'api.openai.com/*' => Http::sequence([
+            fakeOpenAiRandomNumberToolCallResponse(),
+            fakeOpenAiResponse('The number is 7'),
+        ]),
+    ]);
+
+    (new ToolChoiceAgent('required'))->prompt('Generate a random number', provider: 'openai');
+
+    $recorded = Http::recorded();
+
+    expect($recorded)->toHaveCount(2)
+        ->and(json_decode((string) $recorded[0][0]->body(), true)['tool_choice'])->toBe('required')
+        ->and(json_decode((string) $recorded[1][0]->body(), true)['tool_choice'])->toBe('auto');
+});
+
+function fakeOpenAiRandomNumberToolCallResponse(): PromiseInterface
+{
+    $id = uniqid();
+
+    return Http::response([
+        'id' => 'resp_tool_'.$id,
+        'status' => 'completed',
+        'model' => 'gpt-5.4',
+        'output' => [[
+            'type' => 'function_call',
+            'id' => 'fc_'.$id,
+            'call_id' => 'call_'.$id,
+            'name' => 'RandomNumberGenerator',
+            'arguments' => '{"min":1,"max":10}',
+            'status' => 'completed',
+        ]],
+        'usage' => [
+            'input_tokens' => 10,
+            'output_tokens' => 5,
+        ],
+    ]);
+}
 
 function fakeUniqueOpenAiToolCallResponse(): PromiseInterface
 {

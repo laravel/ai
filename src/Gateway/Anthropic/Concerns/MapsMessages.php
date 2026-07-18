@@ -70,7 +70,7 @@ trait MapsMessages
             $thinkingBlocks = $message->toolCalls
                 ->whereNotNull('reasoningId')
                 ->unique('reasoningId')
-                ->map(fn ($toolCall) => [
+                ->map(fn ($toolCall): array => [
                     'type' => 'thinking',
                     'thinking' => is_array($toolCall->reasoningSummary)
                         ? implode("\n", array_column($toolCall->reasoningSummary, 'text'))
@@ -138,7 +138,7 @@ trait MapsMessages
      */
     protected function ensureToolInputIsObject(array $content): array
     {
-        return array_map(function (array $block) {
+        return array_map(function (array $block): array {
             if (in_array($block['type'] ?? '', ['tool_use', 'server_tool_use'], true)) {
                 $block['input'] = (object) ($block['input'] ?? []);
             }

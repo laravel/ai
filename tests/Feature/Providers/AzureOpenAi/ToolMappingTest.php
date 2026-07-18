@@ -8,7 +8,7 @@ use Tests\Fixtures\Tools\RandomNumberGenerator;
 
 use function Laravel\Ai\agent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.azure' => [
         ...config('ai.providers.azure'),
         'key' => 'test-key',
@@ -17,14 +17,14 @@ beforeEach(function () {
     ]]);
 });
 
-test('tool with parameters includes schema without strict mode', function () {
+test('tool with parameters includes schema without strict mode', function (): void {
     Http::fake([
         '*' => fakeAzureResponse('42'),
     ]);
 
     agent(tools: [new RandomNumberGenerator])->prompt('Give me a random number', provider: 'azure');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'function');
 
@@ -38,12 +38,12 @@ test('tool with parameters includes schema without strict mode', function () {
     });
 });
 
-test('tool with a name() method emits the declared name', function () {
+test('tool with a name() method emits the declared name', function (): void {
     Http::fake(['*' => fakeAzureResponse('ok')]);
 
     agent(tools: [new NamedTool('my_custom_tool')])->prompt('Hi', provider: 'azure');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $names = collect(data_get($body, 'tools'))->pluck('name')->all();
 
@@ -51,14 +51,14 @@ test('tool with a name() method emits the declared name', function () {
     });
 });
 
-test('tool with empty schema omits parameters key', function () {
+test('tool with empty schema omits parameters key', function (): void {
     Http::fake([
         '*' => fakeAzureResponse('72019'),
     ]);
 
     agent(tools: [new FixedNumberGenerator])->prompt('Give me a random number', provider: 'azure');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'function');
 

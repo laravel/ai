@@ -118,7 +118,7 @@ class MistralGateway implements EmbeddingGateway, StepTextGateway, Transcription
 
         return new TranscriptionResponse(
             $data['text'] ?? '',
-            collect($data['segments'] ?? [])->map(fn (array $segment) => new TranscriptionSegment(
+            collect($data['segments'] ?? [])->map(fn (array $segment): TranscriptionSegment => new TranscriptionSegment(
                 $segment['text'] ?? '',
                 $segment['speaker_id'] ?? '',
                 $segment['start'] ?? 0,

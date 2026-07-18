@@ -1,6 +1,6 @@
 <?php
 
-test('can create a tool class', function () {
+test('can create a tool class', function (): void {
     $response = $this->artisan('make:tool', [
         'name' => 'TestTool',
     ]);
@@ -10,7 +10,7 @@ test('can create a tool class', function () {
     expect(app_path('Ai/Tools/TestTool.php'))->toBeFile();
 });
 
-test('may publish custom tool stub', function () {
+test('may publish custom tool stub', function (): void {
     $this->artisan('vendor:publish', [
         '--tag' => 'ai-stubs',
         '--force' => true,

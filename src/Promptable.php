@@ -9,6 +9,7 @@ use Illuminate\Container\Container;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Attributes\Model as ModelAttribute;
 use Laravel\Ai\Attributes\Provider as ProviderAttribute;
 use Laravel\Ai\Attributes\Timeout as TimeoutAttribute;
@@ -43,42 +44,68 @@ trait Promptable
     public static function make(...$arguments): static
     {
         return match (true) {
-            ! empty($arguments) && ! array_is_list($arguments) => Container::getInstance()->makeWith(static::class, $arguments),
-            ! empty($arguments) => new static(...$arguments),
+            $arguments !== [] && ! array_is_list($arguments) => Container::getInstance()->makeWith(static::class, $arguments),
+            $arguments !== [] => new static(...$arguments),
             default => Container::getInstance()->make(static::class),
         };
     }
 
     /**
-     * Invoke the agent with a given prompt.
+     * Invoke the agent with a given prompt, or resume a paused run with tool approval decisions.
      */
     public function prompt(
-        string $prompt,
+        Decisions|string $prompt,
         array $attachments = [],
         Lab|array|string|null $provider = null,
         ?string $model = null,
         ?int $timeout = null): AgentResponse
     {
-        return $this->withModelFailover(
-            fn (TextProvider $provider, string $model) => $provider->prompt(
-                new AgentPrompt($this, $prompt, $attachments, $provider, $model, $this->getTimeout($timeout))
-            ),
-            $provider,
-            $model,
+        [$text, $approvalDecisions] = $this->extractPromptInput($prompt);
+
+        $run = fn (TextProvider $provider, string $model): AgentResponse => $provider->prompt(
+            new AgentPrompt($this, $text, $attachments, $provider, $model, $this->getTimeout($timeout), approvalDecisions: $approvalDecisions)
         );
+
+        if ($approvalDecisions !== null) {
+            [$provider, $model] = $this->iterateProvidersWithFailover(
+                $this->providersForApprovalContinuation($provider, $model)
+            )->current();
+
+            return $run($provider, $model);
+        }
+
+        return $this->withModelFailover($run, $provider, $model);
     }
 
     /**
      * Invoke the agent with a given prompt and return a streamable response.
      */
     public function stream(
-        string $prompt,
+        Decisions|string $prompt,
         array $attachments = [],
         Lab|array|string|null $provider = null,
         ?string $model = null,
         ?int $timeout = null): StreamableAgentResponse
     {
-        $providers = $this->getProvidersAndModelsForFailover($provider, $model);
+        [$text, $approvalDecisions] = $this->extractPromptInput($prompt);
+
+        return $this->streamPrompt($text, $approvalDecisions, $attachments, $provider, $model, $timeout);
+    }
+
+    /**
+     * Stream a text prompt or an approval continuation through the configured providers.
+     */
+    private function streamPrompt(
+        string $prompt,
+        ?Decisions $approvalDecisions,
+        array $attachments,
+        Lab|array|string|null $provider,
+        ?string $model,
+        ?int $timeout): StreamableAgentResponse
+    {
+        $providers = $approvalDecisions !== null
+            ? $this->providersForApprovalContinuation($provider, $model)
+            : $this->getProvidersAndModelsForFailover($provider, $model);
         $resolvedTimeout = $this->getTimeout($timeout);
 
         $invocationId = (string) Str::uuid7();
@@ -87,7 +114,7 @@ trait Promptable
             [$resolved, $resolvedModel] = $this->iterateProvidersWithFailover($providers)->current();
 
             return $resolved->stream(
-                new AgentPrompt($this, $prompt, $attachments, $resolved, $resolvedModel, $resolvedTimeout, $invocationId)
+                new AgentPrompt($this, $prompt, $attachments, $resolved, $resolvedModel, $resolvedTimeout, $invocationId, $approvalDecisions)
             );
         }
 
@@ -96,7 +123,7 @@ trait Promptable
 
         $outer = new StreamableAgentResponse(
             $invocationId,
-            function () use ($providers, $prompt, $attachments, $resolvedTimeout, $invocationId, &$outer) {
+            function () use ($providers, $prompt, $approvalDecisions, $attachments, $resolvedTimeout, $invocationId, &$outer) {
                 $lastException = null;
 
                 foreach ($this->iterateProvidersWithFailover($providers) as [$provider, $model]) {
@@ -104,10 +131,10 @@ trait Promptable
 
                     try {
                         $innerResponse = $provider->stream(
-                            new AgentPrompt($this, $prompt, $attachments, $provider, $model, $resolvedTimeout, $invocationId)
+                            new AgentPrompt($this, $prompt, $attachments, $provider, $model, $resolvedTimeout, $invocationId, $approvalDecisions)
                         );
 
-                        $innerResponse->then(fn (StreamedAgentResponse $response) => $outer->adoptStateFrom($response));
+                        $innerResponse->then(fn (StreamedAgentResponse $response): StreamableAgentResponse => $outer->adoptStateFrom($response));
 
                         foreach ($innerResponse as $event) {
                             $started = true;
@@ -136,7 +163,7 @@ trait Promptable
     /**
      * Invoke the agent in a queued job.
      */
-    public function queue(string $prompt, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
+    public function queue(Decisions|string $prompt, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
     {
         if (static::isFaked()) {
             Ai::recordPrompt(
@@ -152,14 +179,28 @@ trait Promptable
     }
 
     /**
+     * Split a prompt input into its text and tool approval decisions.
+     *
+     * @return array{string, ?Decisions}
+     */
+    private function extractPromptInput(Decisions|string $prompt): array
+    {
+        if (is_string($prompt)) {
+            return [$prompt, null];
+        }
+
+        return ['', $prompt];
+    }
+
+    /**
      * Invoke the agent with a given prompt and broadcast the streamed events.
      */
-    public function broadcast(string $prompt, Channel|array $channels, array $attachments = [], bool $now = false, Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
+    public function broadcast(Decisions|string $prompt, Channel|array $channels, array $attachments = [], bool $now = false, Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
     {
         $without = WithoutBroadcasting::eventsFor($this);
 
         return $this->stream($prompt, $attachments, $provider, $model)
-            ->each(function (StreamEvent $event) use ($channels, $now, $without) {
+            ->each(function (StreamEvent $event) use ($channels, $now, $without): void {
                 if (WithoutBroadcasting::excludes($without, $event)) {
                     return;
                 }
@@ -171,7 +212,7 @@ trait Promptable
     /**
      * Invoke the agent with a given prompt and broadcast the streamed events immediately.
      */
-    public function broadcastNow(string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
+    public function broadcastNow(Decisions|string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
     {
         return $this->broadcast($prompt, $channels, $attachments, now: true, provider: $provider, model: $model);
     }
@@ -179,7 +220,7 @@ trait Promptable
     /**
      * Invoke the agent with a given prompt and broadcast the streamed events.
      */
-    public function broadcastOnQueue(string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
+    public function broadcastOnQueue(Decisions|string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
     {
         if (static::isFaked()) {
             Ai::recordPrompt(
@@ -227,6 +268,14 @@ trait Promptable
     }
 
     /**
+     * Get the single provider / model pair an approval continuation must run against, since it may not fail over to a different provider.
+     */
+    private function providersForApprovalContinuation(Lab|array|string|null $provider, ?string $model): array
+    {
+        return array_slice($this->getProvidersAndModelsForFailover($provider, $model), 0, 1, true);
+    }
+
+    /**
      * Iterate the configured provider / model pairs.
      *
      * @param  array<string, string|null>  $providers
@@ -262,7 +311,7 @@ trait Promptable
             } else {
                 $attributes = (new ReflectionClass($this))->getAttributes(ProviderAttribute::class);
 
-                $provider = ! empty($attributes) ? $attributes[0]->newInstance()->value : null;
+                $provider = $attributes === [] ? null : $attributes[0]->newInstance()->value;
             }
         }
 
@@ -272,7 +321,7 @@ trait Promptable
             } else {
                 $attributes = (new ReflectionClass($this))->getAttributes(ModelAttribute::class);
 
-                $model = ! empty($attributes) ? $attributes[0]->newInstance()->value : null;
+                $model = $attributes === [] ? null : $attributes[0]->newInstance()->value;
             }
         }
 
@@ -318,7 +367,7 @@ trait Promptable
 
         $attributes = (new ReflectionClass($this))->getAttributes(TimeoutAttribute::class);
 
-        if (! empty($attributes)) {
+        if ($attributes !== []) {
             return $attributes[0]->newInstance()->value;
         }
 

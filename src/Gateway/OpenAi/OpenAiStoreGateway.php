@@ -59,7 +59,7 @@ class OpenAiStoreGateway implements StoreGateway
                     'name' => $name,
                     'metadata' => filled($description) ? ['description' => $description] : null,
                     'file_ids' => $fileIds?->values()->all(),
-                    'expires_after' => $expiresWhenIdleFor ? [
+                    'expires_after' => $expiresWhenIdleFor instanceof DateInterval ? [
                         'anchor' => 'last_active_at',
                         'days' => $this->intervalToDays($expiresWhenIdleFor),
                     ] : null,

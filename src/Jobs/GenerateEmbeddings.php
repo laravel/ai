@@ -6,10 +6,12 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\PendingResponses\PendingEmbeddingsGeneration;
+use Laravel\Ai\Responses\EmbeddingsResponse;
 
 class GenerateEmbeddings implements ShouldQueue
 {
-    use Concerns\InvokesQueuedResponseCallbacks, Queueable;
+    use Concerns\InvokesQueuedResponseCallbacks;
+    use Queueable;
 
     /**
      * Create a new job instance.
@@ -24,7 +26,7 @@ class GenerateEmbeddings implements ShouldQueue
      */
     public function handle(): void
     {
-        $this->withCallbacks(fn () => $this->pendingEmbeddings->generate(
+        $this->withCallbacks(fn (): EmbeddingsResponse => $this->pendingEmbeddings->generate(
             $this->provider,
             $this->model,
         ));

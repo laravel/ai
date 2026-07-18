@@ -33,7 +33,7 @@ trait InvokesTools
     /**
      * Execute the given tool with the given arguments.
      */
-    protected function executeTool(Tool $tool, array $arguments): string
+    protected function executeTool(Tool $tool, array $arguments, ?string $toolCallId = null): string
     {
         $callbacks = $this->pushToolInvocationCallbacks();
         $id = (string) Str::uuid7();
@@ -42,8 +42,8 @@ trait InvokesTools
             call_user_func($callbacks['invoking'], $tool, $arguments, $id);
 
             return (string) tap(
-                $tool->handle(new Request($arguments)),
-                fn ($result) => call_user_func($callbacks['invoked'], $tool, $arguments, $result, $id)
+                $tool->handle(new Request($arguments, $toolCallId)),
+                fn ($result): mixed => call_user_func($callbacks['invoked'], $tool, $arguments, $result, $id)
             );
         } finally {
             $this->popToolInvocationCallbacks();
@@ -69,8 +69,8 @@ trait InvokesTools
      */
     protected function initializeToolCallbacks(): void
     {
-        $this->invokingToolCallback ??= fn () => true;
-        $this->toolInvokedCallback ??= fn () => true;
+        $this->invokingToolCallback ??= fn (): true => true;
+        $this->toolInvokedCallback ??= fn (): true => true;
     }
 
     /**

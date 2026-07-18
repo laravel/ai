@@ -8,6 +8,7 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\ProviderTool;
+use Laravel\Ai\ToolChoice;
 use Laravel\Ai\Tools\ToolNameResolver;
 use RuntimeException;
 
@@ -63,5 +64,23 @@ trait MapsChatCompletionTools
                 ],
             ],
         ];
+    }
+
+    /**
+     * Map a tool choice to the Chat Completions tool_choice shape.
+     *
+     * @return string|array<string, mixed>
+     */
+    protected function mapToolChoice(ToolChoice $choice): string|array
+    {
+        return match ($choice->mode) {
+            ToolChoice::auto, ToolChoice::none, ToolChoice::required => $choice->mode,
+            ToolChoice::tool => [
+                'type' => 'function',
+                'function' => [
+                    'name' => $choice->toolName,
+                ],
+            ],
+        };
     }
 }

@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway;
 
 use Illuminate\Contracts\Support\Arrayable;
 use JsonSerializable;
+use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -15,6 +16,7 @@ class StepResponse implements Arrayable, JsonSerializable
      * @param  ToolCall[]  $toolCalls
      * @param  array<string, mixed>|null  $structured
      * @param  array<int, array<string, mixed>>  $providerContentBlocks
+     * @param  PendingApproval[]  $pendingApprovals
      */
     public function __construct(
         public string $text,
@@ -25,6 +27,7 @@ class StepResponse implements Arrayable, JsonSerializable
         public ?array $structured = null,
         public ?string $continuationToken = null,
         public array $providerContentBlocks = [],
+        public array $pendingApprovals = [],
     ) {}
 
     /**
@@ -35,7 +38,7 @@ class StepResponse implements Arrayable, JsonSerializable
         return [
             'text' => $this->text,
             'structured' => $this->structured,
-            'tool_calls' => array_map(fn (ToolCall $tc) => $tc->toArray(), $this->toolCalls),
+            'tool_calls' => array_map(fn (ToolCall $tc): array => $tc->toArray(), $this->toolCalls),
             'provider_content_blocks' => $this->providerContentBlocks,
             'finish_reason' => $this->finishReason->value,
             'usage' => $this->usage->toArray(),

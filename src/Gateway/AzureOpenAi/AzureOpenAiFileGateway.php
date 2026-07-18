@@ -12,6 +12,7 @@ class AzureOpenAiFileGateway extends OpenAiFileGateway
     /**
      * Get the default purpose to use when a file does not specify one.
      */
+    #[\Override]
     protected function defaultPurpose(): string
     {
         return 'assistants';
@@ -20,6 +21,7 @@ class AzureOpenAiFileGateway extends OpenAiFileGateway
     /**
      * Get the provider key used to resolve file upload options.
      */
+    #[\Override]
     protected function providerOptionsKey(): Lab
     {
         return Lab::Azure;

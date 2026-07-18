@@ -7,6 +7,7 @@ use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\ToolChoice;
 
 trait BuildsTextRequests
 {
@@ -29,7 +30,9 @@ trait BuildsTextRequests
             $mappedTools = $this->mapTools($tools, $provider);
 
             if (filled($mappedTools)) {
-                $body['tool_choice'] = 'auto';
+                $body['tool_choice'] = $options?->toolChoice instanceof ToolChoice
+                    ? $this->mapToolChoice($options->toolChoice)
+                    : 'auto';
                 $body['tools'] = $mappedTools;
             }
         }
@@ -52,7 +55,7 @@ trait BuildsTextRequests
         $providerOptions = $options?->providerOptions($provider->name());
 
         if (filled($providerOptions)) {
-            $body = array_merge($body, $providerOptions);
+            return array_merge($body, $providerOptions);
         }
 
         return $body;

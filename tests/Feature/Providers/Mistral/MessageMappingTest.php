@@ -11,19 +11,19 @@ use Tests\Fixtures\Agents\ToolUsingAgent;
 
 use function Laravel\Ai\agent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.mistral' => [
         ...config('ai.providers.mistral'),
         'key' => 'test-key',
     ]]);
 });
 
-test('user message maps to chat format', function () {
+test('user message maps to chat format', function (): void {
     Http::fake(['*' => $this->fakeTextResponse()]);
 
     (new AssistantAgent)->prompt('What is Laravel?', provider: 'mistral');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $userMsg = collect($body['messages'])->firstWhere('role', 'user');
 
@@ -31,7 +31,7 @@ test('user message maps to chat format', function () {
     });
 });
 
-test('assistant message with tool calls maps correctly', function () {
+test('assistant message with tool calls maps correctly', function (): void {
     Http::fake([
         '*' => Http::sequence([
             $this->fakeToolCallResponse(),
@@ -45,7 +45,7 @@ test('assistant message with tool calls maps correctly', function () {
 
     expect($recorded)->toHaveCount(2);
 
-    $followUpBody = json_decode($recorded[1][0]->body(), true);
+    $followUpBody = json_decode((string) $recorded[1][0]->body(), true);
 
     $assistantMsg = collect($followUpBody['messages'])->firstWhere('role', 'assistant');
     $toolMsg = collect($followUpBody['messages'])->firstWhere('role', 'tool');
@@ -57,7 +57,7 @@ test('assistant message with tool calls maps correctly', function () {
         ->and($toolMsg['tool_call_id'])->toBe($assistantMsg['tool_calls'][0]['id']);
 });
 
-test('image attachment maps to image url', function () {
+test('image attachment maps to image url', function (): void {
     Http::fake(['*' => $this->fakeTextResponse('I see an image')]);
 
     $image = new RemoteImage('https://example.com/image.png');
@@ -68,7 +68,7 @@ test('image attachment maps to image url', function () {
         provider: 'mistral',
     );
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $content = $body['messages'][1]['content'] ?? $body['messages'][0]['content'];
 
@@ -83,7 +83,7 @@ test('image attachment maps to image url', function () {
     });
 });
 
-test('base64 image attachment maps to data uri', function () {
+test('base64 image attachment maps to data uri', function (): void {
     Http::fake(['*' => $this->fakeTextResponse('I see an image')]);
 
     $image = new Base64Image(base64_encode('fake-image-data'), 'image/png');
@@ -94,7 +94,7 @@ test('base64 image attachment maps to data uri', function () {
         provider: 'mistral',
     );
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $content = $body['messages'][1]['content'] ?? $body['messages'][0]['content'];
 
@@ -105,11 +105,11 @@ test('base64 image attachment maps to data uri', function () {
         $imageBlock = collect($content)->firstWhere('type', 'image_url');
 
         return $imageBlock !== null
-            && str_starts_with($imageBlock['image_url']['url'], 'data:image/png;base64,');
+            && str_starts_with((string) $imageBlock['image_url']['url'], 'data:image/png;base64,');
     });
 });
 
-test('local image attachment without explicit mime type detects mime from file', function () {
+test('local image attachment without explicit mime type detects mime from file', function (): void {
     Http::fake(['*' => $this->fakeTextResponse('I see an image')]);
 
     agent('You are helpful.')->prompt(
@@ -118,7 +118,7 @@ test('local image attachment without explicit mime type detects mime from file',
         provider: 'mistral',
     );
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $content = $body['messages'][1]['content'] ?? $body['messages'][0]['content'];
 
@@ -129,12 +129,12 @@ test('local image attachment without explicit mime type detects mime from file',
         $imageBlock = collect($content)->firstWhere('type', 'image_url');
 
         return $imageBlock !== null
-            && str_starts_with($imageBlock['image_url']['url'], 'data:image/png;base64,')
-            && ! str_contains($imageBlock['image_url']['url'], 'data:;base64,');
+            && str_starts_with((string) $imageBlock['image_url']['url'], 'data:image/png;base64,')
+            && ! str_contains((string) $imageBlock['image_url']['url'], 'data:;base64,');
     });
 });
 
-test('remote document maps to document url', function () {
+test('remote document maps to document url', function (): void {
     Http::fake(['*' => $this->fakeTextResponse('I see a document')]);
 
     $document = new RemoteDocument('https://example.com/report.pdf');
@@ -145,7 +145,7 @@ test('remote document maps to document url', function () {
         provider: 'mistral',
     );
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $content = $body['messages'][1]['content'] ?? $body['messages'][0]['content'];
 
@@ -160,17 +160,17 @@ test('remote document maps to document url', function () {
     });
 });
 
-test('system instructions are in messages array', function () {
+test('system instructions are in messages array', function (): void {
     Http::fake(['*' => $this->fakeTextResponse()]);
 
     (new AssistantAgent)->prompt('Hi', provider: 'mistral');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         $systemMsg = collect($body['messages'])->firstWhere('role', 'system');
 
         return $systemMsg !== null
-            && str_contains($systemMsg['content'], 'helpful assistant');
+            && str_contains((string) $systemMsg['content'], 'helpful assistant');
     });
 });

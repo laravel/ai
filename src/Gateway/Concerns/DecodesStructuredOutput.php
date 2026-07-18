@@ -15,7 +15,7 @@ trait DecodesStructuredOutput
 
         $payload = $this->stripJsonCodeFence($text);
 
-        $decoded = json_decode($payload, true);
+        $decoded = json_decode((string) $payload, true);
 
         return is_array($decoded) ? $decoded : [];
     }
