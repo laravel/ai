@@ -17,6 +17,7 @@ use Traversable;
 
 class StreamableAgentResponse implements IteratorAggregate, Responsable
 {
+    use Concerns\CanStreamUsingAgUiProtocol;
     use Concerns\CanStreamUsingVercelProtocol;
 
     public ?string $text = null;
@@ -35,6 +36,12 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     protected bool $usesVercelProtocol = false;
 
     protected ?string $vercelProtocolMessageId = null;
+
+    protected bool $usesAgUiProtocol = false;
+
+    protected ?string $agUiThreadId = null;
+
+    protected ?string $agUiRunId = null;
 
     protected ?StreamedAgentResponse $streamedResponse = null;
 
@@ -122,12 +129,32 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     }
 
     /**
+     * Stream the response using the AG-UI protocol.
+     *
+     * Pass a $threadId to correlate runs across turns; without one, a conversation started during this turn cannot be reflected in RUN_STARTED and the thread falls back to the invocation id.
+     *
+     * See: https://docs.ag-ui.com/concepts/events
+     */
+    public function usingAgUiProtocol(?string $threadId = null, ?string $runId = null): self
+    {
+        $this->usesAgUiProtocol = true;
+        $this->agUiThreadId = $threadId;
+        $this->agUiRunId = $runId;
+
+        return $this;
+    }
+
+    /**
      * Create an HTTP response that represents the object.
      *
      * @param  Request  $request
      */
     public function toResponse($request): Response
     {
+        if ($this->usesAgUiProtocol) {
+            return $this->toAgUiProtocolResponse();
+        }
+
         if ($this->usesVercelProtocol) {
             return $this->toVercelProtocolResponse();
         }
