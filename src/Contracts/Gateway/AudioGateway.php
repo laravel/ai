@@ -9,6 +9,8 @@ interface AudioGateway
 {
     /**
      * Generate audio from the given text.
+     *
+     * @param  array<string, string>  $headers
      */
     public function generateAudio(
         AudioProvider $provider,
@@ -17,5 +19,6 @@ interface AudioGateway
         string $voice,
         ?string $instructions = null,
         int $timeout = 30,
+        array $headers = [],
     ): AudioResponse;
 }

@@ -29,14 +29,15 @@ class VoyageAiGateway implements EmbeddingGateway, RerankingGateway
         int $dimensions,
         int $timeout = 30,
         array $providerOptions = [],
+        array $headers = [],
     ): EmbeddingsResponse {
         if ($this->usesMultimodalEmbeddingEndpoint($model, $inputs)) {
-            return $this->generateMultimodalEmbeddings($provider, $model, $inputs, $dimensions, $timeout, $providerOptions);
+            return $this->generateMultimodalEmbeddings($provider, $model, $inputs, $dimensions, $timeout, $providerOptions, $headers);
         }
 
         $data = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('/embeddings', array_merge($providerOptions, [
+            fn () => $this->client($provider, $timeout)->withHeaders($headers)->post('/embeddings', array_merge($providerOptions, [
                 'model' => $model,
                 'input' => $inputs,
                 'output_dimension' => $dimensions,
@@ -60,11 +61,12 @@ class VoyageAiGateway implements EmbeddingGateway, RerankingGateway
         string $model,
         array $documents,
         string $query,
-        ?int $limit = null
+        ?int $limit = null,
+        array $headers = [],
     ): RerankingResponse {
         $data = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider)->post('/rerank', array_filter([
+            fn () => $this->client($provider)->withHeaders($headers)->post('/rerank', array_filter([
                 'model' => $model,
                 'query' => $query,
                 'documents' => $documents,

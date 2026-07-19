@@ -64,14 +64,15 @@ class OpenAiGateway implements Gateway, StepTextGateway
         ?string $size = null,
         ?string $quality = null,
         ?int $timeout = null,
+        array $headers = [],
     ): ImageResponse {
         $hasAttachments = filled($attachments);
 
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $hasAttachments
-                ? $this->sendImageEditRequest($provider, $model, $prompt, $attachments, $size, $quality, $timeout)
-                : $this->sendImageGenerationRequest($provider, $model, $prompt, $size, $quality, $timeout),
+                ? $this->sendImageEditRequest($provider, $model, $prompt, $attachments, $size, $quality, $timeout, $headers)
+                : $this->sendImageGenerationRequest($provider, $model, $prompt, $size, $quality, $timeout, $headers),
         );
 
         $data = $response->json();
@@ -88,6 +89,8 @@ class OpenAiGateway implements Gateway, StepTextGateway
 
     /**
      * Send an image generation request.
+     *
+     * @param  array<string, string>  $headers
      */
     protected function sendImageGenerationRequest(
         ImageProvider $provider,
@@ -96,8 +99,9 @@ class OpenAiGateway implements Gateway, StepTextGateway
         ?string $size,
         ?string $quality,
         ?int $timeout,
+        array $headers = [],
     ) {
-        return $this->client($provider, $timeout ?? 120)->post('images/generations', [
+        return $this->client($provider, $timeout ?? 120)->withHeaders($headers)->post('images/generations', [
             'model' => $model,
             'prompt' => $prompt,
             ...$provider->defaultImageOptions($size, $quality),
@@ -109,6 +113,8 @@ class OpenAiGateway implements Gateway, StepTextGateway
 
     /**
      * Send an image edit request with attachments.
+     *
+     * @param  array<string, string>  $headers
      */
     protected function sendImageEditRequest(
         ImageProvider $provider,
@@ -118,8 +124,9 @@ class OpenAiGateway implements Gateway, StepTextGateway
         ?string $size,
         ?string $quality,
         ?int $timeout,
+        array $headers = [],
     ) {
-        $request = $this->client($provider, $timeout ?? 120);
+        $request = $this->client($provider, $timeout ?? 120)->withHeaders($headers);
 
         $isGptImage = str_starts_with($model, 'gpt-image');
         $field = $isGptImage ? 'image[]' : 'image';
@@ -161,6 +168,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
         string $voice,
         ?string $instructions = null,
         int $timeout = 30,
+        array $headers = [],
     ): AudioResponse {
         $voice = match ($voice) {
             'default-male' => 'ash',
@@ -170,7 +178,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('audio/speech', array_filter([
+            fn () => $this->client($provider, $timeout)->withHeaders($headers)->post('audio/speech', array_filter([
                 'model' => $model,
                 'input' => $text,
                 'voice' => $voice,
@@ -202,6 +210,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
         bool $diarize = false,
         int $timeout = 30,
         array $providerOptions = [],
+        array $headers = [],
     ): TranscriptionResponse {
         if ($diarize && filled($providerOptions['prompt'] ?? null)) {
             throw new LogicException('OpenAI does not support the `prompt` option for diarized transcriptions.');
@@ -214,6 +223,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)
+                ->withHeaders($headers)
                 ->attach('file', $audio->content(), $this->audioFilename($audio), array_filter(['Content-Type' => $audio->mimeType()]))
                 ->post('audio/transcriptions', array_merge($providerOptions, array_filter([
                     'model' => $model,
@@ -273,10 +283,11 @@ class OpenAiGateway implements Gateway, StepTextGateway
         int $dimensions,
         int $timeout = 30,
         array $providerOptions = [],
+        array $headers = [],
     ): EmbeddingsResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('embeddings', array_merge($providerOptions, [
+            fn () => $this->client($provider, $timeout)->withHeaders($headers)->post('embeddings', array_merge($providerOptions, [
                 'model' => $model,
                 'input' => $inputs,
                 'dimensions' => $dimensions,

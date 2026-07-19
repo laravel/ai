@@ -68,7 +68,9 @@ class GeminiGateway implements Gateway, StepTextGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post("models/{$model}:generateContent", $body),
+            fn () => $this->client($provider, $timeout)
+                ->withHeaders($options?->headers($provider->driver()) ?? [])
+                ->post("models/{$model}:generateContent", $body),
         );
 
         $data = $response->json();
@@ -98,6 +100,7 @@ class GeminiGateway implements Gateway, StepTextGateway
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)
+                ->withHeaders($options?->headers($provider->driver()) ?? [])
                 ->withOptions(['stream' => true])
                 ->post("models/{$model}:streamGenerateContent?alt=sse", $body),
         );
@@ -120,6 +123,7 @@ class GeminiGateway implements Gateway, StepTextGateway
         ?string $size = null,
         ?string $quality = null,
         ?int $timeout = null,
+        array $headers = [],
     ): ImageResponse {
         $parts = [['text' => $prompt]];
 
@@ -142,7 +146,7 @@ class GeminiGateway implements Gateway, StepTextGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout ?? 120)->post("models/{$model}:generateContent", $body),
+            fn () => $this->client($provider, $timeout ?? 120)->withHeaders($headers)->post("models/{$model}:generateContent", $body),
         );
 
         $data = $response->json();
@@ -172,6 +176,7 @@ class GeminiGateway implements Gateway, StepTextGateway
         int $dimensions,
         int $timeout = 30,
         array $providerOptions = [],
+        array $headers = [],
     ): EmbeddingsResponse {
         $model = $this->normalizeEmbeddingModel($model);
 
@@ -183,7 +188,7 @@ class GeminiGateway implements Gateway, StepTextGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post("models/{$model}:batchEmbedContents", [
+            fn () => $this->client($provider, $timeout)->withHeaders($headers)->post("models/{$model}:batchEmbedContents", [
                 'requests' => $requests,
             ]),
         );
@@ -209,10 +214,11 @@ class GeminiGateway implements Gateway, StepTextGateway
         string $voice,
         ?string $instructions = null,
         int $timeout = 30,
+        array $headers = [],
     ): AudioResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post("models/{$model}:generateContent", [
+            fn () => $this->client($provider, $timeout)->withHeaders($headers)->post("models/{$model}:generateContent", [
                 'contents' => [[
                     'role' => 'user',
                     'parts' => [[
@@ -272,6 +278,7 @@ class GeminiGateway implements Gateway, StepTextGateway
         bool $diarize = false,
         int $timeout = 30,
         array $providerOptions = [],
+        array $headers = [],
     ): TranscriptionResponse {
         $inlineData = ['inlineData' => [
             'mimeType' => $audio->mimeType() ?? 'audio/mp3',
@@ -285,7 +292,7 @@ class GeminiGateway implements Gateway, StepTextGateway
 
             $response = $this->withErrorHandling(
                 $provider->name(),
-                fn () => $this->client($provider, $timeout)->post("models/{$model}:generateContent", array_merge($providerOptions, [
+                fn () => $this->client($provider, $timeout)->withHeaders($headers)->post("models/{$model}:generateContent", array_merge($providerOptions, [
                     'contents' => [[
                         'parts' => [['text' => $prompt], $inlineData],
                     ]],
@@ -331,7 +338,7 @@ class GeminiGateway implements Gateway, StepTextGateway
 
             $response = $this->withErrorHandling(
                 $provider->name(),
-                fn () => $this->client($provider, $timeout)->post("models/{$model}:generateContent", array_merge($providerOptions, [
+                fn () => $this->client($provider, $timeout)->withHeaders($headers)->post("models/{$model}:generateContent", array_merge($providerOptions, [
                     'contents' => [[
                         'parts' => [['text' => $prompt], $inlineData],
                     ]],

@@ -83,6 +83,7 @@ class OpenRouterGateway implements Gateway, StepTextGateway
         ?string $size = null,
         ?string $quality = null,
         ?int $timeout = null,
+        array $headers = [],
     ): ImageResponse {
         $imageOptions = $provider->defaultImageOptions($size, $quality);
 
@@ -94,6 +95,7 @@ class OpenRouterGateway implements Gateway, StepTextGateway
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout ?? 120)
+                ->withHeaders($headers)
                 ->post('chat/completions', array_filter([
                     'model' => $model,
                     'messages' => $this->buildImageMessages($prompt, $attachments),
@@ -152,12 +154,13 @@ class OpenRouterGateway implements Gateway, StepTextGateway
         string $voice,
         ?string $instructions = null,
         int $timeout = 30,
+        array $headers = [],
     ): AudioResponse {
         $format = $this->audioResponseFormat($model);
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('audio/speech', array_filter([
+            fn () => $this->client($provider, $timeout)->withHeaders($headers)->post('audio/speech', array_filter([
                 'model' => $model,
                 'input' => $text,
                 'voice' => $this->resolveVoice($model, $voice),
@@ -238,6 +241,7 @@ class OpenRouterGateway implements Gateway, StepTextGateway
         bool $diarize = false,
         int $timeout = 30,
         array $providerOptions = [],
+        array $headers = [],
     ): TranscriptionResponse {
         if ($diarize) {
             throw new LogicException(
@@ -255,7 +259,7 @@ class OpenRouterGateway implements Gateway, StepTextGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('audio/transcriptions', array_merge($providerOptions, array_filter([
+            fn () => $this->client($provider, $timeout)->withHeaders($headers)->post('audio/transcriptions', array_merge($providerOptions, array_filter([
                 'model' => $model,
                 'input_audio' => [
                     'data' => base64_encode($content),
@@ -307,6 +311,7 @@ class OpenRouterGateway implements Gateway, StepTextGateway
         int $dimensions,
         int $timeout = 30,
         array $providerOptions = [],
+        array $headers = [],
     ): EmbeddingsResponse {
         $body = array_merge($providerOptions, [
             'model' => $model,
@@ -316,7 +321,7 @@ class OpenRouterGateway implements Gateway, StepTextGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('embeddings', $body),
+            fn () => $this->client($provider, $timeout)->withHeaders($headers)->post('embeddings', $body),
         );
 
         $data = $response->json();

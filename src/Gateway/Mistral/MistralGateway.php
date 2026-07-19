@@ -68,10 +68,11 @@ class MistralGateway implements EmbeddingGateway, StepTextGateway, Transcription
         int $dimensions,
         int $timeout = 30,
         array $providerOptions = [],
+        array $headers = [],
     ): EmbeddingsResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('embeddings', array_merge($providerOptions, [
+            fn () => $this->client($provider, $timeout)->withHeaders($headers)->post('embeddings', array_merge($providerOptions, [
                 'model' => $model,
                 'input' => $inputs,
             ])),
@@ -97,6 +98,7 @@ class MistralGateway implements EmbeddingGateway, StepTextGateway, Transcription
         bool $diarize = false,
         int $timeout = 30,
         array $providerOptions = [],
+        array $headers = [],
     ): TranscriptionResponse {
         $params = ['model' => $model];
 
@@ -110,6 +112,7 @@ class MistralGateway implements EmbeddingGateway, StepTextGateway, Transcription
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)
+                ->withHeaders($headers)
                 ->attach('file', $audio->content(), $this->audioFilename($audio), array_filter(['Content-Type' => $audio->mimeType()]))
                 ->post('audio/transcriptions', $this->multipartParams(array_merge($providerOptions, $params))),
         );

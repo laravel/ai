@@ -13,6 +13,8 @@ trait GeneratesAudio
 {
     /**
      * Generate audio from the given text.
+     *
+     * @param  array<string, string>  $headers
      */
     public function audio(
         string $text,
@@ -20,12 +22,13 @@ trait GeneratesAudio
         ?string $instructions = null,
         ?string $model = null,
         int $timeout = 30,
+        array $headers = [],
     ): AudioResponse {
         $invocationId = (string) Str::uuid7();
 
         $model ??= $this->defaultAudioModel();
 
-        $prompt = new AudioPrompt($text, $voice, $instructions, $this, $model, $timeout);
+        $prompt = new AudioPrompt($text, $voice, $instructions, $this, $model, $timeout, $headers);
 
         if (Ai::audioIsFaked()) {
             Ai::recordAudioGeneration($prompt);
@@ -36,7 +39,7 @@ trait GeneratesAudio
         ));
 
         return tap($this->audioGateway()->generateAudio(
-            $this, $model, $prompt->text, $prompt->voice, $prompt->instructions, $timeout,
+            $this, $model, $prompt->text, $prompt->voice, $prompt->instructions, $timeout, $prompt->headers,
         ), function (AudioResponse $response) use ($invocationId, $model, $prompt): void {
             $this->events->dispatch(new AudioGenerated(
                 $invocationId, $this, $model, $prompt, $response,

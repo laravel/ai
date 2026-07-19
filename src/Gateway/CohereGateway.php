@@ -32,10 +32,11 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway
         int $dimensions,
         int $timeout = 30,
         array $providerOptions = [],
+        array $headers = [],
     ): EmbeddingsResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('/embed', array_merge(
+            fn () => $this->client($provider, $timeout)->withHeaders($headers)->post('/embed', array_merge(
                 [
                     'input_type' => 'search_document',
                     'embedding_types' => ['float'],
@@ -67,11 +68,12 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway
         string $model,
         array $documents,
         string $query,
-        ?int $limit = null
+        ?int $limit = null,
+        array $headers = [],
     ): RerankingResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider)->post('/rerank', array_filter([
+            fn () => $this->client($provider)->withHeaders($headers)->post('/rerank', array_filter([
                 'model' => $model,
                 'query' => $query,
                 'documents' => $documents,

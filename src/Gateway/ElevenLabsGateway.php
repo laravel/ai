@@ -31,6 +31,7 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
         string $voice,
         ?string $instructions = null,
         int $timeout = 30,
+        array $headers = [],
     ): AudioResponse {
         $voice = match ($voice) {
             'default-male' => 'onwK4e9ZLuTAKqWW03F9',
@@ -39,6 +40,7 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
         };
 
         $response = $this->withErrorHandling($provider->name(), fn () => $this->client($provider, $timeout)
+            ->withHeaders($headers)
             ->post('text-to-speech/'.$voice, [
                 'model_id' => $model,
                 'text' => $text,
@@ -64,8 +66,10 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
         bool $diarize = false,
         int $timeout = 30,
         array $providerOptions = [],
+        array $headers = [],
     ): TranscriptionResponse {
         $response = $this->withErrorHandling($provider->name(), fn () => $this->client($provider, $timeout)
+            ->withHeaders($headers)
             ->attach('file', $audio->content(), 'file', array_filter(['Content-Type' => $audio->mimeType()]))
             ->post('speech-to-text', array_merge($providerOptions, array_filter([
                 'model_id' => $model,

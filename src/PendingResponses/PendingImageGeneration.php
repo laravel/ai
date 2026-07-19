@@ -13,6 +13,7 @@ use Laravel\Ai\Files\Image;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\StoredImage;
 use Laravel\Ai\Jobs\GenerateImage;
+use Laravel\Ai\PendingResponses\Concerns\ResolvesHeaders;
 use Laravel\Ai\Prompts\QueuedImagePrompt;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\ImageResponse;
@@ -22,6 +23,7 @@ use LogicException;
 class PendingImageGeneration
 {
     use Conditionable;
+    use ResolvesHeaders;
 
     public array $attachments = [];
 
@@ -130,9 +132,11 @@ class PendingImageGeneration
 
             $model ??= $provider->defaultImageModel();
 
+            $headers = $this->resolveHeaders($provider);
+
             try {
                 return $provider->image(
-                    $this->prompt, $this->attachments, $this->size, $this->quality, $model, $this->timeout
+                    $this->prompt, $this->attachments, $this->size, $this->quality, $model, $this->timeout, $headers
                 );
             } catch (FailoverableException $e) {
                 $lastException = $e;
@@ -163,7 +167,8 @@ class PendingImageGeneration
                     $this->size,
                     $this->quality,
                     $provider,
-                    $model
+                    $model,
+                    is_array($this->headers) ? $this->headers : [],
                 )
             );
 

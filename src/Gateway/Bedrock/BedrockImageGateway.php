@@ -34,6 +34,7 @@ class BedrockImageGateway implements ImageGateway
         ?string $size = null,
         ?string $quality = null,
         ?int $timeout = null,
+        array $headers = [],
     ): ImageResponse {
         $client = $this->createBedrockClient($provider, $timeout);
         $options = $provider->defaultImageOptions($size, $quality);
@@ -41,12 +42,12 @@ class BedrockImageGateway implements ImageGateway
         try {
             $response = $this->withErrorHandling(
                 $provider->name(),
-                fn () => $client->invokeModel([
+                fn () => $client->invokeModel(array_merge([
                     'modelId' => $model,
                     'contentType' => 'application/json',
                     'accept' => 'application/json',
                     'body' => json_encode($this->prepareImageRequestBody($model, $prompt, $size, $options)),
-                ]),
+                ], filled($headers) ? ['@http' => ['headers' => $headers]] : [])),
             );
         } catch (Throwable $throwable) {
             throw BedrockException::toAiException($throwable, $provider->name(), $model);

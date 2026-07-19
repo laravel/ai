@@ -26,15 +26,17 @@ class FakeRerankingGateway implements RerankingGateway
      * Rerank the given documents based on their relevance to the query.
      *
      * @param  array<int, string>  $documents
+     * @param  array<string, string>  $headers
      */
     public function rerank(
         RerankingProvider $provider,
         string $model,
         array $documents,
         string $query,
-        ?int $limit = null
+        ?int $limit = null,
+        array $headers = [],
     ): RerankingResponse {
-        $prompt = new RerankingPrompt($documents, $query, $limit, $provider, $model);
+        $prompt = new RerankingPrompt($documents, $query, $limit, $provider, $model, $headers);
 
         return $this->nextResponse($provider, $model, $prompt);
     }

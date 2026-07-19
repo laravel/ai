@@ -9,6 +9,7 @@ class QueuedTranscriptionPrompt
 {
     /**
      * @param  array<string, mixed>  $providerOptions
+     * @param  array<string, string>  $headers
      */
     public function __construct(
         public readonly TranscribableAudio $audio,
@@ -17,6 +18,7 @@ class QueuedTranscriptionPrompt
         public readonly Lab|array|string|null $provider,
         public readonly ?string $model,
         public readonly array $providerOptions = [],
+        public readonly array $headers = [],
     ) {}
 
     /**

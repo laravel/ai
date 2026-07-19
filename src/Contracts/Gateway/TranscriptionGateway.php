@@ -12,6 +12,7 @@ interface TranscriptionGateway
      * Generate text from the given audio.
      *
      * @param  array<string, mixed>  $providerOptions
+     * @param  array<string, string>  $headers
      */
     public function generateTranscription(
         TranscriptionProvider $provider,
@@ -21,5 +22,6 @@ interface TranscriptionGateway
         bool $diarize = false,
         int $timeout = 30,
         array $providerOptions = [],
+        array $headers = [],
     ): TranscriptionResponse;
 }

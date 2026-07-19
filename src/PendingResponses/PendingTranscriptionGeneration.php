@@ -12,6 +12,7 @@ use Laravel\Ai\FakePendingDispatch;
 use Laravel\Ai\Files\LocalAudio;
 use Laravel\Ai\Files\StoredAudio;
 use Laravel\Ai\Jobs\GenerateTranscription;
+use Laravel\Ai\PendingResponses\Concerns\ResolvesHeaders;
 use Laravel\Ai\PendingResponses\Concerns\ResolvesProviderOptions;
 use Laravel\Ai\Prompts\QueuedTranscriptionPrompt;
 use Laravel\Ai\Providers\Provider;
@@ -22,6 +23,7 @@ use LogicException;
 class PendingTranscriptionGeneration
 {
     use Conditionable;
+    use ResolvesHeaders;
     use ResolvesProviderOptions;
 
     protected ?string $language = null;
@@ -84,8 +86,10 @@ class PendingTranscriptionGeneration
 
             $providerOptions = $this->resolveProviderOptions($provider);
 
+            $headers = $this->resolveHeaders($provider);
+
             try {
-                return $provider->transcribe($this->audio, $this->language, $this->diarize, $model, $this->timeout, $providerOptions);
+                return $provider->transcribe($this->audio, $this->language, $this->diarize, $model, $this->timeout, $providerOptions, $headers);
             } catch (FailoverableException $e) {
                 $lastException = $e;
 
@@ -119,6 +123,7 @@ class PendingTranscriptionGeneration
                     $provider,
                     $model,
                     is_array($this->providerOptions) ? $this->providerOptions : [],
+                    is_array($this->headers) ? $this->headers : [],
                 )
             );
 

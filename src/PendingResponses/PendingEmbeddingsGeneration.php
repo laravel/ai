@@ -22,6 +22,7 @@ use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\RemoteVideo;
 use Laravel\Ai\Files\Video;
 use Laravel\Ai\Jobs\GenerateEmbeddings;
+use Laravel\Ai\PendingResponses\Concerns\ResolvesHeaders;
 use Laravel\Ai\PendingResponses\Concerns\ResolvesProviderOptions;
 use Laravel\Ai\Prompts\QueuedEmbeddingsPrompt;
 use Laravel\Ai\Providers\Provider;
@@ -32,6 +33,7 @@ use Laravel\Ai\Responses\QueuedEmbeddingsResponse;
 class PendingEmbeddingsGeneration
 {
     use Conditionable;
+    use ResolvesHeaders;
     use ResolvesProviderOptions;
 
     protected ?int $dimensions = null;
@@ -137,14 +139,16 @@ class PendingEmbeddingsGeneration
 
             $providerOptions = $this->resolveProviderOptions($provider);
 
-            if (($cached = $this->generateFromCache($provider, $model, $dimensions, $providerOptions)) instanceof EmbeddingsResponse) {
+            $headers = $this->resolveHeaders($provider);
+
+            if (($cached = $this->generateFromCache($provider, $model, $dimensions, $providerOptions, $headers)) instanceof EmbeddingsResponse) {
                 return $cached;
             }
 
             try {
                 return tap(
-                    $provider->embeddings($this->inputs, $dimensions, $model, $this->timeout, $providerOptions),
-                    fn (EmbeddingsResponse $response) => $this->cacheEmbeddings($provider, $model, $dimensions, $providerOptions, $response)
+                    $provider->embeddings($this->inputs, $dimensions, $model, $this->timeout, $providerOptions, $headers),
+                    fn (EmbeddingsResponse $response) => $this->cacheEmbeddings($provider, $model, $dimensions, $providerOptions, $headers, $response)
                 );
             } catch (FailoverableException $e) {
                 $lastException = $e;
@@ -162,14 +166,15 @@ class PendingEmbeddingsGeneration
      * Generate the embeddings from a cached response if possible.
      *
      * @param  array<string, mixed>  $providerOptions
+     * @param  array<string, string>  $headers
      */
-    protected function generateFromCache(Provider $provider, string $model, int $dimensions, array $providerOptions): ?EmbeddingsResponse
+    protected function generateFromCache(Provider $provider, string $model, int $dimensions, array $providerOptions, array $headers = []): ?EmbeddingsResponse
     {
         if (! $this->shouldCache()) {
             return null;
         }
 
-        $response = $this->cacheStore()->get($this->cacheKey($provider, $model, $dimensions, $providerOptions));
+        $response = $this->cacheStore()->get($this->cacheKey($provider, $model, $dimensions, $providerOptions, $headers));
 
         if (! is_null($response)) {
             $response = json_decode((string) $response, true);
@@ -187,15 +192,16 @@ class PendingEmbeddingsGeneration
      * Cache the given embeddings response.
      *
      * @param  array<string, mixed>  $providerOptions
+     * @param  array<string, string>  $headers
      */
-    protected function cacheEmbeddings(Provider $provider, string $model, int $dimensions, array $providerOptions, EmbeddingsResponse $response): void
+    protected function cacheEmbeddings(Provider $provider, string $model, int $dimensions, array $providerOptions, array $headers, EmbeddingsResponse $response): void
     {
         if (! $this->shouldCache()) {
             return;
         }
 
         $this->cacheStore()->put(
-            $this->cacheKey($provider, $model, $dimensions, $providerOptions),
+            $this->cacheKey($provider, $model, $dimensions, $providerOptions, $headers),
             json_encode($response),
             now()->addSeconds($this->cacheSeconds ?? config('ai.caching.embeddings.seconds', 60 * 60 * 24 * 30))
         );
@@ -205,15 +211,18 @@ class PendingEmbeddingsGeneration
      * Get the cache key for the given embeddings request.
      *
      * @param  array<string, mixed>  $providerOptions
+     * @param  array<string, string>  $headers
      */
-    protected function cacheKey(Provider $provider, string $model, int $dimensions, array $providerOptions): string
+    protected function cacheKey(Provider $provider, string $model, int $dimensions, array $providerOptions, array $headers = []): string
     {
         $optionsFingerprint = $this->fingerprintProviderOptions($providerOptions);
+
+        $headersFingerprint = $this->fingerprintProviderOptions($headers);
 
         if (array_all($this->inputs, fn ($input) => is_string($input))) {
             return 'laravel-embeddings:'.hash(
                 'sha256',
-                $provider->driver().'-'.$model.'-'.$dimensions.'-'.$optionsFingerprint.'-'.implode('-', $this->inputs),
+                $provider->driver().'-'.$model.'-'.$dimensions.'-'.$optionsFingerprint.'-'.$headersFingerprint.'-'.implode('-', $this->inputs),
             );
         }
 
@@ -222,6 +231,7 @@ class PendingEmbeddingsGeneration
             'model' => $model,
             'dimensions' => $dimensions,
             'options' => $optionsFingerprint,
+            'headers' => $headersFingerprint,
             'inputs' => array_map($this->normalizeInputForCache(...), $this->inputs),
         ], JSON_THROW_ON_ERROR));
     }
@@ -320,6 +330,7 @@ class PendingEmbeddingsGeneration
                     $model,
                     $this->timeout,
                     is_array($this->providerOptions) ? $this->providerOptions : [],
+                    is_array($this->headers) ? $this->headers : [],
                 )
             );
 

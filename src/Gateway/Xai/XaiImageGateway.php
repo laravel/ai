@@ -31,12 +31,14 @@ class XaiImageGateway implements ImageGateway
         ?string $size = null,
         ?string $quality = null,
         ?int $timeout = null,
+        array $headers = [],
     ): ImageResponse {
         $options = $provider->defaultImageOptions($size, $quality);
 
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout ?? 120)
+                ->withHeaders($headers)
                 ->post('images/generations', array_merge(array_filter([
                     'model' => $model,
                     'prompt' => $prompt,

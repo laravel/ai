@@ -37,6 +37,7 @@ trait MapsEmbeddingInputs
         int $dimensions,
         int $timeout = 30,
         array $providerOptions = [],
+        array $headers = [],
     ): EmbeddingsResponse {
         if ($model === 'voyage-multimodal-3' && $dimensions !== 1024) {
             throw new InvalidArgumentException(
@@ -48,7 +49,7 @@ trait MapsEmbeddingInputs
 
         $data = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('/multimodalembeddings', array_merge($providerOptions, [
+            fn () => $this->client($provider, $timeout)->withHeaders($headers)->post('/multimodalembeddings', array_merge($providerOptions, [
                 'model' => $model,
                 'inputs' => array_map(fn (mixed $input) => [
                     'content' => [$this->mapMultimodalEmbeddingInput($input)],

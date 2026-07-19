@@ -29,7 +29,9 @@ trait PerformsChatCompletionSteps
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('chat/completions', $body),
+            fn () => $this->client($provider, $timeout)
+                ->withHeaders($options?->headers($provider->driver()) ?? [])
+                ->post('chat/completions', $body),
         );
 
         $data = $response->json();
@@ -65,6 +67,7 @@ trait PerformsChatCompletionSteps
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)
+                ->withHeaders($options?->headers($provider->driver()) ?? [])
                 ->withOptions(['stream' => true])
                 ->post('chat/completions', $body),
         );

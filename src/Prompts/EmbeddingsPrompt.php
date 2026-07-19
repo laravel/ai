@@ -11,6 +11,7 @@ class EmbeddingsPrompt implements Countable
     /**
      * @param  string[]  $inputs
      * @param  array<string, mixed>  $providerOptions
+     * @param  array<string, string>  $headers
      */
     public function __construct(
         public readonly array $inputs,
@@ -19,6 +20,7 @@ class EmbeddingsPrompt implements Countable
         public readonly string $model,
         public readonly int $timeout = 30,
         public readonly array $providerOptions = [],
+        public readonly array $headers = [],
     ) {}
 
     /**

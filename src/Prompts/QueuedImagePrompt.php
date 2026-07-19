@@ -10,6 +10,9 @@ class QueuedImagePrompt
 {
     public readonly Collection $attachments;
 
+    /**
+     * @param  array<string, string>  $headers
+     */
     public function __construct(
         public readonly string $prompt,
         Collection|array $attachments,
@@ -17,6 +20,7 @@ class QueuedImagePrompt
         public readonly ?string $quality,
         public readonly Lab|array|string|null $provider,
         public readonly ?string $model,
+        public readonly array $headers = [],
     ) {
         $this->attachments = Collection::make($attachments);
     }

@@ -7,6 +7,9 @@ use Laravel\Ai\Enums\Lab;
 
 class QueuedAudioPrompt
 {
+    /**
+     * @param  array<string, string>  $headers
+     */
     public function __construct(
         public readonly string $text,
         public readonly string $voice,
@@ -14,6 +17,7 @@ class QueuedAudioPrompt
         public readonly Lab|array|string|null $provider,
         public readonly ?string $model,
         public readonly int $timeout = 30,
+        public readonly array $headers = [],
     ) {}
 
     /**

@@ -21,8 +21,9 @@ trait GeneratesEmbeddings
      *
      * @param  array<int, string|Audio|Document|Image|Video>  $inputs
      * @param  array<string, mixed>  $providerOptions
+     * @param  array<string, string>  $headers
      */
-    public function embeddings(array $inputs, ?int $dimensions = null, ?string $model = null, int $timeout = 30, array $providerOptions = []): EmbeddingsResponse
+    public function embeddings(array $inputs, ?int $dimensions = null, ?string $model = null, int $timeout = 30, array $providerOptions = [], array $headers = []): EmbeddingsResponse
     {
         if (! is_null($model) && is_null($dimensions)) {
             throw new InvalidArgumentException('Dimensions must be provided when model is specified.');
@@ -33,7 +34,7 @@ trait GeneratesEmbeddings
         $model ??= $this->defaultEmbeddingsModel();
         $dimensions ??= $this->defaultEmbeddingsDimensions();
 
-        $prompt = new EmbeddingsPrompt($inputs, $dimensions, $this, $model, $timeout, $providerOptions);
+        $prompt = new EmbeddingsPrompt($inputs, $dimensions, $this, $model, $timeout, $providerOptions, $headers);
 
         if (Ai::embeddingsAreFaked()) {
             Ai::recordEmbeddingsGeneration($prompt);
@@ -52,6 +53,7 @@ trait GeneratesEmbeddings
             $dimensions,
             $timeout,
             $providerOptions,
+            $headers,
         ), fn (EmbeddingsResponse $response) => $this->events->dispatch(new EmbeddingsGenerated(
             $invocationId, $this, $model, $prompt, $response,
         )));

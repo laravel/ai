@@ -7,6 +7,7 @@ use Laravel\Ai\Attributes\MaxTokens;
 use Laravel\Ai\Attributes\Temperature;
 use Laravel\Ai\Attributes\TopP;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasHeaders;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\ToolChoice;
@@ -34,6 +35,22 @@ class TextGenerationOptions
     {
         if ($this->agent instanceof HasProviderOptions) {
             return $this->agent->providerOptions(
+                $provider instanceof Lab ? $provider : (Lab::tryFrom($provider) ?? $provider)
+            );
+        }
+
+        return null;
+    }
+
+    /**
+     * Get the HTTP headers for the given provider.
+     *
+     * @return array<string, string>|null
+     */
+    public function headers(Lab|string $provider): ?array
+    {
+        if ($this->agent instanceof HasHeaders) {
+            return $this->agent->headers(
                 $provider instanceof Lab ? $provider : (Lab::tryFrom($provider) ?? $provider)
             );
         }

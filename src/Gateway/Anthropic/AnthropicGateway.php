@@ -63,7 +63,9 @@ class AnthropicGateway implements Gateway, StepTextGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('messages', $body),
+            fn () => $this->client($provider, $timeout)
+                ->withHeaders($options?->headers($provider->driver()) ?? [])
+                ->post('messages', $body),
         );
 
         $data = $response->json();
@@ -103,6 +105,7 @@ class AnthropicGateway implements Gateway, StepTextGateway
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)
+                ->withHeaders($options?->headers($provider->driver()) ?? [])
                 ->withOptions(['stream' => true])
                 ->post('messages', $body),
         );
@@ -128,6 +131,7 @@ class AnthropicGateway implements Gateway, StepTextGateway
         ?string $size = null,
         ?string $quality = null,
         ?int $timeout = null,
+        array $headers = [],
     ): ImageResponse {
         throw new LogicException('Anthropic does not support image generation.');
     }
@@ -144,6 +148,7 @@ class AnthropicGateway implements Gateway, StepTextGateway
         string $voice,
         ?string $instructions = null,
         int $timeout = 30,
+        array $headers = [],
     ): AudioResponse {
         throw new LogicException('Anthropic does not support audio generation.');
     }
@@ -161,6 +166,7 @@ class AnthropicGateway implements Gateway, StepTextGateway
         bool $diarize = false,
         int $timeout = 30,
         array $providerOptions = [],
+        array $headers = [],
     ): TranscriptionResponse {
         throw new LogicException('Anthropic does not support transcription generation.');
     }
@@ -177,6 +183,7 @@ class AnthropicGateway implements Gateway, StepTextGateway
         int $dimensions,
         int $timeout = 30,
         array $providerOptions = [],
+        array $headers = [],
     ): EmbeddingsResponse {
         throw new LogicException('Anthropic does not support embedding generation.');
     }

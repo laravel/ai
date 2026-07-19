@@ -55,7 +55,9 @@ class XaiGateway implements Gateway, StepTextGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('responses', $body),
+            fn () => $this->client($provider, $timeout)
+                ->withHeaders($options?->headers($provider->driver()) ?? [])
+                ->post('responses', $body),
         );
 
         $data = $response->json();
@@ -87,6 +89,7 @@ class XaiGateway implements Gateway, StepTextGateway
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)
+                ->withHeaders($options?->headers($provider->driver()) ?? [])
                 ->withOptions(['stream' => true])
                 ->post('responses', $body),
         );
@@ -110,6 +113,7 @@ class XaiGateway implements Gateway, StepTextGateway
         ?string $size = null,
         ?string $quality = null,
         ?int $timeout = null,
+        array $headers = [],
     ): ImageResponse {
         throw new LogicException('Use XaiImageGateway for image generation.');
     }
@@ -124,6 +128,7 @@ class XaiGateway implements Gateway, StepTextGateway
         string $voice,
         ?string $instructions = null,
         int $timeout = 30,
+        array $headers = [],
     ): AudioResponse {
         throw new LogicException('xAI does not support audio generation.');
     }
@@ -139,6 +144,7 @@ class XaiGateway implements Gateway, StepTextGateway
         bool $diarize = false,
         int $timeout = 30,
         array $providerOptions = [],
+        array $headers = [],
     ): TranscriptionResponse {
         throw new LogicException('xAI does not support transcription generation.');
     }
@@ -153,6 +159,7 @@ class XaiGateway implements Gateway, StepTextGateway
         int $dimensions,
         int $timeout = 30,
         array $providerOptions = [],
+        array $headers = [],
     ): EmbeddingsResponse {
         throw new LogicException('xAI does not support embedding generation.');
     }

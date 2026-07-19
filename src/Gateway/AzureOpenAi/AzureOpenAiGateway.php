@@ -52,10 +52,11 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, StepTextGate
         int $dimensions,
         int $timeout = 30,
         array $providerOptions = [],
+        array $headers = [],
     ): EmbeddingsResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('embeddings', array_merge($providerOptions, [
+            fn () => $this->client($provider, $timeout)->withHeaders($headers)->post('embeddings', array_merge($providerOptions, [
                 'model' => $model,
                 'input' => $inputs,
                 'dimensions' => $dimensions,
@@ -88,6 +89,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, StepTextGate
         ?string $size = null,
         ?string $quality = null,
         ?int $timeout = null,
+        array $headers = [],
     ): ImageResponse {
         if (filled($attachments)) {
             throw new LogicException('Azure OpenAI does not support image editing.');
@@ -95,7 +97,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, StepTextGate
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout ?? 120)->post('images/generations', [
+            fn () => $this->client($provider, $timeout ?? 120)->withHeaders($headers)->post('images/generations', [
                 'model' => $model,
                 'prompt' => $prompt,
                 'moderation' => 'low',

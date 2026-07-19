@@ -28,7 +28,9 @@ trait HandlesTextSteps
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('responses', $body),
+            fn () => $this->client($provider, $timeout)
+                ->withHeaders($options?->headers($provider->driver()) ?? [])
+                ->post('responses', $body),
         );
 
         $data = $response->json();
@@ -59,6 +61,7 @@ trait HandlesTextSteps
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)
+                ->withHeaders($options?->headers($provider->driver()) ?? [])
                 ->withOptions(['stream' => true])
                 ->post('responses', $body),
         );

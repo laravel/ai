@@ -50,7 +50,9 @@ class OllamaGateway implements EmbeddingGateway, StepTextGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('api/chat', $body),
+            fn () => $this->client($provider, $timeout)
+                ->withHeaders($options?->headers($provider->driver()) ?? [])
+                ->post('api/chat', $body),
         );
 
         $data = $response->json();
@@ -81,6 +83,7 @@ class OllamaGateway implements EmbeddingGateway, StepTextGateway
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)
+                ->withHeaders($options?->headers($provider->driver()) ?? [])
                 ->withOptions(['stream' => true])
                 ->post('api/chat', $body),
         );
@@ -98,6 +101,7 @@ class OllamaGateway implements EmbeddingGateway, StepTextGateway
         int $dimensions,
         int $timeout = 30,
         array $providerOptions = [],
+        array $headers = [],
     ): EmbeddingsResponse {
         $body = array_merge($providerOptions, array_filter([
             'model' => $model,
@@ -107,7 +111,7 @@ class OllamaGateway implements EmbeddingGateway, StepTextGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('api/embed', $body),
+            fn () => $this->client($provider, $timeout)->withHeaders($headers)->post('api/embed', $body),
         );
 
         $data = $response->json();

@@ -15,14 +15,15 @@ trait Reranks
      * Rerank the given documents based on their relevance to the query.
      *
      * @param  array<int, string>  $documents
+     * @param  array<string, string>  $headers
      */
-    public function rerank(array $documents, string $query, ?int $limit = null, ?string $model = null): RerankingResponse
+    public function rerank(array $documents, string $query, ?int $limit = null, ?string $model = null, array $headers = []): RerankingResponse
     {
         $invocationId = (string) Str::uuid7();
 
         $model ??= $this->defaultRerankingModel();
 
-        $prompt = new RerankingPrompt($documents, $query, $limit, $this, $model);
+        $prompt = new RerankingPrompt($documents, $query, $limit, $this, $model, $headers);
 
         if (Ai::rerankingIsFaked()) {
             Ai::recordReranking($prompt);
@@ -37,7 +38,8 @@ trait Reranks
             $model,
             $documents,
             $query,
-            $limit
+            $limit,
+            $prompt->headers,
         ), fn (RerankingResponse $response) => $this->events->dispatch(new Reranked(
             $invocationId, $this, $model, $prompt, $response,
         )));
