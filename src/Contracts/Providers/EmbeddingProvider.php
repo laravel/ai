@@ -16,8 +16,9 @@ interface EmbeddingProvider extends Provider
      *
      * @param  array<int, string|Audio|Document|Image|Video>  $inputs
      * @param  array<string, mixed>  $providerOptions
+     * @param  array<string, string>  $headers
      */
-    public function embeddings(array $inputs, ?int $dimensions = null, ?string $model = null, int $timeout = 30, array $providerOptions = []): EmbeddingsResponse;
+    public function embeddings(array $inputs, ?int $dimensions = null, ?string $model = null, int $timeout = 30, array $providerOptions = [], array $headers = []): EmbeddingsResponse;
 
     /**
      * Get the provider's embedding gateway.

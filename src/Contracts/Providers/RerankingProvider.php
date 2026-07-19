@@ -11,8 +11,9 @@ interface RerankingProvider extends Provider
      * Rerank the given documents based on their relevance to the query.
      *
      * @param  array<int, string>  $documents
+     * @param  array<string, string>  $headers
      */
-    public function rerank(array $documents, string $query, ?int $limit = null, ?string $model = null): RerankingResponse;
+    public function rerank(array $documents, string $query, ?int $limit = null, ?string $model = null, array $headers = []): RerankingResponse;
 
     /**
      * Get the provider's reranking gateway.

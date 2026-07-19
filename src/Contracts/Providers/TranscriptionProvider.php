@@ -12,6 +12,7 @@ interface TranscriptionProvider extends Provider
      * Generate audio from the given text.
      *
      * @param  array<string, mixed>  $providerOptions
+     * @param  array<string, string>  $headers
      */
     public function transcribe(
         TranscribableAudio $audio,
@@ -20,6 +21,7 @@ interface TranscriptionProvider extends Provider
         ?string $model = null,
         ?int $timeout = null,
         array $providerOptions = [],
+        array $headers = [],
     ): TranscriptionResponse;
 
     /**
