@@ -5,7 +5,6 @@ namespace Laravel\Ai\Storage;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\ConversationStore;
@@ -22,11 +21,6 @@ use Laravel\Ai\Responses\Data\ToolResult;
 
 class DatabaseConversationStore implements ConversationStore
 {
-    /**
-     * Whether the configured messages table has provider content block storage.
-     */
-    protected ?bool $hasProviderContentBlocksColumn = null;
-
     /**
      * Create a new conversation store instance.
      */
@@ -113,7 +107,7 @@ class DatabaseConversationStore implements ConversationStore
             }
         }
 
-        $attributes = $this->messageAttributes($messageId, $conversationId, $participantType, $participantId, $now, [
+        $this->table($this->messagesTable())->insert($this->messageAttributes($messageId, $conversationId, $participantType, $participantId, $now, [
             'agent' => $prompt->agent::class,
             'role' => 'assistant',
             'content' => $response->text,
@@ -123,15 +117,7 @@ class DatabaseConversationStore implements ConversationStore
             'usage' => json_encode($response->usage),
             'meta' => json_encode($this->messageMeta($response)),
             'approval_state' => $this->approvalState($response),
-        ]);
-
-        $providerContentBlocks = $this->providerContentBlocks($response);
-
-        if ($providerContentBlocks !== [] && $this->hasProviderContentBlocksColumn()) {
-            $attributes['provider_content_blocks'] = json_encode($providerContentBlocks);
-        }
-
-        $this->table($this->messagesTable())->insert($attributes);
+        ]));
 
         $this->touchConversation($conversationId, $now);
 
@@ -219,7 +205,11 @@ class DatabaseConversationStore implements ConversationStore
     {
         $meta = (array) json_decode(json_encode($response->meta), true);
 
-        if (filled($blocks = $response->pausedProviderContentBlocks())) {
+        $blocks = $response->awaitingApproval()
+            ? $response->pausedProviderContentBlocks()
+            : $this->providerContentBlocks($response);
+
+        if (filled($blocks)) {
             $meta['provider_content_blocks'] = $blocks;
         }
 
@@ -251,7 +241,9 @@ class DatabaseConversationStore implements ConversationStore
             ->flatMap(function ($record) use ($resolvedCallIds): array {
                 $toolCalls = collect(json_decode((string) $record->tool_calls, true))->values();
                 $toolResults = collect(json_decode((string) $record->tool_results, true))->values();
-                $providerContentBlocks = json_decode($record->provider_content_blocks ?? '[]', true) ?: [];
+                $meta = (array) json_decode($record->meta ?? '[]', true);
+                $providerContentBlocks = $meta['provider_content_blocks'] ?? [];
+                $provider = $meta['provider'] ?? null;
 
                 if ($record->role === 'user') {
                     $attachments = $this->rehydrateAttachments($record->attachments);
@@ -264,20 +256,20 @@ class DatabaseConversationStore implements ConversationStore
                 }
 
                 if ($toolCalls->isNotEmpty()) {
-                    return $this->reconstructToolTurn($record, $toolCalls, $toolResults, $resolvedCallIds, $providerContentBlocks);
+                    return $this->reconstructToolTurn($record, $toolCalls, $toolResults, $resolvedCallIds);
                 }
 
                 if ($toolResults->isNotEmpty()) {
                     $messages = [new ToolResultMessage($toolResults->map(ToolResult::fromArray(...)))];
 
                     if (filled($record->content)) {
-                        $messages[] = new AssistantMessage($record->content, providerContentBlocks: $providerContentBlocks);
+                        $messages[] = new AssistantMessage($record->content, providerContentBlocks: $providerContentBlocks, providerContentBlocksProvider: $provider);
                     }
 
                     return $messages;
                 }
 
-                return [new AssistantMessage($record->content, providerContentBlocks: $providerContentBlocks)];
+                return [new AssistantMessage($record->content, providerContentBlocks: $providerContentBlocks, providerContentBlocksProvider: $provider)];
             })
             ->skipWhile(fn (Message $message) => $message instanceof ToolResultMessage)
             ->values();
@@ -289,10 +281,9 @@ class DatabaseConversationStore implements ConversationStore
      * @param  Collection<int, array<string, mixed>>  $toolCalls
      * @param  Collection<int, array<string, mixed>>  $toolResults
      * @param  array<int, string>  $resolvedCallIds  Ids of calls answered anywhere in the window.
-     * @param  array<int, array<string, mixed>>  $providerContentBlocks
      * @return array<int, Message>
      */
-    protected function reconstructToolTurn(object $record, Collection $toolCalls, Collection $toolResults, array $resolvedCallIds = [], array $providerContentBlocks = []): array
+    protected function reconstructToolTurn(object $record, Collection $toolCalls, Collection $toolResults, array $resolvedCallIds = []): array
     {
         $callIds = $toolCalls->pluck('id')->all();
 
@@ -323,10 +314,11 @@ class DatabaseConversationStore implements ConversationStore
 
         $meta = (array) json_decode($record->meta ?? '[]', true);
 
-        $pausedProviderContentBlocks = $meta['provider_content_blocks'] ?? [];
+        $providerContentBlocks = $meta['provider_content_blocks'] ?? [];
+        $provider = $meta['provider'] ?? null;
 
-        if ($isPause && filled($pausedProviderContentBlocks)) {
-            $messages[] = new AssistantMessage($record->content, $toolCalls->map(ToolCall::fromArray(...))->values(), $pausedProviderContentBlocks, $meta['provider'] ?? null);
+        if ($isPause && filled($providerContentBlocks)) {
+            $messages[] = new AssistantMessage($record->content, $toolCalls->map(ToolCall::fromArray(...))->values(), $providerContentBlocks, $provider);
 
             if ($ownResults->isNotEmpty()) {
                 $messages[] = new ToolResultMessage($ownResults->map(ToolResult::fromArray(...))->values());
@@ -337,7 +329,7 @@ class DatabaseConversationStore implements ConversationStore
 
         // Calls already answered this turn are replayed with their results...
         if ($resolvedCalls->isNotEmpty()) {
-            $messages[] = new AssistantMessage('', $resolvedCalls->map(ToolCall::fromArray(...))->values(), $providerContentBlocks);
+            $messages[] = new AssistantMessage('', $resolvedCalls->map(ToolCall::fromArray(...))->values(), $providerContentBlocks, $provider);
             $messages[] = new ToolResultMessage($ownResults->map(ToolResult::fromArray(...))->values());
         }
 
@@ -347,9 +339,9 @@ class DatabaseConversationStore implements ConversationStore
         )->values();
 
         if ($keptCalls->isNotEmpty()) {
-            $messages[] = new AssistantMessage($record->content, $keptCalls->map(ToolCall::fromArray(...))->values(), $providerContentBlocks);
+            $messages[] = new AssistantMessage($record->content, $keptCalls->map(ToolCall::fromArray(...))->values(), $providerContentBlocks, $provider);
         } elseif (filled($record->content)) {
-            $messages[] = new AssistantMessage($record->content, providerContentBlocks: $providerContentBlocks);
+            $messages[] = new AssistantMessage($record->content, providerContentBlocks: $providerContentBlocks, providerContentBlocksProvider: $provider);
         }
 
         return $messages;
@@ -379,15 +371,6 @@ class DatabaseConversationStore implements ConversationStore
             });
 
         return $providerContentBlocks;
-    }
-
-    /**
-     * Determine whether provider content blocks can be stored for this installation.
-     */
-    protected function hasProviderContentBlocksColumn(): bool
-    {
-        return $this->hasProviderContentBlocksColumn ??= Schema::connection($this->connection)
-            ->hasColumn($this->messagesTable(), 'provider_content_blocks');
     }
 
     /**
