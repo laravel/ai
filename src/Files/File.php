@@ -59,44 +59,6 @@ abstract class File implements HasName, HasProviderOptions
         return $file;
     }
 
-    /**
-     * Create a file instance from a Vercel AI SDK UI message file part.
-     *
-     * @param  array<string, mixed>  $part
-     */
-    public static function fromUiMessagePart(array $part): ?File
-    {
-        $url = $part['url'] ?? '';
-        $mime = strtolower($part['mediaType'] ?? '');
-
-        $file = match (true) {
-            blank($url) => null,
-            str_starts_with($url, 'data:') => static::fromDataUrl($url, $mime),
-            str_starts_with($mime, 'image/') => new RemoteImage($url, $mime),
-            str_starts_with($mime, 'audio/') => new RemoteAudio($url, $mime),
-            default => new RemoteDocument($url, $mime ?: null),
-        };
-
-        return $file?->as($part['filename'] ?? null);
-    }
-
-    /**
-     * Create a base64 file instance from a data URL.
-     */
-    protected static function fromDataUrl(string $url, string $mime): ?File
-    {
-        $mime = $mime ?: strtolower(str_replace('data:', '', strstr($url, ';', true) ?: ''));
-
-        $base64 = str_contains($url, 'base64,') ? substr($url, strpos($url, 'base64,') + 7) : '';
-
-        return match (true) {
-            blank($base64) => null,
-            str_starts_with($mime, 'image/') => new Base64Image($base64, $mime),
-            str_starts_with($mime, 'audio/') => new Base64Audio($base64, $mime),
-            default => new Base64Document($base64, $mime ?: null),
-        };
-    }
-
     protected static function value(array $data, string $key, string $type): string
     {
         if (! isset($data[$key])) {
