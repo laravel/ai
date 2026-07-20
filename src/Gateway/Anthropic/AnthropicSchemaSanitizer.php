@@ -25,8 +25,7 @@ class AnthropicSchemaSanitizer
     ];
 
     /**
-     * Strip JSON Schema keywords unsupported by Anthropic native structured output,
-     * folding each into the node's description so the model still honors the intent.
+     * Strip JSON Schema keywords unsupported by Anthropic native structured output, folding each into the node's description so the model still honors the intent.
      *
      * @param  array<string, mixed>  $schema
      * @return array<string, mixed>
