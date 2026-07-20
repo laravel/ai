@@ -5,7 +5,7 @@ namespace Laravel\Ai\Contracts\Providers;
 use Laravel\Ai\Contracts\Gateway\VideoGateway;
 use Laravel\Ai\Responses\VideoResponse;
 
-interface VideoProvider
+interface VideoProvider extends Provider
 {
     /**
      * Generate a video (blocking until the remote job completes or fails).
