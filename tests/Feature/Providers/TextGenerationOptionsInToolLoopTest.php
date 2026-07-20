@@ -107,7 +107,7 @@ function textGenFakeGroqTextResponse(string $text): PromiseInterface
     ]);
 }
 
-test('openai temperature and max tokens are preserved in tool call follow up', function () {
+test('openai temperature and max tokens are preserved in tool call follow up', function (): void {
     Http::fake([
         '*' => Http::sequence([
             textGenFakeOpenAiToolCallResponse(),
@@ -120,22 +120,22 @@ test('openai temperature and max tokens are preserved in tool call follow up', f
     $gateway = new OpenAiGateway(app(Dispatcher::class));
     $manager = app(AiManager::class);
     $manager->purge('openai');
-    $manager->extend('openai', fn ($app, array $config) => new OpenAiProvider(
+    $manager->extend('openai', fn ($app, array $config): OpenAiProvider => new OpenAiProvider(
         $gateway, $config, app(Dispatcher::class),
     ));
 
     (new TextGenOptionsToolAgent)->prompt('Give me a number', provider: 'openai');
 
     Http::assertSentInOrder([
-        fn (Request $request) => $request['temperature'] === 0.2
+        fn (Request $request): bool => $request['temperature'] === 0.2
             && $request['max_output_tokens'] === 1024,
-        fn (Request $request) => $request['temperature'] === 0.2
+        fn (Request $request): bool => $request['temperature'] === 0.2
             && $request['max_output_tokens'] === 1024
             && isset($request['previous_response_id']),
     ]);
 });
 
-test('groq temperature and max tokens are preserved in tool call follow up', function () {
+test('groq temperature and max tokens are preserved in tool call follow up', function (): void {
     Http::fake([
         '*' => Http::sequence([
             textGenFakeGroqToolCallResponse(),
@@ -148,7 +148,7 @@ test('groq temperature and max tokens are preserved in tool call follow up', fun
     $gateway = new GroqGateway(app(Dispatcher::class));
     $manager = app(AiManager::class);
     $manager->purge('groq');
-    $manager->extend('groq', function ($app, array $config) use ($gateway) {
+    $manager->extend('groq', function ($app, array $config) use ($gateway): GroqProvider {
         $provider = new GroqProvider($config, app(Dispatcher::class));
         $provider->useTextGateway($gateway);
 
@@ -158,9 +158,9 @@ test('groq temperature and max tokens are preserved in tool call follow up', fun
     (new TextGenOptionsToolAgent)->prompt('Give me a number', provider: 'groq');
 
     Http::assertSentInOrder([
-        fn (Request $request) => $request['temperature'] === 0.2
+        fn (Request $request): bool => $request['temperature'] === 0.2
             && $request['max_completion_tokens'] === 1024,
-        fn (Request $request) => $request['temperature'] === 0.2
+        fn (Request $request): bool => $request['temperature'] === 0.2
             && $request['max_completion_tokens'] === 1024,
     ]);
 });

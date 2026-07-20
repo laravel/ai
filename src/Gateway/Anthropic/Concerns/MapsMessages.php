@@ -70,7 +70,7 @@ trait MapsMessages
             $thinkingBlocks = $message->toolCalls
                 ->whereNotNull('reasoningId')
                 ->unique('reasoningId')
-                ->map(fn ($toolCall) => [
+                ->map(fn ($toolCall): array => [
                     'type' => 'thinking',
                     'thinking' => is_array($toolCall->reasoningSummary)
                         ? implode("\n", array_column($toolCall->reasoningSummary, 'text'))
@@ -131,5 +131,31 @@ trait MapsMessages
             'role' => 'user',
             'content' => $content,
         ];
+    }
+
+    /**
+     * Ensure tool_use and server_tool_use content blocks encode empty input as an object for replay.
+     */
+    protected function ensureToolInputIsObject(array $content): array
+    {
+        return array_map(function (array $block): array {
+            if (in_array($block['type'] ?? '', ['tool_use', 'server_tool_use'], true)) {
+                $block['input'] = (object) ($block['input'] ?? []);
+            }
+
+            return $block;
+        }, $content);
+    }
+
+    /**
+     * Serialize a tool result output value to a string.
+     */
+    protected function serializeToolResultOutput(mixed $output): string
+    {
+        return match (true) {
+            is_string($output) => $output,
+            is_array($output) => json_encode($output),
+            default => strval($output),
+        };
     }
 }

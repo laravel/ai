@@ -27,9 +27,9 @@ class AnthropicProvider extends Provider implements FileProvider, SupportsWebFet
     {
         return array_filter([
             'max_uses' => $fetch->maxSearches ?? 10,
-            'allowed_domains' => ! empty($fetch->allowedDomains)
-                ? $fetch->allowedDomains
-                : null,
+            'allowed_domains' => $fetch->allowedDomains === []
+                ? null
+                : $fetch->allowedDomains,
         ]);
     }
 
@@ -40,9 +40,9 @@ class AnthropicProvider extends Provider implements FileProvider, SupportsWebFet
     {
         return array_filter([
             'max_uses' => $search->maxSearches,
-            'allowed_domains' => ! empty($search->allowedDomains)
-                ? $search->allowedDomains
-                : null,
+            'allowed_domains' => $search->allowedDomains === []
+                ? null
+                : $search->allowedDomains,
             'user_location' => $search->hasLocation()
                 ? array_filter([
                     'type' => 'approximate',
@@ -59,7 +59,7 @@ class AnthropicProvider extends Provider implements FileProvider, SupportsWebFet
      */
     public function defaultTextModel(): string
     {
-        return $this->config['models']['text']['default'] ?? 'claude-sonnet-4-6';
+        return $this->config['models']['text']['default'] ?? 'claude-sonnet-5';
     }
 
     /**

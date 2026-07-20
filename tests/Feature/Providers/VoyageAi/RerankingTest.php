@@ -8,20 +8,20 @@ use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Reranking;
 use Laravel\Ai\Responses\Data\RankedDocument;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.voyageai' => [
         ...config('ai.providers.voyageai'),
         'key' => 'test-key',
     ]]);
 });
 
-test('reranking request includes model, query, and documents', function () {
+test('reranking request includes model, query, and documents', function (): void {
     Http::fake(['*' => fakeVoyageRerankingResponse()]);
 
     Reranking::of(['Laravel is a PHP framework', 'React is a JS library'])
         ->rerank('What is Laravel?', provider: 'voyageai', model: 'rerank-2.5-lite');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['model'] === 'rerank-2.5-lite'
@@ -32,17 +32,17 @@ test('reranking request includes model, query, and documents', function () {
     });
 });
 
-test('reranking request includes top_k when limit set', function () {
+test('reranking request includes top_k when limit set', function (): void {
     Http::fake(['*' => fakeVoyageRerankingResponse()]);
 
     Reranking::of(['Doc A', 'Doc B', 'Doc C'])
         ->limit(2)
         ->rerank('query', provider: 'voyageai', model: 'rerank-2.5-lite');
 
-    Http::assertSent(fn (Request $request) => json_decode($request->body(), true)['top_k'] === 2);
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['top_k'] === 2);
 });
 
-test('reranking response is correctly parsed into RankedDocuments', function () {
+test('reranking response is correctly parsed into RankedDocuments', function (): void {
     Http::fake(['*' => fakeVoyageRerankingResponse()]);
 
     $response = Reranking::of(['Laravel is a PHP framework', 'React is a JS library'])
@@ -57,7 +57,7 @@ test('reranking response is correctly parsed into RankedDocuments', function () 
         ->and($response->meta->model)->toBe('rerank-2.5-lite');
 });
 
-test('reranking request sends bearer token', function () {
+test('reranking request sends bearer token', function (): void {
     Http::fake(['*' => fakeVoyageRerankingResponse()]);
 
     Reranking::of(['Doc A', 'Doc B'])->rerank('query', provider: 'voyageai', model: 'rerank-2.5-lite');
@@ -65,7 +65,7 @@ test('reranking request sends bearer token', function () {
     Http::assertSent(fn (Request $request) => $request->hasHeader('Authorization', 'Bearer test-key'));
 });
 
-test('reranking rate limit response throws rate limited exception', function () {
+test('reranking rate limit response throws rate limited exception', function (): void {
     Http::fake([
         'api.voyageai.com/*' => Http::response(['detail' => 'Rate limit exceeded'], 429),
     ]);
@@ -73,7 +73,7 @@ test('reranking rate limit response throws rate limited exception', function () 
     Reranking::of(['Doc A', 'Doc B'])->rerank('query', provider: 'voyageai', model: 'rerank-2.5-lite');
 })->throws(RateLimitedException::class);
 
-test('reranking overloaded response throws provider overloaded exception', function () {
+test('reranking overloaded response throws provider overloaded exception', function (): void {
     Http::fake([
         'api.voyageai.com/*' => Http::response(['detail' => 'Service unavailable'], 503),
     ]);
@@ -81,7 +81,7 @@ test('reranking overloaded response throws provider overloaded exception', funct
     Reranking::of(['Doc A', 'Doc B'])->rerank('query', provider: 'voyageai', model: 'rerank-2.5-lite');
 })->throws(ProviderOverloadedException::class);
 
-test('reranking http error response throws request exception', function () {
+test('reranking http error response throws request exception', function (): void {
     Http::fake([
         'api.voyageai.com/*' => Http::response(['detail' => 'Invalid model'], 400),
     ]);

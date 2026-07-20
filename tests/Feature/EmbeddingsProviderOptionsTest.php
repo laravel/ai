@@ -8,7 +8,7 @@ use Laravel\Ai\PendingResponses\PendingEmbeddingsGeneration;
 use Laravel\Ai\Prompts\QueuedEmbeddingsPrompt;
 use Laravel\Ai\Providers\Provider;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config([
         'ai.providers.cohere' => [...config('ai.providers.cohere'), 'key' => 'test-key'],
         'ai.providers.openai' => [...config('ai.providers.openai'), 'key' => 'test-key'],
@@ -16,7 +16,7 @@ beforeEach(function () {
     ]);
 });
 
-test('cache key differs by provider options so distinct option sets do not collide', function () {
+test('cache key differs by provider options so distinct option sets do not collide', function (): void {
     Http::fake([
         'api.cohere.com/*' => Http::response([
             'embeddings' => ['float' => [[0.1, 0.2, 0.3]]],
@@ -26,22 +26,22 @@ test('cache key differs by provider options so distinct option sets do not colli
 
     Embeddings::for(['Hello'])
         ->cache(3600)
-        ->providerOptions(['input_type' => 'search_document'])
+        ->withProviderOptions(['input_type' => 'search_document'])
         ->generate(provider: 'cohere', model: 'embed-v4.0');
 
     Embeddings::for(['Hello'])
         ->cache(3600)
-        ->providerOptions(['input_type' => 'search_query'])
+        ->withProviderOptions(['input_type' => 'search_query'])
         ->generate(provider: 'cohere', model: 'embed-v4.0');
 
     $observed = collect(Http::recorded())
-        ->map(fn (array $pair) => json_decode($pair[0]->body(), true)['input_type'] ?? null)
+        ->map(fn (array $pair): mixed => json_decode((string) $pair[0]->body(), true)['input_type'] ?? null)
         ->all();
 
     expect($observed)->toBe(['search_document', 'search_query']);
 });
 
-test('cache key is stable for the same provider options', function () {
+test('cache key is stable for the same provider options', function (): void {
     Http::fake([
         'api.cohere.com/*' => Http::response([
             'embeddings' => ['float' => [[0.1, 0.2, 0.3]]],
@@ -51,18 +51,18 @@ test('cache key is stable for the same provider options', function () {
 
     Embeddings::for(['Hello'])
         ->cache(3600)
-        ->providerOptions(['input_type' => 'search_query'])
+        ->withProviderOptions(['input_type' => 'search_query'])
         ->generate(provider: 'cohere', model: 'embed-v4.0');
 
     Embeddings::for(['Hello'])
         ->cache(3600)
-        ->providerOptions(['input_type' => 'search_query'])
+        ->withProviderOptions(['input_type' => 'search_query'])
         ->generate(provider: 'cohere', model: 'embed-v4.0');
 
     expect(Http::recorded())->toHaveCount(1);
 });
 
-test('cache key is insensitive to provider option key order', function () {
+test('cache key is insensitive to provider option key order', function (): void {
     Http::fake([
         'api.cohere.com/*' => Http::response([
             'embeddings' => ['float' => [[0.1, 0.2, 0.3]]],
@@ -72,18 +72,18 @@ test('cache key is insensitive to provider option key order', function () {
 
     Embeddings::for(['Hello'])
         ->cache(3600)
-        ->providerOptions(['input_type' => 'search_query', 'truncate' => 'END'])
+        ->withProviderOptions(['input_type' => 'search_query', 'truncate' => 'END'])
         ->generate(provider: 'cohere', model: 'embed-v4.0');
 
     Embeddings::for(['Hello'])
         ->cache(3600)
-        ->providerOptions(['truncate' => 'END', 'input_type' => 'search_query'])
+        ->withProviderOptions(['truncate' => 'END', 'input_type' => 'search_query'])
         ->generate(provider: 'cohere', model: 'embed-v4.0');
 
     expect(Http::recorded())->toHaveCount(1);
 });
 
-test('closure resolver receives the resolved provider and applies per-provider options', function () {
+test('closure resolver receives the resolved provider and applies per-provider options', function (): void {
     Http::fake([
         'api.cohere.com/*' => Http::response([
             'embeddings' => ['float' => [[0.1]]],
@@ -99,7 +99,7 @@ test('closure resolver receives the resolved provider and applies per-provider o
     $seen = [];
 
     Embeddings::for(['Hello'])
-        ->providerOptions(function (Provider $provider) use (&$seen) {
+        ->withProviderOptions(function (Provider $provider) use (&$seen): array {
             $seen[] = $provider->driver();
 
             return $provider->driver() === 'cohere'
@@ -110,26 +110,26 @@ test('closure resolver receives the resolved provider and applies per-provider o
 
     expect($seen)->toBe(['cohere']);
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return ($body['input_type'] ?? null) === 'search_query';
     });
 });
 
-test('closure provider options are not recorded on the queued prompt fake', function () {
+test('closure provider options are not recorded on the queued prompt fake', function (): void {
     Embeddings::fake();
 
     Embeddings::for(['Hello'])
-        ->providerOptions(fn (Provider $provider) => ['input_type' => 'search_query'])
+        ->withProviderOptions(fn (Provider $provider): array => ['input_type' => 'search_query'])
         ->queue(provider: 'cohere', model: 'embed-v4.0');
 
     Embeddings::assertQueued(
-        fn (QueuedEmbeddingsPrompt $prompt) => $prompt->providerOptions === [],
+        fn (QueuedEmbeddingsPrompt $prompt): bool => $prompt->providerOptions === [],
     );
 });
 
-test('closure provider options survive queue serialization round-trip', function () {
+test('closure provider options survive queue serialization round-trip', function (): void {
     Http::fake([
         'api.cohere.com/*' => Http::response([
             'embeddings' => ['float' => [[0.1]]],
@@ -138,7 +138,7 @@ test('closure provider options survive queue serialization round-trip', function
     ]);
 
     $pending = Embeddings::for(['Hello'])
-        ->providerOptions(fn (Provider $provider) => ['input_type' => 'search_query']);
+        ->withProviderOptions(fn (Provider $provider): array => ['input_type' => 'search_query']);
 
     $job = new GenerateEmbeddings($pending, 'cohere', 'embed-v4.0');
 
@@ -148,14 +148,14 @@ test('closure provider options survive queue serialization round-trip', function
 
     $restored->handle();
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return ($body['input_type'] ?? null) === 'search_query';
     });
 });
 
-test('closure resolver returning null is treated as no options', function () {
+test('closure resolver returning null is treated as no options', function (): void {
     Http::fake([
         'api.cohere.com/*' => Http::response([
             'embeddings' => ['float' => [[0.1]]],
@@ -164,10 +164,10 @@ test('closure resolver returning null is treated as no options', function () {
     ]);
 
     Embeddings::for(['Hello'])
-        ->providerOptions(fn () => null)
+        ->withProviderOptions(fn (): null => null)
         ->generate(provider: 'cohere', model: 'embed-v4.0');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return ($body['input_type'] ?? null) === 'search_document';

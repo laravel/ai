@@ -8,7 +8,7 @@ use Laravel\Ai\Contracts\Files\HasProviderId;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Store;
 
-interface StoreProvider
+interface StoreProvider extends Provider
 {
     /**
      * Get a vector store by its ID.
@@ -27,8 +27,10 @@ interface StoreProvider
 
     /**
      * Add a file to a vector store.
+     *
+     * @param  array<string, mixed>  $metadata
      */
-    public function addFileToStore(string $storeId, HasProviderId $file): string;
+    public function addFileToStore(string $storeId, HasProviderId $file, array $metadata = []): string;
 
     /**
      * Remove a file from a vector store.

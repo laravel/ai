@@ -8,7 +8,7 @@ use Tests\Fixtures\Mcp\FakeMcpClient;
 use Tests\Fixtures\Mcp\FakeMcpTool;
 use Tests\Fixtures\Mcp\FakeMcpToolResult;
 
-test('it detects mcp client tool primitives', function () {
+test('it detects mcp client tool primitives', function (): void {
     expect([
         McpTool::supports(mcpTool(new FakeMcpClient)),
         McpTool::supports(new stdClass),
@@ -18,7 +18,7 @@ test('it detects mcp client tool primitives', function () {
     );
 });
 
-test('it does not own the mcp client lifecycle', function () {
+test('it does not own the mcp client lifecycle', function (): void {
     $client = new FakeMcpClient;
 
     new McpTool(mcpTool($client));
@@ -29,7 +29,7 @@ test('it does not own the mcp client lifecycle', function () {
     ]);
 });
 
-test('it translates mcp input schemas to laravel tool schemas', function () {
+test('it translates mcp input schemas to laravel tool schemas', function (): void {
     $tool = new McpTool(mcpTool(new FakeMcpClient, inputSchema: [
         'type' => 'object',
         'properties' => [
@@ -111,7 +111,7 @@ test('it translates mcp input schemas to laravel tool schemas', function () {
     ]);
 });
 
-test('it resolves $ref against $defs and merges sibling keys', function () {
+test('it resolves $ref against $defs and merges sibling keys', function (): void {
     $tool = new McpTool(mcpTool(new FakeMcpClient, inputSchema: [
         'type' => 'object',
         'properties' => [
@@ -144,7 +144,7 @@ test('it resolves $ref against $defs and merges sibling keys', function () {
     ]);
 });
 
-test('it drops an unresolvable $ref instead of failing the whole tool', function () {
+test('it drops an unresolvable $ref instead of failing the whole tool', function (): void {
     $tool = new McpTool(mcpTool(new FakeMcpClient, inputSchema: [
         'type' => 'object',
         'properties' => [
@@ -164,7 +164,7 @@ test('it drops an unresolvable $ref instead of failing the whole tool', function
     expect($schema['properties']['name'])->toMatchArray(['type' => 'string']);
 });
 
-test('it keeps the properties of a nullable object root', function () {
+test('it keeps the properties of a nullable object root', function (): void {
     $tool = new McpTool(mcpTool(new FakeMcpClient, inputSchema: [
         'anyOf' => [
             [
@@ -182,7 +182,7 @@ test('it keeps the properties of a nullable object root', function () {
     expect($schema['properties']['query'])->toMatchArray(['type' => 'string']);
 });
 
-test('it marks fields nullable when anyOf or oneOf lists null after the typed branch', function () {
+test('it marks fields nullable when anyOf or oneOf lists null after the typed branch', function (): void {
     $tool = new McpTool(mcpTool(new FakeMcpClient, inputSchema: [
         'type' => 'object',
         'properties' => [
@@ -214,7 +214,7 @@ test('it marks fields nullable when anyOf or oneOf lists null after the typed br
     ]);
 });
 
-test('it returns text content from successful mcp calls', function () {
+test('it returns text content from successful mcp calls', function (): void {
     $client = new FakeMcpClient;
     $tool = new McpTool(mcpTool($client, name: 'search'));
 
@@ -232,7 +232,7 @@ test('it returns text content from successful mcp calls', function () {
     );
 });
 
-test('it prefers structured content from successful mcp calls', function () {
+test('it prefers structured content from successful mcp calls', function (): void {
     $client = new FakeMcpClient;
     $tool = new McpTool(mcpTool($client, name: 'lookup'));
 
@@ -252,7 +252,7 @@ test('it prefers structured content from successful mcp calls', function () {
         ]);
 });
 
-test('it surfaces application level mcp errors as tool output', function () {
+test('it surfaces application level mcp errors as tool output', function (): void {
     $client = new FakeMcpClient;
     $tool = new McpTool(mcpTool($client, name: 'lookup'));
 
@@ -263,9 +263,9 @@ test('it surfaces application level mcp errors as tool output', function () {
     expect($tool->handle(new Request(['id' => 1])))->toBe('MCP tool error: Record not found.');
 });
 
-test('it falls back to title then name when description is null', function () {
+test('it falls back to title then name when description is null', function (): void {
     $withTitle = new McpTool(mcpTool(new FakeMcpClient, name: 'lookup', title: 'Lookup record', description: null));
-    $withoutTitle = new McpTool(mcpTool(new FakeMcpClient, name: 'fallback_name', title: null, description: null));
+    $withoutTitle = new McpTool(mcpTool(new FakeMcpClient, name: 'fallback_name', description: null));
 
     expect([
         $withTitle->description(),

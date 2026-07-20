@@ -5,8 +5,10 @@ namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 use Illuminate\Support\Arr;
 use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\ToolChoice;
 
 trait BuildsTextRequests
 {
@@ -22,12 +24,69 @@ trait BuildsTextRequests
         ?array $schema,
         ?TextGenerationOptions $options,
     ): array {
-        $input = $this->mapMessagesToInput($messages, $instructions);
+        $body = [
+            'model' => $model,
+            'input' => $this->mapMessagesToInput($messages, $instructions, $provider),
+        ];
 
-        $body = ['model' => $model, 'input' => $input];
+        return $this->mergeSharedResponsesRequestOptions($body, $tools, $schema, $options, $provider);
+    }
 
+    /**
+     * Build the request body for a stateful Responses API continuation.
+     */
+    protected function buildContinuationBody(
+        Provider $provider,
+        string $model,
+        string $continuationToken,
+        array $messages,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options = null,
+    ): array {
+        $body = [
+            'model' => $model,
+            'previous_response_id' => $continuationToken,
+            'input' => $this->extractToolResultsInput($messages),
+        ];
+
+        return $this->mergeSharedResponsesRequestOptions($body, $tools, $schema, $options, $provider);
+    }
+
+    /**
+     * Extract the latest tool results for a stateful continuation request.
+     */
+    protected function extractToolResultsInput(array $messages): array
+    {
+        $lastMessage = end($messages);
+
+        if (! $lastMessage instanceof ToolResultMessage) {
+            return [];
+        }
+
+        return collect($lastMessage->toolResults)
+            ->map(fn ($toolResult): array => [
+                'type' => 'function_call_output',
+                'call_id' => $toolResult->resultId,
+                'output' => $this->serializeToolResultOutput($toolResult->result),
+            ])
+            ->all();
+    }
+
+    /**
+     * Merge shared Responses API options onto the given request body.
+     */
+    protected function mergeSharedResponsesRequestOptions(
+        array $body,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options,
+        Provider $provider,
+    ): array {
         if (filled($tools)) {
-            $body['tool_choice'] = 'auto';
+            $body['tool_choice'] = $options?->toolChoice instanceof ToolChoice
+                ? $this->mapToolChoice($options->toolChoice)
+                : 'auto';
             $body['tools'] = $this->mapTools($tools, $provider);
         }
 
@@ -35,7 +94,7 @@ trait BuildsTextRequests
             $body['text'] = $this->buildSchemaFormat($schema, Strict::isAppliedTo($options?->agent));
         }
 
-        if (! is_null($options?->maxTokens)) {
+        if ($options?->maxTokens !== null) {
             $body['max_output_tokens'] = $options->maxTokens;
         }
 
@@ -53,7 +112,7 @@ trait BuildsTextRequests
         if ($this->isStateless($provider)) {
             $body['store'] = false;
 
-            if ($this->isReasoningModel($model)) {
+            if ($this->isReasoningModel($body['model'] ?? '')) {
                 $body['include'] = array_values(array_unique([
                     ...($body['include'] ?? []),
                     'reasoning.encrypted_content',
@@ -64,6 +123,25 @@ trait BuildsTextRequests
         return $body;
     }
 
+    /**
+     * Map a tool choice to the OpenAI Responses tool_choice shape.
+     *
+     * @return string|array<string, mixed>
+     */
+    protected function mapToolChoice(ToolChoice $choice): string|array
+    {
+        return match ($choice->mode) {
+            ToolChoice::auto, ToolChoice::none, ToolChoice::required => $choice->mode,
+            ToolChoice::tool => [
+                'type' => 'function',
+                'name' => $choice->toolName,
+            ],
+        };
+    }
+
+    /**
+     * Determine if OpenAI should receive full stateless conversation history.
+     */
     protected function isStateless(Provider $provider): bool
     {
         return filter_var(
@@ -73,6 +151,9 @@ trait BuildsTextRequests
         ) === false;
     }
 
+    /**
+     * Determine if the model supports encrypted reasoning content.
+     */
     protected function isReasoningModel(string $model): bool
     {
         return (str_starts_with($model, 'gpt-5') && ! str_starts_with($model, 'gpt-5-chat'))

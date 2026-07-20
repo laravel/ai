@@ -54,9 +54,7 @@ trait InteractsWithFakeAudio
     public function assertAudioGenerated(Closure $callback): self
     {
         PHPUnit::assertTrue(
-            (new Collection($this->recordedAudioGenerations))->contains(function (AudioPrompt $prompt) use ($callback) {
-                return $callback($prompt);
-            }),
+            (new Collection($this->recordedAudioGenerations))->contains(fn (AudioPrompt $prompt) => $callback($prompt)),
             'An expected audio generation was not recorded.'
         );
 
@@ -69,9 +67,7 @@ trait InteractsWithFakeAudio
     public function assertAudioNotGenerated(Closure $callback): self
     {
         PHPUnit::assertTrue(
-            (new Collection($this->recordedAudioGenerations))->doesntContain(function (AudioPrompt $prompt) use ($callback) {
-                return $callback($prompt);
-            }),
+            (new Collection($this->recordedAudioGenerations))->doesntContain(fn (AudioPrompt $prompt) => $callback($prompt)),
             'An unexpected audio generation was recorded.'
         );
 
@@ -97,9 +93,7 @@ trait InteractsWithFakeAudio
     public function assertAudioQueued(Closure $callback): self
     {
         PHPUnit::assertTrue(
-            (new Collection($this->recordedQueuedAudioGenerations))->contains(function (QueuedAudioPrompt $prompt) use ($callback) {
-                return $callback($prompt);
-            }),
+            (new Collection($this->recordedQueuedAudioGenerations))->contains(fn (QueuedAudioPrompt $prompt) => $callback($prompt)),
             'An expected queued audio generation was not recorded.'
         );
 
@@ -112,9 +106,7 @@ trait InteractsWithFakeAudio
     public function assertAudioNotQueued(Closure $callback): self
     {
         PHPUnit::assertTrue(
-            (new Collection($this->recordedQueuedAudioGenerations))->doesntContain(function (QueuedAudioPrompt $prompt) use ($callback) {
-                return $callback($prompt);
-            }),
+            (new Collection($this->recordedQueuedAudioGenerations))->doesntContain(fn (QueuedAudioPrompt $prompt) => $callback($prompt)),
             'An unexpected queued audio generation was recorded.'
         );
 
