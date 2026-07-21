@@ -3,14 +3,14 @@
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.xai' => [
         ...config('ai.providers.xai'),
         'key' => 'test-key',
     ]]);
 });
 
-test('tool calls trigger follow up request', function () {
+test('tool calls trigger follow up request', function (): void {
     Http::fake([
         '*' => Http::sequence([
             $this->fakeToolCallResponse(),
@@ -27,7 +27,7 @@ test('tool calls trigger follow up request', function () {
 
     expect($recorded)->toHaveCount(2);
 
-    $followUpBody = json_decode($recorded[1][0]->body(), true);
+    $followUpBody = json_decode((string) $recorded[1][0]->body(), true);
 
     expect($followUpBody)->toHaveKey('previous_response_id');
 
@@ -42,7 +42,7 @@ test('tool calls trigger follow up request', function () {
     expect($hasToolOutput)->toBeTrue('Follow-up request should include function_call_output');
 });
 
-test('max steps limits tool call depth', function () {
+test('max steps limits tool call depth', function (): void {
     Http::fake([
         '*' => Http::sequence([
             $this->fakeToolCallResponse('FixedNumberGenerator', 'call_'.uniqid()),
@@ -62,7 +62,7 @@ test('max steps limits tool call depth', function () {
     expect(count($recorded))->toBeLessThanOrEqual(3);
 });
 
-test('follow up request preserves tools', function () {
+test('follow up request preserves tools', function (): void {
     Http::fake([
         '*' => Http::sequence([
             $this->fakeToolCallResponse(),
@@ -77,7 +77,7 @@ test('follow up request preserves tools', function () {
 
     $recorded = Http::recorded();
 
-    $followUpBody = json_decode($recorded[1][0]->body(), true);
+    $followUpBody = json_decode((string) $recorded[1][0]->body(), true);
 
     expect($followUpBody)->toHaveKey('tools')
         ->and($followUpBody['tools'])->not->toBeEmpty();

@@ -2,7 +2,7 @@
 
 use Laravel\Ai\Responses\Data\RankedDocument;
 
-test('ranked document stores index document and score', function () {
+test('ranked document stores index document and score', function (): void {
     $doc = new RankedDocument(0, 'test document content', 0.95);
 
     expect($doc->index)->toBe(0)
@@ -10,7 +10,7 @@ test('ranked document stores index document and score', function () {
         ->and($doc->score)->toBe(0.95);
 });
 
-test('ranked document to array returns all properties', function () {
+test('ranked document to array returns all properties', function (): void {
     $doc = new RankedDocument(2, 'relevant content', 0.85);
 
     $array = $doc->toArray();
@@ -20,7 +20,7 @@ test('ranked document to array returns all properties', function () {
         ->and($array['score'])->toBe(0.85);
 });
 
-test('ranked document json serialize returns to array', function () {
+test('ranked document json serialize returns to array', function (): void {
     $doc = new RankedDocument(1, 'search result', 0.75);
 
     $json = $doc->jsonSerialize();
@@ -30,7 +30,7 @@ test('ranked document json serialize returns to array', function () {
         ->and($json['score'])->toBe(0.75);
 });
 
-test('ranked document to string returns document content', function () {
+test('ranked document to string returns document content', function (): void {
     $doc = new RankedDocument(0, 'document text content', 0.5);
 
     expect((string) $doc)->toBe('document text content');

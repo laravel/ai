@@ -2,7 +2,7 @@
 
 use Tests\Fixtures\Agents\XaiAgent;
 
-test('xai agent can be faked', function () {
+test('xai agent can be faked', function (): void {
     XaiAgent::fake(['Test response']);
 
     $response = (new XaiAgent)->prompt('Hello');
@@ -10,15 +10,15 @@ test('xai agent can be faked', function () {
     expect($response->text)->toBe('Test response');
 });
 
-test('xai agent fake with closure', function () {
-    XaiAgent::fake(fn (string $prompt) => "Echo: {$prompt}");
+test('xai agent fake with closure', function (): void {
+    XaiAgent::fake(fn (string $prompt): string => "Echo: {$prompt}");
 
     $response = (new XaiAgent)->prompt('Hello world');
 
     expect($response->text)->toBe('Echo: Hello world');
 });
 
-test('xai agent fake with no predefined responses', function () {
+test('xai agent fake with no predefined responses', function (): void {
     XaiAgent::fake();
 
     $response = (new XaiAgent)->prompt('Hello');
@@ -26,7 +26,7 @@ test('xai agent fake with no predefined responses', function () {
     expect($response->text)->toBe('Fake response for prompt: Hello');
 });
 
-test('xai agent fake records prompts', function () {
+test('xai agent fake records prompts', function (): void {
     XaiAgent::fake();
 
     (new XaiAgent)->prompt('Hello');
@@ -35,11 +35,11 @@ test('xai agent fake records prompts', function () {
     XaiAgent::assertNotPrompted('Goodbye');
 });
 
-test('xai agent stream can be faked', function () {
+test('xai agent stream can be faked', function (): void {
     XaiAgent::fake(['Streamed response']);
 
     $response = (new XaiAgent)->stream('Hello');
-    $response->each(fn () => true);
+    $response->each(fn (): true => true);
 
     expect($response->text)->toBe('Streamed response');
 });

@@ -152,11 +152,11 @@ trait HandlesTextStreaming
         }
 
         if (filled($pendingToolCalls)) {
-            $toolCalls = array_map(function (array $toolCall) {
+            $toolCalls = array_map(function (array $toolCall): ToolCall {
                 $arguments = $toolCall['arguments'];
 
                 if ($toolCall['argumentsBuffer'] !== '') {
-                    $decoded = json_decode($toolCall['argumentsBuffer'], true);
+                    $decoded = json_decode((string) $toolCall['argumentsBuffer'], true);
 
                     if (is_array($decoded)) {
                         $arguments = array_replace($arguments, $decoded);

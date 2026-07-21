@@ -65,7 +65,7 @@ trait MapsMessages
             $reasoningBlocks = $message->toolCalls
                 ->whereNotNull('reasoningId')
                 ->unique('reasoningId')
-                ->map(fn ($toolCall) => [
+                ->map(fn ($toolCall): array => [
                     'type' => 'reasoning',
                     'id' => $toolCall->reasoningId,
                     'summary' => $toolCall->reasoningSummary ?? [],

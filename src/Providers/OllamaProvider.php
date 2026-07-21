@@ -27,6 +27,7 @@ class OllamaProvider extends Provider implements EmbeddingProvider, TextProvider
     /**
      * Get the credentials for the Ollama provider (API key is optional).
      */
+    #[\Override]
     public function providerCredentials(): array
     {
         return [

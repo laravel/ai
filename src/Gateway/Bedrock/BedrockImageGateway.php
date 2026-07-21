@@ -48,11 +48,11 @@ class BedrockImageGateway implements ImageGateway
                     'body' => json_encode($this->prepareImageRequestBody($model, $prompt, $size, $options)),
                 ]),
             );
-        } catch (Throwable $e) {
-            throw BedrockException::toAiException($e, $provider->name(), $model);
+        } catch (Throwable $throwable) {
+            throw BedrockException::toAiException($throwable, $provider->name(), $model);
         }
 
-        $result = json_decode($response->get('body')->getContents(), true);
+        $result = json_decode((string) $response->get('body')->getContents(), true);
 
         return new ImageResponse(
             $this->parseImageResponse($model, $result),
@@ -111,7 +111,7 @@ class BedrockImageGateway implements ImageGateway
             || str_starts_with($model, 'amazon.titan-image')
             || str_starts_with($model, 'amazon.nova-canvas')) {
             return (new Collection($result['images'] ?? []))
-                ->map(fn ($image) => new GeneratedImage($image ?? '', 'image/png'));
+                ->map(fn ($image): GeneratedImage => new GeneratedImage($image ?? '', 'image/png'));
         }
 
         return new Collection;

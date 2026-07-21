@@ -6,10 +6,12 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\PendingResponses\PendingImageGeneration;
+use Laravel\Ai\Responses\ImageResponse;
 
 class GenerateImage implements ShouldQueue
 {
-    use Concerns\InvokesQueuedResponseCallbacks, Queueable;
+    use Concerns\InvokesQueuedResponseCallbacks;
+    use Queueable;
 
     /**
      * Create a new job instance.
@@ -24,7 +26,7 @@ class GenerateImage implements ShouldQueue
      */
     public function handle(): void
     {
-        $this->withCallbacks(fn () => $this->pendingImage->generate(
+        $this->withCallbacks(fn (): ImageResponse => $this->pendingImage->generate(
             $this->provider,
             $this->model,
         ));

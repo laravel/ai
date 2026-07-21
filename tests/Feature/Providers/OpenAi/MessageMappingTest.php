@@ -3,6 +3,7 @@
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\LocalImage;
@@ -16,14 +17,14 @@ use Tests\Fixtures\Agents\ToolUsingAgent;
 
 use function Laravel\Ai\agent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.openai' => [
         ...config('ai.providers.openai'),
         'key' => 'test-key',
     ]]);
 });
 
-test('user message maps to openai format', function () {
+test('user message maps to openai format', function (): void {
     Http::fake([
         'api.openai.com/*' => fakeOpenAiResponse(),
     ]);
@@ -33,7 +34,7 @@ test('user message maps to openai format', function () {
         provider: 'openai',
     );
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $input = $body['input'];
         $userMessage = collect($input)->firstWhere('role', 'user');
@@ -44,7 +45,7 @@ test('user message maps to openai format', function () {
     });
 });
 
-test('tool result follow up uses previous response id', function () {
+test('tool result follow up uses previous response id', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::sequence([
             fakeOpenAiToolCallResponse(),
@@ -61,7 +62,7 @@ test('tool result follow up uses previous response id', function () {
 
     expect($recorded)->toHaveCount(2);
 
-    $followUpBody = json_decode($recorded[1][0]->body(), true);
+    $followUpBody = json_decode((string) $recorded[1][0]->body(), true);
 
     expect($followUpBody)->toHaveKey('previous_response_id')
         ->and($followUpBody['previous_response_id'])->toBe('resp_tool_123');
@@ -79,7 +80,7 @@ test('tool result follow up uses previous response id', function () {
     expect($hasFunctionCallOutput)->toBeTrue();
 });
 
-test('base64 pdf document maps to input file', function () {
+test('base64 pdf document maps to input file', function (): void {
     Http::fake([
         'api.openai.com/*' => fakeOpenAiResponse('I see a PDF'),
     ]);
@@ -92,7 +93,7 @@ test('base64 pdf document maps to input file', function () {
         provider: 'openai',
     );
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $userMessage = collect($body['input'])->firstWhere('role', 'user');
         $content = $userMessage['content'];
@@ -100,12 +101,12 @@ test('base64 pdf document maps to input file', function () {
         $fileBlock = collect($content)->firstWhere('type', 'input_file');
 
         return $fileBlock !== null
-            && str_contains($fileBlock['file_data'], 'application/pdf')
-            && str_contains($fileBlock['file_data'], base64_encode('fake-pdf-content'));
+            && str_contains((string) $fileBlock['file_data'], 'application/pdf')
+            && str_contains((string) $fileBlock['file_data'], base64_encode('fake-pdf-content'));
     });
 });
 
-test('nameless text document falls back to derived filename', function () {
+test('nameless text document falls back to derived filename', function (): void {
     Http::fake([
         'api.openai.com/*' => fakeOpenAiResponse(),
     ]);
@@ -116,7 +117,7 @@ test('nameless text document falls back to derived filename', function () {
         provider: 'openai',
     );
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $userMessage = collect($body['input'])->firstWhere('role', 'user');
         $fileBlock = collect($userMessage['content'])->firstWhere('type', 'input_file');
@@ -126,7 +127,7 @@ test('nameless text document falls back to derived filename', function () {
     });
 });
 
-test('uploaded pdf file maps to input file', function () {
+test('uploaded pdf file maps to input file', function (): void {
     Http::fake([
         'api.openai.com/*' => fakeOpenAiResponse('I see a PDF'),
     ]);
@@ -139,7 +140,7 @@ test('uploaded pdf file maps to input file', function () {
         provider: 'openai',
     );
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $userMessage = collect($body['input'])->firstWhere('role', 'user');
         $content = $userMessage['content'];
@@ -147,11 +148,11 @@ test('uploaded pdf file maps to input file', function () {
         $fileBlock = collect($content)->firstWhere('type', 'input_file');
 
         return $fileBlock !== null
-            && str_contains($fileBlock['file_data'], 'application/pdf');
+            && str_contains((string) $fileBlock['file_data'], 'application/pdf');
     });
 });
 
-test('local image attachment without explicit mime type detects mime from file', function () {
+test('local image attachment without explicit mime type detects mime from file', function (): void {
     Http::fake([
         'api.openai.com/*' => fakeOpenAiResponse('I see an image'),
     ]);
@@ -162,25 +163,24 @@ test('local image attachment without explicit mime type detects mime from file',
         provider: 'openai',
     );
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $userMessage = collect($body['input'])->firstWhere('role', 'user');
         $imageBlock = collect($userMessage['content'])->firstWhere('type', 'input_image');
 
         return $imageBlock !== null
-            && str_starts_with($imageBlock['image_url'], 'data:image/png;base64,')
-            && ! str_contains($imageBlock['image_url'], 'data:;base64,');
+            && str_starts_with((string) $imageBlock['image_url'], 'data:image/png;base64,')
+            && ! str_contains((string) $imageBlock['image_url'], 'data:;base64,');
     });
 });
 
-test('empty tool arguments serialize as object string on assistant replay', function () {
+test('empty tool arguments serialize as object string on assistant replay', function (): void {
     Http::fake([
         'api.openai.com/*' => fakeOpenAiResponse('hi'),
     ]);
 
     agent(
         instructions: 'Hi.',
-        tools: [(new ToolUsingAgent(fixed: true))->tools()[0]],
         messages: [
             new UserMessage('list'),
             new AssistantMessage('Listing.', collect([
@@ -202,9 +202,10 @@ test('empty tool arguments serialize as object string on assistant replay', func
             ])),
             new UserMessage('thanks'),
         ],
+        tools: [(new ToolUsingAgent(fixed: true))->tools()[0]],
     )->prompt('', provider: 'openai');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $fnCall = collect($body['input'] ?? [])
             ->firstWhere('type', 'function_call');
@@ -213,14 +214,13 @@ test('empty tool arguments serialize as object string on assistant replay', func
     });
 });
 
-test('non-empty tool arguments preserve shape on assistant replay', function () {
+test('non-empty tool arguments preserve shape on assistant replay', function (): void {
     Http::fake([
         'api.openai.com/*' => fakeOpenAiResponse('hi'),
     ]);
 
     agent(
         instructions: 'Hi.',
-        tools: [(new ToolUsingAgent(fixed: true))->tools()[0]],
         messages: [
             new UserMessage('search'),
             new AssistantMessage('Searching.', collect([
@@ -242,25 +242,25 @@ test('non-empty tool arguments preserve shape on assistant replay', function () 
             ])),
             new UserMessage('thanks'),
         ],
+        tools: [(new ToolUsingAgent(fixed: true))->tools()[0]],
     )->prompt('', provider: 'openai');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $fnCall = collect($body['input'] ?? [])
             ->firstWhere('type', 'function_call');
 
-        return $fnCall && json_decode($fnCall['arguments'], true) === ['query' => 'test'];
+        return $fnCall && json_decode((string) $fnCall['arguments'], true) === ['query' => 'test'];
     });
 });
 
-test('reasoning blocks are interleaved with associated tool calls on assistant replay', function () {
+test('reasoning blocks are interleaved with associated tool calls on assistant replay', function (): void {
     Http::fake([
         'api.openai.com/*' => fakeOpenAiResponse('hi'),
     ]);
 
     agent(
         instructions: 'Hi.',
-        tools: [(new ToolUsingAgent(fixed: true))->tools()[0]],
         messages: [
             new UserMessage('search'),
             new AssistantMessage('Searching.', collect([
@@ -298,17 +298,18 @@ test('reasoning blocks are interleaved with associated tool calls on assistant r
             ])),
             new UserMessage('thanks'),
         ],
+        tools: [(new ToolUsingAgent(fixed: true))->tools()[0]],
     )->prompt('', provider: 'openai');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $input = $body['input'];
 
-        $rs1Index = collect($input)->search(fn ($i) => ($i['type'] ?? '') === 'reasoning' && ($i['id'] ?? '') === 'rs_1');
-        $call1Index = collect($input)->search(fn ($i) => ($i['id'] ?? '') === 'call_1');
-        $rs2Index = collect($input)->search(fn ($i) => ($i['type'] ?? '') === 'reasoning' && ($i['id'] ?? '') === 'rs_2');
-        $call2Index = collect($input)->search(fn ($i) => ($i['id'] ?? '') === 'call_2');
-        $call3Index = collect($input)->search(fn ($i) => ($i['id'] ?? '') === 'call_3');
+        $rs1Index = collect($input)->search(fn ($i): bool => ($i['type'] ?? '') === 'reasoning' && ($i['id'] ?? '') === 'rs_1');
+        $call1Index = collect($input)->search(fn ($i): bool => ($i['id'] ?? '') === 'call_1');
+        $rs2Index = collect($input)->search(fn ($i): bool => ($i['type'] ?? '') === 'reasoning' && ($i['id'] ?? '') === 'rs_2');
+        $call2Index = collect($input)->search(fn ($i): bool => ($i['id'] ?? '') === 'call_2');
+        $call3Index = collect($input)->search(fn ($i): bool => ($i['id'] ?? '') === 'call_3');
 
         return $rs1Index !== false
             && $call1Index !== false
@@ -320,7 +321,131 @@ test('reasoning blocks are interleaved with associated tool calls on assistant r
     });
 });
 
-test('system instructions are in input array as system role', function () {
+test('image attachment provider options are forwarded to the content part', function (): void {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiResponse('I see an image'),
+    ]);
+
+    $image = (new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png'))
+        ->withProviderOptions(['detail' => 'low']);
+
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [$image],
+        provider: 'openai',
+    );
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $userMessage = collect($body['input'])->firstWhere('role', 'user');
+        $imageBlock = collect($userMessage['content'])->firstWhere('type', 'input_image');
+
+        return $imageBlock !== null
+            && ($imageBlock['detail'] ?? null) === 'low'
+            && str_starts_with((string) $imageBlock['image_url'], 'data:image/png;base64,');
+    });
+});
+
+test('document attachment provider options are forwarded to the content part', function (): void {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiResponse('I see a document'),
+    ]);
+
+    $document = Files\Document::fromString('hello world', 'text/plain')
+        ->withProviderOptions(['detail' => 'high']);
+
+    agent('You are helpful.')->prompt(
+        'Read this.',
+        attachments: [$document],
+        provider: 'openai',
+    );
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $userMessage = collect($body['input'])->firstWhere('role', 'user');
+        $fileBlock = collect($userMessage['content'])->firstWhere('type', 'input_file');
+
+        return $fileBlock !== null
+            && ($fileBlock['detail'] ?? null) === 'high'
+            && str_contains((string) $fileBlock['file_data'], base64_encode('hello world'));
+    });
+});
+
+test('attachment provider options resolve from a closure scoped to the provider', function (): void {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiResponse('I see an image'),
+    ]);
+
+    $image = (new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png'))
+        ->withProviderOptions(fn (Lab $provider): array => match ($provider) {
+            Lab::OpenAI => ['detail' => 'low'],
+            default => [],
+        });
+
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [$image],
+        provider: 'openai',
+    );
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $userMessage = collect($body['input'])->firstWhere('role', 'user');
+        $imageBlock = collect($userMessage['content'])->firstWhere('type', 'input_image');
+
+        return $imageBlock !== null
+            && ($imageBlock['detail'] ?? null) === 'low';
+    });
+});
+
+test('attachments without provider options map unchanged', function (): void {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiResponse('I see an image'),
+    ]);
+
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')],
+        provider: 'openai',
+    );
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $userMessage = collect($body['input'])->firstWhere('role', 'user');
+        $imageBlock = collect($userMessage['content'])->firstWhere('type', 'input_image');
+
+        return $imageBlock !== null
+            && ! array_key_exists('detail', $imageBlock);
+    });
+});
+
+test('provider options cannot overwrite the mapped structural keys', function (): void {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiResponse('I see an image'),
+    ]);
+
+    $image = (new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png'))
+        ->withProviderOptions(['type' => 'input_text', 'detail' => 'low']);
+
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [$image],
+        provider: 'openai',
+    );
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $userMessage = collect($body['input'])->firstWhere('role', 'user');
+        $imageBlock = collect($userMessage['content'])->firstWhere('type', 'input_image');
+
+        return $imageBlock !== null
+            && $imageBlock['type'] === 'input_image'
+            && ($imageBlock['detail'] ?? null) === 'low'
+            && str_starts_with((string) $imageBlock['image_url'], 'data:image/png;base64,');
+    });
+});
+
+test('system instructions are in input array as system role', function (): void {
     Http::fake([
         'api.openai.com/*' => fakeOpenAiResponse(),
     ]);
@@ -330,11 +455,11 @@ test('system instructions are in input array as system role', function () {
         provider: 'openai',
     );
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $systemMsg = collect($body['input'])->firstWhere('role', 'system');
 
         return $systemMsg !== null
-            && str_contains($systemMsg['content'], 'helpful assistant');
+            && str_contains((string) $systemMsg['content'], 'helpful assistant');
     });
 });

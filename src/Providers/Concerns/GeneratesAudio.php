@@ -37,7 +37,7 @@ trait GeneratesAudio
 
         return tap($this->audioGateway()->generateAudio(
             $this, $model, $prompt->text, $prompt->voice, $prompt->instructions, $timeout,
-        ), function (AudioResponse $response) use ($invocationId, $model, $prompt) {
+        ), function (AudioResponse $response) use ($invocationId, $model, $prompt): void {
             $this->events->dispatch(new AudioGenerated(
                 $invocationId, $this, $model, $prompt, $response,
             ));

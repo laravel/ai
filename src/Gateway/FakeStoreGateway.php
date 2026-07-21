@@ -41,7 +41,7 @@ class FakeStoreGateway implements StoreGateway
 
         return tap($this->marshalGetResponse(
             $provider, $response, $storeId
-        ), fn () => $this->currentResponseIndex++);
+        ), fn (): int => $this->currentResponseIndex++);
     }
 
     /**

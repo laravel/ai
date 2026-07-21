@@ -24,46 +24,46 @@ trait HandlesFailoverErrors
     {
         try {
             return $callback();
-        } catch (ConnectionException $e) {
+        } catch (ConnectionException $connectionException) {
             throw ProviderConnectionException::forProvider(
-                $providerName, $e->getCode(), $e
+                $providerName, $connectionException->getCode(), $connectionException
             );
-        } catch (RequestException $e) {
-            if ($e->response !== null) {
-                $status = $e->response->status();
+        } catch (RequestException $requestException) {
+            if ($requestException->response !== null) {
+                $status = $requestException->response->status();
 
                 if ($status === 429) {
                     throw RateLimitedException::forProvider(
-                        $providerName, $e->getCode(), $e
+                        $providerName, $requestException->getCode(), $requestException
                     );
                 }
 
                 if ($status === 402) {
                     throw InsufficientCreditsException::forProvider(
-                        $providerName, $e->getCode(), $e
+                        $providerName, $requestException->getCode(), $requestException
                     );
                 }
 
                 if (in_array($status, $this->overloadedStatusCodes())) {
                     throw ProviderOverloadedException::forProvider(
-                        $providerName, $e->getCode(), $e
+                        $providerName, $requestException->getCode(), $requestException
                     );
                 }
 
                 if ($patterns = $this->insufficientCreditPatterns()) {
-                    $message = strtolower($e->response->json('error.message', ''));
+                    $message = strtolower($requestException->response->json('error.message', ''));
 
                     foreach ($patterns as $pattern) {
-                        if (str_contains($message, $pattern)) {
+                        if (str_contains($message, (string) $pattern)) {
                             throw InsufficientCreditsException::forProvider(
-                                $providerName, $e->getCode(), $e
+                                $providerName, $requestException->getCode(), $requestException
                             );
                         }
                     }
                 }
             }
 
-            throw $e;
+            throw $requestException;
         }
     }
 

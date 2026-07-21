@@ -106,7 +106,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, StepTextGate
         $data = $response->json();
 
         return new ImageResponse(
-            collect($data['data'] ?? [])->map(fn (array $image) => new GeneratedImage(
+            collect($data['data'] ?? [])->map(fn (array $image): GeneratedImage => new GeneratedImage(
                 $image['b64_json'] ?? '',
                 'image/png',
             )),

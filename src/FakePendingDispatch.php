@@ -15,8 +15,8 @@ class FakePendingDispatch extends PendingDispatch
      * Set the desired connection for the job.
      *
      * @param  \BackedEnum|string|null  $connection
-     * @return $this
      */
+    #[\Override]
     public function onConnection($connection): static
     {
         return $this;
@@ -26,8 +26,8 @@ class FakePendingDispatch extends PendingDispatch
      * Set the desired queue for the job.
      *
      * @param  \BackedEnum|string|null  $queue
-     * @return $this
      */
+    #[\Override]
     public function onQueue($queue): static
     {
         return $this;
@@ -39,8 +39,8 @@ class FakePendingDispatch extends PendingDispatch
      * This feature is only supported by some queues, such as Amazon SQS.
      *
      * @param  \UnitEnum|string  $group
-     * @return $this
      */
+    #[\Override]
     public function onGroup($group): static
     {
         return $this;
@@ -52,8 +52,8 @@ class FakePendingDispatch extends PendingDispatch
      * This feature is only supported by some queues, such as Amazon SQS FIFO.
      *
      * @param  callable|null  $deduplicator
-     * @return $this
      */
+    #[\Override]
     public function withDeduplicator($deduplicator): static
     {
         return $this;
@@ -63,8 +63,8 @@ class FakePendingDispatch extends PendingDispatch
      * Set the desired connection for the chain.
      *
      * @param  \BackedEnum|string|null  $connection
-     * @return $this
      */
+    #[\Override]
     public function allOnConnection($connection): static
     {
         return $this;
@@ -74,8 +74,8 @@ class FakePendingDispatch extends PendingDispatch
      * Set the desired queue for the chain.
      *
      * @param  \BackedEnum|string|null  $queue
-     * @return $this
      */
+    #[\Override]
     public function allOnQueue($queue): static
     {
         return $this;
@@ -85,8 +85,8 @@ class FakePendingDispatch extends PendingDispatch
      * Set the desired delay in seconds for the job.
      *
      * @param  \DateTimeInterface|\DateInterval|int|null  $delay
-     * @return $this
      */
+    #[\Override]
     public function delay($delay): static
     {
         return $this;
@@ -94,9 +94,8 @@ class FakePendingDispatch extends PendingDispatch
 
     /**
      * Set the delay for the job to zero seconds.
-     *
-     * @return $this
      */
+    #[\Override]
     public function withoutDelay(): static
     {
         return $this;
@@ -104,9 +103,8 @@ class FakePendingDispatch extends PendingDispatch
 
     /**
      * Indicate that the job should be dispatched after all database transactions have committed.
-     *
-     * @return $this
      */
+    #[\Override]
     public function afterCommit(): static
     {
         return $this;
@@ -114,9 +112,8 @@ class FakePendingDispatch extends PendingDispatch
 
     /**
      * Indicate that the job should not wait until database transactions have been committed before dispatching.
-     *
-     * @return $this
      */
+    #[\Override]
     public function beforeCommit(): static
     {
         return $this;
@@ -126,8 +123,8 @@ class FakePendingDispatch extends PendingDispatch
      * Set the jobs that should run if this job is successful.
      *
      * @param  array  $chain
-     * @return $this
      */
+    #[\Override]
     public function chain($chain): static
     {
         return $this;
@@ -137,8 +134,8 @@ class FakePendingDispatch extends PendingDispatch
      * Indicate that the job should be dispatched after the response is sent to the browser.
      *
      * @param  bool  $afterResponse
-     * @return $this
      */
+    #[\Override]
     public function afterResponse($afterResponse = true): static
     {
         return $this;
@@ -149,6 +146,7 @@ class FakePendingDispatch extends PendingDispatch
      *
      * @return bool
      */
+    #[\Override]
     protected function shouldDispatch()
     {
         return true;
@@ -159,6 +157,7 @@ class FakePendingDispatch extends PendingDispatch
      *
      * @return mixed
      */
+    #[\Override]
     public function getJob()
     {
         return new class {};
@@ -169,8 +168,8 @@ class FakePendingDispatch extends PendingDispatch
      *
      * @param  string  $method
      * @param  array  $parameters
-     * @return $this
      */
+    #[\Override]
     public function __call($method, $parameters): static
     {
         return $this;
@@ -178,9 +177,8 @@ class FakePendingDispatch extends PendingDispatch
 
     /**
      * Handle the object's destruction.
-     *
-     * @return void
      */
+    #[\Override]
     public function __destruct()
     {
         //

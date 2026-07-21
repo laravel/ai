@@ -11,21 +11,21 @@ use Tests\Fixtures\Tools\RandomNumberGenerator;
 
 use function Laravel\Ai\agent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.openai' => [
         ...config('ai.providers.openai'),
         'key' => 'test-key',
     ]]);
 });
 
-test('tool with parameters includes strict compliant schema', function () {
+test('tool with parameters includes strict compliant schema', function (): void {
     Http::fake([
         '*' => fakeOpenAiResponse('42'),
     ]);
 
     agent(tools: [new RandomNumberGenerator])->prompt('Give me a random number', provider: 'openai');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'function');
 
@@ -39,14 +39,14 @@ test('tool with parameters includes strict compliant schema', function () {
     });
 });
 
-test('tool with a name() method emits the declared name', function () {
+test('tool with a name() method emits the declared name', function (): void {
     Http::fake([
         '*' => fakeOpenAiResponse('ok'),
     ]);
 
     agent(tools: [new NamedTool('my_custom_tool')])->prompt('Hi', provider: 'openai');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $names = collect(data_get($body, 'tools'))->pluck('name')->all();
 
@@ -54,14 +54,14 @@ test('tool with a name() method emits the declared name', function () {
     });
 });
 
-test('tool without a name() method falls back to class basename for openai', function () {
+test('tool without a name() method falls back to class basename for openai', function (): void {
     Http::fake([
         '*' => fakeOpenAiResponse('ok'),
     ]);
 
     agent(tools: [new FixedNumberGenerator])->prompt('Hi', provider: 'openai');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $names = collect(data_get($body, 'tools'))->pluck('name')->all();
 
@@ -69,14 +69,14 @@ test('tool without a name() method falls back to class basename for openai', fun
     });
 });
 
-test('tool without Strict attribute sends strict false and honors developer-declared required fields', function () {
+test('tool without Strict attribute sends strict false and honors developer-declared required fields', function (): void {
     Http::fake([
         '*' => fakeOpenAiResponse('ok'),
     ]);
 
     agent(tools: [new NonStrictTool])->prompt('Hi', provider: 'openai');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'function');
 
@@ -86,14 +86,14 @@ test('tool without Strict attribute sends strict false and honors developer-decl
     });
 });
 
-test('tool with empty schema includes strict compliant parameters', function () {
+test('tool with empty schema includes strict compliant parameters', function (): void {
     Http::fake([
         '*' => fakeOpenAiResponse('72019'),
     ]);
 
     agent(tools: [new FixedNumberGenerator])->prompt('Give me a random number', provider: 'openai');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'function');
 
@@ -106,14 +106,14 @@ test('tool with empty schema includes strict compliant parameters', function () 
     });
 });
 
-test('web search tool sends type web_search', function () {
+test('web search tool sends type web_search', function (): void {
     Http::fake([
         '*' => fakeOpenAiResponse('result'),
     ]);
 
     agent(tools: [new WebSearch])->prompt('Search the web', provider: 'openai');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
 
@@ -121,14 +121,14 @@ test('web search tool sends type web_search', function () {
     });
 });
 
-test('web search tool omits openai-specific options by default', function () {
+test('web search tool omits openai-specific options by default', function (): void {
     Http::fake([
         '*' => fakeOpenAiResponse('result'),
     ]);
 
     agent(tools: [new WebSearch])->prompt('Search the web', provider: 'openai');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
 
@@ -136,7 +136,7 @@ test('web search tool omits openai-specific options by default', function () {
     });
 });
 
-test('web search tool forwards openai provider options into the tool payload', function () {
+test('web search tool forwards openai provider options into the tool payload', function (): void {
     Http::fake([
         '*' => fakeOpenAiResponse('result'),
     ]);
@@ -148,7 +148,7 @@ test('web search tool forwards openai provider options into the tool payload', f
         ]),
     ])->prompt('Search', provider: 'openai');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
 
@@ -157,18 +157,18 @@ test('web search tool forwards openai provider options into the tool payload', f
     });
 });
 
-test('web search tool ignores provider options keyed to another provider', function () {
+test('web search tool ignores provider options keyed to another provider', function (): void {
     Http::fake([
         '*' => fakeOpenAiResponse('result'),
     ]);
 
     agent(tools: [
-        (new WebSearch)->withProviderOptions(fn (Lab|string $provider) => $provider === Lab::Anthropic
+        (new WebSearch)->withProviderOptions(fn (Lab|string $provider): array => $provider === Lab::Anthropic
             ? ['external_web_access' => false]
             : []),
     ])->prompt('Search', provider: 'openai');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
 
@@ -176,7 +176,7 @@ test('web search tool ignores provider options keyed to another provider', funct
     });
 });
 
-test('web search tool sends allowed_domains filter', function () {
+test('web search tool sends allowed_domains filter', function (): void {
     Http::fake([
         '*' => fakeOpenAiResponse('result'),
     ]);
@@ -184,7 +184,7 @@ test('web search tool sends allowed_domains filter', function () {
     agent(tools: [(new WebSearch)->allow(['example.com', 'docs.example.com'])])
         ->prompt('Search', provider: 'openai');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
 
@@ -192,7 +192,7 @@ test('web search tool sends allowed_domains filter', function () {
     });
 });
 
-test('web search tool sends blocked_domains via provider options', function () {
+test('web search tool sends blocked_domains via provider options', function (): void {
     Http::fake([
         '*' => fakeOpenAiResponse('result'),
     ]);
@@ -203,7 +203,7 @@ test('web search tool sends blocked_domains via provider options', function () {
         ]),
     ])->prompt('Search', provider: 'openai');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
 
@@ -211,7 +211,7 @@ test('web search tool sends blocked_domains via provider options', function () {
     });
 });
 
-test('web search tool merges allow() with blocked_domains provider option', function () {
+test('web search tool merges allow() with blocked_domains provider option', function (): void {
     Http::fake([
         '*' => fakeOpenAiResponse('result'),
     ]);
@@ -222,7 +222,7 @@ test('web search tool merges allow() with blocked_domains provider option', func
             ->withProviderOptions(['filters' => ['blocked_domains' => ['bad.com']]]),
     ])->prompt('Search', provider: 'openai');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
 
@@ -231,14 +231,14 @@ test('web search tool merges allow() with blocked_domains provider option', func
     });
 });
 
-test('web search tool omits filters when no domains configured', function () {
+test('web search tool omits filters when no domains configured', function (): void {
     Http::fake([
         '*' => fakeOpenAiResponse('result'),
     ]);
 
     agent(tools: [new WebSearch])->prompt('Search', provider: 'openai');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
 
@@ -246,7 +246,7 @@ test('web search tool omits filters when no domains configured', function () {
     });
 });
 
-test('web search tool sends user_location when location is set', function () {
+test('web search tool sends user_location when location is set', function (): void {
     Http::fake([
         '*' => fakeOpenAiResponse('result'),
     ]);
@@ -254,7 +254,7 @@ test('web search tool sends user_location when location is set', function () {
     agent(tools: [(new WebSearch)->location(city: 'Warsaw', country: 'PL')])
         ->prompt('Search', provider: 'openai');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
 
@@ -264,14 +264,14 @@ test('web search tool sends user_location when location is set', function () {
     });
 });
 
-test('web search tool omits user_location when no location set', function () {
+test('web search tool omits user_location when no location set', function (): void {
     Http::fake([
         '*' => fakeOpenAiResponse('result'),
     ]);
 
     agent(tools: [new WebSearch])->prompt('Search', provider: 'openai');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
 

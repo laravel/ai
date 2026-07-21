@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Providers;
 
 use Illuminate\Support\Collection;
+use InvalidArgumentException;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
@@ -46,9 +47,9 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
     {
         return array_filter([
             'fileSearchStoreNames' => $search->ids(),
-            'metadataFilter' => ! empty($search->filters)
-                ? $this->formatMetadataFilter($search->filters)
-                : null,
+            'metadataFilter' => $search->filters === []
+                ? null
+                : $this->formatMetadataFilter($search->filters),
         ]);
     }
 
@@ -59,14 +60,14 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     protected function formatMetadataFilter(array $filters): string
     {
-        return (new Collection($filters))->map(fn ($filter) => match ($filter['type']) {
+        return (new Collection($filters))->map(fn ($filter): string => match ($filter['type']) {
             'eq' => is_numeric($filter['value'])
                 ? "{$filter['key']}={$filter['value']}"
                 : "{$filter['key']}=\"{$filter['value']}\"",
             'ne' => is_numeric($filter['value'])
                 ? "{$filter['key']}!={$filter['value']}"
                 : "{$filter['key']}!=\"{$filter['value']}\"",
-            'in' => '('.(new Collection($filter['value']))->map(fn ($v) => is_numeric($v) ? "{$filter['key']}={$v}" : "{$filter['key']}=\"{$v}\""
+            'in' => '('.(new Collection($filter['value']))->map(fn ($v): string => is_numeric($v) ? "{$filter['key']}={$v}" : "{$filter['key']}=\"{$v}\""
             )->implode(' OR ').')',
         })->implode(' AND ');
     }
@@ -92,7 +93,7 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function defaultTextModel(): string
     {
-        return $this->config['models']['text']['default'] ?? 'gemini-3.5-flash';
+        return $this->config['models']['text']['default'] ?? 'gemini-3.6-flash';
     }
 
     /**
@@ -100,7 +101,7 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function cheapestTextModel(): string
     {
-        return $this->config['models']['text']['cheapest'] ?? 'gemini-3.1-flash-lite';
+        return $this->config['models']['text']['cheapest'] ?? 'gemini-3.5-flash-lite';
     }
 
     /**
@@ -108,7 +109,7 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function smartestTextModel(): string
     {
-        return $this->config['models']['text']['smartest'] ?? 'gemini-3.5-flash';
+        return $this->config['models']['text']['smartest'] ?? 'gemini-3.6-flash';
     }
 
     /**
@@ -162,7 +163,7 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function defaultEmbeddingsModel(): string
     {
-        return $this->config['models']['embeddings']['default'] ?? 'gemini-embedding-001';
+        return $this->config['models']['embeddings']['default'] ?? 'gemini-embedding-2';
     }
 
     /**
@@ -171,6 +172,36 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
     public function defaultEmbeddingsDimensions(): int
     {
         return $this->config['models']['embeddings']['dimensions'] ?? 3072;
+    }
+
+    /**
+     * Validate embeddings inputs against Gemini's supported media types.
+     */
+    protected function validateEmbeddingInputs(array $inputs, string $model): void
+    {
+        $model = str_starts_with($model, 'models/') ? substr($model, 7) : $model;
+
+        foreach ($inputs as $input) {
+            if (is_string($input)) {
+                continue;
+            }
+
+            if (! $this->isGeminiMultimodalEmbeddingModel($model)) {
+                throw new InvalidArgumentException(
+                    "Model [{$model}] does not support Gemini multimodal embeddings. Use [gemini-embedding-2] or [gemini-embedding-2-preview]."
+                );
+            }
+
+            return;
+        }
+    }
+
+    /**
+     * Determine if the given model supports Gemini multimodal embeddings.
+     */
+    protected function isGeminiMultimodalEmbeddingModel(string $model): bool
+    {
+        return in_array($model, ['gemini-embedding-2', 'gemini-embedding-2-preview'], true);
     }
 
     /**

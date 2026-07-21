@@ -10,7 +10,7 @@ use Tests\Fixtures\Agents\MethodOptionsAgent;
 use Tests\Fixtures\Agents\MethodOverridesAttributeAgent;
 use Tests\Fixtures\Agents\NullableMethodOptionsAgent;
 
-test('text generation options can be created from agent attributes', function () {
+test('text generation options can be created from agent attributes', function (): void {
     $options = TextGenerationOptions::forAgent(new AttributeAgent);
 
     expect($options->maxSteps)->toBe(10)
@@ -19,7 +19,7 @@ test('text generation options can be created from agent attributes', function ()
         ->and($options->topP)->toBe(0.8);
 });
 
-test('text generation options are null when agent has no attributes', function () {
+test('text generation options are null when agent has no attributes', function (): void {
     $options = TextGenerationOptions::forAgent(new AssistantAgent);
 
     expect($options->maxSteps)->toBeNull()
@@ -28,7 +28,7 @@ test('text generation options are null when agent has no attributes', function (
         ->and($options->topP)->toBeNull();
 });
 
-test('text generation options can be resolved from agent methods', function () {
+test('text generation options can be resolved from agent methods', function (): void {
     $options = TextGenerationOptions::forAgent(new MethodOptionsAgent);
 
     expect($options->maxSteps)->toBe(3)
@@ -36,7 +36,7 @@ test('text generation options can be resolved from agent methods', function () {
         ->and($options->temperature)->toBe(0.5);
 });
 
-test('agent methods take priority over attributes', function () {
+test('agent methods take priority over attributes', function (): void {
     $options = TextGenerationOptions::forAgent(new MethodOverridesAttributeAgent);
 
     expect($options->maxSteps)->toBe(1)
@@ -44,7 +44,7 @@ test('agent methods take priority over attributes', function () {
         ->and($options->temperature)->toBe(0.2);
 });
 
-test('null return from agent method falls back to attributes', function () {
+test('null return from agent method falls back to attributes', function (): void {
     $options = TextGenerationOptions::forAgent(new NullableMethodOptionsAgent);
 
     expect($options->maxSteps)->toBe(10)
@@ -52,7 +52,7 @@ test('null return from agent method falls back to attributes', function () {
         ->and($options->temperature)->toBe(0.7);
 });
 
-test('non-public or parameterized option methods are ignored', function () {
+test('non-public or parameterized option methods are ignored', function (): void {
     $options = TextGenerationOptions::forAgent(new IncompatibleMethodsAgent);
 
     expect($options->maxSteps)->toBe(8)
@@ -60,12 +60,10 @@ test('non-public or parameterized option methods are ignored', function () {
         ->and($options->temperature)->toBe(0.9);
 });
 
-test('provider attribute is used when prompting', function () {
+test('provider attribute is used when prompting', function (): void {
     AttributeAgent::fake();
 
     (new AttributeAgent)->prompt('Hello');
 
-    AttributeAgent::assertPrompted(function (AgentPrompt $prompt) {
-        return $prompt->provider->name() === Lab::Anthropic->value;
-    });
+    AttributeAgent::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->provider->name() === Lab::Anthropic->value);
 });

@@ -107,13 +107,13 @@ class FakeTextGateway implements StepTextGateway
      */
     protected function nextStep(TextProvider $provider, string $model, array $messages, ?array $schema): StepResponse
     {
-        $message = (new Collection($messages))->last(function ($message) {
-            return $message instanceof UserMessage;
-        });
+        $message = (new Collection($messages))->last(fn ($message): bool => $message instanceof UserMessage);
 
-        /** @var UserMessage $message */
+        $prompt = $message instanceof UserMessage ? $message->content : '';
+        $attachments = $message instanceof UserMessage ? $message->attachments : new Collection;
+
         $response = $this->nextResponse(
-            $provider, $model, $message->content, $message->attachments, $schema
+            $provider, $model, $prompt, $attachments, $schema
         );
 
         return $this->toStepResponse($response, $provider, $model);
@@ -136,6 +136,13 @@ class FakeTextGateway implements StepTextGateway
             );
         }
 
+        if ($response instanceof TextResponse && $response->hasPendingApprovals()) {
+            return new StepResponse(
+                $response->text, [], FinishReason::Stop, $response->usage, $response->meta,
+                pendingApprovals: $response->pendingApprovals->all(),
+            );
+        }
+
         return new StepResponse(
             $response->text, [], FinishReason::Stop, $response->usage, $response->meta
         );
@@ -152,7 +159,7 @@ class FakeTextGateway implements StepTextGateway
 
         return tap($this->marshalResponse(
             $response, $provider, $model, $prompt, $attachments, $schema
-        ), fn () => $this->currentResponseIndex++);
+        ), fn (): int => $this->currentResponseIndex++);
     }
 
     /**

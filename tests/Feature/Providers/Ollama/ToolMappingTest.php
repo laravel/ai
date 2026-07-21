@@ -8,21 +8,21 @@ use Tests\Fixtures\Tools\RandomNumberGenerator;
 
 use function Laravel\Ai\agent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.ollama' => [
         ...config('ai.providers.ollama'),
         'key' => '',
     ]]);
 });
 
-test('tool with parameters includes correct schema', function () {
+test('tool with parameters includes correct schema', function (): void {
     Http::fake([
         '*' => $this->fakeTextResponse('42'),
     ]);
 
     agent(tools: [new RandomNumberGenerator])->prompt('Give me a random number', provider: 'ollama');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'function');
         $function = $tool['function'] ?? [];
@@ -35,14 +35,14 @@ test('tool with parameters includes correct schema', function () {
     });
 });
 
-test('tool with empty schema includes parameters', function () {
+test('tool with empty schema includes parameters', function (): void {
     Http::fake([
         '*' => $this->fakeTextResponse('72019'),
     ]);
 
     agent(tools: [new FixedNumberGenerator])->prompt('Give me a number', provider: 'ollama');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'function');
         $function = $tool['function'] ?? [];
@@ -52,12 +52,12 @@ test('tool with empty schema includes parameters', function () {
     });
 });
 
-test('tool with a name() method emits the declared name', function () {
+test('tool with a name() method emits the declared name', function (): void {
     Http::fake(['*' => $this->fakeTextResponse('ok')]);
 
     agent(tools: [new NamedTool('my_custom_tool')])->prompt('Hi', provider: 'ollama');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $names = collect(data_get($body, 'tools'))->pluck('function.name')->all();
 
@@ -65,14 +65,14 @@ test('tool with a name() method emits the declared name', function () {
     });
 });
 
-test('tool definition includes name and description', function () {
+test('tool definition includes name and description', function (): void {
     Http::fake([
         '*' => $this->fakeTextResponse('done'),
     ]);
 
     agent(tools: [new RandomNumberGenerator])->prompt('Give me a number', provider: 'ollama');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'function');
         $function = $tool['function'] ?? [];

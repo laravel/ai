@@ -14,7 +14,7 @@ use Tests\Fixtures\Agents\ToolUsingAgent;
 
 use function Laravel\Ai\agent;
 
-test('user message maps to anthropic format', function () {
+test('user message maps to anthropic format', function (): void {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse(),
     ]);
@@ -24,7 +24,7 @@ test('user message maps to anthropic format', function () {
         provider: 'anthropic',
     );
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $messages = $request->data()['messages'];
         $userMessage = $messages[0];
 
@@ -34,7 +34,7 @@ test('user message maps to anthropic format', function () {
     });
 });
 
-test('tool result follow up maps assistant and tool result messages', function () {
+test('tool result follow up maps assistant and tool result messages', function (): void {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence([
             $this->fakeToolCallResponse(),
@@ -86,7 +86,7 @@ test('tool result follow up maps assistant and tool result messages', function (
         ->and($toolResultBlock['content'])->not->toBeEmpty();
 });
 
-test('local image attachment without explicit mime type detects mime from file', function () {
+test('local image attachment without explicit mime type detects mime from file', function (): void {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse('I see an image'),
     ]);
@@ -97,7 +97,7 @@ test('local image attachment without explicit mime type detects mime from file',
         provider: 'anthropic',
     );
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $content = $request->data()['messages'][0]['content'];
         $imageBlock = collect($content)->firstWhere('type', 'image');
 
@@ -107,7 +107,7 @@ test('local image attachment without explicit mime type detects mime from file',
     });
 });
 
-test('base64 pdf document maps to document content block', function () {
+test('base64 pdf document maps to document content block', function (): void {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse('I see a PDF'),
     ]);
@@ -120,7 +120,7 @@ test('base64 pdf document maps to document content block', function () {
         provider: 'anthropic',
     );
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $content = $request->data()['messages'][0]['content'];
         $docBlock = $content[0];
 
@@ -131,7 +131,7 @@ test('base64 pdf document maps to document content block', function () {
     });
 });
 
-test('base64 text document maps to text source block', function () {
+test('base64 text document maps to text source block', function (): void {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse(),
     ]);
@@ -144,7 +144,7 @@ test('base64 text document maps to text source block', function () {
         provider: 'anthropic',
     );
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $docBlock = $request->data()['messages'][0]['content'][0];
 
         return $docBlock['type'] === 'document'
@@ -154,7 +154,7 @@ test('base64 text document maps to text source block', function () {
     });
 });
 
-test('stored text document maps to text source block', function () {
+test('stored text document maps to text source block', function (): void {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse(),
     ]);
@@ -168,7 +168,7 @@ test('stored text document maps to text source block', function () {
         provider: 'anthropic',
     );
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $docBlock = $request->data()['messages'][0]['content'][0];
 
         return $docBlock['type'] === 'document'
@@ -178,7 +178,7 @@ test('stored text document maps to text source block', function () {
     });
 });
 
-test('local text document maps to text source block', function () {
+test('local text document maps to text source block', function (): void {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse(),
     ]);
@@ -193,12 +193,12 @@ test('local text document maps to text source block', function () {
             provider: 'anthropic',
         );
 
-        Http::assertSent(function ($request) {
+        Http::assertSent(function ($request): bool {
             $docBlock = $request->data()['messages'][0]['content'][0];
 
             return $docBlock['type'] === 'document'
                 && $docBlock['source']['type'] === 'text'
-                && str_starts_with($docBlock['source']['media_type'], 'text/')
+                && str_starts_with((string) $docBlock['source']['media_type'], 'text/')
                 && $docBlock['source']['data'] === 'local text contents';
         });
     } finally {
@@ -206,7 +206,7 @@ test('local text document maps to text source block', function () {
     }
 });
 
-test('uploaded text file maps to text source block', function () {
+test('uploaded text file maps to text source block', function (): void {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse(),
     ]);
@@ -219,7 +219,7 @@ test('uploaded text file maps to text source block', function () {
         provider: 'anthropic',
     );
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $docBlock = $request->data()['messages'][0]['content'][0];
 
         return $docBlock['type'] === 'document'
@@ -228,7 +228,7 @@ test('uploaded text file maps to text source block', function () {
     });
 });
 
-test('uploaded pdf file maps to document content block', function () {
+test('uploaded pdf file maps to document content block', function (): void {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse('I see a PDF'),
     ]);
@@ -241,7 +241,7 @@ test('uploaded pdf file maps to document content block', function () {
         provider: 'anthropic',
     );
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $content = $request->data()['messages'][0]['content'];
         $docBlock = $content[0];
 
@@ -251,7 +251,7 @@ test('uploaded pdf file maps to document content block', function () {
     });
 });
 
-test('empty tool arguments serialize as object on assistant replay', function () {
+test('empty tool arguments serialize as object on assistant replay', function (): void {
     $assistant = new AssistantMessage('Listing.', collect([
         new ToolCall(
             id: 'toolu_empty',
@@ -262,7 +262,6 @@ test('empty tool arguments serialize as object on assistant replay', function ()
 
     $gateway = app(AnthropicGateway::class);
     $method = (new ReflectionClass($gateway))->getMethod('mapMessages');
-    $method->setAccessible(true);
 
     $mapped = $method->invoke($gateway, [$assistant]);
     $toolUse = collect($mapped[0]['content'])->firstWhere('type', 'tool_use');
@@ -271,7 +270,7 @@ test('empty tool arguments serialize as object on assistant replay', function ()
         ->and(get_object_vars($toolUse['input']))->toBeEmpty();
 });
 
-test('non-empty tool arguments preserve shape on assistant replay', function () {
+test('non-empty tool arguments preserve shape on assistant replay', function (): void {
     $assistant = new AssistantMessage('Searching.', collect([
         new ToolCall(
             id: 'toolu_args',
@@ -282,7 +281,6 @@ test('non-empty tool arguments preserve shape on assistant replay', function () 
 
     $gateway = app(AnthropicGateway::class);
     $method = (new ReflectionClass($gateway))->getMethod('mapMessages');
-    $method->setAccessible(true);
 
     $mapped = $method->invoke($gateway, [$assistant]);
     $toolUse = collect($mapped[0]['content'])->firstWhere('type', 'tool_use');
@@ -290,7 +288,7 @@ test('non-empty tool arguments preserve shape on assistant replay', function () 
     expect($toolUse['input'])->toBe(['query' => 'test']);
 });
 
-test('assistant message with provider content blocks is replayed verbatim preserving order', function () {
+test('assistant message with provider content blocks is replayed verbatim preserving order', function (): void {
     $contentBlocks = [
         ['type' => 'text', 'text' => 'Let me consult the advisor.'],
         [
@@ -316,11 +314,10 @@ test('assistant message with provider content blocks is replayed verbatim preser
         ['type' => 'text', 'text' => "Here's the implementation."],
     ];
 
-    $assistant = new AssistantMessage('Here\'s the implementation.', null, $contentBlocks);
+    $assistant = new AssistantMessage("Here's the implementation.", null, $contentBlocks);
 
     $gateway = app(AnthropicGateway::class);
     $method = (new ReflectionClass($gateway))->getMethod('mapMessages');
-    $method->setAccessible(true);
 
     $mapped = $method->invoke($gateway, [$assistant]);
 
@@ -338,7 +335,7 @@ test('assistant message with provider content blocks is replayed verbatim preser
     expect($serverToolUse['input'])->toBeInstanceOf(stdClass::class);
 });
 
-test('parsed response populates provider content blocks on the assistant message', function () {
+test('parsed response populates provider content blocks on the assistant message', function (): void {
     Http::fake([
         'api.anthropic.com/*' => Http::response([
             'id' => 'msg_1',
@@ -386,7 +383,7 @@ test('parsed response populates provider content blocks on the assistant message
         ->and($blocks[3])->toBe(['type' => 'text', 'text' => 'Done.']);
 });
 
-test('assistant message produced by parser round-trips through mapping with server blocks intact', function () {
+test('assistant message produced by parser round-trips through mapping with server blocks intact', function (): void {
     Http::fake([
         'api.anthropic.com/*' => Http::response([
             'id' => 'msg_1',
@@ -418,7 +415,6 @@ test('assistant message produced by parser round-trips through mapping with serv
 
     $gateway = app(AnthropicGateway::class);
     $method = (new ReflectionClass($gateway))->getMethod('mapMessages');
-    $method->setAccessible(true);
 
     $mapped = $method->invoke($gateway, [$assistant]);
     $content = $mapped[0]['content'];
@@ -440,12 +436,11 @@ test('assistant message produced by parser round-trips through mapping with serv
         ->and($content[3])->toBe(['type' => 'text', 'text' => 'Found it.']);
 });
 
-test('assistant message without provider content blocks falls back to text plus tool calls rebuild', function () {
+test('assistant message without provider content blocks falls back to text plus tool calls rebuild', function (): void {
     $assistant = new AssistantMessage('Hello');
 
     $gateway = app(AnthropicGateway::class);
     $method = (new ReflectionClass($gateway))->getMethod('mapMessages');
-    $method->setAccessible(true);
 
     $mapped = $method->invoke($gateway, [$assistant]);
 
@@ -455,7 +450,7 @@ test('assistant message without provider content blocks falls back to text plus 
         ]);
 });
 
-test('thinking and redacted_thinking blocks are preserved on replay', function () {
+test('thinking and redacted_thinking blocks are preserved on replay', function (): void {
     $contentBlocks = [
         ['type' => 'thinking', 'thinking' => 'Considering options.', 'signature' => 'sig_1'],
         ['type' => 'redacted_thinking', 'data' => 'opaque'],
@@ -466,14 +461,13 @@ test('thinking and redacted_thinking blocks are preserved on replay', function (
 
     $gateway = app(AnthropicGateway::class);
     $method = (new ReflectionClass($gateway))->getMethod('mapMessages');
-    $method->setAccessible(true);
 
     $mapped = $method->invoke($gateway, [$assistant]);
 
     expect($mapped[0]['content'])->toBe($contentBlocks);
 });
 
-test('system instructions are not in messages array', function () {
+test('system instructions are not in messages array', function (): void {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse(),
     ]);
@@ -483,7 +477,7 @@ test('system instructions are not in messages array', function () {
         provider: 'anthropic',
     );
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $body = $request->data();
 
         foreach ($body['messages'] as $message) {
