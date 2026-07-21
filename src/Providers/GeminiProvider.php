@@ -163,7 +163,7 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function defaultEmbeddingsModel(): string
     {
-        return $this->config['models']['embeddings']['default'] ?? 'gemini-embedding-001';
+        return $this->config['models']['embeddings']['default'] ?? 'gemini-embedding-2';
     }
 
     /**
