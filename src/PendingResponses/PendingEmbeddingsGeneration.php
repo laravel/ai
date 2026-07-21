@@ -7,10 +7,20 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Traits\Conditionable;
 use InvalidArgumentException;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Contracts\Files\HasProviderId;
+use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\FakePendingDispatch;
+use Laravel\Ai\Files\Audio;
+use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\Image;
+use Laravel\Ai\Files\RemoteAudio;
+use Laravel\Ai\Files\RemoteDocument;
+use Laravel\Ai\Files\RemoteImage;
+use Laravel\Ai\Files\RemoteVideo;
+use Laravel\Ai\Files\Video;
 use Laravel\Ai\Jobs\GenerateEmbeddings;
 use Laravel\Ai\PendingResponses\Concerns\ResolvesProviderOptions;
 use Laravel\Ai\Prompts\QueuedEmbeddingsPrompt;
@@ -21,7 +31,8 @@ use Laravel\Ai\Responses\QueuedEmbeddingsResponse;
 
 class PendingEmbeddingsGeneration
 {
-    use Conditionable, ResolvesProviderOptions;
+    use Conditionable;
+    use ResolvesProviderOptions;
 
     protected ?int $dimensions = null;
 
@@ -34,7 +45,7 @@ class PendingEmbeddingsGeneration
     /**
      * Create a new pending embeddings generation instance.
      *
-     * @param  string[]  $inputs
+     * @param  array<int, string|Audio|Document|Image|Video>  $inputs
      *
      * @throws InvalidArgumentException
      */
@@ -49,8 +60,19 @@ class PendingEmbeddingsGeneration
         }
 
         foreach ($inputs as $index => $input) {
-            if (! is_string($input) || blank($input)) {
-                throw new InvalidArgumentException("The input at index {$index} must be a non-blank string.");
+            if (is_string($input)) {
+                if (blank($input)) {
+                    throw new InvalidArgumentException("The input at index {$index} must be a non-blank string.");
+                }
+
+                continue;
+            }
+
+            if (! $input instanceof Image
+                && ! $input instanceof Audio
+                && ! $input instanceof Document
+                && ! $input instanceof Video) {
+                throw new InvalidArgumentException("The input at index {$index} must be a string or an image, audio, document, or video file.");
             }
         }
     }
@@ -115,14 +137,14 @@ class PendingEmbeddingsGeneration
 
             $providerOptions = $this->resolveProviderOptions($provider);
 
-            if ($cached = $this->generateFromCache($provider, $model, $dimensions, $providerOptions)) {
+            if (($cached = $this->generateFromCache($provider, $model, $dimensions, $providerOptions)) instanceof EmbeddingsResponse) {
                 return $cached;
             }
 
             try {
                 return tap(
                     $provider->embeddings($this->inputs, $dimensions, $model, $this->timeout, $providerOptions),
-                    fn ($response) => $this->cacheEmbeddings($provider, $model, $dimensions, $providerOptions, $response)
+                    fn (EmbeddingsResponse $response) => $this->cacheEmbeddings($provider, $model, $dimensions, $providerOptions, $response)
                 );
             } catch (FailoverableException $e) {
                 $lastException = $e;
@@ -150,7 +172,7 @@ class PendingEmbeddingsGeneration
         $response = $this->cacheStore()->get($this->cacheKey($provider, $model, $dimensions, $providerOptions));
 
         if (! is_null($response)) {
-            $response = json_decode($response, true);
+            $response = json_decode((string) $response, true);
 
             return new EmbeddingsResponse($response['embeddings'], 0, new Meta(
                 provider: $response['meta']['provider'],
@@ -188,10 +210,20 @@ class PendingEmbeddingsGeneration
     {
         $optionsFingerprint = $this->fingerprintProviderOptions($providerOptions);
 
-        return 'laravel-embeddings:'.hash(
-            'sha256',
-            $provider->driver().'-'.$model.'-'.$dimensions.'-'.$optionsFingerprint.'-'.implode('-', $this->inputs),
-        );
+        if (array_all($this->inputs, fn ($input) => is_string($input))) {
+            return 'laravel-embeddings:'.hash(
+                'sha256',
+                $provider->driver().'-'.$model.'-'.$dimensions.'-'.$optionsFingerprint.'-'.implode('-', $this->inputs),
+            );
+        }
+
+        return 'laravel-embeddings:'.hash('sha256', json_encode([
+            'driver' => $provider->driver(),
+            'model' => $model,
+            'dimensions' => $dimensions,
+            'options' => $optionsFingerprint,
+            'inputs' => array_map($this->normalizeInputForCache(...), $this->inputs),
+        ], JSON_THROW_ON_ERROR));
     }
 
     /**
@@ -218,12 +250,60 @@ class PendingEmbeddingsGeneration
         }
 
         if (array_is_list($value)) {
-            return array_map(fn ($item) => $this->normalizeForFingerprint($item), $value);
+            return array_map($this->normalizeForFingerprint(...), $value);
         }
 
         ksort($value);
 
-        return array_map(fn ($item) => $this->normalizeForFingerprint($item), $value);
+        return array_map($this->normalizeForFingerprint(...), $value);
+    }
+
+    /**
+     * Normalize an embeddings input into a deterministic cache representation.
+     */
+    protected function normalizeInputForCache(mixed $input): array
+    {
+        if (is_string($input)) {
+            return [
+                'type' => 'text',
+                'value' => $input,
+            ];
+        }
+
+        $type = match (true) {
+            $input instanceof Image => 'image',
+            $input instanceof Audio => 'audio',
+            $input instanceof Document => 'document',
+            $input instanceof Video => 'video',
+            default => throw new InvalidArgumentException('Unsupported embeddings input type ['.get_debug_type($input).']'),
+        };
+
+        return match (true) {
+            $input instanceof HasProviderId => [
+                'type' => $type,
+                'source' => 'provider',
+                'id' => $input->id(),
+                'name' => $input->name(),
+            ],
+            $input instanceof RemoteImage,
+            $input instanceof RemoteAudio,
+            $input instanceof RemoteDocument,
+            $input instanceof RemoteVideo => [
+                'type' => $type,
+                'source' => 'remote',
+                'url' => $input->url,
+                'mime' => $input->declaredMimeType(),
+                'name' => $input->name(),
+            ],
+            $input instanceof StorableFile => [
+                'type' => $type,
+                'source' => 'content',
+                'hash' => hash('sha256', $input->content()),
+                'mime' => $input->mimeType(),
+                'name' => $input->name(),
+            ],
+            default => throw new InvalidArgumentException('Unsupported embeddings input type ['.get_debug_type($input).']'),
+        };
     }
 
     /**

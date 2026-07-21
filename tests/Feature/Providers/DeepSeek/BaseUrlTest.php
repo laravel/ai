@@ -5,11 +5,11 @@ use Illuminate\Support\Facades\Http;
 
 use function Laravel\Ai\agent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     $this->customUrl = 'http://localhost:1234/v1';
 });
 
-test('deepseek text requests use the configured base url', function () {
+test('deepseek text requests use the configured base url', function (): void {
     configureDeepSeekProvider($this->customUrl);
 
     Http::fake([
@@ -24,7 +24,7 @@ test('deepseek text requests use the configured base url', function () {
     deepseekAssertRequestSent('POST', "{$this->customUrl}/chat/completions");
 });
 
-test('deepseek requests fall back to the default base url', function () {
+test('deepseek requests fall back to the default base url', function (): void {
     configureDeepSeekProvider();
 
     Http::fake([
@@ -50,6 +50,6 @@ function configureDeepSeekProvider(?string $url = null): void
 
 function deepseekAssertRequestSent(string $method, string $url): void
 {
-    Http::assertSent(fn (Request $request) => $request->method() === $method
+    Http::assertSent(fn (Request $request): bool => $request->method() === $method
         && $request->url() === $url);
 }

@@ -45,7 +45,7 @@ trait ParsesTextResponses
         $text = $message['content'] ?? '';
         $rawToolCalls = $message['tool_calls'] ?? [];
 
-        $mappedToolCalls = array_map(function (array $toolCall) {
+        $mappedToolCalls = array_map(function (array $toolCall): ToolCall {
             $id = $toolCall['id'] ?? (string) Str::uuid7();
 
             return new ToolCall(

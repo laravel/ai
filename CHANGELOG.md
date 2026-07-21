@@ -1,6 +1,29 @@
 # Release Notes
 
-## [Unreleased](https://github.com/laravel/ai/compare/v0.9.0...0.x)
+## [Unreleased](https://github.com/laravel/ai/compare/v0.9.1...0.x)
+
+## [v0.9.1](https://github.com/laravel/ai/compare/v0.9.0...v0.9.1) - 2026-07-14
+
+### What's Changed
+
+* Remove dead dall-e-3 image integration dataset by [@mrdzen](https://github.com/mrdzen) in https://github.com/laravel/ai/pull/779
+* Forward attachment provider options to OpenAI text generation requests by [@mrdzen](https://github.com/mrdzen) in https://github.com/laravel/ai/pull/768
+* Add tool choice support for Gemini, OpenAI, and Anthropic by [@JVillator0](https://github.com/JVillator0) in https://github.com/laravel/ai/pull/780
+* Add tests for the image portrait and custom size helpers by [@dfinchenko](https://github.com/dfinchenko) in https://github.com/laravel/ai/pull/783
+* Add interactive agent console command for the workbench by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/786
+* Add web fetch tool coverage for the Anthropic provider by [@dfinchenko](https://github.com/dfinchenko) in https://github.com/laravel/ai/pull/792
+* [0.x] Validate blank base64 input consistently across file classes by [@Button99](https://github.com/Button99) in https://github.com/laravel/ai/pull/788
+* Add coverage for iterating the embeddings response by [@dfinchenko](https://github.com/dfinchenko) in https://github.com/laravel/ai/pull/790
+* Add web search user location coverage for the Anthropic provider by [@dfinchenko](https://github.com/dfinchenko) in https://github.com/laravel/ai/pull/791
+* Fix`TextDelta::combine` glues multi-step streamed text together mid-sentence by [@crishoj](https://github.com/crishoj) in https://github.com/laravel/ai/pull/789
+* Fix empty Bedrock stream content blocks by [@iAmKevinMcKee](https://github.com/iAmKevinMcKee) in https://github.com/laravel/ai/pull/785
+
+### New Contributors
+
+* [@crishoj](https://github.com/crishoj) made their first contribution in https://github.com/laravel/ai/pull/789
+* [@iAmKevinMcKee](https://github.com/iAmKevinMcKee) made their first contribution in https://github.com/laravel/ai/pull/785
+
+**Full Changelog**: https://github.com/laravel/ai/compare/v0.9.0...v0.9.1
 
 ## [v0.9.0](https://github.com/laravel/ai/compare/v0.8.1...v0.9.0) - 2026-07-07
 

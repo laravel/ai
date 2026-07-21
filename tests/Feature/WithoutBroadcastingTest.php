@@ -12,31 +12,31 @@ use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\NonBroadcastingTextAgent;
 use Tests\Fixtures\Agents\NonBroadcastingToolAgent;
 
-test('it rejects event classes that are not stream events', function () {
-    expect(fn () => new WithoutBroadcasting('App\Events\Typo'))
+test('it rejects event classes that are not stream events', function (): void {
+    expect(fn (): WithoutBroadcasting => new WithoutBroadcasting('App\Events\Typo'))
         ->toThrow(InvalidArgumentException::class);
 });
 
-test('no events are withheld when the attribute is absent', function () {
+test('no events are withheld when the attribute is absent', function (): void {
     expect(WithoutBroadcasting::eventsFor(new AssistantAgent))->toBe([]);
 });
 
-test('listed events are withheld when the attribute is present', function () {
+test('listed events are withheld when the attribute is present', function (): void {
     expect(WithoutBroadcasting::eventsFor(new NonBroadcastingToolAgent))
         ->toContain(ToolResult::class)
         ->toContain(ToolCall::class);
 });
 
-test('events not listed in the attribute are not withheld', function () {
+test('events not listed in the attribute are not withheld', function (): void {
     expect(WithoutBroadcasting::eventsFor(new NonBroadcastingToolAgent))
         ->not->toContain(TextDelta::class);
 });
 
-test('a null target withholds nothing', function () {
+test('a null target withholds nothing', function (): void {
     expect(WithoutBroadcasting::eventsFor(null))->toBe([]);
 });
 
-test('broadcast withholds listed events from the channel but assembles the full response', function () {
+test('broadcast withholds listed events from the channel but assembles the full response', function (): void {
     Event::fake();
     NonBroadcastingTextAgent::fake(['Hello world']);
 
@@ -44,18 +44,18 @@ test('broadcast withholds listed events from the channel but assembles the full 
 
     (new NonBroadcastingTextAgent)
         ->broadcastNow('Say hello', new Channel('test-channel'))
-        ->then(function ($response) use (&$received) {
+        ->then(function ($response) use (&$received): void {
             $received = $response;
         });
 
-    Event::assertNotDispatched(AnonymousEvent::class, fn (AnonymousEvent $e) => $e->broadcastAs() === 'text_delta');
-    Event::assertDispatched(AnonymousEvent::class, fn (AnonymousEvent $e) => $e->broadcastAs() === 'stream_start');
+    Event::assertNotDispatched(AnonymousEvent::class, fn (AnonymousEvent $e): bool => $e->broadcastAs() === 'text_delta');
+    Event::assertDispatched(AnonymousEvent::class, fn (AnonymousEvent $e): bool => $e->broadcastAs() === 'stream_start');
 
     expect($received)->not->toBeNull('then() callback was never invoked')
         ->and($received->text)->toBe('Hello world');
 });
 
-test('broadcast agent withholds listed events from the channel but resolves the full response', function () {
+test('broadcast agent withholds listed events from the channel but resolves the full response', function (): void {
     Event::fake();
     NonBroadcastingTextAgent::fake(['Hello world']);
 
@@ -67,14 +67,14 @@ test('broadcast agent withholds listed events from the channel but resolves the 
         channels: new Channel('test-channel'),
     );
 
-    $job->then(function ($response) use (&$received) {
+    $job->then(function ($response) use (&$received): void {
         $received = $response;
     });
 
     $job->handle();
 
-    Event::assertNotDispatched(AnonymousEvent::class, fn (AnonymousEvent $e) => $e->broadcastAs() === 'text_delta');
-    Event::assertDispatched(AnonymousEvent::class, fn (AnonymousEvent $e) => $e->broadcastAs() === 'stream_start');
+    Event::assertNotDispatched(AnonymousEvent::class, fn (AnonymousEvent $e): bool => $e->broadcastAs() === 'text_delta');
+    Event::assertDispatched(AnonymousEvent::class, fn (AnonymousEvent $e): bool => $e->broadcastAs() === 'stream_start');
 
     expect($received)->not->toBeNull('then() callback was never invoked')
         ->and($received->text)->toBe('Hello world');

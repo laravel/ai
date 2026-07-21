@@ -15,7 +15,7 @@ function parser(): object
     };
 }
 
-test('reads stream byte by byte to prevent event batching', function () {
+test('reads stream byte by byte to prevent event batching', function (): void {
     $payload = implode("\n\n", [
         'data: {"type":"message_start"}',
         'data: {"type":"content_block_delta","delta":{"text":"Hello"}}',
@@ -30,7 +30,7 @@ test('reads stream byte by byte to prevent event batching', function () {
     expect($stream->maxReadSize)->toBe(1, 'Parser must read byte-by-byte to prevent SSE event batching.');
 });
 
-test('yields each event before reading next events data', function () {
+test('yields each event before reading next events data', function (): void {
     $payload = "data: {\"type\":\"event_1\"}\n\ndata: {\"type\":\"event_2\"}\n\ndata: {\"type\":\"event_3\"}\n\n";
 
     $stream = new FakeStream($payload);

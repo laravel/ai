@@ -31,7 +31,7 @@ use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 use function Laravel\Ai\agent;
 
-test('agents can get a simple text response', function (string $provider, string $apiKey, string $model) {
+test('agents can get a simple text response', function (string $provider, string $apiKey, string $model): void {
     requiresApiKey($apiKey);
 
     Event::fake();
@@ -55,7 +55,7 @@ test('agents can get a simple text response', function (string $provider, string
     Event::assertDispatched(AgentPrompted::class);
 })->with('agent-providers');
 
-test('ad hoc agents can be prompted', function (string $provider, string $apiKey, string $model) {
+test('ad hoc agents can be prompted', function (string $provider, string $apiKey, string $model): void {
     requiresApiKey($apiKey);
 
     $response = agent()->prompt(
@@ -67,7 +67,7 @@ test('ad hoc agents can be prompted', function (string $provider, string $apiKey
     expect(str_contains($response->text, 'Laravel'))->toBeTrue();
 })->with('agent-providers');
 
-test('agents can stream a response', function (string $provider, string $apiKey, string $model) {
+test('agents can stream a response', function (string $provider, string $apiKey, string $model): void {
     requiresApiKey($apiKey);
 
     Event::fake();
@@ -78,9 +78,9 @@ test('agents can stream a response', function (string $provider, string $apiKey,
         'What is the name of the PHP framework created by Taylor Otwell?',
         provider: $provider,
         model: $model,
-    )->then(function (StreamedAgentResponse $response) {
+    )->then(function (StreamedAgentResponse $response): void {
         $_SERVER['__testing.response'] = $response;
-    })->then(function () {
+    })->then(function (): void {
         $_SERVER['__testing.invoked'] = true;
     });
 
@@ -93,7 +93,7 @@ test('agents can stream a response', function (string $provider, string $apiKey,
     expect((new Collection($events))
         ->whereInstanceOf(TextDelta::class)
         ->isNotEmpty())->toBeTrue()
-        ->and(str_contains($response->text, 'Laravel'))->toBeTrue()
+        ->and(str_contains((string) $response->text, 'Laravel'))->toBeTrue()
         ->and($_SERVER['__testing.response']->events)->toHaveSameSize($events)
         ->and($_SERVER['__testing.invoked'])->toBeTrue();
 
@@ -104,7 +104,7 @@ test('agents can stream a response', function (string $provider, string $apiKey,
     unset($_SERVER['__testing.invoked']);
 })->with('agent-providers');
 
-test('agents can queue a response', function (string $provider, string $apiKey, string $model) {
+test('agents can queue a response', function (string $provider, string $apiKey, string $model): void {
     requiresApiKey($apiKey);
 
     $agent = new AssistantAgent;
@@ -113,58 +113,58 @@ test('agents can queue a response', function (string $provider, string $apiKey, 
         'What is the name of the PHP framework created by Taylor Otwell?',
         provider: $provider,
         model: $model,
-    )->then(function (AgentResponse $response) {
+    )->then(function (AgentResponse $response): void {
         $_ENV['__testing.response'] = $response;
     });
 
     $response = $_ENV['__testing.response'];
 
-    expect(str_contains($response->text, 'Laravel'))->toBeTrue();
+    expect(str_contains((string) $response->text, 'Laravel'))->toBeTrue();
 
     unset($_SERVER['__testing.response']);
 })->with('agent-providers');
 
-test('ad hoc agents can queue a response', function (string $provider, string $apiKey, string $model) {
+test('ad hoc agents can queue a response', function (string $provider, string $apiKey, string $model): void {
     requiresApiKey($apiKey);
 
     agent()->queue(
         'What is the name of the PHP framework created by Taylor Otwell?',
         provider: $provider,
         model: $model,
-    )->then(function (AgentResponse $response) {
+    )->then(function (AgentResponse $response): void {
         $_ENV['__testing.response'] = $response;
     });
 
     $response = $_ENV['__testing.response'];
 
-    expect(str_contains($response->text, 'Laravel'))->toBeTrue();
+    expect(str_contains((string) $response->text, 'Laravel'))->toBeTrue();
 
     unset($_SERVER['__testing.response']);
 })->with('agent-providers');
 
-test('ad hoc structured agents can queue a response', function (string $provider, string $apiKey, string $model) {
+test('ad hoc structured agents can queue a response', function (string $provider, string $apiKey, string $model): void {
     requiresApiKey($apiKey);
 
     agent(
-        schema: fn ($schema) => [
+        schema: fn ($schema): array => [
             'symbol' => $schema->string()->required(),
         ]
     )->queue(
         'What is the chemical symbol for silver?',
         provider: $provider,
         model: $model,
-    )->then(function (AgentResponse $response) {
+    )->then(function (AgentResponse $response): void {
         $_ENV['__testing.response'] = $response;
     });
 
     $response = $_ENV['__testing.response'];
 
-    expect(strtolower($response['symbol']))->toEqual('ag');
+    expect(strtolower((string) $response['symbol']))->toEqual('ag');
 
     unset($_SERVER['__testing.response']);
 })->with('agent-providers');
 
-test('agents can have conversation state', function (string $provider, string $apiKey, string $model) {
+test('agents can have conversation state', function (string $provider, string $apiKey, string $model): void {
     requiresApiKey($apiKey);
 
     $agent = new ConversationalAgent;
@@ -178,7 +178,7 @@ test('agents can have conversation state', function (string $provider, string $a
     expect(str_contains($response->text, 'Taylor'))->toBeTrue();
 })->with('agent-providers');
 
-test('agents can have structured output', function (string $provider, string $apiKey, string $model) {
+test('agents can have structured output', function (string $provider, string $apiKey, string $model): void {
     requiresApiKey($apiKey);
 
     $agent = new StructuredAgent;
@@ -189,15 +189,15 @@ test('agents can have structured output', function (string $provider, string $ap
         model: $model,
     );
 
-    expect(strtolower($response['symbol']))->toEqual('ag')
+    expect(strtolower((string) $response['symbol']))->toEqual('ag')
         ->and($response->steps->count())->toBeGreaterThan(0);
 })->with('agent-providers');
 
-test('ad hoc agents can have structured output', function (string $provider, string $apiKey, string $model) {
+test('ad hoc agents can have structured output', function (string $provider, string $apiKey, string $model): void {
     requiresApiKey($apiKey);
 
     $response = agent(
-        schema: fn (JsonSchema $schema) => [
+        schema: fn (JsonSchema $schema): array => [
             'symbol' => $schema->string()->required(),
         ],
     )->prompt(
@@ -206,10 +206,10 @@ test('ad hoc agents can have structured output', function (string $provider, str
         model: $model,
     );
 
-    expect(strtolower($response['symbol']))->toEqual('ag');
+    expect(strtolower((string) $response['symbol']))->toEqual('ag');
 })->with('agent-providers');
 
-test('agents can use tools', function (string $provider, string $apiKey, string $model) {
+test('agents can use tools', function (string $provider, string $apiKey, string $model): void {
     requiresApiKey($apiKey);
 
     Event::fake();
@@ -229,9 +229,7 @@ test('agents can use tools', function (string $provider, string $apiKey, string 
 
     Event::assertDispatched(InvokingTool::class);
 
-    Event::assertDispatched(ToolInvoked::class, function ($event) {
-        return ! is_null($event->toolInvocationId);
-    });
+    Event::assertDispatched(ToolInvoked::class, fn ($event): bool => ! is_null($event->toolInvocationId));
 
     // Verify with a fixed response...
     $agent = new ToolUsingAgent(fixed: true);
@@ -245,13 +243,13 @@ test('agents can use tools', function (string $provider, string $apiKey, string 
     expect($response['number'])->toBe(72019);
 })->with('agent-providers');
 
-test('agents can replay empty tool arguments', function (string $provider, string $apiKey, string $model) {
+test('agents can replay empty tool arguments', function (string $provider, string $apiKey, string $model): void {
     requiresApiKey($apiKey);
 
     $tool = new FixedNumberGenerator;
     $instructions = 'For every request, call the FixedNumberGenerator tool before answering. Answer with one short sentence.';
     $firstPrompt = 'What fixed number is available?';
-    $makeAgent = fn (iterable $messages = []) => new class($instructions, $messages, [$tool]) implements Agent, Conversational, HasProviderOptions, HasTools
+    $makeAgent = fn (iterable $messages = []): object => new class($instructions, $messages, [$tool]) implements Agent, Conversational, HasProviderOptions, HasTools
     {
         use Promptable;
 
@@ -309,7 +307,7 @@ test('agents can replay empty tool arguments', function (string $provider, strin
         ->and($secondResponse->toolCalls->first()->arguments)->toBe([]);
 })->with('agent-providers');
 
-test('agents can analyze text document attachments', function (string $provider, string $apiKey, string $model) {
+test('agents can analyze text document attachments', function (string $provider, string $apiKey, string $model): void {
     requiresApiKey($apiKey);
 
     Storage::fake('docs');
@@ -338,7 +336,7 @@ test('agents can analyze text document attachments', function (string $provider,
         ->and($response->text)->toContain('Taylor');
 })->with('agent-document-providers');
 
-test('agents can analyze local image attachments with a detected mime type', function (string $provider, string $apiKey, string $model, string $file, string $color) {
+test('agents can analyze local image attachments with a detected mime type', function (string $provider, string $apiKey, string $model, string $file, string $color): void {
     requiresApiKey($apiKey);
 
     $response = agent('Answer briefly.')->prompt(
@@ -354,7 +352,7 @@ test('agents can analyze local image attachments with a detected mime type', fun
     'jpeg' => ['blue.jpg', 'blue'],
 ]);
 
-test('agent tool exception handling is not magical', function (string $provider, string $apiKey, string $model) {
+test('agent tool exception handling is not magical', function (string $provider, string $apiKey, string $model): void {
     requiresApiKey($apiKey);
 
     Event::fake();
@@ -371,11 +369,11 @@ test('agent tool exception handling is not magical', function (string $provider,
         );
 
         $text = $response->text;
-    } catch (Exception $e) {
+    } catch (Exception $exception) {
         $caught = true;
 
-        expect($e)->toBeInstanceOf(Exception::class)
-            ->and($e->getMessage())->toEqual('Forced to throw exception.');
+        expect($exception)->toBeInstanceOf(Exception::class)
+            ->and($exception->getMessage())->toEqual('Forced to throw exception.');
     }
 
     expect($caught)->toBeTrue();

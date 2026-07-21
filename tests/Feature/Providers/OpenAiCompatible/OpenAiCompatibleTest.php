@@ -6,16 +6,19 @@ use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
+use Laravel\Ai\Responses\AgentResponse;
 use Tests\Fixtures\Agents\AttributeAgent;
+use Tests\Fixtures\Agents\AttributeToolChoiceAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
+use Tests\Fixtures\Agents\ToolChoiceAgent;
 
 use function Laravel\Ai\agent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     configureOpenAiCompatible();
 });
 
-test('throws when no url is configured', function () {
+test('throws when no url is configured', function (): void {
     config(['ai.providers.openai-compatible' => [
         'driver' => 'openai-compatible',
         'key' => 'test-key',
@@ -24,22 +27,22 @@ test('throws when no url is configured', function () {
 
     Http::fake(['*' => fakeOpenAiCompatibleResponse('Hello')]);
 
-    expect(fn () => agent()->prompt('Hello', provider: 'openai-compatible'))
+    expect(fn (): AgentResponse => agent()->prompt('Hello', provider: 'openai-compatible'))
         ->toThrow(InvalidArgumentException::class, "requires a 'url'");
 });
 
-test('throws when no default model is configured and none is passed', function () {
+test('throws when no default model is configured and none is passed', function (): void {
     config(['ai.providers.openai-compatible' => [
         'driver' => 'openai-compatible',
         'url' => 'http://localhost:1234/v1',
         'key' => 'test-key',
     ]]);
 
-    expect(fn () => agent()->prompt('Hello', provider: 'openai-compatible'))
+    expect(fn (): AgentResponse => agent()->prompt('Hello', provider: 'openai-compatible'))
         ->toThrow(InvalidArgumentException::class, 'requires a default text model');
 });
 
-test('text requests use the configured base url and path', function () {
+test('text requests use the configured base url and path', function (): void {
     Http::fake(['*' => fakeOpenAiCompatibleResponse('Hello from local model')]);
 
     $response = agent()->prompt('Hello', provider: 'openai-compatible');
@@ -47,11 +50,11 @@ test('text requests use the configured base url and path', function () {
     expect($response->text)->toBe('Hello from local model')
         ->and($response->meta->provider)->toBe('openai-compatible');
 
-    Http::assertSent(fn (Request $request) => $request->method() === 'POST'
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'POST'
         && $request->url() === 'http://localhost:1234/v1/chat/completions');
 });
 
-test('request sends bearer token authorization', function () {
+test('request sends bearer token authorization', function (): void {
     Http::fake(['*' => fakeOpenAiCompatibleResponse('Hello')]);
 
     agent()->prompt('Hello', provider: 'openai-compatible');
@@ -59,7 +62,7 @@ test('request sends bearer token authorization', function () {
     Http::assertSent(fn (Request $request) => $request->hasHeader('Authorization', 'Bearer test-key'));
 });
 
-test('request omits authorization header when no key is configured', function () {
+test('request omits authorization header when no key is configured', function (): void {
     config(['ai.providers.openai-compatible' => [
         ...config('ai.providers.openai-compatible'),
         'key' => null,
@@ -69,10 +72,10 @@ test('request omits authorization header when no key is configured', function ()
 
     agent()->prompt('Hello', provider: 'openai-compatible');
 
-    Http::assertSent(fn (Request $request) => ! $request->hasHeader('Authorization'));
+    Http::assertSent(fn (Request $request): bool => ! $request->hasHeader('Authorization'));
 });
 
-test('request works when the key is absent from the config entirely', function () {
+test('request works when the key is absent from the config entirely', function (): void {
     config(['ai.providers.openai-compatible' => [
         'driver' => 'openai-compatible',
         'url' => 'http://localhost:1234/v1',
@@ -83,15 +86,15 @@ test('request works when the key is absent from the config entirely', function (
 
     agent()->prompt('Hello', provider: 'openai-compatible');
 
-    Http::assertSent(fn (Request $request) => ! $request->hasHeader('Authorization'));
+    Http::assertSent(fn (Request $request): bool => ! $request->hasHeader('Authorization'));
 });
 
-test('structured output defaults to json schema response format', function () {
+test('structured output defaults to json schema response format', function (): void {
     Http::fake(['*' => fakeOpenAiCompatibleResponse('{"symbol": "Au"}')]);
 
     (new StructuredAgent)->prompt('What is the symbol for Gold?', provider: 'openai-compatible');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $format = data_get(json_decode($request->body(), true), 'response_format');
 
         return $format['type'] === 'json_schema'
@@ -99,12 +102,47 @@ test('structured output defaults to json schema response format', function () {
     });
 });
 
-test('max tokens uses the max_tokens field by default', function () {
+test('required tool choice forces the model to call a tool', function (): void {
+    Http::fake(['*' => fakeOpenAiCompatibleResponse('42')]);
+
+    (new ToolChoiceAgent('required'))->prompt('Give me a number', provider: 'openai-compatible');
+
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['tool_choice'] === 'required');
+});
+
+test('required tool choice can be set via attribute', function (): void {
+    Http::fake(['*' => fakeOpenAiCompatibleResponse('42')]);
+
+    (new AttributeToolChoiceAgent)->prompt('Give me a number', provider: 'openai-compatible');
+
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['tool_choice'] === 'required');
+});
+
+test('named tool choice forces a specific function', function (): void {
+    Http::fake(['*' => fakeOpenAiCompatibleResponse('42')]);
+
+    (new ToolChoiceAgent(['tool' => 'custom_named_tool']))->prompt('Give me a number', provider: 'openai-compatible');
+
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['tool_choice'] === [
+        'type' => 'function',
+        'function' => ['name' => 'custom_named_tool'],
+    ]);
+});
+
+test('none tool choice prevents tool calls', function (): void {
+    Http::fake(['*' => fakeOpenAiCompatibleResponse('Sure')]);
+
+    (new ToolChoiceAgent('none'))->prompt('Just talk', provider: 'openai-compatible');
+
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['tool_choice'] === 'none');
+});
+
+test('max tokens uses the max_tokens field by default', function (): void {
     Http::fake(['*' => fakeOpenAiCompatibleResponse('Hello')]);
 
     (new AttributeAgent)->prompt('Hello', provider: 'openai-compatible');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return data_get($body, 'max_tokens') === 4096
@@ -112,7 +150,7 @@ test('max tokens uses the max_tokens field by default', function () {
     });
 });
 
-test('response usage is parsed using the openai standard shape', function () {
+test('response usage is parsed using the openai standard shape', function (): void {
     Http::fake(['*' => Http::response([
         'id' => 'chatcmpl-1',
         'object' => 'chat.completion',
@@ -138,14 +176,14 @@ test('response usage is parsed using the openai standard shape', function () {
         ->and($response->usage->reasoningTokens)->toBe(10);
 });
 
-test('streaming omits stream_options by default', function () {
+test('streaming omits stream_options by default', function (): void {
     Http::fake(['*' => fakeOpenAiCompatibleStream()]);
 
     foreach (agent()->stream('Hello', provider: 'openai-compatible') as $event) {
         // drain the stream
     }
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['stream'] === true
@@ -153,7 +191,7 @@ test('streaming omits stream_options by default', function () {
     });
 });
 
-test('streaming sends stream_options when configured on the instance', function () {
+test('streaming sends stream_options when configured on the instance', function (): void {
     config(['ai.providers.openai-compatible' => [
         ...config('ai.providers.openai-compatible'),
         'stream_options' => ['include_usage' => true],
@@ -165,12 +203,10 @@ test('streaming sends stream_options when configured on the instance', function 
         // drain the stream
     }
 
-    Http::assertSent(function (Request $request) {
-        return data_get(json_decode($request->body(), true), 'stream_options.include_usage') === true;
-    });
+    Http::assertSent(fn (Request $request): bool => data_get(json_decode($request->body(), true), 'stream_options.include_usage') === true);
 });
 
-test('streaming sends stream_options supplied via provider options', function () {
+test('streaming sends stream_options supplied via provider options', function (): void {
     Http::fake(['*' => fakeOpenAiCompatibleStream()]);
 
     $agent = new class implements Agent, HasProviderOptions
@@ -192,12 +228,10 @@ test('streaming sends stream_options supplied via provider options', function ()
         // drain the stream
     }
 
-    Http::assertSent(function (Request $request) {
-        return data_get(json_decode($request->body(), true), 'stream_options.include_usage') === true;
-    });
+    Http::assertSent(fn (Request $request): bool => data_get(json_decode($request->body(), true), 'stream_options.include_usage') === true);
 });
 
-test('custom named instances use their own configured base url and model', function () {
+test('custom named instances use their own configured base url and model', function (): void {
     config(['ai.providers.lm-studio' => [
         'driver' => 'openai-compatible',
         'url' => 'http://localhost:4321/v1',
@@ -212,12 +246,12 @@ test('custom named instances use their own configured base url and model', funct
     expect($response->text)->toBe('Hello from LM Studio')
         ->and($response->meta->provider)->toBe('lm-studio');
 
-    Http::assertSent(fn (Request $request) => $request->url() === 'http://localhost:4321/v1/chat/completions'
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'http://localhost:4321/v1/chat/completions'
         && $request->hasHeader('Authorization', 'Bearer lm-studio-key')
         && data_get(json_decode($request->body(), true), 'model') === 'lm-studio-model');
 });
 
-test('named instances resolve provider options by their instance name', function () {
+test('named instances resolve provider options by their instance name', function (): void {
     config(['ai.providers.lm-studio' => [
         'driver' => 'openai-compatible',
         'url' => 'http://localhost:4321/v1',
@@ -256,10 +290,10 @@ test('named instances resolve provider options by their instance name', function
     $agent->prompt('Hello', provider: 'lm-studio');
     $agent->prompt('Hello', provider: 'vllm');
 
-    Http::assertSent(fn (Request $request) => $request->url() === 'http://localhost:4321/v1/chat/completions'
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'http://localhost:4321/v1/chat/completions'
         && data_get(json_decode($request->body(), true), 'top_k') === 40);
 
-    Http::assertSent(fn (Request $request) => $request->url() === 'http://localhost:8000/v1/chat/completions'
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'http://localhost:8000/v1/chat/completions'
         && data_get(json_decode($request->body(), true), 'top_k') === 10);
 });
 
@@ -290,7 +324,7 @@ function fakeOpenAiCompatibleResponse(string $content)
 
 function fakeOpenAiCompatibleStream()
 {
-    $chunk = fn (array $delta, ?string $finish = null) => 'data: '.json_encode([
+    $chunk = fn (array $delta, ?string $finish = null): string => 'data: '.json_encode([
         'id' => 'chatcmpl-123',
         'object' => 'chat.completion.chunk',
         'model' => 'local-model',

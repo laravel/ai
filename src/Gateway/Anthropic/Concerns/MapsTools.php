@@ -127,7 +127,7 @@ trait MapsTools
         return match (true) {
             $tool instanceof WebFetch => $this->mapWebFetchTool($tool, $provider),
             $tool instanceof WebSearch => $this->mapWebSearchTool($tool, $provider),
-            default => throw new LogicException('Provider tool ['.get_class($tool).'] is not supported by Anthropic.'),
+            default => throw new LogicException('Provider tool ['.$tool::class.'] is not supported by Anthropic.'),
         };
     }
 

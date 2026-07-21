@@ -81,7 +81,7 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
 
         return new TranscriptionResponse(
             $response['text'],
-            (new Collection($segments))->map(function ($segment) {
+            (new Collection($segments))->map(function (array $segment) {
                 if ($segment['type'] !== 'word') {
                     return;
                 }

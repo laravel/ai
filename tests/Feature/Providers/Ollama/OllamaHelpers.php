@@ -80,7 +80,7 @@ trait OllamaHelpers
 
     protected function ndjsonPayload(array $chunks): string
     {
-        return implode("\n", array_map('json_encode', $chunks))."\n";
+        return implode("\n", array_map(json_encode(...), $chunks))."\n";
     }
 
     protected function chatChunk(string $content, bool $done = false, ?string $doneReason = null, ?array $usage = null): array

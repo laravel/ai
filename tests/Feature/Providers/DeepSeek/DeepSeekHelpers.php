@@ -30,11 +30,7 @@ trait DeepSeekHelpers
         $lines = [];
 
         foreach ($events as $event) {
-            if ($event === '[DONE]') {
-                $lines[] = 'data: [DONE]';
-            } else {
-                $lines[] = 'data: '.json_encode($event);
-            }
+            $lines[] = $event === '[DONE]' ? 'data: [DONE]' : 'data: '.json_encode($event);
         }
 
         return implode("\n\n", $lines)."\n\n";
@@ -130,7 +126,7 @@ trait DeepSeekHelpers
     protected function findMessage(array $messages, string $role, ?string $has = null): ?array
     {
         return collect($messages)->first(
-            fn (array $m) => $m['role'] === $role && ($has === null || isset($m[$has]))
+            fn (array $m): bool => $m['role'] === $role && ($has === null || isset($m[$has]))
         );
     }
 
@@ -141,6 +137,6 @@ trait DeepSeekHelpers
      */
     protected function filterMessages(array $messages, string $role): array
     {
-        return collect($messages)->filter(fn (array $m) => $m['role'] === $role)->values()->all();
+        return collect($messages)->filter(fn (array $m): bool => $m['role'] === $role)->values()->all();
     }
 }

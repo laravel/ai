@@ -6,10 +6,12 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\PendingResponses\PendingTranscriptionGeneration;
+use Laravel\Ai\Responses\TranscriptionResponse;
 
 class GenerateTranscription implements ShouldQueue
 {
-    use Concerns\InvokesQueuedResponseCallbacks, Queueable;
+    use Concerns\InvokesQueuedResponseCallbacks;
+    use Queueable;
 
     /**
      * Create a new job instance.
@@ -24,7 +26,7 @@ class GenerateTranscription implements ShouldQueue
      */
     public function handle(): void
     {
-        $this->withCallbacks(fn () => $this->pendingTranscription->generate(
+        $this->withCallbacks(fn (): TranscriptionResponse => $this->pendingTranscription->generate(
             $this->provider,
             $this->model,
         ));

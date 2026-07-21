@@ -3,7 +3,7 @@
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\AssistantAgent;
 
-test('gemini requests use the configured base url', function () {
+test('gemini requests use the configured base url', function (): void {
     config(['ai.providers.gemini.url' => 'https://custom-proxy.example.com/v1']);
 
     Http::fake([
@@ -15,12 +15,10 @@ test('gemini requests use the configured base url', function () {
         provider: 'gemini',
     );
 
-    Http::assertSent(function ($request) {
-        return str_contains($request->url(), 'https://custom-proxy.example.com/v1');
-    });
+    Http::assertSent(fn ($request): bool => str_contains((string) $request->url(), 'https://custom-proxy.example.com/v1'));
 });
 
-test('gemini requests fall back to the default base url', function () {
+test('gemini requests fall back to the default base url', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
     ]);
@@ -30,7 +28,5 @@ test('gemini requests fall back to the default base url', function () {
         provider: 'gemini',
     );
 
-    Http::assertSent(function ($request) {
-        return str_contains($request->url(), 'generativelanguage.googleapis.com');
-    });
+    Http::assertSent(fn ($request): bool => str_contains((string) $request->url(), 'generativelanguage.googleapis.com'));
 });

@@ -6,6 +6,7 @@ use Illuminate\Broadcasting\Channel;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Str;
+use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Attributes\WithoutBroadcasting;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Enums\Lab;
@@ -17,7 +18,8 @@ use function Laravel\Ai\ulid;
 
 class BroadcastAgent implements ShouldQueue
 {
-    use Concerns\InvokesQueuedResponseCallbacks, Queueable;
+    use Concerns\InvokesQueuedResponseCallbacks;
+    use Queueable;
 
     public int $tries = 1;
 
@@ -28,7 +30,7 @@ class BroadcastAgent implements ShouldQueue
      */
     public function __construct(
         public Agent $agent,
-        public string $prompt,
+        public Decisions|string $prompt,
         public Channel|array $channels,
         public array $attachments = [],
         public Lab|array|string|null $provider = null,
@@ -47,14 +49,14 @@ class BroadcastAgent implements ShouldQueue
         $without = WithoutBroadcasting::eventsFor($this->agent);
 
         $this->agent->stream($this->prompt, $this->attachments, $this->provider, $this->model)
-            ->each(function (StreamEvent $event) use ($without) {
+            ->each(function (StreamEvent $event) use ($without): void {
                 if (WithoutBroadcasting::excludes($without, $event)) {
                     return;
                 }
 
                 $event->withInvocationId($this->invocationId)->broadcastNow($this->channels);
             })
-            ->then(function ($response) use (&$streamedResponse) {
+            ->then(function ($response) use (&$streamedResponse): void {
                 $streamedResponse = $response;
             });
 

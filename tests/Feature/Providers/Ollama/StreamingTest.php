@@ -12,14 +12,14 @@ use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.ollama' => [
         ...config('ai.providers.ollama'),
         'key' => '',
     ]]);
 });
 
-test('streaming emits text events', function () {
+test('streaming emits text events', function (): void {
     Http::fake([
         '*' => Http::response(
             body: $this->ndjsonPayload([
@@ -42,7 +42,7 @@ test('streaming emits text events', function () {
         ->and($events[count($events) - 1])->toBeInstanceOf(StreamEnd::class);
 });
 
-test('streaming request sets stream to true', function () {
+test('streaming request sets stream to true', function (): void {
     Http::fake([
         '*' => Http::response(
             body: $this->ndjsonPayload([
@@ -55,14 +55,14 @@ test('streaming request sets stream to true', function () {
 
     $this->collectStreamEvents();
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['stream'] === true;
     });
 });
 
-test('streaming handles tool calls', function () {
+test('streaming handles tool calls', function (): void {
     Http::fake([
         '*' => Http::sequence([
             Http::response(
@@ -85,14 +85,14 @@ test('streaming handles tool calls', function () {
 
     $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
 
-    $toolCallEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolCallEvent));
+    $toolCallEvents = array_values(array_filter($events, fn ($e): bool => $e instanceof ToolCallEvent));
 
     expect($toolCallEvents)->not->toBeEmpty()
         ->and($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator')
         ->and($toolCallEvents[0]->toolCall->id)->toBe('call_1');
 });
 
-test('streaming error event stops stream with string payload', function () {
+test('streaming error event stops stream with string payload', function (): void {
     Http::fake([
         '*' => Http::response(
             body: json_encode(['error' => 'model not found'])."\n",
@@ -108,7 +108,7 @@ test('streaming error event stops stream with string payload', function () {
         ->and($events[0]->message)->toBe('model not found');
 });
 
-test('streaming error event also handles structured payload', function () {
+test('streaming error event also handles structured payload', function (): void {
     Http::fake([
         '*' => Http::response(
             body: json_encode(['error' => ['code' => 'model_error', 'message' => 'Model not found']])."\n",
@@ -124,7 +124,7 @@ test('streaming error event also handles structured payload', function () {
         ->and($events[0]->message)->toBe('Model not found');
 });
 
-test('streaming accumulates tool call arguments across chunks', function () {
+test('streaming accumulates tool call arguments across chunks', function (): void {
     Http::fake([
         '*' => Http::sequence([
             Http::response(
@@ -190,7 +190,7 @@ test('streaming accumulates tool call arguments across chunks', function () {
 
     $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
 
-    $toolCallEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolCallEvent));
+    $toolCallEvents = array_values(array_filter($events, fn ($e): bool => $e instanceof ToolCallEvent));
 
     expect($toolCallEvents)->toHaveCount(1)
         ->and($toolCallEvents[0]->toolCall->id)->toBe('call_1')
@@ -198,7 +198,7 @@ test('streaming accumulates tool call arguments across chunks', function () {
         ->and($toolCallEvents[0]->toolCall->arguments)->toBe(['foo' => 'bar']);
 });
 
-test('streaming generates fallback id when tool call has no id', function () {
+test('streaming generates fallback id when tool call has no id', function (): void {
     Http::fake([
         '*' => Http::sequence([
             Http::response(
@@ -236,14 +236,14 @@ test('streaming generates fallback id when tool call has no id', function () {
 
     $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
 
-    $toolCallEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolCallEvent));
+    $toolCallEvents = array_values(array_filter($events, fn ($e): bool => $e instanceof ToolCallEvent));
 
     expect($toolCallEvents)->toHaveCount(1)
         ->and($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator')
         ->and($toolCallEvents[0]->toolCall->id)->not->toBeEmpty();
 });
 
-test('streaming captures usage from final chunk', function () {
+test('streaming captures usage from final chunk', function (): void {
     Http::fake([
         '*' => Http::response(
             body: $this->ndjsonPayload([
@@ -256,13 +256,13 @@ test('streaming captures usage from final chunk', function () {
 
     $events = $this->collectStreamEvents();
 
-    $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+    $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
 
     expect($streamEnd->usage->promptTokens)->toBe(42)
         ->and($streamEnd->usage->completionTokens)->toBe(10);
 });
 
-test('streaming emits exactly one stream end across a tool loop', function () {
+test('streaming emits exactly one stream end across a tool loop', function (): void {
     Http::fake([
         '*' => Http::sequence([
             Http::response(
@@ -285,7 +285,7 @@ test('streaming emits exactly one stream end across a tool loop', function () {
 
     $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
 
-    $streamEnds = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd));
+    $streamEnds = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd));
 
     expect($streamEnds)->toHaveCount(1)
         ->and($streamEnds[0])->toBe($events[count($events) - 1])
@@ -294,7 +294,7 @@ test('streaming emits exactly one stream end across a tool loop', function () {
         ->and($streamEnds[0]->usage->completionTokens)->toBe(15);
 });
 
-test('streaming finish reason maps correctly', function (string $doneReason, $expected) {
+test('streaming finish reason maps correctly', function (string $doneReason, $expected): void {
     Http::fake([
         '*' => Http::response(
             body: $this->ndjsonPayload([
@@ -308,7 +308,7 @@ test('streaming finish reason maps correctly', function (string $doneReason, $ex
 
     $events = $this->collectStreamEvents();
 
-    $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+    $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
 
     expect($streamEnd->reason)->toBe($expected->value);
 })->with([

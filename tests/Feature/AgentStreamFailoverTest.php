@@ -18,7 +18,7 @@ use Tests\Fixtures\Agents\RememberingAssistantAgent;
 use Tests\Fixtures\ConversationStores\InMemoryConversationStore;
 use Tests\Fixtures\Providers\FakeStreamingProvider;
 
-test('stream fails over to next provider when primary is rate limited', function () {
+test('stream fails over to next provider when primary is rate limited', function (): void {
     Event::fake();
 
     config([
@@ -48,10 +48,10 @@ test('stream fails over to next provider when primary is rate limited', function
 
     Event::assertDispatched(AgentFailedOver::class);
 
-    Event::assertDispatched(AgentStreamed::class, fn (AgentStreamed $event) => $event->invocationId === $response->invocationId);
+    Event::assertDispatched(AgentStreamed::class, fn (AgentStreamed $event): bool => $event->invocationId === $response->invocationId);
 });
 
-test('stream throws last exception when all providers fail', function () {
+test('stream throws last exception when all providers fail', function (): void {
     Event::fake();
 
     config([
@@ -70,13 +70,13 @@ test('stream throws last exception when all providers fail', function () {
         provider: ['primary', 'backup'],
     );
 
-    expect(function () use ($response) {
+    expect(function () use ($response): void {
         foreach ($response as $_) {
         }
     })->toThrow(RateLimitedException::class);
 });
 
-test('stream then callback is invoked after failover', function () {
+test('stream then callback is invoked after failover', function (): void {
     Event::fake();
 
     config([
@@ -97,7 +97,7 @@ test('stream then callback is invoked after failover', function () {
 
     $thenResponse = null;
 
-    $response->then(function (StreamedAgentResponse $r) use (&$thenResponse) {
+    $response->then(function (StreamedAgentResponse $r) use (&$thenResponse): void {
         $thenResponse = $r;
     });
 
@@ -109,7 +109,7 @@ test('stream then callback is invoked after failover', function () {
         ->and($thenResponse->meta->provider)->toBe('backup');
 });
 
-test('stream does not fail over when primary succeeds', function () {
+test('stream does not fail over when primary succeeds', function (): void {
     Event::fake();
 
     config([
@@ -135,7 +135,7 @@ test('stream does not fail over when primary succeeds', function () {
     Event::assertNotDispatched(AgentFailedOver::class);
 });
 
-test('single provider stream does not dispatch failover event when rate limited', function () {
+test('single provider stream does not dispatch failover event when rate limited', function (): void {
     Event::fake();
 
     config([
@@ -152,7 +152,7 @@ test('single provider stream does not dispatch failover event when rate limited'
         provider: 'primary',
     );
 
-    expect(function () use ($response) {
+    expect(function () use ($response): void {
         foreach ($response as $_) {
         }
     })->toThrow(RateLimitedException::class);
@@ -160,15 +160,15 @@ test('single provider stream does not dispatch failover event when rate limited'
     Event::assertNotDispatched(AgentFailedOver::class);
 });
 
-test('stream does not fail over when primary emits event then throws', function () {
+test('stream does not fail over when primary emits event then throws', function (): void {
     Event::fake();
 
     $manager = app(AiManager::class);
 
-    $manager->extend('mid_stream_failing', fn ($app, $config) => new FakeStreamingProvider(
+    $manager->extend('mid_stream_failing', fn ($app, $config): FakeStreamingProvider => new FakeStreamingProvider(
         $config,
         $app->make(Dispatcher::class),
-        fn ($provider, $prompt) => new StreamableAgentResponse(
+        fn ($provider, $prompt): StreamableAgentResponse => new StreamableAgentResponse(
             (string) Str::uuid7(),
             function () {
                 yield (new TextDelta('m1', 'm1', 'partial', 0))->withInvocationId('inner-fail');
@@ -179,10 +179,10 @@ test('stream does not fail over when primary emits event then throws', function 
         ),
     ));
 
-    $manager->extend('working_backup', fn ($app, $config) => new FakeStreamingProvider(
+    $manager->extend('working_backup', fn ($app, $config): FakeStreamingProvider => new FakeStreamingProvider(
         $config,
         $app->make(Dispatcher::class),
-        fn ($provider, $prompt) => new StreamableAgentResponse(
+        fn ($provider, $prompt): StreamableAgentResponse => new StreamableAgentResponse(
             (string) Str::uuid7(),
             function () {
                 yield (new TextDelta('m2', 'm2', 'World', 0))->withInvocationId('inner-success');
@@ -201,7 +201,7 @@ test('stream does not fail over when primary emits event then throws', function 
         provider: ['primary', 'backup'],
     );
 
-    expect(function () use ($response) {
+    expect(function () use ($response): void {
         foreach ($response as $_) {
         }
     })->toThrow(RateLimitedException::class);
@@ -209,28 +209,28 @@ test('stream does not fail over when primary emits event then throws', function 
     Event::assertNotDispatched(AgentFailedOver::class);
 });
 
-test('stream does not fail over when primary throws non failoverable exception', function () {
+test('stream does not fail over when primary throws non failoverable exception', function (): void {
     Event::fake();
 
     $manager = app(AiManager::class);
     $backupStreamed = false;
 
-    $manager->extend('malformed_stream', fn ($app, $config) => new FakeStreamingProvider(
+    $manager->extend('malformed_stream', fn ($app, $config): FakeStreamingProvider => new FakeStreamingProvider(
         $config,
         $app->make(Dispatcher::class),
-        fn ($provider, $prompt) => new StreamableAgentResponse(
+        fn ($provider, $prompt): StreamableAgentResponse => new StreamableAgentResponse(
             (string) Str::uuid7(),
-            function () {
+            function (): void {
                 throw new InvalidArgumentException('Malformed stream response.');
             },
             new Meta($provider->name(), $prompt->model),
         ),
     ));
 
-    $manager->extend('backup_after_malformed_stream', fn ($app, $config) => new FakeStreamingProvider(
+    $manager->extend('backup_after_malformed_stream', fn ($app, $config): FakeStreamingProvider => new FakeStreamingProvider(
         $config,
         $app->make(Dispatcher::class),
-        function ($provider, $prompt) use (&$backupStreamed) {
+        function ($provider, $prompt) use (&$backupStreamed): StreamableAgentResponse {
             $backupStreamed = true;
 
             return new StreamableAgentResponse(
@@ -253,7 +253,7 @@ test('stream does not fail over when primary throws non failoverable exception',
         provider: ['primary', 'backup'],
     );
 
-    expect(function () use ($response) {
+    expect(function () use ($response): void {
         foreach ($response as $_) {
         }
     })->toThrow(InvalidArgumentException::class, 'Malformed stream response.');
@@ -263,7 +263,7 @@ test('stream does not fail over when primary throws non failoverable exception',
     Event::assertNotDispatched(AgentFailedOver::class);
 });
 
-test('stream conversation state survives failover', function () {
+test('stream conversation state survives failover', function (): void {
     $store = new InMemoryConversationStore;
     $this->app->instance(ConversationStore::class, $store);
 
@@ -287,7 +287,7 @@ test('stream conversation state survives failover', function () {
 
     $thenResponse = null;
 
-    $response->then(function (StreamedAgentResponse $r) use (&$thenResponse) {
+    $response->then(function (StreamedAgentResponse $r) use (&$thenResponse): void {
         $thenResponse = $r;
     });
 
