@@ -5,7 +5,6 @@ namespace Tests\Fixtures\Agents;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Promptable;
-use Laravel\Ai\Providers\Tools\ToolSearch;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 use Tests\Fixtures\Tools\SecretCodeGenerator;
 
@@ -25,7 +24,7 @@ class ToolSearchAgent implements Agent, HasTools
     {
         return [
             new FixedNumberGenerator,
-            new ToolSearch(tools: [new SecretCodeGenerator]),
+            new SecretCodeGenerator,
         ];
     }
 }

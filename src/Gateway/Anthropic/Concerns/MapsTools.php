@@ -11,15 +11,17 @@ use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\ProviderTool;
-use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
+use Laravel\Ai\Tools\Concerns\ResolvesDeferredTools;
 use Laravel\Ai\Tools\ToolNameResolver;
 use LogicException;
 use RuntimeException;
 
 trait MapsTools
 {
+    use ResolvesDeferredTools;
+
     /**
      * Anthropic's dated version identifier for the hosted tool search tool.
      */
@@ -32,47 +34,42 @@ trait MapsTools
     {
         $mapped = [];
         $nonDeferredCount = 0;
-        $searchIndex = null;
-        $searchOptions = [];
+        $hasDeferred = false;
+        $strategy = 'regex';
 
         foreach ($tools as $tool) {
-            if ($tool instanceof ToolSearch) {
-                if (blank($tool->tools)) {
-                    continue;
-                }
-
-                $this->guardToolSearchSupport($provider);
-
-                if ($searchIndex === null) {
-                    $searchIndex = count($mapped);
-                    $mapped[$searchIndex] = [];
-                }
-
-                $searchOptions = [...$searchOptions, ...$tool->providerOptions(Lab::Anthropic)];
-                $strategy = ($searchOptions['strategy'] ?? 'regex') === 'bm25' ? 'bm25' : 'regex';
-
-                $mapped[$searchIndex] = [
-                    'type' => "tool_search_tool_{$strategy}_".self::TOOL_SEARCH_TOOL_VERSION,
-                    'name' => "tool_search_tool_{$strategy}",
-                    ...array_diff_key($searchOptions, ['strategy' => true, 'type' => true, 'name' => true]),
-                ];
-
-                foreach ($tool->tools as $deferred) {
-                    $mapped[] = $this->mapTool($deferred, defer: true);
-                }
-            } elseif ($tool instanceof ProviderTool) {
+            if ($tool instanceof ProviderTool) {
                 $mapped[] = $this->mapProviderTool($tool, $provider);
                 $nonDeferredCount++;
             } elseif ($tool instanceof Tool) {
-                $mapped[] = $this->mapTool($tool);
-                $nonDeferredCount++;
+                if ($this->isDeferred($tool, Lab::Anthropic)) {
+                    $hasDeferred = true;
+
+                    if (($this->deferredOptions($tool, Lab::Anthropic)['strategy'] ?? null) === 'bm25') {
+                        $strategy = 'bm25';
+                    }
+
+                    $mapped[] = $this->mapTool($tool, defer: true);
+                } else {
+                    $mapped[] = $this->mapTool($tool);
+                    $nonDeferredCount++;
+                }
             }
         }
 
-        if ($searchIndex !== null && $nonDeferredCount === 0) {
-            throw new LogicException(
-                'Anthropic tool search requires at least one non-deferred tool.'
-            );
+        if ($hasDeferred) {
+            $this->guardToolSearchSupport($provider);
+
+            if ($nonDeferredCount === 0) {
+                throw new LogicException(
+                    'Anthropic tool search requires at least one non-deferred tool.'
+                );
+            }
+
+            array_unshift($mapped, [
+                'type' => "tool_search_tool_{$strategy}_".self::TOOL_SEARCH_TOOL_VERSION,
+                'name' => "tool_search_tool_{$strategy}",
+            ]);
         }
 
         return $mapped;

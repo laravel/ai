@@ -4,7 +4,6 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Promptable;
-use Laravel\Ai\Providers\Tools\ToolSearch;
 use Tests\Fixtures\Tools\DeferredTool;
 use Tests\Fixtures\Tools\NonStrictTool;
 
@@ -17,7 +16,7 @@ beforeEach(function () {
     ]]);
 });
 
-test('Azure rejects a ToolSearch tool because it does not support hosted tool search', function () {
+test('Azure rejects a deferred tool because it does not support hosted tool search', function () {
     Http::fake(['my-resource.cognitiveservices.azure.com/*' => fakeAzureResponse('ok')]);
 
     $agent = new class implements Agent, HasTools
@@ -31,7 +30,7 @@ test('Azure rejects a ToolSearch tool because it does not support hosted tool se
 
         public function tools(): iterable
         {
-            return [new NonStrictTool, new ToolSearch(tools: [new DeferredTool])];
+            return [new NonStrictTool, new DeferredTool];
         }
     };
 

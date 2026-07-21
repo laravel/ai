@@ -3,7 +3,7 @@
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\AnthropicToolSearchAgent;
 
-test('an agent with a ToolSearch tool emits the regex tool search entry and defers its nested tools', function () {
+test('an agent with a deferred tool emits the regex tool search entry and defers that tool', function () {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
     ]);

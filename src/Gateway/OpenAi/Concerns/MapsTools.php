@@ -13,45 +13,38 @@ use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\ProviderTool;
-use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Providers\Tools\WebSearch;
+use Laravel\Ai\Tools\Concerns\ResolvesDeferredTools;
 use Laravel\Ai\Tools\ToolNameResolver;
 use LogicException;
 use RuntimeException;
 
 trait MapsTools
 {
+    use ResolvesDeferredTools;
+
     /**
      * Map the given tools to OpenAI function definitions.
      */
     protected function mapTools(array $tools, Provider $provider, bool $stateless = false): array
     {
         $mapped = [];
-        $searchIndex = null;
+        $hasDeferred = false;
 
         foreach ($tools as $tool) {
-            if ($tool instanceof ToolSearch) {
-                if (blank($tool->tools)) {
-                    continue;
-                }
-
-                $this->guardToolSearchSupport($provider, $stateless);
-
-                if ($searchIndex === null) {
-                    $searchIndex = count($mapped);
-                    $mapped[$searchIndex] = ['type' => 'tool_search'];
-                }
-
-                $mapped[$searchIndex] = [...$mapped[$searchIndex], ...array_diff_key($tool->providerOptions(Lab::OpenAI), ['type' => true])];
-
-                foreach ($tool->tools as $deferred) {
-                    $mapped[] = $this->mapTool($deferred, defer: true);
-                }
-            } elseif ($tool instanceof ProviderTool) {
+            if ($tool instanceof ProviderTool) {
                 $mapped[] = $this->mapProviderTool($tool, $provider);
             } elseif ($tool instanceof Tool) {
-                $mapped[] = $this->mapTool($tool);
+                $defer = $this->isDeferred($tool, Lab::OpenAI);
+                $hasDeferred = $hasDeferred || $defer;
+                $mapped[] = $this->mapTool($tool, defer: $defer);
             }
+        }
+
+        if ($hasDeferred) {
+            $this->guardToolSearchSupport($provider, $stateless);
+
+            array_unshift($mapped, ['type' => 'tool_search']);
         }
 
         return $mapped;

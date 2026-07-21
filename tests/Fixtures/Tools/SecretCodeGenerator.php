@@ -3,10 +3,12 @@
 namespace Tests\Fixtures\Tools;
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Tools\Request;
 
-class SecretCodeGenerator implements Tool
+class SecretCodeGenerator implements HasProviderOptions, Tool
 {
     /**
      * Get the description of the tool's purpose.
@@ -30,5 +32,13 @@ class SecretCodeGenerator implements Tool
     public function schema(JsonSchema $schema): array
     {
         return [];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function providerOptions(Lab|string $provider): array
+    {
+        return ['defer_loading' => true];
     }
 }
