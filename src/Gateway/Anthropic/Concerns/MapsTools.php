@@ -3,7 +3,6 @@
 namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
-use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Tool;
@@ -42,10 +41,12 @@ trait MapsTools
                 $mapped[] = $this->mapProviderTool($tool, $provider);
                 $nonDeferredCount++;
             } elseif ($tool instanceof Tool) {
-                if ($this->isDeferred($tool, Lab::Anthropic)) {
+                $options = $this->deferredOptions($tool, Lab::Anthropic);
+
+                if ($options['defer_loading'] ?? false) {
                     $hasDeferred = true;
 
-                    if (($this->deferredOptions($tool, Lab::Anthropic)['strategy'] ?? null) === 'bm25') {
+                    if (($options['strategy'] ?? null) === 'bm25') {
                         $strategy = 'bm25';
                     }
 
@@ -73,18 +74,6 @@ trait MapsTools
         }
 
         return $mapped;
-    }
-
-    /**
-     * Ensure the provider supports hosted tool search.
-     */
-    protected function guardToolSearchSupport(Provider $provider): void
-    {
-        if (! $provider instanceof SupportsToolSearch) {
-            throw new LogicException(
-                "Provider [{$provider->name()}] does not support tool search."
-            );
-        }
     }
 
     /**

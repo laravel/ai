@@ -284,7 +284,7 @@ trait HandlesTextGeneration
             usage: $usage ?? new Usage(0, 0),
             meta: new Meta($provider->name(), $responseData['model'] ?? $model),
             continuationToken: $responseId,
-            providerContentBlocks: $this->extractReplayBlocks($responseData['output'] ?? []),
+            providerContentBlocks: $this->isStateless($provider) ? $this->extractReplayBlocks($responseData['output'] ?? []) : [],
         );
     }
 

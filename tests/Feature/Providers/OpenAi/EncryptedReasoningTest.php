@@ -2,6 +2,7 @@
 
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Messages\AssistantMessage;
 use Tests\Fixtures\Agents\MultiStepToolAgent;
 use Tests\Fixtures\Agents\OpenAiAgent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
@@ -272,6 +273,26 @@ test('stateless replay preserves the original order of reasoning, hosted tool, a
         ->and($input->firstWhere('type', 'reasoning')['encrypted_content'] ?? null)->toBe('enc-blob-1')
         ->and($input->contains(fn ($i) => ($i['type'] ?? null) === 'function_call_output'
             && ($i['call_id'] ?? null) === 'call_1'))->toBeTrue();
+});
+
+test('stateless (store=false) responses capture replay blocks', function () {
+    Http::fake(['api.openai.com/*' => fakeOpenAiResponse('Hi')]);
+
+    $response = (new OpenAiAgent)->prompt('Hello', provider: 'openai');
+
+    expect($response->messages->whereInstanceOf(AssistantMessage::class)->last()->providerContentBlocks)
+        ->not->toBeEmpty();
+});
+
+test('stateful (store=true) responses do not capture replay blocks', function () {
+    config(['ai.providers.openai' => [...config('ai.providers.openai'), 'store' => true]]);
+
+    Http::fake(['api.openai.com/*' => fakeOpenAiResponse('Hi')]);
+
+    $response = (new OpenAiAgent)->prompt('Hello', provider: 'openai');
+
+    expect($response->messages->whereInstanceOf(AssistantMessage::class)->last()->providerContentBlocks)
+        ->toBeEmpty();
 });
 
 function fakeOpenAiToolCallResponseWithEncryptedReasoning(string $reasoningId, string $encryptedContent, string $functionCallId, string $callId): PromiseInterface

@@ -3,11 +3,26 @@
 namespace Laravel\Ai\Tools\Concerns;
 
 use Laravel\Ai\Contracts\HasProviderOptions;
+use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Providers\Provider;
+use LogicException;
 
 trait ResolvesDeferredTools
 {
+    /**
+     * Ensure the provider supports hosted tool search.
+     */
+    protected function guardToolSearchSupport(Provider $provider): void
+    {
+        if (! $provider instanceof SupportsToolSearch) {
+            throw new LogicException(
+                "Provider [{$provider->name()}] does not support tool search."
+            );
+        }
+    }
+
     /**
      * Determine whether the tool opts into deferred loading via its provider options.
      */

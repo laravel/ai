@@ -62,7 +62,7 @@ trait ParsesTextResponses
             meta: new Meta($provider->name(), $data['model'] ?? '', $this->extractCitations($output)),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
             continuationToken: $data['id'] ?? '',
-            providerContentBlocks: $this->extractReplayBlocks($output),
+            providerContentBlocks: $this->isStateless($provider) ? $this->extractReplayBlocks($output) : [],
         );
     }
 
