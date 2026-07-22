@@ -58,6 +58,19 @@ test('overloaded response throws provider overloaded exception', function (): vo
     );
 })->throws(ProviderOverloadedException::class);
 
+test('transient upstream errors fail over as overloaded', function (int $status): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'error' => ['code' => $status, 'message' => 'The service is temporarily unavailable.'],
+        ], $status),
+    ]);
+
+    (new AssistantAgent)->prompt(
+        'Hi',
+        provider: 'gemini',
+    );
+})->with([502, 504, 520, 522, 524])->throws(ProviderOverloadedException::class);
+
 test('error in 200 response throws ai exception', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::response([

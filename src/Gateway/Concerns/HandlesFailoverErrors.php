@@ -62,13 +62,18 @@ trait HandlesFailoverErrors
     }
 
     /**
-     * The status codes that indicate a provider is overloaded.
+     * The status codes that indicate a provider is transiently unavailable and the request should fail over.
+     *
+     * Covers the standard gateway errors (502 Bad Gateway, 503 Service
+     * Unavailable, 504 Gateway Timeout) and the Cloudflare "unknown error"
+     * and timeout family (520, 522, 524) that providers fronted by Cloudflare
+     * return during upstream incidents.
      *
      * @return list<int>
      */
     protected function overloadedStatusCodes(): array
     {
-        return [503];
+        return [502, 503, 504, 520, 522, 524];
     }
 
     /**
