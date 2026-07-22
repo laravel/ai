@@ -31,7 +31,7 @@ class TextResponse implements \Stringable
     /** @var Collection<int, PendingApproval> */
     public Collection $pendingApprovals;
 
-    public ?HttpResponse $raw = null;
+    protected ?HttpResponse $raw = null;
 
     /**
      * Create a new text response instance.
@@ -129,6 +129,32 @@ class TextResponse implements \Stringable
         $this->raw = $response;
 
         return $this;
+    }
+
+    /**
+     * Get the raw HTTP response, if available for the provider.
+     */
+    public function getRaw(): ?HttpResponse
+    {
+        return $this->raw;
+    }
+
+    /**
+     * Prepare the response for serialization, discarding the unserializable raw HTTP response.
+     */
+    public function __serialize(): array
+    {
+        return collect(get_object_vars($this))->except('raw')->all();
+    }
+
+    /**
+     * Restore the response after serialization.
+     */
+    public function __unserialize(array $data): void
+    {
+        foreach ($data as $key => $value) {
+            $this->{$key} = $value;
+        }
     }
 
     /**

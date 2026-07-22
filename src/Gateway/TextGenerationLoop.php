@@ -537,14 +537,14 @@ class TextGenerationLoop
      */
     protected function buildStep(StepResponse $result, array $toolResults = []): Step
     {
-        return new Step(
+        return (new Step(
             $result->text,
             $result->toolCalls,
             $toolResults,
             $result->finishReason,
             $result->usage,
             $result->meta,
-        );
+        ))->withRaw($result->raw);
     }
 
     /**
