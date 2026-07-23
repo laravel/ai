@@ -12,6 +12,9 @@ use Laravel\Ai\Responses\Data\UrlCitation;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
+use Laravel\Ai\Streaming\Events\ReasoningDelta;
+use Laravel\Ai\Streaming\Events\ReasoningEnd;
+use Laravel\Ai\Streaming\Events\ReasoningStart;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
@@ -32,6 +35,8 @@ trait HandlesTextStreaming
         $streamModel = $model;
         $streamStartEmitted = false;
         $textStartEmitted = false;
+        $reasoningId = '';
+        $inReasoning = false;
         $currentText = '';
         $toolCalls = [];
         $pendingToolCalls = [];
@@ -86,6 +91,42 @@ trait HandlesTextStreaming
                     $this->generateEventId(),
                     $provider->name(),
                     $streamModel,
+                    time(),
+                ))->withInvocationId($invocationId);
+            }
+
+            // Close the reasoning block as soon as answer text or tool calls arrive...
+            if ($inReasoning && ((isset($delta['content']) && $delta['content'] !== '') || isset($delta['tool_calls']))) {
+                $inReasoning = false;
+
+                yield (new ReasoningEnd(
+                    $this->generateEventId(),
+                    $reasoningId,
+                    time(),
+                ))->withInvocationId($invocationId);
+
+                $reasoningId = '';
+            }
+
+            // Reasoning streams under `reasoning` (OpenRouter) or `reasoning_content` (LiteLLM, vLLM)...
+            $reasoningDelta = $delta['reasoning'] ?? $delta['reasoning_content'] ?? null;
+
+            if (is_string($reasoningDelta) && $reasoningDelta !== '') {
+                if (! $inReasoning) {
+                    $inReasoning = true;
+                    $reasoningId = $this->generateEventId();
+
+                    yield (new ReasoningStart(
+                        $this->generateEventId(),
+                        $reasoningId,
+                        time(),
+                    ))->withInvocationId($invocationId);
+                }
+
+                yield (new ReasoningDelta(
+                    $this->generateEventId(),
+                    $reasoningId,
+                    $reasoningDelta,
                     time(),
                 ))->withInvocationId($invocationId);
             }
@@ -156,6 +197,15 @@ trait HandlesTextStreaming
             if (isset($data['usage'])) {
                 $usage = $this->extractUsage($data);
             }
+        }
+
+        // End reasoning if still open...
+        if ($inReasoning) {
+            yield (new ReasoningEnd(
+                $this->generateEventId(),
+                $reasoningId,
+                time(),
+            ))->withInvocationId($invocationId);
         }
 
         if ($textStartEmitted) {
