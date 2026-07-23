@@ -82,4 +82,29 @@ interface Agent
         Lab|array|string|null $provider = null,
         ?string $model = null
     ): QueuedAgentResponse;
+
+    /**
+     * Broadcast a static message without invoking the agent.
+     */
+    public function broadcastMessage(
+        string $message,
+        Channel|array $channels,
+        bool $now = false
+    ): void;
+
+    /**
+     * Broadcast a static message immediately without invoking the agent.
+     */
+    public function broadcastMessageNow(
+        string $message,
+        Channel|array $channels
+    ): void;
+
+    /**
+     * Queue a static message for broadcasting without invoking the agent.
+     */
+    public function broadcastMessageOnQueue(
+        string $message,
+        Channel|array $channels
+    ): QueuedAgentResponse;
 }

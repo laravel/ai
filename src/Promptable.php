@@ -22,15 +22,23 @@ use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Gateway\FakeTextGateway;
 use Laravel\Ai\Jobs\BroadcastAgent;
+use Laravel\Ai\Jobs\BroadcastStaticMessage;
 use Laravel\Ai\Jobs\InvokeAgent;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\QueuedAgentResponse;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
+use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamEvent;
+use Laravel\Ai\Streaming\Events\StreamStart;
+use Laravel\Ai\Streaming\Events\TextDelta;
+use Laravel\Ai\Streaming\Events\TextEnd;
+use Laravel\Ai\Streaming\Events\TextStart;
 use ReflectionClass;
 use RuntimeException;
 
@@ -232,6 +240,52 @@ trait Promptable
 
         return new QueuedAgentResponse(
             BroadcastAgent::dispatch($this, $prompt, $channels, $attachments, $provider, $model)
+        );
+    }
+
+    /**
+     * Broadcast a static message without invoking the agent.
+     */
+    public function broadcastMessage(string $message, Channel|array $channels, bool $now = false): void
+    {
+        $invocationId = (string) Str::uuid7();
+        $messageId = ulid();
+        $timestamp = time();
+        $without = WithoutBroadcasting::eventsFor($this);
+
+        $events = [
+            new StreamStart(ulid(), 'static', 'static', $timestamp),
+            new TextStart(ulid(), $messageId, $timestamp),
+            new TextDelta(ulid(), $messageId, $message, $timestamp),
+            new TextEnd(ulid(), $messageId, $timestamp),
+            new StreamEnd(ulid(), FinishReason::Stop->value, new Usage, $timestamp),
+        ];
+
+        foreach ($events as $event) {
+            if (WithoutBroadcasting::excludes($without, $event)) {
+                continue;
+            }
+
+            $event->withInvocationId($invocationId)
+                ->{$now ? 'broadcastNow' : 'broadcast'}($channels);
+        }
+    }
+
+    /**
+     * Broadcast a static message immediately without invoking the agent.
+     */
+    public function broadcastMessageNow(string $message, Channel|array $channels): void
+    {
+        $this->broadcastMessage($message, $channels, now: true);
+    }
+
+    /**
+     * Queue a static message for broadcasting without invoking the agent.
+     */
+    public function broadcastMessageOnQueue(string $message, Channel|array $channels): QueuedAgentResponse
+    {
+        return new QueuedAgentResponse(
+            BroadcastStaticMessage::dispatch($this, $message, $channels)
         );
     }
 
