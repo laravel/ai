@@ -14,6 +14,7 @@ use Laravel\Ai\Streaming\Events\ProviderToolEvent;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
 use Laravel\Ai\Streaming\Events\ReasoningStart;
+use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
@@ -54,7 +55,7 @@ trait HandlesTextStreaming
         $usage = null;
         $stopReason = '';
 
-        $emitTextStart = function () use (&$textStartEmitted, $messageId, $invocationId) {
+        $emitTextStart = function () use (&$textStartEmitted, $messageId, $invocationId): ?\Laravel\Ai\Streaming\Events\StreamEvent {
             if ($textStartEmitted) {
                 return null;
             }
@@ -68,7 +69,7 @@ trait HandlesTextStreaming
             ))->withInvocationId($invocationId);
         };
 
-        $emitReasoningStart = function () use (&$reasoningStartEmitted, &$reasoningId, $invocationId) {
+        $emitReasoningStart = function () use (&$reasoningStartEmitted, &$reasoningId, $invocationId): ?\Laravel\Ai\Streaming\Events\StreamEvent {
             if ($reasoningStartEmitted) {
                 return null;
             }
@@ -124,14 +125,14 @@ trait HandlesTextStreaming
                 if ($blockType === 'text') {
                     $currentBlockText = '';
 
-                    if ($event = $emitTextStart()) {
+                    if (($event = $emitTextStart()) instanceof StreamEvent) {
                         yield $event;
                     }
                 } elseif ($blockType === 'thinking') {
                     $currentThinkingText = '';
                     $currentSignature = '';
 
-                    if ($event = $emitReasoningStart()) {
+                    if (($event = $emitReasoningStart()) instanceof StreamEvent) {
                         yield $event;
                     }
                 } elseif ($blockType === 'tool_use') {
@@ -179,7 +180,7 @@ trait HandlesTextStreaming
                     $textDelta = (string) ($data['delta']['text'] ?? '');
 
                     if ($textDelta !== '') {
-                        if ($event = $emitTextStart()) {
+                        if (($event = $emitTextStart()) instanceof StreamEvent) {
                             yield $event;
                         }
 
@@ -197,7 +198,7 @@ trait HandlesTextStreaming
                     $delta = (string) ($data['delta']['thinking'] ?? '');
 
                     if ($delta !== '') {
-                        if ($event = $emitReasoningStart()) {
+                        if (($event = $emitReasoningStart()) instanceof StreamEvent) {
                             yield $event;
                         }
 

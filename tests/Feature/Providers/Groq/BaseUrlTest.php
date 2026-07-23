@@ -5,11 +5,11 @@ use Illuminate\Support\Facades\Http;
 
 use function Laravel\Ai\agent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     $this->customUrl = 'http://localhost:1234/v1';
 });
 
-test('groq text requests use the configured base url', function () {
+test('groq text requests use the configured base url', function (): void {
     configureGroqProvider($this->customUrl);
 
     Http::fake([
@@ -40,7 +40,7 @@ test('groq text requests use the configured base url', function () {
     groqAssertRequestSent('POST', "{$this->customUrl}/chat/completions");
 });
 
-test('groq requests fall back to the default base url', function () {
+test('groq requests fall back to the default base url', function (): void {
     configureGroqProvider();
 
     Http::fake([
@@ -82,6 +82,6 @@ function configureGroqProvider(?string $url = null): void
 
 function groqAssertRequestSent(string $method, string $url): void
 {
-    Http::assertSent(fn (Request $request) => $request->method() === $method
+    Http::assertSent(fn (Request $request): bool => $request->method() === $method
         && $request->url() === $url);
 }

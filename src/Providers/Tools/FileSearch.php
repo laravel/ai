@@ -33,11 +33,9 @@ class FileSearch extends ProviderTool
     public function ids(): array
     {
         return (new Collection($this->stores))
-            ->map(function ($store) {
-                return $store instanceof Store
-                    ? $store->id
-                    : $store;
-            })->all();
+            ->map(fn ($store) => $store instanceof Store
+                ? $store->id
+                : $store)->all();
     }
 
     /**
@@ -53,7 +51,7 @@ class FileSearch extends ProviderTool
         }
 
         if (is_array($where)) {
-            return (new Collection($where))->map(fn ($value, $key) => [
+            return (new Collection($where))->map(fn ($value, $key): array => [
                 'type' => 'eq',
                 'key' => $key,
                 'value' => $value,

@@ -6,6 +6,7 @@ use Laravel\Ai\Gateway\TextGenerationLoop;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Responses\StructuredTextResponse;
+use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
@@ -30,8 +31,8 @@ function bedrockTextResponse(string $text): array
     ];
 }
 
-describe('tool call loop', function () {
-    test('multi step tool loop returns accumulated response shape', function () {
+describe('tool call loop', function (): void {
+    test('multi step tool loop returns accumulated response shape', function (): void {
         $client = $this->fakeBedrockConverseSequence([
             bedrockToolCallResponse('t1'),
             bedrockToolCallResponse('t2'),
@@ -58,7 +59,7 @@ describe('tool call loop', function () {
             ->and($response->usage->completionTokens)->toBe(11);
     });
 
-    test('max steps limits tool call depth', function () {
+    test('max steps limits tool call depth', function (): void {
         $client = $this->fakeBedrockConverseSequence([
             bedrockToolCallResponse('t1'),
             bedrockToolCallResponse('t2'),
@@ -80,7 +81,7 @@ describe('tool call loop', function () {
         expect($response->steps)->toHaveCount(2);
     });
 
-    test('unknown tool call throws NoSuchToolException', function () {
+    test('unknown tool call throws NoSuchToolException', function (): void {
         $client = $this->fakeBedrockConverse([
             'output' => ['message' => ['content' => [
                 ['toolUse' => ['toolUseId' => 't1', 'name' => 'NonExistentTool', 'input' => []]],
@@ -91,7 +92,7 @@ describe('tool call loop', function () {
 
         $gateway = $this->gatewayWithClient($client);
 
-        expect(fn () => (new TextGenerationLoop($gateway))->generate(
+        expect(fn (): TextResponse => (new TextGenerationLoop($gateway))->generate(
             $this->bedrockProvider(),
             'anthropic.claude-opus-4-7-v1:0',
             null,
@@ -99,7 +100,7 @@ describe('tool call loop', function () {
         ))->toThrow(NoSuchToolException::class);
     });
 
-    test('structured output is parsed from the synthetic tool call', function () {
+    test('structured output is parsed from the synthetic tool call', function (): void {
         $client = $this->fakeBedrockConverse([
             'output' => ['message' => ['content' => [
                 ['toolUse' => ['toolUseId' => 's1', 'name' => 'structured_output', 'input' => ['symbol' => 'Fe']]],
@@ -124,7 +125,7 @@ describe('tool call loop', function () {
             ->and($response->usage->completionTokens)->toBe(4);
     });
 
-    test('streaming tool loop emits a single stream end with accumulated usage', function () {
+    test('streaming tool loop emits a single stream end with accumulated usage', function (): void {
         $client = $this->fakeBedrockStreamSequence([
             [
                 $this->contentBlockStart(0, ['toolUse' => ['toolUseId' => 't1', 'name' => 'FixedNumberGenerator']]),
@@ -155,8 +156,8 @@ describe('tool call loop', function () {
             preserve_keys: false,
         );
 
-        $streamEnds = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd));
-        $toolResults = array_values(array_filter($events, fn ($e) => $e instanceof ToolResultEvent));
+        $streamEnds = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd));
+        $toolResults = array_values(array_filter($events, fn ($e): bool => $e instanceof ToolResultEvent));
 
         expect($streamEnds)->toHaveCount(1)
             ->and($streamEnds[0]->reason)->toBe('stop')

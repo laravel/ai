@@ -142,12 +142,12 @@ class Store
     protected function fileAssertionCallback(Closure|string $fileId): Closure
     {
         if ($fileId instanceof Closure) {
-            return fn ($s, $f) => $s === $this->id && $fileId($f);
+            return fn ($s, $f): bool => $s === $this->id && $fileId($f);
         }
 
         $expectedFileId = str_starts_with($fileId, 'fake_file_') ? $fileId : Files::fakeId($fileId);
 
-        return fn ($s, $f) => $s === $this->id && $this->fileIdMatches($f, $expectedFileId);
+        return fn ($s, $f): bool => $s === $this->id && $this->fileIdMatches($f, $expectedFileId);
     }
 
     /**

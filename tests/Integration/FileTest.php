@@ -8,7 +8,7 @@ use Laravel\Ai\Events\FileStored;
 use Laravel\Ai\Events\StoringFile;
 use Laravel\Ai\Files\Document;
 
-test('can store files', function (string $provider, string $apiKey) {
+test('can store files', function (string $provider, string $apiKey): void {
     requiresApiKey($apiKey);
 
     Event::fake();
@@ -27,7 +27,7 @@ test('can store files', function (string $provider, string $apiKey) {
     Event::assertDispatched(FileDeleted::class);
 })->with('file-providers');
 
-test('can store files from local paths', function (string $provider, string $apiKey) {
+test('can store files from local paths', function (string $provider, string $apiKey): void {
     requiresApiKey($apiKey);
 
     $response = Document::fromPath(__DIR__.'/../Fixtures/document.txt')->put(
@@ -39,7 +39,7 @@ test('can store files from local paths', function (string $provider, string $api
     Document::fromId($response->id)->delete(provider: $provider);
 })->with('file-providers');
 
-test('can store files from storage paths', function (string $provider, string $apiKey) {
+test('can store files from storage paths', function (string $provider, string $apiKey): void {
     requiresApiKey($apiKey);
 
     Storage::disk('local')->put('document.txt', 'Hello, World!');
@@ -53,7 +53,7 @@ test('can store files from storage paths', function (string $provider, string $a
     Document::fromId($response->id)->delete(provider: $provider);
 })->with('file-providers');
 
-test('can store files from remote paths', function (string $provider, string $apiKey) {
+test('can store files from remote paths', function (string $provider, string $apiKey): void {
     requiresApiKey($apiKey);
 
     $stored = Document::fromUrl(
@@ -72,7 +72,7 @@ test('can store files from remote paths', function (string $provider, string $ap
     Document::fromId($response->id)->delete(provider: $provider);
 })->with('file-providers');
 
-test('exception is thrown if stored file does not exist', function (string $provider, string $apiKey) {
+test('exception is thrown if stored file does not exist', function (string $provider, string $apiKey): void {
     requiresApiKey($apiKey);
 
     Document::fromStorage('missing-document.pdf', disk: 'local')->put(
@@ -80,7 +80,7 @@ test('exception is thrown if stored file does not exist', function (string $prov
     );
 })->with('file-providers')->throws(RuntimeException::class);
 
-test('can get files', function (string $provider, string $apiKey) {
+test('can get files', function (string $provider, string $apiKey): void {
     requiresApiKey($apiKey);
 
     $stored = Document::fromString('Hello, World!', 'text/plain')->put(
@@ -96,7 +96,7 @@ test('can get files', function (string $provider, string $apiKey) {
     Document::fromId($response->id)->delete(provider: $provider);
 })->with('file-providers');
 
-test('can delete files', function (string $provider, string $apiKey) {
+test('can delete files', function (string $provider, string $apiKey): void {
     requiresApiKey($apiKey);
 
     $stored = Document::fromString('Hello, World!', 'text/plain')->put(

@@ -9,6 +9,7 @@ use Laravel\Ai\Attributes\TopP;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\ToolChoice;
 use ReflectionClass;
 
 class TextGenerationOptions
@@ -19,6 +20,7 @@ class TextGenerationOptions
         public readonly ?float $temperature = null,
         public readonly ?Agent $agent = null,
         public readonly ?float $topP = null,
+        public readonly ?ToolChoice $toolChoice = null,
     ) {
         //
     }
@@ -40,6 +42,28 @@ class TextGenerationOptions
     }
 
     /**
+     * Resolve the options for the given step, releasing a forced tool choice after the first step so the model can answer.
+     */
+    public function forStep(int $stepNumber): self
+    {
+        if ($stepNumber === 0 || ! $this->toolChoice instanceof ToolChoice) {
+            return $this;
+        }
+
+        if (! in_array($this->toolChoice->mode, [ToolChoice::required, ToolChoice::tool], true)) {
+            return $this;
+        }
+
+        return new self(
+            maxSteps: $this->maxSteps,
+            maxTokens: $this->maxTokens,
+            temperature: $this->temperature,
+            agent: $this->agent,
+            topP: $this->topP,
+        );
+    }
+
+    /**
      * Create a new TextGenerationOptions instance for the given agent.
      */
     public static function forAgent(Agent $agent): self
@@ -52,7 +76,30 @@ class TextGenerationOptions
             temperature: self::resolve($agent, $reflection, 'temperature', Temperature::class),
             agent: $agent,
             topP: self::resolve($agent, $reflection, 'topP', TopP::class),
+            toolChoice: self::resolveToolChoice($agent, $reflection),
         );
+    }
+
+    /**
+     * Resolve the tool choice from the agent's method, falling back to the attribute.
+     */
+    private static function resolveToolChoice(Agent $agent, ReflectionClass $reflection): ?ToolChoice
+    {
+        if (method_exists($agent, 'toolChoice')) {
+            try {
+                $value = $agent->toolChoice();
+            } catch (\ArgumentCountError|\Error) {
+                $value = null;
+            }
+
+            if (! is_null($value)) {
+                return ToolChoice::from($value);
+            }
+        }
+
+        $attributes = $reflection->getAttributes(ToolChoice::class);
+
+        return $attributes === [] ? null : $attributes[0]->newInstance();
     }
 
     /**
@@ -76,6 +123,6 @@ class TextGenerationOptions
 
         $attributes = $reflection->getAttributes($attribute);
 
-        return ! empty($attributes) ? $attributes[0]->newInstance()->value : null;
+        return $attributes === [] ? null : $attributes[0]->newInstance()->value;
     }
 }

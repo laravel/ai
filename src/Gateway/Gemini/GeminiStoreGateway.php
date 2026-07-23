@@ -81,10 +81,10 @@ class GeminiStoreGateway implements StoreGateway
             'x-goog-api-key' => $provider->providerCredentials()['key'],
         ]))->post($this->baseUrl($provider)."/{$storeId}:importFile", array_filter([
             'fileName' => $fileId,
-            'customMetadata' => ! empty($metadata) ? $this->formatMetadata($metadata) : null,
+            'customMetadata' => $metadata === [] ? null : $this->formatMetadata($metadata),
         ]))->throw());
 
-        return basename($response->json('name'));
+        return basename((string) $response->json('name'));
     }
 
     /**
@@ -92,12 +92,10 @@ class GeminiStoreGateway implements StoreGateway
      */
     protected function formatMetadata(array $metadata): array
     {
-        return (new Collection($metadata))->map(function ($value, $key) {
-            return match (true) {
-                is_numeric($value) => ['key' => $key, 'numericValue' => $value],
-                is_array($value) => ['key' => $key, 'stringListValue' => ['values' => $value]],
-                default => ['key' => $key, 'stringValue' => (string) $value],
-            };
+        return (new Collection($metadata))->map(fn ($value, $key): array => match (true) {
+            is_numeric($value) => ['key' => $key, 'numericValue' => $value],
+            is_array($value) => ['key' => $key, 'stringListValue' => ['values' => $value]],
+            default => ['key' => $key, 'stringValue' => (string) $value],
         })->values()->all();
     }
 

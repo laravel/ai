@@ -36,6 +36,7 @@ class StoredDocument extends Document implements Arrayable, JsonSerializable, St
     /**
      * Get the displayable name of the file.
      */
+    #[\Override]
     public function name(): ?string
     {
         return $this->name ?? basename($this->path);
@@ -44,6 +45,7 @@ class StoredDocument extends Document implements Arrayable, JsonSerializable, St
     /**
      * Get the file's MIME type.
      */
+    #[\Override]
     public function mimeType(): ?string
     {
         /** @var FilesystemAdapter $disk */

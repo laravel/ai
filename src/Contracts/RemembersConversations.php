@@ -5,14 +5,19 @@ namespace Laravel\Ai\Contracts;
 interface RemembersConversations extends Conversational
 {
     /**
+     * Start a new conversation for the given participant.
+     */
+    public function forParticipant(object $participant): static;
+
+    /**
      * Start a new conversation for the given user.
      */
     public function forUser(object $user): static;
 
     /**
-     * Continue an existing conversation as the given user.
+     * Continue an existing conversation, optionally as the given user.
      */
-    public function continue(string $conversationId, object $as): static;
+    public function continue(string $conversationId, ?object $as = null): static;
 
     /**
      * Continue the last conversation as the given user.

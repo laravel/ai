@@ -6,12 +6,12 @@ use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\ImageResponse;
 
-test('mime falls back to image/png when no mime type is set', function () {
+test('mime falls back to image/png when no mime type is set', function (): void {
     expect((new GeneratedImage('aGVsbG8='))->mime())->toBe('image/png');
     expect((new GeneratedImage('aGVsbG8=', 'image/webp'))->mime())->toBe('image/webp');
 });
 
-test('toHtml renders an img tag with the image mime type', function () {
+test('toHtml renders an img tag with the image mime type', function (): void {
     $response = new ImageResponse(
         new Collection([new GeneratedImage('aGVsbG8=', 'image/jpeg')]),
         new Usage,
@@ -23,7 +23,7 @@ test('toHtml renders an img tag with the image mime type', function () {
     );
 });
 
-test('toHtml falls back to image/png when the image has no mime type', function () {
+test('toHtml falls back to image/png when the image has no mime type', function (): void {
     $response = new ImageResponse(
         new Collection([new GeneratedImage('aGVsbG8=')]),
         new Usage,
@@ -35,7 +35,7 @@ test('toHtml falls back to image/png when the image has no mime type', function 
     );
 });
 
-test('toHtml escapes the alt attribute', function () {
+test('toHtml escapes the alt attribute', function (): void {
     $response = new ImageResponse(
         new Collection([new GeneratedImage('aGVsbG8=', 'image/png')]),
         new Usage,
@@ -47,13 +47,13 @@ test('toHtml escapes the alt attribute', function () {
     );
 });
 
-test('firstImage throws when the response contains no images', function () {
+test('firstImage throws when the response contains no images', function (): void {
     $response = new ImageResponse(
         new Collection,
         new Usage,
         new Meta('openai', 'gpt-image-1'),
     );
 
-    expect(fn () => $response->firstImage())
+    expect(fn (): GeneratedImage => $response->firstImage())
         ->toThrow(RuntimeException::class, 'The image response does not contain any images.');
 });

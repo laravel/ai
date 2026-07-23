@@ -9,7 +9,7 @@ use Laravel\Ai\Tools\AgentTool;
 use Tests\Fixtures\Agents\DelegatingAgent;
 use Tests\Fixtures\Agents\ResearchAgent;
 
-test('a parent agent delegates to a sub-agent and the sub-agent runs end-to-end', function (string $provider, string $apiKey, string $model) {
+test('a parent agent delegates to a sub-agent and the sub-agent runs end-to-end', function (string $provider, string $apiKey, string $model): void {
     requiresApiKey($apiKey);
 
     config(['ai.default' => $provider]);
@@ -28,15 +28,13 @@ test('a parent agent delegates to a sub-agent and the sub-agent runs end-to-end'
         ->and($researchToolCall->arguments)->toHaveKey('task')
         ->and($researchToolCall->arguments['task'])->toBeString()->not->toBeEmpty();
 
-    Event::assertDispatched(InvokingTool::class, function ($event) use ($researchToolCall) {
-        return $event->tool instanceof AgentTool
-            && $event->tool->agent() instanceof ResearchAgent
-            && ($event->arguments['task'] ?? null) === $researchToolCall->arguments['task'];
-    });
+    Event::assertDispatched(InvokingTool::class, fn ($event): bool => $event->tool instanceof AgentTool
+        && $event->tool->agent() instanceof ResearchAgent
+        && ($event->arguments['task'] ?? null) === $researchToolCall->arguments['task']);
 
     $researchPrompted = null;
 
-    Event::assertDispatched(AgentPrompted::class, function ($event) use (&$researchPrompted) {
+    Event::assertDispatched(AgentPrompted::class, function ($event) use (&$researchPrompted): bool {
         if ($event->prompt->agent instanceof ResearchAgent) {
             $researchPrompted = $event;
 
@@ -50,18 +48,14 @@ test('a parent agent delegates to a sub-agent and the sub-agent runs end-to-end'
         ->and($researchPrompted->prompt->prompt)->toBe($researchToolCall->arguments['task'])
         ->and($researchPrompted->response->text)->toBeString()->not->toBeEmpty();
 
-    Event::assertDispatched(PromptingAgent::class, function ($event) {
-        return $event->prompt->agent instanceof ResearchAgent;
-    });
+    Event::assertDispatched(PromptingAgent::class, fn ($event): bool => $event->prompt->agent instanceof ResearchAgent);
 
     $researchToolResult = $response->toolResults->firstWhere('name', 'research_agent');
 
     expect($researchToolResult)->not->toBeNull()
         ->and($researchToolResult->result)->toBe($researchPrompted->response->text);
 
-    Event::assertDispatched(ToolInvoked::class, function ($event) use ($researchPrompted) {
-        return $event->tool instanceof AgentTool
-            && $event->tool->agent() instanceof ResearchAgent
-            && $event->result === $researchPrompted->response->text;
-    });
+    Event::assertDispatched(ToolInvoked::class, fn ($event): bool => $event->tool instanceof AgentTool
+        && $event->tool->agent() instanceof ResearchAgent
+        && $event->result === $researchPrompted->response->text);
 })->with('agent-providers');

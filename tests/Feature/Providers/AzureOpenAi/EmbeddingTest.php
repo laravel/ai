@@ -7,7 +7,7 @@ use Laravel\Ai\Embeddings;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.azure' => [
         ...config('ai.providers.azure'),
         'key' => 'test-key',
@@ -17,12 +17,12 @@ beforeEach(function () {
     ]]);
 });
 
-test('embeddings request includes model input and dimensions', function () {
+test('embeddings request includes model input and dimensions', function (): void {
     Http::fake(['*' => fakeAzureEmbeddingsResponse()]);
 
     Embeddings::for(['Hello world'])->dimensions(1536)->generate(provider: 'azure', model: 'text-embedding-3-small');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['model'] === 'text-embedding-3-small'
@@ -31,17 +31,15 @@ test('embeddings request includes model input and dimensions', function () {
     });
 });
 
-test('embeddings request uses the v1 embeddings endpoint', function () {
+test('embeddings request uses the v1 embeddings endpoint', function (): void {
     Http::fake(['*' => fakeAzureEmbeddingsResponse()]);
 
     Embeddings::for(['Hello'])->generate(provider: 'azure', model: 'text-embedding-3-small');
 
-    Http::assertSent(function (Request $request) {
-        return str_contains($request->url(), '/openai/v1/embeddings');
-    });
+    Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/openai/v1/embeddings'));
 });
 
-test('embeddings response is correctly parsed', function () {
+test('embeddings response is correctly parsed', function (): void {
     Http::fake(['*' => fakeAzureEmbeddingsResponse()]);
 
     $response = Embeddings::for(['Hello world'])->generate(provider: 'azure', model: 'text-embedding-3-small');
@@ -52,27 +50,23 @@ test('embeddings response is correctly parsed', function () {
         ->and($response->meta->provider)->toBe('azure');
 });
 
-test('embeddings request sends api-key header', function () {
+test('embeddings request sends api-key header', function (): void {
     Http::fake(['*' => fakeAzureEmbeddingsResponse()]);
 
     Embeddings::for(['Hello'])->generate(provider: 'azure', model: 'text-embedding-3-small');
 
-    Http::assertSent(function (Request $request) {
-        return $request->hasHeader('api-key', 'test-key');
-    });
+    Http::assertSent(fn (Request $request) => $request->hasHeader('api-key', 'test-key'));
 });
 
-test('embeddings request does not include api-version query parameter', function () {
+test('embeddings request does not include api-version query parameter', function (): void {
     Http::fake(['*' => fakeAzureEmbeddingsResponse()]);
 
     Embeddings::for(['Hello'])->generate(provider: 'azure', model: 'text-embedding-3-small');
 
-    Http::assertSent(function (Request $request) {
-        return ! str_contains($request->url(), 'api-version');
-    });
+    Http::assertSent(fn (Request $request): bool => ! str_contains($request->url(), 'api-version'));
 });
 
-test('multiple inputs return multiple embeddings', function () {
+test('multiple inputs return multiple embeddings', function (): void {
     Http::fake(['*' => Http::response([
         'id' => 'embd-123',
         'object' => 'list',
@@ -89,7 +83,7 @@ test('multiple inputs return multiple embeddings', function () {
     expect($response->embeddings)->toHaveCount(2);
 });
 
-test('embeddings rate limit response throws rate limited exception', function () {
+test('embeddings rate limit response throws rate limited exception', function (): void {
     Http::fake([
         'my-resource.cognitiveservices.azure.com/*' => Http::response([
             'error' => [
@@ -102,7 +96,7 @@ test('embeddings rate limit response throws rate limited exception', function ()
     Embeddings::for(['Hello'])->generate(provider: 'azure', model: 'text-embedding-3-small');
 })->throws(RateLimitedException::class);
 
-test('embeddings overloaded response throws provider overloaded exception', function () {
+test('embeddings overloaded response throws provider overloaded exception', function (): void {
     Http::fake([
         'my-resource.cognitiveservices.azure.com/*' => Http::response([
             'error' => [
@@ -115,7 +109,7 @@ test('embeddings overloaded response throws provider overloaded exception', func
     Embeddings::for(['Hello'])->generate(provider: 'azure', model: 'text-embedding-3-small');
 })->throws(ProviderOverloadedException::class);
 
-test('embeddings http error response throws request exception', function () {
+test('embeddings http error response throws request exception', function (): void {
     Http::fake([
         'my-resource.cognitiveservices.azure.com/*' => Http::response([
             'error' => [
@@ -128,14 +122,14 @@ test('embeddings http error response throws request exception', function () {
     Embeddings::for(['Hello'])->generate(provider: 'azure', model: 'text-embedding-3-small');
 })->throws(RequestException::class);
 
-test('embeddings request includes provider options in the request body', function () {
+test('embeddings request includes provider options in the request body', function (): void {
     Http::fake(['*' => fakeAzureEmbeddingsResponse()]);
 
     Embeddings::for(['Hello'])
         ->withProviderOptions(['encoding_format' => 'base64', 'user' => 'tester'])
         ->generate(provider: 'azure', model: 'text-embedding-3-small');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['encoding_format'] === 'base64'

@@ -9,7 +9,7 @@ use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ProviderOptionsAgent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 
-test('provider options are included in generation config', function () {
+test('provider options are included in generation config', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
     ]);
@@ -19,7 +19,7 @@ test('provider options are included in generation config', function () {
         provider: 'gemini',
     );
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $body = $request->data();
         $config = $body['generationConfig'] ?? [];
 
@@ -28,7 +28,7 @@ test('provider options are included in generation config', function () {
     });
 });
 
-test('request body does not contain provider options when agent does not implement interface', function () {
+test('request body does not contain provider options when agent does not implement interface', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
     ]);
@@ -38,14 +38,14 @@ test('request body does not contain provider options when agent does not impleme
         provider: 'gemini',
     );
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $config = $request->data()['generationConfig'] ?? [];
 
         return ! isset($config['thinkingConfig']);
     });
 });
 
-test('provider options are persisted in tool call follow up requests', function () {
+test('provider options are persisted in tool call follow up requests', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::sequence([
             $this->fakeToolCallResponse(),
@@ -76,16 +76,16 @@ test('nested generationConfig inside providerOptions is flattened into the top-l
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
     ]);
-
+    
     $agent = new class implements Agent, HasProviderOptions
     {
         use Promptable;
-
+        
         public function instructions(): string
         {
             return 'You are a helpful assistant.';
         }
-
+        
         public function providerOptions(Lab|string $provider): array
         {
             return match ($provider) {
@@ -94,12 +94,12 @@ test('nested generationConfig inside providerOptions is flattened into the top-l
             };
         }
     };
-
+    
     $agent->prompt('Hi', provider: 'gemini');
-
+    
     Http::assertSent(function ($request) {
         $config = $request->data()['generationConfig'] ?? [];
-
+        
         return ($config['temperature'] ?? null) === 0.5
             && ($config['topP'] ?? null) === 0.9
             && ! isset($config['generationConfig']);
@@ -110,20 +110,20 @@ test('safetySettings inside providerOptions generationConfig is hoisted to reque
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
     ]);
-
+    
     $safetySettings = [['category' => 'HARM_CATEGORY_HATE_SPEECH', 'threshold' => 'BLOCK_NONE']];
-
+    
     $agent = new class ($safetySettings) implements Agent, HasProviderOptions
     {
         use Promptable;
-
+        
         public function __construct(private array $safetySettings) {}
-
+        
         public function instructions(): string
         {
             return 'You are a helpful assistant.';
         }
-
+        
         public function providerOptions(Lab|string $provider): array
         {
             return match ($provider) {
@@ -132,18 +132,18 @@ test('safetySettings inside providerOptions generationConfig is hoisted to reque
             };
         }
     };
-
+    
     $agent->prompt('Hi', provider: 'gemini');
-
+    
     Http::assertSent(function ($request) use ($safetySettings) {
         $body = $request->data();
-
+        
         return ($body['safetySettings'] ?? null) === $safetySettings
             && ! isset($body['generationConfig']['safetySettings']);
     });
 });
 
-test('cachedContent is placed at top level of request body, not in generationConfig', function () {
+test('cachedContent is placed at top level of request body, not in generationConfig', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
     ]);
@@ -168,7 +168,7 @@ test('cachedContent is placed at top level of request body, not in generationCon
 
     $agent->prompt('Hi', provider: 'gemini');
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $body = $request->data();
 
         return isset($body['cachedContent'])

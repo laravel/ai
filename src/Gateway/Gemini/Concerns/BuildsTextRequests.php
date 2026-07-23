@@ -8,6 +8,7 @@ use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\ToolResult;
+use Laravel\Ai\ToolChoice;
 
 trait BuildsTextRequests
 {
@@ -64,6 +65,12 @@ trait BuildsTextRequests
 
         if (filled($tools)) {
             $body['tools'] = $this->mapTools($tools, $provider);
+
+            if ($options?->toolChoice instanceof ToolChoice) {
+                $body['tool_config'] = [
+                    'function_calling_config' => $this->functionCallingConfig($options->toolChoice),
+                ];
+            }
         }
 
         $generationConfig = [];
@@ -135,7 +142,7 @@ trait BuildsTextRequests
      */
     protected function buildFunctionResponseParts(array $toolResults): array
     {
-        return array_values(array_map(function ($result) {
+        return array_values(array_map(function ($result): array {
             $functionResponse = [
                 'name' => $result->name,
                 'response' => [
@@ -158,5 +165,23 @@ trait BuildsTextRequests
     protected function buildResponseSchema(array $schema): array
     {
         return (new ObjectSchema($schema))->toSchema();
+    }
+
+    /**
+     * Map a tool choice to the Gemini function_calling_config block.
+     *
+     * @return array<string, mixed>
+     */
+    protected function functionCallingConfig(ToolChoice $choice): array
+    {
+        return match ($choice->mode) {
+            ToolChoice::auto => ['mode' => 'AUTO'],
+            ToolChoice::none => ['mode' => 'NONE'],
+            ToolChoice::required => ['mode' => 'ANY'],
+            ToolChoice::tool => [
+                'mode' => 'ANY',
+                'allowed_function_names' => [$choice->toolName],
+            ],
+        };
     }
 }

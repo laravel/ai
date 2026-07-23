@@ -24,11 +24,11 @@ use Laravel\Ai\Tools\ToolNameResolver;
 
 use function Laravel\Ai\agent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     Storage::fake('local');
 });
 
-test('list files returns files and directories under a path', function () {
+test('list files returns files and directories under a path', function (): void {
     Storage::disk('local')->put('docs/a.txt', 'A');
     Storage::disk('local')->put('docs/nested/b.txt', 'B');
     Storage::disk('local')->put('root.txt', 'R');
@@ -40,7 +40,7 @@ test('list files returns files and directories under a path', function () {
         ->not->toContain('root.txt');
 });
 
-test('list files can recurse into subdirectories', function () {
+test('list files can recurse into subdirectories', function (): void {
     Storage::disk('local')->put('docs/a.txt', 'A');
     Storage::disk('local')->put('docs/nested/b.txt', 'B');
 
@@ -49,7 +49,7 @@ test('list files can recurse into subdirectories', function () {
     expect($result)->toContain('docs/a.txt')->toContain('docs/nested/b.txt');
 });
 
-test('read file returns text contents', function () {
+test('read file returns text contents', function (): void {
     Storage::disk('local')->put('note.txt', 'Hello world');
 
     $result = (new ReadFile('local'))->handle(new Request(['path' => 'note.txt']));
@@ -57,13 +57,13 @@ test('read file returns text contents', function () {
     expect($result)->toBe('Hello world');
 });
 
-test('read file reports a missing file', function () {
+test('read file reports a missing file', function (): void {
     $result = (new ReadFile('local'))->handle(new Request(['path' => 'missing.txt']));
 
     expect($result)->toBe('File [missing.txt] does not exist.');
 });
 
-test('read file rejects an oversized file', function () {
+test('read file rejects an oversized file', function (): void {
     Storage::disk('local')->put('big.txt', str_repeat('a', 300 * 1024));
 
     $result = (new ReadFile('local'))->handle(new Request(['path' => 'big.txt']));
@@ -71,7 +71,7 @@ test('read file rejects an oversized file', function () {
     expect($result)->toContain('too large to read inline');
 });
 
-test('read file rejects a binary file', function () {
+test('read file rejects a binary file', function (): void {
     Storage::disk('local')->put('image.bin', "\xff\xfe\x00\x01binary");
 
     $result = (new ReadFile('local'))->handle(new Request(['path' => 'image.bin']));
@@ -79,7 +79,7 @@ test('read file rejects a binary file', function () {
     expect($result)->toContain('appears to be binary');
 });
 
-test('file exists reports presence and absence', function () {
+test('file exists reports presence and absence', function (): void {
     Storage::disk('local')->put('there.txt', 'x');
 
     expect((new FileExists('local'))->handle(new Request(['path' => 'there.txt'])))
@@ -89,7 +89,7 @@ test('file exists reports presence and absence', function () {
         ->toBe('File [nope.txt] does not exist.');
 });
 
-test('file exists does not report directories as files', function () {
+test('file exists does not report directories as files', function (): void {
     Storage::disk('local')->makeDirectory('docs');
 
     $result = (new FileExists('local'))->handle(new Request(['path' => 'docs']));
@@ -97,7 +97,7 @@ test('file exists does not report directories as files', function () {
     expect($result)->toBe('File [docs] does not exist.');
 });
 
-test('file metadata returns size and mime type', function () {
+test('file metadata returns size and mime type', function (): void {
     Storage::disk('local')->put('data.txt', 'twelve bytes');
 
     $metadata = json_decode((new GetFileMetadata('local'))->handle(new Request(['path' => 'data.txt'])), true);
@@ -106,13 +106,13 @@ test('file metadata returns size and mime type', function () {
         ->and($metadata)->toHaveKeys(['mime_type', 'last_modified', 'visibility']);
 });
 
-test('file metadata reports a missing file', function () {
+test('file metadata reports a missing file', function (): void {
     $result = (new GetFileMetadata('local'))->handle(new Request(['path' => 'missing.txt']));
 
     expect($result)->toBe('File [missing.txt] does not exist.');
 });
 
-test('file url returns a usable string and never throws', function () {
+test('file url returns a usable string and never throws', function (): void {
     Storage::disk('local')->put('pic.txt', 'x');
 
     expect((new GetFileUrl('local'))->handle(new Request(['path' => 'pic.txt'])))->toContain('pic.txt');
@@ -120,13 +120,13 @@ test('file url returns a usable string and never throws', function () {
     expect((new GetFileUrl('local'))->handle(new Request(['path' => 'pic.txt', 'expires_in_minutes' => 5])))->toContain('pic.txt');
 });
 
-test('file url reports a missing file', function () {
+test('file url reports a missing file', function (): void {
     $result = (new GetFileUrl('local'))->handle(new Request(['path' => 'missing.txt']));
 
     expect($result)->toBe('File [missing.txt] does not exist.');
 });
 
-test('file url does not generate urls for directories', function () {
+test('file url does not generate urls for directories', function (): void {
     Storage::disk('local')->makeDirectory('docs');
 
     $result = (new GetFileUrl('local'))->handle(new Request(['path' => 'docs']));
@@ -134,7 +134,7 @@ test('file url does not generate urls for directories', function () {
     expect($result)->toBe('File [docs] does not exist.');
 });
 
-test('write file creates a file', function () {
+test('write file creates a file', function (): void {
     $result = (new WriteFile('local'))->handle(new Request(['path' => 'out.txt', 'contents' => 'written']));
 
     expect($result)->toContain('Wrote');
@@ -142,7 +142,7 @@ test('write file creates a file', function () {
     expect(Storage::disk('local')->get('out.txt'))->toBe('written');
 });
 
-test('write file reports write failures', function () {
+test('write file reports write failures', function (): void {
     $disk = Mockery::mock(Filesystem::class);
     $disk->shouldReceive('put')->once()->with('out.txt', 'written')->andReturnFalse();
 
@@ -151,7 +151,7 @@ test('write file reports write failures', function () {
     expect($result)->toBe('Unable to write [out.txt].');
 });
 
-test('delete file removes a file', function () {
+test('delete file removes a file', function (): void {
     Storage::disk('local')->put('gone.txt', 'x');
 
     $result = (new DeleteFile('local'))->handle(new Request(['path' => 'gone.txt']));
@@ -160,13 +160,13 @@ test('delete file removes a file', function () {
     Storage::disk('local')->assertMissing('gone.txt');
 });
 
-test('delete file reports a missing file', function () {
+test('delete file reports a missing file', function (): void {
     $result = (new DeleteFile('local'))->handle(new Request(['path' => 'missing.txt']));
 
     expect($result)->toBe('File [missing.txt] does not exist.');
 });
 
-test('delete file does not report directories as files', function () {
+test('delete file does not report directories as files', function (): void {
     Storage::disk('local')->makeDirectory('docs');
 
     $result = (new DeleteFile('local'))->handle(new Request(['path' => 'docs']));
@@ -175,7 +175,7 @@ test('delete file does not report directories as files', function () {
     Storage::disk('local')->assertExists('docs');
 });
 
-test('delete file reports delete failures', function () {
+test('delete file reports delete failures', function (): void {
     $disk = Mockery::mock(Filesystem::class);
     $disk->shouldReceive('size')->once()->with('gone.txt')->andReturn(1);
     $disk->shouldReceive('delete')->once()->with('gone.txt')->andReturnFalse();
@@ -185,7 +185,7 @@ test('delete file reports delete failures', function () {
     expect($result)->toBe('Unable to delete [gone.txt].');
 });
 
-test('copy file duplicates a file', function () {
+test('copy file duplicates a file', function (): void {
     Storage::disk('local')->put('src.txt', 'data');
 
     $result = (new CopyFile('local'))->handle(new Request(['from' => 'src.txt', 'to' => 'dst.txt']));
@@ -194,52 +194,52 @@ test('copy file duplicates a file', function () {
     Storage::disk('local')->assertExists('dst.txt');
 });
 
-test('copy file reports a missing source', function () {
+test('copy file reports a missing source', function (): void {
     $result = (new CopyFile('local'))->handle(new Request(['from' => 'missing.txt', 'to' => 'dst.txt']));
 
     expect($result)->toBe('Unable to copy [missing.txt] to [dst.txt]. The source file may not exist.');
 });
 
-test('file storage tools all returns every tool as a collection', function () {
+test('file storage tools all returns every tool as a collection', function (): void {
     $tools = FileStorage::all('local');
 
     expect($tools)->toBeInstanceOf(Collection::class)
         ->toHaveCount(8)
-        ->and($tools->contains(fn ($tool) => $tool instanceof WriteFile))->toBeTrue();
+        ->and($tools->contains(fn ($tool): bool => $tool instanceof WriteFile))->toBeTrue();
 });
 
-test('file storage tools can be filtered as a collection', function () {
+test('file storage tools can be filtered as a collection', function (): void {
     $tools = FileStorage::all('local')
-        ->reject(fn ($tool) => $tool instanceof DeleteFile);
+        ->reject(fn ($tool): bool => $tool instanceof DeleteFile);
 
     expect($tools)->toHaveCount(7)
-        ->and($tools->contains(fn ($tool) => $tool instanceof DeleteFile))->toBeFalse();
+        ->and($tools->contains(fn ($tool): bool => $tool instanceof DeleteFile))->toBeFalse();
 });
 
-test('file storage tools readOnly returns only read tools', function () {
+test('file storage tools readOnly returns only read tools', function (): void {
     $tools = FileStorage::readOnly('local');
 
     expect($tools)->toBeInstanceOf(Collection::class)
         ->toHaveCount(5)
-        ->and($tools->contains(fn ($tool) => $tool instanceof ReadFile))->toBeTrue()
-        ->and($tools->contains(fn ($tool) => $tool instanceof WriteFile))->toBeFalse()
-        ->and($tools->contains(fn ($tool) => $tool instanceof DeleteFile))->toBeFalse()
-        ->and($tools->contains(fn ($tool) => $tool instanceof CopyFile))->toBeFalse();
+        ->and($tools->contains(fn ($tool): bool => $tool instanceof ReadFile))->toBeTrue()
+        ->and($tools->contains(fn ($tool): bool => $tool instanceof WriteFile))->toBeFalse()
+        ->and($tools->contains(fn ($tool): bool => $tool instanceof DeleteFile))->toBeFalse()
+        ->and($tools->contains(fn ($tool): bool => $tool instanceof CopyFile))->toBeFalse();
 });
 
-test('filesystem tool names resolve to class basenames', function () {
+test('filesystem tool names resolve to class basenames', function (): void {
     expect(ToolNameResolver::resolve(new ReadFile('local')))->toBe('ReadFile')
         ->and(ToolNameResolver::resolve(new ListFiles('local')))->toBe('ListFiles')
         ->and(ToolNameResolver::resolve(new WriteFile('local')))->toBe('WriteFile');
 });
 
-test('filesystem tool schemas build', function () {
+test('filesystem tool schemas build', function (): void {
     $schema = (new CopyFile('local'))->schema(new JsonSchemaTypeFactory);
 
     expect($schema)->toHaveKeys(['from', 'to']);
 });
 
-test('every filesystem tool maps to a strict-compliant openai schema', function () {
+test('every filesystem tool maps to a strict-compliant openai schema', function (): void {
     config(['ai.providers.openai' => [
         ...config('ai.providers.openai'),
         'key' => 'test-key',
@@ -250,7 +250,7 @@ test('every filesystem tool maps to a strict-compliant openai schema', function 
     agent(tools: FileStorage::all('local'))
         ->prompt('List the files', provider: 'openai');
 
-    Http::assertSent(function (Illuminate\Http\Client\Request $request) {
+    Http::assertSent(function (Illuminate\Http\Client\Request $request): bool {
         $tools = collect(data_get(json_decode($request->body(), true), 'tools'))->where('type', 'function');
 
         if ($tools->count() !== 8) {
@@ -271,7 +271,7 @@ test('every filesystem tool maps to a strict-compliant openai schema', function 
     });
 });
 
-test('agent copies a file end to end', function () {
+test('agent copies a file end to end', function (): void {
     config(['ai.providers.openai' => [
         ...config('ai.providers.openai'),
         'key' => 'test-key',
@@ -294,7 +294,7 @@ test('agent copies a file end to end', function () {
     Storage::disk('local')->assertCount('wallpapers', 1);
 });
 
-test('agent deletes a file end to end', function () {
+test('agent deletes a file end to end', function (): void {
     config(['ai.providers.openai' => [
         ...config('ai.providers.openai'),
         'key' => 'test-key',
