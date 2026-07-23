@@ -147,7 +147,7 @@ test('queued images can be faked and then callback is executed', function (): vo
     expect($GLOBALS['imageResponse']->firstImage()->image)->toEqual(base64_encode('image'));
 });
 
-test('queued images can be faked and then callback is executed if queue is faked', function (): void {
+test('queued images can be faked and then callback is not executed if queue is faked', function (): void {
     Image::fake([base64_encode('image')]);
     Queue::fake();
 

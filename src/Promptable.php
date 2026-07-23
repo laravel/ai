@@ -169,8 +169,6 @@ trait Promptable
             Ai::recordPrompt(
                 new QueuedAgentPrompt($this, $prompt, $attachments, $provider, $model),
             );
-
-            return new QueuedAgentResponse(new FakePendingDispatch);
         }
 
         return new QueuedAgentResponse(
@@ -226,8 +224,6 @@ trait Promptable
             Ai::recordPrompt(
                 new QueuedAgentPrompt($this, $prompt, $attachments, $provider, $model),
             );
-
-            return new QueuedAgentResponse(new FakePendingDispatch);
         }
 
         return new QueuedAgentResponse(
