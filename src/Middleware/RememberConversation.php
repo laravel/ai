@@ -104,7 +104,7 @@ class RememberConversation
             $response = $this->provider->textGenerationLoop()->generate(
                 $this->provider,
                 $this->provider->cheapestTextModel(),
-                'Generate a concise 3-5 word title for a conversation that starts with the following message. Respond with only the title, no quotes or punctuation.',
+                'Generate a concise 3-5 word title for a conversation that starts with the following message. Use the same language as the message. Respond with only the title, no quotes or punctuation.',
                 [new UserMessage(Str::limit($prompt, 500))],
             );
 
