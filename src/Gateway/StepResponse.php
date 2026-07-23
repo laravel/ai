@@ -3,9 +3,9 @@
 namespace Laravel\Ai\Gateway;
 
 use Illuminate\Contracts\Support\Arrayable;
-use Illuminate\Http\Client\Response as HttpResponse;
 use JsonSerializable;
 use Laravel\Ai\Approvals\PendingApproval;
+use Laravel\Ai\Responses\Concerns\HasRawResponse;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -13,10 +13,7 @@ use Laravel\Ai\Responses\Data\Usage;
 
 class StepResponse implements Arrayable, JsonSerializable
 {
-    /**
-     * The raw HTTP response, if available for the provider.
-     */
-    public ?HttpResponse $raw = null;
+    use HasRawResponse;
 
     /**
      * @param  ToolCall[]  $toolCalls
