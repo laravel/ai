@@ -198,6 +198,8 @@ class TextGenerationLoop
             $allMessages = $this->settleAbandonedToolCalls($messages);
         }
 
+        $turnAssistantMessages = [];
+
         for ($step = 0; $step < $maxSteps; $step++) {
             $stepContext = new StepContext(
                 stepNumber: $step,
@@ -247,7 +249,7 @@ class TextGenerationLoop
                 ))->withInvocationId($invocationId);
             }
 
-            $allMessages[] = $this->buildAssistantMessage($result);
+            $allMessages[] = $turnAssistantMessages[] = $this->buildAssistantMessage($result);
 
             if (filled($toolResults)) {
                 $allMessages[] = new ToolResultMessage(collect($toolResults));
@@ -259,6 +261,7 @@ class TextGenerationLoop
                     $pendingApprovals,
                     time(),
                     $result->providerContentBlocks,
+                    $this->providerContentBlockSteps($turnAssistantMessages),
                 ))->withInvocationId($invocationId);
 
                 break;
@@ -530,6 +533,17 @@ class TextGenerationLoop
             collect($result->toolCalls),
             $result->providerContentBlocks,
         );
+    }
+
+    /**
+     * Build the per-step replay state for a paused turn from each step's assistant message.
+     *
+     * @param  AssistantMessage[]  $assistantMessages
+     * @return array<int, array{tool_call_ids: array<int, string>, blocks: array<int|string, mixed>, content: string}>
+     */
+    protected function providerContentBlockSteps(array $assistantMessages): array
+    {
+        return array_map(fn (AssistantMessage $message): array => $message->toReplayStep(), array_values($assistantMessages));
     }
 
     /**

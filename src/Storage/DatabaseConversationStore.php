@@ -207,6 +207,11 @@ class DatabaseConversationStore implements ConversationStore
 
         if (filled($blocks = $response->pausedProviderContentBlocks())) {
             $meta['provider_content_blocks'] = $blocks;
+
+            // A single-step pause is fully described by the blocks above, so only multi-step turns need the per-step state...
+            if (count($steps = $response->pausedProviderContentBlockSteps()) > 1) {
+                $meta['provider_content_block_steps'] = $steps;
+            }
         }
 
         return $meta;
@@ -305,7 +310,48 @@ class DatabaseConversationStore implements ConversationStore
 
         $providerContentBlocks = $meta['provider_content_blocks'] ?? [];
 
+        $blockSteps = $meta['provider_content_block_steps'] ?? [];
+
+        if ($isPause && $this->stepsCoverToolCalls($blockSteps, $toolCalls)) {
+            $lastIndex = count($blockSteps) - 1;
+
+            foreach ($blockSteps as $index => $blockStep) {
+                $stepCallIds = $blockStep['tool_call_ids'];
+
+                $messages[] = new AssistantMessage(
+                    (string) ($blockStep['content'] ?? ($index === $lastIndex ? $record->content : '')),
+                    $toolCalls->filter(fn (array $toolCall) => in_array($toolCall['id'], $stepCallIds, true))->map(ToolCall::fromArray(...))->values(),
+                    $blockStep['blocks'] ?? [],
+                    $meta['provider'] ?? null,
+                );
+
+                $stepResults = $ownResults->filter(fn (array $toolResult) => in_array($toolResult['id'], $stepCallIds, true))->values();
+
+                if ($stepResults->isNotEmpty()) {
+                    $messages[] = new ToolResultMessage($stepResults->map(ToolResult::fromArray(...)));
+                }
+            }
+
+            return $messages;
+        }
+
         if ($isPause && filled($providerContentBlocks)) {
+            $blockCallIds = $this->providerBlockToolCallIds($providerContentBlocks);
+
+            $earlierResults = $blockCallIds === []
+                ? collect()
+                : $ownResults->reject(fn (array $toolResult) => in_array($toolResult['id'], $blockCallIds, true))->values();
+
+            if ($earlierResults->isNotEmpty()) {
+                $earlierResultIds = $earlierResults->pluck('id')->all();
+
+                $messages[] = new AssistantMessage('', $toolCalls->filter(fn (array $toolCall) => in_array($toolCall['id'], $earlierResultIds, true))->map(ToolCall::fromArray(...))->values());
+                $messages[] = new ToolResultMessage($earlierResults->map(ToolResult::fromArray(...)));
+
+                $toolCalls = $toolCalls->reject(fn (array $toolCall) => in_array($toolCall['id'], $earlierResultIds, true))->values();
+                $ownResults = $ownResults->filter(fn (array $toolResult) => in_array($toolResult['id'], $blockCallIds, true))->values();
+            }
+
             $messages[] = new AssistantMessage($record->content, $toolCalls->map(ToolCall::fromArray(...))->values(), $providerContentBlocks, $meta['provider'] ?? null);
 
             if ($ownResults->isNotEmpty()) {
@@ -333,6 +379,54 @@ class DatabaseConversationStore implements ConversationStore
         }
 
         return $messages;
+    }
+
+    /**
+     * Determine whether stored per-step replay state is well-formed and accounts for every tool call on the row.
+     *
+     * @param  Collection<int, array<string, mixed>>  $toolCalls
+     */
+    protected function stepsCoverToolCalls(mixed $blockSteps, Collection $toolCalls): bool
+    {
+        if (! is_array($blockSteps) || $blockSteps === [] || ! array_is_list($blockSteps)) {
+            return false;
+        }
+
+        $stepCallIds = [];
+
+        foreach ($blockSteps as $blockStep) {
+            if (! is_array($blockStep) || ! is_array($blockStep['tool_call_ids'] ?? null)) {
+                return false;
+            }
+
+            $stepCallIds = [...$stepCallIds, ...$blockStep['tool_call_ids']];
+        }
+
+        return $toolCalls->every(fn (array $toolCall) => in_array($toolCall['id'], $stepCallIds, true));
+    }
+
+    /**
+     * Get the tool-call IDs present in a paused turn's raw provider blocks, or an empty array when the shape carries none.
+     *
+     * @param  array<int|string, mixed>  $blocks
+     * @return array<int, string>
+     */
+    protected function providerBlockToolCallIds(array $blocks): array
+    {
+        if (! array_is_list($blocks)) {
+            return [];
+        }
+
+        return collect($blocks)
+            ->map(fn ($block) => match (true) {
+                ! is_array($block) => null,
+                ($block['type'] ?? null) === 'tool_use' => $block['id'] ?? null,
+                isset($block['toolUse']) => $block['toolUse']['toolUseId'] ?? null,
+                default => null,
+            })
+            ->filter()
+            ->values()
+            ->all();
     }
 
     /**

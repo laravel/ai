@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\Decisions;
+use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Files\RemoteImage;
@@ -562,6 +563,254 @@ test('it preserves provider content blocks when a mixed pause carries an execute
         ->and($messages[0]->providerContentBlocks)->toBe([['type' => 'thinking', 'signature' => 'sig-1']])
         ->and($messages[1])->toBeInstanceOf(ToolResultMessage::class)
         ->and($messages[1]->toolResults[0]->id)->toBe('call-1');
+});
+
+test('it replays earlier-step results ahead of a paused turn whose raw blocks only cover the final step', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'participant_type' => 'user',
+        'participant_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => 'Checked the data, now deleting b',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call-1', 'name' => 'search_data', 'arguments' => [], 'result_id' => 'result-1'],
+            ['id' => 'call-2', 'name' => 'delete_file', 'arguments' => ['path' => 'b'], 'result_id' => 'result-2'],
+        ]),
+        'tool_results' => json_encode([
+            ['id' => 'call-1', 'name' => 'search_data', 'arguments' => [], 'result' => 'rows', 'result_id' => 'result-1'],
+        ]),
+        'usage' => '[]',
+        'meta' => json_encode([
+            'provider' => 'anthropic',
+            'provider_content_blocks' => [
+                ['type' => 'thinking', 'thinking' => '', 'signature' => 'sig-1'],
+                ['type' => 'text', 'text' => 'Checked the data, now deleting b'],
+                ['type' => 'tool_use', 'id' => 'call-2', 'name' => 'delete_file', 'input' => ['path' => 'b']],
+            ],
+        ]),
+        'approval_state' => json_encode(['pending' => ['call-2' => null]]),
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toHaveCount(3)
+        ->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[0]->toolCalls->pluck('id')->all())->toBe(['call-1'])
+        ->and($messages[0]->providerContentBlocks)->toBe([])
+        ->and($messages[1])->toBeInstanceOf(ToolResultMessage::class)
+        ->and($messages[1]->toolResults->pluck('id')->all())->toBe(['call-1'])
+        ->and($messages[2])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[2]->content)->toBe('Checked the data, now deleting b')
+        ->and($messages[2]->toolCalls->pluck('id')->all())->toBe(['call-2'])
+        ->and($messages[2]->providerContentBlocks)->not->toBe([]);
+});
+
+test('it keeps a same-step executed result behind the raw blocks while replaying earlier steps ahead', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'participant_type' => 'user',
+        'participant_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => 'Deleting b and c',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call-1', 'name' => 'search_data', 'arguments' => [], 'result_id' => 'result-1'],
+            ['id' => 'call-2', 'name' => 'read_file', 'arguments' => ['path' => 'b'], 'result_id' => 'result-2'],
+            ['id' => 'call-3', 'name' => 'delete_file', 'arguments' => ['path' => 'c'], 'result_id' => 'result-3'],
+        ]),
+        'tool_results' => json_encode([
+            ['id' => 'call-1', 'name' => 'search_data', 'arguments' => [], 'result' => 'rows', 'result_id' => 'result-1'],
+            ['id' => 'call-2', 'name' => 'read_file', 'arguments' => ['path' => 'b'], 'result' => 'contents', 'result_id' => 'result-2'],
+        ]),
+        'usage' => '[]',
+        'meta' => json_encode([
+            'provider' => 'anthropic',
+            'provider_content_blocks' => [
+                ['type' => 'tool_use', 'id' => 'call-2', 'name' => 'read_file', 'input' => ['path' => 'b']],
+                ['type' => 'tool_use', 'id' => 'call-3', 'name' => 'delete_file', 'input' => ['path' => 'c']],
+            ],
+        ]),
+        'approval_state' => json_encode(['pending' => ['call-3' => null]]),
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toHaveCount(4)
+        ->and($messages[0]->toolCalls->pluck('id')->all())->toBe(['call-1'])
+        ->and($messages[1]->toolResults->pluck('id')->all())->toBe(['call-1'])
+        ->and($messages[2]->toolCalls->pluck('id')->all())->toBe(['call-2', 'call-3'])
+        ->and($messages[2]->providerContentBlocks)->not->toBe([])
+        ->and($messages[3])->toBeInstanceOf(ToolResultMessage::class)
+        ->and($messages[3]->toolResults->pluck('id')->all())->toBe(['call-2']);
+});
+
+test('it replays earlier-step results ahead of a paused turn holding Bedrock-shaped raw blocks', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'participant_type' => 'user',
+        'participant_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => 'Now deleting b',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call-1', 'name' => 'search_data', 'arguments' => [], 'result_id' => 'result-1'],
+            ['id' => 'call-2', 'name' => 'delete_file', 'arguments' => ['path' => 'b'], 'result_id' => 'result-2'],
+        ]),
+        'tool_results' => json_encode([
+            ['id' => 'call-1', 'name' => 'search_data', 'arguments' => [], 'result' => 'rows', 'result_id' => 'result-1'],
+        ]),
+        'usage' => '[]',
+        'meta' => json_encode([
+            'provider' => 'bedrock',
+            'provider_content_blocks' => [
+                ['text' => 'Now deleting b'],
+                ['toolUse' => ['toolUseId' => 'call-2', 'name' => 'delete_file', 'input' => ['path' => 'b']]],
+            ],
+        ]),
+        'approval_state' => json_encode(['pending' => ['call-2' => null]]),
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toHaveCount(3)
+        ->and($messages[0]->toolCalls->pluck('id')->all())->toBe(['call-1'])
+        ->and($messages[1]->toolResults->pluck('id')->all())->toBe(['call-1'])
+        ->and($messages[2]->toolCalls->pluck('id')->all())->toBe(['call-2'])
+        ->and($messages[2]->providerContentBlocks)->not->toBe([]);
+});
+
+test('it persists per-step replay state for a multi-step pause and rehydrates each step verbatim', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    $prompt = new AgentPrompt(new ToolUsingAgent, 'Refund my order.', [], Mockery::mock(TextProvider::class), 'test-model');
+
+    $stepOneBlocks = [
+        ['type' => 'thinking', 'thinking' => 'find the order first', 'signature' => 'sig-1'],
+        ['type' => 'tool_use', 'id' => 'call-1', 'name' => 'lookup_order', 'input' => []],
+    ];
+
+    $stepTwoBlocks = [
+        ['type' => 'thinking', 'thinking' => 'refund it', 'signature' => 'sig-2'],
+        ['type' => 'text', 'text' => 'Refunding order 883'],
+        ['type' => 'tool_use', 'id' => 'call-2', 'name' => 'issue_refund', 'input' => ['order' => 883]],
+    ];
+
+    $response = (new AgentResponse('invocation-id', 'Refunding order 883', new Usage, new Meta('anthropic', 'test-model')))
+        ->withMessages(collect([
+            new AssistantMessage('Looking up the order', collect([new ToolCall('call-1', 'lookup_order', [])]), $stepOneBlocks),
+            new ToolResultMessage(collect([new ToolResult('call-1', 'lookup_order', [], 'Order #883')])),
+            new AssistantMessage('Refunding order 883', collect([new ToolCall('call-2', 'issue_refund', ['order' => 883])]), $stepTwoBlocks),
+        ]))
+        ->withPendingApprovals(collect([new PendingApproval('call-2', 'issue_refund', ['order' => 883])]));
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $meta = json_decode((string) DB::table('agent_conversation_messages')->where('role', 'assistant')->value('meta'), true);
+
+    expect($meta['provider_content_block_steps'])->toHaveCount(2)
+        ->and($meta['provider_content_block_steps'][0]['tool_call_ids'])->toBe(['call-1']);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toHaveCount(3)
+        ->and($messages[0]->content)->toBe('Looking up the order')
+        ->and($messages[0]->toolCalls->pluck('id')->all())->toBe(['call-1'])
+        ->and($messages[0]->providerContentBlocks)->toBe($stepOneBlocks)
+        ->and($messages[1])->toBeInstanceOf(ToolResultMessage::class)
+        ->and($messages[1]->toolResults->pluck('id')->all())->toBe(['call-1'])
+        ->and($messages[2]->content)->toBe('Refunding order 883')
+        ->and($messages[2]->toolCalls->pluck('id')->all())->toBe(['call-2'])
+        ->and($messages[2]->providerContentBlocks)->toBe($stepTwoBlocks);
+});
+
+test('it omits per-step replay state for a single-step pause', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    $prompt = new AgentPrompt(new ToolUsingAgent, 'Refund my order.', [], Mockery::mock(TextProvider::class), 'test-model');
+
+    $blocks = [
+        ['type' => 'tool_use', 'id' => 'call-1', 'name' => 'issue_refund', 'input' => []],
+    ];
+
+    $response = (new AgentResponse('invocation-id', '', new Usage, new Meta('anthropic', 'test-model')))
+        ->withMessages(collect([
+            new AssistantMessage('', collect([new ToolCall('call-1', 'issue_refund', [])]), $blocks),
+        ]))
+        ->withPendingApprovals(collect([new PendingApproval('call-1', 'issue_refund', [])]));
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $meta = json_decode((string) DB::table('agent_conversation_messages')->where('role', 'assistant')->value('meta'), true);
+
+    expect($meta['provider_content_blocks'])->toBe($blocks)
+        ->and($meta)->not->toHaveKey('provider_content_block_steps');
+});
+
+test('it falls back to id-partition reconstruction when stored steps do not cover every tool call', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'participant_type' => 'user',
+        'participant_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => 'Now deleting b',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call-1', 'name' => 'search_data', 'arguments' => [], 'result_id' => 'result-1'],
+            ['id' => 'call-2', 'name' => 'delete_file', 'arguments' => ['path' => 'b'], 'result_id' => 'result-2'],
+        ]),
+        'tool_results' => json_encode([
+            ['id' => 'call-1', 'name' => 'search_data', 'arguments' => [], 'result' => 'rows', 'result_id' => 'result-1'],
+        ]),
+        'usage' => '[]',
+        'meta' => json_encode([
+            'provider' => 'anthropic',
+            'provider_content_blocks' => [
+                ['type' => 'tool_use', 'id' => 'call-2', 'name' => 'delete_file', 'input' => ['path' => 'b']],
+            ],
+            'provider_content_block_steps' => [
+                ['tool_call_ids' => ['call-2'], 'blocks' => []],
+            ],
+        ]),
+        'approval_state' => json_encode(['pending' => ['call-2' => null]]),
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toHaveCount(3)
+        ->and($messages[0]->toolCalls->pluck('id')->all())->toBe(['call-1'])
+        ->and($messages[1]->toolResults->pluck('id')->all())->toBe(['call-1'])
+        ->and($messages[2]->toolCalls->pluck('id')->all())->toBe(['call-2']);
 });
 
 test('it drops a leading orphaned tool_result when the row window splits a pause from its resume', function (): void {
