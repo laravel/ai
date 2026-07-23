@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
+use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Enums\Lab;
@@ -12,47 +13,66 @@ use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\ProviderTool;
+use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Providers\Tools\WebSearch;
-use Laravel\Ai\Tools\Concerns\ResolvesDeferredTools;
 use Laravel\Ai\Tools\ToolNameResolver;
 use LogicException;
 use RuntimeException;
 
 trait MapsTools
 {
-    use ResolvesDeferredTools;
-
     /**
      * Map the given tools to OpenAI function definitions.
      */
     protected function mapTools(array $tools, Provider $provider, bool $stateless = false): array
     {
         $mapped = [];
-        $hasDeferred = false;
+        $searchIndex = null;
 
         foreach ($tools as $tool) {
-            if ($tool instanceof ProviderTool) {
+            if ($tool instanceof ToolSearch) {
+                $this->guardToolSearchSupport($provider, $stateless);
+
+                if (blank($tool->tools)) {
+                    continue;
+                }
+
+                if ($searchIndex === null) {
+                    $searchIndex = count($mapped);
+                    $mapped[$searchIndex] = ['type' => 'tool_search'];
+                }
+
+                $mapped[$searchIndex] = [...$mapped[$searchIndex], ...array_diff_key($tool->providerOptions(Lab::OpenAI), ['type' => true])];
+
+                foreach ($tool->tools as $deferred) {
+                    $mapped[] = $this->mapTool($deferred, defer: true);
+                }
+            } elseif ($tool instanceof ProviderTool) {
                 $mapped[] = $this->mapProviderTool($tool, $provider);
             } elseif ($tool instanceof Tool) {
-                $defer = $this->isDeferred($tool, Lab::OpenAI);
-                $hasDeferred = $hasDeferred || $defer;
-                $mapped[] = $this->mapTool($tool, defer: $defer);
+                $mapped[] = $this->mapTool($tool);
             }
-        }
-
-        if ($hasDeferred) {
-            $this->guardToolSearchSupport($provider);
-
-            if ($stateless) {
-                throw new LogicException(
-                    "Provider [{$provider->name()}] does not support tool search when response storage is disabled (store=false)."
-                );
-            }
-
-            array_unshift($mapped, ['type' => 'tool_search']);
         }
 
         return $mapped;
+    }
+
+    /**
+     * Ensure the provider supports hosted tool search.
+     */
+    protected function guardToolSearchSupport(Provider $provider, bool $stateless = false): void
+    {
+        if (! $provider instanceof SupportsToolSearch) {
+            throw new LogicException(
+                "Provider [{$provider->name()}] does not support tool search."
+            );
+        }
+
+        if ($stateless) {
+            throw new LogicException(
+                "Provider [{$provider->name()}] does not support tool search when response storage is disabled (store=false)."
+            );
+        }
     }
 
     /**

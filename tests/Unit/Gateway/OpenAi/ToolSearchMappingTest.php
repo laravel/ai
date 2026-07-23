@@ -3,6 +3,7 @@
 use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Gateway\OpenAi\Concerns\MapsTools;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Tests\Fixtures\Tools\DeferredTool;
 use Tests\Fixtures\Tools\NonStrictTool;
@@ -36,9 +37,9 @@ function openAiToolSearchProvider(): Provider
     };
 }
 
-test('emits the tool_search entry and defers tools flagged with defer_loading', function () {
+test('emits the tool_search entry and defers the tools nested in the ToolSearch tool', function () {
     $mapped = openAiToolSearchMapper()->map(
-        [new NonStrictTool, new DeferredTool],
+        [new NonStrictTool, new ToolSearch(tools: [new DeferredTool])],
         openAiToolSearchProvider(),
     );
 
@@ -54,9 +55,9 @@ test('emits the tool_search entry and defers tools flagged with defer_loading', 
         ->and($nonDeferred)->toHaveCount(1);
 });
 
-test('emits a single tool_search entry for multiple deferred tools', function () {
+test('emits a single tool_search entry when multiple ToolSearch tools are present', function () {
     $mapped = openAiToolSearchMapper()->map(
-        [new NonStrictTool, new DeferredTool, new DeferredTool],
+        [new NonStrictTool, new ToolSearch(tools: [new DeferredTool]), new ToolSearch(tools: [new DeferredTool])],
         openAiToolSearchProvider(),
     );
 
@@ -69,9 +70,56 @@ test('throws for a provider tool OpenAI cannot map instead of emitting an empty 
         ->toThrow(RuntimeException::class, 'does not support the [WebFetch] tool');
 });
 
-test('does not emit a tool_search entry when no tool is deferred', function () {
+test('merges provider options from every ToolSearch tool onto the single entry', function () {
+    $first = (new ToolSearch(tools: [new DeferredTool]))->withProviderOptions(['foo' => 'bar']);
+    $second = (new ToolSearch(tools: [new DeferredTool]))->withProviderOptions(['baz' => 'qux']);
+
+    $mapped = openAiToolSearchMapper()->map([new NonStrictTool, $first, $second], openAiToolSearchProvider());
+
+    expect(collect($mapped)->firstWhere('type', 'tool_search'))
+        ->toBe(['type' => 'tool_search', 'foo' => 'bar', 'baz' => 'qux']);
+});
+
+test('forwards provider options onto the tool_search entry', function () {
+    $search = (new ToolSearch(tools: [new DeferredTool]))
+        ->withProviderOptions(['foo' => 'bar']);
+
+    $mapped = openAiToolSearchMapper()->map([new NonStrictTool, $search], openAiToolSearchProvider());
+
+    expect(collect($mapped)->firstWhere('type', 'tool_search'))
+        ->toBe(['type' => 'tool_search', 'foo' => 'bar']);
+});
+
+test('skips an empty ToolSearch tool without emitting a tool_search entry', function () {
     $mapped = openAiToolSearchMapper()->map(
-        [new NonStrictTool, new DeferredTool([])],
+        [new NonStrictTool, new ToolSearch],
+        openAiToolSearchProvider(),
+    );
+
+    expect($mapped)->toHaveCount(1)
+        ->and(collect($mapped)->pluck('type'))->not->toContain('tool_search');
+});
+
+test('guards provider support even when the ToolSearch tool is empty', function () {
+    $provider = new class extends Provider
+    {
+        public function __construct()
+        {
+            //
+        }
+
+        public function name(): string
+        {
+            return 'openai';
+        }
+    };
+
+    openAiToolSearchMapper()->map([new NonStrictTool, new ToolSearch], $provider);
+})->throws(LogicException::class, 'does not support tool search');
+
+test('does not emit a tool_search entry when no ToolSearch tool is present', function () {
+    $mapped = openAiToolSearchMapper()->map(
+        [new NonStrictTool, new DeferredTool],
         openAiToolSearchProvider(),
     );
 
@@ -94,5 +142,5 @@ test('throws when the provider does not support tool search', function () {
         }
     };
 
-    openAiToolSearchMapper()->map([new NonStrictTool, new DeferredTool], $provider);
+    openAiToolSearchMapper()->map([new NonStrictTool, new ToolSearch(tools: [new DeferredTool])], $provider);
 })->throws(LogicException::class, 'does not support tool search');

@@ -5,8 +5,8 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Promptable;
+use Laravel\Ai\Providers\Tools\ToolSearch;
 use Tests\Fixtures\Agents\OpenAiToolSearchAgent;
-use Tests\Fixtures\Tools\NonStrictTool;
 
 beforeEach(function () {
     config(['ai.providers.openai' => [
@@ -15,7 +15,7 @@ beforeEach(function () {
     ]]);
 });
 
-test('an agent with a deferred tool emits a tool_search entry and defers that tool', function () {
+test('an agent with a ToolSearch tool emits a tool_search entry and defers its nested tools', function () {
     Http::fake([
         '*' => fakeOpenAiResponse('ok'),
     ]);
@@ -34,7 +34,7 @@ test('an agent with a deferred tool emits a tool_search entry and defers that to
     });
 });
 
-test('rejects a deferred tool when response storage is disabled', function () {
+test('rejects a ToolSearch tool when response storage is disabled', function () {
     config(['ai.providers.openai' => [
         ...config('ai.providers.openai'),
         'key' => 'test-key',
@@ -49,7 +49,7 @@ test('rejects a deferred tool when response storage is disabled', function () {
     Http::assertNothingSent();
 });
 
-test('an agent with no deferred tools omits the tool_search entry', function () {
+test('an agent whose only tool is an empty ToolSearch omits the tool fields', function () {
     Http::fake([
         '*' => fakeOpenAiResponse('ok'),
     ]);
@@ -65,16 +65,16 @@ test('an agent with no deferred tools omits the tool_search entry', function () 
 
         public function tools(): iterable
         {
-            return [new NonStrictTool];
+            return [new ToolSearch];
         }
     };
 
     $agent->prompt('Hi', provider: 'openai', model: 'gpt-5.4');
 
     Http::assertSent(function (Request $request) {
-        $tools = collect(data_get(json_decode($request->body(), true), 'tools'));
+        $body = json_decode($request->body(), true);
 
-        return ! $tools->contains(fn ($t) => ($t['type'] ?? null) === 'tool_search')
-            && ! $tools->contains(fn ($t) => isset($t['defer_loading']));
+        return ! array_key_exists('tools', $body)
+            && ! array_key_exists('tool_choice', $body);
     });
 });

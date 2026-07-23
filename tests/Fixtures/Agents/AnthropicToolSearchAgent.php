@@ -7,6 +7,7 @@ use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Promptable;
+use Laravel\Ai\Providers\Tools\ToolSearch;
 use Tests\Fixtures\Tools\DeferredTool;
 use Tests\Fixtures\Tools\NonStrictTool;
 
@@ -23,6 +24,6 @@ class AnthropicToolSearchAgent implements Agent, HasTools
 
     public function tools(): iterable
     {
-        return [new NonStrictTool, new DeferredTool];
+        return [new NonStrictTool, new ToolSearch(tools: [new DeferredTool])];
     }
 }

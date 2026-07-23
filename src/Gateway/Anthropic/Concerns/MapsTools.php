@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Tool;
@@ -10,17 +11,15 @@ use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\ProviderTool;
+use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
-use Laravel\Ai\Tools\Concerns\ResolvesDeferredTools;
 use Laravel\Ai\Tools\ToolNameResolver;
 use LogicException;
 use RuntimeException;
 
 trait MapsTools
 {
-    use ResolvesDeferredTools;
-
     /**
      * Anthropic's dated version identifier for the hosted tool search tool.
      */
@@ -33,47 +32,63 @@ trait MapsTools
     {
         $mapped = [];
         $nonDeferredCount = 0;
-        $hasDeferred = false;
-        $strategy = 'regex';
+        $searchIndex = null;
+        $searchOptions = [];
+        $strategy = null;
 
         foreach ($tools as $tool) {
-            if ($tool instanceof ProviderTool) {
+            if ($tool instanceof ToolSearch) {
+                $this->guardToolSearchSupport($provider);
+
+                if (blank($tool->tools)) {
+                    continue;
+                }
+
+                if ($searchIndex === null) {
+                    $searchIndex = count($mapped);
+                    $mapped[$searchIndex] = [];
+                }
+
+                $searchOptions = [...$searchOptions, ...$tool->providerOptions(Lab::Anthropic)];
+                $strategy = ($tool->strategy ?? $strategy) === 'bm25' ? 'bm25' : 'regex';
+
+                $mapped[$searchIndex] = [
+                    'type' => "tool_search_tool_{$strategy}_".self::TOOL_SEARCH_TOOL_VERSION,
+                    'name' => "tool_search_tool_{$strategy}",
+                    ...array_diff_key($searchOptions, ['strategy' => true, 'type' => true, 'name' => true]),
+                ];
+
+                foreach ($tool->tools as $deferred) {
+                    $mapped[] = $this->mapTool($deferred, defer: true);
+                }
+            } elseif ($tool instanceof ProviderTool) {
                 $mapped[] = $this->mapProviderTool($tool, $provider);
                 $nonDeferredCount++;
             } elseif ($tool instanceof Tool) {
-                $options = $this->deferredOptions($tool, Lab::Anthropic);
-
-                if ($options['defer_loading'] ?? false) {
-                    $hasDeferred = true;
-
-                    if (($options['strategy'] ?? null) === 'bm25') {
-                        $strategy = 'bm25';
-                    }
-
-                    $mapped[] = $this->mapTool($tool, defer: true);
-                } else {
-                    $mapped[] = $this->mapTool($tool);
-                    $nonDeferredCount++;
-                }
+                $mapped[] = $this->mapTool($tool);
+                $nonDeferredCount++;
             }
         }
 
-        if ($hasDeferred) {
-            $this->guardToolSearchSupport($provider);
-
-            if ($nonDeferredCount === 0) {
-                throw new LogicException(
-                    'Anthropic tool search requires at least one non-deferred tool.'
-                );
-            }
-
-            array_unshift($mapped, [
-                'type' => "tool_search_tool_{$strategy}_".self::TOOL_SEARCH_TOOL_VERSION,
-                'name' => "tool_search_tool_{$strategy}",
-            ]);
+        if ($searchIndex !== null && $nonDeferredCount === 0) {
+            throw new LogicException(
+                'Anthropic tool search requires at least one non-deferred tool.'
+            );
         }
 
         return $mapped;
+    }
+
+    /**
+     * Ensure the provider supports hosted tool search.
+     */
+    protected function guardToolSearchSupport(Provider $provider): void
+    {
+        if (! $provider instanceof SupportsToolSearch) {
+            throw new LogicException(
+                "Provider [{$provider->name()}] does not support tool search."
+            );
+        }
     }
 
     /**

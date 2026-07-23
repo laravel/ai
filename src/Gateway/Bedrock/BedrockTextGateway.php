@@ -26,6 +26,7 @@ use Laravel\Ai\Messages\MessageRole;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\ObjectSchema;
+use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -42,6 +43,7 @@ use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Tools\ToolNameResolver;
+use RuntimeException;
 use stdClass;
 use Throwable;
 
@@ -883,6 +885,9 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
     protected function formatTools(array $tools): array
     {
         return (new Collection($tools))
+            ->each(function ($tool): void {
+                throw_if($tool instanceof ToolSearch, new RuntimeException('Provider [bedrock] does not support tool search.'));
+            })
             ->filter(fn ($tool): bool => $tool instanceof Tool)
             ->map(fn (Tool $tool): array => [
                 'toolSpec' => [
