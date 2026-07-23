@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Providers\Tools;
 
-use InvalidArgumentException;
 use Laravel\Ai\Contracts\Tool;
 
 class ToolSearch extends ProviderTool
@@ -12,11 +11,7 @@ class ToolSearch extends ProviderTool
      */
     public function __construct(public readonly array $tools = [], public readonly ?string $strategy = null)
     {
-        if ($strategy !== null && ! in_array($strategy, ['regex', 'bm25'], true)) {
-            throw new InvalidArgumentException(
-                "Invalid tool search strategy [{$strategy}]. Supported strategies: regex, bm25."
-            );
-        }
+        //
     }
 
     /**

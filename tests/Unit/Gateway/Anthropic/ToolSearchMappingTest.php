@@ -69,6 +69,18 @@ test('emits the bm25 tool search entry when that strategy is passed as a paramet
     ]);
 });
 
+test('passes an unknown strategy through for the provider API to validate', function () {
+    $mapped = anthropicToolSearchMapper()->map(
+        [new NonStrictTool, new ToolSearch(tools: [new DeferredTool], strategy: 'semantic')],
+        anthropicToolSearchProvider(),
+    );
+
+    expect(collect($mapped)->firstWhere('type', 'tool_search_tool_semantic_20251119'))->toBe([
+        'type' => 'tool_search_tool_semantic_20251119',
+        'name' => 'tool_search_tool_semantic',
+    ]);
+});
+
 test('does not leak the strategy parameter onto the tool search entry', function () {
     $mapped = anthropicToolSearchMapper()->map(
         [new NonStrictTool, new ToolSearch(tools: [new DeferredTool], strategy: 'regex')],

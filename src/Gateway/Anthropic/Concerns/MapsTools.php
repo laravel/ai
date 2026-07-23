@@ -37,7 +37,7 @@ trait MapsTools
                     continue;
                 }
 
-                $strategy = $tool->strategy === 'bm25' ? 'bm25' : 'regex';
+                $strategy = $tool->strategy ?? 'regex';
 
                 $mapped[] = [
                     'type' => "tool_search_tool_{$strategy}_".self::TOOL_SEARCH_TOOL_VERSION,

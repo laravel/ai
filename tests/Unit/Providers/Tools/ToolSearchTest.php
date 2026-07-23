@@ -40,11 +40,8 @@ test('carries provider options for a specific provider', function () {
         ->and($search->providerOptions(Lab::OpenAI))->toBe([]);
 });
 
-test('accepts a search strategy', function () {
+test('accepts any search strategy', function () {
     expect((new ToolSearch(strategy: 'bm25'))->strategy)->toBe('bm25')
+        ->and((new ToolSearch(strategy: 'semantic'))->strategy)->toBe('semantic')
         ->and((new ToolSearch)->strategy)->toBeNull();
 });
-
-test('rejects an unknown search strategy', function () {
-    new ToolSearch(strategy: 'semantic');
-})->throws(InvalidArgumentException::class, 'Invalid tool search strategy [semantic]');
