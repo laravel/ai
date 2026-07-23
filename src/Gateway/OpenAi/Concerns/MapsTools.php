@@ -5,7 +5,6 @@ namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
-use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Enums\Lab;
@@ -27,22 +26,16 @@ trait MapsTools
     protected function mapTools(array $tools, Provider $provider, bool $stateless = false): array
     {
         $mapped = [];
-        $searchIndex = null;
 
         foreach ($tools as $tool) {
             if ($tool instanceof ToolSearch) {
-                $this->guardToolSearchSupport($provider, $stateless);
+                $this->guardStatelessToolSearch($provider, $stateless);
 
                 if (blank($tool->tools)) {
                     continue;
                 }
 
-                if ($searchIndex === null) {
-                    $searchIndex = count($mapped);
-                    $mapped[$searchIndex] = ['type' => 'tool_search'];
-                }
-
-                $mapped[$searchIndex] = [...$mapped[$searchIndex], ...array_diff_key($tool->providerOptions(Lab::OpenAI), ['type' => true])];
+                $mapped[] = ['type' => 'tool_search', ...array_diff_key($tool->providerOptions(Lab::OpenAI), ['type' => true])];
 
                 foreach ($tool->tools as $deferred) {
                     $mapped[] = $this->mapTool($deferred, defer: true);
@@ -58,16 +51,10 @@ trait MapsTools
     }
 
     /**
-     * Ensure the provider supports hosted tool search.
+     * Ensure hosted tool search is not used while response storage is disabled.
      */
-    protected function guardToolSearchSupport(Provider $provider, bool $stateless = false): void
+    protected function guardStatelessToolSearch(Provider $provider, bool $stateless): void
     {
-        if (! $provider instanceof SupportsToolSearch) {
-            throw new LogicException(
-                "Provider [{$provider->name()}] does not support tool search."
-            );
-        }
-
         if ($stateless) {
             throw new LogicException(
                 "Provider [{$provider->name()}] does not support tool search when response storage is disabled (store=false)."

@@ -3,7 +3,6 @@
 namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
-use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Tool;
@@ -31,31 +30,19 @@ trait MapsTools
     protected function mapTools(array $tools, Provider $provider): array
     {
         $mapped = [];
-        $nonDeferredCount = 0;
-        $searchIndex = null;
-        $searchOptions = [];
-        $strategy = null;
 
         foreach ($tools as $tool) {
             if ($tool instanceof ToolSearch) {
-                $this->guardToolSearchSupport($provider);
-
                 if (blank($tool->tools)) {
                     continue;
                 }
 
-                if ($searchIndex === null) {
-                    $searchIndex = count($mapped);
-                    $mapped[$searchIndex] = [];
-                }
+                $strategy = $tool->strategy === 'bm25' ? 'bm25' : 'regex';
 
-                $searchOptions = [...$searchOptions, ...$tool->providerOptions(Lab::Anthropic)];
-                $strategy = ($tool->strategy ?? $strategy) === 'bm25' ? 'bm25' : 'regex';
-
-                $mapped[$searchIndex] = [
+                $mapped[] = [
                     'type' => "tool_search_tool_{$strategy}_".self::TOOL_SEARCH_TOOL_VERSION,
                     'name' => "tool_search_tool_{$strategy}",
-                    ...array_diff_key($searchOptions, ['strategy' => true, 'type' => true, 'name' => true]),
+                    ...array_diff_key($tool->providerOptions(Lab::Anthropic), ['strategy' => true, 'type' => true, 'name' => true]),
                 ];
 
                 foreach ($tool->tools as $deferred) {
@@ -63,32 +50,12 @@ trait MapsTools
                 }
             } elseif ($tool instanceof ProviderTool) {
                 $mapped[] = $this->mapProviderTool($tool, $provider);
-                $nonDeferredCount++;
             } elseif ($tool instanceof Tool) {
                 $mapped[] = $this->mapTool($tool);
-                $nonDeferredCount++;
             }
         }
 
-        if ($searchIndex !== null && $nonDeferredCount === 0) {
-            throw new LogicException(
-                'Anthropic tool search requires at least one non-deferred tool.'
-            );
-        }
-
         return $mapped;
-    }
-
-    /**
-     * Ensure the provider supports hosted tool search.
-     */
-    protected function guardToolSearchSupport(Provider $provider): void
-    {
-        if (! $provider instanceof SupportsToolSearch) {
-            throw new LogicException(
-                "Provider [{$provider->name()}] does not support tool search."
-            );
-        }
     }
 
     /**

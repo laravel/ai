@@ -7,9 +7,7 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\ProviderTool;
-use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Tools\ToolNameResolver;
-use RuntimeException;
 
 trait MapsTools
 {
@@ -21,12 +19,6 @@ trait MapsTools
         $mapped = [];
 
         foreach ($tools as $tool) {
-            if ($tool instanceof ToolSearch) {
-                throw new RuntimeException(
-                    "Provider [{$provider->name()}] does not support tool search."
-                );
-            }
-
             if ($tool instanceof ProviderTool) {
                 continue;
             }

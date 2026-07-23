@@ -12,7 +12,6 @@ use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\ProviderTool;
-use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Laravel\Ai\Tools\ToolNameResolver;
@@ -29,12 +28,6 @@ trait MapsTools
         $providerTools = [];
 
         foreach ($tools as $tool) {
-            if ($tool instanceof ToolSearch) {
-                throw new RuntimeException(
-                    "Provider [{$provider->name()}] does not support tool search."
-                );
-            }
-
             if ($tool instanceof ProviderTool) {
                 $providerTool = $this->mapProviderTool($tool, $provider);
 

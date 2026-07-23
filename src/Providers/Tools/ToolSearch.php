@@ -10,7 +10,7 @@ class ToolSearch extends ProviderTool
     /**
      * @param  array<Tool>  $tools
      */
-    public function __construct(public array $tools = [], public ?string $strategy = null)
+    public function __construct(public readonly array $tools = [], public readonly ?string $strategy = null)
     {
         if ($strategy !== null && ! in_array($strategy, ['regex', 'bm25'], true)) {
             throw new InvalidArgumentException(
@@ -20,15 +20,16 @@ class ToolSearch extends ProviderTool
     }
 
     /**
-     * Set the deferred tools discovered through search.
+     * Get a copy of the tool search with the given deferred tools.
      *
      * @param  array<Tool>  $tools
      */
     public function withTools(array $tools): self
     {
-        $this->tools = $tools;
+        $clone = new self($tools, $this->strategy);
+        $clone->providerOptions = $this->providerOptions;
 
-        return $this;
+        return $clone;
     }
 
     /**

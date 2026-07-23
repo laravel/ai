@@ -14,9 +14,9 @@ function openAiToolSearchMapper(): object
     {
         use MapsTools;
 
-        public function map(array $tools, Provider $provider): array
+        public function map(array $tools, Provider $provider, bool $stateless = false): array
         {
-            return $this->mapTools($tools, $provider);
+            return $this->mapTools($tools, $provider, $stateless);
         }
     };
 }
@@ -55,29 +55,17 @@ test('emits the tool_search entry and defers the tools nested in the ToolSearch 
         ->and($nonDeferred)->toHaveCount(1);
 });
 
-test('emits a single tool_search entry when multiple ToolSearch tools are present', function () {
-    $mapped = openAiToolSearchMapper()->map(
-        [new NonStrictTool, new ToolSearch(tools: [new DeferredTool]), new ToolSearch(tools: [new DeferredTool])],
-        openAiToolSearchProvider(),
-    );
-
-    expect(collect($mapped)->where('type', 'tool_search'))->toHaveCount(1)
-        ->and(collect($mapped)->where('defer_loading', true))->toHaveCount(2);
-});
-
 test('throws for a provider tool OpenAI cannot map instead of emitting an empty entry', function () {
     expect(fn () => openAiToolSearchMapper()->map([new WebFetch], openAiToolSearchProvider()))
         ->toThrow(RuntimeException::class, 'does not support the [WebFetch] tool');
 });
 
-test('merges provider options from every ToolSearch tool onto the single entry', function () {
-    $first = (new ToolSearch(tools: [new DeferredTool]))->withProviderOptions(['foo' => 'bar']);
-    $second = (new ToolSearch(tools: [new DeferredTool]))->withProviderOptions(['baz' => 'qux']);
-
-    $mapped = openAiToolSearchMapper()->map([new NonStrictTool, $first, $second], openAiToolSearchProvider());
-
-    expect(collect($mapped)->firstWhere('type', 'tool_search'))
-        ->toBe(['type' => 'tool_search', 'foo' => 'bar', 'baz' => 'qux']);
+test('throws when response storage is disabled because hosted search requires stored responses', function () {
+    expect(fn () => openAiToolSearchMapper()->map(
+        [new NonStrictTool, new ToolSearch(tools: [new DeferredTool])],
+        openAiToolSearchProvider(),
+        stateless: true,
+    ))->toThrow(LogicException::class, 'store=false');
 });
 
 test('forwards provider options onto the tool_search entry', function () {
@@ -100,23 +88,6 @@ test('skips an empty ToolSearch tool without emitting a tool_search entry', func
         ->and(collect($mapped)->pluck('type'))->not->toContain('tool_search');
 });
 
-test('guards provider support even when the ToolSearch tool is empty', function () {
-    $provider = new class extends Provider
-    {
-        public function __construct()
-        {
-            //
-        }
-
-        public function name(): string
-        {
-            return 'openai';
-        }
-    };
-
-    openAiToolSearchMapper()->map([new NonStrictTool, new ToolSearch], $provider);
-})->throws(LogicException::class, 'does not support tool search');
-
 test('does not emit a tool_search entry when no ToolSearch tool is present', function () {
     $mapped = openAiToolSearchMapper()->map(
         [new NonStrictTool, new DeferredTool],
@@ -127,20 +98,3 @@ test('does not emit a tool_search entry when no ToolSearch tool is present', fun
         ->and(collect($mapped)->pluck('type'))->not->toContain('tool_search')
         ->and(collect($mapped)->contains(fn ($t) => isset($t['defer_loading'])))->toBeFalse();
 });
-
-test('throws when the provider does not support tool search', function () {
-    $provider = new class extends Provider
-    {
-        public function __construct()
-        {
-            //
-        }
-
-        public function name(): string
-        {
-            return 'openai';
-        }
-    };
-
-    openAiToolSearchMapper()->map([new NonStrictTool, new ToolSearch(tools: [new DeferredTool])], $provider);
-})->throws(LogicException::class, 'does not support tool search');

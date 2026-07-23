@@ -11,6 +11,7 @@ use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
+use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
@@ -34,11 +35,17 @@ use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Laravel\Ai\Tools\Request;
+use LogicException;
 use Throwable;
 
 class TextGenerationLoop
 {
     use HandlesToolApprovals, InvokesTools;
+
+    /**
+     * The default ceiling for the derived step budget when it is not set explicitly.
+     */
+    protected const DEFAULT_MAX_STEPS = 25;
 
     /**
      * Create a new text generation loop instance.
@@ -65,6 +72,8 @@ class TextGenerationLoop
         ?array $approval = null,
         ?Closure $recordApprovalResults = null,
     ): TextResponse {
+        $this->guardToolSearch($provider, $tools);
+
         $steps = new Collection;
         $maxSteps = $this->resolveMaxSteps($options, $tools);
         $continuationToken = null;
@@ -157,6 +166,8 @@ class TextGenerationLoop
         ?Closure $recordApprovalResults = null,
         ?array $validatedApproval = null,
     ): Generator {
+        $this->guardToolSearch($provider, $tools);
+
         $maxSteps = $this->resolveMaxSteps($options, $tools);
         $continuationToken = null;
         $accumulatedUsage = new Usage;
@@ -285,7 +296,7 @@ class TextGenerationLoop
     }
 
     /**
-     * Resolve the step budget: explicit `maxSteps`, else 1.5x tools, else 5.
+     * Resolve the step budget: explicit `maxSteps`, else 1.5x tools capped at the ceiling, else 5.
      *
      * @param  Tool[]  $tools
      */
@@ -297,7 +308,29 @@ class TextGenerationLoop
 
         $count = ToolSearch::budget($tools);
 
-        return $count > 0 ? (int) round($count * 1.5) : 5;
+        return $count > 0 ? min((int) round($count * 1.5), self::DEFAULT_MAX_STEPS) : 5;
+    }
+
+    /**
+     * Ensure hosted tool search is only used with a supporting provider and a single wrapper.
+     *
+     * @param  Tool[]  $tools
+     */
+    protected function guardToolSearch(TextProvider $provider, array $tools): void
+    {
+        $wrappers = array_filter($tools, fn ($tool): bool => $tool instanceof ToolSearch);
+
+        if ($wrappers === []) {
+            return;
+        }
+
+        if (! $provider instanceof SupportsToolSearch) {
+            throw new LogicException("Provider [{$provider->name()}] does not support tool search.");
+        }
+
+        if (count($wrappers) > 1) {
+            throw new LogicException('Only a single tool search wrapper may be registered per request.');
+        }
     }
 
     /**

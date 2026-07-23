@@ -10,10 +10,25 @@ test('accepts a deferred tool set', function () {
     expect((new ToolSearch(tools: [$tool]))->tools)->toBe([$tool]);
 });
 
-test('withTools replaces the deferred tool set', function () {
+test('withTools returns a new instance without mutating the original', function () {
     $tool = new DeferredTool;
+    $original = new ToolSearch;
 
-    expect((new ToolSearch)->withTools([$tool])->tools)->toBe([$tool]);
+    $updated = $original->withTools([$tool]);
+
+    expect($updated)->not->toBe($original)
+        ->and($updated->tools)->toBe([$tool])
+        ->and($original->tools)->toBe([]);
+});
+
+test('withTools preserves the strategy and provider options', function () {
+    $original = (new ToolSearch(strategy: 'bm25'))
+        ->withProviderOptions(['cache_control' => ['type' => 'ephemeral']]);
+
+    $updated = $original->withTools([new DeferredTool]);
+
+    expect($updated->strategy)->toBe('bm25')
+        ->and($updated->providerOptions(Lab::Anthropic))->toBe(['cache_control' => ['type' => 'ephemeral']]);
 });
 
 test('carries provider options for a specific provider', function () {
