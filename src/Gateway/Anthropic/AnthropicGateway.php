@@ -70,7 +70,7 @@ class AnthropicGateway implements Gateway, StepTextGateway
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, filled($schema), $response);
+        return tap($this->parseTextResponse($data, $provider, filled($schema)), fn (StepResponse $step) => $step->raw = $response);
     }
 
     /**

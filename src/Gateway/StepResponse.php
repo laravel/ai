@@ -14,6 +14,11 @@ use Laravel\Ai\Responses\Data\Usage;
 class StepResponse implements Arrayable, JsonSerializable
 {
     /**
+     * The raw HTTP response, if available for the provider.
+     */
+    public ?HttpResponse $raw = null;
+
+    /**
      * @param  ToolCall[]  $toolCalls
      * @param  array<string, mixed>|null  $structured
      * @param  array<int, array<string, mixed>>  $providerContentBlocks
@@ -29,7 +34,6 @@ class StepResponse implements Arrayable, JsonSerializable
         public ?string $continuationToken = null,
         public array $providerContentBlocks = [],
         public array $pendingApprovals = [],
-        public ?HttpResponse $raw = null,
     ) {}
 
     /**

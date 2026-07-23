@@ -116,7 +116,9 @@ class FakeTextGateway implements StepTextGateway
             $provider, $model, $prompt, $attachments, $schema
         );
 
-        return $this->toStepResponse($response, $provider, $model);
+        return tap($this->toStepResponse($response, $provider, $model), function (StepResponse $step) use ($response): void {
+            $step->raw = $response instanceof TextResponse ? $response->raw : null;
+        });
     }
 
     /**

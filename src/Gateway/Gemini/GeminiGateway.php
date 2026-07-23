@@ -75,7 +75,7 @@ class GeminiGateway implements Gateway, StepTextGateway
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, $model, filled($schema), $response);
+        return tap($this->parseTextResponse($data, $provider, $model, filled($schema)), fn (StepResponse $step) => $step->raw = $response);
     }
 
     /**

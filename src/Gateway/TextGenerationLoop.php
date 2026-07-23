@@ -570,7 +570,7 @@ class TextGenerationLoop
                 $finalStep->text,
                 $totalUsage,
                 $finalStep->meta,
-            ))->withToolCallsAndResults(
+            ))->withMessages($newMessages)->withToolCallsAndResults(
                 toolCalls: $steps->flatMap(fn (Step $s): array => $s->toolCalls),
                 toolResults: $newMessages
                     ->whereInstanceOf(ToolResultMessage::class)

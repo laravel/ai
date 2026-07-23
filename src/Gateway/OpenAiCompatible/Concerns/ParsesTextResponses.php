@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Gateway\OpenAiCompatible\Concerns;
 
-use Illuminate\Http\Client\Response as HttpResponse;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
@@ -36,7 +35,6 @@ trait ParsesTextResponses
         array $data,
         Provider $provider,
         bool $structured,
-        ?HttpResponse $httpResponse = null,
     ): StepResponse {
         $choice = $data['choices'][0] ?? [];
         $message = $choice['message'] ?? [];
@@ -59,7 +57,6 @@ trait ParsesTextResponses
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model),
             structured: $structured ? (json_decode($text, true) ?? []) : null,
-            raw: $httpResponse,
         );
     }
 

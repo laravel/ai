@@ -2,12 +2,12 @@
 
 namespace Laravel\Ai\Responses;
 
-use Illuminate\Http\Client\Response as HttpResponse;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
+use Laravel\Ai\Responses\Concerns\HasRawResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Step;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -16,6 +16,8 @@ use Laravel\Ai\Responses\Data\Usage;
 
 class TextResponse implements \Stringable
 {
+    use HasRawResponse;
+
     /** @var Collection<int, Message> */
     public Collection $messages;
 
@@ -30,8 +32,6 @@ class TextResponse implements \Stringable
 
     /** @var Collection<int, PendingApproval> */
     public Collection $pendingApprovals;
-
-    protected ?HttpResponse $raw = null;
 
     /**
      * Create a new text response instance.
@@ -119,42 +119,6 @@ class TextResponse implements \Stringable
     public function awaitingApproval(): bool
     {
         return $this->pendingApprovals->isNotEmpty();
-    }
-
-    /**
-     * Set the raw HTTP response.
-     */
-    public function withRaw(?HttpResponse $response): static
-    {
-        $this->raw = $response;
-
-        return $this;
-    }
-
-    /**
-     * Get the raw HTTP response, if available for the provider.
-     */
-    public function getRaw(): ?HttpResponse
-    {
-        return $this->raw;
-    }
-
-    /**
-     * Prepare the response for serialization, discarding the unserializable raw HTTP response.
-     */
-    public function __serialize(): array
-    {
-        return collect(get_object_vars($this))->except('raw')->all();
-    }
-
-    /**
-     * Restore the response after serialization.
-     */
-    public function __unserialize(array $data): void
-    {
-        foreach ($data as $key => $value) {
-            $this->{$key} = $value;
-        }
     }
 
     /**

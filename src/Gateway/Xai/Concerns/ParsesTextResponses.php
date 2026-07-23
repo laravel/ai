@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Gateway\Xai\Concerns;
 
-use Illuminate\Http\Client\Response as HttpResponse;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
@@ -51,7 +50,6 @@ trait ParsesTextResponses
         array $data,
         Provider $provider,
         bool $structured,
-        ?HttpResponse $httpResponse = null,
     ): StepResponse {
         $output = $data['output'] ?? [];
         $model = $data['model'] ?? '';
@@ -71,7 +69,6 @@ trait ParsesTextResponses
             meta: new Meta($provider->name(), $model, $citations),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
             continuationToken: $data['id'] ?? null,
-            raw: $httpResponse,
         );
     }
 

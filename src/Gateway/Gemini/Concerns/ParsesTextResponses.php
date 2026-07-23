@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Gateway\Gemini\Concerns;
 
-use Illuminate\Http\Client\Response as HttpResponse;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Exceptions\AiException;
@@ -43,7 +42,6 @@ trait ParsesTextResponses
         Provider $provider,
         string $model,
         bool $structured,
-        ?HttpResponse $httpResponse = null,
     ): StepResponse {
         $candidate = $data['candidates'][0] ?? [];
         $parts = $candidate['content']['parts'] ?? [];
@@ -59,7 +57,6 @@ trait ParsesTextResponses
             meta: new Meta($provider->name(), $model, $this->extractCitations($data)),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
             providerContentBlocks: $this->sanitizeRequestParts($this->excludeThinkingParts($parts)),
-            raw: $httpResponse,
         );
     }
 

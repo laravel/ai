@@ -19,8 +19,8 @@ test('text responses expose the raw http response', function (): void {
         provider: 'anthropic',
     );
 
-    expect($response->getRaw())->toBeInstanceOf(Response::class)
-        ->and($response->getRaw()->json('content.0.text'))->toBe('Hello there');
+    expect($response->raw)->toBeInstanceOf(Response::class)
+        ->and($response->raw->json('content.0.text'))->toBe('Hello there');
 });
 
 test('structured responses expose the raw http response', function (): void {
@@ -33,8 +33,8 @@ test('structured responses expose the raw http response', function (): void {
         provider: 'anthropic',
     );
 
-    expect($response->getRaw())->toBeInstanceOf(Response::class)
-        ->and($response->getRaw()->json('id'))->toBe('msg_123');
+    expect($response->raw)->toBeInstanceOf(Response::class)
+        ->and($response->raw->json('id'))->toBe('msg_123');
 });
 
 test('tool call loops expose the raw http response of the final step', function (): void {
@@ -50,8 +50,8 @@ test('tool call loops expose the raw http response of the final step', function 
         provider: 'anthropic',
     );
 
-    expect($response->getRaw())->toBeInstanceOf(Response::class)
-        ->and($response->getRaw()->json('content.0.text'))->toBe('The number is 72019');
+    expect($response->raw)->toBeInstanceOf(Response::class)
+        ->and($response->raw->json('content.0.text'))->toBe('The number is 72019');
 });
 
 test('each step exposes the raw http response of its own request', function (): void {
@@ -68,10 +68,10 @@ test('each step exposes the raw http response of its own request', function (): 
     );
 
     expect($response->steps)->toHaveCount(2)
-        ->and($response->steps[0]->getRaw())->toBeInstanceOf(Response::class)
-        ->and($response->steps[0]->getRaw()->json('stop_reason'))->toBe('tool_use')
-        ->and($response->steps[1]->getRaw())->toBeInstanceOf(Response::class)
-        ->and($response->steps[1]->getRaw()->json('content.0.text'))->toBe('The number is 72019');
+        ->and($response->steps[0]->raw)->toBeInstanceOf(Response::class)
+        ->and($response->steps[0]->raw->json('stop_reason'))->toBe('tool_use')
+        ->and($response->steps[1]->raw)->toBeInstanceOf(Response::class)
+        ->and($response->steps[1]->raw->json('content.0.text'))->toBe('The number is 72019');
 });
 
 test('agent prompted event exposes the raw http response', function (): void {
@@ -82,7 +82,7 @@ test('agent prompted event exposes the raw http response', function (): void {
     $raw = null;
 
     Event::listen(AgentPrompted::class, function (AgentPrompted $event) use (&$raw): void {
-        $raw = $event->response->getRaw();
+        $raw = $event->response->raw;
     });
 
     (new AssistantAgent)->prompt(
@@ -94,7 +94,7 @@ test('agent prompted event exposes the raw http response', function (): void {
         ->and($raw->json('content.0.text'))->toBe('Hello there');
 });
 
-test('agent streamed event listeners may safely call get raw', function (): void {
+test('streamed responses have a null raw http response', function (): void {
     Http::fake([
         'api.anthropic.com/*' => Http::response(
             body: $this->ssePayload([
@@ -114,7 +114,7 @@ test('agent streamed event listeners may safely call get raw', function (): void
     Event::listen(AgentStreamed::class, function (AgentStreamed $event) use (&$invoked): void {
         $invoked = true;
 
-        expect($event->response->getRaw())->toBeNull();
+        expect($event->response->raw)->toBeNull();
     });
 
     $this->collectStreamEvents();
@@ -137,9 +137,9 @@ test('responses discard the raw http response when serialized', function (): voi
 
     $restored = unserialize(serialize($response));
 
-    expect($restored->getRaw())->toBeNull()
+    expect($restored->raw)->toBeNull()
         ->and($restored->text)->toBe('The number is 72019')
         ->and($restored->steps)->toHaveCount(2)
-        ->and($restored->steps[1]->getRaw())->toBeNull()
+        ->and($restored->steps[1]->raw)->toBeNull()
         ->and($restored->steps[1]->text)->toBe('The number is 72019');
 });

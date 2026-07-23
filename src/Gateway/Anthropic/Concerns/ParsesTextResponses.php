@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
-use Illuminate\Http\Client\Response as HttpResponse;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
@@ -41,7 +40,6 @@ trait ParsesTextResponses
         array $data,
         Provider $provider,
         bool $structured,
-        ?HttpResponse $httpResponse = null,
     ): StepResponse {
         return $this->buildStepResponse(
             $data['content'] ?? [],
@@ -50,7 +48,6 @@ trait ParsesTextResponses
             $this->extractUsage($data),
             $this->extractFinishReason($data),
             $structured,
-            $httpResponse,
         );
     }
 
@@ -64,7 +61,6 @@ trait ParsesTextResponses
         Usage $usage,
         FinishReason $finishReason,
         bool $structured,
-        ?HttpResponse $httpResponse = null,
     ): StepResponse {
         $text = $this->extractText($content);
         $toolCalls = $this->extractToolCalls($content);
@@ -96,7 +92,6 @@ trait ParsesTextResponses
             meta: new Meta($provider->name(), $model, $citations),
             structured: $structuredData,
             providerContentBlocks: $content,
-            raw: $httpResponse,
         );
     }
 

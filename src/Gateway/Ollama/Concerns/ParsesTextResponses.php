@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Gateway\Ollama\Concerns;
 
-use Illuminate\Http\Client\Response as HttpResponse;
 use Illuminate\Support\Str;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
@@ -39,7 +38,6 @@ trait ParsesTextResponses
         array $data,
         Provider $provider,
         bool $structured,
-        ?HttpResponse $httpResponse = null,
     ): StepResponse {
         $message = $data['message'] ?? [];
         $model = $data['model'] ?? '';
@@ -65,7 +63,6 @@ trait ParsesTextResponses
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
-            raw: $httpResponse,
         );
     }
 

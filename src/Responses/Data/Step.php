@@ -3,12 +3,12 @@
 namespace Laravel\Ai\Responses\Data;
 
 use Illuminate\Contracts\Support\Arrayable;
-use Illuminate\Http\Client\Response as HttpResponse;
 use JsonSerializable;
+use Laravel\Ai\Responses\Concerns\HasRawResponse;
 
 class Step implements Arrayable, JsonSerializable
 {
-    protected ?HttpResponse $raw = null;
+    use HasRawResponse;
 
     /**
      * @param  array<int, ToolCall>  $toolCalls
@@ -22,42 +22,6 @@ class Step implements Arrayable, JsonSerializable
         public Usage $usage,
         public Meta $meta,
     ) {}
-
-    /**
-     * Set the raw HTTP response.
-     */
-    public function withRaw(?HttpResponse $response): static
-    {
-        $this->raw = $response;
-
-        return $this;
-    }
-
-    /**
-     * Get the raw HTTP response, if available for the provider.
-     */
-    public function getRaw(): ?HttpResponse
-    {
-        return $this->raw;
-    }
-
-    /**
-     * Prepare the step for serialization, discarding the unserializable raw HTTP response.
-     */
-    public function __serialize(): array
-    {
-        return collect(get_object_vars($this))->except('raw')->all();
-    }
-
-    /**
-     * Restore the step after serialization.
-     */
-    public function __unserialize(array $data): void
-    {
-        foreach ($data as $key => $value) {
-            $this->{$key} = $value;
-        }
-    }
 
     /**
      * Get the instance as an array.

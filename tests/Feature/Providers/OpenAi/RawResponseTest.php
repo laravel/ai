@@ -30,6 +30,6 @@ test('openai text responses expose the raw http response', function (): void {
         provider: 'openai',
     );
 
-    expect($response->getRaw())->toBeInstanceOf(Response::class)
-        ->and($response->getRaw()->json('id'))->toBe('resp_123');
+    expect($response->raw)->toBeInstanceOf(Response::class)
+        ->and($response->raw->json('id'))->toBe('resp_123');
 });
