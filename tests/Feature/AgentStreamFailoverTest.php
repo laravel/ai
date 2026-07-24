@@ -294,8 +294,13 @@ test('stream conversation state survives failover', function (): void {
     foreach ($response as $_) {
     }
 
+    $assistantMessageId = collect($store->messages)->firstWhere('role', 'assistant')['id'];
+
+    // The response exposes the ID of the assistant message that was actually persisted...
     expect($thenResponse->conversationId)->toBe($existingConversationId)
-        ->and($thenResponse->conversationUser)->toBe($user);
+        ->and($thenResponse->conversationUser)->toBe($user)
+        ->and($thenResponse->assistantMessageId)->toBe($assistantMessageId)
+        ->and($response->assistantMessageId)->toBe($assistantMessageId);
 });
 
 function fakeGroqStreamBodyForStreamFailover(): string

@@ -87,6 +87,35 @@ test('agent streamed event receives prompt when middleware short circuits a stre
         && $event->prompt->prompt === 'Test prompt');
 });
 
+test('response exposes the persisted assistant message id after a remembered conversation', function (): void {
+    app()->instance(ConversationStore::class, new FakeConversationStore);
+
+    RememberingAssistantAgent::fake([
+        'Fake response',
+    ]);
+
+    $user = new class
+    {
+        public int $id = 1;
+    };
+
+    $response = (new RememberingAssistantAgent)->forUser($user)->prompt('Test prompt');
+
+    expect($response->conversationId)->toBe('conversation-123')
+        ->and($response->assistantMessageId)->toBe('assistant-message-123');
+});
+
+test('response assistant message id is null when the conversation is not remembered', function (): void {
+    AssistantAgent::fake([
+        'Fake response',
+    ]);
+
+    $response = (new AssistantAgent)->prompt('Test prompt');
+
+    expect($response->conversationId)->toBeNull()
+        ->and($response->assistantMessageId)->toBeNull();
+});
+
 test('stream response conversation id is available after remembered conversations stream completes', function (): void {
     app()->instance(ConversationStore::class, new FakeConversationStore);
 
@@ -106,7 +135,8 @@ test('stream response conversation id is available after remembered conversation
     }
 
     expect($response->conversationId)->toBe('conversation-123')
-        ->and($response->conversationUser)->toBe($user);
+        ->and($response->conversationUser)->toBe($user)
+        ->and($response->assistantMessageId)->toBe('assistant-message-123');
 });
 
 test('stream response conversation id is available when continuing an existing conversation', function (): void {
@@ -130,7 +160,8 @@ test('stream response conversation id is available when continuing an existing c
     }
 
     expect($response->conversationId)->toBe('existing-conversation-id')
-        ->and($response->conversationUser)->toBe($user);
+        ->and($response->conversationUser)->toBe($user)
+        ->and($response->assistantMessageId)->toBe('assistant-message-123');
 });
 
 test('stream response conversation id syncs after late then callbacks', function (): void {

@@ -143,6 +143,7 @@ class SalesCoach implements Agent, Conversational
 // Start a new conversation
 $response = (new SalesCoach)->forUser($user)->prompt('Hello!');
 $conversationId = $response->conversationId;
+$assistantMessageId = $response->assistantMessageId;
 
 // Continue an existing conversation
 $response = (new SalesCoach)->continue($conversationId, as: $user)->prompt('Tell me more.');

@@ -63,7 +63,7 @@ class RememberConversation
             }
 
             // Record assistant message...
-            $this->store->storeAssistantMessage(
+            $assistantMessageId = $this->store->storeAssistantMessage(
                 $agent->currentConversation(),
                 $participantType,
                 $participantId,
@@ -74,6 +74,7 @@ class RememberConversation
             $response->withinConversation(
                 $agent->currentConversation(),
                 $participant,
+                $assistantMessageId,
             );
         });
     }

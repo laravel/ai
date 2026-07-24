@@ -30,6 +30,8 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
 
     public ?object $conversationUser = null;
 
+    public ?string $assistantMessageId = null;
+
     protected array $thenCallbacks = [];
 
     protected bool $usesVercelProtocol = false;
@@ -80,12 +82,13 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     }
 
     /**
-     * Set the conversation UUID for this response.
+     * Set the conversation UUID and persisted assistant message ID for this response.
      */
-    public function withinConversation(?string $conversationId, ?object $conversationUser = null): self
+    public function withinConversation(?string $conversationId, ?object $conversationUser = null, ?string $assistantMessageId = null): self
     {
         $this->conversationId = $conversationId;
         $this->conversationUser = $conversationUser;
+        $this->assistantMessageId = $assistantMessageId;
 
         return $this;
     }
@@ -102,7 +105,7 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
         }
 
         if ($response->conversationId !== null) {
-            $this->withinConversation($response->conversationId, $response->conversationUser);
+            $this->withinConversation($response->conversationId, $response->conversationUser, $response->assistantMessageId);
         }
 
         return $this;
@@ -177,7 +180,8 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
         if ($this->conversationId !== null) {
             $this->streamedResponse->withinConversation(
                 $this->conversationId,
-                $this->conversationUser
+                $this->conversationUser,
+                $this->assistantMessageId
             );
         }
 
@@ -196,5 +200,6 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
 
         $this->conversationId = $this->streamedResponse->conversationId;
         $this->conversationUser = $this->streamedResponse->conversationUser;
+        $this->assistantMessageId = $this->streamedResponse->assistantMessageId;
     }
 }
