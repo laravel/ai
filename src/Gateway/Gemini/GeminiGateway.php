@@ -9,6 +9,7 @@ use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\Gateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
+use Laravel\Ai\Contracts\Gateway\TokenCountGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
@@ -28,10 +29,11 @@ use Laravel\Ai\Responses\Data\TranscriptionSegment;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
+use Laravel\Ai\Responses\TokenCountResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
 use RuntimeException;
 
-class GeminiGateway implements Gateway, StepTextGateway
+class GeminiGateway implements Gateway, StepTextGateway, TokenCountGateway
 {
     use Concerns\BuildsTextRequests;
     use Concerns\CreatesGeminiClient;
@@ -76,6 +78,37 @@ class GeminiGateway implements Gateway, StepTextGateway
         $this->validateTextResponse($data);
 
         return $this->parseTextResponse($data, $provider, $model, filled($schema));
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function countTokens(
+        TextProvider $provider,
+        string $model,
+        array $messages,
+        ?string $instructions = null,
+        array $tools = [],
+        int $timeout = 30,
+        array $providerOptions = [],
+    ): TokenCountResponse {
+        $request = array_merge(
+            ['model' => "models/{$model}"],
+            $this->buildTextRequestBody($provider, $instructions, $messages, $tools, null, null),
+            $providerOptions,
+        );
+
+        $response = $this->withErrorHandling(
+            $provider->name(),
+            fn () => $this->client($provider, $timeout)->post("models/{$model}:countTokens", [
+                'generateContentRequest' => $request,
+            ]),
+        );
+
+        return new TokenCountResponse(
+            (int) $response->json('totalTokens'),
+            new Meta($provider->name(), $model),
+        );
     }
 
     /**

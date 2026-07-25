@@ -16,6 +16,7 @@ use Laravel\Ai\Attributes\Timeout as TimeoutAttribute;
 use Laravel\Ai\Attributes\UseCheapestModel;
 use Laravel\Ai\Attributes\UseSmartestModel;
 use Laravel\Ai\Attributes\WithoutBroadcasting;
+use Laravel\Ai\Contracts\Providers\CountsTokens;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\AgentFailedOver;
@@ -30,7 +31,9 @@ use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\QueuedAgentResponse;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
+use Laravel\Ai\Responses\TokenCountResponse;
 use Laravel\Ai\Streaming\Events\StreamEvent;
+use LogicException;
 use ReflectionClass;
 use RuntimeException;
 
@@ -75,6 +78,29 @@ trait Promptable
         }
 
         return $this->withModelFailover($run, $provider, $model);
+    }
+
+    /**
+     * Count the tokens the given prompt will consume before inference.
+     */
+    public function countTokens(
+        string $prompt,
+        array $attachments = [],
+        Lab|array|string|null $provider = null,
+        ?string $model = null,
+        ?int $timeout = null): TokenCountResponse
+    {
+        [$resolvedProvider, $resolvedModel] = $this->iterateProvidersWithFailover(
+            $this->getProvidersAndModelsForFailover($provider, $model)
+        )->current();
+
+        if (! $resolvedProvider instanceof CountsTokens) {
+            throw new LogicException('Provider ['.$resolvedProvider::class.'] does not support token counting.');
+        }
+
+        return $resolvedProvider->countTokensFor(
+            $this, $prompt, $attachments, $resolvedModel, $this->getTimeout($timeout),
+        );
     }
 
     /**

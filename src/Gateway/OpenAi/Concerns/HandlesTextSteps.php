@@ -4,9 +4,13 @@ namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
 use Generator;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Messages\Message;
+use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\TokenCountResponse;
 
 trait HandlesTextSteps
 {
@@ -36,6 +40,42 @@ trait HandlesTextSteps
         $this->validateTextResponse($data);
 
         return $this->parseTextResponse($data, $provider, filled($schema));
+    }
+
+    /**
+     * Count the tokens the given messages will consume before inference.
+     *
+     * @param  Message[]  $messages
+     * @param  Tool[]  $tools
+     * @param  array<string, mixed>  $providerOptions
+     */
+    public function countTokens(
+        TextProvider $provider,
+        string $model,
+        array $messages,
+        ?string $instructions = null,
+        array $tools = [],
+        int $timeout = 30,
+        array $providerOptions = [],
+    ): TokenCountResponse {
+        $body = [
+            'model' => $model,
+            'input' => $this->mapMessagesToInput($messages, $instructions, $provider),
+        ];
+
+        if (filled($tools)) {
+            $body['tools'] = $this->mapTools($tools, $provider);
+        }
+
+        $response = $this->withErrorHandling(
+            $provider->name(),
+            fn () => $this->client($provider, $timeout)->post('responses/input_tokens', array_merge($body, $providerOptions)),
+        );
+
+        return new TokenCountResponse(
+            (int) $response->json('input_tokens'),
+            new Meta($provider->name(), $model),
+        );
     }
 
     /**

@@ -7,6 +7,7 @@ use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\Gateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
+use Laravel\Ai\Contracts\Gateway\TokenCountGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
@@ -18,12 +19,14 @@ use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Responses\AudioResponse;
+use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
+use Laravel\Ai\Responses\TokenCountResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
 use LogicException;
 
-class AnthropicGateway implements Gateway, StepTextGateway
+class AnthropicGateway implements Gateway, StepTextGateway, TokenCountGateway
 {
     use Concerns\BuildsTextRequests;
     use Concerns\CreatesAnthropicClient;
@@ -71,6 +74,42 @@ class AnthropicGateway implements Gateway, StepTextGateway
         $this->validateTextResponse($data);
 
         return $this->parseTextResponse($data, $provider, filled($schema));
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function countTokens(
+        TextProvider $provider,
+        string $model,
+        array $messages,
+        ?string $instructions = null,
+        array $tools = [],
+        int $timeout = 30,
+        array $providerOptions = [],
+    ): TokenCountResponse {
+        $body = [
+            'model' => $model,
+            'messages' => $this->mapMessages($messages),
+        ];
+
+        if (filled($instructions)) {
+            $body['system'] = $instructions;
+        }
+
+        if (filled($tools)) {
+            $body['tools'] = $this->mapTools($tools, $provider);
+        }
+
+        $response = $this->withErrorHandling(
+            $provider->name(),
+            fn () => $this->client($provider, $timeout)->post('messages/count_tokens', array_merge($body, $providerOptions)),
+        );
+
+        return new TokenCountResponse(
+            (int) $response->json('input_tokens'),
+            new Meta($provider->name(), $model),
+        );
     }
 
     /**
