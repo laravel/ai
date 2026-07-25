@@ -362,9 +362,7 @@ class DatabaseConversationStore implements ConversationStore
     }
 
     /**
-     * Get the replay state for the steps a paused turn ran before the step its raw blocks describe.
-     *
-     * Rows stored before this state existed, and rows whose state does not agree with their own tool calls, replay as they always have.
+     * Get the replay state for the steps a paused turn ran before the step its raw blocks describe, or nothing when the row predates or disagrees with it.
      *
      * @param  array<string, mixed>  $meta
      * @param  Collection<int, array<string, mixed>>  $toolCalls
@@ -391,7 +389,7 @@ class DatabaseConversationStore implements ConversationStore
             }
 
             foreach ($step['tool_call_ids'] as $callId) {
-                // A preceding step ran to completion, so replaying one whose call is missing from the row, still unanswered, or held back by the pause would emit a tool_use nothing can pair with...
+                // A preceding step ran to completion, so a call the row never made, never answered, or is still gating would replay as an unpairable tool_use...
                 if (! is_string($callId)
                     || ! in_array($callId, $callIds, true)
                     || ! in_array($callId, $resultIds, true)

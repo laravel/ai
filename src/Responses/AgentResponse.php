@@ -70,9 +70,7 @@ class AgentResponse extends TextResponse
     }
 
     /**
-     * Get the raw provider replay state for the steps that ran before the paused step, if any.
-     *
-     * The paused step is described by pausedProviderContentBlocks(), so it is never repeated here.
+     * Get the raw provider replay state for the steps before the paused one, which pausedProviderContentBlocks() does not describe.
      *
      * @return array<int, array{tool_call_ids: array<int, string>, blocks: array<int|string, mixed>, content: string}>
      */
