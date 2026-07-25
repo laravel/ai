@@ -5,13 +5,16 @@ namespace Laravel\Ai;
 use Closure;
 use Illuminate\Support\Collection;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Str;
 use Illuminate\Support\Stringable;
+use Laravel\Ai\Agents\SummarizeAgent;
 use Laravel\Ai\Console\Commands\ChatCommand;
 use Laravel\Ai\Console\Commands\MakeAgentCommand;
 use Laravel\Ai\Console\Commands\MakeAgentMiddlewareCommand;
 use Laravel\Ai\Console\Commands\MakeToolCommand;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Storage\DatabaseConversationStore;
 
 class AiServiceProvider extends ServiceProvider
@@ -19,11 +22,12 @@ class AiServiceProvider extends ServiceProvider
     /**
      * Register the package's services.
      */
+    #[\Override]
     public function register(): void
     {
         $this->app->singleton(AiManager::class, fn ($app): AiManager => new AiManager($app));
 
-        $this->app->singleton(ConversationStore::class, fn () => new DatabaseConversationStore(
+        $this->app->singleton(ConversationStore::class, fn (): DatabaseConversationStore => new DatabaseConversationStore(
             config('ai.conversations.connection'),
         ));
 
@@ -55,7 +59,9 @@ class AiServiceProvider extends ServiceProvider
                 $request->dimensions($dimensions);
             }
 
-            if ($cache !== false && ! is_null($cache)) {
+            if ($cache === false) {
+                $request->cache(0);
+            } elseif (! is_null($cache)) {
                 $request->cache(is_int($cache) ? $cache : null);
             }
 
@@ -64,7 +70,7 @@ class AiServiceProvider extends ServiceProvider
             }
 
             if (filled($providerOptions)) {
-                $request->providerOptions($providerOptions);
+                $request->withProviderOptions($providerOptions);
             }
 
             return $request->generate(provider: $provider, model: $model)->embeddings[0];
@@ -77,7 +83,7 @@ class AiServiceProvider extends ServiceProvider
             ?string $instructions = null,
             ?string $model = null,
             ?int $timeout = null,
-        ) {
+        ): AudioResponse {
             $request = Audio::of($this->value());
 
             if (! is_null($voice)) {
@@ -95,6 +101,24 @@ class AiServiceProvider extends ServiceProvider
             return $request->generate(provider: $provider, model: $model);
         });
 
+        // Summarize macros...
+        Stringable::macro('summarize', fn (
+            int $sentences = 3,
+            Lab|array|string|null $provider = null,
+            ?string $model = null,
+            ?int $timeout = null,
+        ): string => (new SummarizeAgent($sentences))
+            ->prompt($this->value(), provider: $provider, model: $model, timeout: $timeout)->text);
+
+        Str::macro('summarize', fn (
+            string $value,
+            int $sentences = 3,
+            Lab|array|string|null $provider = null,
+            ?string $model = null,
+            ?int $timeout = null,
+        ): string => (new SummarizeAgent($sentences))
+            ->prompt($value, provider: $provider, model: $model, timeout: $timeout)->text);
+
         // Reranking macro...
         Collection::macro('rerank', function (
             Closure|array|string $by,
@@ -105,8 +129,8 @@ class AiServiceProvider extends ServiceProvider
         ) {
             $resolver = match (true) {
                 $by instanceof Closure => $by,
-                is_array($by) => fn ($item) => json_encode(
-                    (new Collection($by))->mapWithKeys(fn ($field) => [$field => data_get($item, $field)])->all()
+                is_array($by) => fn ($item): string|false => json_encode(
+                    (new Collection($by))->mapWithKeys(fn ($field): array => [$field => data_get($item, $field)])->all()
                 ),
                 default => fn ($item) => data_get($item, $by),
             };
@@ -116,7 +140,7 @@ class AiServiceProvider extends ServiceProvider
                 ->rerank($query, $provider, $model);
 
             return (new Collection($response->results))->map(
-                fn ($result) => $this->values()[$result->index]
+                fn ($result): mixed => $this->values()[$result->index]
             );
         });
     }

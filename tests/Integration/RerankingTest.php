@@ -7,7 +7,7 @@ use Laravel\Ai\Events\Reranking;
 use Laravel\Ai\Reranking as RerankingFacade;
 use Laravel\Ai\Responses\RerankingResponse;
 
-test('documents can be reranked', function (string $provider, string $apiKey) {
+test('documents can be reranked', function (string $provider, string $apiKey): void {
     requiresApiKey($apiKey);
 
     Event::fake();
@@ -27,7 +27,7 @@ test('documents can be reranked', function (string $provider, string $apiKey) {
     Event::assertDispatched(Reranked::class);
 })->with('reranking-providers');
 
-test('documents can be reranked with limit', function (string $provider, string $apiKey) {
+test('documents can be reranked with limit', function (string $provider, string $apiKey): void {
     requiresApiKey($apiKey);
 
     $response = RerankingFacade::of([
@@ -43,7 +43,7 @@ test('documents can be reranked with limit', function (string $provider, string 
         ->and($response->first()->document)->toContain('Laravel');
 })->with('reranking-providers');
 
-test('collections can be reranked using string field', function (string $provider, string $apiKey) {
+test('collections can be reranked using string field', function (string $provider, string $apiKey): void {
     requiresApiKey($apiKey);
 
     $items = new Collection([
@@ -58,7 +58,7 @@ test('collections can be reranked using string field', function (string $provide
         ->and($reranked->first()['id'])->toEqual(2);
 })->with('reranking-providers');
 
-test('collections can be reranked using array fields', function (string $provider, string $apiKey) {
+test('collections can be reranked using array fields', function (string $provider, string $apiKey): void {
     requiresApiKey($apiKey);
 
     $items = new Collection([
@@ -73,7 +73,7 @@ test('collections can be reranked using array fields', function (string $provide
         ->and($reranked->first()['id'])->toEqual(2);
 })->with('reranking-providers');
 
-test('collections can be reranked using closure', function (string $provider, string $apiKey) {
+test('collections can be reranked using closure', function (string $provider, string $apiKey): void {
     requiresApiKey($apiKey);
 
     $items = new Collection([
@@ -83,7 +83,7 @@ test('collections can be reranked using closure', function (string $provider, st
     ]);
 
     $reranked = $items->rerank(
-        fn ($item) => $item['title'].': '.$item['body'],
+        fn ($item): string => $item['title'].': '.$item['body'],
         'PHP frameworks',
         limit: 2,
         provider: $provider

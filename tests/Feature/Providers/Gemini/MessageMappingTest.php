@@ -7,6 +7,7 @@ use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Base64Document;
+use Laravel\Ai\Files\Base64Video;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
@@ -18,7 +19,7 @@ use Tests\Fixtures\Agents\AssistantAgent;
 
 use function Laravel\Ai\agent;
 
-test('user message maps to gemini format', function () {
+test('user message maps to gemini format', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
     ]);
@@ -28,7 +29,7 @@ test('user message maps to gemini format', function () {
         provider: 'gemini',
     );
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $contents = $request->data()['contents'];
         $userMessage = $contents[0];
 
@@ -37,7 +38,7 @@ test('user message maps to gemini format', function () {
     });
 });
 
-test('tool result follow up maps model and function response', function () {
+test('tool result follow up maps model and function response', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('The number is 72019'),
     ]);
@@ -104,7 +105,7 @@ test('tool result follow up maps model and function response', function () {
         ->and(array_is_list($userMessageParts))->toBeTrue('Tool result parts must be a sequential array');
 });
 
-test('prior assistant tool call with empty arguments omits args in conversation history', function () {
+test('prior assistant tool call with empty arguments omits args in conversation history', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('OK'),
     ]);
@@ -131,18 +132,18 @@ test('prior assistant tool call with empty arguments omits args in conversation 
 
     $agent->prompt('And again', provider: 'gemini');
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $modelFunctionCall = collect($request->data()['contents'])
             ->where('role', 'model')
             ->flatMap(fn ($content) => $content['parts'] ?? [])
-            ->firstWhere(fn ($part) => isset($part['functionCall']))['functionCall'] ?? null;
+            ->firstWhere(fn ($part): bool => isset($part['functionCall']))['functionCall'] ?? null;
 
         return $modelFunctionCall !== null
             && ! array_key_exists('args', $modelFunctionCall);
     });
 });
 
-test('local image attachment without explicit mime type detects mime from file', function () {
+test('local image attachment without explicit mime type detects mime from file', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('I see an image'),
     ]);
@@ -153,7 +154,7 @@ test('local image attachment without explicit mime type detects mime from file',
         provider: 'gemini',
     );
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $parts = $request->data()['contents'][0]['parts'];
 
         foreach ($parts as $part) {
@@ -166,7 +167,7 @@ test('local image attachment without explicit mime type detects mime from file',
     });
 });
 
-test('base64 pdf document maps to inline data', function () {
+test('base64 pdf document maps to inline data', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('I see a PDF'),
     ]);
@@ -179,7 +180,7 @@ test('base64 pdf document maps to inline data', function () {
         provider: 'gemini',
     );
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $parts = $request->data()['contents'][0]['parts'];
 
         foreach ($parts as $part) {
@@ -193,7 +194,34 @@ test('base64 pdf document maps to inline data', function () {
     });
 });
 
-test('stored text document sends real mime type', function () {
+test('base64 video attachment maps to inline data', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('I see a video'),
+    ]);
+
+    $video = new Base64Video(base64_encode('fake-video-content'), 'video/mp4');
+
+    agent('You are helpful.')->prompt(
+        'What is in this video?',
+        attachments: [$video],
+        provider: 'gemini',
+    );
+
+    Http::assertSent(function ($request): bool {
+        $parts = $request->data()['contents'][0]['parts'];
+
+        foreach ($parts as $part) {
+            if (isset($part['inlineData'])) {
+                return $part['inlineData']['mimeType'] === 'video/mp4'
+                    && $part['inlineData']['data'] === base64_encode('fake-video-content');
+            }
+        }
+
+        return false;
+    });
+});
+
+test('stored text document sends real mime type', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
     ]);
@@ -207,7 +235,7 @@ test('stored text document sends real mime type', function () {
         provider: 'gemini',
     );
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $parts = $request->data()['contents'][0]['parts'];
 
         foreach ($parts as $part) {
@@ -221,7 +249,7 @@ test('stored text document sends real mime type', function () {
     });
 });
 
-test('system instructions are not in contents array', function () {
+test('system instructions are not in contents array', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
     ]);
@@ -231,7 +259,7 @@ test('system instructions are not in contents array', function () {
         provider: 'gemini',
     );
 
-    Http::assertSent(function ($request) {
+    Http::assertSent(function ($request): bool {
         $body = $request->data();
 
         foreach ($body['contents'] as $content) {

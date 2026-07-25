@@ -5,7 +5,7 @@ namespace Laravel\Ai\Providers;
 use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
-use Laravel\Ai\Contracts\Gateway\TextGateway;
+use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -30,6 +30,7 @@ class BedrockProvider extends Provider implements EmbeddingProvider, ImageProvid
     /**
      * Get the credentials for the underlying AI provider.
      */
+    #[\Override]
     public function providerCredentials(): array
     {
         return array_filter([
@@ -43,11 +44,18 @@ class BedrockProvider extends Provider implements EmbeddingProvider, ImageProvid
     /**
      * Get the provider connection configuration other than the driver, key, and name.
      */
+    #[\Override]
     public function additionalConfiguration(): array
     {
         return [
             'region' => $this->config['region'] ?? 'us-east-1',
             'use_default_credential_provider' => $this->config['use_default_credential_provider'] ?? true,
+            'assume_role' => [
+                'arn' => $this->config['assume_role']['arn'] ?? null,
+                'session_name' => $this->config['assume_role']['session_name'] ?? null,
+                'duration_seconds' => $this->config['assume_role']['duration_seconds'] ?? null,
+                'external_id' => $this->config['assume_role']['external_id'] ?? null,
+            ],
         ];
     }
 
@@ -122,7 +130,7 @@ class BedrockProvider extends Provider implements EmbeddingProvider, ImageProvid
     /**
      * Get the provider's text gateway.
      */
-    public function textGateway(): TextGateway
+    public function textGateway(): StepTextGateway
     {
         return $this->textGateway ??= new BedrockTextGateway;
     }

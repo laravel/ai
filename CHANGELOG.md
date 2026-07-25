@@ -1,6 +1,95 @@
 # Release Notes
 
-## [Unreleased](https://github.com/laravel/ai/compare/v0.8.0...0.x)
+## [Unreleased](https://github.com/laravel/ai/compare/v0.10.1...0.x)
+
+## [v0.10.1](https://github.com/laravel/ai/compare/v0.10.0...v0.10.1) - 2026-07-21
+
+* [0.x] Update .gitattributes by [@jackbayliss](https://github.com/jackbayliss) in https://github.com/laravel/ai/pull/806
+* Update Gemini default models by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/807
+
+## [v0.10.0](https://github.com/laravel/ai/compare/v0.9.1...v0.10.0) - 2026-07-21
+
+* Add Rector and Laravel Rector, apply automated refactors by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/784
+* Support multimodal for Gemini and VoyageAI by [@paulinevos](https://github.com/paulinevos) in https://github.com/laravel/ai/pull/798
+* Bedrock: support cross-account AssumeRole credential provider by [@amjosuesanchez](https://github.com/amjosuesanchez) in https://github.com/laravel/ai/pull/566
+* Add summarize macro for text summarization by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/800
+* Add human-in-the-loop by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/773
+* Store conversation participants polymorphically by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/795
+
+## [v0.9.1](https://github.com/laravel/ai/compare/v0.9.0...v0.9.1) - 2026-07-14
+
+### What's Changed
+
+* Remove dead dall-e-3 image integration dataset by [@mrdzen](https://github.com/mrdzen) in https://github.com/laravel/ai/pull/779
+* Forward attachment provider options to OpenAI text generation requests by [@mrdzen](https://github.com/mrdzen) in https://github.com/laravel/ai/pull/768
+* Add tool choice support for Gemini, OpenAI, and Anthropic by [@JVillator0](https://github.com/JVillator0) in https://github.com/laravel/ai/pull/780
+* Add tests for the image portrait and custom size helpers by [@dfinchenko](https://github.com/dfinchenko) in https://github.com/laravel/ai/pull/783
+* Add interactive agent console command for the workbench by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/786
+* Add web fetch tool coverage for the Anthropic provider by [@dfinchenko](https://github.com/dfinchenko) in https://github.com/laravel/ai/pull/792
+* [0.x] Validate blank base64 input consistently across file classes by [@Button99](https://github.com/Button99) in https://github.com/laravel/ai/pull/788
+* Add coverage for iterating the embeddings response by [@dfinchenko](https://github.com/dfinchenko) in https://github.com/laravel/ai/pull/790
+* Add web search user location coverage for the Anthropic provider by [@dfinchenko](https://github.com/dfinchenko) in https://github.com/laravel/ai/pull/791
+* Fix`TextDelta::combine` glues multi-step streamed text together mid-sentence by [@crishoj](https://github.com/crishoj) in https://github.com/laravel/ai/pull/789
+* Fix empty Bedrock stream content blocks by [@iAmKevinMcKee](https://github.com/iAmKevinMcKee) in https://github.com/laravel/ai/pull/785
+
+### New Contributors
+
+* [@crishoj](https://github.com/crishoj) made their first contribution in https://github.com/laravel/ai/pull/789
+* [@iAmKevinMcKee](https://github.com/iAmKevinMcKee) made their first contribution in https://github.com/laravel/ai/pull/785
+
+**Full Changelog**: https://github.com/laravel/ai/compare/v0.9.0...v0.9.1
+
+## [v0.9.0](https://github.com/laravel/ai/compare/v0.8.1...v0.9.0) - 2026-07-07
+
+* Add missing return type generics to embeddings and reranking responses by [@dfinchenko](https://github.com/dfinchenko) in https://github.com/laravel/ai/pull/701
+* Allow disabling the embeddings cache per request by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/706
+* Bump shivammathur/setup-php from 2.37.1 to 2.37.2 in the github-actions group by [@dependabot](https://github.com/dependabot)[bot] in https://github.com/laravel/ai/pull/708
+* Use native Anthropic structured outputs by default by [@paix26875](https://github.com/paix26875) in https://github.com/laravel/ai/pull/707
+* Add collection generics to TextResponse properties by [@dfinchenko](https://github.com/dfinchenko) in https://github.com/laravel/ai/pull/709
+* Merge all plain-object anyOf branches instead of keeping only the first by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/703
+* Add file and store support for Azure OpenAI by [@markusjwetzel](https://github.com/markusjwetzel) in https://github.com/laravel/ai/pull/676
+* Add collection generics to AssistantMessage toolCalls by [@dfinchenko](https://github.com/dfinchenko) in https://github.com/laravel/ai/pull/720
+* Extract recursive tool loop into TextGenerationLoop and convert OpenAI by [@vinitkadam03](https://github.com/vinitkadam03) in https://github.com/laravel/ai/pull/652
+* Add collection generics to ToolResultMessage toolResults by [@dfinchenko](https://github.com/dfinchenko) in https://github.com/laravel/ai/pull/735
+* Migrate Anthropic gateway to StepTextGateway via TextGenerationLoop by [@vinitkadam03](https://github.com/vinitkadam03) in https://github.com/laravel/ai/pull/726
+* Migrate xAI gateway to StepTextGateway via TextGenerationLoop by [@vinitkadam03](https://github.com/vinitkadam03) in https://github.com/laravel/ai/pull/728
+* Migrate Groq gateway to StepTextGateway via TextGenerationLoop by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/729
+* Convert Ollama text gateway to TextGenerationLoop by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/730
+* Convert DeepSeek to TextGenerationLoop and StepTextGateway by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/731
+* Convert Gemini gateway to the shared TextGenerationLoop by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/732
+* Convert OpenRouter text gateway to TextGenerationLoop by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/733
+* Convert Mistral to TextGenerationLoop by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/736
+* Migrate Bedrock text gateway onto TextGenerationLoop by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/734
+* Support native anyOf schemas by [@dbpolito](https://github.com/dbpolito) in https://github.com/laravel/ai/pull/710
+* Inline single-use step traits into Gemini and OpenRouter gateways by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/741
+* Add collection generics to streamed agent response events by [@dfinchenko](https://github.com/dfinchenko) in https://github.com/laravel/ai/pull/744
+* Add collection generics to image, transcription, and meta responses by [@dfinchenko](https://github.com/dfinchenko) in https://github.com/laravel/ai/pull/745
+* Bump actions/checkout from 6.0.3 to 7.0.0 in the github-actions group by [@dependabot](https://github.com/dependabot)[bot] in https://github.com/laravel/ai/pull/747
+* Route top-level Ollama provider options out of the options object by [@cjmcintyre](https://github.com/cjmcintyre) in https://github.com/laravel/ai/pull/722
+* Remove redundant global use statements in OpenRouter transcription test by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/751
+* Add withProviderOptions() to storable files by [@mohali-id](https://github.com/mohali-id) in https://github.com/laravel/ai/pull/717
+* Add filesystem tools for AI agents by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/651
+* Fix stored tool conversation replay order by [@gracjankubicki](https://github.com/gracjankubicki) in https://github.com/laravel/ai/pull/621
+* fix: strip markdown code fences from structured output before decoding by [@vaishnavyogesh](https://github.com/vaishnavyogesh) in https://github.com/laravel/ai/pull/754
+* Add web search and citation support to OpenRouterProvider by [@pietervanleuven](https://github.com/pietervanleuven) in https://github.com/laravel/ai/pull/738
+* Default Anthropic text model to Claude Sonnet 5 by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/756
+* Standardize withProviderOptions across the provider option API by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/753
+* Add Workbench setup with a chat example for manual testing by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/762
+* Fix OpenRouter test for new provider options API by [@mrdzen](https://github.com/mrdzen) in https://github.com/laravel/ai/pull/766
+* Add configurable OpenAI-compatible provider by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/742
+* Add WithoutBroadcasting attribute to skip oversized stream events by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/752
+* Support PHPStan static analysis at level 2 by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/755
+* Remove TextGateway contract in favor of StepTextGateway by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/743
+
+**Full Changelog**: https://github.com/laravel/ai/compare/v0.8.1...v0.9.0
+
+## [v0.8.1](https://github.com/laravel/ai/compare/v0.8.0...v0.8.1) - 2026-06-10
+
+### What's Changed
+
+* Normalize MCP tool schemas into the deserializable JSON Schema subset by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/696
+
+**Full Changelog**: https://github.com/laravel/ai/compare/v0.8.0...v0.8.1
 
 ## [v0.8.0](https://github.com/laravel/ai/compare/v0.7.2...v0.8.0) - 2026-06-08
 

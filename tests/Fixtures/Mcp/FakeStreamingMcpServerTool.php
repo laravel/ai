@@ -25,6 +25,7 @@ class FakeStreamingMcpServerTool extends Tool
     /**
      * @return array<string, Type>
      */
+    #[\Override]
     public function schema(JsonSchema $schema): array
     {
         return [];

@@ -19,19 +19,19 @@ function mockBedrockException(string $awsErrorCode, int $statusCode = 400, strin
             Exception::__construct($message, $httpStatus);
         }
 
-        public function getAwsErrorCode(): ?string
+        public function getAwsErrorCode(): string
         {
             return $this->awsErrorCode;
         }
 
-        public function getStatusCode(): ?int
+        public function getStatusCode(): int
         {
             return $this->httpStatus;
         }
     };
 }
 
-test('throttling maps to rate limited exception', function () {
+test('throttling maps to rate limited exception', function (): void {
     $bedrock = mockBedrockException('ThrottlingException', 429);
 
     $aiException = BedrockException::toAiException($bedrock, 'bedrock', 'claude-sonnet');
@@ -41,7 +41,7 @@ test('throttling maps to rate limited exception', function () {
         ->and($aiException->getPrevious())->toBe($bedrock);
 });
 
-test('service unavailable maps to provider overloaded', function () {
+test('service unavailable maps to provider overloaded', function (): void {
     $bedrock = mockBedrockException('ServiceUnavailableException', 503);
 
     $aiException = BedrockException::toAiException($bedrock, 'bedrock', 'claude-sonnet');
@@ -50,7 +50,7 @@ test('service unavailable maps to provider overloaded', function () {
         ->and($aiException->getCode())->toBe(503);
 });
 
-test('model not ready maps to provider overloaded', function () {
+test('model not ready maps to provider overloaded', function (): void {
     $bedrock = mockBedrockException('ModelNotReadyException', 503);
 
     $aiException = BedrockException::toAiException($bedrock, 'bedrock', 'claude-sonnet');
@@ -58,7 +58,7 @@ test('model not ready maps to provider overloaded', function () {
     expect($aiException)->toBeInstanceOf(ProviderOverloadedException::class);
 });
 
-test('model timeout maps to provider overloaded', function () {
+test('model timeout maps to provider overloaded', function (): void {
     $bedrock = mockBedrockException('ModelTimeoutException', 408);
 
     $aiException = BedrockException::toAiException($bedrock, 'bedrock', 'claude-sonnet');
@@ -66,7 +66,7 @@ test('model timeout maps to provider overloaded', function () {
     expect($aiException)->toBeInstanceOf(ProviderOverloadedException::class);
 });
 
-test('model stream error maps to provider overloaded', function () {
+test('model stream error maps to provider overloaded', function (): void {
     $bedrock = mockBedrockException('ModelStreamErrorException', 424);
 
     $aiException = BedrockException::toAiException($bedrock, 'bedrock', 'claude-sonnet');
@@ -74,7 +74,7 @@ test('model stream error maps to provider overloaded', function () {
     expect($aiException)->toBeInstanceOf(ProviderOverloadedException::class);
 });
 
-test('internal server error maps to provider overloaded', function () {
+test('internal server error maps to provider overloaded', function (): void {
     $bedrock = mockBedrockException('InternalServerException', 500);
 
     $aiException = BedrockException::toAiException($bedrock, 'bedrock', 'claude-sonnet');
@@ -82,7 +82,7 @@ test('internal server error maps to provider overloaded', function () {
     expect($aiException)->toBeInstanceOf(ProviderOverloadedException::class);
 });
 
-test('service quota exceeded maps to insufficient credits', function () {
+test('service quota exceeded maps to insufficient credits', function (): void {
     $bedrock = mockBedrockException('ServiceQuotaExceededException', 402);
 
     $aiException = BedrockException::toAiException($bedrock, 'bedrock', 'claude-sonnet');
@@ -91,7 +91,7 @@ test('service quota exceeded maps to insufficient credits', function () {
         ->and($aiException->getCode())->toBe(402);
 });
 
-test('unknown bedrock error falls through to generic ai exception', function () {
+test('unknown bedrock error falls through to generic ai exception', function (): void {
     $bedrock = mockBedrockException('SomethingElseException', 400, 'weird error');
 
     $aiException = BedrockException::toAiException($bedrock, 'bedrock', 'claude-sonnet');
@@ -102,7 +102,7 @@ test('unknown bedrock error falls through to generic ai exception', function () 
         ->and($aiException->getMessage())->toContain('weird error');
 });
 
-test('non-bedrock exception with credit balance message maps to insufficient credits', function () {
+test('non-bedrock exception with credit balance message maps to insufficient credits', function (): void {
     $generic = new RuntimeException('Your credit balance is too low');
 
     $aiException = BedrockException::toAiException($generic, 'bedrock', 'claude-sonnet');
@@ -110,7 +110,7 @@ test('non-bedrock exception with credit balance message maps to insufficient cre
     expect($aiException)->toBeInstanceOf(InsufficientCreditsException::class);
 });
 
-test('non-bedrock exception with quota exceeded message maps to insufficient credits', function () {
+test('non-bedrock exception with quota exceeded message maps to insufficient credits', function (): void {
     $generic = new RuntimeException('You have exceeded your current quota');
 
     $aiException = BedrockException::toAiException($generic, 'bedrock', 'claude-sonnet');
@@ -118,7 +118,7 @@ test('non-bedrock exception with quota exceeded message maps to insufficient cre
     expect($aiException)->toBeInstanceOf(InsufficientCreditsException::class);
 });
 
-test('non-bedrock generic exception wraps as ai exception', function () {
+test('non-bedrock generic exception wraps as ai exception', function (): void {
     $generic = new RuntimeException('Some network failure', 500);
 
     $aiException = BedrockException::toAiException($generic, 'bedrock', 'claude-sonnet');

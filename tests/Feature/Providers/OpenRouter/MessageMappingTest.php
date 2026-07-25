@@ -8,19 +8,19 @@ use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 use function Laravel\Ai\agent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.openrouter' => [
         ...config('ai.providers.openrouter'),
         'key' => 'test-key',
     ]]);
 });
 
-test('user message maps to chat completions format', function () {
+test('user message maps to chat completions format', function (): void {
     Http::fake(['*' => fakeOpenRouterResponse('Hello')]);
 
     agent()->prompt('Hello there', provider: 'openrouter');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $userMsg = collect($body['messages'])->firstWhere('role', 'user');
 
@@ -29,20 +29,20 @@ test('user message maps to chat completions format', function () {
     });
 });
 
-test('system instructions are sent as system role message', function () {
+test('system instructions are sent as system role message', function (): void {
     Http::fake(['*' => fakeOpenRouterResponse('Hello')]);
 
     (new AssistantAgent)->prompt('Hello', provider: 'openrouter');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['messages'][0]['role'] === 'system'
-            && str_contains($body['messages'][0]['content'], 'helpful assistant');
+            && str_contains((string) $body['messages'][0]['content'], 'helpful assistant');
     });
 });
 
-test('tool result follow up maps assistant and tool result messages', function () {
+test('tool result follow up maps assistant and tool result messages', function (): void {
     Http::fake([
         '*' => Http::sequence([
             fakeOpenRouterToolCallResponse(),
@@ -52,8 +52,8 @@ test('tool result follow up maps assistant and tool result messages', function (
 
     agent(tools: [new FixedNumberGenerator])->prompt('Give me a number', provider: 'openrouter');
 
-    $requests = Http::recorded(fn (Request $r) => true);
-    $followUpBody = json_decode($requests[1][0]->body(), true);
+    $requests = Http::recorded(fn (Request $r): true => true);
+    $followUpBody = json_decode((string) $requests[1][0]->body(), true);
     $messages = $followUpBody['messages'];
 
     $assistantMsg = collect($messages)->firstWhere('role', 'assistant');
@@ -66,7 +66,7 @@ test('tool result follow up maps assistant and tool result messages', function (
         ->and($toolMsg['tool_call_id'])->toBe('call_123');
 });
 
-test('local image attachment without explicit mime type detects mime from file', function () {
+test('local image attachment without explicit mime type detects mime from file', function (): void {
     Http::fake(['*' => fakeOpenRouterResponse('I see an image')]);
 
     agent('You are helpful.')->prompt(
@@ -75,13 +75,13 @@ test('local image attachment without explicit mime type detects mime from file',
         provider: 'openrouter',
     );
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $userMsg = collect($body['messages'])->firstWhere('role', 'user');
         $imageBlock = collect($userMsg['content'])->firstWhere('type', 'image_url');
 
         return $imageBlock !== null
-            && str_starts_with($imageBlock['image_url']['url'], 'data:image/png;base64,')
-            && ! str_contains($imageBlock['image_url']['url'], 'data:;base64,');
+            && str_starts_with((string) $imageBlock['image_url']['url'], 'data:image/png;base64,')
+            && ! str_contains((string) $imageBlock['image_url']['url'], 'data:;base64,');
     });
 });

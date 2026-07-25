@@ -11,7 +11,8 @@ use Laravel\Ai\Files\Concerns\HasRemoteContent;
 
 class RemoteImage extends Image implements Arrayable, JsonSerializable, StorableFile
 {
-    use CanBeUploadedToProvider, HasRemoteContent;
+    use CanBeUploadedToProvider;
+    use HasRemoteContent;
 
     public function __construct(public string $url, ?string $mimeType = null)
     {

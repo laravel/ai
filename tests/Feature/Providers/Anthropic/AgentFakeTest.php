@@ -2,7 +2,7 @@
 
 use Tests\Fixtures\Agents\AnthropicAgent;
 
-test('anthropic agent can be faked', function () {
+test('anthropic agent can be faked', function (): void {
     AnthropicAgent::fake(['Test response']);
 
     $response = (new AnthropicAgent)->prompt('Hello');
@@ -10,15 +10,15 @@ test('anthropic agent can be faked', function () {
     expect($response->text)->toBe('Test response');
 });
 
-test('anthropic agent fake with closure', function () {
-    AnthropicAgent::fake(fn (string $prompt) => "Echo: {$prompt}");
+test('anthropic agent fake with closure', function (): void {
+    AnthropicAgent::fake(fn (string $prompt): string => "Echo: {$prompt}");
 
     $response = (new AnthropicAgent)->prompt('Hello world');
 
     expect($response->text)->toBe('Echo: Hello world');
 });
 
-test('anthropic agent fake with no predefined responses', function () {
+test('anthropic agent fake with no predefined responses', function (): void {
     AnthropicAgent::fake();
 
     $response = (new AnthropicAgent)->prompt('Hello');
@@ -26,7 +26,7 @@ test('anthropic agent fake with no predefined responses', function () {
     expect($response->text)->toBe('Fake response for prompt: Hello');
 });
 
-test('anthropic agent fake records prompts', function () {
+test('anthropic agent fake records prompts', function (): void {
     AnthropicAgent::fake();
 
     (new AnthropicAgent)->prompt('Hello');
@@ -35,11 +35,11 @@ test('anthropic agent fake records prompts', function () {
     AnthropicAgent::assertNotPrompted('Goodbye');
 });
 
-test('anthropic agent stream can be faked', function () {
+test('anthropic agent stream can be faked', function (): void {
     AnthropicAgent::fake(['Streamed response']);
 
     $response = (new AnthropicAgent)->stream('Hello');
-    $response->each(fn () => true);
+    $response->each(fn (): true => true);
 
     expect($response->text)->toBe('Streamed response');
 });

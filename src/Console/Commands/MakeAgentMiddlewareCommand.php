@@ -2,11 +2,13 @@
 
 namespace Laravel\Ai\Console\Commands;
 
+use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\GeneratorCommand;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Input\InputOption;
 
 #[AsCommand(name: 'make:agent-middleware')]
+#[Description('Create a new agent middleware')]
 class MakeAgentMiddlewareCommand extends GeneratorCommand
 {
     /**
@@ -15,13 +17,6 @@ class MakeAgentMiddlewareCommand extends GeneratorCommand
      * @var string
      */
     protected $name = 'make:agent-middleware';
-
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
-    protected $description = 'Create a new agent middleware';
 
     /**
      * The type of class being generated.
@@ -36,6 +31,7 @@ class MakeAgentMiddlewareCommand extends GeneratorCommand
      * @param  string  $rootNamespace
      * @return string
      */
+    #[\Override]
     protected function getDefaultNamespace($rootNamespace)
     {
         return $rootNamespace.'\Ai\Middleware';
@@ -69,6 +65,7 @@ class MakeAgentMiddlewareCommand extends GeneratorCommand
      *
      * @return array
      */
+    #[\Override]
     protected function getOptions()
     {
         return [

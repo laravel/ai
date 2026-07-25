@@ -2,7 +2,7 @@
 
 use Laravel\Ai\Responses\Data\ToolResult;
 
-test('tool result stores all properties', function () {
+test('tool result stores all properties', function (): void {
     $result = new ToolResult(
         id: 'call_123',
         name: 'get_weather',
@@ -18,7 +18,7 @@ test('tool result stores all properties', function () {
         ->and($result->resultId)->toBe('msg_789');
 });
 
-test('tool result to array returns all properties', function () {
+test('tool result to array returns all properties', function (): void {
     $result = new ToolResult('id', 'name', [], 'raw result');
 
     $array = $result->toArray();
@@ -32,8 +32,18 @@ test('tool result to array returns all properties', function () {
     ]);
 });
 
-test('tool result json serialize returns to array', function () {
+test('tool result json serialize returns to array', function (): void {
     $result = new ToolResult('id', 'name', [], 'val');
 
     expect($result->jsonSerialize())->toBe($result->toArray());
+});
+
+test('tool result to array includes the denied key only when denied', function (): void {
+    expect((new ToolResult('id', 'name', [], 'val'))->toArray())->not->toHaveKey('denied')
+        ->and((new ToolResult('id', 'name', [], 'val', denied: true))->toArray())->toHaveKey('denied', true);
+});
+
+test('tool result from array hydrates the denied flag from its key', function (): void {
+    expect(ToolResult::fromArray(['id' => 'id', 'name' => 'name', 'arguments' => [], 'result' => 'val'])->denied)->toBeFalse()
+        ->and(ToolResult::fromArray(['id' => 'id', 'name' => 'name', 'arguments' => [], 'result' => 'val', 'denied' => true])->denied)->toBeTrue();
 });

@@ -10,8 +10,11 @@ use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
 use RuntimeException;
 
-class ImageResponse implements Countable, Htmlable
+class ImageResponse implements \Stringable, Countable, Htmlable
 {
+    /**
+     * @param  Collection<int, GeneratedImage>  $images
+     */
     public function __construct(
         public Collection $images,
         public Usage $usage,

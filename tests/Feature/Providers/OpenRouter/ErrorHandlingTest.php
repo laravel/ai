@@ -8,26 +8,26 @@ use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Tests\Fixtures\Agents\AssistantAgent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.openrouter' => [
         ...config('ai.providers.openrouter'),
         'key' => 'test-key',
     ]]);
 });
 
-test('http error response throws request exception', function () {
+test('http error response throws request exception', function (): void {
     Http::fake(['openrouter.ai/*' => Http::response(['error' => ['message' => 'Bad request']], 400)]);
 
     (new AssistantAgent)->prompt('Hello', provider: 'openrouter');
 })->throws(RequestException::class);
 
-test('rate limit response throws rate limited exception', function () {
+test('rate limit response throws rate limited exception', function (): void {
     Http::fake(['openrouter.ai/*' => Http::response(['error' => ['message' => 'Rate limited']], 429)]);
 
     (new AssistantAgent)->prompt('Hello', provider: 'openrouter');
 })->throws(RateLimitedException::class);
 
-test('overloaded response throws provider overloaded exception', function () {
+test('overloaded response throws provider overloaded exception', function (): void {
     Http::fake([
         'openrouter.ai/*' => Http::response([
             'error' => [
@@ -40,7 +40,7 @@ test('overloaded response throws provider overloaded exception', function () {
     (new AssistantAgent)->prompt('Hello', provider: 'openrouter');
 })->throws(ProviderOverloadedException::class);
 
-test('402 response throws insufficient credits exception', function () {
+test('402 response throws insufficient credits exception', function (): void {
     Http::fake([
         'openrouter.ai/*' => Http::response([
             'error' => [
@@ -53,7 +53,7 @@ test('402 response throws insufficient credits exception', function () {
     (new AssistantAgent)->prompt('Hello', provider: 'openrouter');
 })->throws(InsufficientCreditsException::class);
 
-test('error in 200 response throws ai exception', function () {
+test('error in 200 response throws ai exception', function (): void {
     Http::fake(['openrouter.ai/*' => Http::response([
         'error' => [
             'type' => 'invalid_request_error',

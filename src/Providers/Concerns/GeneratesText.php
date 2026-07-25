@@ -17,13 +17,18 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
+use Laravel\Ai\Events\ToolApprovalRequested;
+use Laravel\Ai\Events\ToolApprovalResolved;
 use Laravel\Ai\Events\ToolInvoked;
+use Laravel\Ai\Exceptions\ApprovalNotResumableException;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Middleware\RememberConversation;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StructuredAgentResponse;
+use Laravel\Ai\Responses\StructuredTextResponse;
+use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Tools\AgentTool;
 use Laravel\Ai\Tools\McpServerTool;
 use Laravel\Ai\Tools\McpTool;
@@ -32,6 +37,8 @@ use function Laravel\Ai\pipeline;
 
 trait GeneratesText
 {
+    use ResumesToolApprovals;
+
     protected string $currentToolInvocationId;
 
     /**
@@ -42,27 +49,31 @@ trait GeneratesText
         $invocationId = (string) Str::uuid7();
 
         $processedPrompt = null;
+        $resolvedApprovalResults = null;
 
         $response = pipeline()
             ->send($prompt)
             ->through($this->gatherMiddlewareFor($prompt->agent))
-            ->then(function (AgentPrompt $prompt) use ($invocationId, &$processedPrompt) {
+            ->then(function (AgentPrompt $prompt) use ($invocationId, &$processedPrompt, &$resolvedApprovalResults): TextResponse {
                 $processedPrompt = $prompt;
 
                 $this->events->dispatch(new PromptingAgent($invocationId, $prompt));
 
                 $agent = $prompt->agent;
 
-                $messages = [
+                $messages = $this->withoutForeignProviderContentBlocks([
                     ...($agent instanceof Conversational ? $agent->messages() : []),
-                    new UserMessage($prompt->prompt, $prompt->attachments->all()),
-                ];
+                ]);
+
+                if (! $prompt->hasApprovalDecisions()) {
+                    $messages[] = new UserMessage($prompt->prompt, $prompt->attachments->all());
+                }
 
                 $this->listenForToolInvocations($invocationId, $agent);
 
                 $schema = $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null;
 
-                $response = $this->textGateway()->generateText(
+                $response = $this->textGenerationLoop()->generate(
                     $this,
                     $prompt->model,
                     (string) $agent->instructions(),
@@ -71,9 +82,15 @@ trait GeneratesText
                     $schema,
                     TextGenerationOptions::forAgent($agent),
                     $prompt->timeout,
+                    $this->resumableApprovalFor($prompt),
+                    $this->approvalResultRecorderFor($prompt, $resolvedApprovalResults),
                 );
 
-                return ! empty($schema)
+                if ($response->hasPendingApprovals()) {
+                    $this->throwIfNotResumable($agent);
+                }
+
+                $agentResponse = $response instanceof StructuredTextResponse
                     ? (new StructuredAgentResponse($invocationId, $response->structured, $response->text, $response->usage, $response->meta))
                         ->withToolCallsAndResults($response->toolCalls, $response->toolResults)
                         ->withSteps($response->steps)
@@ -81,11 +98,35 @@ trait GeneratesText
                         ->withMessages($response->messages)
                         ->withToolCallsAndResults($response->toolCalls, $response->toolResults)
                         ->withSteps($response->steps);
+
+                $agentResponse->withPendingApprovals($response->pendingApprovals);
+
+                return $agentResponse;
             });
 
         $this->events->dispatch(
             new AgentPrompted($invocationId, $processedPrompt ?? $prompt, $response)
         );
+
+        if ($response->hasPendingApprovals()) {
+            $this->events->dispatch(new ToolApprovalRequested(
+                $invocationId,
+                $prompt->agent,
+                $response->pendingApprovals,
+                $response->conversationId,
+                $response->conversationUser,
+            ));
+        }
+
+        if ($resolvedApprovalResults !== null) {
+            $this->events->dispatch(new ToolApprovalResolved(
+                $invocationId,
+                $prompt->agent,
+                $resolvedApprovalResults,
+                $response->conversationId,
+                $response->conversationUser,
+            ));
+        }
 
         return $response;
     }
@@ -101,8 +142,7 @@ trait GeneratesText
             return $next($prompt);
         }] : [];
 
-        if (in_array(RemembersConversations::class, class_uses_recursive($agent))
-            && $agent->hasConversationParticipant()) {
+        if (in_array(RemembersConversations::class, class_uses_recursive($agent))) {
             $middleware[] = new RememberConversation(resolve(ConversationStore::class), $this);
         }
 
@@ -145,19 +185,37 @@ trait GeneratesText
      */
     protected function listenForToolInvocations(string $invocationId, Agent $agent): void
     {
-        $this->textGateway()->onToolInvocation(
-            invoking: function (Tool $tool, array $arguments) use ($invocationId, $agent) {
+        $this->textGenerationLoop()->onToolInvocation(
+            invoking: function (Tool $tool, array $arguments) use ($invocationId, $agent): void {
                 $this->currentToolInvocationId = (string) Str::uuid7();
 
                 $this->events->dispatch(new InvokingTool(
                     $invocationId, $this->currentToolInvocationId, $agent, $tool, $arguments
                 ));
             },
-            invoked: function (Tool $tool, array $arguments, mixed $result) use ($invocationId, $agent) {
+            invoked: function (Tool $tool, array $arguments, mixed $result) use ($invocationId, $agent): void {
                 $this->events->dispatch(new ToolInvoked(
                     $invocationId, $this->currentToolInvocationId, $agent, $tool, $arguments, $result
                 ));
             },
         );
+    }
+
+    /**
+     * Throw when a pause has surfaced on an agent that cannot resume it from persisted history.
+     */
+    protected function throwIfNotResumable(Agent $agent): void
+    {
+        if (! $this->agentCanResumeApprovals($agent)) {
+            throw ApprovalNotResumableException::make();
+        }
+    }
+
+    /**
+     * Determine whether the given agent can resume a paused approval from persisted history.
+     */
+    protected function agentCanResumeApprovals(Agent $agent): bool
+    {
+        return $agent instanceof Conversational;
     }
 }

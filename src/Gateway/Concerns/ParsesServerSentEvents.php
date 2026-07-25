@@ -13,8 +13,10 @@ trait ParsesServerSentEvents
     {
         while (! $streamBody->eof()) {
             $line = trim($this->readLine($streamBody));
-
-            if ($line === '' || ! str_starts_with($line, 'data:')) {
+            if ($line === '') {
+                continue;
+            }
+            if (! str_starts_with($line, 'data:')) {
                 continue;
             }
 

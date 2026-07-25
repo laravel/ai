@@ -2,7 +2,7 @@
 
 use Laravel\Ai\Responses\Data\ToolCall;
 
-test('tool call stores all properties', function () {
+test('tool call stores all properties', function (): void {
     $toolCall = new ToolCall(
         id: 'call_123',
         name: 'get_weather',
@@ -22,7 +22,7 @@ test('tool call stores all properties', function () {
         ->and($toolCall->reasoningEncryptedContent)->toBe('enc-blob-1');
 });
 
-test('tool call to array returns all properties', function () {
+test('tool call to array returns all properties', function (): void {
     $toolCall = new ToolCall('id', 'name', ['arg' => 'val']);
 
     $array = $toolCall->toArray();
@@ -38,7 +38,7 @@ test('tool call to array returns all properties', function () {
     ]);
 });
 
-test('tool call json serialize returns to array', function () {
+test('tool call json serialize returns to array', function (): void {
     $toolCall = new ToolCall('id', 'name', []);
 
     expect($toolCall->jsonSerialize())->toBe($toolCall->toArray());

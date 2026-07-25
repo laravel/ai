@@ -12,14 +12,14 @@ use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.xai' => [
         ...config('ai.providers.xai'),
         'key' => 'test-key',
     ]]);
 });
 
-test('streaming emits text events', function () {
+test('streaming emits text events', function (): void {
     Http::fake([
         '*' => Http::response(
             body: $this->ssePayload([
@@ -44,7 +44,7 @@ test('streaming emits text events', function () {
         ->and($events[5])->toBeInstanceOf(StreamEnd::class);
 });
 
-test('streaming handles tool calls', function () {
+test('streaming handles tool calls', function (): void {
     Http::fake([
         '*' => Http::sequence([
             Http::response(
@@ -73,39 +73,15 @@ test('streaming handles tool calls', function () {
 
     $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
 
-    $toolCallEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolCallEvent));
-    $toolResultEvents = array_values(array_filter($events, fn ($e) => $e instanceof ToolResultEvent));
+    $toolCallEvents = array_values(array_filter($events, fn ($e): bool => $e instanceof ToolCallEvent));
+    $toolResultEvents = array_values(array_filter($events, fn ($e): bool => $e instanceof ToolResultEvent));
 
     expect($toolCallEvents)->not->toBeEmpty()
         ->and($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator')
         ->and($toolResultEvents)->not->toBeEmpty();
 });
 
-test('streaming captures usage', function () {
-    Http::fake([
-        '*' => Http::response(
-            body: $this->ssePayload([
-                ['type' => 'response.created', 'response' => ['id' => 'resp_123', 'model' => 'grok-4-1-fast-reasoning']],
-                ['type' => 'response.output_text.delta', 'delta' => 'Hi'],
-                ['type' => 'response.output_text.done'],
-                ['type' => 'response.completed', 'response' => ['id' => 'resp_123', 'status' => 'completed', 'output' => [['type' => 'message', 'status' => 'completed', 'role' => 'assistant', 'content' => [['type' => 'output_text', 'text' => '']]]], 'usage' => ['input_tokens' => 10, 'output_tokens' => 5, 'input_tokens_details' => ['cached_tokens' => 2], 'output_tokens_details' => ['reasoning_tokens' => 3]]]],
-            ]),
-            status: 200,
-            headers: ['Content-Type' => 'text/event-stream'],
-        ),
-    ]);
-
-    $events = $this->collectStreamEvents();
-
-    $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
-
-    expect($streamEnd->usage->promptTokens)->toBe(8); // 10 - 2 cached
-    expect($streamEnd->usage->completionTokens)->toBe(5);
-    expect($streamEnd->usage->cacheReadInputTokens)->toBe(2)
-        ->and($streamEnd->usage->reasoningTokens)->toBe(3);
-});
-
-test('streaming sums usage across tool call steps', function () {
+test('streaming tool loop emits a single stream end with accumulated usage', function (): void {
     Http::fake([
         '*' => Http::sequence([
             Http::response(
@@ -134,16 +110,40 @@ test('streaming sums usage across tool call steps', function () {
 
     $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
 
-    $streamEnds = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd));
+    $streamEnds = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd));
 
     expect($streamEnds)->toHaveCount(1)
-        ->and($streamEnds[0]->usage)
-        ->promptTokens->toBe(20)
-        ->completionTokens->toBe(15)
-        ->cacheReadInputTokens->toBe(10);
+        ->and($streamEnds[0]->reason)->toBe(FinishReason::Stop->value)
+        ->and($streamEnds[0]->usage->promptTokens)->toBe(20)
+        ->and($streamEnds[0]->usage->completionTokens)->toBe(15)
+        ->and($streamEnds[0]->usage->cacheReadInputTokens)->toBe(10);
 });
 
-test('streaming error event stops stream', function () {
+test('streaming captures usage', function (): void {
+    Http::fake([
+        '*' => Http::response(
+            body: $this->ssePayload([
+                ['type' => 'response.created', 'response' => ['id' => 'resp_123', 'model' => 'grok-4-1-fast-reasoning']],
+                ['type' => 'response.output_text.delta', 'delta' => 'Hi'],
+                ['type' => 'response.output_text.done'],
+                ['type' => 'response.completed', 'response' => ['id' => 'resp_123', 'status' => 'completed', 'output' => [['type' => 'message', 'status' => 'completed', 'role' => 'assistant', 'content' => [['type' => 'output_text', 'text' => '']]]], 'usage' => ['input_tokens' => 10, 'output_tokens' => 5, 'input_tokens_details' => ['cached_tokens' => 2], 'output_tokens_details' => ['reasoning_tokens' => 3]]]],
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents();
+
+    $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
+
+    expect($streamEnd->usage->promptTokens)->toBe(8); // 10 - 2 cached
+    expect($streamEnd->usage->completionTokens)->toBe(5);
+    expect($streamEnd->usage->cacheReadInputTokens)->toBe(2)
+        ->and($streamEnd->usage->reasoningTokens)->toBe(3);
+});
+
+test('streaming error event stops stream', function (): void {
     Http::fake([
         '*' => Http::response(
             body: $this->ssePayload([
@@ -162,7 +162,7 @@ test('streaming error event stops stream', function () {
         ->and($events[0]->message)->toBe('Internal server error');
 });
 
-test('streaming finish reason maps correctly', function (string $status, string $type, $expected) {
+test('streaming finish reason maps correctly', function (string $status, string $type, $expected): void {
     Http::fake([
         '*' => Http::response(
             body: $this->ssePayload([
@@ -178,7 +178,7 @@ test('streaming finish reason maps correctly', function (string $status, string 
 
     $events = $this->collectStreamEvents();
 
-    $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+    $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
 
     expect($streamEnd->reason)->toBe($expected->value);
 })->with([

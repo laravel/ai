@@ -5,30 +5,28 @@ use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Transcription;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.eleven' => [
         ...config('ai.providers.eleven'),
         'key' => 'test-key',
     ]]);
 });
 
-test('transcription request posts to speech-to-text with model, language, and diarize flag', function () {
+test('transcription request posts to speech-to-text with model, language, and diarize flag', function (): void {
     Http::fake(['*' => fakeElevenTranscriptionResponse()]);
 
     Transcription::of(base64_encode('fake-audio'))
         ->language('en')
         ->generate(provider: 'eleven', model: 'scribe_v2');
 
-    Http::assertSent(function (Request $request) {
-        return $request->url() === 'https://api.elevenlabs.io/v1/speech-to-text'
-            && $request->isMultipart()
-            && collect($request->data())->contains(fn ($part) => $part['name'] === 'model_id' && $part['contents'] === 'scribe_v2')
-            && collect($request->data())->contains(fn ($part) => $part['name'] === 'language' && $part['contents'] === 'en')
-            && collect($request->data())->contains(fn ($part) => $part['name'] === 'diarize' && $part['contents'] === 'false');
-    });
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://api.elevenlabs.io/v1/speech-to-text'
+        && $request->isMultipart()
+        && collect($request->data())->contains(fn ($part): bool => $part['name'] === 'model_id' && $part['contents'] === 'scribe_v2')
+        && collect($request->data())->contains(fn ($part): bool => $part['name'] === 'language' && $part['contents'] === 'en')
+        && collect($request->data())->contains(fn ($part): bool => $part['name'] === 'diarize' && $part['contents'] === 'false'));
 });
 
-test('transcription request sends diarize=true when enabled', function () {
+test('transcription request sends diarize=true when enabled', function (): void {
     Http::fake(['*' => fakeElevenTranscriptionResponse(diarized: true)]);
 
     Transcription::of(base64_encode('fake-audio'))
@@ -37,11 +35,11 @@ test('transcription request sends diarize=true when enabled', function () {
 
     Http::assertSent(
         fn (Request $request) => collect($request->data())
-            ->contains(fn ($part) => $part['name'] === 'diarize' && $part['contents'] === 'true')
+            ->contains(fn ($part): bool => $part['name'] === 'diarize' && $part['contents'] === 'true')
     );
 });
 
-test('transcription request sends xi-api-key header', function () {
+test('transcription request sends xi-api-key header', function (): void {
     Http::fake(['*' => fakeElevenTranscriptionResponse()]);
 
     Transcription::of(base64_encode('fake-audio'))->generate(provider: 'eleven', model: 'scribe_v2');
@@ -49,7 +47,7 @@ test('transcription request sends xi-api-key header', function () {
     Http::assertSent(fn (Request $request) => $request->hasHeader('xi-api-key', 'test-key'));
 });
 
-test('transcription response returns plain text with no segments when diarize is off', function () {
+test('transcription response returns plain text with no segments when diarize is off', function (): void {
     Http::fake(['*' => fakeElevenTranscriptionResponse()]);
 
     $response = Transcription::of(base64_encode('fake-audio'))->generate(provider: 'eleven', model: 'scribe_v2');
@@ -60,7 +58,7 @@ test('transcription response returns plain text with no segments when diarize is
         ->and($response->meta->model)->toBe('scribe_v2');
 });
 
-test('transcription response builds segments from words when diarize is on', function () {
+test('transcription response builds segments from words when diarize is on', function (): void {
     Http::fake(['*' => fakeElevenTranscriptionResponse(diarized: true)]);
 
     $response = Transcription::of(base64_encode('fake-audio'))
@@ -76,7 +74,7 @@ test('transcription response builds segments from words when diarize is on', fun
         ->and($response->segments[1]->speaker)->toBe('speaker_1');
 });
 
-test('transcription filters out non-word segments (e.g. spacing)', function () {
+test('transcription filters out non-word segments (e.g. spacing)', function (): void {
     Http::fake(['*' => Http::response([
         'text' => 'Hello world',
         'words' => [
@@ -94,18 +92,18 @@ test('transcription filters out non-word segments (e.g. spacing)', function () {
         ->and($response->segments->pluck('text')->all())->toBe(['Hello', 'world']);
 });
 
-test('transcription uses default model when none specified', function () {
+test('transcription uses default model when none specified', function (): void {
     Http::fake(['*' => fakeElevenTranscriptionResponse()]);
 
     Transcription::of(base64_encode('fake-audio'))->generate(provider: 'eleven');
 
     Http::assertSent(
         fn (Request $request) => collect($request->data())
-            ->contains(fn ($part) => $part['name'] === 'model_id' && $part['contents'] === 'scribe_v2')
+            ->contains(fn ($part): bool => $part['name'] === 'model_id' && $part['contents'] === 'scribe_v2')
     );
 });
 
-test('transcription throws when the API returns an error', function () {
+test('transcription throws when the API returns an error', function (): void {
     Http::fake(['*' => Http::response(['detail' => 'unauthorized'], 401)]);
 
     Transcription::of(base64_encode('fake-audio'))->generate(provider: 'eleven', model: 'scribe_v2');

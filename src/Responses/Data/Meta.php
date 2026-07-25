@@ -8,8 +8,12 @@ use JsonSerializable;
 
 class Meta implements Arrayable, JsonSerializable
 {
+    /** @var Collection<int, Citation> */
     public Collection $citations;
 
+    /**
+     * @param  Collection<int, Citation>|null  $citations
+     */
     public function __construct(
         public ?string $provider = null,
         public ?string $model = null,

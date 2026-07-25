@@ -9,47 +9,47 @@ use Tests\Fixtures\Tools\RandomNumberGenerator;
 
 use function Laravel\Ai\agent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.ollama' => [
         ...config('ai.providers.ollama'),
         'key' => '',
     ]]);
 });
 
-test('request includes model and messages', function () {
+test('request includes model and messages', function (): void {
     Http::fake(['*' => $this->fakeTextResponse('Hello')]);
 
     agent()->prompt('Hi there', provider: 'ollama', model: 'llama3.1:8b');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['model'] === 'llama3.1:8b'
             && count($body['messages']) >= 1
-            && collect($body['messages'])->contains(fn ($m) => $m['role'] === 'user' && $m['content'] === 'Hi there');
+            && collect($body['messages'])->contains(fn ($m): bool => $m['role'] === 'user' && $m['content'] === 'Hi there');
     });
 });
 
-test('system instructions are sent as system message', function () {
+test('system instructions are sent as system message', function (): void {
     Http::fake(['*' => $this->fakeTextResponse('Hello')]);
 
     (new AssistantAgent)->prompt('Hello', provider: 'ollama');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $systemMsg = collect($body['messages'])->firstWhere('role', 'system');
 
         return $systemMsg !== null
-            && str_contains($systemMsg['content'], 'helpful assistant');
+            && str_contains((string) $systemMsg['content'], 'helpful assistant');
     });
 });
 
-test('temperature and max tokens are sent in options object', function () {
+test('temperature and max tokens are sent in options object', function (): void {
     Http::fake(['*' => $this->fakeTextResponse('Hello')]);
 
     (new AttributeAgent)->prompt('Hello', provider: 'ollama');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return data_get($body, 'options.temperature') === 0.7
@@ -57,12 +57,12 @@ test('temperature and max tokens are sent in options object', function () {
     });
 });
 
-test('temperature and max tokens are excluded when not set', function () {
+test('temperature and max tokens are excluded when not set', function (): void {
     Http::fake(['*' => $this->fakeTextResponse('Hello')]);
 
     agent()->prompt('Hello', provider: 'ollama');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return ! array_key_exists('options', $body)
@@ -71,37 +71,37 @@ test('temperature and max tokens are excluded when not set', function () {
     });
 });
 
-test('tools are included in the request', function () {
+test('tools are included in the request', function (): void {
     Http::fake(['*' => $this->fakeTextResponse('42')]);
 
     agent(tools: [new RandomNumberGenerator])->prompt('Give me a number', provider: 'ollama');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return is_array($body['tools'])
-            && count($body['tools']) > 0;
+            && $body['tools'] !== [];
     });
 });
 
-test('request without tools excludes tools field', function () {
+test('request without tools excludes tools field', function (): void {
     Http::fake(['*' => $this->fakeTextResponse('Hello')]);
 
     agent()->prompt('Hello', provider: 'ollama');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return ! array_key_exists('tools', $body);
     });
 });
 
-test('structured output includes format field', function () {
+test('structured output includes format field', function (): void {
     Http::fake(['*' => $this->fakeStructuredResponse('{"symbol": "Au"}')]);
 
     (new StructuredAgent)->prompt('What is the symbol for Gold?', provider: 'ollama');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return array_key_exists('format', $body)
@@ -109,31 +109,46 @@ test('structured output includes format field', function () {
     });
 });
 
-test('request without schema excludes format field', function () {
+test('structured output appends json schema instruction to system message', function (): void {
+    Http::fake(['*' => $this->fakeStructuredResponse('{"symbol": "Au"}')]);
+
+    (new StructuredAgent)->prompt('What is the symbol for Gold?', provider: 'ollama');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $systemMessage = collect($body['messages'])->firstWhere('role', 'system');
+
+        return $systemMessage !== null
+            && str_contains((string) $systemMessage['content'], 'You MUST respond EXCLUSIVELY with a JSON object that strictly adheres to the following schema')
+            && str_contains((string) $systemMessage['content'], '"symbol"');
+    });
+});
+
+test('request without schema excludes format field', function (): void {
     Http::fake(['*' => $this->fakeTextResponse('Hello')]);
 
     agent()->prompt('Hello', provider: 'ollama');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return ! array_key_exists('format', $body);
     });
 });
 
-test('non-streaming request sets stream to false', function () {
+test('non-streaming request sets stream to false', function (): void {
     Http::fake(['*' => $this->fakeTextResponse('Hello')]);
 
     agent()->prompt('Hello', provider: 'ollama');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['stream'] === false;
     });
 });
 
-test('response text is correctly parsed', function () {
+test('response text is correctly parsed', function (): void {
     Http::fake(['*' => $this->fakeTextResponse('Laravel is great')]);
 
     $response = agent()->prompt('Tell me about Laravel', provider: 'ollama');
@@ -142,7 +157,7 @@ test('response text is correctly parsed', function () {
         ->and($response->meta->provider)->toBe('ollama');
 });
 
-test('response usage is correctly parsed', function () {
+test('response usage is correctly parsed', function (): void {
     Http::fake(['*' => Http::response([
         'model' => 'llama3.1:8b',
         'message' => ['role' => 'assistant', 'content' => 'Hello'],
@@ -158,7 +173,7 @@ test('response usage is correctly parsed', function () {
         ->and($response->usage->completionTokens)->toBe(5);
 });
 
-test('structured response is correctly parsed', function () {
+test('structured response is correctly parsed', function (): void {
     Http::fake(['*' => $this->fakeStructuredResponse('{"symbol": "Au"}')]);
 
     $response = (new StructuredAgent)->prompt('What is the symbol for Gold?', provider: 'ollama');
@@ -166,12 +181,10 @@ test('structured response is correctly parsed', function () {
     expect($response->structured['symbol'])->toBe('Au');
 });
 
-test('request is sent to the chat endpoint', function () {
+test('request is sent to the chat endpoint', function (): void {
     Http::fake(['*' => $this->fakeTextResponse('Hello')]);
 
     agent()->prompt('Hello', provider: 'ollama');
 
-    Http::assertSent(function (Request $request) {
-        return str_ends_with($request->url(), '/api/chat');
-    });
+    Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/api/chat'));
 });
