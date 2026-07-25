@@ -180,6 +180,51 @@ test('it emits streamed approval requests without executing gated tools', functi
         ->and(collect($events)->whereInstanceOf(StreamEnd::class))->toHaveCount(1);
 });
 
+test('a streamed pause on a later step carries the preceding steps replay state', function (): void {
+    $gated = new TextGenerationLoopApprovableTool;
+    $ungated = new TextGenerationLoopCountingTool;
+
+    $ungatedCall = new ToolCall('call-1', TextGenerationLoopCountingTool::class, [], 'call-1');
+    $gatedCall = new ToolCall('call-2', TextGenerationLoopApprovableTool::class, ['value' => 'danger'], 'call-2');
+
+    $stepOneBlocks = [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1']];
+    $stepTwoBlocks = [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'tool_use', 'id' => 'call-2']];
+
+    $gateway = new TextGenerationLoopFakeGateway(streams: [
+        textGenerationLoopStreamStep(
+            events: [new ToolCallEvent('event-1', $ungatedCall, time())],
+            returns: new StepResponse('looking', [$ungatedCall], FinishReason::ToolCalls, new Usage, new Meta('fake', 'model'), providerContentBlocks: $stepOneBlocks),
+        ),
+        textGenerationLoopStreamStep(
+            events: [new ToolCallEvent('event-2', $gatedCall, time())],
+            returns: new StepResponse('acting', [$gatedCall], FinishReason::ToolCalls, new Usage, new Meta('fake', 'model'), providerContentBlocks: $stepTwoBlocks),
+        ),
+    ]);
+
+    $events = iterator_to_array((new TextGenerationLoop($gateway))->stream(
+        'invocation-1',
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [],
+        [$ungated, $gated],
+        null,
+        new TextGenerationOptions(maxSteps: 3),
+        null,
+    ));
+
+    $approval = collect($events)->whereInstanceOf(ToolApprovalRequest::class)->first();
+
+    // The paused step travels as providerContentBlocks; only the step before it is carried separately...
+    expect($approval->providerContentBlocks)->toBe($stepTwoBlocks)
+        ->and($approval->precedingProviderContentBlockSteps)->toHaveCount(1)
+        ->and($approval->precedingProviderContentBlockSteps[0]['tool_call_ids'])->toBe(['call-1'])
+        ->and($approval->precedingProviderContentBlockSteps[0]['blocks'])->toBe($stepOneBlocks)
+        ->and($approval->precedingProviderContentBlockSteps[0]['content'])->toBe('looking')
+        ->and($gated->calls)->toBe(0)
+        ->and($ungated->calls)->toBe(1);
+});
+
 test('it resumes a paused step running only the still-pending gated call', function (): void {
     $gated = new TextGenerationLoopApprovableTool;
     $ungated = new TextGenerationLoopCountingTool;

@@ -70,11 +70,13 @@ class AgentResponse extends TextResponse
     }
 
     /**
-     * Get the per-step raw provider replay state for the paused assistant turn, if any.
+     * Get the raw provider replay state for the steps that ran before the paused step, if any.
+     *
+     * The paused step is described by pausedProviderContentBlocks(), so it is never repeated here.
      *
      * @return array<int, array{tool_call_ids: array<int, string>, blocks: array<int|string, mixed>, content: string}>
      */
-    public function pausedProviderContentBlockSteps(): array
+    public function precedingProviderContentBlockSteps(): array
     {
         if (! $this->hasPendingApprovals()) {
             return [];
@@ -82,8 +84,13 @@ class AgentResponse extends TextResponse
 
         return $this->messages
             ->whereInstanceOf(AssistantMessage::class)
-            ->map(fn (AssistantMessage $message): array => $message->toReplayStep())
             ->values()
+            ->slice(0, -1)
+            ->map(fn (AssistantMessage $message): array => [
+                'tool_call_ids' => $message->toolCalls->pluck('id')->values()->all(),
+                'blocks' => $message->providerContentBlocks,
+                'content' => $message->content,
+            ])
             ->all();
     }
 }

@@ -36,7 +36,7 @@ return new class extends AiMigration
             $table->text('tool_calls');
             $table->text('tool_results');
             $table->text('usage');
-            $table->text('meta');
+            $table->longText('meta');
             $table->text('approval_state')->nullable();
             $table->timestamps();
 

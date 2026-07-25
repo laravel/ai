@@ -261,7 +261,7 @@ class TextGenerationLoop
                     $pendingApprovals,
                     time(),
                     $result->providerContentBlocks,
-                    $this->providerContentBlockSteps($turnAssistantMessages),
+                    $this->precedingProviderContentBlockSteps($turnAssistantMessages),
                 ))->withInvocationId($invocationId);
 
                 break;
@@ -536,14 +536,18 @@ class TextGenerationLoop
     }
 
     /**
-     * Build the per-step replay state for a paused turn from each step's assistant message.
+     * Build the replay state for the steps that ran before the paused one, which the pause's own blocks do not describe.
      *
-     * @param  AssistantMessage[]  $assistantMessages
+     * @param  AssistantMessage[]  $assistantMessages  every assistant message of the turn, the paused step last
      * @return array<int, array{tool_call_ids: array<int, string>, blocks: array<int|string, mixed>, content: string}>
      */
-    protected function providerContentBlockSteps(array $assistantMessages): array
+    protected function precedingProviderContentBlockSteps(array $assistantMessages): array
     {
-        return array_map(fn (AssistantMessage $message): array => $message->toReplayStep(), array_values($assistantMessages));
+        return array_map(fn (AssistantMessage $message): array => [
+            'tool_call_ids' => $message->toolCalls->pluck('id')->values()->all(),
+            'blocks' => $message->providerContentBlocks,
+            'content' => $message->content,
+        ], array_slice(array_values($assistantMessages), 0, -1));
     }
 
     /**
@@ -584,7 +588,7 @@ class TextGenerationLoop
                 $finalStep->text,
                 $totalUsage,
                 $finalStep->meta,
-            ))->withToolCallsAndResults(
+            ))->withMessages($newMessages)->withToolCallsAndResults(
                 toolCalls: $steps->flatMap(fn (Step $s): array => $s->toolCalls),
                 toolResults: $newMessages
                     ->whereInstanceOf(ToolResultMessage::class)

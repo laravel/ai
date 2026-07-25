@@ -53,12 +53,12 @@ class StreamedAgentResponse extends AgentResponse
     }
 
     /**
-     * Get the per-step raw provider replay state for the paused assistant turn, if any.
+     * Get the raw provider replay state for the steps that ran before the paused step, if any.
      *
      * @return array<int, array{tool_call_ids: array<int, string>, blocks: array<int|string, mixed>, content: string}>
      */
-    public function pausedProviderContentBlockSteps(): array
+    public function precedingProviderContentBlockSteps(): array
     {
-        return $this->events->whereInstanceOf(ToolApprovalRequest::class)->last()?->providerContentBlockSteps ?? [];
+        return $this->events->whereInstanceOf(ToolApprovalRequest::class)->last()?->precedingProviderContentBlockSteps ?? [];
     }
 }

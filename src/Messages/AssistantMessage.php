@@ -36,18 +36,4 @@ class AssistantMessage extends Message
         $this->providerContentBlocks = $providerContentBlocks;
         $this->providerContentBlocksProvider = $providerContentBlocksProvider;
     }
-
-    /**
-     * Get the per-step replay state entry persisted for this message when a paused turn spans multiple steps.
-     *
-     * @return array{tool_call_ids: array<int, string>, blocks: array<int|string, mixed>, content: string}
-     */
-    public function toReplayStep(): array
-    {
-        return [
-            'tool_call_ids' => $this->toolCalls->pluck('id')->values()->all(),
-            'blocks' => $this->providerContentBlocks,
-            'content' => $this->content,
-        ];
-    }
 }
