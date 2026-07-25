@@ -10,6 +10,7 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
+use Tests\Fixtures\Agents\RememberingApprovableAgent;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 use function Laravel\Ai\agent;
@@ -47,8 +48,7 @@ test('emits reasoning start, delta, and end events while streaming', function ()
 });
 
 test('emits reasoning events from the reasoning_content field', function (): void {
-    // OpenAI-compatible upstreams (LiteLLM, vLLM) stream reasoning under
-    // `reasoning_content` instead of OpenRouter's native `reasoning`.
+    // OpenAI-compatible upstreams (LiteLLM, vLLM) stream reasoning under `reasoning_content`...
     Http::fake([
         '*' => Http::response($this->ssePayload([
             $this->chatChunk(['role' => 'assistant', 'reasoning_content' => 'Thinking it through.']),
@@ -112,6 +112,103 @@ test('closes a trailing reasoning block when the stream has no answer text', fun
 
     $reasoningEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof ReasoningEnd));
     expect($reasoningEnd)->toHaveCount(1);
+});
+
+test('emits a single reasoning block when a chunk carries both reasoning and content', function (): void {
+    // Some upstreams emit a transition chunk holding the last reasoning token and the first answer token...
+    Http::fake([
+        '*' => Http::response($this->ssePayload([
+            $this->chatChunk(['role' => 'assistant', 'reasoning' => 'Hmm, let']),
+            $this->chatChunk(['reasoning' => ' me think.', 'content' => 'Hello']),
+            $this->chatChunk(['content' => ' world']),
+            $this->chatChunkFinish('stop', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
+        ])),
+    ]);
+
+    $events = $this->collectStreamEvents();
+
+    expect($events[1])->toBeInstanceOf(ReasoningStart::class)
+        ->and($events[2])->toBeInstanceOf(ReasoningDelta::class)->delta->toBe('Hmm, let')
+        ->and($events[3])->toBeInstanceOf(ReasoningDelta::class)->delta->toBe(' me think.')
+        ->and($events[4])->toBeInstanceOf(ReasoningEnd::class)
+        ->and($events[5])->toBeInstanceOf(TextStart::class)
+        ->and($events[6])->toBeInstanceOf(TextDelta::class)->delta->toBe('Hello');
+
+    expect(array_filter($events, fn ($e): bool => $e instanceof ReasoningStart))->toHaveCount(1);
+    expect(array_filter($events, fn ($e): bool => $e instanceof ReasoningEnd))->toHaveCount(1);
+});
+
+test('does not close the reasoning block on an empty tool calls array', function (): void {
+    Http::fake([
+        '*' => Http::response($this->ssePayload([
+            $this->chatChunk(['role' => 'assistant', 'reasoning' => 'Hmm, let']),
+            $this->chatChunk(['tool_calls' => []]),
+            $this->chatChunk(['reasoning' => ' me think.']),
+            $this->chatChunkFinish('stop', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
+        ])),
+    ]);
+
+    $events = $this->collectStreamEvents();
+
+    expect(array_filter($events, fn ($e): bool => $e instanceof ReasoningStart))->toHaveCount(1)
+        ->and(array_filter($events, fn ($e): bool => $e instanceof ReasoningEnd))->toHaveCount(1)
+        ->and(array_filter($events, fn ($e): bool => $e instanceof ReasoningDelta))->toHaveCount(2);
+});
+
+test('captures streamed reasoning on the paused turn state', function (): void {
+    Http::fake([
+        '*' => Http::response($this->ssePayload([
+            $this->chatChunk(['role' => 'assistant', 'reasoning' => 'I should call the generator.']),
+            $this->chatChunkToolCallStart(0, 'call_1', 'ApprovableNumberGenerator'),
+            $this->chatChunkToolCallDelta(0, '{}'),
+            $this->chatChunkFinish('tool_calls', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
+        ])),
+    ]);
+
+    $paused = null;
+
+    (new RememberingApprovableAgent)
+        ->forUser((object) ['id' => 1])
+        ->stream('Generate a number', provider: 'openrouter')
+        ->then(function ($response) use (&$paused): void {
+            $paused = $response;
+        })
+        ->each(fn (): bool => true);
+
+    expect($paused->hasPendingApprovals())->toBeTrue()
+        ->and($paused->pausedProviderContentBlocks())
+        ->toBe(['reasoning_content' => 'I should call the generator.']);
+});
+
+test('captures reasoning from a non-streamed response on the paused turn state', function (): void {
+    Http::fake(['*' => Http::response([
+        'id' => 'chatcmpl-123',
+        'object' => 'chat.completion',
+        'model' => 'anthropic/claude-sonnet-4.6',
+        'choices' => [[
+            'index' => 0,
+            'message' => [
+                'role' => 'assistant',
+                'content' => '',
+                'reasoning' => 'I should call the generator.',
+                'tool_calls' => [[
+                    'id' => 'call_1',
+                    'type' => 'function',
+                    'function' => ['name' => 'ApprovableNumberGenerator', 'arguments' => '{}'],
+                ]],
+            ],
+            'finish_reason' => 'tool_calls',
+        ]],
+        'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
+    ])]);
+
+    $response = (new RememberingApprovableAgent)
+        ->forUser((object) ['id' => 1])
+        ->prompt('Generate a number', provider: 'openrouter');
+
+    expect($response->hasPendingApprovals())->toBeTrue()
+        ->and($response->pausedProviderContentBlocks())
+        ->toBe(['reasoning_content' => 'I should call the generator.']);
 });
 
 test('does not emit reasoning events when the stream has no reasoning', function (): void {

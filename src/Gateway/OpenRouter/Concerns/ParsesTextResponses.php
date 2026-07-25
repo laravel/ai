@@ -55,6 +55,15 @@ trait ParsesTextResponses
             $toolCall['id'] ?? null,
         ), $message['tool_calls'] ?? []);
 
+        // Reasoning arrives under `reasoning` (OpenRouter) or `reasoning_content` (LiteLLM, vLLM)...
+        $reasoning = $message['reasoning'] ?? $message['reasoning_content'] ?? null;
+
+        $providerContentBlocks = [];
+
+        if (is_string($reasoning) && filled($reasoning)) {
+            $providerContentBlocks['reasoning_content'] = $reasoning;
+        }
+
         return new StepResponse(
             text: $text,
             toolCalls: $toolCalls,
@@ -62,6 +71,7 @@ trait ParsesTextResponses
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model, $citations),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
+            providerContentBlocks: $providerContentBlocks,
         );
     }
 

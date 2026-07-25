@@ -37,6 +37,7 @@ trait HandlesTextStreaming
         $textStartEmitted = false;
         $reasoningId = '';
         $inReasoning = false;
+        $currentReasoning = '';
         $currentText = '';
         $toolCalls = [];
         $pendingToolCalls = [];
@@ -95,19 +96,6 @@ trait HandlesTextStreaming
                 ))->withInvocationId($invocationId);
             }
 
-            // Close the reasoning block as soon as answer text or tool calls arrive...
-            if ($inReasoning && ((isset($delta['content']) && $delta['content'] !== '') || isset($delta['tool_calls']))) {
-                $inReasoning = false;
-
-                yield (new ReasoningEnd(
-                    $this->generateEventId(),
-                    $reasoningId,
-                    time(),
-                ))->withInvocationId($invocationId);
-
-                $reasoningId = '';
-            }
-
             // Reasoning streams under `reasoning` (OpenRouter) or `reasoning_content` (LiteLLM, vLLM)...
             $reasoningDelta = $delta['reasoning'] ?? $delta['reasoning_content'] ?? null;
 
@@ -123,12 +111,27 @@ trait HandlesTextStreaming
                     ))->withInvocationId($invocationId);
                 }
 
+                $currentReasoning .= $reasoningDelta;
+
                 yield (new ReasoningDelta(
                     $this->generateEventId(),
                     $reasoningId,
                     $reasoningDelta,
                     time(),
                 ))->withInvocationId($invocationId);
+            }
+
+            // Close the reasoning block as soon as answer text or tool calls arrive...
+            if ($inReasoning && ((isset($delta['content']) && $delta['content'] !== '') || filled($delta['tool_calls'] ?? null))) {
+                $inReasoning = false;
+
+                yield (new ReasoningEnd(
+                    $this->generateEventId(),
+                    $reasoningId,
+                    time(),
+                ))->withInvocationId($invocationId);
+
+                $reasoningId = '';
             }
 
             if (isset($delta['content']) && $delta['content'] !== '') {
@@ -235,12 +238,19 @@ trait HandlesTextStreaming
             }
         }
 
+        $providerContentBlocks = [];
+
+        if (filled($currentReasoning)) {
+            $providerContentBlocks['reasoning_content'] = $currentReasoning;
+        }
+
         return new StepResponse(
             text: $currentText,
             toolCalls: $toolCalls,
             finishReason: $this->extractFinishReason(['finish_reason' => $finishReason ?? '']),
             usage: $usage ?? new Usage(0, 0),
             meta: new Meta($provider->name(), $streamModel),
+            providerContentBlocks: $providerContentBlocks,
         );
     }
 
