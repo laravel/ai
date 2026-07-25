@@ -68,6 +68,12 @@ trait BuildsTextRequests
             'top_p' => $options?->topP,
         ]));
 
+        $plugins = $provider->additionalConfiguration()['plugins'] ?? null;
+
+        if (filled($plugins)) {
+            $body['plugins'] = $plugins;
+        }
+
         $providerOptions = $options?->providerOptions($provider->driver());
 
         if (filled($providerOptions)) {

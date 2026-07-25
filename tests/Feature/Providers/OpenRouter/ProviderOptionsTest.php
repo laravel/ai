@@ -31,6 +31,23 @@ test('provider options are included in openrouter request body', function (): vo
     });
 });
 
+test('provider plugins configuration is included in openrouter request body', function (): void {
+    config(['ai.providers.openrouter.plugins' => [
+        ['id' => 'file-parser', 'pdf' => ['engine' => 'mistral-ocr']],
+    ]]);
+
+    Http::fake(['*' => fakeOpenRouterResponse('Hello')]);
+
+    agent()->prompt('Summarize the PDF', provider: 'openrouter');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+
+        return data_get($body, 'plugins.0.id') === 'file-parser'
+            && data_get($body, 'plugins.0.pdf.engine') === 'mistral-ocr';
+    });
+});
+
 test('request body does not contain provider options when agent does not implement interface', function (): void {
     Http::fake(['*' => fakeOpenRouterResponse('Hello')]);
 
@@ -40,7 +57,42 @@ test('request body does not contain provider options when agent does not impleme
         $body = json_decode($request->body(), true);
 
         return ! array_key_exists('frequency_penalty', $body)
-            && ! array_key_exists('presence_penalty', $body);
+            && ! array_key_exists('presence_penalty', $body)
+            && ! array_key_exists('plugins', $body);
+    });
+});
+
+test('agent provider options override provider plugins configuration', function (): void {
+    config(['ai.providers.openrouter.plugins' => [
+        ['id' => 'file-parser'],
+    ]]);
+
+    Http::fake(['*' => fakeOpenRouterResponse('Hello')]);
+
+    $agent = new class implements Agent, HasProviderOptions
+    {
+        use Promptable;
+
+        public function instructions(): string
+        {
+            return 'You are a helpful assistant.';
+        }
+
+        public function providerOptions(Lab|string $provider): array
+        {
+            return match ($provider) {
+                Lab::OpenRouter => ['plugins' => [['id' => 'response-healing']]],
+                default => [],
+            };
+        }
+    };
+
+    $agent->prompt('Hello', provider: 'openrouter');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+
+        return data_get($body, 'plugins') === [['id' => 'response-healing']];
     });
 });
 
