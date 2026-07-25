@@ -17,6 +17,7 @@ use Laravel\Ai\Gateway\Bedrock\Concerns\CreatesBedrockClient;
 use Laravel\Ai\Gateway\Bedrock\Concerns\MapsAttachments;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
+use Laravel\Ai\Gateway\Concerns\ParsesCohereEmbeddings;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
@@ -53,6 +54,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
     use HandlesFailoverErrors;
     use InvokesTools;
     use MapsAttachments;
+    use ParsesCohereEmbeddings;
 
     protected const STRUCTURED_OUTPUT_TOOL = 'structured_output';
 
@@ -521,8 +523,8 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
     ): EmbeddingsResponse {
         $client = $this->createBedrockClient($provider, $timeout);
 
-        if (str_starts_with($model, 'cohere.')) {
-            return $this->generateCohereEmbeddings($provider, $model, $client, $inputs, $providerOptions);
+        if ($this->isCohereModel($model)) {
+            return $this->generateCohereEmbeddings($provider, $model, $client, $inputs, $dimensions, $providerOptions);
         }
 
         $embeddings = [];
@@ -572,6 +574,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
         string $model,
         $client,
         array $inputs,
+        int $dimensions,
         array $providerOptions = [],
     ): EmbeddingsResponse {
         try {
@@ -583,6 +586,7 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
                     'accept' => 'application/json',
                     'body' => json_encode(array_merge(
                         ['input_type' => 'search_document'],
+                        $this->supportsCohereOutputDimension($model) ? ['output_dimension' => $dimensions] : [],
                         $providerOptions,
                         ['texts' => array_values($inputs)],
                     )),
@@ -594,37 +598,29 @@ class BedrockTextGateway implements EmbeddingGateway, TextGateway
             throw BedrockException::toAiException($e, $provider->name(), $model);
         }
 
-        $embeddings = $this->parseCohereEmbeddings($result);
-
-        // Cohere's Bedrock response body carries no usage; the input token count
-        // is returned in the `x-amzn-bedrock-input-token-count` response header.
-        $tokens = (int) ($response['@metadata']['headers']['x-amzn-bedrock-input-token-count'] ?? 0);
-
+        // Cohere's Bedrock responses carry no usage, so the input token count comes from the headers.
         return new EmbeddingsResponse(
-            $embeddings,
-            $tokens,
+            $this->parseCohereEmbeddings($result['embeddings'] ?? []),
+            (int) ($response['@metadata']['headers']['x-amzn-bedrock-input-token-count'] ?? 0),
             new Meta($provider->name(), $model),
         );
     }
 
     /**
-     * Normalize a Cohere Bedrock embeddings response body into a list of vectors.
-     *
-     * @param  array<string, mixed>  $result
-     * @return array<int, array<int, float>>
+     * Determine if the given model identifier refers to a Cohere model.
      */
-    protected function parseCohereEmbeddings(array $result): array
+    protected function isCohereModel(string $model): bool
     {
-        $raw = $result['embeddings'] ?? [];
+        return Str::is(['cohere.*', '*.cohere.*', '*/cohere.*'], $model);
+    }
 
-        if (is_array($raw) && $raw !== [] && ! array_is_list($raw)) {
-            $raw = $raw['float'] ?? (reset($raw) ?: []);
-        }
-
-        return array_values(array_filter(
-            is_array($raw) ? $raw : [],
-            fn ($vector) => is_array($vector),
-        ));
+    /**
+     * Determine if the given Cohere model accepts a configurable output dimension.
+     */
+    protected function supportsCohereOutputDimension(string $model): bool
+    {
+        // Only the unified Embed v4 and later models accept an output dimension; v3 widths are fixed.
+        return str_contains($model, 'embed-v');
     }
 
     /**
