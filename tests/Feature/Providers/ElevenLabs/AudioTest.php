@@ -7,19 +7,19 @@ use Laravel\Ai\Audio;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.eleven' => [
         ...config('ai.providers.eleven'),
         'key' => 'test-key',
     ]]);
 });
 
-test('audio request includes model_id, text, and resolves default-female voice', function () {
+test('audio request includes model_id, text, and resolves default-female voice', function (): void {
     Http::fake(['*' => fakeElevenAudioResponse()]);
 
     Audio::of('Hello world')->generate(provider: 'eleven', model: 'eleven_multilingual_v2');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
         return $body['model_id'] === 'eleven_multilingual_v2'
@@ -28,23 +28,23 @@ test('audio request includes model_id, text, and resolves default-female voice',
     });
 });
 
-test('audio request resolves default-male voice alias', function () {
+test('audio request resolves default-male voice alias', function (): void {
     Http::fake(['*' => fakeElevenAudioResponse()]);
 
     Audio::of('Hello')->male()->generate(provider: 'eleven', model: 'eleven_multilingual_v2');
 
-    Http::assertSent(fn (Request $request) => $request->url() === 'https://api.elevenlabs.io/v1/text-to-speech/onwK4e9ZLuTAKqWW03F9');
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://api.elevenlabs.io/v1/text-to-speech/onwK4e9ZLuTAKqWW03F9');
 });
 
-test('audio request passes custom voice id through unchanged', function () {
+test('audio request passes custom voice id through unchanged', function (): void {
     Http::fake(['*' => fakeElevenAudioResponse()]);
 
     Audio::of('Hello')->voice('my-custom-voice-id')->generate(provider: 'eleven', model: 'eleven_multilingual_v2');
 
-    Http::assertSent(fn (Request $request) => $request->url() === 'https://api.elevenlabs.io/v1/text-to-speech/my-custom-voice-id');
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://api.elevenlabs.io/v1/text-to-speech/my-custom-voice-id');
 });
 
-test('audio request sends xi-api-key header', function () {
+test('audio request sends xi-api-key header', function (): void {
     Http::fake(['*' => fakeElevenAudioResponse()]);
 
     Audio::of('Hello')->generate(provider: 'eleven', model: 'eleven_multilingual_v2');
@@ -52,7 +52,7 @@ test('audio request sends xi-api-key header', function () {
     Http::assertSent(fn (Request $request) => $request->hasHeader('xi-api-key', 'test-key'));
 });
 
-test('audio response is base64-encoded with audio/mpeg mime type', function () {
+test('audio response is base64-encoded with audio/mpeg mime type', function (): void {
     Http::fake(['*' => Http::response('raw-audio-bytes')]);
 
     $response = Audio::of('Hello')->generate(provider: 'eleven', model: 'eleven_multilingual_v2');
@@ -63,27 +63,27 @@ test('audio response is base64-encoded with audio/mpeg mime type', function () {
         ->and($response->meta->model)->toBe('eleven_multilingual_v2');
 });
 
-test('audio uses default model when none specified', function () {
+test('audio uses default model when none specified', function (): void {
     Http::fake(['*' => fakeElevenAudioResponse()]);
 
     Audio::of('Hello')->generate(provider: 'eleven');
 
-    Http::assertSent(fn (Request $request) => json_decode($request->body(), true)['model_id'] === 'eleven_multilingual_v2');
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['model_id'] === 'eleven_multilingual_v2');
 });
 
-test('audio throws when the API returns an error', function () {
+test('audio throws when the API returns an error', function (): void {
     Http::fake(['*' => Http::response(['detail' => 'unauthorized'], 401)]);
 
     Audio::of('Hello')->generate(provider: 'eleven', model: 'eleven_multilingual_v2');
 })->throws(RequestException::class);
 
-test('audio rate limit response throws rate limited exception', function () {
+test('audio rate limit response throws rate limited exception', function (): void {
     Http::fake(['api.elevenlabs.io/*' => Http::response(['detail' => 'rate limit exceeded'], 429)]);
 
     Audio::of('Hello')->generate(provider: 'eleven', model: 'eleven_multilingual_v2');
 })->throws(RateLimitedException::class);
 
-test('audio overloaded response throws provider overloaded exception', function () {
+test('audio overloaded response throws provider overloaded exception', function (): void {
     Http::fake(['api.elevenlabs.io/*' => Http::response(['detail' => 'service unavailable'], 503)]);
 
     Audio::of('Hello')->generate(provider: 'eleven', model: 'eleven_multilingual_v2');

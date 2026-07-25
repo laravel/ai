@@ -9,8 +9,8 @@ use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\RerankingGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\RerankingProvider;
+use Laravel\Ai\Gateway\Cohere\Concerns\ParsesEmbeddings;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
-use Laravel\Ai\Gateway\Concerns\ParsesCohereEmbeddings;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\RankedDocument;
 use Laravel\Ai\Responses\EmbeddingsResponse;
@@ -19,7 +19,7 @@ use Laravel\Ai\Responses\RerankingResponse;
 class CohereGateway implements EmbeddingGateway, RerankingGateway
 {
     use HandlesFailoverErrors;
-    use ParsesCohereEmbeddings;
+    use ParsesEmbeddings;
 
     /**
      * Generate embedding vectors representing the given inputs.
@@ -83,7 +83,7 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway
 
         $data = $response->json();
 
-        $results = (new Collection($data['results']))->map(fn (array $result) => new RankedDocument(
+        $results = (new Collection($data['results']))->map(fn (array $result): RankedDocument => new RankedDocument(
             index: $result['index'],
             document: $documents[$result['index']],
             score: $result['relevance_score'],

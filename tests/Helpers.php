@@ -1,6 +1,7 @@
 <?php
 
 use GuzzleHttp\Promise\PromiseInterface;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 
 function requiresApiKey(string ...$keys): void
@@ -10,6 +11,30 @@ function requiresApiKey(string ...$keys): void
             test()->markTestSkipped("Missing {$key} — skipping external test.");
         }
     }
+}
+
+function sentRequest(): Request
+{
+    [$request] = Http::recorded()->first();
+
+    return $request;
+}
+
+function multipartField(Request $request, string $name): ?string
+{
+    return collect($request->data())->firstWhere('name', $name)['contents'] ?? null;
+}
+
+// Laravel 12 flattens nested multipart arrays to "name[]" => value while Laravel 13 keeps "name" => array, so we compare just the values to stay stable across both.
+function multipartNestedField(Request $request, string $name): array
+{
+    return collect($request->data())
+        ->reject(fn ($field): bool => isset($field['filename']))
+        ->filter(fn ($field): bool => (($field['name'] ?? null) === $name && is_array($field['contents'] ?? null))
+            || preg_match('/^'.preg_quote($name, '/').'\[[^\]]*\]$/', $field['name'] ?? '') === 1)
+        ->flatMap(fn ($field): array => is_array($field['contents'] ?? null) ? array_values($field['contents']) : [$field['contents'] ?? null])
+        ->values()
+        ->all();
 }
 
 function fakeGroqResponse(string $text = 'Hello'): PromiseInterface

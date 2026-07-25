@@ -41,7 +41,7 @@ trait GeneratesTranscriptions
 
         return tap($this->transcriptionGateway()->generateTranscription(
             $this, $model, $prompt->audio, $prompt->language, $prompt->diarize, $prompt->timeout ?? 30, $prompt->providerOptions
-        ), function (TranscriptionResponse $response) use ($invocationId, $model, $prompt) {
+        ), function (TranscriptionResponse $response) use ($invocationId, $model, $prompt): void {
             $this->events->dispatch(new TranscriptionGenerated(
                 $invocationId, $this, $model, $prompt, $response
             ));

@@ -5,7 +5,7 @@ namespace Laravel\Ai\Contracts\Providers;
 use Laravel\Ai\Contracts\Gateway\RerankingGateway;
 use Laravel\Ai\Responses\RerankingResponse;
 
-interface RerankingProvider
+interface RerankingProvider extends Provider
 {
     /**
      * Rerank the given documents based on their relevance to the query.

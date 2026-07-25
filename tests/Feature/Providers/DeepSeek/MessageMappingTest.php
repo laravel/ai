@@ -9,14 +9,14 @@ use Tests\Fixtures\Agents\ToolUsingAgent;
 
 use function Laravel\Ai\agent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.deepseek' => [
         ...config('ai.providers.deepseek'),
         'key' => 'test-key',
     ]]);
 });
 
-test('user message maps to deepseek format', function () {
+test('user message maps to deepseek format', function (): void {
     Http::fake([
         'api.deepseek.com/*' => fakeDeepSeekResponse(),
     ]);
@@ -26,7 +26,7 @@ test('user message maps to deepseek format', function () {
         provider: 'deepseek',
     );
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $userMessage = collect($body['messages'])->firstWhere('role', 'user');
 
@@ -35,7 +35,7 @@ test('user message maps to deepseek format', function () {
     });
 });
 
-test('tool result follow up maps assistant and tool result messages', function () {
+test('tool result follow up maps assistant and tool result messages', function (): void {
     Http::fake([
         'api.deepseek.com/*' => Http::sequence([
             fakeDeepSeekToolCallResponse(),
@@ -52,7 +52,7 @@ test('tool result follow up maps assistant and tool result messages', function (
 
     expect($recorded)->toHaveCount(2);
 
-    $followUpBody = json_decode($recorded[1][0]->body(), true);
+    $followUpBody = json_decode((string) $recorded[1][0]->body(), true);
     $followUpMessages = $followUpBody['messages'];
 
     $hasAssistantWithToolCalls = false;
@@ -71,15 +71,15 @@ test('tool result follow up maps assistant and tool result messages', function (
     expect($hasAssistantWithToolCalls)->toBeTrue()
         ->and($hasToolResult)->toBeTrue();
 
-    $assistantMsg = collect($followUpMessages)->last(fn ($m) => $m['role'] === 'assistant' && isset($m['tool_calls']));
-    $toolMsg = collect($followUpMessages)->last(fn ($m) => $m['role'] === 'tool');
+    $assistantMsg = collect($followUpMessages)->last(fn ($m): bool => $m['role'] === 'assistant' && isset($m['tool_calls']));
+    $toolMsg = collect($followUpMessages)->last(fn ($m): bool => $m['role'] === 'tool');
 
     expect($assistantMsg['tool_calls'][0]['function']['name'])->toBe('FixedNumberGenerator')
         ->and($toolMsg['tool_call_id'])->toBe($assistantMsg['tool_calls'][0]['id'])
         ->and($toolMsg['content'])->not->toBeEmpty();
 });
 
-test('image attachment maps to image url content block', function () {
+test('image attachment maps to image url content block', function (): void {
     Http::fake([
         'api.deepseek.com/*' => fakeDeepSeekResponse('I see an image'),
     ]);
@@ -92,7 +92,7 @@ test('image attachment maps to image url content block', function () {
         provider: 'deepseek',
     );
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
         $userMessage = collect($body['messages'])->firstWhere('role', 'user');
         $content = $userMessage['content'];
@@ -100,12 +100,12 @@ test('image attachment maps to image url content block', function () {
         $imageBlock = collect($content)->firstWhere('type', 'image_url');
 
         return $imageBlock !== null
-            && str_contains($imageBlock['image_url']['url'], 'image/png')
-            && str_contains($imageBlock['image_url']['url'], base64_encode('fake-image-data'));
+            && str_contains((string) $imageBlock['image_url']['url'], 'image/png')
+            && str_contains((string) $imageBlock['image_url']['url'], base64_encode('fake-image-data'));
     });
 });
 
-test('document attachments throw exception', function () {
+test('document attachments throw exception', function (): void {
     Http::fake([
         'api.deepseek.com/*' => fakeDeepSeekResponse(),
     ]);

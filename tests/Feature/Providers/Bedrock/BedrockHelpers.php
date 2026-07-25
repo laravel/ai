@@ -40,7 +40,7 @@ trait BedrockHelpers
     protected function fakeBedrockStreamSequence(array $eventLists): BedrockRuntimeClient
     {
         return $this->bedrockClient(new MockHandler(array_map(
-            fn (array $events) => new Result(['stream' => $events]),
+            fn (array $events): Result => new Result(['stream' => $events]),
             $eventLists,
         )));
     }
@@ -48,7 +48,7 @@ trait BedrockHelpers
     protected function fakeBedrockConverseSequence(array $results): BedrockRuntimeClient
     {
         return $this->bedrockClient(new MockHandler(array_map(
-            fn (array $result) => new Result($result),
+            fn (array $result): Result => new Result($result),
             $results,
         )));
     }
@@ -96,7 +96,7 @@ trait BedrockHelpers
     {
         $payload = ['contentBlockIndex' => $index];
 
-        if ($start) {
+        if ($start !== []) {
             $payload['start'] = $start;
         }
 

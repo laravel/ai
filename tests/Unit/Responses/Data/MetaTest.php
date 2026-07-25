@@ -2,27 +2,27 @@
 
 use Laravel\Ai\Responses\Data\Meta;
 
-test('meta extracts provider and model from response', function () {
+test('meta extracts provider and model from response', function (): void {
     $meta = new Meta('openai', 'gpt-4o');
 
     expect($meta->provider)->toBe('openai')
         ->and($meta->model)->toBe('gpt-4o');
 });
 
-test('meta accepts null provider and model', function () {
-    $meta = new Meta(null, null);
+test('meta accepts null provider and model', function (): void {
+    $meta = new Meta;
 
     expect($meta->provider)->toBeNull()
         ->and($meta->model)->toBeNull();
 });
 
-test('meta returns empty citations when not provided', function () {
+test('meta returns empty citations when not provided', function (): void {
     $meta = new Meta('openai', 'gpt-4o');
 
     expect($meta->citations)->toBeEmpty();
 });
 
-test('meta to array includes provider model and citations', function () {
+test('meta to array includes provider model and citations', function (): void {
     $meta = new Meta('openai', 'gpt-4o');
 
     $array = $meta->toArray();
@@ -32,7 +32,7 @@ test('meta to array includes provider model and citations', function () {
         ->and($array['citations'])->toBe([]);
 });
 
-test('meta json serialize returns to array', function () {
+test('meta json serialize returns to array', function (): void {
     $meta = new Meta('anthropic', 'claude-3-opus');
 
     $json = $meta->jsonSerialize();

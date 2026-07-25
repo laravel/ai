@@ -5,22 +5,22 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Transcription;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.gemini' => [
         ...config('ai.providers.gemini'),
         'key' => 'test-key',
     ]]);
 });
 
-test('transcription request sends audio as inline data with correct mime type', function () {
+test('transcription request sends audio as inline data with correct mime type', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => fakeGeminiTranscriptionResponse(),
     ]);
 
-    Transcription::of(base64_encode('fake-audio'), 'audio/mp3')
+    Transcription::of(base64_encode('fake-audio'))
         ->generate(provider: 'gemini', model: 'gemini-3.5-flash');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = $request->data();
         $parts = $body['contents'][0]['parts'];
 
@@ -30,27 +30,27 @@ test('transcription request sends audio as inline data with correct mime type', 
     });
 });
 
-test('transcription request includes language in prompt when specified', function () {
+test('transcription request includes language in prompt when specified', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => fakeGeminiTranscriptionResponse(),
     ]);
 
-    Transcription::of(base64_encode('fake-audio'), 'audio/mp3')
+    Transcription::of(base64_encode('fake-audio'))
         ->language('fr')
         ->generate(provider: 'gemini', model: 'gemini-3.5-flash');
 
-    Http::assertSent(fn (Request $request) => str_contains(
-        $request->data()['contents'][0]['parts'][0]['text'],
+    Http::assertSent(fn (Request $request): bool => str_contains(
+        (string) $request->data()['contents'][0]['parts'][0]['text'],
         'fr'
     ));
 });
 
-test('transcription response returns text with correct meta', function () {
+test('transcription response returns text with correct meta', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => fakeGeminiTranscriptionResponse(),
     ]);
 
-    $response = Transcription::of(base64_encode('fake-audio'), 'audio/mp3')
+    $response = Transcription::of(base64_encode('fake-audio'))
         ->generate(provider: 'gemini', model: 'gemini-3.5-flash');
 
     expect($response->text)->toBe('Hello world')
@@ -61,41 +61,41 @@ test('transcription response returns text with correct meta', function () {
         ->and($response->usage->completionTokens)->toBe(5);
 });
 
-test('transcription uses default model when none specified', function () {
+test('transcription uses default model when none specified', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => fakeGeminiTranscriptionResponse(),
     ]);
 
-    Transcription::of(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'gemini');
+    Transcription::of(base64_encode('fake-audio'))->generate(provider: 'gemini');
 
-    Http::assertSent(fn (Request $request) => str_contains($request->url(), 'models/gemini-3.5-flash:generateContent'));
+    Http::assertSent(fn (Request $request): bool => str_contains($request->url(), 'models/gemini-3.5-flash:generateContent'));
 });
 
-test('diarized transcription request sends json schema in generation config', function () {
+test('diarized transcription request sends json schema in generation config', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => fakeGeminiDiarizedTranscriptionResponse(),
     ]);
 
-    Transcription::of(base64_encode('fake-audio'), 'audio/mp3')
+    Transcription::of(base64_encode('fake-audio'))
         ->diarize()
         ->generate(provider: 'gemini', model: 'gemini-3.5-flash');
 
-    Http::assertSent(function (Request $request) {
+    Http::assertSent(function (Request $request): bool {
         $body = $request->data();
 
         return isset($body['generationConfig']['responseMimeType'])
             && $body['generationConfig']['responseMimeType'] === 'application/json'
             && isset($body['generationConfig']['responseSchema']['properties']['segments'])
-            && str_contains($body['contents'][0]['parts'][0]['text'], 'MM:SS or HH:MM:SS');
+            && str_contains((string) $body['contents'][0]['parts'][0]['text'], 'MM:SS or HH:MM:SS');
     });
 });
 
-test('diarized transcription response returns text and segments', function () {
+test('diarized transcription response returns text and segments', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => fakeGeminiDiarizedTranscriptionResponse(),
     ]);
 
-    $response = Transcription::of(base64_encode('fake-audio'), 'audio/mp3')
+    $response = Transcription::of(base64_encode('fake-audio'))
         ->diarize()
         ->generate(provider: 'gemini', model: 'gemini-3.5-flash');
 
@@ -111,7 +111,7 @@ test('diarized transcription response returns text and segments', function () {
         ->and($response->usage->completionTokens)->toBe(20);
 });
 
-test('diarized transcription parses srt and hour timestamp formats', function () {
+test('diarized transcription parses srt and hour timestamp formats', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => fakeGeminiDiarizedTranscriptionResponse([
             ['text' => 'Hello', 'start_time' => '00:00:01,500', 'end_time' => '00:01:02,250'],
@@ -119,7 +119,7 @@ test('diarized transcription parses srt and hour timestamp formats', function ()
         ]),
     ]);
 
-    $response = Transcription::of(base64_encode('fake-audio'), 'audio/mp3')
+    $response = Transcription::of(base64_encode('fake-audio'))
         ->diarize()
         ->generate(provider: 'gemini', model: 'gemini-3.5-flash');
 

@@ -2,16 +2,19 @@
 
 namespace Laravel\Ai\Providers\Concerns;
 
-use Laravel\Ai\Contracts\Gateway\TextGateway;
+use Laravel\Ai\Contracts\Gateway\StepTextGateway;
+use Laravel\Ai\Gateway\TextGenerationLoop;
 
 trait HasTextGateway
 {
-    protected TextGateway $textGateway;
+    protected StepTextGateway $textGateway;
+
+    protected ?TextGenerationLoop $textGenerationLoop = null;
 
     /**
      * Get the provider's text gateway.
      */
-    public function textGateway(): TextGateway
+    public function textGateway(): StepTextGateway
     {
         return $this->textGateway ?? $this->gateway;
     }
@@ -19,10 +22,19 @@ trait HasTextGateway
     /**
      * Set the provider's text gateway.
      */
-    public function useTextGateway(TextGateway $gateway): self
+    public function useTextGateway(StepTextGateway $gateway): self
     {
         $this->textGateway = $gateway;
+        $this->textGenerationLoop = null;
 
         return $this;
+    }
+
+    /**
+     * Get the multi-step text generation loop wrapping the provider's text gateway.
+     */
+    public function textGenerationLoop(): TextGenerationLoop
+    {
+        return $this->textGenerationLoop ??= new TextGenerationLoop($this->textGateway());
     }
 }

@@ -18,7 +18,7 @@ class McpTool implements Tool
     /**
      * The MCP client tool primitive class name.
      */
-    protected const MCP_CLIENT_TOOL = 'Laravel\\Mcp\\Client\\Primitives\\Tool';
+    protected const MCP_CLIENT_TOOL = \Laravel\Mcp\Client\Primitives\Tool::class;
 
     /**
      * The prefix applied to MCP client tool names.
@@ -35,7 +35,7 @@ class McpTool implements Tool
      */
     public static function supports(mixed $tool): bool
     {
-        return is_object($tool) && is_a($tool, self::MCP_CLIENT_TOOL);
+        return $tool instanceof \Laravel\Mcp\Client\Primitives\Tool;
     }
 
     /**

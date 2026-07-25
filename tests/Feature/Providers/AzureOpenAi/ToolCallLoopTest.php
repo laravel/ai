@@ -2,9 +2,10 @@
 
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Support\Facades\Http;
+use Tests\Fixtures\Agents\MultiStepToolAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.azure' => [
         ...config('ai.providers.azure'),
         'key' => 'test-key',
@@ -13,7 +14,7 @@ beforeEach(function () {
     ]]);
 });
 
-test('tool calls trigger follow up request', function () {
+test('tool calls trigger follow up request', function (): void {
     Http::fake([
         'my-resource.cognitiveservices.azure.com/*' => Http::sequence([
             fakeUniqueAzureToolCallResponse(),
@@ -30,7 +31,7 @@ test('tool calls trigger follow up request', function () {
 
     expect($recorded)->toHaveCount(2);
 
-    $followUpBody = json_decode($recorded[1][0]->body(), true);
+    $followUpBody = json_decode((string) $recorded[1][0]->body(), true);
 
     expect($followUpBody)->toHaveKey('previous_response_id');
 
@@ -45,7 +46,7 @@ test('tool calls trigger follow up request', function () {
     expect($hasFunctionCallOutput)->toBeTrue();
 });
 
-test('max steps limits tool call depth', function () {
+test('max steps limits tool call depth', function (): void {
     Http::fake([
         'my-resource.cognitiveservices.azure.com/*' => Http::sequence([
             fakeUniqueAzureToolCallResponse(),
@@ -63,6 +64,29 @@ test('max steps limits tool call depth', function () {
     $recorded = Http::recorded();
 
     expect(count($recorded))->toBeLessThanOrEqual(3);
+});
+
+test('multi step tool loop returns accumulated response shape', function (): void {
+    Http::fake([
+        'my-resource.cognitiveservices.azure.com/*' => Http::sequence([
+            fakeUniqueAzureToolCallResponse(),
+            fakeUniqueAzureToolCallResponse(),
+            fakeAzureResponse('Done'),
+        ]),
+    ]);
+
+    $response = (new MultiStepToolAgent)->prompt(
+        'Generate numbers',
+        provider: 'azure',
+    );
+
+    expect((string) $response)->toBe('Done')
+        ->and($response->messages)->toHaveCount(5)
+        ->and($response->steps)->toHaveCount(3)
+        ->and($response->toolCalls)->toHaveCount(2)
+        ->and($response->toolResults)->toHaveCount(2)
+        ->and($response->usage->promptTokens)->toBe(21)
+        ->and($response->usage->completionTokens)->toBe(11);
 });
 
 function fakeUniqueAzureToolCallResponse(): PromiseInterface

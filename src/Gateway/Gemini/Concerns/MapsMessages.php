@@ -52,6 +52,15 @@ trait MapsMessages
      */
     protected function mapAssistantMessage(AssistantMessage|Message $message, array &$contents): void
     {
+        if ($message instanceof AssistantMessage && filled($message->providerContentBlocks)) {
+            $contents[] = [
+                'role' => 'model',
+                'parts' => $message->providerContentBlocks,
+            ];
+
+            return;
+        }
+
         $parts = [];
 
         if (filled($message->content)) {

@@ -4,6 +4,7 @@ namespace Laravel\Ai\Prompts;
 
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 
@@ -25,8 +26,9 @@ class AgentPrompt extends Prompt
         string $model,
         ?int $timeout = null,
         ?string $invocationId = null,
+        ?Decisions $approvalDecisions = null,
     ) {
-        parent::__construct($prompt, $provider, $model);
+        parent::__construct($prompt, $provider, $model, $approvalDecisions);
 
         $this->agent = $agent;
         $this->attachments = Collection::make($attachments);
@@ -63,6 +65,10 @@ class AgentPrompt extends Prompt
      */
     public function revise(string $prompt, Collection|array|null $attachments = null): AgentPrompt
     {
+        if ($this->hasApprovalDecisions()) {
+            return $this;
+        }
+
         if (is_array($attachments)) {
             $attachments = new Collection($attachments);
         }
@@ -75,6 +81,7 @@ class AgentPrompt extends Prompt
             $this->model,
             $this->timeout,
             $this->invocationId,
+            $this->approvalDecisions,
         );
     }
 

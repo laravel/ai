@@ -5,7 +5,7 @@ use Illuminate\JsonSchema\Types\ObjectType;
 
 use function Laravel\Ai\generate_fake_data_for_json_schema_type;
 
-test('structured data can be faked', function () {
+test('structured data can be faked', function (): void {
     $schema = new JsonSchemaTypeFactory;
 
     $response = generate_fake_data_for_json_schema_type((new ObjectType([

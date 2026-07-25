@@ -7,14 +7,14 @@ use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Tests\Fixtures\Agents\AssistantAgent;
 
-beforeEach(function () {
+beforeEach(function (): void {
     config(['ai.providers.openai' => [
         ...config('ai.providers.openai'),
         'key' => 'test-key',
     ]]);
 });
 
-test('http error response throws request exception', function () {
+test('http error response throws request exception', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::response([
             'error' => [
@@ -30,7 +30,7 @@ test('http error response throws request exception', function () {
     );
 })->throws(RequestException::class);
 
-test('rate limit response throws rate limited exception', function () {
+test('rate limit response throws rate limited exception', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::response([
             'error' => [
@@ -46,7 +46,7 @@ test('rate limit response throws rate limited exception', function () {
     );
 })->throws(RateLimitedException::class);
 
-test('overloaded response throws provider overloaded exception', function () {
+test('overloaded response throws provider overloaded exception', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::response([
             'error' => [
@@ -62,7 +62,7 @@ test('overloaded response throws provider overloaded exception', function () {
     );
 })->throws(ProviderOverloadedException::class);
 
-test('error in 200 response throws ai exception', function () {
+test('error in 200 response throws ai exception', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::response([
             'error' => [
@@ -78,7 +78,7 @@ test('error in 200 response throws ai exception', function () {
     );
 })->throws(AiException::class, 'OpenAI Error');
 
-test('failed status response throws ai exception', function () {
+test('failed status response throws ai exception', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::response([
             'id' => 'resp_123',

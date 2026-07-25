@@ -2,7 +2,7 @@
 
 use Tests\Fixtures\Agents\GroqAgent;
 
-test('groq agent can be faked', function () {
+test('groq agent can be faked', function (): void {
     GroqAgent::fake(['Test response']);
 
     $response = (new GroqAgent)->prompt('Hello');
@@ -10,15 +10,15 @@ test('groq agent can be faked', function () {
     expect($response->text)->toBe('Test response');
 });
 
-test('groq agent fake with closure', function () {
-    GroqAgent::fake(fn (string $prompt) => "Echo: {$prompt}");
+test('groq agent fake with closure', function (): void {
+    GroqAgent::fake(fn (string $prompt): string => "Echo: {$prompt}");
 
     $response = (new GroqAgent)->prompt('Hello world');
 
     expect($response->text)->toBe('Echo: Hello world');
 });
 
-test('groq agent fake with no predefined responses', function () {
+test('groq agent fake with no predefined responses', function (): void {
     GroqAgent::fake();
 
     $response = (new GroqAgent)->prompt('Hello');
@@ -26,7 +26,7 @@ test('groq agent fake with no predefined responses', function () {
     expect($response->text)->toBe('Fake response for prompt: Hello');
 });
 
-test('groq agent fake records prompts', function () {
+test('groq agent fake records prompts', function (): void {
     GroqAgent::fake();
 
     (new GroqAgent)->prompt('Hello');
@@ -35,11 +35,11 @@ test('groq agent fake records prompts', function () {
     GroqAgent::assertNotPrompted('Goodbye');
 });
 
-test('groq agent stream can be faked', function () {
+test('groq agent stream can be faked', function (): void {
     GroqAgent::fake(['Streamed response']);
 
     $response = (new GroqAgent)->stream('Hello');
-    $response->each(fn () => true);
+    $response->each(fn (): true => true);
 
     expect($response->text)->toBe('Streamed response');
 });

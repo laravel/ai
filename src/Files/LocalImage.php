@@ -42,6 +42,7 @@ class LocalImage extends Image implements Arrayable, JsonSerializable, StorableF
     /**
      * Get the displayable name of the file.
      */
+    #[\Override]
     public function name(): ?string
     {
         return $this->name ?? basename($this->path);
@@ -50,6 +51,7 @@ class LocalImage extends Image implements Arrayable, JsonSerializable, StorableF
     /**
      * Get the file's MIME type.
      */
+    #[\Override]
     public function mimeType(): ?string
     {
         return $this->mime ?? ((new Filesystem)->mimeType($this->path) ?: null);

@@ -12,20 +12,20 @@ use Laravel\Ai\Promptable;
 use Tests\Fixtures\Agents\RememberingToolAgent;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
-uses(RefreshDatabase::class)->beforeEach(function () {
+uses(RefreshDatabase::class)->beforeEach(function (): void {
     $this->artisan('migrate', [
         '--path' => __DIR__.'/../../database/migrations',
         '--realpath' => true,
     ])->run();
 })->in(__FILE__);
 
-test('models can replay conversation history with tool calls', function (string $provider, string $apiKey, string $model, bool $isReasoning) {
+test('models can replay conversation history with tool calls', function (string $provider, string $apiKey, string $model, bool $isReasoning): void {
     requiresApiKey($apiKey);
 
     $tool = new FixedNumberGenerator;
     $instructions = 'For every request, call the FixedNumberGenerator tool before answering. Answer with one short sentence.';
 
-    $makeAgent = fn (iterable $messages = []) => new class($instructions, $messages, [$tool], $isReasoning) implements Agent, Conversational, HasProviderOptions, HasTools
+    $makeAgent = fn (iterable $messages = []): object => new class($instructions, $messages, [$tool], $isReasoning) implements Agent, Conversational, HasProviderOptions, HasTools
     {
         use Promptable;
 
@@ -92,7 +92,7 @@ test('models can replay conversation history with tool calls', function (string 
     expect($secondResponse->text)->toContain('72019');
 })->with('tool-replay-providers');
 
-test('reasoning conversation roundtrips through database storage', function () {
+test('reasoning conversation roundtrips through database storage', function (): void {
     requiresApiKey('OPENAI_API_KEY');
 
     $user = (object) ['id' => 1];
@@ -121,7 +121,7 @@ test('reasoning conversation roundtrips through database storage', function () {
 
     expect($record)->not->toBeNull();
 
-    $storedToolCalls = json_decode($record->tool_calls, true);
+    $storedToolCalls = json_decode((string) $record->tool_calls, true);
 
     expect($storedToolCalls)->toHaveCount(1)
         ->and($storedToolCalls[0]['reasoning_id'] ?? null)->not->toBeNull();

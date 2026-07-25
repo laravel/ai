@@ -2,6 +2,8 @@
 
 namespace Laravel\Ai\Schema;
 
+use Illuminate\JsonSchema\Types\AnyOfType;
+
 class SchemaNormalizer
 {
     /**
@@ -58,6 +60,7 @@ class SchemaNormalizer
         [$schema, $seen] = $this->inlineRefs($schema, $root, $seen);
 
         $schema = $this->mergeAllOf($schema, $root, $seen);
+        $schema = $this->preserveAnyOf($schema, $root, $seen);
         $schema = $this->collapseUnions($schema, $root, $seen);
         $schema = $this->collapseMultiType($schema);
         $schema = $this->normalizeKeywords($schema);
@@ -199,12 +202,71 @@ class SchemaNormalizer
                 continue;
             }
 
+            if ($key === 'anyOf' && $this->supportsAnyOf()) {
+                continue;
+            }
+
             $branches = $schema[$key];
 
             unset($schema[$key]);
 
             $schema = $this->mergeUnion($schema, $branches, $root, $seen);
         }
+
+        return $schema;
+    }
+
+    /**
+     * Keep anyOf compositions intact when the installed deserializer supports them.
+     *
+     * @param  array<string, mixed>  $schema
+     * @param  array<string, mixed>  $root
+     * @param  array<string, true>  $seen
+     * @return array<string, mixed>
+     */
+    private function preserveAnyOf(array $schema, array $root, array $seen): array
+    {
+        if (! $this->supportsAnyOf() || ! is_array($schema['anyOf'] ?? null)) {
+            return $schema;
+        }
+
+        $carry = ['anyOf' => true, 'title' => true, 'description' => true, 'enum' => true, 'default' => true];
+        $base = array_diff_key($schema, $carry);
+
+        $branches = [];
+        $resolved = false;
+
+        foreach ($schema['anyOf'] as $branch) {
+            if (! is_array($branch)) {
+                continue;
+            }
+            if ($branch === []) {
+                continue;
+            }
+            [$branch, $branchSeen] = $this->inlineRefs($branch, $root, $seen);
+
+            if ($branch === []) {
+                continue;
+            }
+
+            if ($this->isNullBranch($branch)) {
+                $branches[] = ['type' => 'null'];
+
+                continue;
+            }
+
+            $branches[] = $this->node($base === [] ? $branch : $this->mergeSchema($base, $branch), $root, $branchSeen);
+            $resolved = true;
+        }
+
+        if (! $resolved) {
+            unset($schema['anyOf']);
+
+            return $schema;
+        }
+
+        $schema = array_intersect_key($schema, $carry);
+        $schema['anyOf'] = $branches;
 
         return $schema;
     }
@@ -235,7 +297,7 @@ class SchemaNormalizer
                 continue;
             }
 
-            if (in_array($branch['type'] ?? null, ['null', ['null']], true)) {
+            if ($this->isNullBranch($branch)) {
                 $nullable = true;
             } else {
                 $resolved[] = $this->node($branch, $root, $branchSeen);
@@ -272,7 +334,7 @@ class SchemaNormalizer
      */
     private function mergeObjectVariants(array $schema, array $branches): ?array
     {
-        $objects = array_values(array_filter($branches, fn ($branch) => $this->isObjectBranch($branch)));
+        $objects = array_values(array_filter($branches, $this->isObjectBranch(...)));
 
         if (count($objects) < 2) {
             return null;
@@ -364,13 +426,13 @@ class SchemaNormalizer
      */
     private function mergeVariantValues(array $list): array
     {
-        $list = array_values(array_filter($list, 'is_array'));
+        $list = array_values(array_filter($list, is_array(...)));
 
         if (count($list) <= 1) {
             return $list[0] ?? [];
         }
 
-        $objects = array_values(array_filter($list, fn ($value) => $this->isObjectBranch($value)));
+        $objects = array_values(array_filter($list, $this->isObjectBranch(...)));
 
         if (count($objects) >= 2) {
             return $this->reduceObjectGroup($objects);
@@ -404,7 +466,7 @@ class SchemaNormalizer
             }
         }
 
-        $types = array_values(array_unique(array_filter($types, fn ($type) => $type !== null)));
+        $types = array_values(array_unique(array_filter($types, fn ($type): bool => $type !== null)));
 
         if (! isset($merged['items']) && $types !== []) {
             $merged['type'] = count($types) === 1 ? $types[0] : $types;
@@ -452,9 +514,27 @@ class SchemaNormalizer
     private function isObjectBranch(array $branch): bool
     {
         $type = $branch['type'] ?? null;
-        $nonNull = array_values(array_filter(is_array($type) ? $type : [$type], fn ($value) => $value !== 'null'));
+        $nonNull = array_values(array_filter(is_array($type) ? $type : [$type], fn ($value): bool => $value !== 'null'));
 
         return $nonNull === ['object'];
+    }
+
+    /**
+     * Determine if the installed Illuminate JSON schema package supports anyOf.
+     */
+    private function supportsAnyOf(): bool
+    {
+        return class_exists(AnyOfType::class);
+    }
+
+    /**
+     * Determine whether the branch only represents null.
+     *
+     * @param  array<string, mixed>  $schema
+     */
+    private function isNullBranch(array $schema): bool
+    {
+        return in_array($schema['type'] ?? null, ['null', ['null']], true);
     }
 
     /**
@@ -504,8 +584,8 @@ class SchemaNormalizer
             return $schema;
         }
 
-        $valid = array_values(array_filter($type, fn ($value) => in_array($value, self::TYPES, true)));
-        $nonNull = array_values(array_filter($valid, fn ($value) => $value !== 'null'));
+        $valid = array_values(array_filter($type, fn ($value): bool => in_array($value, self::TYPES, true)));
+        $nonNull = array_values(array_filter($valid, fn ($value): bool => $value !== 'null'));
 
         if ($nonNull === []) {
             unset($schema['type']);
@@ -582,7 +662,7 @@ class SchemaNormalizer
             if (is_array($schema['required'] ?? null)) {
                 $schema['required'] = array_values(array_filter(
                     $schema['required'],
-                    fn ($name) => is_string($name) && array_key_exists($name, $properties),
+                    fn ($name): bool => is_string($name) && array_key_exists($name, $properties),
                 ));
             }
         }
@@ -613,9 +693,9 @@ class SchemaNormalizer
         }
 
         $type = $schema['type'] ?? null;
-        $nonNull = array_filter(is_array($type) ? $type : [$type], fn ($t) => $t !== 'null');
+        $nonNull = array_filter(is_array($type) ? $type : [$type], fn ($t): bool => $t !== 'null');
 
-        if ($nonNull !== [] && array_filter($nonNull, fn ($t) => ! in_array($t, self::TYPES, true)) === []) {
+        if ($nonNull !== [] && array_filter($nonNull, fn ($t): bool => ! in_array($t, self::TYPES, true)) === []) {
             return $schema;
         }
 
