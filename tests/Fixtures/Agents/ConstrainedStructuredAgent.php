@@ -26,7 +26,8 @@ class ConstrainedStructuredAgent implements Agent, HasStructuredOutput
     {
         return [
             'score' => $schema->integer()->required()->min(1)->max(10),
-            'tags' => $schema->array()->items($schema->string()->max(20))->max(5),
+            'summary' => $schema->string()->required()->min(1)->max(280),
+            'tags' => $schema->array()->required()->items($schema->string()->max(20))->min(1)->max(5),
         ];
     }
 }

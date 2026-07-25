@@ -215,20 +215,20 @@ describe('structured output', function (): void {
             provider: 'anthropic',
         );
 
-        Http::assertSent(function ($request) {
-            $schema = $request->data()['output_config']['format']['schema'];
+        Http::assertSent(function ($request): bool {
+            $properties = $request->data()['output_config']['format']['schema']['properties'];
 
-            $score = $schema['properties']['score'];
-            $tags = $schema['properties']['tags'];
+            expect($properties['score'])->not->toHaveKeys(['minimum', 'maximum'])
+                ->and($properties['score']['description'])->toBe('Must be at least 1. Must be at most 10.')
+                ->and($properties['summary'])->not->toHaveKeys(['minLength', 'maxLength'])
+                ->and($properties['summary']['description'])->toBe('Must be at least 1 character. Must be at most 280 characters.')
+                ->and($properties['tags'])->not->toHaveKey('maxItems')
+                ->and($properties['tags']['minItems'])->toBe(1)
+                ->and($properties['tags']['description'])->toBe('Must contain at most 5 items.')
+                ->and($properties['tags']['items'])->not->toHaveKey('maxLength')
+                ->and($properties['tags']['items']['description'])->toBe('Must be at most 20 characters.');
 
-            return ! isset($score['minimum'])
-                && ! isset($score['maximum'])
-                && str_contains($score['description'], 'Must be at least 1.')
-                && str_contains($score['description'], 'Must be at most 10.')
-                && ! isset($tags['maxItems'])
-                && ! isset($tags['items']['maxLength'])
-                && str_contains($tags['description'], 'Must contain at most 5 items.')
-                && str_contains($tags['items']['description'], 'Must be at most 20 characters.');
+            return true;
         });
     });
 
