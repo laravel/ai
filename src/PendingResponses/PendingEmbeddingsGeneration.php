@@ -213,7 +213,7 @@ class PendingEmbeddingsGeneration
         if (array_all($this->inputs, fn ($input) => is_string($input))) {
             return 'laravel-embeddings:'.hash(
                 'sha256',
-                $provider->driver().'-'.$model.'-'.$dimensions.'-'.$optionsFingerprint.'-'.implode('-', $this->inputs),
+                $provider->driver().'-'.$model.'-'.$dimensions.'-'.$optionsFingerprint.'-'.json_encode($this->inputs, JSON_THROW_ON_ERROR),
             );
         }
 

@@ -54,6 +54,13 @@ test('negative cache seconds bypasses an existing cached entry', function (): vo
     expect(Http::recorded())->toHaveCount(2);
 });
 
+test('distinct string batches do not share a cache entry', function (): void {
+    Embeddings::for(['a-b', 'c'])->cache(3600)->generate(provider: 'cohere', model: 'embed-v4.0');
+    Embeddings::for(['a', 'b-c'])->cache(3600)->generate(provider: 'cohere', model: 'embed-v4.0');
+
+    expect(Http::recorded())->toHaveCount(2);
+});
+
 test('toEmbeddings honors cache false even when enabled globally', function (): void {
     config(['ai.caching.embeddings.cache' => true]);
 
