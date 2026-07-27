@@ -15,7 +15,7 @@ trait ParsesEmbeddings
      */
     protected function parseCohereEmbeddings(mixed $embeddings): array
     {
-        // Embed v4 keys the vectors by embedding type, while earlier models return a bare list.
+        // Cohere returns a bare list of vectors, or an object keyed by embedding type, depending on the requested embedding types.
         if (is_array($embeddings) && ! array_is_list($embeddings)) {
             $embeddings = $embeddings['float'] ?? throw new AiException(sprintf(
                 'Cohere returned [%s] embeddings, but only float embeddings are supported.',

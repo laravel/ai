@@ -16,13 +16,13 @@ function cohereEmbeddingsParser(): object
     };
 }
 
-test('parses the bare list of vectors returned by Embed v3', function () {
+test('parses embeddings returned as a bare list of vectors', function () {
     $embeddings = cohereEmbeddingsParser()->parse([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]);
 
     expect($embeddings)->toBe([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]);
 });
 
-test('unwraps the float type keyed by Embed v4', function () {
+test('unwraps the float type when embeddings are keyed by embedding type', function () {
     $embeddings = cohereEmbeddingsParser()->parse(['float' => [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]]);
 
     expect($embeddings)->toBe([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]);

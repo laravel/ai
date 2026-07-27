@@ -3,11 +3,11 @@
 use Laravel\Ai\Exceptions\AiException;
 
 describe('cohere embeddings', function () {
-    test('unwraps Cohere Embed v4 vectors and reads the token count header', function () {
+    test('unwraps the float vectors when embeddings are keyed by embedding type', function () {
         $client = $this->fakeBedrockInvoke([
-            'embeddings' => ['float' => [[0.1, 0.2, 0.3]]],
-            'response_type' => 'embeddings_floats',
-        ], ['x-amzn-bedrock-input-token-count' => '7']);
+            'embeddings' => ['float' => [[0.1, 0.2, 0.3]], 'int8' => [[1, 2, 3]]],
+            'response_type' => 'embeddings_by_type',
+        ]);
 
         $gateway = $this->gatewayWithClient($client);
 
@@ -19,10 +19,9 @@ describe('cohere embeddings', function () {
         );
 
         expect($response->first())->toBe([0.1, 0.2, 0.3]);
-        expect($response->tokens)->toBe(7);
     });
 
-    test('returns Cohere Embed v3 vectors from the bare list shape', function () {
+    test('returns the vectors when embeddings are a bare list', function () {
         $client = $this->fakeBedrockInvoke([
             'embeddings' => [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]],
         ]);
