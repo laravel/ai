@@ -96,6 +96,56 @@ test('emits reasoning start, delta, and end events while streaming', function ()
         ->and($events[9])->toBeInstanceOf(StreamEnd::class);
 });
 
+test('emits a single reasoning block when a chunk carries both reasoning and content', function (): void {
+    // DeepSeek emits a transition chunk holding the last reasoning token and the first answer token...
+    Http::fake([
+        'api.deepseek.com/*' => Http::response(
+            body: $this->ssePayload([
+                $this->chatChunk(['role' => 'assistant', 'reasoning_content' => 'Hmm, let']),
+                $this->chatChunk(['reasoning_content' => ' me think.', 'content' => 'Hello']),
+                $this->chatChunkFinish('stop', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
+                '[DONE]',
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents();
+
+    expect($events[1])->toBeInstanceOf(ReasoningStart::class)
+        ->and($events[2])->toBeInstanceOf(ReasoningDelta::class)->delta->toBe('Hmm, let')
+        ->and($events[3])->toBeInstanceOf(ReasoningDelta::class)->delta->toBe(' me think.')
+        ->and($events[4])->toBeInstanceOf(ReasoningEnd::class)
+        ->and($events[5])->toBeInstanceOf(TextStart::class)
+        ->and($events[6])->toBeInstanceOf(TextDelta::class)->delta->toBe('Hello');
+
+    expect(array_filter($events, fn ($e): bool => $e instanceof ReasoningStart))->toHaveCount(1);
+    expect(array_filter($events, fn ($e): bool => $e instanceof ReasoningEnd))->toHaveCount(1);
+});
+
+test('does not close the reasoning block on an empty tool calls array', function (): void {
+    Http::fake([
+        'api.deepseek.com/*' => Http::response(
+            body: $this->ssePayload([
+                $this->chatChunk(['role' => 'assistant', 'reasoning_content' => 'Hmm, let']),
+                $this->chatChunk(['tool_calls' => []]),
+                $this->chatChunk(['reasoning_content' => ' me think.']),
+                $this->chatChunkFinish('stop', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
+                '[DONE]',
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents();
+
+    expect(array_filter($events, fn ($e): bool => $e instanceof ReasoningStart))->toHaveCount(1)
+        ->and(array_filter($events, fn ($e): bool => $e instanceof ReasoningEnd))->toHaveCount(1)
+        ->and(array_filter($events, fn ($e): bool => $e instanceof ReasoningDelta))->toHaveCount(2);
+});
+
 test('preserves reasoning content across streaming tool-call loops', function (): void {
     Http::fake([
         'api.deepseek.com/*' => Http::sequence([

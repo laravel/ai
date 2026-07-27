@@ -4,15 +4,13 @@ namespace Laravel\Ai\Gateway\DeepSeek\Concerns;
 
 use Generator;
 use Illuminate\Support\Str;
+use Laravel\Ai\Gateway\OpenAiCompatible\ChatCompletionReasoning;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\Error;
-use Laravel\Ai\Streaming\Events\ReasoningDelta;
-use Laravel\Ai\Streaming\Events\ReasoningEnd;
-use Laravel\Ai\Streaming\Events\ReasoningStart;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
@@ -34,9 +32,7 @@ trait HandlesTextStreaming
         $streamBody,
     ): Generator {
         $messageId = $this->generateEventId();
-        $reasoningId = '';
-        $inReasoning = false;
-        $currentReasoning = '';
+        $reasoning = new ChatCompletionReasoning;
         $streamStartEmitted = false;
         $textStartEmitted = false;
         $currentText = '';
@@ -82,38 +78,8 @@ trait HandlesTextStreaming
                 ))->withInvocationId($invocationId);
             }
 
-            if ($inReasoning && ((isset($delta['content']) && $delta['content'] !== '') || isset($delta['tool_calls']))) {
-                $inReasoning = false;
-
-                yield (new ReasoningEnd(
-                    $this->generateEventId(),
-                    $reasoningId,
-                    time(),
-                ))->withInvocationId($invocationId);
-
-                $reasoningId = '';
-            }
-
-            if (isset($delta['reasoning_content']) && $delta['reasoning_content'] !== '') {
-                if (! $inReasoning) {
-                    $inReasoning = true;
-                    $reasoningId = $this->generateEventId();
-
-                    yield (new ReasoningStart(
-                        $this->generateEventId(),
-                        $reasoningId,
-                        time(),
-                    ))->withInvocationId($invocationId);
-                }
-
-                $currentReasoning .= $delta['reasoning_content'];
-
-                yield (new ReasoningDelta(
-                    $this->generateEventId(),
-                    $reasoningId,
-                    $delta['reasoning_content'],
-                    time(),
-                ))->withInvocationId($invocationId);
+            foreach ($reasoning->process($delta) as $event) {
+                yield $event->withInvocationId($invocationId);
             }
 
             if (isset($delta['content']) && $delta['content'] !== '') {
@@ -164,12 +130,8 @@ trait HandlesTextStreaming
             }
         }
 
-        if ($inReasoning) {
-            yield (new ReasoningEnd(
-                $this->generateEventId(),
-                $reasoningId,
-                time(),
-            ))->withInvocationId($invocationId);
+        foreach ($reasoning->close() as $event) {
+            yield $event->withInvocationId($invocationId);
         }
 
         if ($textStartEmitted) {
@@ -194,19 +156,13 @@ trait HandlesTextStreaming
             }
         }
 
-        $providerContentBlocks = [];
-
-        if (filled($currentReasoning)) {
-            $providerContentBlocks['reasoning_content'] = $currentReasoning;
-        }
-
         return new StepResponse(
             text: $currentText,
             toolCalls: $toolCalls,
             finishReason: $this->extractFinishReason(['finish_reason' => $finishReason ?? '']),
             usage: $usage ?? new Usage(0, 0),
             meta: new Meta($provider->name(), $responseModel),
-            providerContentBlocks: $providerContentBlocks,
+            providerContentBlocks: $reasoning->providerContentBlocks(),
         );
     }
 

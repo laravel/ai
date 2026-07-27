@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway\DeepSeek\Concerns;
 
+use Laravel\Ai\Gateway\OpenAiCompatible\ChatCompletionReasoning;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\MessageRole;
@@ -83,7 +84,10 @@ trait MapsMessages
                 fn (ToolCall $toolCall) => $this->serializeToolCallToChat($toolCall)
             )->all();
 
-            $msg['reasoning_content'] = $message->providerContentBlocks['reasoning_content'] ?? '';
+            // DeepSeek expects the key on every tool-call message, even when there was no reasoning...
+            $msg[ChatCompletionReasoning::CONTENT_BLOCK_KEY] = ChatCompletionReasoning::replayableFrom(
+                $message->providerContentBlocks
+            ) ?? '';
         }
 
         $chatMessages[] = $msg;
