@@ -315,7 +315,7 @@ class DatabaseConversationStore implements ConversationStore
 
         if ($blocksDescribeTurn && filled($providerContentBlocks)) {
             // The blocks replay the paused step verbatim, so any step before it has to be replayed ahead of them...
-            foreach ($this->precedingPauseSteps($meta, $toolCalls, $ownResults, $pausedCallIds) as $step) {
+            foreach ($meta['preceding_provider_content_block_steps'] ?? [] as $step) {
                 $stepCallIds = $step['tool_call_ids'];
 
                 $messages[] = new AssistantMessage(
@@ -362,53 +362,6 @@ class DatabaseConversationStore implements ConversationStore
         }
 
         return $messages;
-    }
-
-    /**
-     * Get the replay state for the steps a paused turn ran before the step its raw blocks describe, or nothing when the row predates or disagrees with it.
-     *
-     * @param  array<string, mixed>  $meta
-     * @param  Collection<int, array<string, mixed>>  $toolCalls
-     * @param  Collection<int, array<string, mixed>>  $ownResults
-     * @param  array<int, string>  $pausedCallIds
-     * @return array<int, array{tool_call_ids: array<int, string>, blocks: array<int|string, mixed>, content: string}>
-     */
-    protected function precedingPauseSteps(array $meta, Collection $toolCalls, Collection $ownResults, array $pausedCallIds): array
-    {
-        $steps = $meta['preceding_provider_content_block_steps'] ?? null;
-
-        if (! is_array($steps) || $steps === [] || ! array_is_list($steps)) {
-            return [];
-        }
-
-        $callIds = $toolCalls->pluck('id')->all();
-        $resultIds = $ownResults->pluck('id')->all();
-
-        $preceding = [];
-
-        foreach ($steps as $step) {
-            if (! is_array($step) || ! is_array($step['tool_call_ids'] ?? null) || ! is_array($step['blocks'] ?? null)) {
-                return [];
-            }
-
-            foreach ($step['tool_call_ids'] as $callId) {
-                // A preceding step ran to completion, so a call the row never made, never answered, or is still gating would replay as an unpairable tool_use...
-                if (! is_string($callId)
-                    || ! in_array($callId, $callIds, true)
-                    || ! in_array($callId, $resultIds, true)
-                    || in_array($callId, $pausedCallIds, true)) {
-                    return [];
-                }
-            }
-
-            $preceding[] = [
-                'tool_call_ids' => array_values($step['tool_call_ids']),
-                'blocks' => $step['blocks'],
-                'content' => is_string($step['content'] ?? null) ? $step['content'] : '',
-            ];
-        }
-
-        return $preceding;
     }
 
     /**

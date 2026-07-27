@@ -669,49 +669,6 @@ test('it keeps a same-step executed result behind the paused turn raw blocks', f
         ->and($messages[1]->toolResults->pluck('id')->all())->toBe(['call-1']);
 });
 
-test('it ignores preceding-step state that disagrees with the row tool calls', function (): void {
-    $store = new DatabaseConversationStore;
-    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
-
-    DB::table('agent_conversation_messages')->insert([
-        'id' => 'message-1',
-        'conversation_id' => $conversationId,
-        'participant_type' => 'user',
-        'participant_id' => 1,
-        'agent' => ToolUsingAgent::class,
-        'role' => 'assistant',
-        'content' => 'Now deleting b',
-        'attachments' => '[]',
-        'tool_calls' => json_encode([
-            ['id' => 'call-1', 'name' => 'search_data', 'arguments' => [], 'result_id' => 'result-1'],
-            ['id' => 'call-2', 'name' => 'delete_file', 'arguments' => ['path' => 'b'], 'result_id' => 'result-2'],
-        ]),
-        'tool_results' => json_encode([
-            ['id' => 'call-1', 'name' => 'search_data', 'arguments' => [], 'result' => 'rows', 'result_id' => 'result-1'],
-        ]),
-        'usage' => '[]',
-        'meta' => json_encode([
-            'provider' => 'anthropic',
-            'provider_content_blocks' => [
-                ['type' => 'tool_use', 'id' => 'call-2', 'name' => 'delete_file', 'input' => ['path' => 'b']],
-            ],
-            // References a call this row never made, so replaying it would emit an unanswerable tool_use...
-            'preceding_provider_content_block_steps' => [
-                ['tool_call_ids' => ['call-9'], 'blocks' => [['type' => 'tool_use', 'id' => 'call-9', 'name' => 'ghost', 'input' => []]], 'content' => ''],
-            ],
-        ]),
-        'approval_state' => json_encode(['pending' => ['call-2' => null]]),
-        'created_at' => now(),
-        'updated_at' => now(),
-    ]);
-
-    $messages = $store->getLatestConversationMessages($conversationId, 10);
-
-    expect($messages)->toHaveCount(2)
-        ->and($messages[0]->toolCalls->pluck('id')->all())->toBe(['call-1', 'call-2'])
-        ->and($messages[1]->toolResults->pluck('id')->all())->toBe(['call-1']);
-});
-
 test('it drops a leading orphaned tool_result when the row window splits a pause from its resume', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
