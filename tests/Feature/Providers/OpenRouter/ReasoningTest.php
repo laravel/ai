@@ -10,6 +10,8 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
+use Tests\Fixtures\Agents\HistoricalForeignBlocksToolCallAgent;
+use Tests\Fixtures\Agents\HistoricalReasoningWithoutToolCallsAgent;
 use Tests\Fixtures\Agents\RememberingApprovableAgent;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
@@ -209,6 +211,169 @@ test('captures reasoning from a non-streamed response on the paused turn state',
     expect($response->hasPendingApprovals())->toBeTrue()
         ->and($response->pausedProviderContentBlocks())
         ->toBe(['reasoning_content' => 'I should call the generator.']);
+});
+
+test('emits reasoning events from the reasoning_details field', function (): void {
+    // Structured reasoning models only expose the thinking text through `reasoning_details`...
+    Http::fake([
+        '*' => Http::response($this->ssePayload([
+            $this->chatChunk(['role' => 'assistant', 'reasoning_details' => [[
+                'type' => 'reasoning.text',
+                'text' => 'Step by step, then.',
+                'signature' => null,
+                'id' => 'reasoning-text-1',
+                'format' => 'anthropic-claude-v1',
+                'index' => 0,
+            ]]]),
+            $this->chatChunk(['content' => 'Answer']),
+            $this->chatChunkFinish('stop', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
+        ])),
+    ]);
+
+    $events = $this->collectStreamEvents();
+
+    $reasoningDeltas = array_values(array_filter($events, fn ($e): bool => $e instanceof ReasoningDelta));
+
+    expect($reasoningDeltas)->toHaveCount(1)
+        ->and($reasoningDeltas[0]->delta)->toBe('Step by step, then.');
+});
+
+test('ignores encrypted reasoning details that carry no readable text', function (): void {
+    Http::fake([
+        '*' => Http::response($this->ssePayload([
+            $this->chatChunk(['role' => 'assistant', 'reasoning_details' => [[
+                'type' => 'reasoning.encrypted',
+                'data' => 'gAAAAAB...',
+                'id' => 'reasoning-encrypted-1',
+                'format' => 'anthropic-claude-v1',
+            ]]]),
+            $this->chatChunk(['content' => 'Answer']),
+            $this->chatChunkFinish('stop', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
+        ])),
+    ]);
+
+    $types = array_map(fn ($e): string => $e::class, $this->collectStreamEvents());
+
+    expect($types)->not->toContain(ReasoningStart::class)
+        ->not->toContain(ReasoningDelta::class)
+        ->not->toContain(ReasoningEnd::class);
+});
+
+test('counts reasoning once when a chunk carries both plain text and reasoning details', function (): void {
+    // OpenRouter mirrors the same thinking text into both fields, so only one may be read...
+    Http::fake([
+        '*' => Http::response($this->ssePayload([
+            $this->chatChunk([
+                'role' => 'assistant',
+                'reasoning' => 'Thinking it through.',
+                'reasoning_details' => [[
+                    'type' => 'reasoning.text',
+                    'text' => 'Thinking it through.',
+                    'format' => 'anthropic-claude-v1',
+                    'index' => 0,
+                ]],
+            ]),
+            $this->chatChunk(['reasoning_details' => [[
+                'type' => 'reasoning.text',
+                'text' => ' Nearly there.',
+                'format' => 'anthropic-claude-v1',
+                'index' => 0,
+            ]]]),
+            $this->chatChunk(['content' => 'Answer']),
+            $this->chatChunkFinish('stop', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
+        ])),
+    ]);
+
+    $events = $this->collectStreamEvents();
+
+    $reasoning = array_values(array_filter($events, fn ($e): bool => $e instanceof ReasoningDelta));
+
+    expect($reasoning)->toHaveCount(1)
+        ->and($reasoning[0]->delta)->toBe('Thinking it through.');
+});
+
+test('ignores another provider reasoning block shape when replaying', function (): void {
+    // Anthropic and Gemini store a list of raw blocks rather than a keyed reasoning string...
+    Http::fake(['*' => fakeOpenRouterResponse('Sure.')]);
+
+    (new HistoricalForeignBlocksToolCallAgent)->prompt('And again?', provider: 'openrouter');
+
+    $assistantMessage = $this->findMessage($this->requestMessages(0), role: 'assistant', has: 'tool_calls');
+
+    expect($assistantMessage)->not->toBeNull()
+        ->and($assistantMessage)->not->toHaveKey('reasoning_content');
+});
+
+test('replays reasoning alongside tool calls on the follow up request', function (): void {
+    Http::fake([
+        '*' => Http::sequence([
+            Http::response([
+                'id' => 'chatcmpl-123',
+                'object' => 'chat.completion',
+                'model' => 'anthropic/claude-sonnet-4.6',
+                'choices' => [[
+                    'index' => 0,
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => null,
+                        'reasoning' => 'I need the generator for this.',
+                        'tool_calls' => [[
+                            'id' => 'call_1',
+                            'type' => 'function',
+                            'function' => ['name' => 'FixedNumberGenerator', 'arguments' => '{}'],
+                        ]],
+                    ],
+                    'finish_reason' => 'tool_calls',
+                ]],
+                'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
+            ]),
+            fakeOpenRouterResponse('The number is 72019'),
+        ]),
+    ]);
+
+    agent(tools: [new FixedNumberGenerator])->prompt('Give me a number', provider: 'openrouter');
+
+    $assistantMessage = $this->findMessage($this->requestMessages(1), role: 'assistant', has: 'tool_calls');
+
+    expect($assistantMessage['reasoning_content'])->toBe('I need the generator for this.')
+        ->and($assistantMessage['tool_calls'][0]['function']['name'])->toBe('FixedNumberGenerator');
+});
+
+test('replays streamed reasoning alongside tool calls on the follow up request', function (): void {
+    Http::fake([
+        '*' => Http::sequence([
+            Http::response($this->ssePayload([
+                $this->chatChunk(['role' => 'assistant', 'reasoning' => 'I need the generator for this.']),
+                $this->chatChunkToolCallStart(0, 'call_1', 'FixedNumberGenerator'),
+                $this->chatChunkToolCallDelta(0, '{}'),
+                $this->chatChunkFinish('tool_calls', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
+            ])),
+            Http::response($this->ssePayload([
+                $this->chatChunk(['role' => 'assistant', 'content' => 'The number is 72019']),
+                $this->chatChunkFinish('stop', ['prompt_tokens' => 20, 'completion_tokens' => 5]),
+            ])),
+        ]),
+    ]);
+
+    foreach (agent(tools: [new FixedNumberGenerator])->stream('Give me a number', provider: 'openrouter') as $event) {
+        //
+    }
+
+    $assistantMessage = $this->findMessage($this->requestMessages(1), role: 'assistant', has: 'tool_calls');
+
+    expect($assistantMessage['reasoning_content'])->toBe('I need the generator for this.');
+});
+
+test('omits reasoning from historical assistant messages without tool calls', function (): void {
+    // Reasoning is only replayed to justify pending tool calls, never to pad finished turns...
+    Http::fake(['*' => fakeOpenRouterResponse('The answer is 6.')]);
+
+    (new HistoricalReasoningWithoutToolCallsAgent)->prompt('What is 3+3?', provider: 'openrouter');
+
+    $assistantMessage = $this->findMessage($this->requestMessages(0), role: 'assistant');
+
+    expect($assistantMessage['content'])->toBe('The answer is 8.')
+        ->and($assistantMessage)->not->toHaveKey('reasoning_content');
 });
 
 test('does not emit reasoning events when the stream has no reasoning', function (): void {

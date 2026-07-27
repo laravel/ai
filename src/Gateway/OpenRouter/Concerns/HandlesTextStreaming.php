@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\OpenRouter\Concerns;
 
 use Generator;
 use Illuminate\Support\Str;
+use Laravel\Ai\Gateway\OpenAiCompatible\ChatCompletionReasoning;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
@@ -12,9 +13,6 @@ use Laravel\Ai\Responses\Data\UrlCitation;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
-use Laravel\Ai\Streaming\Events\ReasoningDelta;
-use Laravel\Ai\Streaming\Events\ReasoningEnd;
-use Laravel\Ai\Streaming\Events\ReasoningStart;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
@@ -35,9 +33,7 @@ trait HandlesTextStreaming
         $streamModel = $model;
         $streamStartEmitted = false;
         $textStartEmitted = false;
-        $reasoningId = '';
-        $inReasoning = false;
-        $currentReasoning = '';
+        $reasoning = new ChatCompletionReasoning;
         $currentText = '';
         $toolCalls = [];
         $pendingToolCalls = [];
@@ -96,42 +92,8 @@ trait HandlesTextStreaming
                 ))->withInvocationId($invocationId);
             }
 
-            // Reasoning streams under `reasoning` (OpenRouter) or `reasoning_content` (LiteLLM, vLLM)...
-            $reasoningDelta = $delta['reasoning'] ?? $delta['reasoning_content'] ?? null;
-
-            if (is_string($reasoningDelta) && $reasoningDelta !== '') {
-                if (! $inReasoning) {
-                    $inReasoning = true;
-                    $reasoningId = $this->generateEventId();
-
-                    yield (new ReasoningStart(
-                        $this->generateEventId(),
-                        $reasoningId,
-                        time(),
-                    ))->withInvocationId($invocationId);
-                }
-
-                $currentReasoning .= $reasoningDelta;
-
-                yield (new ReasoningDelta(
-                    $this->generateEventId(),
-                    $reasoningId,
-                    $reasoningDelta,
-                    time(),
-                ))->withInvocationId($invocationId);
-            }
-
-            // Close the reasoning block as soon as answer text or tool calls arrive...
-            if ($inReasoning && ((isset($delta['content']) && $delta['content'] !== '') || filled($delta['tool_calls'] ?? null))) {
-                $inReasoning = false;
-
-                yield (new ReasoningEnd(
-                    $this->generateEventId(),
-                    $reasoningId,
-                    time(),
-                ))->withInvocationId($invocationId);
-
-                $reasoningId = '';
+            foreach ($reasoning->process($delta) as $event) {
+                yield $event->withInvocationId($invocationId);
             }
 
             if (isset($delta['content']) && $delta['content'] !== '') {
@@ -202,13 +164,8 @@ trait HandlesTextStreaming
             }
         }
 
-        // End reasoning if still open...
-        if ($inReasoning) {
-            yield (new ReasoningEnd(
-                $this->generateEventId(),
-                $reasoningId,
-                time(),
-            ))->withInvocationId($invocationId);
+        foreach ($reasoning->close() as $event) {
+            yield $event->withInvocationId($invocationId);
         }
 
         if ($textStartEmitted) {
@@ -238,19 +195,13 @@ trait HandlesTextStreaming
             }
         }
 
-        $providerContentBlocks = [];
-
-        if (filled($currentReasoning)) {
-            $providerContentBlocks['reasoning_content'] = $currentReasoning;
-        }
-
         return new StepResponse(
             text: $currentText,
             toolCalls: $toolCalls,
             finishReason: $this->extractFinishReason(['finish_reason' => $finishReason ?? '']),
             usage: $usage ?? new Usage(0, 0),
             meta: new Meta($provider->name(), $streamModel),
-            providerContentBlocks: $providerContentBlocks,
+            providerContentBlocks: $reasoning->providerContentBlocks(),
         );
     }
 

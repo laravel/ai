@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\OpenRouter\Concerns;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
+use Laravel\Ai\Gateway\OpenAiCompatible\ChatCompletionReasoning;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
@@ -55,15 +56,6 @@ trait ParsesTextResponses
             $toolCall['id'] ?? null,
         ), $message['tool_calls'] ?? []);
 
-        // Reasoning arrives under `reasoning` (OpenRouter) or `reasoning_content` (LiteLLM, vLLM)...
-        $reasoning = $message['reasoning'] ?? $message['reasoning_content'] ?? null;
-
-        $providerContentBlocks = [];
-
-        if (is_string($reasoning) && filled($reasoning)) {
-            $providerContentBlocks['reasoning_content'] = $reasoning;
-        }
-
         return new StepResponse(
             text: $text,
             toolCalls: $toolCalls,
@@ -71,7 +63,9 @@ trait ParsesTextResponses
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model, $citations),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
-            providerContentBlocks: $providerContentBlocks,
+            providerContentBlocks: ChatCompletionReasoning::providerContentBlocksFor(
+                ChatCompletionReasoning::textFrom($message)
+            ),
         );
     }
 

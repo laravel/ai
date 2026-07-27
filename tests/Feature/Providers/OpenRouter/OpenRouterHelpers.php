@@ -2,10 +2,25 @@
 
 namespace Tests\Feature\Providers\OpenRouter;
 
+use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\AssistantAgent;
 
 trait OpenRouterHelpers
 {
+    protected function requestMessages(int $requestIndex = 0): array
+    {
+        $recorded = Http::recorded();
+
+        return json_decode($recorded[$requestIndex][0]->body(), true)['messages'] ?? [];
+    }
+
+    protected function findMessage(array $messages, string $role, ?string $has = null): ?array
+    {
+        return collect($messages)->first(
+            fn (array $m): bool => $m['role'] === $role && ($has === null || isset($m[$has]))
+        );
+    }
+
     protected function collectStreamEvents(?object $agent = null): array
     {
         $agent ??= new AssistantAgent;

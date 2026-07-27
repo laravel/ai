@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway\OpenAiCompatible\Concerns;
 
+use Laravel\Ai\Gateway\OpenAiCompatible\ChatCompletionReasoning;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\MessageRole;
@@ -76,6 +77,13 @@ trait MapsChatCompletionMessages
             $msg['tool_calls'] = $message->toolCalls->map(
                 fn (ToolCall $toolCall) => $this->serializeToolCallToChat($toolCall)
             )->all();
+
+            // Thinking models need the reasoning that produced the tool calls replayed alongside them...
+            $reasoning = ChatCompletionReasoning::replayableFrom($message->providerContentBlocks);
+
+            if ($reasoning !== null) {
+                $msg[ChatCompletionReasoning::CONTENT_BLOCK_KEY] = $reasoning;
+            }
         }
 
         $chatMessages[] = $msg;
