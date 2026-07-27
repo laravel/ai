@@ -297,8 +297,11 @@ class DatabaseConversationStore implements ConversationStore
 
         $pausedCallIds = $this->pausedCallIds($record);
 
-        $isPause = $pendingCalls->isNotEmpty()
-            && $pendingCalls->every(fn (array $toolCall) => in_array($toolCall['id'], $pausedCallIds, true));
+        // The blocks keep describing the turn once its pause resolves, so replay them for any call still gating or answered on a later row...
+        $blocksDescribeTurn = $pendingCalls->every(
+            fn (array $toolCall) => in_array($toolCall['id'], $pausedCallIds, true)
+                || in_array($toolCall['id'], $resolvedCallIds, true)
+        );
 
         $messages = [];
 
@@ -310,7 +313,7 @@ class DatabaseConversationStore implements ConversationStore
 
         $providerContentBlocks = $meta['provider_content_blocks'] ?? [];
 
-        if ($isPause && filled($providerContentBlocks)) {
+        if ($blocksDescribeTurn && filled($providerContentBlocks)) {
             // The blocks replay the paused step verbatim, so any step before it has to be replayed ahead of them...
             foreach ($this->precedingPauseSteps($meta, $toolCalls, $ownResults, $pausedCallIds) as $step) {
                 $stepCallIds = $step['tool_call_ids'];

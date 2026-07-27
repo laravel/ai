@@ -855,3 +855,42 @@ test('an abandoned multi-step pause settles when the conversation continues', fu
 
     assertToolCallsArePaired(collect(Http::recorded())->last()[0]->data()['messages'], 'abandoned pause');
 });
+
+test('a resolved pause keeps replaying its steps once the approval has landed', function () {
+    Config::set('ai.conversations.generate_title', false);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            anthropicToolStep('m1', 'FixedNumberGenerator', 'toolu_1', 'sig-1'),
+            anthropicToolStep('m2', 'ApprovableNumberGenerator', 'toolu_2', 'sig-2'),
+            anthropicFinalStep('m3'),
+            anthropicFinalStep('m4'),
+        ]),
+    ]);
+
+    $user = (object) ['id' => 1];
+
+    $paused = (new RememberingMultiStepApprovableAgent)->forUser($user)->prompt('Go', provider: 'anthropic');
+
+    (new RememberingMultiStepApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->prompt(Decisions::from(['toolu_2' => true]), provider: 'anthropic');
+
+    // A fresh turn: the resolved row still describes itself step by step rather than collapsing into one parallel call...
+    (new RememberingMultiStepApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->prompt('And now something else', provider: 'anthropic');
+
+    $messages = collect(Http::recorded())->last()[0]->data()['messages'];
+
+    assertToolCallsArePaired($messages, 'resolved turn replay');
+
+    $assistantTurns = collect($messages)->where('role', 'assistant')->values();
+
+    expect($assistantTurns)->toHaveCount(3)
+        ->and($assistantTurns[0]['content'][0]['signature'])->toBe('sig-1')
+        ->and(collect($assistantTurns[0]['content'])->where('type', 'tool_use')->pluck('id')->all())->toBe(['toolu_1'])
+        ->and($assistantTurns[1]['content'][0]['signature'])->toBe('sig-2')
+        ->and(collect($assistantTurns[1]['content'])->where('type', 'tool_use')->pluck('id')->all())->toBe(['toolu_2'])
+        ->and($assistantTurns[2]['content'][0]['text'])->toBe('Done.');
+});
