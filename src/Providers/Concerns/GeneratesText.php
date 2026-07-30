@@ -172,7 +172,7 @@ trait GeneratesText
 
         return array_map(
             fn ($tool) => $this->resolveTool($tool),
-            [...$agent->tools()],
+            [...$agent->tools($this->lab())],
         );
     }
 

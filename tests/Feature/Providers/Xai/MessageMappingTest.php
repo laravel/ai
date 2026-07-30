@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\RemoteDocument;
@@ -193,7 +194,7 @@ test('reasoning blocks are interleaved with associated tool calls on assistant r
             ])),
             new UserMessage('thanks'),
         ],
-        tools: [(new ToolUsingAgent(fixed: true))->tools()[0]],
+        tools: [(new ToolUsingAgent(fixed: true))->tools(Lab::xAI)[0]],
     )->prompt('', provider: 'xai');
 
     Http::assertSent(function (Request $request): bool {

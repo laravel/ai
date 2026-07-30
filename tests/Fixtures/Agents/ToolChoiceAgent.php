@@ -4,6 +4,7 @@ namespace Tests\Fixtures\Agents;
 
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\ToolChoice;
 use Tests\Fixtures\Tools\NamedTool;
@@ -27,7 +28,7 @@ class ToolChoiceAgent implements Agent, HasTools
         return $this->toolChoice;
     }
 
-    public function tools(): iterable
+    public function tools(Lab|string $provider): iterable
     {
         return [
             new RandomNumberGenerator,

@@ -202,7 +202,7 @@ test('empty tool arguments serialize as object string on assistant replay', func
             ])),
             new UserMessage('thanks'),
         ],
-        tools: [(new ToolUsingAgent(fixed: true))->tools()[0]],
+        tools: [(new ToolUsingAgent(fixed: true))->tools(Lab::OpenAI)[0]],
     )->prompt('', provider: 'openai');
 
     Http::assertSent(function (Request $request): bool {
@@ -242,7 +242,7 @@ test('non-empty tool arguments preserve shape on assistant replay', function ():
             ])),
             new UserMessage('thanks'),
         ],
-        tools: [(new ToolUsingAgent(fixed: true))->tools()[0]],
+        tools: [(new ToolUsingAgent(fixed: true))->tools(Lab::OpenAI)[0]],
     )->prompt('', provider: 'openai');
 
     Http::assertSent(function (Request $request): bool {
@@ -298,7 +298,7 @@ test('reasoning blocks are interleaved with associated tool calls on assistant r
             ])),
             new UserMessage('thanks'),
         ],
-        tools: [(new ToolUsingAgent(fixed: true))->tools()[0]],
+        tools: [(new ToolUsingAgent(fixed: true))->tools(Lab::OpenAI)[0]],
     )->prompt('', provider: 'openai');
 
     Http::assertSent(function (Request $request): bool {

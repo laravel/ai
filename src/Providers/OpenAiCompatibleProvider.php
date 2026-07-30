@@ -10,6 +10,7 @@ use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\OpenAiCompatible\OpenAiCompatibleGateway;
 
 class OpenAiCompatibleProvider extends Provider implements EmbeddingProvider, TextProvider, TranscriptionProvider
@@ -34,6 +35,15 @@ class OpenAiCompatibleProvider extends Provider implements EmbeddingProvider, Te
     public function providerCredentials(): array
     {
         return ['key' => $this->config['key'] ?? null];
+    }
+
+    /**
+     * Get the lab that provider-specific configuration should be resolved by.
+     */
+    #[\Override]
+    public function lab(): Lab|string
+    {
+        return $this->name();
     }
 
     /**

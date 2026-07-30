@@ -46,7 +46,7 @@ test('models can replay conversation history with tool calls', function (string 
             return $this->messages;
         }
 
-        public function tools(): iterable
+        public function tools(Lab|string $provider): iterable
         {
             return $this->tools;
         }

@@ -20,7 +20,7 @@ class ThinkingToolChoiceAgent implements Agent, HasProviderOptions, HasTools
         return 'You are a helpful assistant.';
     }
 
-    public function tools(): iterable
+    public function tools(Lab|string $provider): iterable
     {
         return [
             new RandomNumberGenerator,

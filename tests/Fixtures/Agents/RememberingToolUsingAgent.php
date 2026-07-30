@@ -6,6 +6,7 @@ use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
@@ -25,7 +26,7 @@ class RememberingToolUsingAgent implements Agent, Conversational, HasTools
     /**
      * Get the tools available to the agent.
      */
-    public function tools(): iterable
+    public function tools(Lab|string $provider): iterable
     {
         return [new FixedNumberGenerator];
     }

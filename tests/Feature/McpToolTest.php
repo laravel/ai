@@ -2,6 +2,7 @@
 
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Tools\McpTool;
@@ -36,7 +37,7 @@ test('agents can return mcp client tools directly', function (): void {
             return 'Use available tools.';
         }
 
-        public function tools(): iterable
+        public function tools(Lab|string $provider): iterable
         {
             return [$this->tool];
         }
@@ -90,7 +91,7 @@ test('it runs mcp client tools whose schema uses unrepresentable json schema', f
             return 'Use available tools.';
         }
 
-        public function tools(): iterable
+        public function tools(Lab|string $provider): iterable
         {
             return [$this->tool];
         }

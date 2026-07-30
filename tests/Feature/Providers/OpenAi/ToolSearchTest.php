@@ -4,6 +4,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Providers\Tools\ToolSearch;
 use Tests\Fixtures\Agents\OpenAiToolSearchAgent;
@@ -63,7 +64,7 @@ test('an agent whose only tool is an empty ToolSearch omits the tool fields', fu
             return 'You are a helpful assistant.';
         }
 
-        public function tools(): iterable
+        public function tools(Lab|string $provider): iterable
         {
             return [new ToolSearch];
         }

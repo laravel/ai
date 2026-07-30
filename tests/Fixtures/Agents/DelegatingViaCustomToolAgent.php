@@ -4,6 +4,7 @@ namespace Tests\Fixtures\Agents;
 
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 use Tests\Fixtures\Tools\AgentCallingTool;
 
@@ -16,7 +17,7 @@ class DelegatingViaCustomToolAgent implements Agent, HasTools
         return 'You delegate research using your tool.';
     }
 
-    public function tools(): iterable
+    public function tools(Lab|string $provider): iterable
     {
         return [
             new AgentCallingTool,

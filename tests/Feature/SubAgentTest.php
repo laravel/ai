@@ -1,6 +1,7 @@
 <?php
 
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -84,7 +85,7 @@ test('agent tool falls back to a generic description that does not leak instruct
 });
 
 test('framework wraps an agent in tools automatically when resolving', function (): void {
-    $tools = (new DelegatingAgent)->tools();
+    $tools = (new DelegatingAgent)->tools(Lab::OpenAI);
 
     $resolved = array_map(
         fn ($tool) => $tool instanceof Agent ? new AgentTool($tool) : $tool,

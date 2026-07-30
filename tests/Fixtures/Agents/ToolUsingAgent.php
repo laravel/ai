@@ -6,6 +6,7 @@ use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
@@ -29,7 +30,7 @@ class ToolUsingAgent implements Agent, HasStructuredOutput, HasTools
      *
      * @return Tool[]
      */
-    public function tools(): iterable
+    public function tools(Lab|string $provider): iterable
     {
         return [
             $this->fixed

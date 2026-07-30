@@ -5,6 +5,7 @@ namespace Tests\Fixtures\Agents;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\CanActAsTool;
 use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 
 class MiddleManagerAgent implements Agent, CanActAsTool, HasTools
@@ -26,7 +27,7 @@ class MiddleManagerAgent implements Agent, CanActAsTool, HasTools
         return 'You are a middle manager that breaks down tasks and delegates to the research_agent sub-agent.';
     }
 
-    public function tools(): iterable
+    public function tools(Lab|string $provider): iterable
     {
         return [
             new ResearchAgent,

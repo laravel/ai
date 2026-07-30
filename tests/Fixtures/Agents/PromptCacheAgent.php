@@ -25,7 +25,7 @@ class PromptCacheAgent implements Agent, HasProviderOptions, HasTools
         return 'You are a helpful assistant that generates numbers.';
     }
 
-    public function tools(): iterable
+    public function tools(Lab|string $provider): iterable
     {
         return $this->withTools ? [new FixedNumberGenerator] : [];
     }

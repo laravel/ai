@@ -18,7 +18,7 @@ class ProviderOptionsWithToolsAgent implements Agent, HasProviderOptions, HasToo
         return 'You are a helpful assistant that generates numbers.';
     }
 
-    public function tools(): iterable
+    public function tools(Lab|string $provider): iterable
     {
         return [
             new FixedNumberGenerator,

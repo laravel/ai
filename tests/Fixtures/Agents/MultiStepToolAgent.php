@@ -5,6 +5,7 @@ namespace Tests\Fixtures\Agents;
 use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
@@ -18,7 +19,7 @@ class MultiStepToolAgent implements Agent, HasTools
         return 'You are a helpful assistant that generates numbers.';
     }
 
-    public function tools(): iterable
+    public function tools(Lab|string $provider): iterable
     {
         return [new FixedNumberGenerator];
     }

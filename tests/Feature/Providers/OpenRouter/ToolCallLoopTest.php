@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Exceptions\NoSuchToolException;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Responses\AgentResponse;
@@ -66,7 +67,7 @@ test('max steps limits tool call depth', function (): void {
             return 'You are a helpful assistant.';
         }
 
-        public function tools(): iterable
+        public function tools(Lab|string $provider): iterable
         {
             return [new FixedNumberGenerator];
         }

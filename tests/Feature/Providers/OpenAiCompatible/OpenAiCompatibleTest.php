@@ -4,6 +4,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasProviderOptions;
+use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Responses\AgentResponse;
@@ -12,6 +13,7 @@ use Tests\Fixtures\Agents\AttributeToolChoiceAgent;
 use Tests\Fixtures\Agents\NestedStructuredAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
 use Tests\Fixtures\Agents\ToolChoiceAgent;
+use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 use function Laravel\Ai\agent;
 
@@ -325,6 +327,51 @@ test('named instances resolve provider options by their instance name', function
 
     Http::assertSent(fn (Request $request): bool => $request->url() === 'http://localhost:8000/v1/chat/completions'
         && data_get(json_decode($request->body(), true), 'top_k') === 10);
+});
+
+test('named instances resolve tools by their instance name', function (): void {
+    config(['ai.providers.lm-studio' => [
+        'driver' => 'openai-compatible',
+        'url' => 'http://localhost:4321/v1',
+        'key' => 'lm-studio-key',
+        'models' => ['text' => ['default' => 'lm-studio-model']],
+    ]]);
+
+    config(['ai.providers.vllm' => [
+        'driver' => 'openai-compatible',
+        'url' => 'http://localhost:8000/v1',
+        'key' => 'vllm-key',
+        'models' => ['text' => ['default' => 'vllm-model']],
+    ]]);
+
+    Http::fake(['*' => fakeOpenAiCompatibleResponse('Hello')]);
+
+    $agent = new class implements Agent, HasTools
+    {
+        use Promptable;
+
+        public function instructions(): string
+        {
+            return 'You are a helpful assistant.';
+        }
+
+        public function tools(Lab|string $provider): iterable
+        {
+            return match ($provider) {
+                'lm-studio' => [new FixedNumberGenerator],
+                default => [],
+            };
+        }
+    };
+
+    $agent->prompt('Hello', provider: 'lm-studio');
+    $agent->prompt('Hello', provider: 'vllm');
+
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'http://localhost:4321/v1/chat/completions'
+        && collect(data_get(json_decode($request->body(), true), 'tools'))->pluck('function.name')->all() === ['FixedNumberGenerator']);
+
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'http://localhost:8000/v1/chat/completions'
+        && data_get(json_decode($request->body(), true), 'tools') === null);
 });
 
 function configureOpenAiCompatible(): void

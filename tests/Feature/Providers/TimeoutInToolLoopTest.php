@@ -8,6 +8,7 @@ use Laravel\Ai\AiManager;
 use Laravel\Ai\Attributes\Timeout;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Anthropic\AnthropicGateway;
 use Laravel\Ai\Gateway\Gemini\GeminiGateway;
 use Laravel\Ai\Gateway\Groq\GroqGateway;
@@ -30,7 +31,7 @@ class TimeoutToolAgent implements Agent, HasTools
         return 'You are a helpful assistant.';
     }
 
-    public function tools(): iterable
+    public function tools(Lab|string $provider): iterable
     {
         return [new FixedNumberGenerator];
     }

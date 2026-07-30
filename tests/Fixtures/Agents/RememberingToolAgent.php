@@ -22,7 +22,7 @@ class RememberingToolAgent implements Agent, HasProviderOptions, HasTools
         return 'Call the FixedNumberGenerator tool before answering. Answer with one short sentence.';
     }
 
-    public function tools(): iterable
+    public function tools(Lab|string $provider): iterable
     {
         return [new FixedNumberGenerator];
     }

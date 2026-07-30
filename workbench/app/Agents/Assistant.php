@@ -6,6 +6,7 @@ use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 use Workbench\App\Tools\ConvertTemperature;
 use Workbench\App\Tools\CurrentLocation;
@@ -19,7 +20,7 @@ class Assistant implements Agent, Conversational, HasTools
     /**
      * Get the tools available to the agent.
      */
-    public function tools(): array
+    public function tools(Lab|string $provider): array
     {
         return [
             new CurrentLocation,

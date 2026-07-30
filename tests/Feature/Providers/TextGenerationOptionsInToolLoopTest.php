@@ -9,6 +9,7 @@ use Laravel\Ai\Attributes\MaxTokens;
 use Laravel\Ai\Attributes\Temperature;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Groq\GroqGateway;
 use Laravel\Ai\Gateway\OpenAi\OpenAiGateway;
 use Laravel\Ai\Promptable;
@@ -27,7 +28,7 @@ class TextGenOptionsToolAgent implements Agent, HasTools
         return 'You are a helpful assistant.';
     }
 
-    public function tools(): iterable
+    public function tools(Lab|string $provider): iterable
     {
         return [new FixedNumberGenerator];
     }

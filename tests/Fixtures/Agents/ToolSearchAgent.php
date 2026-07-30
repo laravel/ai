@@ -4,6 +4,7 @@ namespace Tests\Fixtures\Agents;
 
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Providers\Tools\ToolSearch;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
@@ -21,7 +22,7 @@ class ToolSearchAgent implements Agent, HasTools
             .'When asked for the secret authorization code, find and call the tool that returns it.';
     }
 
-    public function tools(): iterable
+    public function tools(Lab|string $provider): iterable
     {
         return [
             new FixedNumberGenerator,

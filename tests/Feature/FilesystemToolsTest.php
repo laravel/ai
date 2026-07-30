@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Tools\FileStorage;
 use Laravel\Ai\Tools\Filesystem\CopyFile;
@@ -348,7 +349,7 @@ class FileStorageAgent implements Agent, HasTools
         return 'You manage files on disk using the available tools.';
     }
 
-    public function tools(): iterable
+    public function tools(Lab|string $provider): iterable
     {
         return FileStorage::all('local');
     }

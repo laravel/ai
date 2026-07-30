@@ -5,6 +5,7 @@ namespace Laravel\Ai;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Enums\Lab;
 
 /**
  * @phpstan-consistent-constructor
@@ -25,7 +26,7 @@ class AnonymousAgent implements Agent, Conversational, HasTools
         return $this->messages;
     }
 
-    public function tools(): iterable
+    public function tools(Lab|string $provider): iterable
     {
         return $this->tools;
     }

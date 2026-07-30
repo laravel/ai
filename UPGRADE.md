@@ -1,5 +1,39 @@
 # Upgrade Guide
 
+## Upgrading To 1.0 From 0.x
+
+### Provider Aware Agent Tools
+
+**Likelihood Of Impact: High**
+
+The `HasTools` contract now receives the provider that is being invoked, allowing an agent to offer a different set of tools to each provider. Agents implementing `HasTools` should add the `$provider` argument to their `tools` method:
+
+```php
+use Laravel\Ai\Enums\Lab;
+
+/**
+ * Get the tools available to the agent for the given provider.
+ */
+public function tools(Lab|string $provider): iterable
+{
+    return [new SearchKnowledgeBase];
+}
+```
+
+The argument is the `Lab` the provider belongs to, so tools may be limited to the providers that support them. This is particularly useful when failing over between providers, since the tools are resolved again for each provider that is attempted:
+
+```php
+public function tools(Lab|string $provider): iterable
+{
+    return match ($provider) {
+        Lab::Anthropic => [new SearchKnowledgeBase, new WebFetch],
+        default => [new SearchKnowledgeBase],
+    };
+}
+```
+
+Connections using the `openai-compatible` driver receive their connection name instead, matching the existing behavior of `providerOptions`.
+
 ## Upgrading To 0.11 From 0.10
 
 ### Connection Failures Throw `ProviderConnectionException`

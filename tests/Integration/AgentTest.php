@@ -269,7 +269,7 @@ test('agents can replay empty tool arguments', function (string $provider, strin
             return $this->messages;
         }
 
-        public function tools(): iterable
+        public function tools(Lab|string $provider): iterable
         {
             return $this->tools;
         }

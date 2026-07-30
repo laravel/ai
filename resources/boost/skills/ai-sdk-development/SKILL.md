@@ -312,15 +312,28 @@ Implement the `HasTools` interface and scaffold tools with `php artisan make:too
 
 ```php
 use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Enums\Lab;
 
 class MyAgent implements Agent, HasTools
 {
     use Promptable;
 
-    public function tools(): iterable
+    public function tools(Lab|string $provider): iterable
     {
         return [new MyCustomTool];
     }
+}
+```
+
+The `$provider` argument is the `Lab` currently being invoked, so tools may be limited to the providers that support them. Tools are resolved again for each provider attempted during failover:
+
+```php
+public function tools(Lab|string $provider): iterable
+{
+    return match ($provider) {
+        Lab::Anthropic => [new MyCustomTool, new WebFetch],
+        default => [new MyCustomTool],
+    };
 }
 ```
 
@@ -329,7 +342,7 @@ class MyAgent implements Agent, HasTools
 ```php
 use Laravel\Ai\Providers\Tools\{WebSearch, WebFetch, FileSearch};
 
-public function tools(): iterable
+public function tools(Lab|string $provider): iterable
 {
     return [
         (new WebSearch)->max(5)->allow(['laravel.com']),

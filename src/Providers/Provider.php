@@ -32,6 +32,14 @@ abstract class Provider implements \Stringable, ProviderContract
     }
 
     /**
+     * Get the lab that provider-specific configuration should be resolved by.
+     */
+    public function lab(): Lab|string
+    {
+        return Lab::tryFrom($this->driver()) ?? $this->driver();
+    }
+
+    /**
      * Get the credentials for the underlying AI provider.
      */
     public function providerCredentials(): array
