@@ -27,7 +27,7 @@ class GeminiFileGateway implements FileGateway
 
         $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders(array_filter([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
-        ]))->get($this->baseUrl($provider)."/{$fileId}")->throw());
+        ]))->replaceHeaders($provider->additionalConfiguration()['headers'] ?? [])->get($this->baseUrl($provider)."/{$fileId}")->throw());
 
         return new FileResponse(
             id: $response->json('name'),
@@ -50,7 +50,7 @@ class GeminiFileGateway implements FileGateway
 
         $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders(array_filter([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
-        ]))->attach(
+        ]))->replaceHeaders($provider->additionalConfiguration()['headers'] ?? [])->attach(
             'file', $content, $name, ['Content-Type' => $mime]
         )->post("{$uploadUrl}/files", array_replace_recursive([
             'file' => ['display_name' => $name],
@@ -68,7 +68,7 @@ class GeminiFileGateway implements FileGateway
 
         $this->withErrorHandling($provider->name(), fn () => Http::withHeaders(array_filter([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
-        ]))->delete($this->baseUrl($provider)."/{$fileId}")->throw());
+        ]))->replaceHeaders($provider->additionalConfiguration()['headers'] ?? [])->delete($this->baseUrl($provider)."/{$fileId}")->throw());
     }
 
     /**

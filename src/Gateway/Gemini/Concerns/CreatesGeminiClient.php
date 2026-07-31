@@ -15,6 +15,7 @@ trait CreatesGeminiClient
     {
         return Http::baseUrl($this->baseUrl($provider))
             ->withHeaders(array_filter(['x-goog-api-key' => $provider->providerCredentials()['key']]))
+            ->replaceHeaders($provider->additionalConfiguration()['headers'] ?? [])
             ->timeout($timeout ?? 60)
             ->throw();
     }

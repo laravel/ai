@@ -103,6 +103,7 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
                 'Authorization' => 'Bearer '.$provider->providerCredentials()['key'],
                 'Content-Type' => 'application/json',
             ])
+            ->replaceHeaders($provider->additionalConfiguration()['headers'] ?? [])
             ->timeout($timeout)
             ->throw();
     }

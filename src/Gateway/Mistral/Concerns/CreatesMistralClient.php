@@ -15,6 +15,7 @@ trait CreatesMistralClient
     {
         return Http::baseUrl($this->baseUrl($provider))
             ->withToken($provider->providerCredentials()['key'])
+            ->replaceHeaders($provider->additionalConfiguration()['headers'] ?? [])
             ->timeout($timeout ?? 60)
             ->throw();
     }

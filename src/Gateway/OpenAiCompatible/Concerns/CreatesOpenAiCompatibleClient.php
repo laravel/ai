@@ -22,7 +22,7 @@ trait CreatesOpenAiCompatibleClient
             $client->withToken($key);
         }
 
-        return $client;
+        return $client->replaceHeaders($provider->additionalConfiguration()['headers'] ?? []);
     }
 
     /**

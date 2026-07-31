@@ -73,12 +73,15 @@ class AnthropicFileGateway implements FileGateway
      */
     protected function client(Provider $provider, ?int $timeout = null): PendingRequest
     {
+        $config = $provider->additionalConfiguration();
+
         return Http::baseUrl($this->baseUrl($provider))
             ->withHeaders(array_filter([
                 'x-api-key' => $provider->providerCredentials()['key'],
-                'anthropic-version' => $provider->additionalConfiguration()['version'] ?? '2023-06-01',
+                'anthropic-version' => $config['version'] ?? '2023-06-01',
                 'anthropic-beta' => 'files-api-2025-04-14',
             ]))
+            ->replaceHeaders($config['headers'] ?? [])
             ->timeout($timeout ?? 60)
             ->throw();
     }

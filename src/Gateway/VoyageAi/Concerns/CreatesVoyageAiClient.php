@@ -15,6 +15,7 @@ trait CreatesVoyageAiClient
     {
         return Http::baseUrl($this->baseUrl($provider))
             ->withToken($provider->providerCredentials()['key'])
+            ->replaceHeaders($provider->additionalConfiguration()['headers'] ?? [])
             ->timeout($timeout ?? 30)
             ->throw();
     }

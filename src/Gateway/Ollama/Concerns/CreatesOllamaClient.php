@@ -20,10 +20,10 @@ trait CreatesOllamaClient
         $key = $provider->providerCredentials()['key'] ?? null;
 
         if (filled($key)) {
-            return $client->withToken($key);
+            $client->withToken($key);
         }
 
-        return $client;
+        return $client->replaceHeaders($provider->additionalConfiguration()['headers'] ?? []);
     }
 
     /**

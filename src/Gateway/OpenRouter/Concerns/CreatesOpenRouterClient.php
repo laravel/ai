@@ -21,6 +21,7 @@ trait CreatesOpenRouterClient
                 'HTTP-Referer' => $config['http_referer'] ?? null,
                 'X-OpenRouter-Title' => $config['x_title'] ?? null,
             ]))
+            ->replaceHeaders($config['headers'] ?? [])
             ->timeout($timeout ?? 60)
             ->throw();
     }

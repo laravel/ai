@@ -105,6 +105,7 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway
                 'Authorization' => 'Bearer '.$provider->providerCredentials()['key'],
                 'Content-Type' => 'application/json',
             ])
+            ->replaceHeaders($config['headers'] ?? [])
             ->timeout($timeout)
             ->throw();
     }

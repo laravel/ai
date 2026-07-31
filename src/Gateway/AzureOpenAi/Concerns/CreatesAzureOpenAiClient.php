@@ -19,6 +19,7 @@ trait CreatesAzureOpenAiClient
 
         return Http::baseUrl("{$base}/openai/v1")
             ->withHeaders(['api-key' => $provider->providerCredentials()['key']])
+            ->replaceHeaders($config['headers'] ?? [])
             ->timeout($timeout ?? 60)
             ->throw();
     }

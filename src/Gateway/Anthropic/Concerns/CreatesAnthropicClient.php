@@ -23,6 +23,7 @@ trait CreatesAnthropicClient
 
         return Http::baseUrl($this->baseUrl($provider))
             ->withHeaders($headers)
+            ->replaceHeaders($config['headers'] ?? [])
             ->timeout($timeout ?? 60)
             ->throw();
     }

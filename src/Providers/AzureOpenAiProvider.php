@@ -174,6 +174,7 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FilePro
             'url' => rtrim($this->config['url'] ?? '', '/'),
             'api_version' => $this->config['api_version'] ?? '2025-04-01-preview',
             'store' => $this->config['store'] ?? true,
+            'headers' => $this->config['headers'] ?? [],
         ];
     }
 

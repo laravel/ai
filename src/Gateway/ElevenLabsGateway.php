@@ -105,6 +105,7 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
     {
         return Http::baseUrl($this->baseUrl($provider))
             ->withHeaders(array_filter(['xi-api-key' => $provider->providerCredentials()['key']]))
+            ->replaceHeaders($provider->additionalConfiguration()['headers'] ?? [])
             ->timeout($timeout);
     }
 
