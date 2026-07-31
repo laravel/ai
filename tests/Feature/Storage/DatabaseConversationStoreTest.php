@@ -113,6 +113,77 @@ test('it persists tool calls and results from a remembered agent prompt', functi
         ->and(json_decode((string) $record->tool_results, true))->toBeList();
 });
 
+test('it preserves the gemini thought signature across a persisted tool conversation', function (): void {
+    Http::fake([
+        '*' => Http::sequence([
+            // Turn 1, round 1: functionCall with a sibling thoughtSignature.
+            Http::response([
+                'candidates' => [[
+                    'content' => [
+                        'parts' => [[
+                            'functionCall' => ['id' => 'call_123', 'name' => 'FixedNumberGenerator', 'args' => (object) []],
+                            'thoughtSignature' => 'sig_persist_777',
+                        ]],
+                        'role' => 'model',
+                    ],
+                    'finishReason' => 'STOP',
+                ]],
+                'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5, 'totalTokenCount' => 15],
+                'modelVersion' => 'gemini-3.6-flash',
+            ]),
+            // Turn 1, round 2: final text.
+            Http::response([
+                'candidates' => [[
+                    'content' => ['parts' => [['text' => 'The number is 72019']], 'role' => 'model'],
+                    'finishReason' => 'STOP',
+                ]],
+                'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5, 'totalTokenCount' => 15],
+                'modelVersion' => 'gemini-3.6-flash',
+            ]),
+            // Turn 2: final text.
+            Http::response([
+                'candidates' => [[
+                    'content' => ['parts' => [['text' => 'The second number is 99']], 'role' => 'model'],
+                    'finishReason' => 'STOP',
+                ]],
+                'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5, 'totalTokenCount' => 15],
+                'modelVersion' => 'gemini-3.6-flash',
+            ]),
+        ]),
+    ]);
+
+    $user = (object) ['id' => 1];
+    $conversationId = (new DatabaseConversationStore)->storeConversation('user', $user->id, 'Tool conversation');
+
+    // Turn 1 runs the tool loop and persists the completed turn.
+    (new RememberingToolUsingAgent)->continue($conversationId, $user)->prompt('Generate a random number', provider: 'gemini');
+
+    // The signature is persisted alongside the stored tool call...
+    $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
+    $storedCall = json_decode((string) $record->tool_calls, true)[0];
+    expect($storedCall['thought_signature'])->toBe('sig_persist_777');
+
+    // ...and Turn 2 replays it back to Gemini so the request does not 400.
+    (new RememberingToolUsingAgent)->continue($conversationId, $user)->prompt('Generate another', provider: 'gemini');
+
+    $recorded = Http::recorded();
+    $followUpContents = $recorded[count($recorded) - 1][0]->data()['contents'];
+
+    $signature = null;
+
+    foreach ($followUpContents as $content) {
+        if (($content['role'] ?? null) === 'model') {
+            foreach ($content['parts'] as $part) {
+                if (isset($part['functionCall'])) {
+                    $signature = $part['thoughtSignature'] ?? null;
+                }
+            }
+        }
+    }
+
+    expect($signature)->toBe('sig_persist_777');
+});
+
 test('it stores sparse keyed tool calls and results as JSON arrays', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');

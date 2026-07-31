@@ -120,33 +120,34 @@ trait ParsesTextResponses
     }
 
     /**
-     * Extract raw tool calls from the response parts.
+     * Extract the response parts that carry a function call, keeping the full
+     * part so sibling fields such as thoughtSignature travel with the call.
      */
     protected function extractRawToolCalls(array $parts): array
     {
         return array_values(
-            array_map(
-                fn (array $part) => $part['functionCall'],
-                array_filter($parts, fn (array $part): bool => isset($part['functionCall']))
-            )
+            array_filter($parts, fn (array $part): bool => isset($part['functionCall']))
         );
     }
 
     /**
-     * Map raw function call data to ToolCall DTOs.
+     * Map function call parts to ToolCall DTOs.
      *
      * @return array<ToolCall>
      */
     protected function mapToolCalls(array $rawToolCalls): array
     {
-        return array_map(function (array $fc): ToolCall {
-            $id = $fc['id'] ?? (string) Str::uuid7();
+        return array_map(function (array $part): ToolCall {
+            $functionCall = $part['functionCall'] ?? $part;
+
+            $id = $functionCall['id'] ?? (string) Str::uuid7();
 
             return new ToolCall(
                 $id,
-                $fc['name'] ?? '',
-                $fc['args'] ?? [],
+                $functionCall['name'] ?? '',
+                $functionCall['args'] ?? [],
                 $id,
+                thoughtSignature: $part['thoughtSignature'] ?? null,
             );
         }, $rawToolCalls);
     }
