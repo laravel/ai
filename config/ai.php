@@ -13,12 +13,12 @@ return [
     |
     */
 
-    'default' => env('AI_DEFAULT_PROVIDER', 'openai'),
-    'default_for_images' => env('AI_DEFAULT_IMAGES_PROVIDER', 'gemini'),
-    'default_for_audio' => env('AI_DEFAULT_AUDIO_PROVIDER', 'openai'),
-    'default_for_transcription' => env('AI_DEFAULT_TRANSCRIPTION_PROVIDER', 'openai'),
-    'default_for_embeddings' => env('AI_DEFAULT_EMBEDDINGS_PROVIDER', 'openai'),
-    'default_for_reranking' => env('AI_DEFAULT_RERANKING_PROVIDER', 'cohere'),
+    'default' => env('AI_PROVIDER', 'openai'),
+    'default_for_images' => env('AI_IMAGES_PROVIDER', 'gemini'),
+    'default_for_audio' => env('AI_AUDIO_PROVIDER', 'openai'),
+    'default_for_transcription' => env('AI_TRANSCRIPTION_PROVIDER', 'openai'),
+    'default_for_embeddings' => env('AI_EMBEDDINGS_PROVIDER', 'openai'),
+    'default_for_reranking' => env('AI_RERANKING_PROVIDER', 'cohere'),
 
     /*
     |--------------------------------------------------------------------------
