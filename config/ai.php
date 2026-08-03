@@ -14,7 +14,7 @@ return [
     */
 
     'default' => env('AI_DEFAULT_PROVIDER', 'openai'),
-    'default_for_images' => env('AI_DEFAULT_IMAGES_PROVIDER', 'openai'),
+    'default_for_images' => env('AI_DEFAULT_IMAGES_PROVIDER', 'gemini'),
     'default_for_audio' => env('AI_DEFAULT_AUDIO_PROVIDER', 'openai'),
     'default_for_transcription' => env('AI_DEFAULT_TRANSCRIPTION_PROVIDER', 'openai'),
     'default_for_embeddings' => env('AI_DEFAULT_EMBEDDINGS_PROVIDER', 'openai'),
