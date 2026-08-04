@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Laravel\Ai\AiManager;
 use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Events\AgentStreamed;
 use Laravel\Ai\Exceptions\RateLimitedException;
@@ -47,6 +48,7 @@ test('stream fails over to next provider when primary is rate limited', function
         ->and($response->text)->toBe('Hello');
 
     Event::assertDispatched(AgentFailedOver::class);
+    Event::assertNotDispatched(AgentFailed::class);
 
     Event::assertDispatched(AgentStreamed::class, fn (AgentStreamed $event): bool => $event->invocationId === $response->invocationId);
 });
@@ -74,6 +76,11 @@ test('stream throws last exception when all providers fail', function (): void {
         foreach ($response as $_) {
         }
     })->toThrow(RateLimitedException::class);
+
+    Event::assertDispatched(AgentFailedOver::class);
+    Event::assertDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->invocationId === $response->invocationId
+        && $event->exception instanceof RateLimitedException
+        && $event->prompt->provider()->name() === 'backup');
 });
 
 test('stream then callback is invoked after failover', function (): void {
@@ -133,6 +140,7 @@ test('stream does not fail over when primary succeeds', function (): void {
     expect($response->text)->toBe('Hello');
 
     Event::assertNotDispatched(AgentFailedOver::class);
+    Event::assertNotDispatched(AgentFailed::class);
 });
 
 test('single provider stream does not dispatch failover event when rate limited', function (): void {
@@ -158,6 +166,8 @@ test('single provider stream does not dispatch failover event when rate limited'
     })->toThrow(RateLimitedException::class);
 
     Event::assertNotDispatched(AgentFailedOver::class);
+    Event::assertDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->invocationId === $response->invocationId
+        && $event->exception instanceof RateLimitedException);
 });
 
 test('stream does not fail over when primary emits event then throws', function (): void {
@@ -206,6 +216,35 @@ test('stream does not fail over when primary emits event then throws', function 
         }
     })->toThrow(RateLimitedException::class);
 
+    Event::assertNotDispatched(AgentFailedOver::class);
+    Event::assertDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->invocationId === $response->invocationId
+        && $event->exception instanceof RateLimitedException);
+});
+
+test('single provider stream dispatches agent failed when provider throws before returning a response', function (): void {
+    Event::fake();
+
+    $manager = app(AiManager::class);
+
+    $manager->extend('immediately_failing_stream', fn ($app, $config): FakeStreamingProvider => new FakeStreamingProvider(
+        $config,
+        $app->make(Dispatcher::class),
+        function (): StreamableAgentResponse {
+            throw new InvalidArgumentException('Unable to create stream response.');
+        },
+    ));
+
+    config([
+        'ai.providers.primary' => ['driver' => 'immediately_failing_stream'],
+    ]);
+
+    expect(fn () => (new AssistantAgent)->stream(
+        'Hello',
+        provider: 'primary',
+    ))->toThrow(InvalidArgumentException::class, 'Unable to create stream response.');
+
+    Event::assertDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->exception instanceof InvalidArgumentException
+        && $event->prompt->provider()->name() === 'primary');
     Event::assertNotDispatched(AgentFailedOver::class);
 });
 
@@ -261,6 +300,8 @@ test('stream does not fail over when primary throws non failoverable exception',
     expect($backupStreamed)->toBeFalse();
 
     Event::assertNotDispatched(AgentFailedOver::class);
+    Event::assertDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->invocationId === $response->invocationId
+        && $event->exception instanceof InvalidArgumentException);
 });
 
 test('stream conversation state survives failover', function (): void {

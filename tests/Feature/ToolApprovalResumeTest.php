@@ -2,8 +2,10 @@
 
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Approvals\Decisions;
+use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Messages\ToolResultMessage;
@@ -523,12 +525,17 @@ test('a resume does not fail over to another provider and re-run the approved to
 
     $paused = (new RememberingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: ['primary', 'backup']);
 
+    Event::fake([AgentFailed::class]);
+
     expect(fn () => (new RememberingApprovableAgent)
         ->continue($paused->conversationId, $user)
         ->prompt(Decisions::from(['toolu_1' => true]), provider: ['primary', 'backup'])
     )->toThrow(RateLimitedException::class);
 
     expect(ApprovableNumberGenerator::$invocations)->toBe(1);
+
+    Event::assertDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->exception instanceof RateLimitedException
+        && $event->prompt->hasApprovalDecisions());
 });
 
 test('a successful resume records the approved result exactly once across history', function () {
