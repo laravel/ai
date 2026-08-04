@@ -284,11 +284,7 @@ class DatabaseConversationStore implements ConversationStore
             fn (array $toolResult) => ! in_array($toolResult['id'], $callIds, true)
         );
 
-        $ownResultIds = $ownResults->pluck('id')->all();
-
-        [$resolvedCalls, $pendingCalls] = $toolCalls->partition(
-            fn (array $toolCall) => in_array($toolCall['id'], $ownResultIds, true)
-        );
+        [$resolvedCalls, $ownResults, $pendingCalls] = $this->pairToolCalls($toolCalls, $ownResults);
 
         $pausedCallIds = $this->pausedCallIds($record);
 
@@ -333,6 +329,42 @@ class DatabaseConversationStore implements ConversationStore
         }
 
         return $messages;
+    }
+
+    /**
+     * Match each stored tool call to the result answering it, at most one result per call.
+     *
+     * @param  Collection<int, array<string, mixed>>  $toolCalls
+     * @param  Collection<int, array<string, mixed>>  $toolResults
+     * @return array{Collection<int, array<string, mixed>>, Collection<int, array<string, mixed>>, Collection<int, array<string, mixed>>}
+     */
+    protected function pairToolCalls(Collection $toolCalls, Collection $toolResults): array
+    {
+        $unmatchedResults = $toolResults->values();
+
+        $resolvedCalls = collect();
+        $pairedResults = collect();
+        $pendingCalls = collect();
+
+        foreach ($toolCalls as $toolCall) {
+            // Results are consumed as they are matched so a repeated id cannot answer two calls...
+            $key = isset($toolCall['id'])
+                ? $unmatchedResults->search(fn (array $toolResult) => ($toolResult['id'] ?? null) === $toolCall['id'])
+                : false;
+
+            if ($key === false) {
+                $pendingCalls->push($toolCall);
+
+                continue;
+            }
+
+            $resolvedCalls->push($toolCall);
+            $pairedResults->push($unmatchedResults->get($key));
+
+            $unmatchedResults->forget($key);
+        }
+
+        return [$resolvedCalls->values(), $pairedResults->values(), $pendingCalls->values()];
     }
 
     /**
