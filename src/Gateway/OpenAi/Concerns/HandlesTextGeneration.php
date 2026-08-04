@@ -267,11 +267,14 @@ trait HandlesTextGeneration
                 $responseId = $response['id'] ?? $responseId;
                 $responseUsage = $response['usage'] ?? [];
 
+                $cachedTokens = $responseUsage['input_tokens_details']['cached_tokens'] ?? 0;
+                $cacheWriteTokens = $responseUsage['input_tokens_details']['cache_write_tokens'] ?? 0;
+
                 $usage = new Usage(
-                    ($responseUsage['input_tokens'] ?? 0) - ($responseUsage['input_tokens_details']['cached_tokens'] ?? 0),
+                    ($responseUsage['input_tokens'] ?? 0) - $cachedTokens - $cacheWriteTokens,
                     $responseUsage['output_tokens'] ?? 0,
-                    0,
-                    $responseUsage['input_tokens_details']['cached_tokens'] ?? 0,
+                    $cacheWriteTokens,
+                    $cachedTokens,
                     $responseUsage['output_tokens_details']['reasoning_tokens'] ?? 0,
                 );
             }

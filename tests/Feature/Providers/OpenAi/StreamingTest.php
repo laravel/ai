@@ -193,3 +193,27 @@ test('streaming finish reason maps correctly', function (string $status, string 
     'unknown status maps to Unknown' => ['mystery_status', 'message', FinishReason::Unknown],
     'completed unknown type maps to Unknown' => ['completed', 'mystery_output', FinishReason::Unknown],
 ]);
+
+test('streaming captures cache write tokens from response completed', function (): void {
+    Http::fake([
+        'api.openai.com/*' => Http::response(
+            body: $this->ssePayload([
+                $this->responseCreated('gpt-5.6-luna'),
+                $this->outputTextDelta('Hello'),
+                $this->outputTextDone('Hello'),
+                $this->responseCompleted(8817, 120, cachedTokens: 0, cacheWriteTokens: 8814, model: 'gpt-5.6-luna'),
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents();
+
+    $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
+
+    expect($streamEnd->usage->cacheWriteInputTokens)->toBe(8814)
+        ->and($streamEnd->usage->cacheReadInputTokens)->toBe(0)
+        ->and($streamEnd->usage->promptTokens)->toBe(3)
+        ->and($streamEnd->usage->completionTokens)->toBe(120);
+});
