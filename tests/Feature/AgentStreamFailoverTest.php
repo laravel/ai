@@ -9,7 +9,9 @@ use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Events\AgentStreamed;
+use Laravel\Ai\Events\StreamingAgent;
 use Laravel\Ai\Exceptions\RateLimitedException;
+use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
@@ -155,7 +157,17 @@ test('single provider stream does not dispatch failover event when rate limited'
     Http::fakeSequence()
         ->push(status: 429);
 
-    $response = (new AssistantAgent)->stream(
+    $agent = (new AssistantAgent)->withMiddleware([
+        new class
+        {
+            public function handle(AgentPrompt $prompt, Closure $next)
+            {
+                return $next($prompt->append('Revised by middleware'));
+            }
+        },
+    ]);
+
+    $response = $agent->stream(
         'Hello',
         provider: 'primary',
     );
@@ -166,8 +178,12 @@ test('single provider stream does not dispatch failover event when rate limited'
     })->toThrow(RateLimitedException::class);
 
     Event::assertNotDispatched(AgentFailedOver::class);
+    $processedPrompt = 'Hello'.PHP_EOL.PHP_EOL.'Revised by middleware';
+
+    Event::assertDispatched(StreamingAgent::class, fn (StreamingAgent $event): bool => $event->prompt->prompt === $processedPrompt);
     Event::assertDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->invocationId === $response->invocationId
-        && $event->exception instanceof RateLimitedException);
+        && $event->exception instanceof RateLimitedException
+        && $event->prompt->prompt === $processedPrompt);
 });
 
 test('stream does not fail over when primary emits event then throws', function (): void {

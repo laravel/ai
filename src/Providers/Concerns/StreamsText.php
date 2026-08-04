@@ -38,7 +38,7 @@ trait StreamsText
             ->send($prompt)
             ->through($this->gatherMiddlewareFor($prompt->agent))
             ->then(function (AgentPrompt $prompt) use ($invocationId, &$processedPrompt, &$resolvedApprovalResults): StreamableAgentResponse {
-                $processedPrompt = $prompt;
+                $processedPrompt = $prompt->markAsProcessed();
 
                 $agent = $prompt->agent;
 

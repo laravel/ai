@@ -355,7 +355,7 @@ trait Promptable
      */
     private function recordAgentFailure(string $invocationId, AgentPrompt $prompt, Throwable $exception): void
     {
-        event(new AgentFailed($invocationId, $prompt, $exception));
+        event(new AgentFailed($invocationId, $prompt->processed(), $exception));
     }
 
     /**

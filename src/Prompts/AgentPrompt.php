@@ -18,6 +18,8 @@ class AgentPrompt extends Prompt
 
     public readonly ?string $invocationId;
 
+    private readonly AgentPromptContext $context;
+
     public function __construct(
         Agent $agent,
         string $prompt,
@@ -27,6 +29,7 @@ class AgentPrompt extends Prompt
         ?int $timeout = null,
         ?string $invocationId = null,
         ?Decisions $approvalDecisions = null,
+        ?AgentPromptContext $context = null,
     ) {
         parent::__construct($prompt, $provider, $model, $approvalDecisions);
 
@@ -34,6 +37,7 @@ class AgentPrompt extends Prompt
         $this->attachments = Collection::make($attachments);
         $this->timeout = $timeout;
         $this->invocationId = $invocationId;
+        $this->context = $context ?? new AgentPromptContext;
     }
 
     /**
@@ -77,6 +81,38 @@ class AgentPrompt extends Prompt
             $this->agent,
             $prompt,
             $attachments ?? $this->attachments,
+            $this->provider,
+            $this->model,
+            $this->timeout,
+            $this->invocationId,
+            $this->approvalDecisions,
+            $this->context,
+        );
+    }
+
+    /**
+     * Record this prompt as the prompt processed by agent middleware.
+     */
+    public function markAsProcessed(): self
+    {
+        $this->context->recordProcessedPrompt($this);
+
+        return $this;
+    }
+
+    /**
+     * Get the prompt processed by agent middleware, if available.
+     */
+    public function processed(): self
+    {
+        if ($this->context->processedPrompt === null) {
+            return $this;
+        }
+
+        return new self(
+            $this->agent,
+            $this->context->processedPrompt,
+            $this->context->processedAttachments ?? $this->attachments,
             $this->provider,
             $this->model,
             $this->timeout,

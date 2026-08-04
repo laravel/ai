@@ -8,6 +8,7 @@ use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Exceptions\RateLimitedException;
+use Laravel\Ai\Prompts\AgentPrompt;
 use Tests\Fixtures\Agents\AssistantAgent;
 
 test('prompt dispatches agent failed when all providers are exhausted', function (): void {
@@ -64,12 +65,26 @@ test('prompt dispatches agent failed for a non failoverable exception', function
     Http::fakeSequence()
         ->push(status: 400);
 
-    expect(fn () => (new AssistantAgent)->prompt(
+    $agent = (new AssistantAgent)->withMiddleware([
+        new class
+        {
+            public function handle(AgentPrompt $prompt, Closure $next)
+            {
+                return $next($prompt->prepend('Revised by middleware'));
+            }
+        },
+    ]);
+
+    expect(fn () => $agent->prompt(
         'Hello',
         provider: 'primary',
     ))->toThrow(RequestException::class);
 
-    Event::assertDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->exception instanceof RequestException);
+    $processedPrompt = 'Revised by middleware'.PHP_EOL.PHP_EOL.'Hello';
+
+    Event::assertDispatched(PromptingAgent::class, fn (PromptingAgent $event): bool => $event->prompt->prompt === $processedPrompt);
+    Event::assertDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->exception instanceof RequestException
+        && $event->prompt->prompt === $processedPrompt);
     Event::assertNotDispatched(AgentFailedOver::class);
     Event::assertNotDispatched(AgentPrompted::class);
 });

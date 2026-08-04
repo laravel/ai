@@ -55,7 +55,7 @@ trait GeneratesText
             ->send($prompt)
             ->through($this->gatherMiddlewareFor($prompt->agent))
             ->then(function (AgentPrompt $prompt) use ($invocationId, &$processedPrompt, &$resolvedApprovalResults): TextResponse {
-                $processedPrompt = $prompt;
+                $processedPrompt = $prompt->markAsProcessed();
 
                 $this->events->dispatch(new PromptingAgent($invocationId, $prompt));
 
