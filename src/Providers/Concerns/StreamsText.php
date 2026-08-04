@@ -11,6 +11,7 @@ use Laravel\Ai\Events\AgentStreamed;
 use Laravel\Ai\Events\StreamingAgent;
 use Laravel\Ai\Events\ToolApprovalRequested;
 use Laravel\Ai\Events\ToolApprovalResolved;
+use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
@@ -98,7 +99,10 @@ trait StreamsText
                                     yield $event;
                                 }
                             } catch (Throwable $exception) {
-                                $this->events->dispatch(new AgentFailed($invocationId, $prompt, $exception));
+                                // A failoverable exception is only terminal once the caller has run out of providers to try...
+                                if (! $exception instanceof FailoverableException || ! $prompt->canFailOver) {
+                                    $this->events->dispatch(new AgentFailed($invocationId, $prompt, $exception));
+                                }
 
                                 throw $exception;
                             }
@@ -107,9 +111,12 @@ trait StreamsText
                     );
                 });
         } catch (Throwable $exception) {
-            $this->events->dispatch(
-                new AgentFailed($invocationId, $processedPrompt ?? $prompt, $exception)
-            );
+            // A failoverable exception is only terminal once the caller has run out of providers to try...
+            if (! $exception instanceof FailoverableException || ! $prompt->canFailOver) {
+                $this->events->dispatch(
+                    new AgentFailed($invocationId, $processedPrompt ?? $prompt, $exception)
+                );
+            }
 
             throw $exception;
         }

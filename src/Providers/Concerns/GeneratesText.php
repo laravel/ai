@@ -26,6 +26,7 @@ use Laravel\Ai\Events\ToolApprovalResolved;
 use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Exceptions\ApprovalNotResumableException;
+use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -115,9 +116,12 @@ trait GeneratesText
                     return $agentResponse;
                 });
         } catch (Throwable $exception) {
-            $this->events->dispatch(
-                new AgentFailed($invocationId, $processedPrompt ?? $prompt, $exception)
-            );
+            // A failoverable exception is only terminal once the caller has run out of providers to try...
+            if (! $exception instanceof FailoverableException || ! $prompt->canFailOver) {
+                $this->events->dispatch(
+                    new AgentFailed($invocationId, $processedPrompt ?? $prompt, $exception)
+                );
+            }
 
             throw $exception;
         }

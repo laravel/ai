@@ -22,6 +22,9 @@ class AgentPrompt extends Prompt
 
     public readonly ?string $parentToolInvocationId;
 
+    /** Whether the caller may retry this prompt against another configured provider, so a failoverable exception is not yet terminal. */
+    public readonly bool $canFailOver;
+
     public function __construct(
         Agent $agent,
         string $prompt,
@@ -33,6 +36,7 @@ class AgentPrompt extends Prompt
         ?Decisions $approvalDecisions = null,
         ?string $parentInvocationId = null,
         ?string $parentToolInvocationId = null,
+        bool $canFailOver = false,
     ) {
         parent::__construct($prompt, $provider, $model, $approvalDecisions);
 
@@ -42,6 +46,7 @@ class AgentPrompt extends Prompt
         $this->invocationId = $invocationId;
         $this->parentInvocationId = $parentInvocationId;
         $this->parentToolInvocationId = $parentToolInvocationId;
+        $this->canFailOver = $canFailOver;
     }
 
     /**
@@ -92,6 +97,7 @@ class AgentPrompt extends Prompt
             $this->approvalDecisions,
             $this->parentInvocationId,
             $this->parentToolInvocationId,
+            $this->canFailOver,
         );
     }
 
