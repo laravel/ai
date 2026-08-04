@@ -31,11 +31,18 @@ class FakeEmbeddingGateway implements EmbeddingGateway
         EmbeddingProvider $provider,
         string $model,
         array $inputs,
-        int $dimensions,
+        ?int $dimensions,
         int $timeout = 30,
         array $providerOptions = [],
     ): EmbeddingsResponse {
-        $prompt = new EmbeddingsPrompt($inputs, $dimensions, $provider, $model, $timeout, $providerOptions);
+        $prompt = new EmbeddingsPrompt(
+            $inputs,
+            $dimensions ?? $provider->defaultEmbeddingsDimensions(),
+            $provider,
+            $model,
+            $timeout,
+            $providerOptions,
+        );
 
         return $this->nextResponse($provider, $model, $prompt);
     }

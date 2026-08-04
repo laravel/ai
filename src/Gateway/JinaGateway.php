@@ -29,7 +29,7 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
         EmbeddingProvider $provider,
         string $model,
         array $inputs,
-        int $dimensions,
+        ?int $dimensions,
         int $timeout = 30,
         array $providerOptions = [],
     ): EmbeddingsResponse {
@@ -41,8 +41,8 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
                 [
                     'model' => $model,
                     'input' => array_map(fn (string $text): array => ['text' => $text], $inputs),
-                    'dimensions' => $dimensions,
                 ],
+                is_null($dimensions) ? [] : ['dimensions' => $dimensions],
             )),
         );
 

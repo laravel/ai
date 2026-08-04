@@ -304,15 +304,14 @@ class OpenRouterGateway implements Gateway, StepTextGateway
         EmbeddingProvider $provider,
         string $model,
         array $inputs,
-        int $dimensions,
+        ?int $dimensions,
         int $timeout = 30,
         array $providerOptions = [],
     ): EmbeddingsResponse {
         $body = array_merge($providerOptions, [
             'model' => $model,
             'input' => $inputs,
-            'dimensions' => $dimensions,
-        ]);
+        ], is_null($dimensions) ? [] : ['dimensions' => $dimensions]);
 
         $response = $this->withErrorHandling(
             $provider->name(),

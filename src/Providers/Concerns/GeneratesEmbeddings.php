@@ -24,16 +24,12 @@ trait GeneratesEmbeddings
      */
     public function embeddings(array $inputs, ?int $dimensions = null, ?string $model = null, int $timeout = 30, array $providerOptions = []): EmbeddingsResponse
     {
-        if (! is_null($model) && is_null($dimensions)) {
-            throw new InvalidArgumentException('Dimensions must be provided when model is specified.');
-        }
-
         $invocationId = (string) Str::uuid7();
 
         $model ??= $this->defaultEmbeddingsModel();
-        $dimensions ??= $this->defaultEmbeddingsDimensions();
+        $dimensions ??= $this->configuredEmbeddingsDimensions();
 
-        $prompt = new EmbeddingsPrompt($inputs, $dimensions, $this, $model, $timeout, $providerOptions);
+        $prompt = new EmbeddingsPrompt($inputs, $dimensions ?? $this->defaultEmbeddingsDimensions(), $this, $model, $timeout, $providerOptions);
 
         if (Ai::embeddingsAreFaked()) {
             Ai::recordEmbeddingsGeneration($prompt);
@@ -55,6 +51,14 @@ trait GeneratesEmbeddings
         ), fn (EmbeddingsResponse $response) => $this->events->dispatch(new EmbeddingsGenerated(
             $invocationId, $this, $model, $prompt, $response,
         )));
+    }
+
+    /**
+     * Get the dimensions explicitly configured for the provider's embeddings model, if any.
+     */
+    protected function configuredEmbeddingsDimensions(): ?int
+    {
+        return $this->config['models']['embeddings']['dimensions'] ?? null;
     }
 
     /**

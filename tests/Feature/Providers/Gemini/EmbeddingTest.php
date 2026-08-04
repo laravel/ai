@@ -64,7 +64,7 @@ test('embeddings request wraps each input in a request object', function (): voi
 
         return $firstRequest['model'] === 'models/gemini-embedding-001'
             && $firstRequest['content']['parts'][0]['text'] === 'Hello world'
-            && data_get($firstRequest, 'outputDimensionality') === 3072;
+            && ! array_key_exists('outputDimensionality', $firstRequest);
     });
 });
 
@@ -362,7 +362,7 @@ test('embeddings request merges provider options into each per-input request', f
                 return false;
             }
 
-            if (! isset($req['model'], $req['content'], $req['outputDimensionality'])) {
+            if (! isset($req['model'], $req['content'])) {
                 return false;
             }
         }
@@ -377,6 +377,7 @@ test('gemini provider options cannot override framework controlled per-request k
     ]);
 
     Embeddings::for(['Hello'])
+        ->dimensions(3072)
         ->withProviderOptions([
             'model' => 'hijacked',
             'content' => ['hijacked'],

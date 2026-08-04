@@ -49,7 +49,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, StepTextGate
         EmbeddingProvider $provider,
         string $model,
         array $inputs,
-        int $dimensions,
+        ?int $dimensions,
         int $timeout = 30,
         array $providerOptions = [],
     ): EmbeddingsResponse {
@@ -58,8 +58,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, StepTextGate
             fn () => $this->client($provider, $timeout)->post('embeddings', array_merge($providerOptions, [
                 'model' => $model,
                 'input' => $inputs,
-                'dimensions' => $dimensions,
-            ])),
+            ], is_null($dimensions) ? [] : ['dimensions' => $dimensions])),
         );
 
         $data = $response->json();

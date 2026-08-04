@@ -79,12 +79,12 @@ test('multiple inputs return multiple embeddings', function (): void {
         ->and($response->embeddings[1])->toBe([0.4, 0.5, 0.6]);
 });
 
-test('embeddings default to 2048 dimensions when none specified', function (): void {
+test('embeddings omit dimensions when none specified', function (): void {
     Http::fake(['*' => fakeJinaEmbeddingsResponse()]);
 
     Embeddings::for(['Hello'])->generate(provider: 'jina', model: 'jina-embeddings-v4');
 
-    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['dimensions'] === 2048);
+    Http::assertSent(fn (Request $request): bool => ! array_key_exists('dimensions', json_decode($request->body(), true)));
 });
 
 test('embeddings request includes provider options and overrides default task', function (): void {

@@ -34,11 +34,11 @@ trait MapsEmbeddingInputs
         EmbeddingProvider $provider,
         string $model,
         array $inputs,
-        int $dimensions,
+        ?int $dimensions,
         int $timeout = 30,
         array $providerOptions = [],
     ): EmbeddingsResponse {
-        if ($model === 'voyage-multimodal-3' && $dimensions !== 1024) {
+        if ($model === 'voyage-multimodal-3' && ! is_null($dimensions) && $dimensions !== 1024) {
             throw new InvalidArgumentException(
                 'Model [voyage-multimodal-3] only supports 1024 dimension embeddings. Use [voyage-multimodal-3.5] for other dimensions.'
             );
@@ -53,7 +53,7 @@ trait MapsEmbeddingInputs
                 'inputs' => array_map(fn (mixed $input) => [
                     'content' => [$this->mapMultimodalEmbeddingInput($input)],
                 ], $inputs),
-            ], $model === 'voyage-multimodal-3' ? [] : ['output_dimension' => $dimensions])),
+            ], $model === 'voyage-multimodal-3' || is_null($dimensions) ? [] : ['output_dimension' => $dimensions])),
         )->json();
 
         return new EmbeddingsResponse(

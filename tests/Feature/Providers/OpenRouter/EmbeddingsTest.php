@@ -30,7 +30,7 @@ test('embeddings request is correctly formatted', function (): void {
 
         return $body['model'] === 'google/gemini-embedding-001'
             && $body['input'] === ['Hello world']
-            && $body['dimensions'] === 1536
+            && ! array_key_exists('dimensions', $body)
             && str_contains($request->url(), 'embeddings');
     });
 });

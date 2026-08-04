@@ -497,13 +497,13 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
         EmbeddingProvider $provider,
         string $model,
         array $inputs,
-        int $dimensions,
+        ?int $dimensions,
         int $timeout = 30,
         array $providerOptions = [],
     ): EmbeddingsResponse {
         $client = $this->createBedrockClient($provider, $timeout);
 
-        if ($this->isCohereModel($model)) {
+        if ($this->isCohereEmbeddingModel($model)) {
             return $this->generateCohereEmbeddings($provider, $model, $client, $inputs, $dimensions, $providerOptions);
         }
 
@@ -520,8 +520,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
                         'accept' => 'application/json',
                         'body' => json_encode(array_merge($providerOptions, [
                             'inputText' => $input,
-                            'dimensions' => $dimensions,
-                        ])),
+                        ], is_null($dimensions) ? [] : ['dimensions' => $dimensions])),
                     ]),
                 );
 
@@ -554,7 +553,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
         string $model,
         $client,
         array $inputs,
-        int $dimensions,
+        ?int $dimensions,
         array $providerOptions = [],
     ): EmbeddingsResponse {
         try {
@@ -566,7 +565,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
                     'accept' => 'application/json',
                     'body' => json_encode(array_merge(
                         ['input_type' => 'search_document'],
-                        $this->supportsCohereOutputDimension($model) ? ['output_dimension' => $dimensions] : [],
+                        is_null($dimensions) ? [] : ['output_dimension' => $dimensions],
                         $providerOptions,
                         ['texts' => array_values($inputs)],
                     )),
@@ -587,20 +586,11 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
     }
 
     /**
-     * Determine if the given model identifier refers to a Cohere model.
+     * Determine if the given model identifier refers to a Cohere embeddings model.
      */
-    protected function isCohereModel(string $model): bool
+    protected function isCohereEmbeddingModel(string $model): bool
     {
-        return Str::is(['cohere.*', '*.cohere.*', '*/cohere.*'], $model);
-    }
-
-    /**
-     * Determine if the given Cohere model accepts a configurable output dimension.
-     */
-    protected function supportsCohereOutputDimension(string $model): bool
-    {
-        // Only the unified Embed v4 and later models accept an output dimension; v3 widths are fixed.
-        return str_contains($model, 'embed-v');
+        return Str::contains($model, 'cohere.embed-');
     }
 
     /**

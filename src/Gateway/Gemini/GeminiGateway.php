@@ -169,7 +169,7 @@ class GeminiGateway implements Gateway, StepTextGateway
         EmbeddingProvider $provider,
         string $model,
         array $inputs,
-        int $dimensions,
+        ?int $dimensions,
         int $timeout = 30,
         array $providerOptions = [],
     ): EmbeddingsResponse {
@@ -178,8 +178,7 @@ class GeminiGateway implements Gateway, StepTextGateway
         $requests = array_map(fn (mixed $input): array => array_merge(Arr::except($providerOptions, 'output_dimensionality'), [
             'model' => "models/{$model}",
             'content' => ['parts' => [$this->mapEmbeddingInput($input)]],
-            'outputDimensionality' => $dimensions,
-        ]), $inputs);
+        ], is_null($dimensions) ? [] : ['outputDimensionality' => $dimensions]), $inputs);
 
         $response = $this->withErrorHandling(
             $provider->name(),

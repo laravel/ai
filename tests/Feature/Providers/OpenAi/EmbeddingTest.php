@@ -85,12 +85,22 @@ test('embeddings use default model when none specified', function (): void {
     Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['model'] === 'text-embedding-3-small');
 });
 
-test('embeddings default to 1536 dimensions when none specified', function (): void {
+test('embeddings omit dimensions when none specified', function (): void {
     Http::fake(['*' => fakeOpenAiEmbeddingResponse()]);
 
     Embeddings::for(['Hello'])->generate(provider: 'openai', model: 'text-embedding-3-small');
 
-    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['dimensions'] === 1536);
+    Http::assertSent(fn (Request $request): bool => ! array_key_exists('dimensions', json_decode($request->body(), true)));
+});
+
+test('embeddings send the dimensions configured for the provider', function (): void {
+    Http::fake(['*' => fakeOpenAiEmbeddingResponse()]);
+
+    config(['ai.providers.openai.models.embeddings.dimensions' => 512]);
+
+    Embeddings::for(['Hello'])->generate(provider: 'openai', model: 'text-embedding-3-small');
+
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['dimensions'] === 512);
 });
 
 test('embeddings request includes provider options in the request body', function (): void {
@@ -113,6 +123,7 @@ test('provider options cannot override framework controlled keys', function (): 
     Http::fake(['*' => fakeOpenAiEmbeddingResponse()]);
 
     Embeddings::for(['Hello'])
+        ->dimensions(1536)
         ->withProviderOptions(['model' => 'hijacked', 'input' => ['hijacked'], 'dimensions' => 1])
         ->generate(provider: 'openai', model: 'text-embedding-3-small');
 
