@@ -18,6 +18,10 @@ class AgentPrompt extends Prompt
 
     public readonly ?string $invocationId;
 
+    public readonly ?string $parentInvocationId;
+
+    public readonly ?string $parentToolInvocationId;
+
     public function __construct(
         Agent $agent,
         string $prompt,
@@ -27,6 +31,8 @@ class AgentPrompt extends Prompt
         ?int $timeout = null,
         ?string $invocationId = null,
         ?Decisions $approvalDecisions = null,
+        ?string $parentInvocationId = null,
+        ?string $parentToolInvocationId = null,
     ) {
         parent::__construct($prompt, $provider, $model, $approvalDecisions);
 
@@ -34,6 +40,8 @@ class AgentPrompt extends Prompt
         $this->attachments = Collection::make($attachments);
         $this->timeout = $timeout;
         $this->invocationId = $invocationId;
+        $this->parentInvocationId = $parentInvocationId;
+        $this->parentToolInvocationId = $parentToolInvocationId;
     }
 
     /**
@@ -82,6 +90,8 @@ class AgentPrompt extends Prompt
             $this->timeout,
             $this->invocationId,
             $this->approvalDecisions,
+            $this->parentInvocationId,
+            $this->parentToolInvocationId,
         );
     }
 

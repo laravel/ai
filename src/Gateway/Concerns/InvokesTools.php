@@ -3,9 +3,11 @@
 namespace Laravel\Ai\Gateway\Concerns;
 
 use Closure;
+use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
 use Laravel\Ai\Tools\ToolNameResolver;
+use Throwable;
 
 trait InvokesTools
 {
@@ -13,18 +15,21 @@ trait InvokesTools
 
     protected Closure $toolInvokedCallback;
 
+    protected Closure $toolFailedCallback;
+
     /**
-     * @var array<int, array{invoking: Closure, invoked: Closure}>
+     * @var array<int, array{invoking: Closure, invoked: Closure, failed: Closure}>
      */
     protected array $toolInvocationCallbackStack = [];
 
     /**
-     * Specify callbacks that should be invoked when tools are invoking / invoked.
+     * Specify callbacks that should be invoked when tools are invoking / invoked / failed.
      */
-    public function onToolInvocation(Closure $invoking, Closure $invoked): self
+    public function onToolInvocation(Closure $invoking, Closure $invoked, ?Closure $failed = null): self
     {
         $this->invokingToolCallback = $invoking;
         $this->toolInvokedCallback = $invoked;
+        $this->toolFailedCallback = $failed ?? fn (): true => true;
 
         return $this;
     }
@@ -36,13 +41,20 @@ trait InvokesTools
     {
         $callbacks = $this->pushToolInvocationCallbacks();
 
+        // Minted here so that nested invocations, such as a sub-agent invoked as a tool, each carry their own ID...
+        $toolInvocationId = (string) Str::uuid7();
+
         try {
-            call_user_func($callbacks['invoking'], $tool, $arguments);
+            call_user_func($callbacks['invoking'], $tool, $arguments, $toolInvocationId);
 
             return (string) tap(
-                $tool->handle(new Request($arguments, $toolCallId)),
-                fn ($result): mixed => call_user_func($callbacks['invoked'], $tool, $arguments, $result)
+                $tool->handle(new Request($arguments, $toolCallId, $toolInvocationId)),
+                fn ($result): mixed => call_user_func($callbacks['invoked'], $tool, $arguments, $result, $toolInvocationId)
             );
+        } catch (Throwable $exception) {
+            call_user_func($callbacks['failed'], $tool, $arguments, $exception, $toolInvocationId);
+
+            throw $exception;
         } finally {
             $this->popToolInvocationCallbacks();
         }
@@ -69,12 +81,13 @@ trait InvokesTools
     {
         $this->invokingToolCallback ??= fn (): true => true;
         $this->toolInvokedCallback ??= fn (): true => true;
+        $this->toolFailedCallback ??= fn (): true => true;
     }
 
     /**
      * Snapshot the current callbacks for the duration of a single tool invocation.
      *
-     * @return array{invoking: Closure, invoked: Closure}
+     * @return array{invoking: Closure, invoked: Closure, failed: Closure}
      */
     protected function pushToolInvocationCallbacks(): array
     {
@@ -83,6 +96,7 @@ trait InvokesTools
         return $this->toolInvocationCallbackStack[] = [
             'invoking' => $this->invokingToolCallback,
             'invoked' => $this->toolInvokedCallback,
+            'failed' => $this->toolFailedCallback,
         ];
     }
 
@@ -99,5 +113,6 @@ trait InvokesTools
 
         $this->invokingToolCallback = $callbacks['invoking'];
         $this->toolInvokedCallback = $callbacks['invoked'];
+        $this->toolFailedCallback = $callbacks['failed'];
     }
 }

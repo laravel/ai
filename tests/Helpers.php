@@ -58,7 +58,7 @@ function fakeGroqResponse(string $text = 'Hello'): PromiseInterface
     ]);
 }
 
-function fakeGroqToolCallResponse(): PromiseInterface
+function fakeGroqToolCallResponse(string $name = 'FixedNumberGenerator', array $arguments = [], string $id = 'call_123'): PromiseInterface
 {
     return Http::response([
         'id' => 'chatcmpl-tool-123',
@@ -70,11 +70,11 @@ function fakeGroqToolCallResponse(): PromiseInterface
                 'role' => 'assistant',
                 'content' => null,
                 'tool_calls' => [[
-                    'id' => 'call_123',
+                    'id' => $id,
                     'type' => 'function',
                     'function' => [
-                        'name' => 'FixedNumberGenerator',
-                        'arguments' => '{}',
+                        'name' => $name,
+                        'arguments' => $arguments === [] ? '{}' : json_encode($arguments),
                     ],
                 ]],
             ],

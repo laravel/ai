@@ -17,6 +17,7 @@ use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Exceptions\NoSuchToolException;
 use Laravel\Ai\Gateway\Concerns\HandlesToolApprovals;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
+use Laravel\Ai\Gateway\Concerns\ObservesSteps;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
@@ -37,7 +38,7 @@ use Throwable;
 
 class TextGenerationLoop
 {
-    use HandlesToolApprovals, InvokesTools;
+    use HandlesToolApprovals, InvokesTools, ObservesSteps;
 
     /**
      * Create a new text generation loop instance.
@@ -68,6 +69,7 @@ class TextGenerationLoop
         $maxSteps = $this->resolveMaxSteps($options, $tools);
         $continuationToken = null;
         $lastResult = null;
+        $stepCallbacks = $this->stepCallbacks();
 
         if ($approval !== null) {
             $resumption = $this->resumeFromApproval($approval, $messages, $tools);
@@ -95,17 +97,27 @@ class TextGenerationLoop
                 continuationToken: $continuationToken,
             );
 
-            $lastResult = $this->gateway->generateTextStep(
-                $provider,
-                $model,
-                $instructions,
-                $allMessages,
-                $tools,
-                $schema,
-                $options?->forStep($step),
-                $timeout,
-                $stepContext,
-            );
+            call_user_func($stepCallbacks['starting'], $stepContext);
+
+            try {
+                $lastResult = $this->gateway->generateTextStep(
+                    $provider,
+                    $model,
+                    $instructions,
+                    $allMessages,
+                    $tools,
+                    $schema,
+                    $options?->forStep($step),
+                    $timeout,
+                    $stepContext,
+                );
+            } catch (Throwable $exception) {
+                call_user_func($stepCallbacks['failed'], $stepContext, $exception);
+
+                throw $exception;
+            }
+
+            call_user_func($stepCallbacks['completed'], $stepContext, $lastResult);
 
             [$toolResults, $pendingApprovals] = $this->stepToolResults($lastResult, $stepContext->isFinalStep, $tools);
 
@@ -161,6 +173,7 @@ class TextGenerationLoop
         $accumulatedUsage = new Usage;
         $finalReason = null;
         $sawError = false;
+        $stepCallbacks = $this->stepCallbacks();
 
         if ($approval !== null) {
             $resumption = $this->resumeFromApproval($approval, $messages, $tools, $validatedApproval);
@@ -205,32 +218,42 @@ class TextGenerationLoop
                 continuationToken: $continuationToken,
             );
 
-            $stream = $this->gateway->generateStreamStep(
-                $invocationId,
-                $provider,
-                $model,
-                $instructions,
-                $allMessages,
-                $tools,
-                $schema,
-                $options?->forStep($step),
-                $timeout,
-                $stepContext,
-            );
+            call_user_func($stepCallbacks['starting'], $stepContext);
 
-            foreach ($stream as $event) {
-                yield $event;
+            try {
+                $stream = $this->gateway->generateStreamStep(
+                    $invocationId,
+                    $provider,
+                    $model,
+                    $instructions,
+                    $allMessages,
+                    $tools,
+                    $schema,
+                    $options?->forStep($step),
+                    $timeout,
+                    $stepContext,
+                );
 
-                if ($event instanceof Error) {
-                    $sawError = true;
+                foreach ($stream as $event) {
+                    yield $event;
+
+                    if ($event instanceof Error) {
+                        $sawError = true;
+                    }
                 }
-            }
 
-            $result = $stream->getReturn();
+                $result = $stream->getReturn();
+            } catch (Throwable $exception) {
+                call_user_func($stepCallbacks['failed'], $stepContext, $exception);
+
+                throw $exception;
+            }
 
             if (! $result instanceof StepResponse) {
                 break;
             }
+
+            call_user_func($stepCallbacks['completed'], $stepContext, $result);
 
             $accumulatedUsage = $accumulatedUsage->add($result->usage);
             $finalReason = $result->finishReason;

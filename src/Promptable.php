@@ -38,6 +38,10 @@ trait Promptable
 {
     use SerializesModels;
 
+    protected ?string $parentInvocationId = null;
+
+    protected ?string $parentToolInvocationId = null;
+
     /**
      * Create a new instance of the agent.
      */
@@ -62,8 +66,13 @@ trait Promptable
     {
         [$text, $approvalDecisions] = $this->extractPromptInput($prompt);
 
+        $invocationId = (string) Str::uuid7();
+
         $run = fn (TextProvider $provider, string $model): AgentResponse => $provider->prompt(
-            new AgentPrompt($this, $text, $attachments, $provider, $model, $this->getTimeout($timeout), approvalDecisions: $approvalDecisions)
+            new AgentPrompt(
+                $this, $text, $attachments, $provider, $model, $this->getTimeout($timeout), $invocationId, $approvalDecisions,
+                $this->parentInvocationId, $this->parentToolInvocationId,
+            )
         );
 
         if ($approvalDecisions !== null) {
@@ -74,7 +83,20 @@ trait Promptable
             return $run($provider, $model);
         }
 
-        return $this->withModelFailover($run, $provider, $model);
+        return $this->withModelFailover($run, $provider, $model, $invocationId);
+    }
+
+    /**
+     * Indicate that the agent runs within the given parent invocation, correlating its events with the parent's.
+     */
+    public function withinInvocation(?string $invocationId, ?string $toolInvocationId = null): static
+    {
+        $agent = clone $this;
+
+        $agent->parentInvocationId = $invocationId;
+        $agent->parentToolInvocationId = $toolInvocationId;
+
+        return $agent;
     }
 
     /**
@@ -114,7 +136,10 @@ trait Promptable
             [$resolved, $resolvedModel] = $this->iterateProvidersWithFailover($providers)->current();
 
             return $resolved->stream(
-                new AgentPrompt($this, $prompt, $attachments, $resolved, $resolvedModel, $resolvedTimeout, $invocationId, $approvalDecisions)
+                new AgentPrompt(
+                    $this, $prompt, $attachments, $resolved, $resolvedModel, $resolvedTimeout, $invocationId, $approvalDecisions,
+                    $this->parentInvocationId, $this->parentToolInvocationId,
+                )
             );
         }
 
@@ -131,7 +156,10 @@ trait Promptable
 
                     try {
                         $innerResponse = $provider->stream(
-                            new AgentPrompt($this, $prompt, $attachments, $provider, $model, $resolvedTimeout, $invocationId, $approvalDecisions)
+                            new AgentPrompt(
+                                $this, $prompt, $attachments, $provider, $model, $resolvedTimeout, $invocationId, $approvalDecisions,
+                                $this->parentInvocationId, $this->parentToolInvocationId,
+                            )
                         );
 
                         $innerResponse->then(fn (StreamedAgentResponse $response): StreamableAgentResponse => $outer->adoptStateFrom($response));
@@ -148,7 +176,7 @@ trait Promptable
                             throw $e;
                         }
 
-                        $lastException = $this->recordAgentFailover($provider, $model, $e);
+                        $lastException = $this->recordAgentFailover($invocationId, $provider, $model, $e);
                     }
                 }
 
@@ -238,7 +266,7 @@ trait Promptable
     /**
      * Invoke the given Closure with provider / model failover.
      */
-    private function withModelFailover(Closure $callback, Lab|array|string|null $provider, ?string $model): mixed
+    private function withModelFailover(Closure $callback, Lab|array|string|null $provider, ?string $model, ?string $invocationId = null): mixed
     {
         $lastException = null;
 
@@ -246,7 +274,7 @@ trait Promptable
             try {
                 return $callback($provider, $model);
             } catch (FailoverableException $e) {
-                $lastException = $this->recordAgentFailover($provider, $model, $e);
+                $lastException = $this->recordAgentFailover($invocationId, $provider, $model, $e);
             }
         }
 
@@ -293,9 +321,9 @@ trait Promptable
     /**
      * Record that an agent failed over to the next configured provider.
      */
-    private function recordAgentFailover(Provider $provider, string $model, FailoverableException $exception): FailoverableException
+    private function recordAgentFailover(?string $invocationId, Provider $provider, string $model, FailoverableException $exception): FailoverableException
     {
-        event(new AgentFailedOver($this, $provider, $model, $exception));
+        event(new AgentFailedOver($invocationId, $this, $provider, $model, $exception));
 
         return $exception;
     }
