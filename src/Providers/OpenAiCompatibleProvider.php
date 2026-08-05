@@ -86,9 +86,6 @@ class OpenAiCompatibleProvider extends Provider implements EmbeddingProvider, Te
 
     /**
      * Get the default dimensions of the default embeddings model.
-     *
-     * When no dimensions are configured, the request omits the dimensions
-     * parameter and the model's native dimensions are used.
      */
     public function defaultEmbeddingsDimensions(): int
     {
