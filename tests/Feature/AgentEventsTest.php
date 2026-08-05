@@ -161,7 +161,6 @@ test('a run that exhausts every provider reports the failure once', function ():
     expect(fn (): mixed => (new AssistantAgent)->prompt('Hi', provider: ['primary', 'backup']))
         ->toThrow(RateLimitedException::class);
 
-    // Only the first attempt actually failed over; the last had nowhere left to go...
     Event::assertDispatchedTimes(AgentFailedOver::class, 1);
     Event::assertDispatchedTimes(AgentFailed::class, 1);
 
@@ -194,7 +193,6 @@ test('a streamed run that exhausts every provider reports the failure once', fun
         }
     })->toThrow(RateLimitedException::class);
 
-    // Only the first attempt actually failed over; the last had nowhere left to go...
     Event::assertDispatchedTimes(AgentFailedOver::class, 1);
     Event::assertDispatchedTimes(AgentFailed::class, 1);
 
@@ -490,6 +488,132 @@ test('the parent invocation is restored once a tool call finishes', function ():
         ->and($standalone->parentToolInvocationId)->toBeNull();
 });
 
+test('a provider error inside the stream closes the step it opened', function (): void {
+    Event::fake();
+
+    config(['ai.providers.only' => ['driver' => 'groq', 'key' => 'test-key']]);
+
+    Http::preventStrayRequests();
+
+    Http::fakeSequence()->pushResponse(fakeGroqStreamErrorResponse('Upstream exploded.'));
+
+    $response = (new AssistantAgent)->stream('Hi', provider: 'only');
+
+    foreach ($response as $event) {
+        //
+    }
+
+    // The provider reported the error in the stream rather than throwing, but the step still has to close...
+    Event::assertDispatchedTimes(StartingStep::class, 1);
+    Event::assertDispatchedTimes(StepFailed::class, 1);
+    Event::assertNotDispatched(StepCompleted::class);
+
+    $starting = Event::dispatched(StartingStep::class)->first()[0];
+    $failed = Event::dispatched(StepFailed::class)->first()[0];
+
+    expect($failed->invocationId)->toBe($starting->invocationId)
+        ->and($failed->stepNumber)->toBe($starting->stepNumber)
+        ->and($failed->exception->getMessage())->toBe('Upstream exploded.');
+});
+
+test('step events carry the agent that ran them', function (): void {
+    Event::fake();
+
+    AssistantAgent::fake(['Hello!']);
+
+    $agent = new AssistantAgent;
+
+    $agent->prompt('Hi');
+
+    $starting = Event::dispatched(StartingStep::class)->first()[0];
+    $completed = Event::dispatched(StepCompleted::class)->first()[0];
+
+    expect($starting->agent)->toBe($agent)
+        ->and($completed->agent)->toBe($agent)
+        ->and($starting->model)->not->toBeEmpty();
+});
+
+test('a failed step identifies the provider and model that failed it', function (): void {
+    Event::fake();
+
+    config([
+        'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
+        'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
+    ]);
+
+    Http::preventStrayRequests();
+
+    Http::fakeSequence()
+        ->push(status: 429)
+        ->pushResponse(fakeGroqResponse('Hello from the backup.'));
+
+    (new AssistantAgent)->prompt('Hi', provider: ['primary', 'backup']);
+
+    $starting = Event::dispatched(StartingStep::class)->first()[0];
+    $failed = Event::dispatched(StepFailed::class)->first()[0];
+
+    // Failover attempts share an invocation id and both restart at step zero, so the step events must name their own provider...
+    expect($failed->agent)->toBeInstanceOf(AssistantAgent::class)
+        ->and($failed->provider)->toBe($starting->provider)
+        ->and($failed->model)->toBe($starting->model);
+});
+
+test('a failure after failover reports the prompt the middleware produced', function (): void {
+    Event::fake();
+
+    config([
+        'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
+        'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
+    ]);
+
+    Http::preventStrayRequests();
+
+    Http::fakeSequence()
+        ->push(status: 429)
+        ->push(status: 429);
+
+    $agent = (new AssistantAgent)->withMiddleware([
+        fn (AgentPrompt $prompt, Closure $next) => $next($prompt->revise('Revised by middleware.')),
+    ]);
+
+    expect(fn (): mixed => $agent->prompt('Hi', provider: ['primary', 'backup']))
+        ->toThrow(RateLimitedException::class);
+
+    $prompted = Event::dispatched(PromptingAgent::class)->first()[0];
+
+    Event::assertDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->prompt->prompt === $prompted->prompt->prompt
+        && $event->prompt->prompt === 'Revised by middleware.');
+});
+
+test('a streamed failure after the stream started reports the run as failed', function (): void {
+    Event::fake();
+
+    config([
+        'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
+        'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
+    ]);
+
+    Http::preventStrayRequests();
+
+    Http::fakeSequence()->pushResponse(fakeGroqStreamToolCallResponse('RateLimitedNumberGenerator'));
+
+    $response = (new RateLimitedToolAgent)->stream('Generate', provider: ['primary', 'backup']);
+
+    $seen = 0;
+
+    // The stream had already reached the consumer, so the run can no longer be replayed against the backup...
+    expect(function () use ($response, &$seen): void {
+        foreach ($response as $event) {
+            $seen++;
+        }
+    })->toThrow(RateLimitedException::class, 'Rate limited while running the tool.');
+
+    expect($seen)->toBeGreaterThan(0);
+
+    Event::assertDispatchedTimes(AgentFailed::class, 1);
+    Event::assertNotDispatched(AgentFailedOver::class);
+});
+
 test('the parent invocation never travels outside the current process', function (): void {
     $insideDehydratedContext = null;
 
@@ -559,88 +683,4 @@ test('a tool that fails while resuming an approval reports the failure once and 
 
     expect($failed->exception->getMessage())->toBe('Forced to throw exception.')
         ->and($failed->toolInvocationId)->toBe($invoking->toolInvocationId);
-});
-
-test('a provider error inside the stream closes the step it opened', function (): void {
-    Event::fake();
-
-    config(['ai.providers.only' => ['driver' => 'groq', 'key' => 'test-key']]);
-
-    Http::preventStrayRequests();
-
-    Http::fakeSequence()->pushResponse(fakeGroqStreamErrorResponse('Upstream exploded.'));
-
-    $response = (new AssistantAgent)->stream('Hi', provider: 'only');
-
-    foreach ($response as $event) {
-        //
-    }
-
-    // The provider reported the error in the stream rather than throwing, but the step still has to close...
-    Event::assertDispatchedTimes(StartingStep::class, 1);
-    Event::assertDispatchedTimes(StepFailed::class, 1);
-    Event::assertNotDispatched(StepCompleted::class);
-
-    $starting = Event::dispatched(StartingStep::class)->first()[0];
-    $failed = Event::dispatched(StepFailed::class)->first()[0];
-
-    expect($failed->invocationId)->toBe($starting->invocationId)
-        ->and($failed->stepNumber)->toBe($starting->stepNumber)
-        ->and($failed->exception->getMessage())->toBe('Upstream exploded.');
-});
-
-test('a failure after failover reports the prompt the middleware produced', function (): void {
-    Event::fake();
-
-    config([
-        'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
-        'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
-    ]);
-
-    Http::preventStrayRequests();
-
-    Http::fakeSequence()
-        ->push(status: 429)
-        ->push(status: 429);
-
-    $agent = (new AssistantAgent)->withMiddleware([
-        fn (AgentPrompt $prompt, Closure $next) => $next($prompt->revise('Revised by middleware.')),
-    ]);
-
-    expect(fn (): mixed => $agent->prompt('Hi', provider: ['primary', 'backup']))
-        ->toThrow(RateLimitedException::class);
-
-    $prompted = Event::dispatched(PromptingAgent::class)->first()[0];
-
-    Event::assertDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->prompt->prompt === $prompted->prompt->prompt
-        && $event->prompt->prompt === 'Revised by middleware.');
-});
-
-test('a streamed failure after the stream started reports the run as failed', function (): void {
-    Event::fake();
-
-    config([
-        'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
-        'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
-    ]);
-
-    Http::preventStrayRequests();
-
-    Http::fakeSequence()->pushResponse(fakeGroqStreamToolCallResponse('RateLimitedNumberGenerator'));
-
-    $response = (new RateLimitedToolAgent)->stream('Generate', provider: ['primary', 'backup']);
-
-    $seen = 0;
-
-    // The stream had already reached the consumer, so the run can no longer be replayed against the backup...
-    expect(function () use ($response, &$seen): void {
-        foreach ($response as $event) {
-            $seen++;
-        }
-    })->toThrow(RateLimitedException::class, 'Rate limited while running the tool.');
-
-    expect($seen)->toBeGreaterThan(0);
-
-    Event::assertDispatchedTimes(AgentFailed::class, 1);
-    Event::assertNotDispatched(AgentFailedOver::class);
 });

@@ -205,19 +205,19 @@ trait GeneratesText
         $agent = $prompt->agent;
 
         return new RunObservers(
-            startingStep: function (StepContext $context) use ($invocationId, $prompt): void {
+            startingStep: function (StepContext $context) use ($invocationId, $agent, $prompt): void {
                 $this->events->dispatch(new StartingStep(
-                    $invocationId, $context->stepNumber, $this, $prompt->model, $context->isFinalStep
+                    $invocationId, $context->stepNumber, $agent, $this, $prompt->model, $context->isFinalStep
                 ));
             },
-            stepCompleted: function (StepContext $context, StepResponse $response) use ($invocationId): void {
+            stepCompleted: function (StepContext $context, StepResponse $response) use ($invocationId, $agent): void {
                 $this->events->dispatch(new StepCompleted(
-                    $invocationId, $context->stepNumber, $response->meta, $response->usage, $response->finishReason, $response->toolCalls
+                    $invocationId, $context->stepNumber, $agent, $response->meta, $response->usage, $response->finishReason, $response->toolCalls
                 ));
             },
-            stepFailed: function (StepContext $context, Throwable $exception) use ($invocationId): void {
+            stepFailed: function (StepContext $context, Throwable $exception) use ($invocationId, $agent, $prompt): void {
                 $this->events->dispatch(new StepFailed(
-                    $invocationId, $context->stepNumber, $exception
+                    $invocationId, $context->stepNumber, $agent, $this, $prompt->model, $exception
                 ));
             },
             invokingTool: function (Tool $tool, array $arguments, string $toolInvocationId) use ($invocationId, $agent): void {
