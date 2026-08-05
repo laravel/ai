@@ -15,7 +15,7 @@ trait InvokesTools
     /**
      * Execute the given tool with the given arguments.
      */
-    protected function executeTool(Tool $tool, array $arguments, ?string $toolCallId = null, ?RunObservers $observers = null, ?string $invocationId = null): string
+    protected function executeTool(Tool $tool, array $arguments, ?string $toolCallId = null, ?RunObservers $observers = null): string
     {
         $observers ??= new RunObservers;
 
@@ -23,7 +23,7 @@ trait InvokesTools
         $toolInvocationId = (string) Str::uuid7();
 
         // Any agent prompted while this tool runs, however it was reached, is a child of this tool call...
-        return ParentInvocation::within($invocationId, $toolInvocationId, function () use ($tool, $arguments, $toolCallId, $toolInvocationId, $observers): string {
+        return ParentInvocation::within($observers->invocationId, $toolInvocationId, function () use ($tool, $arguments, $toolCallId, $toolInvocationId, $observers): string {
             $observers->invokingTool($tool, $arguments, $toolInvocationId);
 
             // Only the handler itself may fail the tool call, so an observer that throws is never reported as a tool failure...

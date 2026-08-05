@@ -92,7 +92,6 @@ trait GeneratesText
                         $this->resumableApprovalFor($prompt),
                         $this->approvalResultRecorderFor($prompt, $resolvedApprovalResults),
                         $this->observersFor($invocationId, $prompt),
-                        $invocationId,
                     );
 
                     if ($response->hasPendingApprovals()) {
@@ -205,6 +204,7 @@ trait GeneratesText
         $agent = $prompt->agent;
 
         return new RunObservers(
+            invocationId: $invocationId,
             startingStep: function (StepContext $context) use ($invocationId, $agent, $prompt): void {
                 $this->events->dispatch(new StartingStep(
                     $invocationId, $context->stepNumber, $agent, $this, $prompt->model, $context->isFinalStep

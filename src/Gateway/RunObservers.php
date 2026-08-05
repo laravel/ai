@@ -6,10 +6,11 @@ use Closure;
 use Laravel\Ai\Contracts\Tool;
 use Throwable;
 
-/** Passed into each run rather than held on the loop, so a nested run cannot overwrite the observers of the run that started it. */
+// Passed into each run rather than held on the loop, so a nested run cannot overwrite the observers of the run that started it...
 class RunObservers
 {
     public function __construct(
+        public readonly ?string $invocationId = null,
         protected ?Closure $startingStep = null,
         protected ?Closure $stepCompleted = null,
         protected ?Closure $stepFailed = null,

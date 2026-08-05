@@ -22,7 +22,7 @@ class AgentPrompt extends Prompt
 
     public readonly ?string $parentToolInvocationId;
 
-    /** Whether the caller may retry this prompt against another configured provider, so a failoverable exception is not yet terminal. */
+    // Whether the caller may retry this prompt against another configured provider, so a failoverable exception is not yet terminal...
     public readonly bool $canFailOver;
 
     public function __construct(
