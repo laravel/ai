@@ -94,4 +94,12 @@ class OpenAiCompatibleProvider extends Provider implements EmbeddingProvider, Te
     {
         return $this->config['models']['embeddings']['dimensions'] ?? 0;
     }
+
+    /**
+     * Determine if the provider may omit dimensions and use a model's native embedding dimensions.
+     */
+    protected function supportsNativeEmbeddingDimensions(): bool
+    {
+        return true;
+    }
 }
