@@ -3,13 +3,15 @@
 namespace Laravel\Ai\Gateway;
 
 use Closure;
-use Illuminate\Container\Container;
-use Illuminate\Log\Context\Repository as ContextRepository;
 
-/** A tool handler is arbitrary user code, so the delegating pair travels in hidden context rather than as a parameter. */
 class ParentInvocation
 {
-    protected const CONTEXT_KEY = 'laravel-ai.parent-invocation';
+    /**
+     * The invocation and tool invocation the current run was delegated from.
+     *
+     * @var array{?string, ?string}
+     */
+    protected static array $current = [null, null];
 
     /**
      * Get the invocation and tool invocation the current run was delegated from.
@@ -18,7 +20,7 @@ class ParentInvocation
      */
     public static function current(): array
     {
-        return static::context()?->getHidden(static::CONTEXT_KEY) ?? [null, null];
+        return static::$current;
     }
 
     /**
@@ -26,34 +28,15 @@ class ParentInvocation
      */
     public static function within(?string $invocationId, string $toolInvocationId, Closure $callback): mixed
     {
-        $context = static::context();
+        $previous = static::$current;
 
-        if ($context === null) {
-            return $callback();
-        }
-
-        $previous = $context->getHidden(static::CONTEXT_KEY);
-
-        $context->addHidden(static::CONTEXT_KEY, [$invocationId, $toolInvocationId]);
+        // A tool handler is arbitrary user code, so the delegating pair waits here rather than travelling as a parameter...
+        static::$current = [$invocationId, $toolInvocationId];
 
         try {
             return $callback();
         } finally {
-            $previous === null
-                ? $context->forgetHidden(static::CONTEXT_KEY)
-                : $context->addHidden(static::CONTEXT_KEY, $previous);
+            static::$current = $previous;
         }
-    }
-
-    /**
-     * Resolve the context repository, if the application provides one.
-     */
-    protected static function context(): ?ContextRepository
-    {
-        $container = Container::getInstance();
-
-        return $container->bound(ContextRepository::class)
-            ? $container->make(ContextRepository::class)
-            : null;
     }
 }

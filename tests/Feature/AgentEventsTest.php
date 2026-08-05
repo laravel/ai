@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\ConversationStore;
@@ -15,6 +16,7 @@ use Laravel\Ai\Events\StepFailed;
 use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Exceptions\RateLimitedException;
+use Laravel\Ai\Gateway\ParentInvocation;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -478,4 +480,18 @@ test('the parent invocation is restored once a tool call finishes', function ():
 
     expect($standalone->parentInvocationId)->toBeNull()
         ->and($standalone->parentToolInvocationId)->toBeNull();
+});
+
+test('the parent invocation never travels outside the current process', function (): void {
+    $insideDehydratedContext = null;
+
+    ParentInvocation::within('inv_1', 'tool_1', function () use (&$insideDehydratedContext): void {
+        $insideDehydratedContext = Context::dehydrate();
+
+        expect(ParentInvocation::current())->toBe(['inv_1', 'tool_1']);
+    });
+
+    // Queued jobs serialize the log context, so the delegating pair must never be stored there...
+    expect($insideDehydratedContext)->toBeNull()
+        ->and(ParentInvocation::current())->toBe([null, null]);
 });
