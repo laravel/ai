@@ -95,14 +95,15 @@ class OllamaGateway implements EmbeddingGateway, StepTextGateway
         EmbeddingProvider $provider,
         string $model,
         array $inputs,
-        ?int $dimensions,
+        int $dimensions,
         int $timeout = 30,
         array $providerOptions = [],
     ): EmbeddingsResponse {
-        $body = array_merge($providerOptions, [
+        $body = array_merge($providerOptions, array_filter([
             'model' => $model,
             'input' => $inputs,
-        ], is_null($dimensions) ? [] : ['dimensions' => $dimensions]);
+            'dimensions' => $dimensions ?: null,
+        ]));
 
         $response = $this->withErrorHandling(
             $provider->name(),

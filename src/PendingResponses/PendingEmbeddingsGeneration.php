@@ -133,19 +133,18 @@ class PendingEmbeddingsGeneration
 
             $model ??= $provider->defaultEmbeddingsModel();
 
-            // Only an explicitly requested dimension is forwarded, but the cache key always needs a concrete value...
-            $cacheDimensions = $this->dimensions ?: $provider->defaultEmbeddingsDimensions();
+            $dimensions = $this->dimensions ?: $provider->defaultEmbeddingsDimensions();
 
             $providerOptions = $this->resolveProviderOptions($provider);
 
-            if (($cached = $this->generateFromCache($provider, $model, $cacheDimensions, $providerOptions)) instanceof EmbeddingsResponse) {
+            if (($cached = $this->generateFromCache($provider, $model, $dimensions, $providerOptions)) instanceof EmbeddingsResponse) {
                 return $cached;
             }
 
             try {
                 return tap(
-                    $provider->embeddings($this->inputs, $this->dimensions, $model, $this->timeout, $providerOptions),
-                    fn (EmbeddingsResponse $response) => $this->cacheEmbeddings($provider, $model, $cacheDimensions, $providerOptions, $response)
+                    $provider->embeddings($this->inputs, $dimensions, $model, $this->timeout, $providerOptions),
+                    fn (EmbeddingsResponse $response) => $this->cacheEmbeddings($provider, $model, $dimensions, $providerOptions, $response)
                 );
             } catch (FailoverableException $e) {
                 $lastException = $e;

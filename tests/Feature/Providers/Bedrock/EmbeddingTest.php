@@ -63,47 +63,20 @@ describe('cohere embeddings', function () {
         expect($response->embeddings)->toBe([]);
     });
 
-    test('requests the given output dimension for Cohere Embed v4 models', function () {
+    test('sends the Cohere request shape rather than the Titan one', function () {
         $mock = $this->bedrockInvokeMock(['embeddings' => ['float' => [[0.1, 0.2, 0.3]]]]);
 
         $this->gatewayWithClient($this->bedrockClient($mock))->generateEmbeddings(
             $this->bedrockProvider(),
             'cohere.embed-v4:0',
             ['The quick brown fox.'],
-            256,
+            1024,
         );
 
         expect(json_decode($mock->getLastCommand()['body'], true))->toBe([
             'input_type' => 'search_document',
-            'output_dimension' => 256,
             'texts' => ['The quick brown fox.'],
         ]);
-    });
-
-    test('omits the output dimension when none was requested', function () {
-        $mock = $this->bedrockInvokeMock(['embeddings' => [[0.1, 0.2, 0.3]]]);
-
-        $this->gatewayWithClient($this->bedrockClient($mock))->generateEmbeddings(
-            $this->bedrockProvider(),
-            'cohere.embed-english-v3',
-            ['The quick brown fox.'],
-            null,
-        );
-
-        expect(json_decode($mock->getLastCommand()['body'], true))->not->toHaveKey('output_dimension');
-    });
-
-    test('forwards a requested output dimension without inspecting the model', function () {
-        $mock = $this->bedrockInvokeMock(['embeddings' => [[0.1, 0.2, 0.3]]]);
-
-        $this->gatewayWithClient($this->bedrockClient($mock))->generateEmbeddings(
-            $this->bedrockProvider(),
-            'cohere.embed-multilingual-v4',
-            ['The quick brown fox.'],
-            512,
-        );
-
-        expect(json_decode($mock->getLastCommand()['body'], true))->toHaveKey('output_dimension', 512);
     });
 
     test('routes region prefixed Cohere models to the Cohere request shape', function () {
@@ -122,21 +95,6 @@ describe('cohere embeddings', function () {
 });
 
 describe('titan embeddings', function () {
-    test('omits the dimensions when none was requested', function () {
-        $mock = $this->bedrockInvokeMock(['embedding' => [0.1, 0.2, 0.3], 'inputTextTokenCount' => 5]);
-
-        $this->gatewayWithClient($this->bedrockClient($mock))->generateEmbeddings(
-            $this->bedrockProvider(),
-            'amazon.titan-embed-text-v2:0',
-            ['The quick brown fox.'],
-            null,
-        );
-
-        expect(json_decode($mock->getLastCommand()['body'], true))->toBe([
-            'inputText' => 'The quick brown fox.',
-        ]);
-    });
-
     test('requests the given dimensions', function () {
         $mock = $this->bedrockInvokeMock(['embedding' => [0.1, 0.2, 0.3], 'inputTextTokenCount' => 5]);
 

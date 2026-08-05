@@ -497,14 +497,14 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
         EmbeddingProvider $provider,
         string $model,
         array $inputs,
-        ?int $dimensions,
+        int $dimensions,
         int $timeout = 30,
         array $providerOptions = [],
     ): EmbeddingsResponse {
         $client = $this->createBedrockClient($provider, $timeout);
 
         if ($this->isCohereEmbeddingModel($model)) {
-            return $this->generateCohereEmbeddings($provider, $model, $client, $inputs, $dimensions, $providerOptions);
+            return $this->generateCohereEmbeddings($provider, $model, $client, $inputs, $providerOptions);
         }
 
         $embeddings = [];
@@ -520,7 +520,8 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
                         'accept' => 'application/json',
                         'body' => json_encode(array_merge($providerOptions, [
                             'inputText' => $input,
-                        ], is_null($dimensions) ? [] : ['dimensions' => $dimensions])),
+                            'dimensions' => $dimensions,
+                        ])),
                     ]),
                 );
 
@@ -553,7 +554,6 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
         string $model,
         $client,
         array $inputs,
-        ?int $dimensions,
         array $providerOptions = [],
     ): EmbeddingsResponse {
         try {
@@ -565,7 +565,6 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
                     'accept' => 'application/json',
                     'body' => json_encode(array_merge(
                         ['input_type' => 'search_document'],
-                        is_null($dimensions) ? [] : ['output_dimension' => $dimensions],
                         $providerOptions,
                         ['texts' => array_values($inputs)],
                     )),
@@ -590,7 +589,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
      */
     protected function isCohereEmbeddingModel(string $model): bool
     {
-        return Str::contains($model, 'cohere.embed-');
+        return str_contains($model, 'cohere.embed-');
     }
 
     /**

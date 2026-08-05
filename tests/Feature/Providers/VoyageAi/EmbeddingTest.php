@@ -68,12 +68,12 @@ test('multiple inputs return multiple embeddings', function (): void {
         ->and($response->embeddings[1])->toBe([0.4, 0.5, 0.6]);
 });
 
-test('embeddings omit the output dimension when none specified', function (): void {
+test('embeddings default to 1024 dimensions when none specified', function (): void {
     Http::fake(['*' => fakeVoyageEmbeddingsResponse()]);
 
     Embeddings::for(['Hello'])->generate(provider: 'voyageai', model: 'voyage-4');
 
-    Http::assertSent(fn (Request $request): bool => ! array_key_exists('output_dimension', json_decode($request->body(), true)));
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['output_dimension'] === 1024);
 });
 
 test('image embeddings use the multimodal endpoint', function (): void {

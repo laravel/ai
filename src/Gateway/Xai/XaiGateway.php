@@ -150,7 +150,7 @@ class XaiGateway implements Gateway, StepTextGateway
         EmbeddingProvider $provider,
         string $model,
         array $inputs,
-        ?int $dimensions,
+        int $dimensions,
         int $timeout = 30,
         array $providerOptions = [],
     ): EmbeddingsResponse {

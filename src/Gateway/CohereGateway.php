@@ -31,7 +31,7 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway
         EmbeddingProvider $provider,
         string $model,
         array $inputs,
-        ?int $dimensions,
+        int $dimensions,
         int $timeout = 30,
         array $providerOptions = [],
     ): EmbeddingsResponse {
@@ -42,7 +42,6 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway
                     'input_type' => 'search_document',
                     'embedding_types' => ['float'],
                 ],
-                is_null($dimensions) ? [] : ['output_dimension' => $dimensions],
                 $providerOptions,
                 [
                     'model' => $model,
