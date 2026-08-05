@@ -58,7 +58,7 @@ describe('prompt responses', function (): void {
 
     test('fake responses may expose a raw http response', function (): void {
         AssistantAgent::fake([
-            (new TextResponse('Hello', new Usage, new Meta))->withRaw(new Response(
+            (new TextResponse('Hello', new Usage, new Meta))->withRawResponse(new Response(
                 new Psr7Response(200, ['x-ratelimit-remaining-requests' => '99'], '{}')
             )),
         ]);

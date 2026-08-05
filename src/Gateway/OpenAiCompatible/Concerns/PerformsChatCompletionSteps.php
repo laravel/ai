@@ -36,7 +36,7 @@ trait PerformsChatCompletionSteps
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, filled($schema))->withRaw($response);
+        return $this->parseTextResponse($data, $provider, filled($schema))->withRawResponse($response);
     }
 
     /**

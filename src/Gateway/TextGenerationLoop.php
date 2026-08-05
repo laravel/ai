@@ -544,7 +544,7 @@ class TextGenerationLoop
             $result->finishReason,
             $result->usage,
             $result->meta,
-        ))->withRaw($result->raw);
+        ))->withRawResponse($result->raw);
     }
 
     /**
@@ -575,13 +575,13 @@ class TextGenerationLoop
                 toolResults: $newMessages
                     ->whereInstanceOf(ToolResultMessage::class)
                     ->flatMap(fn (ToolResultMessage $message): Collection => $message->toolResults),
-            )->withSteps($steps)->withRaw($lastResult->raw);
+            )->withSteps($steps)->withRawResponse($lastResult->raw);
         }
 
         return (new TextResponse(
             $finalStep->text,
             $totalUsage,
             $finalStep->meta,
-        ))->withMessages($newMessages)->withSteps($steps)->withRaw($lastResult?->raw);
+        ))->withMessages($newMessages)->withSteps($steps)->withRawResponse($lastResult?->raw);
     }
 }

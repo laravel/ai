@@ -11,7 +11,7 @@ use Tests\Fixtures\Responses\SubclassedTextResponse;
 test('serialization preserves private properties declared on text response subclasses', function (): void {
     $response = new SubclassedTextResponse('Hello', new Usage(1, 2), new Meta('anthropic', 'claude'));
     $response->rememberSecret('changed');
-    $response->withRaw(new Response(new Psr7Response(200, [], '{}')));
+    $response->withRawResponse(new Response(new Psr7Response(200, [], '{}')));
 
     $restored = unserialize(serialize($response));
 
@@ -23,7 +23,7 @@ test('serialization preserves private properties declared on text response subcl
 test('serialization preserves private properties declared on step subclasses', function (): void {
     $step = new SubclassedStep('Hello', [], [], FinishReason::Stop, new Usage(1, 2), new Meta('anthropic', 'claude'));
     $step->rememberSecret('changed');
-    $step->withRaw(new Response(new Psr7Response(200, [], '{}')));
+    $step->withRawResponse(new Response(new Psr7Response(200, [], '{}')));
 
     $restored = unserialize(serialize($step));
 
