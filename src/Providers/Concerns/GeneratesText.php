@@ -116,12 +116,7 @@ trait GeneratesText
                     return $agentResponse;
                 });
         } catch (Throwable $exception) {
-            // A failoverable exception is only terminal once the caller has run out of providers to try...
-            if (! $exception instanceof FailoverableException || ! $prompt->canFailOver) {
-                $this->events->dispatch(
-                    new AgentFailed($invocationId, $processedPrompt ?? $prompt, $exception)
-                );
-            }
+            $this->recordAgentFailure($invocationId, $processedPrompt ?? $prompt, $exception);
 
             throw $exception;
         }
@@ -241,6 +236,19 @@ trait GeneratesText
                 ));
             },
         );
+    }
+
+    /**
+     * Dispatch the terminal failure event for a run, unless the caller may still retry it against another provider.
+     */
+    protected function recordAgentFailure(string $invocationId, AgentPrompt $prompt, Throwable $exception, bool $retryable = true): void
+    {
+        // A failoverable exception is only terminal once the caller has run out of providers to try...
+        if ($retryable && $prompt->canFailOver && $exception instanceof FailoverableException) {
+            return;
+        }
+
+        $this->events->dispatch(new AgentFailed($invocationId, $prompt, $exception));
     }
 
     /**

@@ -6,12 +6,10 @@ use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasStructuredOutput;
-use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\AgentStreamed;
 use Laravel\Ai\Events\StreamingAgent;
 use Laravel\Ai\Events\ToolApprovalRequested;
 use Laravel\Ai\Events\ToolApprovalResolved;
-use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
@@ -74,6 +72,8 @@ trait StreamsText
                         function () use ($invocationId, $prompt, $agent, $messages, $tools, $approval, $recordApprovalResults, $validatedApproval) {
                             $this->events->dispatch(new StreamingAgent($invocationId, $prompt));
 
+                            $yielded = false;
+
                             try {
                                 foreach ($this->textGenerationLoop()->stream(
                                     $invocationId,
@@ -95,12 +95,11 @@ trait StreamsText
                                     }
 
                                     yield $event;
+
+                                    $yielded = true;
                                 }
                             } catch (Throwable $exception) {
-                                // A failoverable exception is only terminal once the caller has run out of providers to try...
-                                if (! $exception instanceof FailoverableException || ! $prompt->canFailOver) {
-                                    $this->events->dispatch(new AgentFailed($invocationId, $prompt, $exception));
-                                }
+                                $this->recordAgentFailure($invocationId, $prompt, $exception, retryable: ! $yielded);
 
                                 throw $exception;
                             }
@@ -109,12 +108,7 @@ trait StreamsText
                     );
                 });
         } catch (Throwable $exception) {
-            // A failoverable exception is only terminal once the caller has run out of providers to try...
-            if (! $exception instanceof FailoverableException || ! $prompt->canFailOver) {
-                $this->events->dispatch(
-                    new AgentFailed($invocationId, $processedPrompt ?? $prompt, $exception)
-                );
-            }
+            $this->recordAgentFailure($invocationId, $processedPrompt ?? $prompt, $exception);
 
             throw $exception;
         }

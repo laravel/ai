@@ -29,6 +29,7 @@ use Tests\Fixtures\Agents\DelegatingViaCustomToolAgent;
 use Tests\Fixtures\Agents\MiddleManagerAgent;
 use Tests\Fixtures\Agents\MultiStepToolAgent;
 use Tests\Fixtures\Agents\OrchestratorAgent;
+use Tests\Fixtures\Agents\RateLimitedToolAgent;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
 use Tests\Fixtures\Agents\RememberingThrowingApprovableAgent;
 use Tests\Fixtures\Agents\ResearchAgent;
@@ -160,7 +161,8 @@ test('a run that exhausts every provider reports the failure once', function ():
     expect(fn (): mixed => (new AssistantAgent)->prompt('Hi', provider: ['primary', 'backup']))
         ->toThrow(RateLimitedException::class);
 
-    Event::assertDispatchedTimes(AgentFailedOver::class, 2);
+    // Only the first attempt actually failed over; the last had nowhere left to go...
+    Event::assertDispatchedTimes(AgentFailedOver::class, 1);
     Event::assertDispatchedTimes(AgentFailed::class, 1);
 
     $failed = Event::dispatched(AgentFailed::class)->first()[0];
@@ -192,7 +194,8 @@ test('a streamed run that exhausts every provider reports the failure once', fun
         }
     })->toThrow(RateLimitedException::class);
 
-    Event::assertDispatchedTimes(AgentFailedOver::class, 2);
+    // Only the first attempt actually failed over; the last had nowhere left to go...
+    Event::assertDispatchedTimes(AgentFailedOver::class, 1);
     Event::assertDispatchedTimes(AgentFailed::class, 1);
 
     Event::assertDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->invocationId === $response->invocationId);
@@ -211,6 +214,7 @@ test('a single provider run with no failover still reports a failoverable failur
         ->toThrow(RateLimitedException::class);
 
     Event::assertDispatchedTimes(AgentFailed::class, 1);
+    Event::assertNotDispatched(AgentFailedOver::class);
 });
 
 test('a single provider stream with no failover still reports a failoverable failure', function (): void {
@@ -231,6 +235,7 @@ test('a single provider stream with no failover still reports a failoverable fai
     })->toThrow(RateLimitedException::class);
 
     Event::assertDispatchedTimes(AgentFailed::class, 1);
+    Event::assertNotDispatched(AgentFailedOver::class);
 });
 
 test('step events are dispatched for each step of a tool calling run', function (): void {
@@ -582,4 +587,60 @@ test('a provider error inside the stream closes the step it opened', function ()
     expect($failed->invocationId)->toBe($starting->invocationId)
         ->and($failed->stepNumber)->toBe($starting->stepNumber)
         ->and($failed->exception->getMessage())->toBe('Upstream exploded.');
+});
+
+test('a failure after failover reports the prompt the middleware produced', function (): void {
+    Event::fake();
+
+    config([
+        'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
+        'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
+    ]);
+
+    Http::preventStrayRequests();
+
+    Http::fakeSequence()
+        ->push(status: 429)
+        ->push(status: 429);
+
+    $agent = (new AssistantAgent)->withMiddleware([
+        fn (AgentPrompt $prompt, Closure $next) => $next($prompt->revise('Revised by middleware.')),
+    ]);
+
+    expect(fn (): mixed => $agent->prompt('Hi', provider: ['primary', 'backup']))
+        ->toThrow(RateLimitedException::class);
+
+    $prompted = Event::dispatched(PromptingAgent::class)->first()[0];
+
+    Event::assertDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->prompt->prompt === $prompted->prompt->prompt
+        && $event->prompt->prompt === 'Revised by middleware.');
+});
+
+test('a streamed failure after the stream started reports the run as failed', function (): void {
+    Event::fake();
+
+    config([
+        'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
+        'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
+    ]);
+
+    Http::preventStrayRequests();
+
+    Http::fakeSequence()->pushResponse(fakeGroqStreamToolCallResponse('RateLimitedNumberGenerator'));
+
+    $response = (new RateLimitedToolAgent)->stream('Generate', provider: ['primary', 'backup']);
+
+    $seen = 0;
+
+    // The stream had already reached the consumer, so the run can no longer be replayed against the backup...
+    expect(function () use ($response, &$seen): void {
+        foreach ($response as $event) {
+            $seen++;
+        }
+    })->toThrow(RateLimitedException::class, 'Rate limited while running the tool.');
+
+    expect($seen)->toBeGreaterThan(0);
+
+    Event::assertDispatchedTimes(AgentFailed::class, 1);
+    Event::assertNotDispatched(AgentFailedOver::class);
 });

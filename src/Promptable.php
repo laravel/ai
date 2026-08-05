@@ -18,7 +18,6 @@ use Laravel\Ai\Attributes\UseSmartestModel;
 use Laravel\Ai\Attributes\WithoutBroadcasting;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Enums\Lab;
-use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Gateway\FakeTextGateway;
@@ -35,7 +34,6 @@ use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use ReflectionClass;
 use RuntimeException;
-use Throwable;
 
 trait Promptable
 {
@@ -71,18 +69,20 @@ trait Promptable
             ? $this->providersForApprovalContinuation($provider, $model)
             : $this->getProvidersAndModelsForFailover($provider, $model);
 
-        $agentPrompt = null;
-
         [$parentInvocationId, $parentToolInvocationId] = ParentInvocation::current();
 
-        $run = function (TextProvider $provider, string $model) use (
-            $text, $attachments, $timeout, $invocationId, $approvalDecisions, $providers,
-            $parentInvocationId, $parentToolInvocationId, &$agentPrompt
+        $run = function (TextProvider $provider, string $model, bool $canFailOver = false) use (
+            $text, $attachments, $timeout, $invocationId, $approvalDecisions,
+            $parentInvocationId, $parentToolInvocationId
         ): AgentResponse {
             return $provider->prompt(
-                $agentPrompt = new AgentPrompt(
-                    $this, $text, $attachments, $provider, $model, $this->getTimeout($timeout), $invocationId, $approvalDecisions,
-                    $parentInvocationId, $parentToolInvocationId, count($providers) > 1,
+                new AgentPrompt(
+                    $this, $text, $attachments, $provider, $model, $this->getTimeout($timeout),
+                    invocationId: $invocationId,
+                    approvalDecisions: $approvalDecisions,
+                    parentInvocationId: $parentInvocationId,
+                    parentToolInvocationId: $parentToolInvocationId,
+                    canFailOver: $canFailOver,
                 )
             );
         };
@@ -93,13 +93,7 @@ trait Promptable
             return $run($provider, $model);
         }
 
-        try {
-            return $this->withModelFailover($run, $providers, $invocationId);
-        } catch (FailoverableException $e) {
-            $this->recordAgentFailure($invocationId, $agentPrompt, $e);
-
-            throw $e;
-        }
+        return $this->withModelFailover($run, $providers, $invocationId);
     }
 
     /**
@@ -142,8 +136,11 @@ trait Promptable
 
             return $resolved->stream(
                 new AgentPrompt(
-                    $this, $prompt, $attachments, $resolved, $resolvedModel, $resolvedTimeout, $invocationId, $approvalDecisions,
-                    $parentInvocationId, $parentToolInvocationId,
+                    $this, $prompt, $attachments, $resolved, $resolvedModel, $resolvedTimeout,
+                    invocationId: $invocationId,
+                    approvalDecisions: $approvalDecisions,
+                    parentInvocationId: $parentInvocationId,
+                    parentToolInvocationId: $parentToolInvocationId,
                 )
             );
         }
@@ -155,16 +152,19 @@ trait Promptable
             $invocationId,
             function () use ($providers, $prompt, $approvalDecisions, $attachments, $resolvedTimeout, $invocationId, $parentInvocationId, $parentToolInvocationId, &$outer) {
                 $lastException = null;
-                $agentPrompt = null;
 
-                foreach ($this->iterateProvidersWithFailover($providers) as [$provider, $model]) {
+                foreach ($this->iterateProvidersWithFailover($providers) as [$provider, $model, $canFailOver]) {
                     $started = false;
 
                     try {
                         $innerResponse = $provider->stream(
-                            $agentPrompt = new AgentPrompt(
-                                $this, $prompt, $attachments, $provider, $model, $resolvedTimeout, $invocationId, $approvalDecisions,
-                                $parentInvocationId, $parentToolInvocationId, true,
+                            new AgentPrompt(
+                                $this, $prompt, $attachments, $provider, $model, $resolvedTimeout,
+                                invocationId: $invocationId,
+                                approvalDecisions: $approvalDecisions,
+                                parentInvocationId: $parentInvocationId,
+                                parentToolInvocationId: $parentToolInvocationId,
+                                canFailOver: $canFailOver,
                             )
                         );
 
@@ -179,16 +179,14 @@ trait Promptable
                         return;
                     } catch (FailoverableException $e) {
                         if ($started) {
-                            $this->recordAgentFailure($invocationId, $agentPrompt, $e);
-
                             throw $e;
                         }
 
-                        $lastException = $this->recordAgentFailover($invocationId, $provider, $model, $e);
+                        $lastException = $canFailOver
+                            ? $this->recordAgentFailover($invocationId, $provider, $model, $e)
+                            : $e;
                     }
                 }
-
-                $this->recordAgentFailure($invocationId, $agentPrompt, $lastException);
 
                 throw $lastException;
             },
@@ -282,11 +280,13 @@ trait Promptable
     {
         $lastException = null;
 
-        foreach ($this->iterateProvidersWithFailover($providers) as [$provider, $model]) {
+        foreach ($this->iterateProvidersWithFailover($providers) as [$provider, $model, $canFailOver]) {
             try {
-                return $callback($provider, $model);
+                return $callback($provider, $model, $canFailOver);
             } catch (FailoverableException $e) {
-                $lastException = $this->recordAgentFailover($invocationId, $provider, $model, $e);
+                $lastException = $canFailOver
+                    ? $this->recordAgentFailover($invocationId, $provider, $model, $e)
+                    : $e;
             }
         }
 
@@ -319,14 +319,16 @@ trait Promptable
      * Iterate the configured provider / model pairs.
      *
      * @param  array<string, string|null>  $providers
-     * @return Generator<int, array{TextProvider, string}>
+     * @return Generator<int, array{TextProvider, string, bool}>
      */
     private function iterateProvidersWithFailover(array $providers): Generator
     {
+        $remaining = count($providers);
+
         foreach ($providers as $provider => $model) {
             $provider = Ai::textProviderFor($this, $provider);
 
-            yield [$provider, $model ?? $this->getDefaultModelFor($provider)];
+            yield [$provider, $model ?? $this->getDefaultModelFor($provider), --$remaining > 0];
         }
     }
 
@@ -338,16 +340,6 @@ trait Promptable
         event(new AgentFailedOver($invocationId, $this, $provider, $model, $exception));
 
         return $exception;
-    }
-
-    /**
-     * Record that an agent run failed terminally after exhausting the providers it could fail over to.
-     */
-    private function recordAgentFailure(string $invocationId, ?AgentPrompt $prompt, Throwable $exception): void
-    {
-        if ($prompt?->canFailOver) {
-            event(new AgentFailed($invocationId, $prompt, $exception));
-        }
     }
 
     /**
