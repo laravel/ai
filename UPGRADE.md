@@ -1,19 +1,5 @@
 # Upgrade Guide
 
-## Upgrading To 0.11 From 0.10
-
-### The `AgentFailedOver` Event Signature
-
-**Likelihood Of Impact: Low**
-
-`AgentFailedOver` now takes the run's `$invocationId` as its first constructor argument so that failover attempts can be correlated with the rest of the run's events:
-
-```php
-new AgentFailedOver($invocationId, $agent, $provider, $model, $exception);
-```
-
-Listeners that only read the event's properties are unaffected. Only code that constructs the event by hand, such as a test double, needs to change. `ProviderFailedOver` is unchanged.
-
 ## Upgrading To 0.10 From 0.9
 
 ### Polymorphic Conversation Participants
