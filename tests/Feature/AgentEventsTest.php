@@ -20,9 +20,14 @@ use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Gateway\ParentInvocation;
+use Laravel\Ai\Gateway\StepResponse;
+use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Messages\ToolResultMessage;
+use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Tools\AgentTool;
 use Tests\Fixtures\Agents\AssistantAgent;
@@ -258,23 +263,50 @@ test('step events are dispatched for each step of a tool calling run', function 
 
     Event::assertDispatched(StepCompleted::class, fn (StepCompleted $event): bool => $event->invocationId === $response->invocationId
         && $event->stepNumber === 0
-        && $event->finishReason === FinishReason::ToolCalls
-        && count($event->toolCalls) === 1);
+        && $event->response->finishReason === FinishReason::ToolCalls
+        && count($event->response->toolCalls) === 1);
 
     Event::assertDispatched(StepCompleted::class, fn (StepCompleted $event): bool => $event->stepNumber === 1
-        && $event->finishReason === FinishReason::Stop
-        && $event->toolCalls === []);
+        && $event->response->finishReason === FinishReason::Stop
+        && $event->response->toolCalls === []);
 });
 
-test('step completed carries the meta of the step it reports', function (): void {
+test('step completed carries the whole step response', function (): void {
     Event::fake();
 
     AssistantAgent::fake(['Hello!']);
 
     (new AssistantAgent)->prompt('Hi');
 
-    Event::assertDispatched(StepCompleted::class, fn (StepCompleted $event): bool => $event->meta->model !== ''
-        && $event->meta->provider !== '');
+    $completed = Event::dispatched(StepCompleted::class)->first()[0];
+
+    // The response travels whole so a consumer can record the text and usage of a step, not only that it finished...
+    expect($completed->response)->toBeInstanceOf(StepResponse::class)
+        ->and($completed->response->text)->toBe('Hello!')
+        ->and($completed->response->meta->model)->not->toBeEmpty()
+        ->and($completed->response->meta->provider)->not->toBeEmpty()
+        ->and($completed->response->usage)->toBeInstanceOf(Usage::class);
+});
+
+test('starting step carries the messages and options the step is sent with', function (): void {
+    Event::fake();
+
+    MultiStepToolAgent::fake([
+        new ToolCall('call_1', 'FixedNumberGenerator', []),
+        'The number is 72019.',
+    ]);
+
+    (new MultiStepToolAgent)->prompt('Generate a number');
+
+    [$first, $second] = Event::dispatched(StartingStep::class)->map(fn (array $dispatched): StartingStep => $dispatched[0])->all();
+
+    expect($first->messages)->toHaveCount(1)
+        ->and($first->messages[0])->toBeInstanceOf(UserMessage::class)
+        ->and($first->options)->toBeInstanceOf(TextGenerationOptions::class);
+
+    // The second step is sent the assistant turn and the tool result the first step produced...
+    expect($second->messages)->toHaveCount(3)
+        ->and($second->messages[2])->toBeInstanceOf(ToolResultMessage::class);
 });
 
 test('conversation title generation does not report steps against the run that triggered it', function (): void {
@@ -314,7 +346,7 @@ test('step events are dispatched on the streaming path', function (): void {
 
     Event::assertDispatched(StepCompleted::class, fn (StepCompleted $event): bool => $event->invocationId === $response->invocationId
         && $event->stepNumber === 0
-        && $event->finishReason === FinishReason::Stop);
+        && $event->response->finishReason === FinishReason::Stop);
 });
 
 test('a failing gateway dispatches step failed and agent failed instead of agent prompted', function (): void {
@@ -608,6 +640,40 @@ test('a failure after failover reports the prompt the middleware produced', func
 
     Event::assertDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->prompt->prompt === $prompted->prompt->prompt
         && $event->prompt->prompt === 'Revised by middleware.');
+});
+
+test('middleware that builds its own prompt does not turn a recoverable failover into a failure', function (): void {
+    Event::fake();
+
+    config([
+        'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
+        'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
+    ]);
+
+    Http::preventStrayRequests();
+
+    Http::fakeSequence()
+        ->push(status: 429)
+        ->pushResponse(fakeGroqResponse('Hello from the backup.'));
+
+    // A hand built prompt cannot carry the attempt bookkeeping forward, so terminality must be read from ours...
+    $agent = (new AssistantAgent)->withMiddleware([
+        fn (AgentPrompt $prompt, Closure $next) => $next(new AgentPrompt(
+            $prompt->agent,
+            'Rebuilt by middleware.',
+            $prompt->attachments,
+            $prompt->provider,
+            $prompt->model,
+            invocationId: $prompt->invocationId,
+        )),
+    ]);
+
+    $response = $agent->prompt('Hi', provider: ['primary', 'backup']);
+
+    expect($response->text)->toBe('Hello from the backup.');
+
+    Event::assertDispatched(AgentFailedOver::class);
+    Event::assertNotDispatched(AgentFailed::class);
 });
 
 test('a streamed failure after the stream started reports the run as failed', function (): void {

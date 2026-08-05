@@ -18,6 +18,7 @@ use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Exceptions\NoSuchToolException;
 use Laravel\Ai\Gateway\Concerns\HandlesToolApprovals;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
+use Laravel\Ai\Gateway\Concerns\MeasuresDuration;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
@@ -38,15 +39,12 @@ use Throwable;
 
 class TextGenerationLoop
 {
-    use HandlesToolApprovals, InvokesTools;
+    use HandlesToolApprovals, InvokesTools, MeasuresDuration;
 
     /**
      * Create a new text generation loop instance.
      */
-    public function __construct(protected StepTextGateway $gateway)
-    {
-        //
-    }
+    public function __construct(protected StepTextGateway $gateway) {}
 
     /**
      * @param  Tool[]  $tools
@@ -97,7 +95,9 @@ class TextGenerationLoop
                 continuationToken: $continuationToken,
             );
 
-            $context?->startingStep($stepContext);
+            $stepOptions = $options?->forStep($step);
+
+            $context?->startingStep($stepContext, $allMessages, $stepOptions);
 
             $startedAt = hrtime(true);
 
@@ -109,7 +109,7 @@ class TextGenerationLoop
                     $allMessages,
                     $tools,
                     $schema,
-                    $options?->forStep($step),
+                    $stepOptions,
                     $timeout,
                     $stepContext,
                 );
@@ -220,7 +220,9 @@ class TextGenerationLoop
                 continuationToken: $continuationToken,
             );
 
-            $context?->startingStep($stepContext);
+            $stepOptions = $options?->forStep($step);
+
+            $context?->startingStep($stepContext, $allMessages, $stepOptions);
 
             $lastError = null;
             $startedAt = hrtime(true);
@@ -234,7 +236,7 @@ class TextGenerationLoop
                     $allMessages,
                     $tools,
                     $schema,
-                    $options?->forStep($step),
+                    $stepOptions,
                     $timeout,
                     $stepContext,
                 );

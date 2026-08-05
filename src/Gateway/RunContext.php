@@ -12,6 +12,7 @@ use Laravel\Ai\Events\StepCompleted;
 use Laravel\Ai\Events\StepFailed;
 use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
+use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Streaming\Events\Error;
 use Throwable;
 
@@ -27,11 +28,14 @@ class RunContext
 
     /**
      * Report that a generation step is about to start.
+     *
+     * @param  Message[]  $messages
      */
-    public function startingStep(StepContext $step): void
+    public function startingStep(StepContext $step, array $messages, ?TextGenerationOptions $options): void
     {
         $this->events->dispatch(new StartingStep(
             $this->invocationId, $step->stepNumber, $this->agent, $this->provider, $this->model, $step->isFinalStep,
+            $messages, $options,
         ));
     }
 
@@ -42,7 +46,7 @@ class RunContext
     {
         $this->events->dispatch(new StepCompleted(
             $this->invocationId, $step->stepNumber, $this->agent, $this->provider, $this->model, $step->isFinalStep,
-            $response->meta, $response->usage, $response->finishReason, $response->toolCalls, $durationMs,
+            $response, $durationMs,
         ));
     }
 
