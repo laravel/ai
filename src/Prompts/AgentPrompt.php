@@ -22,7 +22,9 @@ class AgentPrompt extends Prompt
 
     public readonly ?string $parentToolInvocationId;
 
-    // Internal failover bookkeeping, deliberately not part of the prompt's public surface...
+    // Internal failover bookkeeping, deliberately not part of the prompt's public surface. It rides on the prompt
+    // because the provider catches the failure but only the caller knows whether another provider is queued, and
+    // moving the dispatch up to the caller would lose the prompt the middleware produced...
     protected readonly bool $isFinalAttempt;
 
     /**
