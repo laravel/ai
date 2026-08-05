@@ -4,18 +4,19 @@ use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
+use Laravel\Ai\Gateway\RunObservers;
 use Laravel\Ai\Tools\Request;
 
-test('tool invocation callbacks are restored after nested tool invocations', function (): void {
+test('each tool invocation reports to the observers it was given', function (): void {
     $events = [];
 
     $gateway = new class
     {
         use InvokesTools;
 
-        public function invoke(Tool $tool, array $arguments = []): string
+        public function invoke(Tool $tool, array $arguments = [], ?RunObservers $observers = null): string
         {
-            return $this->executeTool($tool, $arguments);
+            return $this->executeTool($tool, $arguments, null, $observers);
         }
     };
 
@@ -45,36 +46,29 @@ test('tool invocation callbacks are restored after nested tool invocations', fun
         }
     };
 
-    $gateway->onToolInvocation(
-        invoking: function (Tool $tool) use (&$events): void {
-            $events[] = 'parent invoking '.($tool->description());
-        },
-        invoked: function (Tool $tool, array $arguments, mixed $result) use (&$events): void {
-            $events[] = 'parent invoked '.($tool->description()).':'.$result;
-        },
-    );
+    $observers = function (string $label) use (&$events): RunObservers {
+        return new RunObservers(
+            invokingTool: function (Tool $tool) use (&$events, $label): void {
+                $events[] = $label.' invoking '.$tool->description();
+            },
+            toolInvoked: function (Tool $tool, array $arguments, mixed $result) use (&$events, $label): void {
+                $events[] = $label.' invoked '.$tool->description().':'.$result;
+            },
+        );
+    };
 
     $nestedTool = $makeTool('nested', fn (): string => 'nested result');
 
-    $delegatingTool = $makeTool('delegating', function () use ($gateway, $nestedTool, &$events): string {
-        $gateway->onToolInvocation(
-            invoking: function (Tool $tool) use (&$events): void {
-                $events[] = 'sub invoking '.($tool->description());
-            },
-            invoked: function (Tool $tool, array $arguments, mixed $result) use (&$events): void {
-                $events[] = 'sub invoked '.($tool->description()).':'.$result;
-            },
-        );
-
-        $gateway->invoke($nestedTool);
+    $delegatingTool = $makeTool('delegating', function () use ($gateway, $nestedTool, $observers): string {
+        $gateway->invoke($nestedTool, observers: $observers('sub'));
 
         return 'delegated result';
     });
 
     $siblingTool = $makeTool('sibling', fn (): string => 'sibling result');
 
-    $gateway->invoke($delegatingTool);
-    $gateway->invoke($siblingTool);
+    $gateway->invoke($delegatingTool, observers: $observers('parent'));
+    $gateway->invoke($siblingTool, observers: $observers('parent'));
 
     expect($events)->toBe([
         'parent invoking delegating',
@@ -84,4 +78,39 @@ test('tool invocation callbacks are restored after nested tool invocations', fun
         'parent invoking sibling',
         'parent invoked sibling:sibling result',
     ]);
+});
+
+test('a tool invocation without observers is silent', function (): void {
+    $gateway = new class
+    {
+        use InvokesTools;
+
+        public function invoke(Tool $tool): string
+        {
+            return $this->executeTool($tool, []);
+        }
+    };
+
+    $tool = new class implements Tool
+    {
+        public function description(): string
+        {
+            return 'unobserved';
+        }
+
+        public function handle(Request $request): string
+        {
+            return 'result';
+        }
+
+        /**
+         * @return array<string, Type>
+         */
+        public function schema(JsonSchema $schema): array
+        {
+            return [];
+        }
+    };
+
+    expect($gateway->invoke($tool))->toBe('result');
 });

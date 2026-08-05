@@ -11,7 +11,7 @@ use Throwable;
 
 class AgentTool implements Tool
 {
-    public function __construct(protected Agent $agent, protected ?string $invocationId = null)
+    public function __construct(protected Agent $agent)
     {
         //
     }
@@ -45,22 +45,11 @@ class AgentTool implements Tool
     public function handle(Request $request): string
     {
         try {
-            return $this->agentWithinParentInvocation($request)->prompt((string) $request['task'])->text;
+            return $this->agent->prompt((string) $request['task'])->text;
         } catch (Throwable $throwable) {
+            // Degraded to a result so the parent run survives; the failure surfaces as the sub-agent's own AgentFailed...
             return 'Agent failed: '.$throwable->getMessage();
         }
-    }
-
-    /**
-     * Get the agent, correlated with the invocation and tool invocation that are delegating to it.
-     */
-    protected function agentWithinParentInvocation(Request $request): Agent
-    {
-        if (! method_exists($this->agent, 'withinInvocation')) {
-            return $this->agent;
-        }
-
-        return $this->agent->withinInvocation($this->invocationId, $request->toolInvocationId());
     }
 
     /**

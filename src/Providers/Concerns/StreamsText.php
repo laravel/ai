@@ -60,7 +60,7 @@ trait StreamsText
                         $messages[] = new UserMessage($prompt->prompt, $prompt->attachments->all());
                     }
 
-                    $tools = $this->resolveTools($agent, $invocationId);
+                    $tools = $this->resolveTools($agent);
                     $approval = $this->resumableApprovalFor($prompt);
                     $recordApprovalResults = $this->approvalResultRecorderFor($prompt, $resolvedApprovalResults);
 
@@ -73,9 +73,6 @@ trait StreamsText
                         $invocationId,
                         function () use ($invocationId, $prompt, $agent, $messages, $tools, $approval, $recordApprovalResults, $validatedApproval) {
                             $this->events->dispatch(new StreamingAgent($invocationId, $prompt));
-
-                            $this->listenForToolInvocations($invocationId, $agent);
-                            $this->listenForGenerationSteps($invocationId, $prompt);
 
                             try {
                                 foreach ($this->textGenerationLoop()->stream(
@@ -91,6 +88,7 @@ trait StreamsText
                                     $approval,
                                     $recordApprovalResults,
                                     $validatedApproval,
+                                    $this->observersFor($invocationId, $prompt),
                                 ) as $event) {
                                     if ($event instanceof ToolApprovalRequest) {
                                         $this->throwIfNotResumable($agent);

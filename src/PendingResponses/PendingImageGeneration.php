@@ -137,7 +137,7 @@ class PendingImageGeneration
             } catch (FailoverableException $e) {
                 $lastException = $e;
 
-                event(new ProviderFailedOver(null, $provider, $model, $e));
+                event(new ProviderFailedOver($provider, $model, $e));
 
                 continue;
             }

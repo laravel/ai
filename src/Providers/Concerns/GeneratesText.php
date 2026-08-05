@@ -27,6 +27,7 @@ use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Exceptions\ApprovalNotResumableException;
 use Laravel\Ai\Exceptions\FailoverableException;
+use Laravel\Ai\Gateway\RunObservers;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -77,9 +78,6 @@ trait GeneratesText
                         $messages[] = new UserMessage($prompt->prompt, $prompt->attachments->all());
                     }
 
-                    $this->listenForToolInvocations($invocationId, $agent);
-                    $this->listenForGenerationSteps($invocationId, $prompt);
-
                     $schema = $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null;
 
                     $response = $this->textGenerationLoop()->generate(
@@ -87,12 +85,14 @@ trait GeneratesText
                         $prompt->model,
                         (string) $agent->instructions(),
                         $messages,
-                        $this->resolveTools($agent, $invocationId),
+                        $this->resolveTools($agent),
                         $schema,
                         TextGenerationOptions::forAgent($agent),
                         $prompt->timeout,
                         $this->resumableApprovalFor($prompt),
                         $this->approvalResultRecorderFor($prompt, $resolvedApprovalResults),
+                        $this->observersFor($invocationId, $prompt),
+                        $invocationId,
                     );
 
                     if ($response->hasPendingApprovals()) {
@@ -176,14 +176,14 @@ trait GeneratesText
     /**
      * Resolve the tools for the given agent, wrapping any agent instances as tools.
      */
-    protected function resolveTools(Agent $agent, ?string $invocationId = null): array
+    protected function resolveTools(Agent $agent): array
     {
         if (! $agent instanceof HasTools) {
             return [];
         }
 
         return array_map(
-            fn ($tool) => $this->resolveTool($tool, $invocationId),
+            fn ($tool) => $this->resolveTool($tool),
             [...$agent->tools()],
         );
     }
@@ -191,10 +191,10 @@ trait GeneratesText
     /**
      * Resolve a tool returned by the agent into a native tool instance when needed.
      */
-    protected function resolveTool(mixed $tool, ?string $invocationId = null): mixed
+    protected function resolveTool(mixed $tool): mixed
     {
         return match (true) {
-            $tool instanceof Agent => new AgentTool($tool, $invocationId),
+            $tool instanceof Agent => new AgentTool($tool),
             $tool instanceof Tool => $tool,
             McpTool::supports($tool) => new McpTool($tool),
             McpServerTool::supports($tool) => new McpServerTool($tool),
@@ -203,48 +203,41 @@ trait GeneratesText
     }
 
     /**
-     * Listen for gateway tool invocations and dispatch events for the given agent when the tools are invoked.
+     * Build the observers that dispatch this run's step and tool events.
      */
-    protected function listenForToolInvocations(string $invocationId, Agent $agent): void
+    protected function observersFor(string $invocationId, AgentPrompt $prompt): RunObservers
     {
-        $this->textGenerationLoop()->onToolInvocation(
-            invoking: function (Tool $tool, array $arguments, string $toolInvocationId) use ($invocationId, $agent): void {
-                $this->events->dispatch(new InvokingTool(
-                    $invocationId, $toolInvocationId, $agent, $tool, $arguments
-                ));
-            },
-            invoked: function (Tool $tool, array $arguments, mixed $result, string $toolInvocationId) use ($invocationId, $agent): void {
-                $this->events->dispatch(new ToolInvoked(
-                    $invocationId, $toolInvocationId, $agent, $tool, $arguments, $result
-                ));
-            },
-            failed: function (Tool $tool, array $arguments, Throwable $exception, string $toolInvocationId) use ($invocationId, $agent): void {
-                $this->events->dispatch(new ToolFailed(
-                    $invocationId, $toolInvocationId, $agent, $tool, $arguments, $exception
-                ));
-            },
-        );
-    }
+        $agent = $prompt->agent;
 
-    /**
-     * Listen for generation steps and dispatch events for the given prompt as each step starts, completes, or fails.
-     */
-    protected function listenForGenerationSteps(string $invocationId, AgentPrompt $prompt): void
-    {
-        $this->textGenerationLoop()->onStep(
-            starting: function (StepContext $context) use ($invocationId, $prompt): void {
+        return new RunObservers(
+            startingStep: function (StepContext $context) use ($invocationId, $prompt): void {
                 $this->events->dispatch(new StartingStep(
                     $invocationId, $context->stepNumber, $this, $prompt->model, $context->isFinalStep
                 ));
             },
-            completed: function (StepContext $context, StepResponse $response) use ($invocationId): void {
+            stepCompleted: function (StepContext $context, StepResponse $response) use ($invocationId): void {
                 $this->events->dispatch(new StepCompleted(
-                    $invocationId, $context->stepNumber, $response->usage, $response->finishReason, $response->toolCalls
+                    $invocationId, $context->stepNumber, $response->meta, $response->usage, $response->finishReason, $response->toolCalls
                 ));
             },
-            failed: function (StepContext $context, Throwable $exception) use ($invocationId): void {
+            stepFailed: function (StepContext $context, Throwable $exception) use ($invocationId): void {
                 $this->events->dispatch(new StepFailed(
                     $invocationId, $context->stepNumber, $exception
+                ));
+            },
+            invokingTool: function (Tool $tool, array $arguments, string $toolInvocationId) use ($invocationId, $agent): void {
+                $this->events->dispatch(new InvokingTool(
+                    $invocationId, $toolInvocationId, $agent, $tool, $arguments
+                ));
+            },
+            toolInvoked: function (Tool $tool, array $arguments, mixed $result, string $toolInvocationId) use ($invocationId, $agent): void {
+                $this->events->dispatch(new ToolInvoked(
+                    $invocationId, $toolInvocationId, $agent, $tool, $arguments, $result
+                ));
+            },
+            toolFailed: function (Tool $tool, array $arguments, Throwable $exception, string $toolInvocationId) use ($invocationId, $agent): void {
+                $this->events->dispatch(new ToolFailed(
+                    $invocationId, $toolInvocationId, $agent, $tool, $arguments, $exception
                 ));
             },
         );

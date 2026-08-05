@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Events\AgentPrompted;
@@ -20,11 +21,14 @@ use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Tools\AgentTool;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\DelegatingAgent;
+use Tests\Fixtures\Agents\DelegatingViaCustomToolAgent;
 use Tests\Fixtures\Agents\MiddleManagerAgent;
 use Tests\Fixtures\Agents\MultiStepToolAgent;
 use Tests\Fixtures\Agents\OrchestratorAgent;
+use Tests\Fixtures\Agents\RememberingAssistantAgent;
 use Tests\Fixtures\Agents\ResearchAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
+use Tests\Fixtures\FakeConversationStore;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 test('a synchronous prompt threads one invocation id through the prompt and its events', function (): void {
@@ -252,6 +256,39 @@ test('step events are dispatched for each step of a tool calling run', function 
         && $event->toolCalls === []);
 });
 
+test('step completed carries the meta of the step it reports', function (): void {
+    Event::fake();
+
+    AssistantAgent::fake(['Hello!']);
+
+    (new AssistantAgent)->prompt('Hi');
+
+    Event::assertDispatched(StepCompleted::class, fn (StepCompleted $event): bool => $event->meta->model !== ''
+        && $event->meta->provider !== '');
+});
+
+test('conversation title generation does not report steps against the run that triggered it', function (): void {
+    app()->instance(ConversationStore::class, new FakeConversationStore);
+
+    Event::fake();
+
+    RememberingAssistantAgent::fake(['Fake response', 'A Nice Title']);
+
+    $user = new class
+    {
+        public int $id = 1;
+    };
+
+    $response = (new RememberingAssistantAgent)->forUser($user)->prompt('Test prompt');
+
+    // Title generation runs its own loop on the same provider, and must not be attributed to this run...
+    Event::assertDispatchedTimes(StartingStep::class, 1);
+    Event::assertDispatchedTimes(StepCompleted::class, 1);
+
+    Event::assertDispatched(StartingStep::class, fn (StartingStep $event): bool => $event->invocationId === $response->invocationId
+        && $event->stepNumber === 0);
+});
+
 test('step events are dispatched on the streaming path', function (): void {
     Event::fake();
 
@@ -398,4 +435,47 @@ test('a sub agent prompt is linked to the parent invocation and tool invocation'
     Event::assertDispatched(PromptingAgent::class, fn (PromptingAgent $event): bool => $event->prompt->agent instanceof DelegatingAgent
         && $event->prompt->parentInvocationId === null
         && $event->prompt->parentToolInvocationId === null);
+});
+
+test('an agent prompted from a hand written tool is linked to the parent invocation', function (): void {
+    Event::fake();
+
+    DelegatingViaCustomToolAgent::fake([
+        new ToolCall('call_1', 'AgentCallingTool', []),
+        'Done.',
+    ]);
+
+    ResearchAgent::fake(['Research result']);
+
+    $response = (new DelegatingViaCustomToolAgent)->prompt('Go');
+
+    $invoking = Event::dispatched(InvokingTool::class)->first()[0];
+
+    Event::assertDispatched(PromptingAgent::class, fn (PromptingAgent $event): bool => $event->prompt->agent instanceof ResearchAgent
+        && $event->prompt->parentInvocationId === $response->invocationId
+        && $event->prompt->parentToolInvocationId === $invoking->toolInvocationId);
+});
+
+test('the parent invocation is restored once a tool call finishes', function (): void {
+    Event::fake();
+
+    DelegatingAgent::fake([
+        new ToolCall('call_1', 'research_agent', ['task' => 'Research Laravel']),
+        'Delegated.',
+    ]);
+
+    ResearchAgent::fake(['Research result']);
+
+    (new DelegatingAgent)->prompt('Delegate');
+
+    ResearchAgent::fake(['Standalone result']);
+
+    (new ResearchAgent)->prompt('Standalone');
+
+    $standalone = Event::dispatched(PromptingAgent::class)
+        ->map(fn (array $dispatched) => $dispatched[0]->prompt)
+        ->last(fn ($prompt): bool => $prompt->agent instanceof ResearchAgent);
+
+    expect($standalone->parentInvocationId)->toBeNull()
+        ->and($standalone->parentToolInvocationId)->toBeNull();
 });
