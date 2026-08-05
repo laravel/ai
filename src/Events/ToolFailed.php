@@ -10,7 +10,7 @@ class ToolFailed
 {
     /**
      * @param  array<string, mixed>  $arguments
-     * @param  float|null  $durationMs  wall time spent in the tool's handler, or null when the call was not measured
+     * @param  float  $durationMs  wall time spent in the tool's handler before it threw
      */
     public function __construct(
         public string $invocationId,
@@ -19,6 +19,6 @@ class ToolFailed
         public Tool $tool,
         public array $arguments,
         public Throwable $exception,
-        public ?float $durationMs = null,
+        public float $durationMs,
     ) {}
 }

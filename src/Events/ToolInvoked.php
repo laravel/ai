@@ -9,7 +9,7 @@ class ToolInvoked
 {
     /**
      * @param  array<string, mixed>  $arguments
-     * @param  float|null  $durationMs  wall time spent in the tool's handler, or null when the call was not measured
+     * @param  float|null  $durationMs  wall time spent in the tool's handler; optional only to keep the existing constructor signature callable, the gateway always measures it
      */
     public function __construct(
         public string $invocationId,
