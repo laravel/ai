@@ -12,6 +12,8 @@ use Throwable;
 
 trait InvokesTools
 {
+    use MeasuresDuration;
+
     /**
      * Execute the given tool with the given arguments.
      *
@@ -55,13 +57,5 @@ trait InvokesTools
         }
 
         return null;
-    }
-
-    /**
-     * Get the milliseconds elapsed since the given monotonic nanosecond reading.
-     */
-    protected function elapsedMilliseconds(int $startedAt): float
-    {
-        return (hrtime(true) - $startedAt) / 1e6;
     }
 }
