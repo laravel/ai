@@ -24,18 +24,20 @@ trait InvokesTools
 
         // Any agent prompted while this tool runs, however it was reached, is a child of this tool call...
         return ParentInvocation::within($invocationId, $toolInvocationId, function () use ($tool, $arguments, $toolCallId, $toolInvocationId, $observers): string {
-            try {
-                $observers->invokingTool($tool, $arguments, $toolInvocationId);
+            $observers->invokingTool($tool, $arguments, $toolInvocationId);
 
-                return (string) tap(
-                    $tool->handle(new Request($arguments, $toolCallId, $toolInvocationId)),
-                    fn ($result): mixed => $observers->toolInvoked($tool, $arguments, $result, $toolInvocationId)
-                );
+            // Only the handler itself may fail the tool call, so an observer that throws is never reported as a tool failure...
+            try {
+                $result = $tool->handle(new Request($arguments, $toolCallId, $toolInvocationId));
             } catch (Throwable $exception) {
                 $observers->toolFailed($tool, $arguments, $exception, $toolInvocationId);
 
                 throw $exception;
             }
+
+            $observers->toolInvoked($tool, $arguments, $result, $toolInvocationId);
+
+            return (string) $result;
         });
     }
 

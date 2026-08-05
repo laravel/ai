@@ -1,8 +1,10 @@
 <?php
 
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\AgentFailedOver;
@@ -28,6 +30,7 @@ use Tests\Fixtures\Agents\MiddleManagerAgent;
 use Tests\Fixtures\Agents\MultiStepToolAgent;
 use Tests\Fixtures\Agents\OrchestratorAgent;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
+use Tests\Fixtures\Agents\RememberingThrowingApprovableAgent;
 use Tests\Fixtures\Agents\ResearchAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 use Tests\Fixtures\FakeConversationStore;
@@ -494,4 +497,61 @@ test('the parent invocation never travels outside the current process', function
     // Queued jobs serialize the log context, so the delegating pair must never be stored there...
     expect($insideDehydratedContext)->toBeNull()
         ->and(ParentInvocation::current())->toBe([null, null]);
+});
+
+test('a tool that fails while resuming an approval reports the failure once and continues the run', function (): void {
+    Event::fake();
+
+    Config::set('ai.conversations.generate_title', false);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            Http::response([
+                'id' => 'msg_tool_1',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [[
+                    'type' => 'tool_use',
+                    'id' => 'toolu_1',
+                    'name' => 'ThrowingApprovableGenerator',
+                    'input' => (object) [],
+                ]],
+                'stop_reason' => 'tool_use',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+            Http::response([
+                'id' => 'msg_2',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [['type' => 'text', 'text' => 'The tool could not run.']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+        ]),
+    ]);
+
+    $user = (object) ['id' => 1];
+
+    $paused = (new RememberingThrowingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
+
+    expect($paused->hasPendingApprovals())->toBeTrue();
+
+    $resumed = (new RememberingThrowingApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->prompt(Decisions::from(['toolu_1' => true]), provider: 'anthropic');
+
+    // The resume path turns the failure into a tool result, so the run survives but still reports the failure exactly once...
+    Event::assertDispatchedTimes(ToolFailed::class, 1);
+    Event::assertNotDispatched(ToolInvoked::class);
+    Event::assertNotDispatched(AgentFailed::class);
+
+    expect($resumed->text)->toBe('The tool could not run.');
+
+    $failed = Event::dispatched(ToolFailed::class)->first()[0];
+    $invoking = Event::dispatched(InvokingTool::class)->first()[0];
+
+    expect($failed->exception->getMessage())->toBe('Forced to throw exception.')
+        ->and($failed->toolInvocationId)->toBe($invoking->toolInvocationId);
 });

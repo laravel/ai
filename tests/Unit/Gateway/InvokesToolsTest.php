@@ -80,6 +80,113 @@ test('each tool invocation reports to the observers it was given', function (): 
     ]);
 });
 
+test('only the tool handler itself can fail a tool invocation', function (): void {
+    $gateway = new class
+    {
+        use InvokesTools;
+
+        public function invoke(Tool $tool, ?RunObservers $observers = null): string
+        {
+            return $this->executeTool($tool, [], null, $observers);
+        }
+    };
+
+    $tool = new class implements Tool
+    {
+        public function description(): string
+        {
+            return 'unstringable';
+        }
+
+        public function handle(Request $request): Stringable|string
+        {
+            return new class implements Stringable
+            {
+                public function __toString(): string
+                {
+                    throw new RuntimeException('Stringify exploded.');
+                }
+            };
+        }
+
+        /**
+         * @return array<string, Type>
+         */
+        public function schema(JsonSchema $schema): array
+        {
+            return [];
+        }
+    };
+
+    $invoked = 0;
+    $failed = 0;
+
+    $observers = new RunObservers(
+        toolInvoked: function () use (&$invoked): void {
+            $invoked++;
+        },
+        toolFailed: function () use (&$failed): void {
+            $failed++;
+        },
+    );
+
+    expect(fn (): string => $gateway->invoke($tool, $observers))
+        ->toThrow(RuntimeException::class, 'Stringify exploded.');
+
+    // The handler succeeded, so the invocation is reported once and never as a failure...
+    expect($invoked)->toBe(1)
+        ->and($failed)->toBe(0);
+});
+
+test('an observer that throws is not reported as a tool failure', function (): void {
+    $gateway = new class
+    {
+        use InvokesTools;
+
+        public function invoke(Tool $tool, ?RunObservers $observers = null): string
+        {
+            return $this->executeTool($tool, [], null, $observers);
+        }
+    };
+
+    $tool = new class implements Tool
+    {
+        public function description(): string
+        {
+            return 'fine';
+        }
+
+        public function handle(Request $request): string
+        {
+            return 'result';
+        }
+
+        /**
+         * @return array<string, Type>
+         */
+        public function schema(JsonSchema $schema): array
+        {
+            return [];
+        }
+    };
+
+    $failed = 0;
+
+    $observers = new RunObservers(
+        toolInvoked: function (): void {
+            throw new RuntimeException('Listener exploded.');
+        },
+        toolFailed: function () use (&$failed): void {
+            $failed++;
+        },
+    );
+
+    expect(fn (): string => $gateway->invoke($tool, $observers))
+        ->toThrow(RuntimeException::class, 'Listener exploded.');
+
+    expect($failed)->toBe(0);
+});
+
 test('a tool invocation without observers is silent', function (): void {
     $gateway = new class
     {
