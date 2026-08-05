@@ -76,6 +76,16 @@ function fakeGroqStreamResponse(string $text = 'Hello'): PromiseInterface
     return Http::response($body, 200, ['Content-Type' => 'text/event-stream']);
 }
 
+function fakeGroqStreamErrorResponse(string $message = 'Upstream exploded.'): PromiseInterface
+{
+    $body = implode("\n\n", [
+        'data: '.json_encode(['error' => ['code' => 'server_error', 'message' => $message]]),
+        'data: [DONE]',
+    ])."\n\n";
+
+    return Http::response($body, 200, ['Content-Type' => 'text/event-stream']);
+}
+
 function fakeGroqToolCallResponse(string $name = 'FixedNumberGenerator', array $arguments = [], string $id = 'call_123'): PromiseInterface
 {
     return Http::response([

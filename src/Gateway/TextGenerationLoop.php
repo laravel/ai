@@ -13,6 +13,7 @@ use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Exceptions\NoSuchToolException;
 use Laravel\Ai\Gateway\Concerns\HandlesToolApprovals;
@@ -222,6 +223,8 @@ class TextGenerationLoop
 
             $observers->startingStep($stepContext);
 
+            $lastError = null;
+
             try {
                 $stream = $this->gateway->generateStreamStep(
                     $invocationId,
@@ -241,6 +244,7 @@ class TextGenerationLoop
 
                     if ($event instanceof Error) {
                         $sawError = true;
+                        $lastError = $event;
                     }
                 }
 
@@ -251,7 +255,12 @@ class TextGenerationLoop
                 throw $exception;
             }
 
+            // A provider may report an error in the stream itself rather than throwing, which still ends the step...
             if (! $result instanceof StepResponse) {
+                $observers->stepFailed($stepContext, new AiException(
+                    $lastError?->message ?? 'The provider ended the stream without completing the step.'
+                ));
+
                 break;
             }
 

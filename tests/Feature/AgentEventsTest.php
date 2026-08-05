@@ -555,3 +555,31 @@ test('a tool that fails while resuming an approval reports the failure once and 
     expect($failed->exception->getMessage())->toBe('Forced to throw exception.')
         ->and($failed->toolInvocationId)->toBe($invoking->toolInvocationId);
 });
+
+test('a provider error inside the stream closes the step it opened', function (): void {
+    Event::fake();
+
+    config(['ai.providers.only' => ['driver' => 'groq', 'key' => 'test-key']]);
+
+    Http::preventStrayRequests();
+
+    Http::fakeSequence()->pushResponse(fakeGroqStreamErrorResponse('Upstream exploded.'));
+
+    $response = (new AssistantAgent)->stream('Hi', provider: 'only');
+
+    foreach ($response as $event) {
+        //
+    }
+
+    // The provider reported the error in the stream rather than throwing, but the step still has to close...
+    Event::assertDispatchedTimes(StartingStep::class, 1);
+    Event::assertDispatchedTimes(StepFailed::class, 1);
+    Event::assertNotDispatched(StepCompleted::class);
+
+    $starting = Event::dispatched(StartingStep::class)->first()[0];
+    $failed = Event::dispatched(StepFailed::class)->first()[0];
+
+    expect($failed->invocationId)->toBe($starting->invocationId)
+        ->and($failed->stepNumber)->toBe($starting->stepNumber)
+        ->and($failed->exception->getMessage())->toBe('Upstream exploded.');
+});
