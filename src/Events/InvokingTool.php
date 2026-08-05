@@ -7,6 +7,9 @@ use Laravel\Ai\Contracts\Tool;
 
 class InvokingTool
 {
+    /**
+     * @param  array<string, mixed>  $arguments
+     */
     public function __construct(
         public string $invocationId,
         public string $toolInvocationId,

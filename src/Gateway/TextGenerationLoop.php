@@ -64,16 +64,15 @@ class TextGenerationLoop
         ?int $timeout = null,
         ?array $approval = null,
         ?Closure $recordApprovalResults = null,
-        ?RunObservers $observers = null,
+        ?RunContext $context = null,
     ): TextResponse {
         $steps = new Collection;
         $maxSteps = $this->resolveMaxSteps($options, $tools);
         $continuationToken = null;
         $lastResult = null;
-        $observers ??= new RunObservers;
 
         if ($approval !== null) {
-            $resumption = $this->resumeFromApproval($approval, $messages, $tools, observers: $observers);
+            $resumption = $this->resumeFromApproval($approval, $messages, $tools, context: $context);
 
             $allMessages = $resumption->messages;
             $newMessages = $resumption->newMessages;
@@ -98,7 +97,9 @@ class TextGenerationLoop
                 continuationToken: $continuationToken,
             );
 
-            $observers->startingStep($stepContext);
+            $context?->startingStep($stepContext);
+
+            $startedAt = hrtime(true);
 
             try {
                 $lastResult = $this->gateway->generateTextStep(
@@ -113,14 +114,14 @@ class TextGenerationLoop
                     $stepContext,
                 );
             } catch (Throwable $exception) {
-                $observers->stepFailed($stepContext, $exception);
+                $context?->stepFailed($stepContext, $exception, $this->elapsedMilliseconds($startedAt));
 
                 throw $exception;
             }
 
-            $observers->stepCompleted($stepContext, $lastResult);
+            $context?->stepCompleted($stepContext, $lastResult, $this->elapsedMilliseconds($startedAt));
 
-            [$toolResults, $pendingApprovals] = $this->stepToolResults($lastResult, $stepContext->isFinalStep, $tools, $observers);
+            [$toolResults, $pendingApprovals] = $this->stepToolResults($lastResult, $stepContext->isFinalStep, $tools, $context);
 
             $steps->push($this->buildStep($lastResult, $toolResults));
 
@@ -168,17 +169,16 @@ class TextGenerationLoop
         ?array $approval = null,
         ?Closure $recordApprovalResults = null,
         ?array $validatedApproval = null,
-        ?RunObservers $observers = null,
+        ?RunContext $context = null,
     ): Generator {
         $maxSteps = $this->resolveMaxSteps($options, $tools);
         $continuationToken = null;
         $accumulatedUsage = new Usage;
         $finalReason = null;
         $sawError = false;
-        $observers ??= new RunObservers;
 
         if ($approval !== null) {
-            $resumption = $this->resumeFromApproval($approval, $messages, $tools, $validatedApproval, $observers);
+            $resumption = $this->resumeFromApproval($approval, $messages, $tools, $validatedApproval, $context);
 
             $allMessages = $resumption->messages;
 
@@ -220,9 +220,10 @@ class TextGenerationLoop
                 continuationToken: $continuationToken,
             );
 
-            $observers->startingStep($stepContext);
+            $context?->startingStep($stepContext);
 
             $lastError = null;
+            $startedAt = hrtime(true);
 
             try {
                 $stream = $this->gateway->generateStreamStep(
@@ -249,26 +250,29 @@ class TextGenerationLoop
 
                 $result = $stream->getReturn();
             } catch (Throwable $exception) {
-                $observers->stepFailed($stepContext, $exception);
+                $context?->stepFailed($stepContext, $exception, $this->elapsedMilliseconds($startedAt));
 
                 throw $exception;
             }
 
-            // A provider may report an error in the stream itself rather than throwing, which still ends the step...
+            // A provider may report an error in the stream itself rather than throwing, which still ends the step. The error event travels with the exception so its type and metadata are not lost...
             if (! $result instanceof StepResponse) {
-                $observers->stepFailed($stepContext, new AiException(
-                    $lastError?->message ?? 'The provider ended the stream without completing the step.'
-                ));
+                $context?->stepFailed(
+                    $stepContext,
+                    new AiException($lastError?->message ?? 'The provider ended the stream without completing the step.'),
+                    $this->elapsedMilliseconds($startedAt),
+                    $lastError,
+                );
 
                 break;
             }
 
-            $observers->stepCompleted($stepContext, $result);
+            $context?->stepCompleted($stepContext, $result, $this->elapsedMilliseconds($startedAt));
 
             $accumulatedUsage = $accumulatedUsage->add($result->usage);
             $finalReason = $result->finishReason;
 
-            [$toolResults, $pendingApprovals] = $this->stepToolResults($result, $stepContext->isFinalStep, $tools, $observers);
+            [$toolResults, $pendingApprovals] = $this->stepToolResults($result, $stepContext->isFinalStep, $tools, $context);
 
             foreach ($toolResults as $toolResult) {
                 yield (new ToolResultEvent(
@@ -336,7 +340,7 @@ class TextGenerationLoop
      * @param  Tool[]  $tools
      * @return array{array<int, ToolResult>, Collection<int, PendingApproval>}
      */
-    protected function stepToolResults(StepResponse $result, bool $isFinalStep, array $tools, ?RunObservers $observers = null): array
+    protected function stepToolResults(StepResponse $result, bool $isFinalStep, array $tools, ?RunContext $context = null): array
     {
         if (filled($result->pendingApprovals)) {
             return [[], collect($result->pendingApprovals)];
@@ -346,7 +350,7 @@ class TextGenerationLoop
             return [[], collect()];
         }
 
-        return $this->approvalAwareToolResults($result->toolCalls, $tools, $isFinalStep, $observers);
+        return $this->approvalAwareToolResults($result->toolCalls, $tools, $isFinalStep, $context);
     }
 
     /**
@@ -354,7 +358,7 @@ class TextGenerationLoop
      * @param  Tool[]  $tools
      * @return array{array<int, ToolResult>, Collection<int, PendingApproval>}
      */
-    protected function approvalAwareToolResults(array $toolCalls, array $tools, bool $isFinalStep = false, ?RunObservers $observers = null): array
+    protected function approvalAwareToolResults(array $toolCalls, array $tools, bool $isFinalStep = false, ?RunContext $context = null): array
     {
         $pendingApprovals = collect();
         $resolved = [];
@@ -382,7 +386,7 @@ class TextGenerationLoop
             $resolved[] = [$toolCall, $tool];
         }
 
-        $toolResults = array_map(function (array $pair) use ($isFinalStep, $observers) {
+        $toolResults = array_map(function (array $pair) use ($isFinalStep, $context) {
             [$toolCall, $tool] = $pair;
 
             return new ToolResult(
@@ -391,7 +395,7 @@ class TextGenerationLoop
                 $toolCall->arguments,
                 $isFinalStep || ! $tool instanceof Tool
                     ? 'The agent reached its maximum number of steps without running this tool call.'
-                    : $this->executeTool($tool, $toolCall->arguments, $toolCall->id, $observers),
+                    : $this->executeTool($tool, $toolCall->arguments, $toolCall->id, $context),
                 $toolCall->resultId,
             );
         }, $resolved);
@@ -407,11 +411,11 @@ class TextGenerationLoop
      * @param  Tool[]  $tools
      * @param  array{Collection<int, ToolCall>, Collection<string, ?Tool>}|null  $validatedApproval  a caller's own eager validateApproval() result, reused instead of re-validating
      */
-    protected function resumeFromApproval(array $approval, array $messages, array $tools, ?array $validatedApproval = null, ?RunObservers $observers = null): ApprovalResumption
+    protected function resumeFromApproval(array $approval, array $messages, array $tools, ?array $validatedApproval = null, ?RunContext $context = null): ApprovalResumption
     {
         $messages = $this->settleAbandonedToolCalls($messages, exceptLatestAssistantTurn: true);
 
-        [$approvalResults, $shouldContinue, $failedToolCallIds] = $this->resolveApprovalResults($approval, $messages, $tools, $validatedApproval, $observers);
+        [$approvalResults, $shouldContinue, $failedToolCallIds] = $this->resolveApprovalResults($approval, $messages, $tools, $validatedApproval, $context);
 
         $newMessages = [];
 
@@ -435,7 +439,7 @@ class TextGenerationLoop
      * @param  array{Collection<int, ToolCall>, Collection<string, ?Tool>}|null  $validatedApproval  a caller's own eager validateApproval() result, reused instead of re-validating
      * @return array{array<int, ToolResult>, bool, array<int, string>}
      */
-    protected function resolveApprovalResults(array $approval, array $messages, array $tools, ?array $validatedApproval = null, ?RunObservers $observers = null): array
+    protected function resolveApprovalResults(array $approval, array $messages, array $tools, ?array $validatedApproval = null, ?RunContext $context = null): array
     {
         [$pendingToolCalls, $resolvedTools] = $validatedApproval ?? $this->validateApproval($approval, $messages, $tools);
 
@@ -471,7 +475,7 @@ class TextGenerationLoop
             }
 
             try {
-                $result = $this->executeTool($tool, $arguments, $toolCall->id, $observers);
+                $result = $this->executeTool($tool, $arguments, $toolCall->id, $context);
             } catch (Throwable $exception) {
                 $failedToolCallIds[] = $toolCall->id;
                 $result = 'The tool call failed: '.$exception->getMessage();

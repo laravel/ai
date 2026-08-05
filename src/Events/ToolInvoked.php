@@ -7,6 +7,10 @@ use Laravel\Ai\Contracts\Tool;
 
 class ToolInvoked
 {
+    /**
+     * @param  array<string, mixed>  $arguments
+     * @param  float|null  $durationMs  wall time spent in the tool's handler, or null when the call was not measured
+     */
     public function __construct(
         public string $invocationId,
         public string $toolInvocationId,
@@ -14,5 +18,6 @@ class ToolInvoked
         public Tool $tool,
         public array $arguments,
         public mixed $result,
+        public ?float $durationMs = null,
     ) {}
 }

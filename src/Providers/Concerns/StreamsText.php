@@ -67,12 +67,13 @@ trait StreamsText
                         ? $this->textGenerationLoop()->validateApproval($approval, $messages, $tools)
                         : null;
 
-                    return new StreamableAgentResponse(
-                        $invocationId,
-                        function () use ($invocationId, $prompt, $agent, $messages, $tools, $approval, $recordApprovalResults, $validatedApproval) {
-                            $this->events->dispatch(new StreamingAgent($invocationId, $prompt));
+                    $streamable = null;
 
-                            $yielded = false;
+                    // The response owns the "has anything reached the consumer" flag so this failure check and the caller's failover decision can never drift apart...
+                    $streamable = new StreamableAgentResponse(
+                        $invocationId,
+                        function () use ($invocationId, $prompt, $agent, $messages, $tools, $approval, $recordApprovalResults, $validatedApproval, &$streamable) {
+                            $this->events->dispatch(new StreamingAgent($invocationId, $prompt));
 
                             try {
                                 foreach ($this->textGenerationLoop()->stream(
@@ -88,24 +89,24 @@ trait StreamsText
                                     $approval,
                                     $recordApprovalResults,
                                     $validatedApproval,
-                                    $this->observersFor($invocationId, $prompt),
+                                    $this->runContextFor($invocationId, $prompt),
                                 ) as $event) {
                                     if ($event instanceof ToolApprovalRequest) {
                                         $this->throwIfNotResumable($agent);
                                     }
 
                                     yield $event;
-
-                                    $yielded = true;
                                 }
                             } catch (Throwable $exception) {
-                                $this->recordAgentFailure($invocationId, $prompt, $exception, retryable: ! $yielded);
+                                $this->recordAgentFailure($invocationId, $prompt, $exception, retryable: ! $streamable->hasYielded());
 
                                 throw $exception;
                             }
                         },
                         $meta,
                     );
+
+                    return $streamable;
                 });
         } catch (Throwable $exception) {
             $this->recordAgentFailure($invocationId, $processedPrompt ?? $prompt, $exception);

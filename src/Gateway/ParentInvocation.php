@@ -39,4 +39,15 @@ class ParentInvocation
             static::$current = $previous;
         }
     }
+
+    /**
+     * Forget the delegating pair.
+     *
+     * The pair is process global and unwinds on its own, so this only matters where a fatal could
+     * strand it in a reused process, such as an Octane worker or between tests.
+     */
+    public static function flush(): void
+    {
+        static::$current = [null, null];
+    }
 }

@@ -16,20 +16,12 @@ use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\AgentPrompted;
-use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
-use Laravel\Ai\Events\StartingStep;
-use Laravel\Ai\Events\StepCompleted;
-use Laravel\Ai\Events\StepFailed;
 use Laravel\Ai\Events\ToolApprovalRequested;
 use Laravel\Ai\Events\ToolApprovalResolved;
-use Laravel\Ai\Events\ToolFailed;
-use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Exceptions\ApprovalNotResumableException;
 use Laravel\Ai\Exceptions\FailoverableException;
-use Laravel\Ai\Gateway\RunObservers;
-use Laravel\Ai\Gateway\StepContext;
-use Laravel\Ai\Gateway\StepResponse;
+use Laravel\Ai\Gateway\RunContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Middleware\RememberConversation;
@@ -91,7 +83,7 @@ trait GeneratesText
                         $prompt->timeout,
                         $this->resumableApprovalFor($prompt),
                         $this->approvalResultRecorderFor($prompt, $resolvedApprovalResults),
-                        $this->observersFor($invocationId, $prompt),
+                        $this->runContextFor($invocationId, $prompt),
                     );
 
                     if ($response->hasPendingApprovals()) {
@@ -197,45 +189,11 @@ trait GeneratesText
     }
 
     /**
-     * Build the observers that dispatch this run's step and tool events.
+     * Build the context that identifies this run and reports its step and tool events.
      */
-    protected function observersFor(string $invocationId, AgentPrompt $prompt): RunObservers
+    protected function runContextFor(string $invocationId, AgentPrompt $prompt): RunContext
     {
-        $agent = $prompt->agent;
-
-        return new RunObservers(
-            invocationId: $invocationId,
-            startingStep: function (StepContext $context) use ($invocationId, $agent, $prompt): void {
-                $this->events->dispatch(new StartingStep(
-                    $invocationId, $context->stepNumber, $agent, $this, $prompt->model, $context->isFinalStep
-                ));
-            },
-            stepCompleted: function (StepContext $context, StepResponse $response) use ($invocationId, $agent): void {
-                $this->events->dispatch(new StepCompleted(
-                    $invocationId, $context->stepNumber, $agent, $response->meta, $response->usage, $response->finishReason, $response->toolCalls
-                ));
-            },
-            stepFailed: function (StepContext $context, Throwable $exception) use ($invocationId, $agent, $prompt): void {
-                $this->events->dispatch(new StepFailed(
-                    $invocationId, $context->stepNumber, $agent, $this, $prompt->model, $exception
-                ));
-            },
-            invokingTool: function (Tool $tool, array $arguments, string $toolInvocationId) use ($invocationId, $agent): void {
-                $this->events->dispatch(new InvokingTool(
-                    $invocationId, $toolInvocationId, $agent, $tool, $arguments
-                ));
-            },
-            toolInvoked: function (Tool $tool, array $arguments, mixed $result, string $toolInvocationId) use ($invocationId, $agent): void {
-                $this->events->dispatch(new ToolInvoked(
-                    $invocationId, $toolInvocationId, $agent, $tool, $arguments, $result
-                ));
-            },
-            toolFailed: function (Tool $tool, array $arguments, Throwable $exception, string $toolInvocationId) use ($invocationId, $agent): void {
-                $this->events->dispatch(new ToolFailed(
-                    $invocationId, $toolInvocationId, $agent, $tool, $arguments, $exception
-                ));
-            },
-        );
+        return new RunContext($invocationId, $prompt->agent, $this, $prompt->model, $this->events);
     }
 
     /**
@@ -244,7 +202,7 @@ trait GeneratesText
     protected function recordAgentFailure(string $invocationId, AgentPrompt $prompt, Throwable $exception, bool $retryable = true): void
     {
         // A failoverable exception is only terminal once the caller has run out of providers to try...
-        if ($retryable && $prompt->canFailOver && $exception instanceof FailoverableException) {
+        if ($retryable && ! $prompt->isFinalAttempt() && $exception instanceof FailoverableException) {
             return;
         }
 
