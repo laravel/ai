@@ -32,7 +32,7 @@ trait HandlesTextStreaming
         $streamBody,
     ): Generator {
         $messageId = $this->generateEventId();
-        $reasoning = new ChatCompletionReasoning;
+        $reasoning = new ChatCompletionReasoning($invocationId);
         $streamStartEmitted = false;
         $textStartEmitted = false;
         $currentText = '';
@@ -43,6 +43,8 @@ trait HandlesTextStreaming
 
         foreach ($this->parseServerSentEvents($streamBody) as $data) {
             if (isset($data['error'])) {
+                yield from $reasoning->close();
+
                 yield (new Error(
                     $this->generateEventId(),
                     $data['error']['code'] ?? 'unknown_error',
@@ -78,9 +80,7 @@ trait HandlesTextStreaming
                 ))->withInvocationId($invocationId);
             }
 
-            foreach ($reasoning->process($delta) as $event) {
-                yield $event->withInvocationId($invocationId);
-            }
+            yield from $reasoning->process($delta);
 
             if (isset($delta['content']) && $delta['content'] !== '') {
                 if (! $textStartEmitted) {
@@ -130,9 +130,7 @@ trait HandlesTextStreaming
             }
         }
 
-        foreach ($reasoning->close() as $event) {
-            yield $event->withInvocationId($invocationId);
-        }
+        yield from $reasoning->close();
 
         if ($textStartEmitted) {
             yield (new TextEnd(

@@ -79,14 +79,24 @@ trait MapsChatCompletionMessages
             )->all();
 
             // Thinking models need the reasoning that produced the tool calls replayed alongside them...
-            $reasoning = ChatCompletionReasoning::replayableFrom($message->providerContentBlocks);
-
-            if ($reasoning !== null) {
-                $msg[ChatCompletionReasoning::CONTENT_BLOCK_KEY] = $reasoning;
-            }
+            $msg = [...$msg, ...$this->replayableReasoningFor($message)];
         }
 
         $chatMessages[] = $msg;
+    }
+
+    /**
+     * Get the reasoning fields to replay for the given assistant message.
+     *
+     * Providers disagree on the inbound field name, so gateways override this to match their own API.
+     *
+     * @return array<string, mixed>
+     */
+    protected function replayableReasoningFor(AssistantMessage $message): array
+    {
+        $reasoning = ChatCompletionReasoning::replayableFrom($message->providerContentBlocks);
+
+        return $reasoning === null ? [] : [ChatCompletionReasoning::CONTENT_BLOCK_KEY => $reasoning];
     }
 
     /**

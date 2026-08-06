@@ -18,7 +18,7 @@ class StepResponse implements Arrayable, JsonSerializable
     /**
      * @param  ToolCall[]  $toolCalls
      * @param  array<string, mixed>|null  $structured
-     * @param  array<int, array<string, mixed>>  $providerContentBlocks
+     * @param  array<array-key, mixed>  $providerContentBlocks
      * @param  PendingApproval[]  $pendingApprovals
      */
     public function __construct(

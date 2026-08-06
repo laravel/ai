@@ -63,9 +63,7 @@ trait ParsesTextResponses
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model, $citations),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
-            providerContentBlocks: ChatCompletionReasoning::providerContentBlocksFor(
-                ChatCompletionReasoning::textFrom($message)
-            ),
+            providerContentBlocks: ChatCompletionReasoning::providerContentBlocksIn($message),
         );
     }
 

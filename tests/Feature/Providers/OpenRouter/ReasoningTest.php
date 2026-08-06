@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
 use Laravel\Ai\Streaming\Events\ReasoningStart;
@@ -238,7 +239,7 @@ test('emits reasoning events from the reasoning_details field', function (): voi
         ->and($reasoningDeltas[0]->delta)->toBe('Step by step, then.');
 });
 
-test('ignores encrypted reasoning details that carry no readable text', function (): void {
+test('emits no reasoning events for encrypted details that carry no readable text', function (): void {
     Http::fake([
         '*' => Http::response($this->ssePayload([
             $this->chatChunk(['role' => 'assistant', 'reasoning_details' => [[
@@ -257,6 +258,135 @@ test('ignores encrypted reasoning details that carry no readable text', function
     expect($types)->not->toContain(ReasoningStart::class)
         ->not->toContain(ReasoningDelta::class)
         ->not->toContain(ReasoningEnd::class);
+});
+
+test('captures encrypted reasoning details so they can be replayed', function (): void {
+    // There is nothing to render, but the payload must survive the round trip to the next turn...
+    Http::fake([
+        '*' => Http::sequence([
+            Http::response($this->ssePayload([
+                $this->chatChunk(['role' => 'assistant', 'reasoning_details' => [[
+                    'type' => 'reasoning.encrypted',
+                    'data' => 'gAAAAAB...',
+                    'id' => 'reasoning-encrypted-1',
+                    'format' => 'anthropic-claude-v1',
+                ]]]),
+                $this->chatChunkToolCallStart(0, 'call_1', 'FixedNumberGenerator'),
+                $this->chatChunkToolCallDelta(0, '{}'),
+                $this->chatChunkFinish('tool_calls', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
+            ])),
+            Http::response($this->ssePayload([
+                $this->chatChunk(['role' => 'assistant', 'content' => 'The number is 72019']),
+                $this->chatChunkFinish('stop', ['prompt_tokens' => 20, 'completion_tokens' => 5]),
+            ])),
+        ]),
+    ]);
+
+    foreach (agent(tools: [new FixedNumberGenerator])->stream('Give me a number', provider: 'openrouter') as $event) {
+        //
+    }
+
+    $assistantMessage = $this->findMessage($this->requestMessages(1), role: 'assistant', has: 'tool_calls');
+
+    expect($assistantMessage['reasoning_details'])->toBe([[
+        'type' => 'reasoning.encrypted',
+        'data' => 'gAAAAAB...',
+        'id' => 'reasoning-encrypted-1',
+        'format' => 'anthropic-claude-v1',
+    ]]);
+});
+
+test('merges streamed reasoning detail fragments into one replayable block', function (): void {
+    // Text arrives in fragments under one index and the signature lands on the last of them...
+    Http::fake([
+        '*' => Http::sequence([
+            Http::response($this->ssePayload([
+                $this->chatChunk(['role' => 'assistant', 'reasoning_details' => [[
+                    'type' => 'reasoning.text',
+                    'text' => 'Step by step,',
+                    'format' => 'anthropic-claude-v1',
+                    'index' => 0,
+                ]]]),
+                $this->chatChunk(['reasoning_details' => [[
+                    'type' => 'reasoning.text',
+                    'text' => ' then.',
+                    'signature' => 'sig-abc',
+                    'format' => 'anthropic-claude-v1',
+                    'index' => 0,
+                ]]]),
+                $this->chatChunkToolCallStart(0, 'call_1', 'FixedNumberGenerator'),
+                $this->chatChunkToolCallDelta(0, '{}'),
+                $this->chatChunkFinish('tool_calls', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
+            ])),
+            Http::response($this->ssePayload([
+                $this->chatChunk(['role' => 'assistant', 'content' => 'The number is 72019']),
+                $this->chatChunkFinish('stop', ['prompt_tokens' => 20, 'completion_tokens' => 5]),
+            ])),
+        ]),
+    ]);
+
+    $events = [];
+
+    foreach (agent(tools: [new FixedNumberGenerator])->stream('Give me a number', provider: 'openrouter') as $event) {
+        $events[] = $event;
+    }
+
+    $deltas = array_values(array_filter($events, fn ($e): bool => $e instanceof ReasoningDelta));
+
+    expect($deltas)->toHaveCount(2)
+        ->and($deltas[0]->delta)->toBe('Step by step,')
+        ->and($deltas[1]->delta)->toBe(' then.');
+
+    $assistantMessage = $this->findMessage($this->requestMessages(1), role: 'assistant', has: 'tool_calls');
+
+    expect($assistantMessage['reasoning_details'])->toBe([[
+        'type' => 'reasoning.text',
+        'text' => 'Step by step, then.',
+        'format' => 'anthropic-claude-v1',
+        'index' => 0,
+        'signature' => 'sig-abc',
+    ]]);
+});
+
+test('does not duplicate reasoning when details are resent accumulated', function (): void {
+    // Some upstreams resend the whole block each chunk rather than streaming fragments...
+    Http::fake([
+        '*' => Http::response($this->ssePayload([
+            $this->chatChunk(['role' => 'assistant', 'reasoning_details' => [[
+                'type' => 'reasoning.text',
+                'text' => 'Step by step,',
+                'index' => 0,
+            ]]]),
+            $this->chatChunk(['reasoning_details' => [[
+                'type' => 'reasoning.text',
+                'text' => 'Step by step, then.',
+                'index' => 0,
+            ]]]),
+            $this->chatChunk(['content' => 'Answer']),
+            $this->chatChunkFinish('stop', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
+        ])),
+    ]);
+
+    $deltas = array_values(array_filter(
+        $this->collectStreamEvents(), fn ($e): bool => $e instanceof ReasoningDelta
+    ));
+
+    expect(implode('', array_map(fn ($e): string => $e->delta, $deltas)))->toBe('Step by step, then.')
+        ->and($deltas[1]->delta)->toBe(' then.');
+});
+
+test('closes an open reasoning block before an upstream error', function (): void {
+    Http::fake([
+        '*' => Http::response($this->ssePayload([
+            $this->chatChunk(['role' => 'assistant', 'reasoning' => 'Hmm, let me think.']),
+            ['error' => ['code' => 'rate_limited', 'message' => 'Slow down.']],
+        ])),
+    ]);
+
+    $types = array_map(fn ($e): string => $e::class, $this->collectStreamEvents());
+
+    expect(array_search(ReasoningEnd::class, $types, true))
+        ->toBeLessThan(array_search(Error::class, $types, true));
 });
 
 test('counts reasoning once when a chunk carries both plain text and reasoning details', function (): void {
@@ -301,7 +431,8 @@ test('ignores another provider reasoning block shape when replaying', function (
     $assistantMessage = $this->findMessage($this->requestMessages(0), role: 'assistant', has: 'tool_calls');
 
     expect($assistantMessage)->not->toBeNull()
-        ->and($assistantMessage)->not->toHaveKey('reasoning_content');
+        ->and($assistantMessage)->not->toHaveKey('reasoning')
+        ->and($assistantMessage)->not->toHaveKey('reasoning_details');
 });
 
 test('replays reasoning alongside tool calls on the follow up request', function (): void {
@@ -335,7 +466,9 @@ test('replays reasoning alongside tool calls on the follow up request', function
 
     $assistantMessage = $this->findMessage($this->requestMessages(1), role: 'assistant', has: 'tool_calls');
 
-    expect($assistantMessage['reasoning_content'])->toBe('I need the generator for this.')
+    // OpenRouter accepts `reasoning` as plain text; `reasoning_content` is a DeepSeek field it ignores...
+    expect($assistantMessage['reasoning'])->toBe('I need the generator for this.')
+        ->and($assistantMessage)->not->toHaveKey('reasoning_content')
         ->and($assistantMessage['tool_calls'][0]['function']['name'])->toBe('FixedNumberGenerator');
 });
 
@@ -361,7 +494,8 @@ test('replays streamed reasoning alongside tool calls on the follow up request',
 
     $assistantMessage = $this->findMessage($this->requestMessages(1), role: 'assistant', has: 'tool_calls');
 
-    expect($assistantMessage['reasoning_content'])->toBe('I need the generator for this.');
+    expect($assistantMessage['reasoning'])->toBe('I need the generator for this.')
+        ->and($assistantMessage)->not->toHaveKey('reasoning_content');
 });
 
 test('omits reasoning from historical assistant messages without tool calls', function (): void {
@@ -373,7 +507,8 @@ test('omits reasoning from historical assistant messages without tool calls', fu
     $assistantMessage = $this->findMessage($this->requestMessages(0), role: 'assistant');
 
     expect($assistantMessage['content'])->toBe('The answer is 8.')
-        ->and($assistantMessage)->not->toHaveKey('reasoning_content');
+        ->and($assistantMessage)->not->toHaveKey('reasoning')
+        ->and($assistantMessage)->not->toHaveKey('reasoning_details');
 });
 
 test('does not emit reasoning events when the stream has no reasoning', function (): void {

@@ -14,14 +14,20 @@ use Laravel\Ai\Streaming\Events\StreamEvent;
  *
  * Chat Completions has no reasoning block delimiters, so the block opens on the first
  * reasoning delta and closes as soon as answer text or tool calls begin, or when the
- * stream ends. Reasoning is captured so it can be replayed on the next request.
+ * stream ends. Both the readable text and the structured details are captured, since
+ * replaying reasoning needs the details verbatim while rendering it needs the text.
  */
 class ChatCompletionReasoning
 {
     /**
-     * The provider content block key that reasoning is captured and replayed under.
+     * The provider content block key holding the readable reasoning text.
      */
     public const CONTENT_BLOCK_KEY = 'reasoning_content';
+
+    /**
+     * The provider content block key holding the structured reasoning details.
+     */
+    public const DETAILS_BLOCK_KEY = 'reasoning_details';
 
     /**
      * The ID shared by the events of the currently open reasoning block.
@@ -39,9 +45,18 @@ class ChatCompletionReasoning
     protected string $text = '';
 
     /**
-     * Indicates if this stream has sent reasoning as plain text.
+     * The structured reasoning details accumulated so far, keyed by block identity.
+     *
+     * @var array<array-key, array<string, mixed>>
      */
-    protected bool $sentPlainText = false;
+    protected array $details = [];
+
+    /**
+     * Where this stream reads its reasoning text from, either "plain" or "details".
+     */
+    protected ?string $source = null;
+
+    public function __construct(protected string $invocationId) {}
 
     /**
      * Emit the reasoning events for the given streaming delta.
@@ -51,28 +66,35 @@ class ChatCompletionReasoning
      */
     public function process(array $delta): Generator
     {
-        $reasoning = static::plainTextFrom($delta);
+        $plain = static::plainTextFrom($delta);
 
-        if ($reasoning !== '') {
-            $this->sentPlainText = true;
-        }
+        // Details are merged even when the text is read elsewhere, since only they can be replayed verbatim...
+        $details = $this->mergeDetails($delta);
 
-        // A stream that sends plain text keeps to it, so reasoning is never counted from both sources...
-        if ($reasoning === '' && ! $this->sentPlainText) {
-            $reasoning = static::detailsTextFrom($delta);
-        }
+        // The first reasoning-bearing chunk picks the source, so mirrored fields are never counted twice...
+        $this->source ??= match (true) {
+            $plain !== '' => 'plain',
+            $details !== '' => 'details',
+            default => null,
+        };
+
+        $reasoning = match ($this->source) {
+            'plain' => $plain,
+            'details' => $details,
+            default => '',
+        };
 
         if ($reasoning !== '') {
             if (! $this->open) {
                 $this->open = true;
                 $this->reasoningId = $this->generateEventId();
 
-                yield new ReasoningStart($this->generateEventId(), $this->reasoningId, time());
+                yield $this->event(new ReasoningStart($this->generateEventId(), $this->reasoningId, time()));
             }
 
             $this->text .= $reasoning;
 
-            yield new ReasoningDelta($this->generateEventId(), $this->reasoningId, $reasoning, time());
+            yield $this->event(new ReasoningDelta($this->generateEventId(), $this->reasoningId, $reasoning, time()));
         }
 
         // Answer text or tool calls mean the model has stopped thinking...
@@ -94,33 +116,48 @@ class ChatCompletionReasoning
 
         $this->open = false;
 
-        yield new ReasoningEnd($this->generateEventId(), $this->reasoningId, time());
+        yield $this->event(new ReasoningEnd($this->generateEventId(), $this->reasoningId, time()));
 
         $this->reasoningId = '';
     }
 
     /**
-     * Get the provider content blocks holding the accumulated reasoning.
+     * Get the provider content blocks capturing the reasoning seen so far.
      *
-     * @return array<string, string>
+     * @return array<string, mixed>
      */
     public function providerContentBlocks(): array
     {
-        return static::providerContentBlocksFor($this->text);
+        return static::providerContentBlocksFor($this->text, array_values($this->details));
     }
 
     /**
-     * Get the provider content blocks holding the given reasoning text.
+     * Get the provider content blocks capturing the reasoning of the given Chat Completions message.
      *
-     * @return array<string, string>
+     * @param  array<string, mixed>  $message
+     * @return array<string, mixed>
      */
-    public static function providerContentBlocksFor(string $reasoning): array
+    public static function providerContentBlocksIn(array $message): array
     {
-        return $reasoning === '' ? [] : [static::CONTENT_BLOCK_KEY => $reasoning];
+        return static::providerContentBlocksFor(static::textFrom($message), static::detailsFrom($message));
     }
 
     /**
-     * Get the reasoning to replay for the given assistant message provider content blocks.
+     * Get the provider content blocks holding the given reasoning text and details.
+     *
+     * @param  array<int, array<string, mixed>>  $details
+     * @return array<string, mixed>
+     */
+    public static function providerContentBlocksFor(string $reasoning, array $details = []): array
+    {
+        return array_filter([
+            static::CONTENT_BLOCK_KEY => $reasoning,
+            static::DETAILS_BLOCK_KEY => $details,
+        ]);
+    }
+
+    /**
+     * Get the readable reasoning text to replay for the given assistant message provider content blocks.
      *
      * @param  array<array-key, mixed>  $providerContentBlocks
      */
@@ -129,6 +166,19 @@ class ChatCompletionReasoning
         $reasoning = $providerContentBlocks[static::CONTENT_BLOCK_KEY] ?? null;
 
         return is_string($reasoning) && $reasoning !== '' ? $reasoning : null;
+    }
+
+    /**
+     * Get the structured reasoning details to replay verbatim, which carry the signatures and encrypted payloads that the readable text loses.
+     *
+     * @param  array<array-key, mixed>  $providerContentBlocks
+     * @return array<int, array<string, mixed>>|null
+     */
+    public static function replayableDetailsFrom(array $providerContentBlocks): ?array
+    {
+        $details = $providerContentBlocks[static::DETAILS_BLOCK_KEY] ?? null;
+
+        return is_array($details) && $details !== [] ? array_values($details) : null;
     }
 
     /**
@@ -144,6 +194,71 @@ class ChatCompletionReasoning
     }
 
     /**
+     * Extract the structured reasoning details from a Chat Completions message or streaming delta.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<int, array<string, mixed>>
+     */
+    public static function detailsFrom(array $payload): array
+    {
+        $details = $payload[static::DETAILS_BLOCK_KEY] ?? null;
+
+        return array_values(array_filter(is_array($details) ? $details : [], is_array(...)));
+    }
+
+    /**
+     * Merge the given delta's reasoning details into the captured blocks, returning the text that newly arrived.
+     *
+     * @param  array<string, mixed>  $delta
+     */
+    protected function mergeDetails(array $delta): string
+    {
+        $arrived = '';
+
+        foreach (static::detailsFrom($delta) as $position => $detail) {
+            $key = $detail['id'] ?? $detail['index'] ?? $position;
+
+            if (! isset($this->details[$key])) {
+                $this->details[$key] = $detail;
+
+                $arrived .= static::readableTextFrom($detail);
+
+                continue;
+            }
+
+            $arrived .= $this->mergeDetail($key, $detail);
+        }
+
+        return $arrived;
+    }
+
+    /**
+     * Merge a repeated detail into the block already captured under the given key, returning the text that newly arrived.
+     *
+     * @param  array<string, mixed>  $detail
+     */
+    protected function mergeDetail(int|string $key, array $detail): string
+    {
+        $captured = static::readableTextFrom($this->details[$key]);
+        $incoming = static::readableTextFrom($detail);
+
+        // Upstreams either stream detail fragments or resend the block accumulated so far...
+        $arrived = str_starts_with($incoming, $captured) ? substr($incoming, strlen($captured)) : $incoming;
+
+        $this->details[$key] = [...$this->details[$key], ...$detail];
+
+        foreach (['text', 'summary'] as $field) {
+            if (array_key_exists($field, $this->details[$key])) {
+                $this->details[$key][$field] = $captured.$arrived;
+
+                break;
+            }
+        }
+
+        return $arrived;
+    }
+
+    /**
      * Extract the plain text reasoning from a Chat Completions message or streaming delta.
      *
      * @param  array<string, mixed>  $payload
@@ -151,7 +266,7 @@ class ChatCompletionReasoning
     protected static function plainTextFrom(array $payload): string
     {
         // OpenRouter sends `reasoning`, while DeepSeek, LiteLLM and vLLM send `reasoning_content`...
-        foreach ([$payload['reasoning'] ?? null, $payload['reasoning_content'] ?? null] as $reasoning) {
+        foreach ([$payload['reasoning'] ?? null, $payload[static::CONTENT_BLOCK_KEY] ?? null] as $reasoning) {
             if (is_string($reasoning) && $reasoning !== '') {
                 return $reasoning;
             }
@@ -163,24 +278,29 @@ class ChatCompletionReasoning
     /**
      * Extract the reasoning text carried by structured reasoning details.
      *
-     * Encrypted details hold no readable text and are skipped.
-     *
      * @param  array<string, mixed>  $payload
      */
     protected static function detailsTextFrom(array $payload): string
     {
-        $details = $payload['reasoning_details'] ?? null;
         $text = '';
 
-        foreach (is_array($details) ? $details : [] as $detail) {
-            $part = is_array($detail) ? ($detail['text'] ?? $detail['summary'] ?? null) : null;
-
-            if (is_string($part)) {
-                $text .= $part;
-            }
+        foreach (static::detailsFrom($payload) as $detail) {
+            $text .= static::readableTextFrom($detail);
         }
 
         return $text;
+    }
+
+    /**
+     * Get the readable text of a single reasoning detail, which is empty for encrypted blocks.
+     *
+     * @param  array<string, mixed>  $detail
+     */
+    protected static function readableTextFrom(array $detail): string
+    {
+        $text = $detail['text'] ?? $detail['summary'] ?? null;
+
+        return is_string($text) ? $text : '';
     }
 
     /**
@@ -193,6 +313,14 @@ class ChatCompletionReasoning
         $content = $delta['content'] ?? null;
 
         return (is_string($content) && $content !== '') || filled($delta['tool_calls'] ?? null);
+    }
+
+    /**
+     * Tag the given event with the invocation it belongs to.
+     */
+    protected function event(StreamEvent $event): StreamEvent
+    {
+        return $event->withInvocationId($this->invocationId);
     }
 
     /**

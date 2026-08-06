@@ -18,9 +18,11 @@ use Laravel\Ai\Files\Image;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\Concerns\WrapsPcmAudio;
+use Laravel\Ai\Gateway\OpenAiCompatible\ChatCompletionReasoning;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionMessages;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionTools;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\PerformsChatCompletionSteps;
+use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\ProviderTool;
 use Laravel\Ai\Providers\Tools\WebSearch;
@@ -51,6 +53,28 @@ class OpenRouterGateway implements Gateway, StepTextGateway
     public function __construct(protected Dispatcher $events)
     {
         //
+    }
+
+    /**
+     * Get the reasoning fields to replay for the given assistant message.
+     *
+     * OpenRouter accepts `reasoning_details` verbatim or `reasoning` as plain text, and the details
+     * are preferred because they carry the signatures and encrypted payloads that thinking models
+     * require back unmodified. It does not accept the `reasoning_content` field DeepSeek uses.
+     *
+     * @return array<string, mixed>
+     */
+    protected function replayableReasoningFor(AssistantMessage $message): array
+    {
+        $details = ChatCompletionReasoning::replayableDetailsFrom($message->providerContentBlocks);
+
+        if ($details !== null) {
+            return [ChatCompletionReasoning::DETAILS_BLOCK_KEY => $details];
+        }
+
+        $reasoning = ChatCompletionReasoning::replayableFrom($message->providerContentBlocks);
+
+        return $reasoning === null ? [] : ['reasoning' => $reasoning];
     }
 
     /**
