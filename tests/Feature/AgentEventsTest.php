@@ -882,7 +882,7 @@ test('step completed carries the wall time spent in the provider call', function
 
     $completed = Event::dispatched(StepCompleted::class)->first()[0];
 
-    expect($completed->durationMs)->toBeFloat()->toBeGreaterThan(0.0);
+    expect($completed->time)->toBeFloat()->toBeGreaterThan(0.0);
 });
 
 test('step failed carries the wall time spent before the failure', function (): void {
@@ -899,7 +899,7 @@ test('step failed carries the wall time spent before the failure', function (): 
 
     $failed = Event::dispatched(StepFailed::class)->first()[0];
 
-    expect($failed->durationMs)->toBeFloat()->toBeGreaterThan(0.0);
+    expect($failed->time)->toBeFloat()->toBeGreaterThan(0.0);
 });
 
 test('tool events carry the wall time spent in the tool', function (): void {
@@ -914,7 +914,7 @@ test('tool events carry the wall time spent in the tool', function (): void {
 
     $invoked = Event::dispatched(ToolInvoked::class)->first()[0];
 
-    expect($invoked->durationMs)->toBeFloat()->toBeGreaterThan(0.0);
+    expect($invoked->time)->toBeFloat()->toBeGreaterThan(0.0);
 });
 
 test('a failed over run names the invocation it belongs to', function (): void {

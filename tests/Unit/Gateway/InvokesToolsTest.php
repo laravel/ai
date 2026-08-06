@@ -192,7 +192,7 @@ test('tool events carry the wall time spent in the handler', function (): void {
 
     toolInvokingGateway()->invoke($tool, context: stubRunContext($events));
 
-    expect($invoked->durationMs)->toBeFloat()->toBeGreaterThan(1.0);
+    expect($invoked->time)->toBeFloat()->toBeGreaterThan(1.0);
 });
 
 test('the invoking and invoked events share a tool invocation id', function (): void {

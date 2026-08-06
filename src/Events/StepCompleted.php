@@ -10,7 +10,7 @@ class StepCompleted
 {
     /**
      * @param  string  $model  the model the step was requested against, which the responding model reported in $response->meta may differ from
-     * @param  float  $durationMs  wall time spent in the provider call
+     * @param  float  $time  wall time spent in the provider call, in milliseconds
      */
     public function __construct(
         public string $invocationId,
@@ -20,6 +20,6 @@ class StepCompleted
         public string $model,
         public bool $isFinalStep,
         public StepResponse $response,
-        public float $durationMs,
+        public float $time,
     ) {}
 }

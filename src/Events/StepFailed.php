@@ -10,7 +10,7 @@ use Throwable;
 class StepFailed
 {
     /**
-     * @param  float  $durationMs  wall time spent in the provider call before it failed
+     * @param  float  $time  wall time spent in the provider call before it failed, in milliseconds
      * @param  Error|null  $error  the stream error that ended the step, when the provider reported one instead of throwing
      */
     public function __construct(
@@ -21,7 +21,7 @@ class StepFailed
         public string $model,
         public bool $isFinalStep,
         public Throwable $exception,
-        public float $durationMs,
+        public float $time,
         public ?Error $error = null,
     ) {}
 }

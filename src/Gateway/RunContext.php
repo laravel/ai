@@ -42,22 +42,22 @@ class RunContext
     /**
      * Report that a generation step returned a response.
      */
-    public function stepCompleted(StepContext $step, StepResponse $response, float $durationMs): void
+    public function stepCompleted(StepContext $step, StepResponse $response, float $time): void
     {
         $this->events->dispatch(new StepCompleted(
             $this->invocationId, $step->stepNumber, $this->agent, $this->provider, $this->model, $step->isFinalStep,
-            $response, $durationMs,
+            $response, $time,
         ));
     }
 
     /**
      * Report that a generation step ended without producing a response.
      */
-    public function stepFailed(StepContext $step, Throwable $exception, float $durationMs, ?Error $error = null): void
+    public function stepFailed(StepContext $step, Throwable $exception, float $time, ?Error $error = null): void
     {
         $this->events->dispatch(new StepFailed(
             $this->invocationId, $step->stepNumber, $this->agent, $this->provider, $this->model, $step->isFinalStep,
-            $exception, $durationMs, $error,
+            $exception, $time, $error,
         ));
     }
 
@@ -78,10 +78,10 @@ class RunContext
      *
      * @param  array<string, mixed>  $arguments
      */
-    public function toolInvoked(Tool $tool, array $arguments, mixed $result, string $toolInvocationId, float $durationMs): void
+    public function toolInvoked(Tool $tool, array $arguments, mixed $result, string $toolInvocationId, float $time): void
     {
         $this->events->dispatch(new ToolInvoked(
-            $this->invocationId, $toolInvocationId, $this->agent, $tool, $arguments, $result, $durationMs,
+            $this->invocationId, $toolInvocationId, $this->agent, $tool, $arguments, $result, $time,
         ));
     }
 
@@ -90,10 +90,10 @@ class RunContext
      *
      * @param  array<string, mixed>  $arguments
      */
-    public function toolFailed(Tool $tool, array $arguments, Throwable $exception, string $toolInvocationId, float $durationMs): void
+    public function toolFailed(Tool $tool, array $arguments, Throwable $exception, string $toolInvocationId, float $time): void
     {
         $this->events->dispatch(new ToolFailed(
-            $this->invocationId, $toolInvocationId, $this->agent, $tool, $arguments, $exception, $durationMs,
+            $this->invocationId, $toolInvocationId, $this->agent, $tool, $arguments, $exception, $time,
         ));
     }
 }
