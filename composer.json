@@ -61,7 +61,7 @@
             "pint --format agent",
             "phpstan --memory-limit=-1"
         ],
-        "test": "pest",
+        "test": "pest --parallel",
         "test:lint": "pint --test --format agent",
         "test:types": "phpstan",
         "check": [
