@@ -25,7 +25,7 @@ class GeminiStoreGateway implements StoreGateway
 
         $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders(array_filter([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
-        ]))->get($this->baseUrl($provider)."/{$storeId}")->throw());
+        ]))->replaceHeaders($provider->additionalConfiguration()['headers'] ?? [])->get($this->baseUrl($provider)."/{$storeId}")->throw());
 
         return new Store(
             provider: $provider,
@@ -54,7 +54,7 @@ class GeminiStoreGateway implements StoreGateway
 
         $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders(array_filter([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
-        ]))->post($this->baseUrl($provider).'/fileSearchStores', [
+        ]))->replaceHeaders($provider->additionalConfiguration()['headers'] ?? [])->post($this->baseUrl($provider).'/fileSearchStores', [
             'displayName' => $name,
         ])->throw());
 
@@ -79,7 +79,7 @@ class GeminiStoreGateway implements StoreGateway
 
         $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders(array_filter([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
-        ]))->post($this->baseUrl($provider)."/{$storeId}:importFile", array_filter([
+        ]))->replaceHeaders($provider->additionalConfiguration()['headers'] ?? [])->post($this->baseUrl($provider)."/{$storeId}:importFile", array_filter([
             'fileName' => $fileId,
             'customMetadata' => $metadata === [] ? null : $this->formatMetadata($metadata),
         ]))->throw());
@@ -109,7 +109,7 @@ class GeminiStoreGateway implements StoreGateway
 
         $this->withErrorHandling($provider->name(), fn () => Http::withHeaders(array_filter([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
-        ]))->delete($this->baseUrl($provider)."/{$documentId}", [
+        ]))->replaceHeaders($provider->additionalConfiguration()['headers'] ?? [])->delete($this->baseUrl($provider)."/{$documentId}", [
             'force' => true,
         ])->throw());
 
@@ -125,7 +125,7 @@ class GeminiStoreGateway implements StoreGateway
 
         $this->withErrorHandling($provider->name(), fn () => Http::withHeaders(array_filter([
             'x-goog-api-key' => $provider->providerCredentials()['key'],
-        ]))->delete($this->baseUrl($provider)."/{$storeId}")->throw());
+        ]))->replaceHeaders($provider->additionalConfiguration()['headers'] ?? [])->delete($this->baseUrl($provider)."/{$storeId}")->throw());
 
         return true;
     }
