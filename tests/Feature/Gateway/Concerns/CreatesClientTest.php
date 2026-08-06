@@ -27,8 +27,8 @@ test('configured headers override defaults case insensitively', function (): voi
     )->getOptions()['headers'];
 
     expect($headers)->toBe([
-        'authorization' => 'Bearer proxy-token',
-        'content-type' => 'application/json',
-        'x-session-affinity' => 'abc-123',
+        'Authorization' => 'Bearer proxy-token',
+        'Content-Type' => 'application/json',
+        'X-Session-Affinity' => 'abc-123',
     ]);
 });

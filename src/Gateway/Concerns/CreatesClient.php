@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\Concerns;
 
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 
 trait CreatesClient
@@ -20,7 +21,8 @@ trait CreatesClient
     ): PendingRequest {
         $headers = collect($headers)
             ->merge($configuredHeaders)
-            ->mapWithKeys(fn (mixed $value, string $name): array => [strtolower($name) => $value])
+            ->groupBy(fn (mixed $value, string $name): string => strtolower($name), preserveKeys: true)
+            ->mapWithKeys(fn (Collection $group): array => [$group->keys()->first() => $group->last()])
             ->all();
 
         return Http::baseUrl($baseUrl)
