@@ -33,7 +33,7 @@ test('configured headers override gateway default headers', function (): void {
     config(['ai.providers.voyageai' => [
         ...config('ai.providers.voyageai'),
         'key' => 'test-key',
-        'headers' => ['Authorization' => 'Bearer proxy-token'],
+        'headers' => ['authorization' => 'Bearer proxy-token'],
     ]]);
 
     Http::fake(['*' => fakeCustomHeadersEmbeddingsResponse()]);

@@ -4,7 +4,6 @@ namespace Laravel\Ai\Gateway;
 
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\RerankingGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
@@ -17,6 +16,7 @@ use Laravel\Ai\Responses\RerankingResponse;
 
 class JinaGateway implements EmbeddingGateway, RerankingGateway
 {
+    use Concerns\CreatesClient;
     use HandlesFailoverErrors;
 
     /**
@@ -98,14 +98,15 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
      */
     protected function client(EmbeddingProvider|RerankingProvider $provider, int $timeout = 30): PendingRequest
     {
-        return Http::baseUrl($this->baseUrl($provider))
-            ->withHeaders([
+        return $this->createClient(
+            $this->baseUrl($provider),
+            [
                 'Authorization' => 'Bearer '.$provider->providerCredentials()['key'],
                 'Content-Type' => 'application/json',
-            ])
-            ->replaceHeaders($provider->additionalConfiguration()['headers'] ?? [])
-            ->timeout($timeout)
-            ->throw();
+            ],
+            $provider->additionalConfiguration()['headers'] ?? [],
+            $timeout,
+        );
     }
 
     /**

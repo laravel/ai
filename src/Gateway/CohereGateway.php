@@ -4,7 +4,6 @@ namespace Laravel\Ai\Gateway;
 
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\RerankingGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
@@ -18,6 +17,7 @@ use Laravel\Ai\Responses\RerankingResponse;
 
 class CohereGateway implements EmbeddingGateway, RerankingGateway
 {
+    use Concerns\CreatesClient;
     use HandlesFailoverErrors;
     use ParsesEmbeddings;
 
@@ -102,13 +102,14 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway
     {
         $config = $provider->additionalConfiguration();
 
-        return Http::baseUrl($config['url'] ?? 'https://api.cohere.com/v2')
-            ->withHeaders([
+        return $this->createClient(
+            $config['url'] ?? 'https://api.cohere.com/v2',
+            [
                 'Authorization' => 'Bearer '.$provider->providerCredentials()['key'],
                 'Content-Type' => 'application/json',
-            ])
-            ->replaceHeaders($config['headers'] ?? [])
-            ->timeout($timeout)
-            ->throw();
+            ],
+            $config['headers'] ?? [],
+            $timeout,
+        );
     }
 }

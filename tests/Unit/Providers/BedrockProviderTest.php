@@ -80,6 +80,16 @@ test('returns additional configuration with region', function (): void {
         ->and($additionalConfig['use_default_credential_provider'])->toBeTrue();
 });
 
+test('returns configured headers', function (): void {
+    $provider = new BedrockProvider([
+        'headers' => ['X-Session-Affinity' => 'abc-123'],
+    ], $this->dispatcher);
+
+    expect($provider->additionalConfiguration()['headers'])->toBe([
+        'X-Session-Affinity' => 'abc-123',
+    ]);
+});
+
 test('preserves false value for use default credential provider', function (): void {
     $config = [
         'region' => 'us-east-1',

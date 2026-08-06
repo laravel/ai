@@ -3,26 +3,27 @@
 namespace Laravel\Ai\Gateway\OpenAiCompatible\Concerns;
 
 use Illuminate\Http\Client\PendingRequest;
-use Illuminate\Support\Facades\Http;
 use InvalidArgumentException;
+use Laravel\Ai\Gateway\Concerns\CreatesClient;
 use Laravel\Ai\Providers\Provider;
 
 trait CreatesOpenAiCompatibleClient
 {
+    use CreatesClient;
+
     /**
      * Get an HTTP client for the OpenAI-compatible API.
      */
     protected function client(Provider $provider, ?int $timeout = null): PendingRequest
     {
-        $client = Http::baseUrl($this->baseUrl($provider))
-            ->timeout($timeout ?? 60)
-            ->throw();
+        $key = $provider->providerCredentials()['key'] ?? null;
 
-        if (filled($key = $provider->providerCredentials()['key'] ?? null)) {
-            $client->withToken($key);
-        }
-
-        return $client->replaceHeaders($provider->additionalConfiguration()['headers'] ?? []);
+        return $this->createClient(
+            $this->baseUrl($provider),
+            filled($key) ? ['Authorization' => 'Bearer '.$key] : [],
+            $provider->additionalConfiguration()['headers'] ?? [],
+            $timeout ?? 60,
+        );
     }
 
     /**
