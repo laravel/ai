@@ -92,12 +92,15 @@ trait GeneratesText
 
                 $agentResponse = $response instanceof StructuredTextResponse
                     ? (new StructuredAgentResponse($invocationId, $response->structured, $response->text, $response->usage, $response->meta))
+                        ->withMessages($response->messages)
                         ->withToolCallsAndResults($response->toolCalls, $response->toolResults)
                         ->withSteps($response->steps)
+                        ->withRawResponse($response->raw)
                     : (new AgentResponse($invocationId, $response->text, $response->usage, $response->meta))
                         ->withMessages($response->messages)
                         ->withToolCallsAndResults($response->toolCalls, $response->toolResults)
-                        ->withSteps($response->steps);
+                        ->withSteps($response->steps)
+                        ->withRawResponse($response->raw);
 
                 $agentResponse->withPendingApprovals($response->pendingApprovals);
 

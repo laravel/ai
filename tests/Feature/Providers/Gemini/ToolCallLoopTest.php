@@ -247,3 +247,50 @@ test('thinking parts are excluded from tool call continuation', function (): voi
         }
     }
 });
+
+test('thought signature is preserved across the tool call continuation', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::sequence([
+            Http::response([
+                'candidates' => [[
+                    'content' => [
+                        'parts' => [
+                            ['text' => 'Let me generate that...', 'thought' => true],
+                            [
+                                'functionCall' => ['id' => 'call_1', 'name' => 'FixedNumberGenerator', 'args' => (object) []],
+                                'thoughtSignature' => 'sig_abc_123',
+                            ],
+                        ],
+                        'role' => 'model',
+                    ],
+                    'finishReason' => 'STOP',
+                ]],
+                'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5],
+            ]),
+            $this->fakeTextResponse('The number is 72019'),
+        ]),
+    ]);
+
+    (new ToolUsingAgent(fixed: true))->prompt('Generate', provider: 'gemini');
+
+    $recorded = Http::recorded();
+    expect($recorded)->toHaveCount(2);
+
+    $followUpContents = $recorded[1][0]->data()['contents'];
+
+    $signature = null;
+
+    foreach ($followUpContents as $content) {
+        if ($content['role'] === 'model') {
+            foreach ($content['parts'] as $part) {
+                if (isset($part['functionCall'])) {
+                    $signature = $part['thoughtSignature'] ?? null;
+                }
+            }
+        }
+    }
+
+    // Gemini 3 rejects tool-call history whose functionCall part is missing its
+    // thoughtSignature, so the signature must survive the round trip verbatim.
+    expect($signature)->toBe('sig_abc_123');
+});

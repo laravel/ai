@@ -1,6 +1,26 @@
 # Release Notes
 
-## [Unreleased](https://github.com/laravel/ai/compare/v0.10.1...0.x)
+## [Unreleased](https://github.com/laravel/ai/compare/v0.10.2...0.x)
+
+## [v0.10.2](https://github.com/laravel/ai/compare/v0.10.1...v0.10.2) - 2026-07-28
+
+### What's Changed
+
+* Preserve conversation title language by [@yuters](https://github.com/yuters) in https://github.com/laravel/ai/pull/814
+* Bump actions/checkout from 7.0.0 to 7.0.1 in the github-actions group by [@dependabot](https://github.com/dependabot)[bot] in https://github.com/laravel/ai/pull/830
+* Fix Anthropic structured output rejecting JSON Schema constraints by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/718
+* Bump postcss from 8.5.16 to 8.5.23 in /workbench by [@dependabot](https://github.com/dependabot)[bot] in https://github.com/laravel/ai/pull/831
+* Fix colliding embeddings cache keys for distinct string batches by [@ademola-emmanuel](https://github.com/ademola-emmanuel) in https://github.com/laravel/ai/pull/832
+* Replace deprected DeepSeek model  name with deepseek-v4-flash by [@peter-nassef](https://github.com/peter-nassef) in https://github.com/laravel/ai/pull/829
+* Fix: SimilaritySearch tool output with additional JSON flags (for other languages) by [@yuters](https://github.com/yuters) in https://github.com/laravel/ai/pull/820
+
+### New Contributors
+
+* [@yuters](https://github.com/yuters) made their first contribution in https://github.com/laravel/ai/pull/814
+* [@ademola-emmanuel](https://github.com/ademola-emmanuel) made their first contribution in https://github.com/laravel/ai/pull/832
+* [@peter-nassef](https://github.com/peter-nassef) made their first contribution in https://github.com/laravel/ai/pull/829
+
+**Full Changelog**: https://github.com/laravel/ai/compare/v0.10.1...v0.10.2
 
 ## [v0.10.1](https://github.com/laravel/ai/compare/v0.10.0...v0.10.1) - 2026-07-21
 
