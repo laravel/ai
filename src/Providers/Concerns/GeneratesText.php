@@ -42,6 +42,17 @@ trait GeneratesText
     protected string $currentToolInvocationId;
 
     /**
+     * The invocation IDs of the tools that are currently executing.
+     *
+     * A tool may start a nested generation while it runs, which an AgentTool does by design when
+     * it prompts its sub-agent. Providers are memoized per name, so the nested generation shares
+     * this instance. Invocations always unwind in LIFO order.
+     *
+     * @var array<int, string>
+     */
+    protected array $toolInvocationIds = [];
+
+    /**
      * Invoke the given agent.
      */
     public function prompt(AgentPrompt $prompt): AgentResponse
@@ -190,15 +201,19 @@ trait GeneratesText
     {
         $this->textGenerationLoop()->onToolInvocation(
             invoking: function (Tool $tool, array $arguments) use ($invocationId, $agent): void {
-                $this->currentToolInvocationId = (string) Str::uuid7();
+                $this->toolInvocationIds[] = $this->currentToolInvocationId = (string) Str::uuid7();
 
                 $this->events->dispatch(new InvokingTool(
                     $invocationId, $this->currentToolInvocationId, $agent, $tool, $arguments
                 ));
             },
             invoked: function (Tool $tool, array $arguments, mixed $result) use ($invocationId, $agent): void {
+                $toolInvocationId = array_pop($this->toolInvocationIds) ?? $this->currentToolInvocationId;
+
+                $this->currentToolInvocationId = end($this->toolInvocationIds) ?: $toolInvocationId;
+
                 $this->events->dispatch(new ToolInvoked(
-                    $invocationId, $this->currentToolInvocationId, $agent, $tool, $arguments, $result
+                    $invocationId, $toolInvocationId, $agent, $tool, $arguments, $result
                 ));
             },
         );
