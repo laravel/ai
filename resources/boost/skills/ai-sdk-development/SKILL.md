@@ -420,6 +420,7 @@ Point the SDK at any OpenAI-compatible endpoint (LM Studio, vLLM, Together, etc.
             'default' => 'some-embedding-model',
             'dimensions' => 1024, // optional; omit to use native dimensions
         ],
+        'transcription' => ['default' => 'some-transcription-model'],
     ],
 ],
 ```
@@ -435,7 +436,7 @@ Embeddings::for(['Hello'])->generate(
 );
 ```
 
-It uses OpenAI-standard shapes and supports text, streaming, tools, structured output, image attachments, and text embeddings. Embedding dimensions are optional; omit them to use the model's native dimensions. For extra request-body fields, implement `HasProviderOptions` — the returned array is merged into the body.
+It uses OpenAI-standard shapes and supports text, streaming, tools, structured output, image attachments, text embeddings, and audio transcription. Embedding dimensions are optional; omit them to use the model's native dimensions. For extra request-body fields, implement `HasProviderOptions` — the returned array is merged into the body.
 
 ## Common Pitfalls
 
@@ -465,7 +466,7 @@ Calling a capability not supported by a provider throws a `LogicException`. Refe
 | Text       | OpenAI, Anthropic, Gemini, Azure, Groq, xAI, DeepSeek, Mistral, Ollama, OpenRouter, OpenAI-compatible |
 | Images     | OpenAI, Gemini, xAI                                            |
 | TTS        | OpenAI, ElevenLabs                                              |
-| STT        | OpenAI, ElevenLabs, Mistral                                     |
+| STT        | OpenAI, ElevenLabs, Mistral, OpenAI-compatible                 |
 | Embeddings | OpenAI, OpenAI-compatible, Gemini, Azure, Cohere, Mistral, Jina, VoyageAI |
 | Reranking  | Cohere, Jina                                                    |
 | Files      | OpenAI, Anthropic, Gemini                                       |
