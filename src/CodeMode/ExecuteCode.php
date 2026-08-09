@@ -4,9 +4,7 @@ namespace Laravel\Ai\CodeMode;
 
 use Closure;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
-use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Tools\Request;
 
 /**
@@ -16,11 +14,8 @@ class ExecuteCode implements Tool
 {
     protected ?string $description = null;
 
-    /**
-     * @param  array<string, Tool>  $tools
-     */
     public function __construct(
-        protected array $tools,
+        protected Catalog $catalog,
         protected int|float|null $timeout = null,
         protected ?int $maxToolCalls = null,
         protected ?int $maxOutputBytes = null,
@@ -43,10 +38,7 @@ class ExecuteCode implements Tool
     {
         $functions = implode(', ', $this->availableFunctions());
 
-        $signatures = implode("\n", array_map(
-            fn (string $path): string => $this->signatureFor($path, $this->tools[$path]),
-            array_keys($this->tools),
-        ));
+        $catalog = $this->renderCatalog();
 
         return $this->description ??= <<<DESCRIPTION
         Execute a PHP program that orchestrates the tools listed below. Write plain PHP statements
@@ -57,9 +49,12 @@ class ExecuteCode implements Tool
         Workflow:
         1. Call tools as tool('<path>', ['param' => value]). Every tool returns a string; when a tool
            returns JSON, parse it with json_decode(\$result) — json_decode always returns arrays.
-        2. Sequence dependent calls, branch, and loop in one program instead of one call per turn.
-        3. Filter and aggregate large results in code, returning only the data the conversation needs.
-        4. Wrap calls in try/catch (catch (Exception \$e) { \$e->getMessage() }) to handle tool failures.
+        2. When a tool's signature is not listed below, look it up with the search_tools tool, or with
+           search_tools('<terms>') inside a program — both return [['path' => ..., 'signature' => ...]]
+           ranked by relevance. Call the returned path exactly as given.
+        3. Sequence dependent calls, branch, and loop in one program instead of one call per turn.
+        4. Filter and aggregate large results in code, returning only the data the conversation needs.
+        5. Wrap calls in try/catch (catch (Exception \$e) { \$e->getMessage() }) to handle tool failures.
 
         The runtime is a restricted PHP subset: variables, arrays, string interpolation,
         arithmetic/comparison/logical operators, if/else, foreach/for/while, match/switch, try/catch,
@@ -67,11 +62,26 @@ class ExecuteCode implements Tool
         built-in functions: {$functions}.
 
         Not available: classes and objects (data is scalars and arrays), method calls, references,
-        file/network/process access, and any function not listed above. Only the tools below exist.
+        file/network/process access, and any function not listed above. Only the catalog tools exist.
 
-        Available tools:
-        {$signatures}
+        {$catalog}
         DESCRIPTION;
+    }
+
+    /**
+     * Render the model-facing catalog, inlining signatures until the byte budget is spent
+     * and leaving the remaining tools discoverable by path through the search_tools tool.
+     */
+    protected function renderCatalog(): string
+    {
+        $catalog = "Available tools:\n".implode("\n", $this->catalog->inline());
+
+        if (! $this->catalog->isPartial()) {
+            return $catalog;
+        }
+
+        return $catalog."\n\nThese tools also exist; call the search_tools tool for their signatures "
+            ."before using them:\n".implode(', ', $this->catalog->deferred());
     }
 
     /**
@@ -80,7 +90,7 @@ class ExecuteCode implements Tool
     public function handle(Request $request): string
     {
         $interpreter = new Interpreter(
-            $this->tools,
+            $this->catalog,
             $this->timeout,
             $this->maxToolCalls,
             $this->onToolCallStart,
@@ -148,40 +158,5 @@ class ExecuteCode implements Tool
         sort($functions);
 
         return $functions;
-    }
-
-    /**
-     * Render a model-facing call signature for a catalog tool.
-     */
-    protected function signatureFor(string $path, Tool $tool): string
-    {
-        $schema = (new ObjectSchema((array) $tool->schema(new JsonSchemaTypeFactory)))->toSchema();
-
-        $required = $schema['required'] ?? [];
-        $parameters = [];
-
-        foreach ($schema['properties'] ?? [] as $name => $property) {
-            $type = $property['type'] ?? 'mixed';
-            $type = is_array($type) ? implode('|', $type) : $type;
-
-            $parameter = sprintf("'%s' => %s", $name, $type);
-
-            if (! in_array($name, $required, true)) {
-                $parameter .= ' (optional)';
-            }
-
-            if (is_string($property['description'] ?? null) && $property['description'] !== '') {
-                $parameter .= ' /* '.$property['description'].' */';
-            }
-
-            $parameters[] = $parameter;
-        }
-
-        return sprintf(
-            "tool('%s', [%s]): string — %s",
-            $path,
-            implode(', ', $parameters),
-            (string) $tool->description(),
-        );
     }
 }

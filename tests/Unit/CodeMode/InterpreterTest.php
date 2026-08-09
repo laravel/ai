@@ -1,15 +1,16 @@
 <?php
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Laravel\Ai\CodeMode\Catalog;
 use Laravel\Ai\CodeMode\Interpreter;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
 
-function interpreterTool(string $name, Closure $handler): Tool
+function interpreterTool(string $name, Closure $handler, string $description = 'A test tool.'): Tool
 {
-    return new class($name, $handler) implements Tool
+    return new class($name, $handler, $description) implements Tool
     {
-        public function __construct(protected string $toolName, protected Closure $handler) {}
+        public function __construct(protected string $toolName, protected Closure $handler, protected string $toolDescription = 'A test tool.') {}
 
         public function name(): string
         {
@@ -18,7 +19,7 @@ function interpreterTool(string $name, Closure $handler): Tool
 
         public function description(): string
         {
-            return 'A test tool.';
+            return $this->toolDescription;
         }
 
         public function handle(Request $request): string
@@ -373,4 +374,38 @@ test('break and continue support levels', function (): void {
     PHP);
 
     expect($result['value'])->toBe(['1.1', '2.1']);
+});
+
+test('search_tools ranks the catalog by term overlap', function (): void {
+    $interpreter = new Interpreter(new Catalog([
+        'orders.LookupOrder' => interpreterTool('LookupOrder', fn () => '', 'Look up an order.'),
+        'mail.SendEmail' => interpreterTool('SendEmail', fn () => '', 'Send an email message.'),
+        'orders.CancelOrder' => interpreterTool('CancelOrder', fn () => '', 'Cancel an order.'),
+    ]));
+
+    $result = $interpreter->execute("return search_tools('cancel order');");
+
+    expect(array_column($result['value'], 'path'))
+        ->toBe(['orders.CancelOrder', 'orders.LookupOrder'])
+        ->and($result['value'][0]['signature'])->toContain('CancelOrder');
+});
+
+test('search_tools browses the catalog for an empty query and honors the limit', function (): void {
+    $interpreter = new Interpreter(new Catalog([
+        'a' => interpreterTool('a', fn () => ''),
+        'b' => interpreterTool('b', fn () => ''),
+        'c' => interpreterTool('c', fn () => ''),
+    ]));
+
+    expect(array_column($interpreter->execute("return search_tools('');")['value'], 'path'))
+        ->toBe(['a', 'b', 'c'])
+        ->and(array_column($interpreter->execute("return search_tools('', 2);")['value'], 'path'))
+        ->toBe(['a', 'b']);
+});
+
+test('search_tools rejects an invalid limit', function (): void {
+    $result = (new Interpreter)->execute("return search_tools('x', 0);");
+
+    expect($result['ok'])->toBeFalse()
+        ->and($result['error']['message'])->toContain('positive integer limit');
 });

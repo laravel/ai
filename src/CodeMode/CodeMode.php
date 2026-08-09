@@ -119,7 +119,8 @@ class CodeMode
     }
 
     /**
-     * Expand into the single execute_code tool the model interacts with.
+     * Expand into the execute_code tool the model interacts with, plus a search_tools
+     * tool when the catalog is too large to inline in the description.
      *
      * The tree is resolved through the given resolver (e.g. Agent to AgentTool) but never
      * exposed to the provider directly; the model reaches the tools only through programs.
@@ -169,7 +170,9 @@ class CodeMode
             }
         }
 
-        return [new ExecuteCode(
+        $catalog = new Catalog($catalog);
+
+        $tools = [new ExecuteCode(
             $catalog,
             $this->timeout,
             $this->maxToolCalls,
@@ -177,5 +180,8 @@ class CodeMode
             $this->onToolCallStart,
             $this->onToolCallEnd,
         )];
+
+        // A search tool only earns its slot when the catalog is too large to inline.
+        return $catalog->isPartial() ? [...$tools, new SearchTools($catalog)] : $tools;
     }
 }

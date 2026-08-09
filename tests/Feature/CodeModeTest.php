@@ -34,7 +34,7 @@ test('the agent runs a program that orchestrates catalog tools in one invocation
         ->and($decoded['toolCalls'])->toBe(['weather.get_weather']);
 });
 
-test('only the execute_code tool is exposed to the provider', function (): void {
+test('only the execute_code tool is exposed when the whole catalog fits inline', function (): void {
     $exposed = collect((new CodeModeAgent)->tools())
         ->flatMap(fn (mixed $tool): array => $tool instanceof CodeMode
             ? array_map(fn (Tool $expanded): string => $expanded->name(), $tool->expand(fn ($leaf) => $leaf))
@@ -100,6 +100,41 @@ test('a non-tool entry in the tree fails loudly', function (): void {
 test('an invalid namespace fails loudly', function (): void {
     expect(fn () => CodeMode::for(['bad namespace!' => [new CodeModeWeatherTool]])->expand(fn ($leaf) => $leaf))
         ->toThrow(InvalidArgumentException::class, 'namespace');
+});
+
+test('a program can discover a catalog tool through search_tools', function (): void {
+    [$executeCode] = CodeMode::for(['weather' => [new CodeModeWeatherTool]])->expand(fn ($leaf) => $leaf);
+
+    $result = json_decode($executeCode->handle(new Request([
+        'code' => "return search_tools('weather');",
+    ])), true);
+
+    expect($result['ok'])->toBeTrue()
+        ->and($result['value'][0]['path'])->toBe('weather.get_weather')
+        ->and($result['value'][0]['signature'])->toContain("tool('weather.get_weather', ['city' => string");
+});
+
+test('a catalog too large to inline is deferred to the search_tools tool', function (): void {
+    $tools = array_map(fn (int $i): Tool => new CodeModeFillerTool($i), range(1, 200));
+
+    $expanded = CodeMode::for($tools)->expand(fn ($leaf) => $leaf);
+
+    expect(array_map(fn (Tool $tool): string => $tool->name(), $expanded))
+        ->toBe(['execute_code', 'search_tools']);
+
+    [$executeCode, $searchTools] = $expanded;
+
+    $description = $executeCode->description();
+
+    expect($description)->toContain("tool('filler_tool_1',")
+        ->and($description)->toContain('call the search_tools tool for their signatures')
+        ->and($description)->toContain('filler_tool_200')
+        ->and($description)->not->toContain("tool('filler_tool_200'");
+
+    $found = json_decode($searchTools->handle(new Request(['query' => 'filler_tool_200', 'limit' => 1])), true);
+
+    expect($found[0]['path'])->toBe('filler_tool_200')
+        ->and($found[0]['signature'])->toContain('Filler tool number 200');
 });
 
 class CodeModeWeatherTool implements Tool
@@ -173,5 +208,30 @@ class CodeModeAgent implements Agent, HasTools
                 'weather' => [new CodeModeWeatherTool],
             ]),
         ];
+    }
+}
+
+class CodeModeFillerTool implements Tool
+{
+    public function __construct(protected int $index) {}
+
+    public function name(): string
+    {
+        return 'filler_tool_'.$this->index;
+    }
+
+    public function description(): string
+    {
+        return 'Filler tool number '.$this->index.' used to grow the catalog past the inline budget.';
+    }
+
+    public function handle(Request $request): string
+    {
+        return (string) $this->index;
+    }
+
+    public function schema(JsonSchema $schema): array
+    {
+        return [];
     }
 }

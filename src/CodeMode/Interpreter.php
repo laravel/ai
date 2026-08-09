@@ -113,16 +113,20 @@ class Interpreter
 
     protected int $callDepth = 0;
 
+    protected Catalog $catalog;
+
     /**
-     * @param  array<string, Tool>  $tools
+     * @param  Catalog|array<string, Tool>  $catalog
      */
     public function __construct(
-        protected array $tools = [],
+        Catalog|array $catalog = [],
         protected int|float|null $timeout = null,
         protected ?int $maxToolCalls = null,
         protected ?Closure $onToolCallStart = null,
         protected ?Closure $onToolCallEnd = null,
-    ) {}
+    ) {
+        $this->catalog = $catalog instanceof Catalog ? $catalog : new Catalog($catalog);
+    }
 
     /**
      * Execute the given program and return its result or failure as data.
@@ -840,6 +844,10 @@ class Interpreter
             return $this->callTool($expr, $scope);
         }
 
+        if ($name === 'search_tools') {
+            return $this->searchTools($this->evalArgs($expr, $scope));
+        }
+
         if (in_array($name, self::REF_FUNCTIONS, true)) {
             return $this->callRefFunction($name, $expr, $scope);
         }
@@ -1026,6 +1034,28 @@ class Interpreter
     /**
      * Invoke a catalog tool through the model-facing tool() built-in.
      */
+    /**
+     * Rank catalog tools against a query, returning their paths and signatures.
+     *
+     * @param  array<int, mixed>  $arguments
+     * @return array<int, array<string, string>>
+     */
+    protected function searchTools(array $arguments): array
+    {
+        $query = $arguments[0] ?? '';
+        $limit = $arguments[1] ?? 10;
+
+        if (! is_string($query)) {
+            throw new ProgramThrow(new ExceptionValue('TypeError', 'search_tools() expects a query string.'));
+        }
+
+        if (! is_int($limit) || $limit < 1) {
+            throw new ProgramThrow(new ExceptionValue('ValueError', 'search_tools() expects a positive integer limit.'));
+        }
+
+        return $this->catalog->search($query, $limit);
+    }
+
     protected function callTool(Expr\FuncCall $expr, Scope $scope): string
     {
         $arguments = $this->evalArgs($expr, $scope);
@@ -1036,11 +1066,11 @@ class Interpreter
             throw new Diagnostic('UnknownTool', 'tool() expects a tool path string as its first argument.');
         }
 
-        $tool = $this->tools[$path] ?? null;
+        $tool = $this->catalog->tool($path);
 
         if ($tool === null) {
             throw new Diagnostic('UnknownTool', sprintf(
-                'Unknown tool "%s". Available tools: %s.', $path, implode(', ', array_keys($this->tools))
+                'Unknown tool "%s". Available tools: %s.', $path, implode(', ', $this->catalog->paths())
             ));
         }
 
