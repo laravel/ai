@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
+use Laravel\Ai\CodeMode\CodeMode;
 use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
@@ -160,10 +161,17 @@ trait GeneratesText
             return [];
         }
 
-        return array_map(
-            fn ($tool) => $this->resolveTool($tool),
-            [...$agent->tools()],
-        );
+        $tools = [];
+
+        foreach ($agent->tools() as $tool) {
+            if ($tool instanceof CodeMode) {
+                array_push($tools, ...$tool->expand(fn ($leaf) => $this->resolveTool($leaf)));
+            } else {
+                $tools[] = $this->resolveTool($tool);
+            }
+        }
+
+        return $tools;
     }
 
     /**

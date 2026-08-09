@@ -22,7 +22,8 @@
         "illuminate/json-schema": "^12.62|^13.15",
         "illuminate/support": "^12.0|^13.0",
         "laravel/prompts": "^0.3.6",
-        "laravel/serializable-closure": "^2.0"
+        "laravel/serializable-closure": "^2.0",
+        "nikic/php-parser": "^5.0"
     },
     "require-dev": {
         "driftingly/rector-laravel": "^2.5",
