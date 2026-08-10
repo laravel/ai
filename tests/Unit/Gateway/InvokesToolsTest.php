@@ -85,3 +85,61 @@ test('tool invocation callbacks are restored after nested tool invocations', fun
         'parent invoked sibling:sibling result',
     ]);
 });
+
+test('invocation callbacks keep per-call context and forward tool call IDs', function (): void {
+    $events = [];
+    $receivedId = null;
+
+    $gateway = new class
+    {
+        use InvokesTools;
+
+        public function invoke(Tool $tool, array $arguments = [], ?string $toolCallId = null): string
+        {
+            return $this->executeTool($tool, $arguments, $toolCallId);
+        }
+    };
+
+    $tool = new class($receivedId) implements Tool
+    {
+        protected mixed $receivedId;
+
+        public function __construct(mixed &$receivedId)
+        {
+            $this->receivedId = &$receivedId;
+        }
+
+        public function description(): string
+        {
+            return 'A context test tool.';
+        }
+
+        public function handle(Request $request): string
+        {
+            $this->receivedId = $request->toolCallId();
+
+            return 'result';
+        }
+
+        public function schema(JsonSchema $schema): array
+        {
+            return [];
+        }
+    };
+
+    $gateway->onToolInvocation(
+        invoking: function () use (&$events): string {
+            $events[] = 'invoking';
+
+            return 'correlation-id';
+        },
+        invoked: function (Tool $tool, array $arguments, mixed $result, string $context) use (&$events): void {
+            $events[] = $context.':'.$result;
+        },
+    );
+
+    $gateway->invoke($tool, toolCallId: 'provider-id');
+
+    expect($receivedId)->toBe('provider-id')
+        ->and($events)->toBe(['invoking', 'correlation-id:result']);
+});

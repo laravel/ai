@@ -7,7 +7,7 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
 
 /**
- * Look up signatures for code mode tools left out of the inline catalog.
+ * Look up schemas for code mode tools left out of the inline catalog.
  */
 class SearchTools implements Tool
 {
@@ -26,9 +26,9 @@ class SearchTools implements Tool
      */
     public function description(): string
     {
-        return 'Search the tools available to execute_code. Returns matching tool paths with their '
-            .'call signatures, ranked by relevance; an empty query browses the catalog. Use the '
-            .'returned path exactly as given in a tool(...) call inside an execute_code program.';
+        return 'Search the tools available to execute_code. Returns matching paths, descriptions, and JSON Schemas, '
+            .'ranked by relevance; an empty query browses the catalog. Use the returned path exactly as given in a '
+            .'call step inside an execute_code program.';
     }
 
     /**
@@ -38,7 +38,7 @@ class SearchTools implements Tool
     {
         return json_encode(
             $this->catalog->search((string) $request->string('query'), $request->integer('limit', 10)),
-            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR,
         );
     }
 
@@ -49,7 +49,7 @@ class SearchTools implements Tool
     {
         return [
             'query' => $schema->string()->description('The terms to search tool names and descriptions for.')->required(),
-            'limit' => $schema->integer()->description('The maximum number of tools to return. Defaults to 10.'),
+            'limit' => $schema->integer()->min(1)->max(50)->default(10)->description('The maximum number of tools to return.'),
         ];
     }
 }

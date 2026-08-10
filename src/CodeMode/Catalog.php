@@ -3,129 +3,144 @@
 namespace Laravel\Ai\CodeMode;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Illuminate\Support\Str;
+use InvalidArgumentException;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\ObjectSchema;
 
 /**
- * The tools code mode exposes, their model-facing signatures, and lookup over both.
+ * The catalog of tools and schemas exposed to orchestration programs.
  */
 class Catalog
 {
-    /**
-     * How many bytes of signatures may be inlined in the execute_code description.
-     */
     protected const MAX_INLINE_BYTES = 8000;
 
+    protected const MAX_SCHEMA_BYTES = 16000;
+
+    protected const MAX_SEARCH_RESULTS = 50;
+
+    protected const MAX_SEARCH_BYTES = 32000;
+
     /**
-     * The rendered call signature for each path.
-     *
-     * @var array<string, string>
+     * @var array<string, array{path: string, description: string, schema: array<string, mixed>}>
      */
-    protected array $signatures;
+    protected array $entries = [];
+
+    /** @var array<string, string> */
+    protected array $rendered = [];
+
+    /** @var array<string, string> */
+    protected array $searchable = [];
 
     /**
      * @param  array<string, Tool>  $tools
      */
     public function __construct(protected array $tools)
     {
-        $this->signatures = [];
-
         foreach ($tools as $path => $tool) {
-            $this->signatures[$path] = $this->signatureFor($path, $tool);
+            $schema = (new ObjectSchema((array) $tool->schema(new JsonSchemaTypeFactory)))->toSchema();
+            $encodedSchema = json_encode($schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+
+            if (strlen($encodedSchema) > self::MAX_SCHEMA_BYTES) {
+                throw new InvalidArgumentException(sprintf(
+                    'The schema for code mode tool [%s] exceeds the %d byte catalog limit.', $path, self::MAX_SCHEMA_BYTES
+                ));
+            }
+
+            $description = (string) $tool->description();
+            $this->entries[$path] = compact('path', 'description', 'schema');
+            $this->rendered[$path] = sprintf(
+                "Tool [%s]: %s\nArguments JSON Schema: %s",
+                $path,
+                $description,
+                $encodedSchema,
+            );
+            $this->searchable[$path] = implode(' ', [
+                $path,
+                $description,
+                $this->schemaSearchText($schema),
+            ]);
         }
     }
 
-    /**
-     * Get the tool registered at the given path.
-     */
     public function tool(string $path): ?Tool
     {
         return $this->tools[$path] ?? null;
     }
 
-    /**
-     * Get every registered tool path.
-     *
-     * @return array<int, string>
-     */
+    /** @return array<int, string> */
     public function paths(): array
     {
         return array_keys($this->tools);
     }
 
-    /**
-     * Determine whether any tool is left out of the inline catalog.
-     */
     public function isPartial(): bool
     {
-        return $this->deferred() !== [];
+        return $this->deferredCount() > 0;
     }
 
-    /**
-     * The signatures small enough to inline in the execute_code description.
-     *
-     * @return array<int, string>
-     */
+    public function deferredCount(): int
+    {
+        return count($this->tools) - $this->inlineCount();
+    }
+
+    /** @return array<int, string> */
     public function inline(): array
     {
-        return array_values(array_slice($this->signatures, 0, $this->inlineCount()));
+        return array_values(array_slice($this->rendered, 0, $this->inlineCount()));
     }
 
     /**
-     * The paths whose signatures did not fit the inline budget.
-     *
-     * @return array<int, string>
-     */
-    public function deferred(): array
-    {
-        return array_slice($this->paths(), $this->inlineCount());
-    }
-
-    /**
-     * Rank tools against a query by lexical term overlap, or browse in declaration order when empty.
-     *
-     * @return array<int, array<string, string>>
+     * @return array<int, array{path: string, description: string, schema: array<string, mixed>}>
      */
     public function search(string $query, int $limit = 10): array
     {
-        // A ceiling so an oversized limit cannot pull the whole deferred catalog into context.
-        $limit = max(1, min($limit, 50));
-
-        $terms = array_unique(preg_split('/[^a-z0-9]+/', strtolower($query), flags: PREG_SPLIT_NO_EMPTY) ?: []);
-
+        $limit = max(1, min($limit, self::MAX_SEARCH_RESULTS));
+        $terms = $this->terms($query);
         $scores = [];
 
-        foreach ($this->signatures as $path => $signature) {
-            $haystack = strtolower($path.' '.$signature);
-
+        foreach ($this->entries as $path => $entry) {
+            $pathText = Str::lower($path);
+            $descriptionText = Str::lower($entry['description']);
+            $schemaText = Str::lower($this->schemaSearchText($entry['schema']));
             $scores[$path] = array_sum(array_map(
-                fn (string $term): int => str_contains($haystack, $term) ? 1 : 0, $terms
+                fn (string $term): int => (str_contains($pathText, $term) ? 4 : 0)
+                    + (str_contains($descriptionText, $term) ? 2 : 0)
+                    + (str_contains($schemaText, $term) ? 1 : 0),
+                $terms,
             ));
         }
 
         if ($terms !== []) {
             $scores = array_filter($scores);
-
-            // PHP sorts are stable, so equal scores keep declaration order.
             arsort($scores, SORT_NUMERIC);
         }
 
-        return array_map(
-            fn (string $path): array => ['path' => $path, 'signature' => $this->signatures[$path]],
-            array_slice(array_keys($scores), 0, $limit),
-        );
+        $results = [];
+        $bytes = 2;
+
+        foreach (array_slice(array_keys($scores), 0, $limit) as $path) {
+            $entry = $this->entries[$path];
+            $entryBytes = strlen(json_encode($entry, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)) + 1;
+
+            if ($bytes + $entryBytes > self::MAX_SEARCH_BYTES) {
+                break;
+            }
+
+            $results[] = $entry;
+            $bytes += $entryBytes;
+        }
+
+        return $results;
     }
 
-    /**
-     * How many signatures fit the inline byte budget.
-     */
     protected function inlineCount(): int
     {
         $count = 0;
         $bytes = 0;
 
-        foreach ($this->signatures as $signature) {
-            if (($bytes += strlen($signature) + 1) > self::MAX_INLINE_BYTES) {
+        foreach ($this->rendered as $entry) {
+            if (($bytes += strlen($entry) + 1) > self::MAX_INLINE_BYTES) {
                 break;
             }
 
@@ -135,38 +150,56 @@ class Catalog
         return $count;
     }
 
-    /**
-     * Render a model-facing call signature for a tool.
-     */
-    protected function signatureFor(string $path, Tool $tool): string
+    /** @return array<int, string> */
+    protected function terms(string $value): array
     {
-        $schema = (new ObjectSchema((array) $tool->schema(new JsonSchemaTypeFactory)))->toSchema();
+        return array_values(array_unique(
+            preg_split('/[^\p{L}\p{N}]+/u', Str::lower($value), flags: PREG_SPLIT_NO_EMPTY) ?: []
+        ));
+    }
 
-        $required = $schema['required'] ?? [];
-        $parameters = [];
+    /**
+     * @param  array<string, mixed>  $schema
+     */
+    protected function schemaSearchText(array $schema): string
+    {
+        $parts = [];
 
-        foreach ($schema['properties'] ?? [] as $name => $property) {
-            $type = $property['type'] ?? 'mixed';
-            $type = is_array($type) ? implode('|', $type) : $type;
+        foreach ($schema as $key => $value) {
+            if (in_array($key, ['properties', 'description', 'enum', 'const', 'title'], true)) {
+                $parts[] = is_scalar($value) ? (string) $value : $this->schemaValueText($value);
 
-            $parameter = sprintf("'%s' => %s", $name, $type);
-
-            if (! in_array($name, $required, true)) {
-                $parameter .= ' (optional)';
+                continue;
             }
 
-            if (is_string($property['description'] ?? null) && $property['description'] !== '') {
-                $parameter .= ' /* '.$property['description'].' */';
+            if (is_array($value)) {
+                $parts[] = $this->schemaValueText($value);
             }
-
-            $parameters[] = $parameter;
         }
 
-        return sprintf(
-            "tool('%s', [%s]): string — %s",
-            $path,
-            implode(', ', $parameters),
-            (string) $tool->description(),
-        );
+        return implode(' ', $parts);
+    }
+
+    protected function schemaValueText(mixed $value): string
+    {
+        if (is_scalar($value)) {
+            return (string) $value;
+        }
+
+        if (! is_array($value)) {
+            return '';
+        }
+
+        $parts = [];
+
+        foreach ($value as $key => $nested) {
+            if (is_string($key)) {
+                $parts[] = $key;
+            }
+
+            $parts[] = $this->schemaValueText($nested);
+        }
+
+        return implode(' ', $parts);
     }
 }

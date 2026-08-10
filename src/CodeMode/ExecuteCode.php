@@ -8,17 +8,20 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
 
 /**
- * The single model-facing tool code mode exposes: run a PHP program over the wrapped tools.
+ * Run a bounded JSON orchestration program over wrapped tools.
  */
 class ExecuteCode implements Tool
 {
-    protected ?string $description = null;
-
+    /**
+     * @param  Closure(Tool, string, array<string, mixed>, string): string|null  $toolInvoker
+     */
     public function __construct(
         protected Catalog $catalog,
-        protected int|float|null $timeout = null,
-        protected ?int $maxToolCalls = null,
-        protected ?int $maxOutputBytes = null,
+        protected int|float $timeout,
+        protected int $maxToolCalls,
+        protected int $maxOutputBytes,
+        protected int $maxOperations,
+        protected ?Closure $toolInvoker = null,
         protected ?Closure $onToolCallStart = null,
         protected ?Closure $onToolCallEnd = null,
     ) {}
@@ -36,37 +39,39 @@ class ExecuteCode implements Tool
      */
     public function description(): string
     {
-        $functions = implode(', ', $this->availableFunctions());
-
         $catalog = $this->renderCatalog();
 
-        return $this->description ??= <<<DESCRIPTION
-        Execute a PHP program that orchestrates the tools listed below. Write plain PHP statements
-        (the <?php tag is optional). The value you `return` becomes the result; `echo` output is
-        captured and returned as logs. The result is JSON: {"ok": true, "value": ..., "logs": [...],
+        return <<<DESCRIPTION
+        Execute a bounded JSON orchestration program over the tools listed below. Pass the program as
+        a JSON string. The result is JSON: {"ok": true, "value": ..., "logs": [...],
         "toolCalls": [...]} on success, or {"ok": false, "error": {"kind", "message"}, ...} on failure.
 
-        Workflow:
-        1. Call tools as tool('<path>', ['param' => value]). Every tool returns a string; when a tool
-           returns JSON, parse it with json_decode(\$result) — json_decode always returns arrays.
-        2. Sequence dependent calls, branch, and loop in one program instead of one call per turn.
-        3. Filter and aggregate large results in code, returning only the data the conversation needs.
-        4. Wrap calls in try/catch (catch (Exception \$e) { \$e->getMessage() }) to handle tool failures.
+        Program shape: {"steps": [...], "return": <expression>}.
+        Steps:
+        - {"set":"name","value":<expression>}
+        - {"call":"tool.path","arguments":<object expression>,"save":"name"}
+        - {"append":"listName","value":<expression>}
+        - {"if":<boolean expression>,"then":[...],"else":[...]}
+        - {"foreach":{"items":<array expression>,"as":"item","key":"optionalKey"},"do":[...]}
+        - {"log":<expression>}
 
-        The runtime is a restricted PHP subset: variables, arrays, string interpolation,
-        arithmetic/comparison/logical operators, if/else, foreach/for/while, match/switch, try/catch,
-        throw new Exception(...), closures, arrow functions, user-defined functions, and only these
-        built-in functions: {$functions}.
+        Expressions are JSON values. A one-key object invokes one of these data-only operators:
+        {"\$var":"name.optional.path"}, {"\$json":<string expression>}, {"\$concat":[...]},
+        {"\$sum":<array>}, {"\$count":<array|string>}, {"\$not":<boolean>}, {"\$and":[...]},
+        {"\$or":[...]}, {"\$eq":[a,b]}, {"\$neq":[a,b]}, {"\$gt":[a,b]}, {"\$gte":[a,b]},
+        {"\$lt":[a,b]}, {"\$lte":[a,b]}, {"\$add":[a,b]}, {"\$subtract":[a,b]},
+        {"\$multiply":[a,b]}, {"\$divide":[a,b]}, {"\$mod":[a,b]}, {"\$contains":[a,b]},
+        {"\$in":[a,b]}, or {"\$coalesce":[...]}.
 
-        Not available: classes and objects (data is scalars and arrays), method calls, references,
-        file/network/process access, and any function not listed above. Only the catalog tools exist.
+        There are no host-language callbacks, functions, classes, objects, file, network, or process
+        primitives. Only an explicit call step can cause a side effect, through one catalog tool.
 
         {$catalog}
         DESCRIPTION;
     }
 
     /**
-     * Render the model-facing catalog, inlining signatures until the byte budget is spent.
+     * Render the model-facing catalog, inlining schemas until the byte budget is spent.
      */
     protected function renderCatalog(): string
     {
@@ -78,10 +83,10 @@ class ExecuteCode implements Tool
             return rtrim($catalog);
         }
 
-        return $catalog.'These tools also exist; look their signatures up with the search_tools tool, or with '
-            ."search_tools('<terms>') inside a program — both return [['path' => ..., 'signature' => ...]] "
-            ."ranked by relevance — then call the path exactly as given:\n"
-            .implode(', ', $this->catalog->deferred());
+        return $catalog.sprintf(
+            '%d additional tools are available through search_tools. Search returns each exact path, description, and JSON Schema.',
+            $this->catalog->deferredCount(),
+        );
     }
 
     /**
@@ -93,11 +98,14 @@ class ExecuteCode implements Tool
             $this->catalog,
             $this->timeout,
             $this->maxToolCalls,
+            $this->maxOperations,
+            $this->toolInvoker,
             $this->onToolCallStart,
             $this->onToolCallEnd,
+            $request->toolCallId(),
         );
 
-        return $this->encode($interpreter->execute((string) $request->string('code')));
+        return $this->encode($interpreter->execute((string) $request->string('program')));
     }
 
     /**
@@ -106,9 +114,9 @@ class ExecuteCode implements Tool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'code' => $schema
+            'program' => $schema
                 ->string()
-                ->description('The PHP program to execute.')
+                ->description('The JSON orchestration program to execute.')
                 ->required(),
         ];
     }
@@ -120,43 +128,36 @@ class ExecuteCode implements Tool
      */
     protected function encode(array $result): string
     {
-        $flags = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE;
+        $flags = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR;
 
         $json = json_encode($result, $flags);
 
-        if ($this->maxOutputBytes === null || strlen($json) <= $this->maxOutputBytes) {
+        if (strlen($json) <= $this->maxOutputBytes) {
             return $json;
         }
 
         $result['truncated'] = true;
 
         if (array_key_exists('value', $result)) {
-            $envelope = strlen(json_encode([...$result, 'value' => '', 'logs' => []], $flags));
-
-            $result['value'] = substr(
-                json_encode($result['value'], $flags), 0, max(0, $this->maxOutputBytes - $envelope - 64)
-            ).' ...[truncated]';
+            $result['value'] = '[truncated]';
         }
 
-        // Logs are kept from the start until the remaining budget is exhausted.
         while (strlen($json = json_encode($result, $flags)) > $this->maxOutputBytes && $result['logs'] !== []) {
             array_pop($result['logs']);
         }
 
-        return strlen($json) <= $this->maxOutputBytes ? $json : substr($json, 0, $this->maxOutputBytes);
-    }
+        while (strlen($json = json_encode($result, $flags)) > $this->maxOutputBytes && $result['toolCalls'] !== []) {
+            array_pop($result['toolCalls']);
+        }
 
-    /**
-     * The full set of callable built-ins, including tool() itself.
-     *
-     * @return array<int, string>
-     */
-    protected function availableFunctions(): array
-    {
-        $functions = [...Interpreter::FUNCTIONS, ...Interpreter::REF_FUNCTIONS];
-
-        sort($functions);
-
-        return $functions;
+        return strlen($json) <= $this->maxOutputBytes
+            ? $json
+            : json_encode([
+                'ok' => false,
+                'error' => ['kind' => 'OutputLimitExceeded', 'message' => 'The program result exceeded the output byte limit.'],
+                'logs' => [],
+                'toolCalls' => [],
+                'truncated' => true,
+            ], $flags);
     }
 }

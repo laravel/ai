@@ -5,6 +5,7 @@ namespace Laravel\Ai\Providers\Concerns;
 use Closure;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 use Laravel\Ai\Ai;
 use Laravel\Ai\CodeMode\CodeMode;
 use Laravel\Ai\Concerns\RemembersConversations;
@@ -33,14 +34,13 @@ use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Tools\AgentTool;
 use Laravel\Ai\Tools\McpServerTool;
 use Laravel\Ai\Tools\McpTool;
+use Laravel\Ai\Tools\ToolNameResolver;
 
 use function Laravel\Ai\pipeline;
 
 trait GeneratesText
 {
     use ResumesToolApprovals;
-
-    protected string $currentToolInvocationId;
 
     /**
      * Invoke the given agent.
@@ -165,10 +165,33 @@ trait GeneratesText
 
         foreach ($agent->tools() as $tool) {
             if ($tool instanceof CodeMode) {
-                array_push($tools, ...$tool->expand(fn ($leaf) => $this->resolveTool($leaf)));
+                array_push($tools, ...$tool->expand(
+                    fn ($leaf) => $this->resolveTool($leaf),
+                    fn (Tool $leaf, string $path, array $arguments, string $toolCallId): string => $this
+                        ->textGenerationLoop()
+                        ->invokeNestedTool($leaf, $path, $arguments, $toolCallId),
+                ));
             } else {
                 $tools[] = $this->resolveTool($tool);
             }
+        }
+
+        $names = [];
+
+        foreach ($tools as $tool) {
+            if (! $tool instanceof Tool) {
+                continue;
+            }
+
+            $name = ToolNameResolver::resolve($tool);
+
+            if (isset($names[$name])) {
+                throw new InvalidArgumentException(sprintf(
+                    'Multiple agent tools resolve to the provider name [%s]. Rename or combine them before prompting.', $name
+                ));
+            }
+
+            $names[$name] = true;
         }
 
         return $tools;
@@ -194,16 +217,18 @@ trait GeneratesText
     protected function listenForToolInvocations(string $invocationId, Agent $agent): void
     {
         $this->textGenerationLoop()->onToolInvocation(
-            invoking: function (Tool $tool, array $arguments) use ($invocationId, $agent): void {
-                $this->currentToolInvocationId = (string) Str::uuid7();
+            invoking: function (Tool $tool, array $arguments) use ($invocationId, $agent): string {
+                $toolInvocationId = (string) Str::uuid7();
 
                 $this->events->dispatch(new InvokingTool(
-                    $invocationId, $this->currentToolInvocationId, $agent, $tool, $arguments
+                    $invocationId, $toolInvocationId, $agent, $tool, $arguments
                 ));
+
+                return $toolInvocationId;
             },
-            invoked: function (Tool $tool, array $arguments, mixed $result) use ($invocationId, $agent): void {
+            invoked: function (Tool $tool, array $arguments, mixed $result, string $toolInvocationId) use ($invocationId, $agent): void {
                 $this->events->dispatch(new ToolInvoked(
-                    $invocationId, $this->currentToolInvocationId, $agent, $tool, $arguments, $result
+                    $invocationId, $toolInvocationId, $agent, $tool, $arguments, $result
                 ));
             },
         );

@@ -37,11 +37,11 @@ trait InvokesTools
         $callbacks = $this->pushToolInvocationCallbacks();
 
         try {
-            call_user_func($callbacks['invoking'], $tool, $arguments);
+            $context = call_user_func($callbacks['invoking'], $tool, $arguments);
 
             return (string) tap(
                 $tool->handle(new Request($arguments, $toolCallId)),
-                fn ($result): mixed => call_user_func($callbacks['invoked'], $tool, $arguments, $result)
+                fn ($result): mixed => call_user_func($callbacks['invoked'], $tool, $arguments, $result, $context)
             );
         } finally {
             $this->popToolInvocationCallbacks();

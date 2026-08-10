@@ -7,9 +7,10 @@ use InvalidArgumentException;
 use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\ToolNameResolver;
+use Laravel\SerializableClosure\SerializableClosure;
 
 /**
- * Expose a tree of tools to the model as a single execute_code tool it drives with PHP programs.
+ * Expose a tree of tools through a bounded orchestration DSL.
  */
 class CodeMode
 {
@@ -20,15 +21,17 @@ class CodeMode
      */
     protected array $tools;
 
-    protected int|float|null $timeout = null;
+    protected int|float $timeout = 10;
 
-    protected ?int $maxToolCalls = null;
+    protected int $maxToolCalls = 25;
 
-    protected ?int $maxOutputBytes = null;
+    protected int $maxOutputBytes = 65536;
 
-    protected ?Closure $onToolCallStart = null;
+    protected int $maxOperations = 10000;
 
-    protected ?Closure $onToolCallEnd = null;
+    protected ?SerializableClosure $onToolCallStart = null;
+
+    protected ?SerializableClosure $onToolCallEnd = null;
 
     /**
      * @param  iterable<int|string, mixed>  $tools
@@ -36,6 +39,21 @@ class CodeMode
     public function __construct(iterable $tools)
     {
         $this->tools = is_array($tools) ? $tools : iterator_to_array($tools);
+
+        foreach ($this->tools as $key => $entry) {
+            if (is_string($key) && is_iterable($entry) && ! is_array($entry)) {
+                $entry = $this->tools[$key] = iterator_to_array($entry);
+            }
+
+            foreach (is_string($key) && is_iterable($entry) ? $entry : [$entry] as $leaf) {
+                if ($leaf instanceof Approvable) {
+                    throw new InvalidArgumentException(sprintf(
+                        'Tool approvals are not supported inside code mode: [%s]. Pass this tool to the agent directly instead.',
+                        $leaf instanceof Tool ? ToolNameResolver::resolve($leaf) : get_debug_type($leaf),
+                    ));
+                }
+            }
+        }
     }
 
     /**
@@ -49,7 +67,7 @@ class CodeMode
     }
 
     /**
-     * Limit a program's wall-clock execution time, in seconds.
+     * Limit a program's execution deadline, in seconds.
      */
     public function timeout(int|float $seconds): self
     {
@@ -77,12 +95,26 @@ class CodeMode
     }
 
     /**
+     * Limit how many evaluator operations a single program may perform.
+     */
+    public function maxOperations(int $operations): self
+    {
+        if ($operations < 1) {
+            throw new InvalidArgumentException('The code mode operation limit must be at least one.');
+        }
+
+        $this->maxOperations = $operations;
+
+        return $this;
+    }
+
+    /**
      * Limit the byte size of the model-facing result, truncating oversized values and logs.
      */
     public function maxOutputBytes(int $bytes): self
     {
-        if ($bytes < 0) {
-            throw new InvalidArgumentException('The code mode output byte limit must not be negative.');
+        if ($bytes < 256) {
+            throw new InvalidArgumentException('The code mode output byte limit must be at least 256 bytes.');
         }
 
         $this->maxOutputBytes = $bytes;
@@ -95,7 +127,7 @@ class CodeMode
      */
     public function onToolCallStart(Closure $callback): self
     {
-        $this->onToolCallStart = $callback;
+        $this->onToolCallStart = new SerializableClosure($callback);
 
         return $this;
     }
@@ -105,7 +137,7 @@ class CodeMode
      */
     public function onToolCallEnd(Closure $callback): self
     {
-        $this->onToolCallEnd = $callback;
+        $this->onToolCallEnd = new SerializableClosure($callback);
 
         return $this;
     }
@@ -114,9 +146,10 @@ class CodeMode
      * Expand into the execute_code tool, plus search_tools when the catalog is too large to inline.
      *
      * @param  Closure(mixed): mixed  $resolver
+     * @param  Closure(Tool, string, array<string, mixed>, string): string|null  $toolInvoker
      * @return array<int, Tool>
      */
-    public function expand(Closure $resolver): array
+    public function expand(Closure $resolver, ?Closure $toolInvoker = null): array
     {
         $catalog = [];
 
@@ -165,8 +198,10 @@ class CodeMode
             $this->timeout,
             $this->maxToolCalls,
             $this->maxOutputBytes,
-            $this->onToolCallStart,
-            $this->onToolCallEnd,
+            $this->maxOperations,
+            $toolInvoker,
+            $this->onToolCallStart?->getClosure(),
+            $this->onToolCallEnd?->getClosure(),
         )];
 
         // A search tool only earns its slot when the catalog is too large to inline.

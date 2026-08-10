@@ -39,6 +39,12 @@ class TextGenerationLoop
 {
     use HandlesToolApprovals, InvokesTools;
 
+    /** @var array<int, ToolCall> */
+    protected array $nestedToolCalls = [];
+
+    /** @var array<int, ToolResult> */
+    protected array $nestedToolResults = [];
+
     /**
      * Create a new text generation loop instance.
      */
@@ -64,6 +70,8 @@ class TextGenerationLoop
         ?array $approval = null,
         ?Closure $recordApprovalResults = null,
     ): TextResponse {
+        $this->nestedToolCalls = [];
+        $this->nestedToolResults = [];
         $steps = new Collection;
         $maxSteps = $this->resolveMaxSteps($options, $tools);
         $continuationToken = null;
@@ -156,6 +164,8 @@ class TextGenerationLoop
         ?Closure $recordApprovalResults = null,
         ?array $validatedApproval = null,
     ): Generator {
+        $this->nestedToolCalls = [];
+        $this->nestedToolResults = [];
         $maxSteps = $this->resolveMaxSteps($options, $tools);
         $continuationToken = null;
         $accumulatedUsage = new Usage;
@@ -236,6 +246,16 @@ class TextGenerationLoop
             $finalReason = $result->finishReason;
 
             [$toolResults, $pendingApprovals] = $this->stepToolResults($result, $stepContext->isFinalStep, $tools);
+
+            foreach ($this->drainNestedToolResults() as $nestedToolResult) {
+                yield (new ToolResultEvent(
+                    $this->generateEventId(),
+                    $nestedToolResult,
+                    true,
+                    null,
+                    time(),
+                ))->withInvocationId($invocationId);
+            }
 
             foreach ($toolResults as $toolResult) {
                 yield (new ToolResultEvent(
@@ -565,7 +585,7 @@ class TextGenerationLoop
         $newMessages = collect($newMessages)->values();
 
         if ($lastResult?->structured !== null) {
-            return (new StructuredTextResponse(
+            $response = (new StructuredTextResponse(
                 $lastResult->structured,
                 $finalStep->text,
                 $totalUsage,
@@ -576,12 +596,56 @@ class TextGenerationLoop
                     ->whereInstanceOf(ToolResultMessage::class)
                     ->flatMap(fn (ToolResultMessage $message): Collection => $message->toolResults),
             )->withSteps($steps);
+
+            return $this->appendNestedToolRecords($response);
         }
 
-        return (new TextResponse(
+        $response = (new TextResponse(
             $finalStep->text,
             $totalUsage,
             $finalStep->meta,
         ))->withMessages($newMessages)->withSteps($steps);
+
+        return $this->appendNestedToolRecords($response);
+    }
+
+    /**
+     * Invoke a tool nested inside another tool while preserving normal lifecycle behavior.
+     *
+     * @param  array<string, mixed>  $arguments
+     */
+    public function invokeNestedTool(Tool $tool, string $name, array $arguments, string $toolCallId): string
+    {
+        $this->nestedToolCalls[] = new ToolCall($toolCallId, $name, $arguments);
+
+        try {
+            $result = $this->executeTool($tool, $arguments, $toolCallId);
+        } catch (Throwable $exception) {
+            $this->nestedToolResults[] = new ToolResult($toolCallId, $name, $arguments, $exception->getMessage());
+
+            throw $exception;
+        }
+
+        $this->nestedToolResults[] = new ToolResult($toolCallId, $name, $arguments, $result);
+
+        return $result;
+    }
+
+    protected function appendNestedToolRecords(TextResponse $response): TextResponse
+    {
+        return $response->withToolCallsAndResults(
+            $response->toolCalls->concat($this->nestedToolCalls),
+            $response->toolResults->concat($this->nestedToolResults),
+        );
+    }
+
+    /** @return array<int, ToolResult> */
+    protected function drainNestedToolResults(): array
+    {
+        $results = $this->nestedToolResults;
+        $this->nestedToolResults = [];
+        $this->nestedToolCalls = [];
+
+        return $results;
     }
 }
