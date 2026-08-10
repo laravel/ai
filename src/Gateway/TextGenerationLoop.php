@@ -352,12 +352,7 @@ class TextGenerationLoop
             $resolved[] = [$toolCall, $tool];
         }
 
-        $availableTools = implode(', ', array_map(
-            ToolNameResolver::resolve(...),
-            array_filter($tools, fn (mixed $tool): bool => $tool instanceof Tool),
-        )) ?: 'none';
-
-        $toolResults = array_map(function (array $pair) use ($availableTools, $isFinalStep) {
+        $toolResults = array_map(function (array $pair) use ($tools, $isFinalStep) {
             [$toolCall, $tool] = $pair;
 
             return new ToolResult(
@@ -365,7 +360,7 @@ class TextGenerationLoop
                 $toolCall->name,
                 $toolCall->arguments,
                 match (true) {
-                    ! $tool instanceof Tool => "Tool '{$toolCall->name}' does not exist. Available tools: {$availableTools}.",
+                    ! $tool instanceof Tool => "Tool '{$toolCall->name}' does not exist. Available tools: {$this->availableToolNames($tools)}.",
                     $isFinalStep => 'The agent reached its maximum number of steps without running this tool call.',
                     default => $this->executeTool($tool, $toolCall->arguments, $toolCall->id),
                 },
@@ -374,6 +369,19 @@ class TextGenerationLoop
         }, $resolved);
 
         return [$toolResults, $pendingApprovals];
+    }
+
+    /**
+     * The names of the locally executable tools, as advertised back to a model that called an unknown one.
+     *
+     * @param  array<Tool|ProviderTool>  $tools
+     */
+    protected function availableToolNames(array $tools): string
+    {
+        return implode(', ', array_map(
+            ToolNameResolver::resolve(...),
+            array_filter($tools, fn (mixed $tool): bool => $tool instanceof Tool),
+        )) ?: 'none';
     }
 
     /**

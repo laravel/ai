@@ -562,6 +562,28 @@ test('it does not execute tool calls on the final generation step', function ():
         ->and($response->steps->first()->toolResults)->toHaveCount(1);
 });
 
+test('it reports an unknown tool on the final generation step without the repair attribute', function (): void {
+    $gateway = new TextGenerationLoopFakeGateway([
+        new StepResponse('', [new ToolCall('call-1', 'MissingTool', [], 'call-1')], FinishReason::ToolCalls, new Usage, new Meta('fake', 'model')),
+    ]);
+
+    $response = (new TextGenerationLoop($gateway))->generate(
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [],
+        [new TextGenerationLoopCountingTool],
+        null,
+        new TextGenerationOptions(maxSteps: 1),
+        null,
+    );
+
+    expect($gateway->generateCalls)->toBe(1)
+        ->and($gateway->contexts[0]->isFinalStep)->toBeTrue()
+        ->and($response->toolResults)->toHaveCount(1)
+        ->and($response->toolResults[0]->result)->toBe("Tool 'MissingTool' does not exist. Available tools: TextGenerationLoopCountingTool.");
+});
+
 test('it holds stream end until the streamed tool loop is complete', function (): void {
     $tool = new TextGenerationLoopCountingTool;
     $firstToolCall = new ToolCall('call-1', TextGenerationLoopCountingTool::class, [], 'call-1');
