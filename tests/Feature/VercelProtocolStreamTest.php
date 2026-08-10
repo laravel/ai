@@ -4,9 +4,16 @@ use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Responses\Data;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StreamableAgentResponse;
+use Laravel\Ai\Streaming\Events\Citation;
+use Laravel\Ai\Streaming\Events\Error;
+use Laravel\Ai\Streaming\Events\ReasoningDelta;
+use Laravel\Ai\Streaming\Events\ReasoningEnd;
+use Laravel\Ai\Streaming\Events\ReasoningStart;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
+use Laravel\Ai\Streaming\Events\TextEnd;
+use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Laravel\Ai\Streaming\Events\ToolCall;
 use Laravel\Ai\Streaming\Events\ToolResult;
@@ -34,6 +41,80 @@ function vercelProtocolParts(array $events, ?string $messageId = null): array
         ->map(fn (string $payload) => $payload === '[DONE]' ? ['type' => 'done'] : json_decode($payload, true))
         ->all();
 }
+
+test('a text stream emits start, delta, and end parts for the message', function () {
+    $parts = vercelProtocolParts([
+        new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
+        new TextStart('event-1', 'msg-1', time()),
+        new TextDelta('event-2', 'msg-1', 'Hello.', time()),
+        new TextEnd('event-3', 'msg-1', time()),
+        new StreamEnd('event-4', 'stop', new Usage, time()),
+    ]);
+
+    expect($parts)->toBe([
+        ['type' => 'start', 'messageId' => 'msg-1'],
+        ['type' => 'text-start', 'id' => 'msg-1'],
+        ['type' => 'text-delta', 'id' => 'msg-1', 'delta' => 'Hello.'],
+        ['type' => 'text-end', 'id' => 'msg-1'],
+        ['type' => 'finish'],
+        ['type' => 'done'],
+    ]);
+});
+
+test('a reasoning stream emits start, delta, and end parts for the reasoning block', function () {
+    $parts = vercelProtocolParts([
+        new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
+        new ReasoningStart('event-1', 'reasoning-1', time()),
+        new ReasoningDelta('event-2', 'reasoning-1', 'Considering the options.', time()),
+        new ReasoningEnd('event-3', 'reasoning-1', time()),
+        new StreamEnd('event-4', 'stop', new Usage, time()),
+    ]);
+
+    expect($parts)->toBe([
+        ['type' => 'start', 'messageId' => 'msg-1'],
+        ['type' => 'reasoning-start', 'id' => 'reasoning-1'],
+        ['type' => 'reasoning-delta', 'id' => 'reasoning-1', 'delta' => 'Considering the options.'],
+        ['type' => 'reasoning-end', 'id' => 'reasoning-1'],
+        ['type' => 'finish'],
+        ['type' => 'done'],
+    ]);
+});
+
+test('a cited text stream emits a source url part for the cited page', function () {
+    $parts = vercelProtocolParts([
+        new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
+        new TextStart('event-1', 'msg-1', time()),
+        new TextDelta('event-2', 'msg-1', 'Laravel is a PHP framework.', time()),
+        new Citation('event-3', 'msg-1', new Data\UrlCitation('https://laravel.com/docs', 'Laravel Documentation'), time()),
+        new TextEnd('event-4', 'msg-1', time()),
+        new StreamEnd('event-5', 'stop', new Usage, time()),
+    ]);
+
+    expect($parts)->toBe([
+        ['type' => 'start', 'messageId' => 'msg-1'],
+        ['type' => 'text-start', 'id' => 'msg-1'],
+        ['type' => 'text-delta', 'id' => 'msg-1', 'delta' => 'Laravel is a PHP framework.'],
+        ['type' => 'source-url', 'sourceId' => 'https://laravel.com/docs', 'url' => 'https://laravel.com/docs'],
+        ['type' => 'text-end', 'id' => 'msg-1'],
+        ['type' => 'finish'],
+        ['type' => 'done'],
+    ]);
+});
+
+test('a failed stream emits an error part instead of a finish part', function () {
+    $parts = vercelProtocolParts([
+        new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
+        new TextStart('event-1', 'msg-1', time()),
+        new Error('event-2', 'overloaded_error', 'Overloaded', false, time()),
+    ]);
+
+    expect($parts)->toBe([
+        ['type' => 'start', 'messageId' => 'msg-1'],
+        ['type' => 'text-start', 'id' => 'msg-1'],
+        ['type' => 'error', 'errorText' => 'Overloaded'],
+        ['type' => 'done'],
+    ]);
+});
 
 test('a paused stream emits an approval request part for each pending approval', function () {
     $parts = vercelProtocolParts([
@@ -120,6 +201,21 @@ test('an unexecuted tool call streams as a tool output error', function () {
         'type' => 'tool-output-error',
         'toolCallId' => 'call-1',
         'errorText' => 'The agent reached its maximum number of steps without running this tool call.',
+    ]);
+});
+
+test('a failed tool call without an error message streams a default error text', function () {
+    $parts = vercelProtocolParts([
+        new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
+        new ToolCall('event-1', new Data\ToolCall('call-1', 'GetWeather', ['city' => 'Lisbon']), time()),
+        new ToolResult('event-2', new Data\ToolResult('call-1', 'GetWeather', ['city' => 'Lisbon'], null), false, null, time()),
+        new StreamEnd('event-3', 'stop', new Usage, time()),
+    ]);
+
+    expect($parts[2])->toBe([
+        'type' => 'tool-output-error',
+        'toolCallId' => 'call-1',
+        'errorText' => 'The tool call failed.',
     ]);
 });
 

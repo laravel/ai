@@ -100,7 +100,7 @@ trait StreamsText
                     new AgentStreamed($invocationId, $processedPrompt ?? $prompt, $response)
                 );
 
-                if ($response->awaitingApproval()) {
+                if ($response->hasPendingApprovals()) {
                     $this->events->dispatch(new ToolApprovalRequested(
                         $invocationId,
                         $prompt->agent,

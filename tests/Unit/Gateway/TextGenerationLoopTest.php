@@ -59,7 +59,7 @@ test('it pauses gated tool calls without executing them while running ungated ca
     expect($gated->calls)->toBe(0)
         ->and($ungated->calls)->toBe(1)
         ->and($gateway->generateCalls)->toBe(1)
-        ->and($response->awaitingApproval())->toBeTrue()
+        ->and($response->hasPendingApprovals())->toBeTrue()
         ->and($response->pendingApprovals)->toHaveCount(1)
         ->and($response->pendingApprovals[0]->id)->toBe('call-gated')
         ->and($response->toolCalls)->toHaveCount(2)
@@ -103,7 +103,7 @@ test('it resumes a mixed batch of approved, edited, and rejected calls', functio
     expect($tool->calls)->toBe(2)
         ->and($tool->handledArguments)->toBe([['value' => 'approved'], ['value' => 'edited']])
         ->and($gateway->generateCalls)->toBe(1)
-        ->and($response->awaitingApproval())->toBeFalse()
+        ->and($response->hasPendingApprovals())->toBeFalse()
         ->and($response->toolResults)->toHaveCount(3)
         ->and($response->toolResults->firstWhere('id', 'call-1')->result)->toBe('handled approved')
         ->and($response->toolResults->firstWhere('id', 'call-2')->result)->toBe('handled edited')
@@ -146,7 +146,7 @@ test('mismatched or stale approval decisions are rejected', function (): void {
         new TextGenerationOptions(maxSteps: 2),
         null,
         ['*' => Decision::approve()],
-    ))->toThrow(ApprovalMismatchException::class, 'There are no pending tool calls awaiting approval.');
+    ))->toThrow(ApprovalMismatchException::class, 'There are no tool calls pending approval.');
 });
 
 test('it emits streamed approval requests without executing gated tools', function (): void {
@@ -209,7 +209,7 @@ test('it resumes a paused step running only the still-pending gated call', funct
 
     expect($gated->calls)->toBe(1)
         ->and($ungated->calls)->toBe(0)
-        ->and($response->awaitingApproval())->toBeFalse()
+        ->and($response->hasPendingApprovals())->toBeFalse()
         ->and($response->toolResults->pluck('id')->all())->toBe(['call-ungated', 'call-gated'])
         ->and($response->text)->toBe('done');
 });
@@ -257,7 +257,7 @@ test('a gated tool with approval disabled executes without pausing', function ()
     );
 
     expect($tool->calls)->toBe(1)
-        ->and($response->awaitingApproval())->toBeFalse()
+        ->and($response->hasPendingApprovals())->toBeFalse()
         ->and($response->text)->toBe('done');
 });
 
@@ -342,7 +342,7 @@ test('a gate that has relaxed since the pause can still be resumed', function ()
     );
 
     expect($tool->calls)->toBe(1)
-        ->and($response->awaitingApproval())->toBeFalse()
+        ->and($response->hasPendingApprovals())->toBeFalse()
         ->and($response->text)->toBe('done');
 });
 
@@ -468,7 +468,7 @@ test('a default decision approves every pending call while an explicit decision 
     expect($gated->calls)->toBe(1)
         ->and($gated->handledArguments)->toBe([['value' => 'approved']])
         ->and($ungated->calls)->toBe(1)
-        ->and($response->awaitingApproval())->toBeFalse()
+        ->and($response->hasPendingApprovals())->toBeFalse()
         ->and($response->toolResults)->toHaveCount(3)
         ->and($response->toolResults->firstWhere('id', 'call-2')->result)->toBe('Wrong file')
         ->and($response->text)->toBe('done');
@@ -950,7 +950,7 @@ test('a gated tool call on the final step pauses instead of being exhausted', fu
 
     expect($gated->calls)->toBe(0)
         ->and($ungated->calls)->toBe(0)
-        ->and($response->awaitingApproval())->toBeTrue()
+        ->and($response->hasPendingApprovals())->toBeTrue()
         ->and($response->pendingApprovals)->toHaveCount(1)
         ->and($response->pendingApprovals[0]->id)->toBe('call-gated')
         ->and($response->toolResults)->toHaveCount(1)

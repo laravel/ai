@@ -166,6 +166,49 @@ describe('tool calls', function (): void {
             }
         }
     });
+
+    test('streaming preserves the thought signature across the tool call continuation', function (): void {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::sequence([
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->geminiChunk([['text' => 'thinking...', 'thought' => true]]),
+                        $this->geminiChunkWithUsage([[
+                            'functionCall' => ['id' => 'call_1', 'name' => 'FixedNumberGenerator', 'args' => (object) []],
+                            'thoughtSignature' => 'sig_stream_555',
+                        ]], 10, 5),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->geminiChunkWithUsage([['text' => 'The number is 72019']], 20, 10),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+            ]),
+        ]);
+
+        $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+        $followUpContents = Http::recorded()[1][0]->data()['contents'];
+
+        $signature = null;
+
+        foreach ($followUpContents as $content) {
+            if ($content['role'] === 'model') {
+                foreach ($content['parts'] as $part) {
+                    if (isset($part['functionCall'])) {
+                        $signature = $part['thoughtSignature'] ?? null;
+                    }
+                }
+            }
+        }
+
+        expect($signature)->toBe('sig_stream_555');
+    });
 });
 
 describe('thinking blocks', function (): void {

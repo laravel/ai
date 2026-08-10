@@ -4,13 +4,17 @@ namespace Laravel\Ai\Providers;
 
 use Illuminate\Contracts\Events\Dispatcher;
 use InvalidArgumentException;
+use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
+use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Gateway\OpenAiCompatible\OpenAiCompatibleGateway;
 
-class OpenAiCompatibleProvider extends Provider implements TextProvider
+class OpenAiCompatibleProvider extends Provider implements EmbeddingProvider, TextProvider
 {
+    use Concerns\GeneratesEmbeddings;
     use Concerns\GeneratesText;
+    use Concerns\HasEmbeddingGateway;
     use Concerns\HasTextGateway;
     use Concerns\StreamsText;
 
@@ -37,6 +41,14 @@ class OpenAiCompatibleProvider extends Provider implements TextProvider
     }
 
     /**
+     * Get the provider's embedding gateway.
+     */
+    public function embeddingGateway(): EmbeddingGateway
+    {
+        return $this->embeddingGateway ??= new OpenAiCompatibleGateway($this->events);
+    }
+
+    /**
      * Get the name of the default text model.
      */
     public function defaultTextModel(): string
@@ -60,5 +72,31 @@ class OpenAiCompatibleProvider extends Provider implements TextProvider
     public function smartestTextModel(): string
     {
         return $this->config['models']['text']['smartest'] ?? $this->defaultTextModel();
+    }
+
+    /**
+     * Get the name of the default embeddings model.
+     */
+    public function defaultEmbeddingsModel(): string
+    {
+        return $this->config['models']['embeddings']['default'] ?? throw new InvalidArgumentException(
+            "The [{$this->name()}] openai-compatible provider requires a default embeddings model. Set [models.embeddings.default] in its configuration or pass a model explicitly."
+        );
+    }
+
+    /**
+     * Get the default dimensions of the default embeddings model.
+     */
+    public function defaultEmbeddingsDimensions(): int
+    {
+        return $this->config['models']['embeddings']['dimensions'] ?? 0;
+    }
+
+    /**
+     * Determine if the provider may omit dimensions and use a model's native embedding dimensions.
+     */
+    protected function supportsNativeEmbeddingDimensions(): bool
+    {
+        return true;
     }
 }

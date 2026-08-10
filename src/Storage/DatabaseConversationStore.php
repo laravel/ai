@@ -143,11 +143,11 @@ class DatabaseConversationStore implements ConversationStore
     }
 
     /**
-     * Mark a paused assistant row with the tool-call IDs awaiting a decision, or null when the turn is not a pause.
+     * Mark a paused assistant row with the tool-call IDs pending a decision, or null when the turn is not a pause.
      */
     protected function approvalState(AgentResponse $response): ?string
     {
-        if (! $response->awaitingApproval()) {
+        if (! $response->hasPendingApprovals()) {
             return null;
         }
 
@@ -157,7 +157,7 @@ class DatabaseConversationStore implements ConversationStore
     }
 
     /**
-     * Get the tool-call IDs a stored row recorded as awaiting a decision.
+     * Get the tool-call IDs a stored row recorded as pending a decision.
      *
      * @return array<int, string>
      */

@@ -516,7 +516,7 @@ class TextGenerationLoop
         }
 
         if ($pendingToolCalls->isEmpty()) {
-            throw new ApprovalMismatchException('There are no pending tool calls awaiting approval.', collect());
+            throw new ApprovalMismatchException('There are no tool calls pending approval.', collect());
         }
 
         return [$pendingToolCalls, $resolvedTools];
@@ -557,14 +557,14 @@ class TextGenerationLoop
      */
     protected function buildStep(StepResponse $result, array $toolResults = []): Step
     {
-        return new Step(
+        return (new Step(
             $result->text,
             $result->toolCalls,
             $toolResults,
             $result->finishReason,
             $result->usage,
             $result->meta,
-        );
+        ))->withRawResponse($result->raw);
     }
 
     /**
@@ -590,12 +590,12 @@ class TextGenerationLoop
                 $finalStep->text,
                 $totalUsage,
                 $finalStep->meta,
-            ))->withToolCallsAndResults(
+            ))->withMessages($newMessages)->withToolCallsAndResults(
                 toolCalls: $steps->flatMap(fn (Step $s): array => $s->toolCalls),
                 toolResults: $newMessages
                     ->whereInstanceOf(ToolResultMessage::class)
                     ->flatMap(fn (ToolResultMessage $message): Collection => $message->toolResults),
-            )->withSteps($steps);
+            )->withSteps($steps)->withRawResponse($lastResult->raw);
 
             return $this->appendNestedToolRecords($response);
         }
@@ -604,7 +604,7 @@ class TextGenerationLoop
             $finalStep->text,
             $totalUsage,
             $finalStep->meta,
-        ))->withMessages($newMessages)->withSteps($steps);
+        ))->withMessages($newMessages)->withSteps($steps)->withRawResponse($lastResult?->raw);
 
         return $this->appendNestedToolRecords($response);
     }

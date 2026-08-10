@@ -46,7 +46,7 @@ test('a remembered agent pauses for approval, persists the tool_use, and resumes
 
     $paused = (new RememberingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
 
-    expect($paused->awaitingApproval())->toBeTrue()
+    expect($paused->hasPendingApprovals())->toBeTrue()
         ->and($paused->pendingApprovals)->toHaveCount(1)
         ->and($paused->pendingApprovals[0]->id)->toBe('toolu_1')
         ->and($paused->conversationId)->not->toBeNull();
@@ -65,7 +65,7 @@ test('a remembered agent pauses for approval, persists the tool_use, and resumes
         ->continue($paused->conversationId, $user)
         ->prompt(Decisions::from(['toolu_1' => true]), provider: 'anthropic');
 
-    expect($resumed->awaitingApproval())->toBeFalse()
+    expect($resumed->hasPendingApprovals())->toBeFalse()
         ->and($resumed->text)->toBe('The number is 72019.')
         ->and($resumed->toolResults)->toHaveCount(1)
         ->and($resumed->toolResults[0]->result)->toBe('72019');
@@ -104,7 +104,7 @@ test('an ownerless remembered agent pauses for approval and resumes without a pa
 
     $paused = (new RememberingApprovableAgent)->prompt('Generate a number', provider: 'anthropic');
 
-    expect($paused->awaitingApproval())->toBeTrue()
+    expect($paused->hasPendingApprovals())->toBeTrue()
         ->and($paused->pendingApprovals)->toHaveCount(1)
         ->and($paused->pendingApprovals[0]->id)->toBe('toolu_1')
         ->and($paused->conversationId)->not->toBeNull()
@@ -125,7 +125,7 @@ test('an ownerless remembered agent pauses for approval and resumes without a pa
         ->continue($paused->conversationId)
         ->prompt(Decisions::from(['toolu_1' => true]), provider: 'anthropic');
 
-    expect($resumed->awaitingApproval())->toBeFalse()
+    expect($resumed->hasPendingApprovals())->toBeFalse()
         ->and($resumed->text)->toBe('The number is 72019.')
         ->and($resumed->toolResults)->toHaveCount(1)
         ->and($resumed->toolResults[0]->result)->toBe('72019');
@@ -173,7 +173,7 @@ test('a resumed approval replays the paused turn provider content blocks', funct
 
     $paused = (new RememberingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
 
-    expect($paused->awaitingApproval())->toBeTrue();
+    expect($paused->hasPendingApprovals())->toBeTrue();
 
     (new RememberingApprovableAgent)
         ->continue($paused->conversationId, $user)
@@ -230,7 +230,7 @@ test('a resume on a different provider falls back to the generic mapping instead
 
     $paused = (new RememberingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
 
-    expect($paused->awaitingApproval())->toBeTrue();
+    expect($paused->hasPendingApprovals())->toBeTrue();
 
     // Rewrite the paused row as if the pause had happened on a failover provider...
     DB::table('agent_conversation_messages')
@@ -309,14 +309,14 @@ test('a resume that pauses again can itself be resumed', function () {
         ->continue($paused->conversationId, $user)
         ->prompt(Decisions::from(['toolu_1' => true]), provider: 'anthropic');
 
-    expect($pausedAgain->awaitingApproval())->toBeTrue()
+    expect($pausedAgain->hasPendingApprovals())->toBeTrue()
         ->and($pausedAgain->pendingApprovals[0]->id)->toBe('toolu_2');
 
     $resumed = (new RememberingApprovableAgent)
         ->continue($paused->conversationId, $user)
         ->prompt(Decisions::from(['toolu_2' => true]), provider: 'anthropic');
 
-    expect($resumed->awaitingApproval())->toBeFalse()
+    expect($resumed->hasPendingApprovals())->toBeFalse()
         ->and($resumed->text)->toBe('Both numbers generated.');
 });
 
@@ -364,7 +364,7 @@ test('a plain prompt after an abandoned pause settles the dangling tool call', f
 
     $paused = (new RememberingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
 
-    expect($paused->awaitingApproval())->toBeTrue();
+    expect($paused->hasPendingApprovals())->toBeTrue();
 
     $reply = (new RememberingApprovableAgent)
         ->continue($paused->conversationId, $user)
@@ -600,7 +600,7 @@ test('a rejected resume stores and rehydrates the tool result as denied', functi
         ->continue($paused->conversationId, $user)
         ->prompt(Decisions::from(['toolu_1' => false]), provider: 'anthropic');
 
-    expect($rejected->awaitingApproval())->toBeFalse();
+    expect($rejected->hasPendingApprovals())->toBeFalse();
 
     $assistantRow = DB::table('agent_conversation_messages')
         ->where('conversation_id', $paused->conversationId)

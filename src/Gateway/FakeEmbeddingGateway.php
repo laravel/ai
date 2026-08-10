@@ -99,6 +99,10 @@ class FakeEmbeddingGateway implements EmbeddingGateway
      */
     protected function generateFakeEmbeddings(int $count, int $dimensions): array
     {
+        if ($dimensions <= 0) {
+            throw new RuntimeException('Unable to generate fake embeddings without positive dimensions. Configure embedding dimensions or provide a fake response.');
+        }
+
         return array_map(
             fn (): array => Embeddings::fakeEmbedding($dimensions),
             range(1, $count)

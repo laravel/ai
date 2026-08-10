@@ -28,7 +28,7 @@ class AgentResponse extends TextResponse
      *
      * @param  array<int, PendingApproval>|Collection<int, PendingApproval>  $pendingApprovals
      */
-    public static function fakeAwaitingApproval(array|Collection $pendingApprovals): self
+    public static function fakeWithPendingApprovals(array|Collection $pendingApprovals): self
     {
         return (new self('fake-invocation', '', new Usage, new Meta))
             ->withPendingApprovals(Collection::make($pendingApprovals));
@@ -62,7 +62,7 @@ class AgentResponse extends TextResponse
      */
     public function pausedProviderContentBlocks(): array
     {
-        if (! $this->awaitingApproval()) {
+        if (! $this->hasPendingApprovals()) {
             return [];
         }
 

@@ -31,7 +31,7 @@ class DeepSeekProvider extends Provider implements TextProvider
      */
     public function defaultTextModel(): string
     {
-        return $this->config['models']['text']['default'] ?? 'deepseek-chat';
+        return $this->config['models']['text']['default'] ?? 'deepseek-v4-flash';
     }
 
     /**
@@ -39,7 +39,7 @@ class DeepSeekProvider extends Provider implements TextProvider
      */
     public function cheapestTextModel(): string
     {
-        return $this->config['models']['text']['cheapest'] ?? 'deepseek-chat';
+        return $this->config['models']['text']['cheapest'] ?? 'deepseek-v4-flash';
     }
 
     /**

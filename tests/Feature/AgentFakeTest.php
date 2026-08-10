@@ -1,5 +1,7 @@
 <?php
 
+use GuzzleHttp\Psr7\Response as Psr7Response;
+use Illuminate\Http\Client\Response;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\Decisions;
@@ -52,6 +54,19 @@ describe('prompt responses', function (): void {
         AssistantAgent::fake();
 
         AssistantAgent::assertNeverPrompted();
+    });
+
+    test('fake responses may expose a raw http response', function (): void {
+        AssistantAgent::fake([
+            (new TextResponse('Hello', new Usage, new Meta))->withRawResponse(new Response(
+                new Psr7Response(200, ['x-ratelimit-remaining-requests' => '99'], '{}')
+            )),
+        ]);
+
+        $response = (new AssistantAgent)->prompt('Hi');
+
+        expect($response->raw)->toBeInstanceOf(Response::class)
+            ->and($response->raw->header('x-ratelimit-remaining-requests'))->toBe('99');
     });
 
     test('agents can be faked with no predefined responses', function (): void {
@@ -132,7 +147,7 @@ describe('prompt responses', function (): void {
 
     test('agents can fake paused approval responses and assert resume prompts', function () {
         ConversationalAgent::fake([
-            AgentResponse::fakeAwaitingApproval([
+            AgentResponse::fakeWithPendingApprovals([
                 new PendingApproval('call-1', 'DeleteFile', ['path' => 'config/app.php'], 'Deletes a file'),
             ]),
             'Resumed',
@@ -140,7 +155,7 @@ describe('prompt responses', function (): void {
 
         $response = (new ConversationalAgent)->prompt('Delete config/app.php');
 
-        expect($response->awaitingApproval())->toBeTrue()
+        expect($response->hasPendingApprovals())->toBeTrue()
             ->and($response->pendingApprovals)->toHaveCount(1);
 
         (new ConversationalAgent)->prompt(Decisions::from(['call-1' => true]));

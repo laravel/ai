@@ -87,9 +87,9 @@ test('invalid decision maps are rejected', function () {
 test('a paused response exposes everything a controller needs to build its own approval envelope', function () {
     $pending = new PendingApproval('call-1', 'DeleteFile', ['path' => 'config/app.php'], 'Deletes a file');
 
-    $paused = AgentResponse::fakeAwaitingApproval([$pending])->withinConversation('conversation-1');
+    $paused = AgentResponse::fakeWithPendingApprovals([$pending])->withinConversation('conversation-1');
 
-    expect($paused->awaitingApproval())->toBeTrue()
+    expect($paused->hasPendingApprovals())->toBeTrue()
         ->and($paused->conversationId)->toBe('conversation-1')
         ->and($paused->pendingApprovals->toArray())->toBe([$pending->toArray()]);
 });
@@ -98,7 +98,7 @@ test('non-paused responses render without the approval envelope', function () {
     $complete = (new AgentResponse('invocation-1', 'Done', new Usage, new Meta))->withinConversation('conversation-1');
     $structured = new StructuredAgentResponse('invocation-1', ['number' => 72019], '72019', new Usage, new Meta);
 
-    expect($complete->awaitingApproval())->toBeFalse()
+    expect($complete->hasPendingApprovals())->toBeFalse()
         ->and($complete->conversationId)->toBe('conversation-1')
         ->and($complete->text)->toBe('Done')
         ->and($complete)->not->toBeInstanceOf(Responsable::class)
@@ -154,7 +154,7 @@ test('a paused stream dispatches the tool approval requested event', function ()
     Event::fake([ToolApprovalRequested::class]);
 
     ConversationalAgent::fake([
-        AgentResponse::fakeAwaitingApproval([
+        AgentResponse::fakeWithPendingApprovals([
             new PendingApproval('call-1', 'DeleteFile', ['path' => 'config/app.php'], 'Deletes a file'),
         ]),
     ]);

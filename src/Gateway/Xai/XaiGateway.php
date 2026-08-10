@@ -62,7 +62,7 @@ class XaiGateway implements Gateway, StepTextGateway
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, filled($schema));
+        return $this->parseTextResponse($data, $provider, filled($schema))->withRawResponse($response);
     }
 
     /**
