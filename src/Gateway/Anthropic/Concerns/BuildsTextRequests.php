@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Illuminate\Support\Arr;
 use InvalidArgumentException;
+use Laravel\Ai\Enums\PromptCacheTarget;
 use Laravel\Ai\Gateway\Anthropic\AnthropicSchemaSanitizer;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
@@ -30,13 +31,17 @@ trait BuildsTextRequests
             'max_tokens' => $options?->maxTokens ?? 64_000,
         ];
 
+        $providerOptions = $options?->providerOptions($provider->driver()) ?? [];
+
+        $cacheTargets = PromptCacheTarget::normalize(Arr::pull($providerOptions, 'prompt_cache'));
+
         if (filled($instructions)) {
-            $body['system'] = $instructions;
+            $body['system'] = in_array(PromptCacheTarget::System, $cacheTargets, true)
+                ? [['type' => 'text', 'text' => $instructions, 'cache_control' => ['type' => 'ephemeral']]]
+                : $instructions;
         }
 
         $mappedTools = filled($tools) ? $this->mapTools($tools, $provider) : [];
-
-        $providerOptions = $options?->providerOptions($provider->driver()) ?? [];
 
         if (filled($schema) && $this->supportsNativeStructuredOutput($provider)) {
             $body['output_config'] = [
@@ -61,6 +66,10 @@ trait BuildsTextRequests
                 $body['tools'] = $mappedTools;
                 $body['tool_choice'] = $this->resolveToolChoice($schema, $tools, $providerOptions, $options?->toolChoice);
             }
+        }
+
+        if (isset($body['tools']) && in_array(PromptCacheTarget::Tools, $cacheTargets, true)) {
+            $body['tools'][array_key_last($body['tools'])]['cache_control'] = ['type' => 'ephemeral'];
         }
 
         $body = array_merge($body, Arr::whereNotNull([
