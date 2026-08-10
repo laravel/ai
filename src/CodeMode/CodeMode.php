@@ -9,12 +9,7 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\ToolNameResolver;
 
 /**
- * Expose a tree of tools to the model through a single execute_code tool.
- *
- * Instead of one provider round-trip per tool call, the model writes a small PHP program
- * that sequences, branches, and aggregates calls to the wrapped tools in one invocation.
- *
- * Tool approvals are not supported inside code mode — an Approvable tool in the tree throws.
+ * Expose a tree of tools to the model as a single execute_code tool it drives with PHP programs.
  */
 class CodeMode
 {
@@ -44,9 +39,7 @@ class CodeMode
     }
 
     /**
-     * Create a new code mode wrapper over the given tools.
-     *
-     * String keys become namespaces: ['orders' => [new LookupOrder]] exposes tool('orders.LookupOrder', ...).
+     * Create a new code mode wrapper over the given tools, string keys becoming namespaces.
      *
      * @param  iterable<int|string, mixed>  $tools
      */
@@ -108,8 +101,7 @@ class CodeMode
     }
 
     /**
-     * Register a hook fired after each nested tool call settles with
-     * ['index', 'name', 'input', 'durationMs', 'outcome', 'message'?].
+     * Register a hook fired after each nested tool call settles.
      */
     public function onToolCallEnd(Closure $callback): self
     {
@@ -119,11 +111,7 @@ class CodeMode
     }
 
     /**
-     * Expand into the execute_code tool the model interacts with, plus a search_tools
-     * tool when the catalog is too large to inline in the description.
-     *
-     * The tree is resolved through the given resolver (e.g. Agent to AgentTool) but never
-     * exposed to the provider directly; the model reaches the tools only through programs.
+     * Expand into the execute_code tool, plus search_tools when the catalog is too large to inline.
      *
      * @param  Closure(mixed): mixed  $resolver
      * @return array<int, Tool>

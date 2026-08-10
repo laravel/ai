@@ -12,8 +12,7 @@ use Laravel\Ai\ObjectSchema;
 class Catalog
 {
     /**
-     * How many bytes of signatures may be inlined in the execute_code description
-     * before the remaining tools are listed by path only and left to search_tools.
+     * How many bytes of signatures may be inlined in the execute_code description.
      */
     protected const MAX_INLINE_BYTES = 8000;
 
@@ -83,9 +82,7 @@ class Catalog
     }
 
     /**
-     * Rank tools against a query by lexical term overlap over path, parameters, and description.
-     *
-     * An empty query browses the catalog in declaration order.
+     * Rank tools against a query by lexical term overlap, or browse in declaration order when empty.
      *
      * @return array<int, array<string, string>>
      */

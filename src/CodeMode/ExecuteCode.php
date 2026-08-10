@@ -66,8 +66,7 @@ class ExecuteCode implements Tool
     }
 
     /**
-     * Render the model-facing catalog, inlining signatures until the byte budget is spent
-     * and leaving the remaining tools discoverable by path through the search_tools tool.
+     * Render the model-facing catalog, inlining signatures until the byte budget is spent.
      */
     protected function renderCatalog(): string
     {

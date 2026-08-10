@@ -16,9 +16,6 @@ use Throwable;
 
 /**
  * A confined tree-walking evaluator for a bounded PHP subset — no eval, no ambient authority.
- *
- * Programs may only touch plain data (scalars and arrays) and the supplied tools; expected
- * failures are returned as diagnostic data instead of being thrown to the host.
  */
 class Interpreter
 {

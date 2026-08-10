@@ -8,9 +8,6 @@ use Laravel\Ai\Tools\Request;
 
 /**
  * Look up signatures for code mode tools left out of the inline catalog.
- *
- * Exposed alongside execute_code only when the catalog is partial, so discovery is a
- * plain tool call instead of something the model has to write a program to do.
  */
 class SearchTools implements Tool
 {
