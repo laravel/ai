@@ -21,6 +21,7 @@ use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
+use Laravel\Ai\Providers\Tools\ProviderTool;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Step;
@@ -50,7 +51,7 @@ class TextGenerationLoop
     }
 
     /**
-     * @param  Tool[]  $tools
+     * @param  array<Tool|ProviderTool>  $tools
      * @param  array<string, mixed>|null  $schema
      * @param  array<string, Decision>|null  $approval
      */
@@ -139,7 +140,7 @@ class TextGenerationLoop
     }
 
     /**
-     * @param  Tool[]  $tools
+     * @param  array<Tool|ProviderTool>  $tools
      * @param  array<string, mixed>|null  $schema
      * @param  array<string, Decision>|null  $approval
      * @param  array{Collection<int, ToolCall>, Collection<string, ?Tool>}|null  $validatedApproval  the caller's own eager validateApproval() result, reused instead of re-validating
@@ -288,7 +289,7 @@ class TextGenerationLoop
     /**
      * Resolve the step budget: explicit `maxSteps`, else 1.5x tools, else 5.
      *
-     * @param  Tool[]  $tools
+     * @param  array<Tool|ProviderTool>  $tools
      */
     protected function resolveMaxSteps(?TextGenerationOptions $options, array $tools): int
     {
@@ -302,7 +303,7 @@ class TextGenerationLoop
     /**
      * Tool results to continue the loop with, plus any pending approvals that pause it.
      *
-     * @param  Tool[]  $tools
+     * @param  array<Tool|ProviderTool>  $tools
      * @return array{array<int, ToolResult>, Collection<int, PendingApproval>}
      */
     protected function stepToolResults(StepResponse $result, bool $isFinalStep, array $tools, ?TextGenerationOptions $options): array
@@ -320,7 +321,7 @@ class TextGenerationLoop
 
     /**
      * @param  ToolCall[]  $toolCalls
-     * @param  Tool[]  $tools
+     * @param  array<Tool|ProviderTool>  $tools
      * @return array{array<int, ToolResult>, Collection<int, PendingApproval>}
      */
     protected function approvalAwareToolResults(array $toolCalls, array $tools, bool $isFinalStep = false, ?TextGenerationOptions $options = null): array
@@ -351,7 +352,10 @@ class TextGenerationLoop
             $resolved[] = [$toolCall, $tool];
         }
 
-        $availableTools = implode(', ', array_map(ToolNameResolver::resolve(...), $tools)) ?: 'none';
+        $availableTools = implode(', ', array_map(
+            ToolNameResolver::resolve(...),
+            array_filter($tools, fn (mixed $tool): bool => $tool instanceof Tool),
+        )) ?: 'none';
 
         $toolResults = array_map(function (array $pair) use ($availableTools, $isFinalStep) {
             [$toolCall, $tool] = $pair;
@@ -377,7 +381,7 @@ class TextGenerationLoop
      *
      * @param  array<string, Decision>  $approval
      * @param  Message[]  $messages
-     * @param  Tool[]  $tools
+     * @param  array<Tool|ProviderTool>  $tools
      * @param  array{Collection<int, ToolCall>, Collection<string, ?Tool>}|null  $validatedApproval  a caller's own eager validateApproval() result, reused instead of re-validating
      */
     protected function resumeFromApproval(array $approval, array $messages, array $tools, ?array $validatedApproval = null): ApprovalResumption
@@ -404,7 +408,7 @@ class TextGenerationLoop
     /**
      * @param  array<string, Decision>  $approval
      * @param  Message[]  $messages
-     * @param  Tool[]  $tools
+     * @param  array<Tool|ProviderTool>  $tools
      * @param  array{Collection<int, ToolCall>, Collection<string, ?Tool>}|null  $validatedApproval  a caller's own eager validateApproval() result, reused instead of re-validating
      * @return array{array<int, ToolResult>, bool, array<int, string>}
      */
@@ -467,7 +471,7 @@ class TextGenerationLoop
      *
      * @param  array<string, Decision>  $approval
      * @param  Message[]  $messages
-     * @param  Tool[]  $tools
+     * @param  array<Tool|ProviderTool>  $tools
      * @return array{Collection<int, ToolCall>, Collection<string, ?Tool>}
      */
     public function validateApproval(array $approval, array $messages, array $tools): array

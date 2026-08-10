@@ -20,6 +20,7 @@ use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Promptable;
+use Laravel\Ai\Providers\Tools\WebSearch;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -747,7 +748,7 @@ test('it repairs missing generation tool calls for agents with the repair attrib
         'model',
         null,
         [],
-        [$tool],
+        [$tool, new WebSearch],
         null,
         new TextGenerationOptions(maxSteps: 2, agent: new TextGenerationLoopRepairingAgent),
         null,
@@ -757,6 +758,30 @@ test('it repairs missing generation tool calls for agents with the repair attrib
         ->and($response->text)->toBe('Done')
         ->and($response->toolResults)->toHaveCount(1)
         ->and($response->toolResults[0]->result)->toBe("Tool 'MissingTool' does not exist. Available tools: TextGenerationLoopCountingTool.");
+});
+
+test('it executes local tools when provider-hosted tools are also registered', function (): void {
+    $tool = new TextGenerationLoopCountingTool;
+    $toolCall = new ToolCall('call-1', TextGenerationLoopCountingTool::class, [], 'call-1');
+    $gateway = new TextGenerationLoopFakeGateway([
+        new StepResponse('', [$toolCall], FinishReason::ToolCalls, new Usage, new Meta('fake', 'model')),
+        new StepResponse('Done', [], FinishReason::Stop, new Usage, new Meta('fake', 'model')),
+    ]);
+
+    $response = (new TextGenerationLoop($gateway))->generate(
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [],
+        [new WebSearch, $tool],
+        null,
+        new TextGenerationOptions(maxSteps: 2),
+        null,
+    );
+
+    expect($tool->calls)->toBe(1)
+        ->and($gateway->generateCalls)->toBe(2)
+        ->and($response->text)->toBe('Done');
 });
 
 test('it repairs missing streamed tool calls for agents with the repair attribute', function (): void {
