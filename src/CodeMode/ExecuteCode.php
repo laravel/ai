@@ -49,12 +49,9 @@ class ExecuteCode implements Tool
         Workflow:
         1. Call tools as tool('<path>', ['param' => value]). Every tool returns a string; when a tool
            returns JSON, parse it with json_decode(\$result) — json_decode always returns arrays.
-        2. When a tool's signature is not listed below, look it up with the search_tools tool, or with
-           search_tools('<terms>') inside a program — both return [['path' => ..., 'signature' => ...]]
-           ranked by relevance. Call the returned path exactly as given.
-        3. Sequence dependent calls, branch, and loop in one program instead of one call per turn.
-        4. Filter and aggregate large results in code, returning only the data the conversation needs.
-        5. Wrap calls in try/catch (catch (Exception \$e) { \$e->getMessage() }) to handle tool failures.
+        2. Sequence dependent calls, branch, and loop in one program instead of one call per turn.
+        3. Filter and aggregate large results in code, returning only the data the conversation needs.
+        4. Wrap calls in try/catch (catch (Exception \$e) { \$e->getMessage() }) to handle tool failures.
 
         The runtime is a restricted PHP subset: variables, arrays, string interpolation,
         arithmetic/comparison/logical operators, if/else, foreach/for/while, match/switch, try/catch,
@@ -74,14 +71,18 @@ class ExecuteCode implements Tool
      */
     protected function renderCatalog(): string
     {
-        $catalog = "Available tools:\n".implode("\n", $this->catalog->inline());
+        $inline = $this->catalog->inline();
+
+        $catalog = $inline === [] ? '' : "Available tools:\n".implode("\n", $inline)."\n\n";
 
         if (! $this->catalog->isPartial()) {
-            return $catalog;
+            return rtrim($catalog);
         }
 
-        return $catalog."\n\nThese tools also exist; call the search_tools tool for their signatures "
-            ."before using them:\n".implode(', ', $this->catalog->deferred());
+        return $catalog.'These tools also exist; look their signatures up with the search_tools tool, or with '
+            ."search_tools('<terms>') inside a program — both return [['path' => ..., 'signature' => ...]] "
+            ."ranked by relevance — then call the path exactly as given:\n"
+            .implode(', ', $this->catalog->deferred());
     }
 
     /**

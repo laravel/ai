@@ -40,7 +40,7 @@ class SearchTools implements Tool
     public function handle(Request $request): string
     {
         return json_encode(
-            $this->catalog->search((string) $request->string('query'), max(1, (int) ($request['limit'] ?? 10))),
+            $this->catalog->search((string) $request->string('query'), $request->integer('limit', 10)),
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
         );
     }

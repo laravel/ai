@@ -1032,9 +1032,6 @@ class Interpreter
     }
 
     /**
-     * Invoke a catalog tool through the model-facing tool() built-in.
-     */
-    /**
      * Rank catalog tools against a query, returning their paths and signatures.
      *
      * @param  array<int, mixed>  $arguments
@@ -1056,6 +1053,9 @@ class Interpreter
         return $this->catalog->search($query, $limit);
     }
 
+    /**
+     * Invoke a catalog tool through the model-facing tool() built-in.
+     */
     protected function callTool(Expr\FuncCall $expr, Scope $scope): string
     {
         $arguments = $this->evalArgs($expr, $scope);

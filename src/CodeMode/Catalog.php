@@ -91,6 +91,9 @@ class Catalog
      */
     public function search(string $query, int $limit = 10): array
     {
+        // A ceiling so an oversized limit cannot pull the whole deferred catalog into context.
+        $limit = max(1, min($limit, 50));
+
         $terms = array_unique(preg_split('/[^a-z0-9]+/', strtolower($query), flags: PREG_SPLIT_NO_EMPTY) ?: []);
 
         $scores = [];

@@ -127,7 +127,7 @@ test('a catalog too large to inline is deferred to the search_tools tool', funct
     $description = $executeCode->description();
 
     expect($description)->toContain("tool('filler_tool_1',")
-        ->and($description)->toContain('call the search_tools tool for their signatures')
+        ->and($description)->toContain('look their signatures up with the search_tools tool')
         ->and($description)->toContain('filler_tool_200')
         ->and($description)->not->toContain("tool('filler_tool_200'");
 
