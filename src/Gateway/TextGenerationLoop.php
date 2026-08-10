@@ -9,6 +9,7 @@ use Illuminate\Support\Str;
 use Laravel\Ai\Approvals\Approval;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\PendingApproval;
+use Laravel\Ai\Attributes\RepairToolCalls;
 use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -33,6 +34,7 @@ use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Laravel\Ai\Tools\Request;
+use Laravel\Ai\Tools\ToolNameResolver;
 use Throwable;
 
 class TextGenerationLoop
@@ -107,7 +109,7 @@ class TextGenerationLoop
                 $stepContext,
             );
 
-            [$toolResults, $pendingApprovals] = $this->stepToolResults($lastResult, $stepContext->isFinalStep, $tools);
+            [$toolResults, $pendingApprovals] = $this->stepToolResults($lastResult, $stepContext->isFinalStep, $tools, $options);
 
             $steps->push($this->buildStep($lastResult, $toolResults));
 
@@ -235,7 +237,7 @@ class TextGenerationLoop
             $accumulatedUsage = $accumulatedUsage->add($result->usage);
             $finalReason = $result->finishReason;
 
-            [$toolResults, $pendingApprovals] = $this->stepToolResults($result, $stepContext->isFinalStep, $tools);
+            [$toolResults, $pendingApprovals] = $this->stepToolResults($result, $stepContext->isFinalStep, $tools, $options);
 
             foreach ($toolResults as $toolResult) {
                 yield (new ToolResultEvent(
@@ -303,7 +305,7 @@ class TextGenerationLoop
      * @param  Tool[]  $tools
      * @return array{array<int, ToolResult>, Collection<int, PendingApproval>}
      */
-    protected function stepToolResults(StepResponse $result, bool $isFinalStep, array $tools): array
+    protected function stepToolResults(StepResponse $result, bool $isFinalStep, array $tools, ?TextGenerationOptions $options): array
     {
         if (filled($result->pendingApprovals)) {
             return [[], collect($result->pendingApprovals)];
@@ -313,7 +315,7 @@ class TextGenerationLoop
             return [[], collect()];
         }
 
-        return $this->approvalAwareToolResults($result->toolCalls, $tools, $isFinalStep);
+        return $this->approvalAwareToolResults($result->toolCalls, $tools, $isFinalStep, $options);
     }
 
     /**
@@ -321,7 +323,7 @@ class TextGenerationLoop
      * @param  Tool[]  $tools
      * @return array{array<int, ToolResult>, Collection<int, PendingApproval>}
      */
-    protected function approvalAwareToolResults(array $toolCalls, array $tools, bool $isFinalStep = false): array
+    protected function approvalAwareToolResults(array $toolCalls, array $tools, bool $isFinalStep = false, ?TextGenerationOptions $options = null): array
     {
         $pendingApprovals = collect();
         $resolved = [];
@@ -342,23 +344,27 @@ class TextGenerationLoop
                 continue;
             }
 
-            if (! $tool instanceof Tool && ! $isFinalStep) {
+            if (! $tool instanceof Tool && ! $isFinalStep && ! RepairToolCalls::isAppliedTo($options?->agent)) {
                 throw new NoSuchToolException($toolCall->name);
             }
 
             $resolved[] = [$toolCall, $tool];
         }
 
-        $toolResults = array_map(function (array $pair) use ($isFinalStep) {
+        $availableTools = implode(', ', array_map(ToolNameResolver::resolve(...), $tools)) ?: 'none';
+
+        $toolResults = array_map(function (array $pair) use ($availableTools, $isFinalStep) {
             [$toolCall, $tool] = $pair;
 
             return new ToolResult(
                 $toolCall->id,
                 $toolCall->name,
                 $toolCall->arguments,
-                $isFinalStep || ! $tool instanceof Tool
-                    ? 'The agent reached its maximum number of steps without running this tool call.'
-                    : $this->executeTool($tool, $toolCall->arguments, $toolCall->id),
+                match (true) {
+                    ! $tool instanceof Tool => "Tool '{$toolCall->name}' does not exist. Available tools: {$availableTools}.",
+                    $isFinalStep => 'The agent reached its maximum number of steps without running this tool call.',
+                    default => $this->executeTool($tool, $toolCall->arguments, $toolCall->id),
+                },
                 $toolCall->resultId,
             );
         }, $resolved);
