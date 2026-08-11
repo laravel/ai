@@ -73,7 +73,9 @@ trait HandlesTextStreaming
                 ))->withInvocationId($invocationId);
             }
 
-            if (isset($delta['content']) && $delta['content'] !== '') {
+            $content = $this->extractContentText($delta['content'] ?? '');
+
+            if ($content !== '') {
                 if (! $textStartEmitted) {
                     $textStartEmitted = true;
 
@@ -84,12 +86,12 @@ trait HandlesTextStreaming
                     ))->withInvocationId($invocationId);
                 }
 
-                $currentText .= $delta['content'];
+                $currentText .= $content;
 
                 yield (new TextDelta(
                     $this->generateEventId(),
                     $messageId,
-                    $delta['content'],
+                    $content,
                     time(),
                 ))->withInvocationId($invocationId);
             }

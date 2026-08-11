@@ -126,3 +126,22 @@ test('follow up request includes original messages', function (): void {
 
     expect($userMsg)->not->toBeNull();
 });
+
+test('follow up response with block content is flattened to text', function (): void {
+    Http::fake([
+        '*' => Http::sequence([
+            $this->fakeToolCallResponse('FixedNumberGenerator', 'call_'.uniqid()),
+            $this->fakeTextResponse([
+                ['type' => 'text', 'text' => 'The number is 72019'],
+                ['type' => 'reference', 'reference_ids' => ['search_documents']],
+            ]),
+        ]),
+    ]);
+
+    $response = (new ToolUsingAgent(fixed: true))->prompt(
+        'Generate a number',
+        provider: 'mistral',
+    );
+
+    expect($response->text)->toBe('The number is 72019');
+});
