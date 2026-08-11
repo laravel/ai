@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Gateway\Anthropic;
 
-use Illuminate\Http\Client\PendingRequest;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Providers\FileProvider;
@@ -68,22 +67,17 @@ class AnthropicFileGateway implements FileGateway
     }
 
     /**
-     * Get an HTTP client for the Anthropic Files API.
+     * Get the authentication headers for the Anthropic Files API.
+     *
+     * @return array<string, string>
      */
-    protected function client(Provider $provider, ?int $timeout = null): PendingRequest
+    protected function clientHeaders(Provider $provider): array
     {
-        $config = $provider->additionalConfiguration();
-
-        return $this->createClient(
-            $this->baseUrl($provider),
-            array_filter([
-                'x-api-key' => $provider->providerCredentials()['key'],
-                'anthropic-version' => $config['version'] ?? '2023-06-01',
-                'anthropic-beta' => 'files-api-2025-04-14',
-            ]),
-            $config['headers'] ?? [],
-            $timeout ?? 60,
-        );
+        return array_filter([
+            'x-api-key' => $provider->providerCredentials()['key'],
+            'anthropic-version' => $provider->additionalConfiguration()['version'] ?? '2023-06-01',
+            'anthropic-beta' => 'files-api-2025-04-14',
+        ]);
     }
 
     /**

@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Gateway\AzureOpenAi\Concerns;
 
-use Illuminate\Http\Client\PendingRequest;
 use Laravel\Ai\Gateway\Concerns\CreatesClient;
 use Laravel\Ai\Providers\Provider;
 
@@ -11,19 +10,20 @@ trait CreatesAzureOpenAiClient
     use CreatesClient;
 
     /**
-     * Get an HTTP client for the Azure OpenAI v1-compatible API.
+     * Get the base URL for the Azure OpenAI v1-compatible API.
      */
-    protected function client(Provider $provider, ?int $timeout = null): PendingRequest
+    protected function baseUrl(Provider $provider): string
     {
-        $config = $provider->additionalConfiguration();
+        return rtrim($provider->additionalConfiguration()['url'] ?? '', '/').'/openai/v1';
+    }
 
-        $base = rtrim($config['url'] ?? '', '/');
-
-        return $this->createClient(
-            "{$base}/openai/v1",
-            ['api-key' => $provider->providerCredentials()['key']],
-            $config['headers'] ?? [],
-            $timeout ?? 60,
-        );
+    /**
+     * Get the authentication headers for the Azure OpenAI API.
+     *
+     * @return array<string, string>
+     */
+    protected function clientHeaders(Provider $provider): array
+    {
+        return ['api-key' => $provider->providerCredentials()['key']];
     }
 }

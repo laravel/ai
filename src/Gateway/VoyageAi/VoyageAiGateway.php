@@ -7,6 +7,7 @@ use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\RerankingGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\RerankingProvider;
+use Laravel\Ai\Gateway\Concerns\CreatesClient;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\RankedDocument;
@@ -15,8 +16,8 @@ use Laravel\Ai\Responses\RerankingResponse;
 
 class VoyageAiGateway implements EmbeddingGateway, RerankingGateway
 {
-    use Concerns\CreatesVoyageAiClient;
     use Concerns\MapsEmbeddingInputs;
+    use CreatesClient;
     use HandlesFailoverErrors;
 
     /**
@@ -80,5 +81,21 @@ class VoyageAiGateway implements EmbeddingGateway, RerankingGateway
             ))->all(),
             new Meta($provider->name(), $model),
         );
+    }
+
+    /**
+     * Get the API URL used when the provider has no configured URL.
+     */
+    protected function defaultBaseUrl(): string
+    {
+        return 'https://api.voyageai.com/v1';
+    }
+
+    /**
+     * Get the request timeout in seconds, or null for no timeout.
+     */
+    protected function defaultTimeout(): ?int
+    {
+        return 30;
     }
 }

@@ -11,6 +11,7 @@ use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Gateway\Concerns\CreatesClient;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionMessages;
@@ -27,10 +28,10 @@ use Laravel\Ai\Responses\TranscriptionResponse;
 class MistralGateway implements EmbeddingGateway, StepTextGateway, TranscriptionGateway
 {
     use Concerns\BuildsTextRequests;
-    use Concerns\CreatesMistralClient;
     use Concerns\HandlesTextStreaming;
     use Concerns\MapsAttachments;
     use Concerns\ParsesTextResponses;
+    use CreatesClient;
     use HandlesFailoverErrors;
     use MapsChatCompletionMessages;
     use MapsChatCompletionTools;
@@ -172,5 +173,13 @@ class MistralGateway implements EmbeddingGateway, StepTextGateway, Transcription
         };
 
         return "audio.{$extension}";
+    }
+
+    /**
+     * Get the API URL used when the provider has no configured URL.
+     */
+    protected function defaultBaseUrl(): string
+    {
+        return 'https://api.mistral.ai/v1';
     }
 }

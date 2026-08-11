@@ -9,6 +9,7 @@ use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Gateway\Concerns\CreatesClient;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
@@ -19,12 +20,12 @@ use Laravel\Ai\Responses\EmbeddingsResponse;
 class OllamaGateway implements EmbeddingGateway, StepTextGateway
 {
     use Concerns\BuildsTextRequests;
-    use Concerns\CreatesOllamaClient;
     use Concerns\HandlesTextStreaming;
     use Concerns\MapsAttachments;
     use Concerns\MapsMessages;
     use Concerns\MapsTools;
     use Concerns\ParsesTextResponses;
+    use CreatesClient;
     use HandlesFailoverErrors;
 
     public function __construct(protected Dispatcher $events)
@@ -124,5 +125,13 @@ class OllamaGateway implements EmbeddingGateway, StepTextGateway
             $data['prompt_eval_count'] ?? 0,
             new Meta($provider->name(), $model),
         );
+    }
+
+    /**
+     * Get the API URL used when the provider has no configured URL.
+     */
+    protected function defaultBaseUrl(): string
+    {
+        return 'http://localhost:11434';
     }
 }

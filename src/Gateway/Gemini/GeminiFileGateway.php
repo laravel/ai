@@ -2,21 +2,18 @@
 
 namespace Laravel\Ai\Gateway\Gemini;
 
-use Illuminate\Http\Client\PendingRequest;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Enums\Lab;
-use Laravel\Ai\Gateway\Concerns\CreatesClient;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\PreparesStorableFiles;
-use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\FileResponse;
 use Laravel\Ai\Responses\StoredFileResponse;
 
 class GeminiFileGateway implements FileGateway
 {
-    use CreatesClient;
+    use Concerns\CreatesGeminiClient;
     use HandlesFailoverErrors;
     use PreparesStorableFiles;
 
@@ -73,22 +70,19 @@ class GeminiFileGateway implements FileGateway
         );
     }
 
-    protected function client(Provider $provider): PendingRequest
+    /**
+     * Get the request timeout in seconds, or null for no timeout.
+     */
+    protected function defaultTimeout(): ?int
     {
-        return $this->createClient(
-            $this->baseUrl($provider),
-            array_filter(['x-goog-api-key' => $provider->providerCredentials()['key']]),
-            $provider->additionalConfiguration()['headers'] ?? [],
-            timeout: null,
-            throw: false,
-        );
+        return null;
     }
 
     /**
-     * Get the base URL for the Gemini API.
+     * Determine if client errors should be thrown as exceptions.
      */
-    protected function baseUrl(Provider $provider): string
+    protected function throwsClientErrors(): bool
     {
-        return rtrim($provider->additionalConfiguration()['url'] ?? 'https://generativelanguage.googleapis.com/v1beta', '/');
+        return false;
     }
 }

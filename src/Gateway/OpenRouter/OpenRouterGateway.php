@@ -15,6 +15,7 @@ use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Files\Image;
+use Laravel\Ai\Gateway\Concerns\CreatesClient;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\Concerns\WrapsPcmAudio;
@@ -37,10 +38,10 @@ use RuntimeException;
 class OpenRouterGateway implements Gateway, StepTextGateway
 {
     use Concerns\BuildsTextRequests;
-    use Concerns\CreatesOpenRouterClient;
     use Concerns\HandlesTextStreaming;
     use Concerns\MapsAttachments;
     use Concerns\ParsesTextResponses;
+    use CreatesClient;
     use HandlesFailoverErrors;
     use MapsChatCompletionMessages;
     use MapsChatCompletionTools;
@@ -328,5 +329,29 @@ class OpenRouterGateway implements Gateway, StepTextGateway
             $data['usage']['prompt_tokens'] ?? 0,
             new Meta($provider->name(), $model),
         );
+    }
+
+    /**
+     * Get the API URL used when the provider has no configured URL.
+     */
+    protected function defaultBaseUrl(): string
+    {
+        return 'https://openrouter.ai/api/v1';
+    }
+
+    /**
+     * Get the authentication headers for the OpenRouter API.
+     *
+     * @return array<string, string>
+     */
+    protected function clientHeaders(Provider $provider): array
+    {
+        $config = $provider->additionalConfiguration();
+
+        return array_filter([
+            'Authorization' => 'Bearer '.$provider->providerCredentials()['key'],
+            'HTTP-Referer' => $config['http_referer'] ?? null,
+            'X-OpenRouter-Title' => $config['x_title'] ?? null,
+        ]);
     }
 }

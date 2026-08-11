@@ -9,6 +9,7 @@ use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Gateway\Concerns\CreatesClient;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Providers\Provider;
@@ -18,13 +19,13 @@ use Laravel\Ai\Responses\EmbeddingsResponse;
 class OpenAiCompatibleGateway implements EmbeddingGateway, StepTextGateway
 {
     use Concerns\BuildsTextRequests;
-    use Concerns\CreatesOpenAiCompatibleClient;
     use Concerns\HandlesTextStreaming;
     use Concerns\MapsAttachments;
     use Concerns\MapsChatCompletionMessages;
     use Concerns\MapsChatCompletionTools;
     use Concerns\ParsesTextResponses;
     use Concerns\PerformsChatCompletionSteps;
+    use CreatesClient;
     use HandlesFailoverErrors;
     use ParsesServerSentEvents;
 
@@ -98,5 +99,21 @@ class OpenAiCompatibleGateway implements EmbeddingGateway, StepTextGateway
     protected function streamOptions(Provider $provider): ?array
     {
         return $provider->additionalConfiguration()['stream_options'] ?? null;
+    }
+
+    /**
+     * Get the base URL for the OpenAI-compatible API.
+     */
+    protected function baseUrl(Provider $provider): string
+    {
+        $url = $provider->additionalConfiguration()['url'] ?? null;
+
+        if (blank($url)) {
+            throw new InvalidArgumentException(
+                "The [{$provider->name()}] openai-compatible provider requires a 'url' to be configured."
+            );
+        }
+
+        return rtrim((string) $url, '/');
     }
 }
