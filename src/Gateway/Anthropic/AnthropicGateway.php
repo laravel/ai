@@ -200,6 +200,7 @@ class AnthropicGateway implements Gateway, StepTextGateway
             'quota exceeded',
             'exceeded your current quota',
             'billing',
+            'usage limit',
         ];
     }
 }
