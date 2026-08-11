@@ -205,7 +205,7 @@ class DatabaseConversationStore implements ConversationStore
     {
         $meta = (array) json_decode(json_encode($response->meta), true);
 
-        $blocks = $response->awaitingApproval()
+        $blocks = $response->hasPendingApprovals()
             ? $response->pausedProviderContentBlocks()
             : $this->providerContentBlocks($response);
 

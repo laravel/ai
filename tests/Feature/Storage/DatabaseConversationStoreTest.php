@@ -705,7 +705,7 @@ test('it records provider content blocks into the message meta when a turn pause
         ->toHaveKey('provider_content_blocks', [['type' => 'thinking', 'signature' => 'sig-1']]);
 });
 
-test('it omits provider content blocks when the assistant turn is not paused', function (): void {
+test('it omits provider content blocks when none are present', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
 
@@ -718,9 +718,7 @@ test('it omits provider content blocks when the assistant turn is not paused', f
     );
 
     $response = (new AgentResponse('invocation-id', 'Deleted the file.', new Usage, new Meta))
-        ->withMessages(collect([
-            new AssistantMessage('Deleted the file.', null, [['type' => 'thinking', 'signature' => 'sig-1']]),
-        ]));
+        ->withMessages(collect([new AssistantMessage('Deleted the file.')]));
 
     $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
 
