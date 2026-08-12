@@ -23,9 +23,7 @@ trait MapsTools
 
         foreach ($tools as $tool) {
             if ($tool instanceof ProviderTool) {
-                $providerTool = $this->mapProviderTool($tool, $provider);
-
-                if (filled($providerTool)) {
+                if (filled($providerTool = $this->mapProviderTool($tool, $provider))) {
                     $mapped[] = $providerTool;
                 }
             } elseif ($tool instanceof Tool) {
