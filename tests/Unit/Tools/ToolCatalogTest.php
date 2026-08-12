@@ -1,9 +1,9 @@
 <?php
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
-use Laravel\Ai\CodeMode\Catalog;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
+use Laravel\Ai\Tools\ToolCatalog;
 
 function catalogTool(string $name, string $description, Closure $schemaDefinition): Tool
 {
@@ -46,7 +46,7 @@ test('catalog search preserves complete nested JSON schemas', function (): void 
         'tags' => $schema->array()->items($schema->string()->pattern('^[a-z]+$')),
     ]);
 
-    $entry = (new Catalog(['users.create' => $tool]))->search('', 1)[0];
+    $entry = (new ToolCatalog(['create_user' => $tool]))->search('', 1)[0];
     $properties = $entry['schema']['properties'];
 
     expect($properties['role']['enum'])->toBe(['admin', 'editor'])
@@ -57,7 +57,7 @@ test('catalog search preserves complete nested JSON schemas', function (): void 
 });
 
 test('catalog ranking indexes parameter names and descriptions independently', function (): void {
-    $catalog = new Catalog([
+    $catalog = new ToolCatalog([
         'alpha' => catalogTool('alpha', 'A generic action.', fn (JsonSchema $schema): array => [
             'destination_city' => $schema->string()->description('The arrival location.'),
         ]),
@@ -67,15 +67,15 @@ test('catalog ranking indexes parameter names and descriptions independently', f
         'gamma' => catalogTool('gamma', 'Deliver a parcel overnight.', fn (): array => []),
     ]);
 
-    expect(array_column($catalog->search('destination city'), 'path'))->toBe(['alpha'])
-        ->and(array_column($catalog->search('overnight'), 'path'))->toBe(['gamma']);
+    expect(array_column($catalog->search('destination city'), 'name'))->toBe(['alpha'])
+        ->and(array_column($catalog->search('overnight'), 'name'))->toBe(['gamma']);
 });
 
 test('catalog search tokenizes Unicode descriptions', function (): void {
-    $catalog = new Catalog([
+    $catalog = new ToolCatalog([
         'weather' => catalogTool('weather', '東京の天気を調べる', fn (): array => []),
         'mail' => catalogTool('mail', 'メールを送る', fn (): array => []),
     ]);
 
-    expect(array_column($catalog->search('天気'), 'path'))->toBe(['weather']);
+    expect(array_column($catalog->search('天気'), 'name'))->toBe(['weather']);
 });

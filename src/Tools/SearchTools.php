@@ -1,17 +1,16 @@
 <?php
 
-namespace Laravel\Ai\CodeMode;
+namespace Laravel\Ai\Tools;
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\Tools\Request;
 
 /**
- * Look up schemas for code mode tools left out of the inline catalog.
+ * Search the catalog of tools available through execute_tools.
  */
 class SearchTools implements Tool
 {
-    public function __construct(protected Catalog $catalog) {}
+    public function __construct(protected ToolCatalog $catalog) {}
 
     /**
      * Get the name of the tool.
@@ -26,9 +25,8 @@ class SearchTools implements Tool
      */
     public function description(): string
     {
-        return 'Search the tools available to execute_code. Returns matching paths, descriptions, and JSON Schemas, '
-            .'ranked by relevance; an empty query browses the catalog. Use the returned path exactly as given in a '
-            .'call step inside an execute_code program.';
+        return 'Search the tools available through execute_tools. Returns exact tool names, descriptions, and '
+            .'complete argument JSON Schemas, ranked by relevance. An empty query browses the catalog.';
     }
 
     /**
@@ -48,7 +46,7 @@ class SearchTools implements Tool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'query' => $schema->string()->description('The terms to search tool names and descriptions for.')->required(),
+            'query' => $schema->string()->description('The terms to search tool names and descriptions for. An empty query browses the catalog.'),
             'limit' => $schema->integer()->min(1)->max(50)->default(10)->description('The maximum number of tools to return.'),
         ];
     }

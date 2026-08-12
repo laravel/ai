@@ -7,7 +7,6 @@ use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Ai;
-use Laravel\Ai\CodeMode\CodeMode;
 use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
@@ -35,6 +34,7 @@ use Laravel\Ai\Tools\AgentTool;
 use Laravel\Ai\Tools\McpServerTool;
 use Laravel\Ai\Tools\McpTool;
 use Laravel\Ai\Tools\ToolNameResolver;
+use Laravel\Ai\Tools\ToolSearch;
 
 use function Laravel\Ai\pipeline;
 
@@ -167,7 +167,7 @@ trait GeneratesText
         $tools = [];
 
         foreach ($agent->tools() as $tool) {
-            if ($tool instanceof CodeMode) {
+            if ($tool instanceof ToolSearch) {
                 array_push($tools, ...$tool->expand(
                     fn ($leaf) => $this->resolveTool($leaf),
                     fn (Tool $leaf, string $path, array $arguments, string $toolCallId): string => $this

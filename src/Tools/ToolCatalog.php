@@ -1,6 +1,6 @@
 <?php
 
-namespace Laravel\Ai\CodeMode;
+namespace Laravel\Ai\Tools;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Str;
@@ -9,12 +9,10 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\ObjectSchema;
 
 /**
- * The catalog of tools and schemas exposed to orchestration programs.
+ * The searchable catalog of tools and schemas behind a tool search.
  */
-class Catalog
+class ToolCatalog
 {
-    protected const MAX_INLINE_BYTES = 8000;
-
     protected const MAX_SCHEMA_BYTES = 16000;
 
     protected const MAX_SEARCH_RESULTS = 50;
@@ -22,76 +20,40 @@ class Catalog
     protected const MAX_SEARCH_BYTES = 32000;
 
     /**
-     * @var array<string, array{path: string, description: string, schema: array<string, mixed>}>
+     * @var array<string, array{name: string, description: string, schema: array<string, mixed>}>
      */
     protected array $entries = [];
-
-    /** @var array<string, string> */
-    protected array $rendered = [];
-
-    /** @var array<string, string> */
-    protected array $searchable = [];
 
     /**
      * @param  array<string, Tool>  $tools
      */
     public function __construct(protected array $tools)
     {
-        foreach ($tools as $path => $tool) {
+        foreach ($tools as $name => $tool) {
             $schema = (new ObjectSchema((array) $tool->schema(new JsonSchemaTypeFactory)))->toSchema();
             $encodedSchema = json_encode($schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
 
             if (strlen($encodedSchema) > self::MAX_SCHEMA_BYTES) {
                 throw new InvalidArgumentException(sprintf(
-                    'The schema for code mode tool [%s] exceeds the %d byte catalog limit.', $path, self::MAX_SCHEMA_BYTES
+                    'The schema for tool search tool [%s] exceeds the %d byte catalog limit.', $name, self::MAX_SCHEMA_BYTES
                 ));
             }
 
-            $description = (string) $tool->description();
-            $this->entries[$path] = compact('path', 'description', 'schema');
-            $this->rendered[$path] = sprintf(
-                "Tool [%s]: %s\nArguments JSON Schema: %s",
-                $path,
-                $description,
-                $encodedSchema,
-            );
-            $this->searchable[$path] = implode(' ', [
-                $path,
-                $description,
-                $this->schemaSearchText($schema),
-            ]);
+            $this->entries[$name] = [
+                'name' => $name,
+                'description' => (string) $tool->description(),
+                'schema' => $schema,
+            ];
         }
     }
 
-    public function tool(string $path): ?Tool
+    public function tool(string $name): ?Tool
     {
-        return $this->tools[$path] ?? null;
-    }
-
-    /** @return array<int, string> */
-    public function paths(): array
-    {
-        return array_keys($this->tools);
-    }
-
-    public function isPartial(): bool
-    {
-        return $this->deferredCount() > 0;
-    }
-
-    public function deferredCount(): int
-    {
-        return count($this->tools) - $this->inlineCount();
-    }
-
-    /** @return array<int, string> */
-    public function inline(): array
-    {
-        return array_values(array_slice($this->rendered, 0, $this->inlineCount()));
+        return $this->tools[$name] ?? null;
     }
 
     /**
-     * @return array<int, array{path: string, description: string, schema: array<string, mixed>}>
+     * @return array<int, array{name: string, description: string, schema: array<string, mixed>}>
      */
     public function search(string $query, int $limit = 10): array
     {
@@ -99,12 +61,12 @@ class Catalog
         $terms = $this->terms($query);
         $scores = [];
 
-        foreach ($this->entries as $path => $entry) {
-            $pathText = Str::lower($path);
+        foreach ($this->entries as $name => $entry) {
+            $nameText = Str::lower($name);
             $descriptionText = Str::lower($entry['description']);
             $schemaText = Str::lower($this->schemaSearchText($entry['schema']));
-            $scores[$path] = array_sum(array_map(
-                fn (string $term): int => (str_contains($pathText, $term) ? 4 : 0)
+            $scores[$name] = array_sum(array_map(
+                fn (string $term): int => (str_contains($nameText, $term) ? 4 : 0)
                     + (str_contains($descriptionText, $term) ? 2 : 0)
                     + (str_contains($schemaText, $term) ? 1 : 0),
                 $terms,
@@ -119,8 +81,8 @@ class Catalog
         $results = [];
         $bytes = 2;
 
-        foreach (array_slice(array_keys($scores), 0, $limit) as $path) {
-            $entry = $this->entries[$path];
+        foreach (array_slice(array_keys($scores), 0, $limit) as $name) {
+            $entry = $this->entries[$name];
             $entryBytes = strlen(json_encode($entry, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)) + 1;
 
             if ($bytes + $entryBytes > self::MAX_SEARCH_BYTES) {
@@ -132,22 +94,6 @@ class Catalog
         }
 
         return $results;
-    }
-
-    protected function inlineCount(): int
-    {
-        $count = 0;
-        $bytes = 0;
-
-        foreach ($this->rendered as $entry) {
-            if (($bytes += strlen($entry) + 1) > self::MAX_INLINE_BYTES) {
-                break;
-            }
-
-            $count++;
-        }
-
-        return $count;
     }
 
     /** @return array<int, string> */
