@@ -216,7 +216,8 @@ class ChatCompletionReasoning
         $arrived = '';
 
         foreach (static::detailsFrom($delta) as $position => $detail) {
-            $key = $detail['id'] ?? $detail['index'] ?? $position;
+            // The type joins the key so a reused id or index never welds two distinct blocks together...
+            $key = ($detail['type'] ?? '').'#'.($detail['id'] ?? $detail['index'] ?? $position);
 
             if (! isset($this->details[$key])) {
                 $this->details[$key] = $detail;
@@ -237,7 +238,7 @@ class ChatCompletionReasoning
      *
      * @param  array<string, mixed>  $detail
      */
-    protected function mergeDetail(int|string $key, array $detail): string
+    protected function mergeDetail(string $key, array $detail): string
     {
         $captured = static::readableTextFrom($this->details[$key]);
         $incoming = static::readableTextFrom($detail);

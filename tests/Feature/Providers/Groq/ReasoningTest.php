@@ -83,7 +83,8 @@ test('replays reasoning alongside tool calls on the follow up request', function
         fn (array $message): bool => isset($message['tool_calls'])
     );
 
-    expect($assistantMessage['reasoning_content'])->toBe('I need the generator for this.');
+    expect($assistantMessage['reasoning'])->toBe('I need the generator for this.')
+        ->and($assistantMessage)->not->toHaveKey('reasoning_content');
 });
 
 test('does not emit reasoning events when the stream has no reasoning', function (): void {

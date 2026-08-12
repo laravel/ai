@@ -4,7 +4,6 @@ namespace Laravel\Ai\Gateway\Mistral\Concerns;
 
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
-use Laravel\Ai\Gateway\OpenAiCompatible\ChatCompletionReasoning;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
@@ -60,7 +59,6 @@ trait ParsesTextResponses
             finishReason: $this->extractFinishReason($choice),
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model),
-            providerContentBlocks: ChatCompletionReasoning::providerContentBlocksIn($message),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
         );
     }
