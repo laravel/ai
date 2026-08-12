@@ -49,9 +49,17 @@ trait MapsAttachments
                     'type' => 'image_url',
                     'image_url' => ['url' => 'data:'.$attachment->getClientMimeType().';base64,'.base64_encode($attachment->get())],
                 ],
-                default => throw new InvalidArgumentException('This openai-compatible provider does not support document attachments. Only image attachments are supported.'),
+                default => throw new InvalidArgumentException($this->unsupportedAttachmentMessage()),
             };
         })->all();
+    }
+
+    /**
+     * Get the message thrown when an attachment type is not supported.
+     */
+    protected function unsupportedAttachmentMessage(): string
+    {
+        return 'This openai-compatible provider does not support document attachments. Only image attachments are supported.';
     }
 
     /**
