@@ -259,14 +259,16 @@ class TextGenerationLoop
 
             // A provider may report an error in the stream itself rather than throwing, which still ends the step. The error event travels with the exception so its type and metadata are not lost...
             if (! $result instanceof StepResponse) {
+                $exception = new AiException($lastError?->message ?? 'The provider ended the stream without completing the step.');
+
                 $context?->stepFailed(
                     $stepContext,
-                    new AiException($lastError?->message ?? 'The provider ended the stream without completing the step.'),
+                    $exception,
                     $this->elapsedMilliseconds($startedAt),
                     $lastError,
                 );
 
-                break;
+                throw $exception;
             }
 
             $context?->stepCompleted($stepContext, $result, $this->elapsedMilliseconds($startedAt));

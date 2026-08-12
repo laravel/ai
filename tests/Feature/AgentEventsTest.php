@@ -533,14 +533,18 @@ test('a provider error inside the stream closes the step it opened', function ()
 
     $response = (new AssistantAgent)->stream('Hi', provider: 'only');
 
-    foreach ($response as $event) {
-        //
-    }
+    expect(function () use ($response): void {
+        foreach ($response as $event) {
+            //
+        }
+    })->toThrow('Upstream exploded.');
 
     // The provider reported the error in the stream rather than throwing, but the step still has to close...
     Event::assertDispatchedTimes(StartingStep::class, 1);
     Event::assertDispatchedTimes(StepFailed::class, 1);
     Event::assertNotDispatched(StepCompleted::class);
+    Event::assertDispatched(AgentFailed::class);
+    Event::assertNotDispatched(AgentStreamed::class);
 
     $starting = Event::dispatched(StartingStep::class)->first()[0];
     $failed = Event::dispatched(StepFailed::class)->first()[0];
