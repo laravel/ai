@@ -474,7 +474,7 @@ Calling a capability not supported by a provider throws a `LogicException`. Refe
 | Text       | OpenAI, Anthropic, Gemini, Azure, Groq, xAI, DeepSeek, Mistral, Ollama, OpenRouter, OpenAI-compatible |
 | Images     | OpenAI, Gemini, xAI                                            |
 | TTS        | OpenAI, ElevenLabs                                              |
-| STT        | OpenAI, ElevenLabs, Mistral, OpenAI-compatible                 |
+| STT        | OpenAI, ElevenLabs, Mistral, Groq, OpenAI-compatible            |
 | Embeddings | OpenAI, OpenAI-compatible, Gemini, Azure, Cohere, Mistral, Jina, VoyageAI |
 | Reranking  | Cohere, Jina                                                    |
 | Files      | OpenAI, Anthropic, Gemini                                       |
