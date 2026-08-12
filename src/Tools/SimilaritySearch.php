@@ -94,7 +94,7 @@ class SimilaritySearch implements Tool
         }
 
         return "Relevant results found. They are listed below in order of relevance:\n\n".
-            $results->toJson(JSON_PRETTY_PRINT);
+            $results->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     /**

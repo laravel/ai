@@ -207,20 +207,11 @@ class PendingEmbeddingsGeneration
      */
     protected function cacheKey(Provider $provider, string $model, int $dimensions, array $providerOptions): string
     {
-        $optionsFingerprint = $this->fingerprintProviderOptions($providerOptions);
-
-        if (array_all($this->inputs, fn ($input) => is_string($input))) {
-            return 'laravel-embeddings:'.hash(
-                'sha256',
-                $provider->driver().'-'.$model.'-'.$dimensions.'-'.$optionsFingerprint.'-'.implode('-', $this->inputs),
-            );
-        }
-
         return 'laravel-embeddings:'.hash('sha256', json_encode([
             'driver' => $provider->driver(),
             'model' => $model,
             'dimensions' => $dimensions,
-            'options' => $optionsFingerprint,
+            'options' => $this->fingerprintProviderOptions($providerOptions),
             'inputs' => array_map($this->normalizeInputForCache(...), $this->inputs),
         ], JSON_THROW_ON_ERROR));
     }

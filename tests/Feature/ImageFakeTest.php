@@ -1,7 +1,10 @@
 <?php
 
+use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Image;
 use Laravel\Ai\Jobs\GenerateImage;
@@ -117,6 +120,66 @@ test('image custom size is recorded', function (): void {
 
     Image::assertGenerated(fn (ImagePrompt $prompt): bool => $prompt->prompt === 'A sunset'
         && $prompt->size === '16:9');
+});
+
+test('image is stored under a random name derived from its mime type', function (): void {
+    Storage::fake('images');
+
+    Image::fake([
+        new ImageResponse(
+            new Collection([new GeneratedImage(base64_encode('raw-bytes'), 'image/jpeg')]),
+            new Usage,
+            new Meta,
+        ),
+    ]);
+
+    $path = Image::of('A sunset')->generate()->store('generated', 'images');
+
+    expect($path)->toStartWith('generated/')
+        ->and($path)->toEndWith('.jpg')
+        ->and(Storage::disk('images')->get($path))->toBe('raw-bytes');
+});
+
+test('image can be stored under an explicit path and name', function (): void {
+    Storage::fake('images');
+
+    Image::fake([base64_encode('raw-bytes')]);
+
+    $response = Image::of('A sunset')->generate();
+
+    expect($response->storeAs('generated', 'sunset.png', 'images'))->toBe('generated/sunset.png')
+        ->and($response->storeAs('sunset.png', null, 'images'))->toBe('sunset.png')
+        ->and(Storage::disk('images')->get('generated/sunset.png'))->toBe('raw-bytes')
+        ->and(Storage::disk('images')->get('sunset.png'))->toBe('raw-bytes');
+});
+
+test('storing an image publicly passes public visibility to the disk', function (): void {
+    $writes = [];
+
+    $disk = Mockery::mock(Filesystem::class);
+    $disk->shouldReceive('put')->andReturnUsing(function (string $path, string $contents, array $options) use (&$writes): bool {
+        $writes[] = ['path' => $path, 'options' => $options];
+
+        return true;
+    });
+
+    $factory = Mockery::mock(FilesystemFactory::class);
+    $factory->shouldReceive('disk')->with('images')->andReturn($disk);
+
+    app()->instance(FilesystemFactory::class, $factory);
+
+    Image::fake([base64_encode('raw-bytes')]);
+
+    $response = Image::of('A sunset')->generate();
+
+    $response->store('generated', 'images');
+    $response->storePublicly('generated', 'images');
+    $response->storePubliclyAs('sunset.png', null, 'images');
+
+    expect($writes[0]['options'])->toBe([])
+        ->and($writes[1]['options'])->toBe(['visibility' => 'public'])
+        ->and($writes[2]['options'])->toBe(['visibility' => 'public'])
+        ->and($writes[2]['path'])->toBe('sunset.png');
 });
 
 test('queued images can be faked', function (): void {

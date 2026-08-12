@@ -1,6 +1,9 @@
 <?php
 
+use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Laravel\Ai\Audio;
 use Laravel\Ai\Enums\Lab;
@@ -141,6 +144,69 @@ test('audio voice and instructions are recorded', function (): void {
     Audio::assertGenerated(fn (AudioPrompt $prompt): bool => $prompt->text === 'Hello world'
         && $prompt->voice === 'alloy'
         && $prompt->instructions === 'Speak slowly');
+});
+
+test('audio is stored under a random name derived from its mime type', function (): void {
+    Storage::fake('audio');
+
+    Audio::fake([
+        new AudioResponse(base64_encode('wav-bytes'), new Meta, 'audio/wav'),
+        new AudioResponse(base64_encode('alias-bytes'), new Meta, 'audio/x-wav'),
+        new AudioResponse(base64_encode('mp3-bytes'), new Meta),
+    ]);
+
+    $wav = Audio::of('First text')->generate()->store('generated', 'audio');
+    $alias = Audio::of('Second text')->generate()->store('generated', 'audio');
+    $default = Audio::of('Third text')->generate()->store('generated', 'audio');
+
+    expect($wav)->toStartWith('generated/')
+        ->and($wav)->toEndWith('.wav')
+        ->and($alias)->toEndWith('.wav')
+        ->and($default)->toEndWith('.mp3')
+        ->and(Storage::disk('audio')->get($wav))->toBe('wav-bytes')
+        ->and(Storage::disk('audio')->get($default))->toBe('mp3-bytes');
+});
+
+test('audio can be stored under an explicit path and name', function (): void {
+    Storage::fake('audio');
+
+    Audio::fake([base64_encode('raw-bytes')]);
+
+    $response = Audio::of('Hello world')->generate();
+
+    expect($response->storeAs('generated', 'hello.mp3', 'audio'))->toBe('generated/hello.mp3')
+        ->and($response->storeAs('hello.mp3', null, 'audio'))->toBe('hello.mp3')
+        ->and(Storage::disk('audio')->get('generated/hello.mp3'))->toBe('raw-bytes')
+        ->and(Storage::disk('audio')->get('hello.mp3'))->toBe('raw-bytes');
+});
+
+test('storing audio publicly passes public visibility to the disk', function (): void {
+    $writes = [];
+
+    $disk = Mockery::mock(Filesystem::class);
+    $disk->shouldReceive('put')->andReturnUsing(function (string $path, string $contents, array $options) use (&$writes): bool {
+        $writes[] = ['path' => $path, 'options' => $options];
+
+        return true;
+    });
+
+    $factory = Mockery::mock(FilesystemFactory::class);
+    $factory->shouldReceive('disk')->with('audio')->andReturn($disk);
+
+    app()->instance(FilesystemFactory::class, $factory);
+
+    Audio::fake([base64_encode('raw-bytes')]);
+
+    $response = Audio::of('Hello world')->generate();
+
+    $response->store('generated', 'audio');
+    $response->storePublicly('generated', 'audio');
+    $response->storePubliclyAs('hello.mp3', null, 'audio');
+
+    expect($writes[0]['options'])->toBe([])
+        ->and($writes[1]['options'])->toBe(['visibility' => 'public'])
+        ->and($writes[2]['options'])->toBe(['visibility' => 'public'])
+        ->and($writes[2]['path'])->toBe('hello.mp3');
 });
 
 test('queued audio can be faked', function (): void {
