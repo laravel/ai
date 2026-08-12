@@ -10,6 +10,7 @@ use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Exceptions\NoSuchToolException;
+use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationLoop;
@@ -732,12 +733,12 @@ test('it throws when streaming tool calls do not match local tools', function ()
     )))->toThrow(NoSuchToolException::class);
 });
 
-test('it emits a terminal stream end when a turn yields no stream end or error', function (): void {
+test('it throws when a turn completes without a step response', function (): void {
     $gateway = new TextGenerationLoopFakeGateway(streams: [
         textGenerationLoopStreamStep(events: [new TextDelta('text-delta', 'message-1', 'partial', time())]),
     ]);
 
-    $events = iterator_to_array((new TextGenerationLoop($gateway))->stream(
+    expect(fn (): array => iterator_to_array((new TextGenerationLoop($gateway))->stream(
         'invocation-1',
         textGenerationLoopProvider(),
         'model',
@@ -747,33 +748,42 @@ test('it emits a terminal stream end when a turn yields no stream end or error',
         null,
         null,
         null,
-    ));
-
-    $streamEnds = collect($events)->whereInstanceOf(StreamEnd::class);
-
-    expect($streamEnds)->toHaveCount(1)
-        ->and($streamEnds->first()->reason)->toBe(FinishReason::Error->value);
+    )))->toThrow(StreamErrorException::class, 'The provider ended the stream without completing the step.');
 });
 
-test('it does not emit a stream end when a turn errors without a stream end', function (): void {
+test('it yields the error and then throws it when a turn errors without a stream end', function (): void {
+    $error = new Error('error-1', 'server_error', 'Server overloaded', false, time());
+
     $gateway = new TextGenerationLoopFakeGateway(streams: [
-        textGenerationLoopStreamStep(events: [new Error('error-1', 'server_error', 'Server overloaded', false, time())]),
+        textGenerationLoopStreamStep(events: [$error]),
     ]);
 
-    $events = iterator_to_array((new TextGenerationLoop($gateway))->stream(
-        'invocation-1',
-        textGenerationLoopProvider(),
-        'model',
-        null,
-        [],
-        [],
-        null,
-        null,
-        null,
-    ));
+    $events = [];
+    $thrown = null;
 
+    try {
+        foreach ((new TextGenerationLoop($gateway))->stream(
+            'invocation-1',
+            textGenerationLoopProvider(),
+            'model',
+            null,
+            [],
+            [],
+            null,
+            null,
+            null,
+        ) as $event) {
+            $events[] = $event;
+        }
+    } catch (StreamErrorException $exception) {
+        $thrown = $exception;
+    }
+
+    // The consumer still sees the provider's own error event before the step fails...
     expect(collect($events)->whereInstanceOf(StreamEnd::class))->toHaveCount(0)
-        ->and(collect($events)->whereInstanceOf(Error::class))->toHaveCount(1);
+        ->and(collect($events)->whereInstanceOf(Error::class))->toHaveCount(1)
+        ->and($thrown?->error)->toBe($error)
+        ->and($thrown?->getMessage())->toBe('Server overloaded');
 });
 
 function textGenerationLoopProvider(): TextProvider

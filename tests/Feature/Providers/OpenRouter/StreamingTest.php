@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
@@ -89,13 +90,21 @@ test('streaming error event stops stream', function (): void {
     ]);
 
     $events = [];
-    foreach (agent()->stream('Hi', provider: 'openrouter') as $event) {
-        $events[] = $event;
+    $error = null;
+
+    try {
+        foreach (agent()->stream('Hi', provider: 'openrouter') as $event) {
+            $events[] = $event;
+        }
+    } catch (StreamErrorException $exception) {
+        $error = $exception->error;
     }
 
     $errorEvents = array_values(array_filter($events, fn ($e): bool => $e instanceof Error));
+
     expect($errorEvents)->toHaveCount(1)
-        ->and($errorEvents[0]->type)->toBe('server_error');
+        ->and($errorEvents[0]->type)->toBe('server_error')
+        ->and($error)->toBe($errorEvents[0]);
 });
 
 test('streaming error finish reason emits error event', function (): void {
@@ -107,13 +116,21 @@ test('streaming error finish reason emits error event', function (): void {
     ]);
 
     $events = [];
-    foreach (agent()->stream('Hi', provider: 'openrouter') as $event) {
-        $events[] = $event;
+    $error = null;
+
+    try {
+        foreach (agent()->stream('Hi', provider: 'openrouter') as $event) {
+            $events[] = $event;
+        }
+    } catch (StreamErrorException $exception) {
+        $error = $exception->error;
     }
 
     $errorEvents = array_values(array_filter($events, fn ($e): bool => $e instanceof Error));
+
     expect($errorEvents)->toHaveCount(1)
-        ->and($errorEvents[0]->type)->toBe('502');
+        ->and($errorEvents[0]->type)->toBe('502')
+        ->and($error)->toBe($errorEvents[0]);
 });
 
 test('streaming captures usage from final chunk', function (): void {

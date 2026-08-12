@@ -13,7 +13,6 @@ use Laravel\Ai\Events\StepFailed;
 use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Messages\Message;
-use Laravel\Ai\Streaming\Events\Error;
 use Throwable;
 
 class RunContext
@@ -53,11 +52,11 @@ class RunContext
     /**
      * Report that a generation step ended without producing a response.
      */
-    public function stepFailed(StepContext $step, Throwable $exception, float $time, ?Error $error = null): void
+    public function stepFailed(StepContext $step, Throwable $exception, float $time): void
     {
         $this->events->dispatch(new StepFailed(
             $this->invocationId, $step->stepNumber, $this->agent, $this->provider, $this->model, $step->isFinalStep,
-            $exception, $time, $error,
+            $exception, $time,
         ));
     }
 

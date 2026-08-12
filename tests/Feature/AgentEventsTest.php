@@ -19,6 +19,7 @@ use Laravel\Ai\Events\StreamingAgent;
 use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Exceptions\RateLimitedException;
+use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Gateway\ParentInvocation;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -551,12 +552,13 @@ test('a provider error inside the stream closes the step it opened', function ()
 
     expect($failed->invocationId)->toBe($starting->invocationId)
         ->and($failed->stepNumber)->toBe($starting->stepNumber)
+        ->and($failed->exception)->toBeInstanceOf(StreamErrorException::class)
         ->and($failed->exception->getMessage())->toBe('Upstream exploded.');
 
-    // The synthesized exception cannot carry the provider's own classification, so the error event travels alongside it...
-    expect($failed->error)->toBeInstanceOf(Error::class)
-        ->and($failed->error->message)->toBe('Upstream exploded.')
-        ->and($failed->error->type)->toBe('server_error');
+    // The provider's own classification rides on the exception, so a listener never loses the error's type or metadata...
+    expect($failed->exception->error)->toBeInstanceOf(Error::class)
+        ->and($failed->exception->error->message)->toBe('Upstream exploded.')
+        ->and($failed->exception->error->type)->toBe('server_error');
 });
 
 test('a step that throws carries no stream error', function (): void {
@@ -573,8 +575,8 @@ test('a step that throws carries no stream error', function (): void {
 
     $failed = Event::dispatched(StepFailed::class)->first()[0];
 
-    expect($failed->error)->toBeNull()
-        ->and($failed->exception)->toBeInstanceOf(RateLimitedException::class);
+    expect($failed->exception)->toBeInstanceOf(RateLimitedException::class)
+        ->and($failed->exception)->not->toBeInstanceOf(StreamErrorException::class);
 });
 
 test('step events carry the agent that ran them', function (): void {
