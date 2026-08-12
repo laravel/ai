@@ -21,6 +21,7 @@ use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Gateway\FakeTextGateway;
+use Laravel\Ai\Gateway\ParentInvocation;
 use Laravel\Ai\Jobs\BroadcastAgent;
 use Laravel\Ai\Jobs\InvokeAgent;
 use Laravel\Ai\Prompts\AgentPrompt;
@@ -68,11 +69,15 @@ trait Promptable
             ? $this->providersForApprovalContinuation($provider, $model)
             : $this->getProvidersAndModelsForFailover($provider, $model);
 
+        [$parentInvocationId, $parentToolInvocationId] = ParentInvocation::current();
+
         $run = fn (TextProvider $provider, string $model): AgentResponse => $provider->prompt(
             new AgentPrompt(
                 $this, $text, $attachments, $provider, $model, $this->getTimeout($timeout),
                 invocationId: $invocationId,
                 approvalDecisions: $approvalDecisions,
+                parentInvocationId: $parentInvocationId,
+                parentToolInvocationId: $parentToolInvocationId,
             )
         );
 
@@ -118,11 +123,19 @@ trait Promptable
 
         $invocationId = (string) Str::uuid7();
 
+        [$parentInvocationId, $parentToolInvocationId] = ParentInvocation::current();
+
         if (count($providers) === 1) {
             [$resolved, $resolvedModel] = $this->iterateProvidersWithFailover($providers)->current();
 
             return $resolved->stream(
-                new AgentPrompt($this, $prompt, $attachments, $resolved, $resolvedModel, $resolvedTimeout, $invocationId, $approvalDecisions)
+                new AgentPrompt(
+                    $this, $prompt, $attachments, $resolved, $resolvedModel, $resolvedTimeout,
+                    invocationId: $invocationId,
+                    approvalDecisions: $approvalDecisions,
+                    parentInvocationId: $parentInvocationId,
+                    parentToolInvocationId: $parentToolInvocationId,
+                )
             );
         }
 
@@ -131,7 +144,7 @@ trait Promptable
 
         $outer = new StreamableAgentResponse(
             $invocationId,
-            function () use ($providers, $prompt, $approvalDecisions, $attachments, $resolvedTimeout, $invocationId, &$outer) {
+            function () use ($providers, $prompt, $approvalDecisions, $attachments, $resolvedTimeout, $invocationId, $parentInvocationId, $parentToolInvocationId, &$outer) {
                 $lastException = null;
 
                 foreach ($this->iterateProvidersWithFailover($providers) as [$provider, $model]) {
@@ -139,7 +152,13 @@ trait Promptable
 
                     try {
                         $innerResponse = $provider->stream(
-                            new AgentPrompt($this, $prompt, $attachments, $provider, $model, $resolvedTimeout, $invocationId, $approvalDecisions)
+                            new AgentPrompt(
+                                $this, $prompt, $attachments, $provider, $model, $resolvedTimeout,
+                                invocationId: $invocationId,
+                                approvalDecisions: $approvalDecisions,
+                                parentInvocationId: $parentInvocationId,
+                                parentToolInvocationId: $parentToolInvocationId,
+                            )
                         );
 
                         $innerResponse->then(fn (StreamedAgentResponse $response): StreamableAgentResponse => $outer->adoptStateFrom($response));

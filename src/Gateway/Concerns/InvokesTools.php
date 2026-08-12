@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\Concerns;
 
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Gateway\ParentInvocation;
 use Laravel\Ai\Gateway\RunContext;
 use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Tools\Request;
@@ -23,22 +24,25 @@ trait InvokesTools
     {
         $toolInvocationId = (string) Str::uuid7();
 
-        $context?->invokingTool($tool, $arguments, $toolInvocationId);
+        // Any agent prompted while this tool runs, however it was reached, is a child of this tool call...
+        return ParentInvocation::within($context?->invocationId, $toolInvocationId, function () use ($tool, $arguments, $toolCallId, $toolInvocationId, $context): string {
+            $context?->invokingTool($tool, $arguments, $toolInvocationId);
 
-        $startedAt = hrtime(true);
+            $startedAt = hrtime(true);
 
-        // Only the handler itself may fail the tool call, so a listener that throws is never reported as a tool failure...
-        try {
-            $result = $tool->handle(new Request($arguments, $toolCallId, $toolInvocationId));
-        } catch (Throwable $exception) {
-            $context?->toolFailed($tool, $arguments, $exception, $toolInvocationId, $this->elapsedMilliseconds($startedAt));
+            // Only the handler itself may fail the tool call, so a listener that throws is never reported as a tool failure...
+            try {
+                $result = $tool->handle(new Request($arguments, $toolCallId, $toolInvocationId));
+            } catch (Throwable $exception) {
+                $context?->toolFailed($tool, $arguments, $exception, $toolInvocationId, $this->elapsedMilliseconds($startedAt));
 
-            throw $exception;
-        }
+                throw $exception;
+            }
 
-        $context?->toolInvoked($tool, $arguments, $result, $toolInvocationId, $this->elapsedMilliseconds($startedAt));
+            $context?->toolInvoked($tool, $arguments, $result, $toolInvocationId, $this->elapsedMilliseconds($startedAt));
 
-        return (string) $result;
+            return (string) $result;
+        });
     }
 
     /**

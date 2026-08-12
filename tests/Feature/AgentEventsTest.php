@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Approvals\Decisions;
@@ -16,6 +17,7 @@ use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Exceptions\StreamErrorException;
+use Laravel\Ai\Gateway\ParentInvocation;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\ToolResultMessage;
@@ -26,6 +28,8 @@ use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Tools\AgentTool;
 use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\DelegatingAgent;
+use Tests\Fixtures\Agents\DelegatingViaCustomToolAgent;
 use Tests\Fixtures\Agents\MiddleManagerAgent;
 use Tests\Fixtures\Agents\MultiStepToolAgent;
 use Tests\Fixtures\Agents\OrchestratorAgent;
@@ -456,4 +460,84 @@ test('tool events carry the wall time spent in the tool', function (): void {
     $invoked = Event::dispatched(ToolInvoked::class)->first()[0];
 
     expect($invoked->time)->toBeFloat()->toBeGreaterThan(0.0);
+});
+
+test('a sub agent prompt is linked to the parent invocation and tool invocation', function (): void {
+    Event::fake();
+
+    DelegatingAgent::fake([
+        new ToolCall('call_123', 'research_agent', ['task' => 'Research Laravel']),
+        'Research delegated.',
+    ]);
+
+    ResearchAgent::fake(['Research result']);
+
+    $response = (new DelegatingAgent)->prompt('Delegate research about Laravel');
+
+    $invoking = Event::dispatched(InvokingTool::class)->first()[0];
+
+    Event::assertDispatched(PromptingAgent::class, fn (PromptingAgent $event): bool => $event->prompt->agent instanceof ResearchAgent
+        && $event->prompt->parentInvocationId === $response->invocationId
+        && $event->prompt->parentToolInvocationId === $invoking->toolInvocationId);
+
+    Event::assertDispatched(PromptingAgent::class, fn (PromptingAgent $event): bool => $event->prompt->agent instanceof DelegatingAgent
+        && $event->prompt->parentInvocationId === null
+        && $event->prompt->parentToolInvocationId === null);
+});
+
+test('an agent prompted from a hand written tool is linked to the parent invocation', function (): void {
+    Event::fake();
+
+    DelegatingViaCustomToolAgent::fake([
+        new ToolCall('call_1', 'AgentCallingTool', []),
+        'Done.',
+    ]);
+
+    ResearchAgent::fake(['Research result']);
+
+    $response = (new DelegatingViaCustomToolAgent)->prompt('Go');
+
+    $invoking = Event::dispatched(InvokingTool::class)->first()[0];
+
+    Event::assertDispatched(PromptingAgent::class, fn (PromptingAgent $event): bool => $event->prompt->agent instanceof ResearchAgent
+        && $event->prompt->parentInvocationId === $response->invocationId
+        && $event->prompt->parentToolInvocationId === $invoking->toolInvocationId);
+});
+
+test('the parent invocation is restored once a tool call finishes', function (): void {
+    Event::fake();
+
+    DelegatingAgent::fake([
+        new ToolCall('call_1', 'research_agent', ['task' => 'Research Laravel']),
+        'Delegated.',
+    ]);
+
+    ResearchAgent::fake(['Research result']);
+
+    (new DelegatingAgent)->prompt('Delegate');
+
+    ResearchAgent::fake(['Standalone result']);
+
+    (new ResearchAgent)->prompt('Standalone');
+
+    $standalone = Event::dispatched(PromptingAgent::class)
+        ->map(fn (array $dispatched) => $dispatched[0]->prompt)
+        ->last(fn ($prompt): bool => $prompt->agent instanceof ResearchAgent);
+
+    expect($standalone->parentInvocationId)->toBeNull()
+        ->and($standalone->parentToolInvocationId)->toBeNull();
+});
+
+test('the parent invocation never travels outside the current process', function (): void {
+    $insideDehydratedContext = null;
+
+    ParentInvocation::within('inv_1', 'tool_1', function () use (&$insideDehydratedContext): void {
+        $insideDehydratedContext = Context::dehydrate();
+
+        expect(ParentInvocation::current())->toBe(['inv_1', 'tool_1']);
+    });
+
+    // Queued jobs serialize the log context, so the delegating pair must never be stored there...
+    expect($insideDehydratedContext)->toBeNull()
+        ->and(ParentInvocation::current())->toBe([null, null]);
 });
