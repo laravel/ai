@@ -71,15 +71,21 @@ trait Promptable
 
         [$parentInvocationId, $parentToolInvocationId] = ParentInvocation::current();
 
-        $run = fn (TextProvider $provider, string $model): AgentResponse => $provider->prompt(
-            new AgentPrompt(
-                $this, $text, $attachments, $provider, $model, $this->getTimeout($timeout),
-                invocationId: $invocationId,
-                approvalDecisions: $approvalDecisions,
-                parentInvocationId: $parentInvocationId,
-                parentToolInvocationId: $parentToolInvocationId,
-            )
-        );
+        $run = function (TextProvider $provider, string $model, bool $isFinalAttempt = true) use (
+            $text, $attachments, $timeout, $invocationId, $approvalDecisions,
+            $parentInvocationId, $parentToolInvocationId
+        ): AgentResponse {
+            return $provider->prompt(
+                new AgentPrompt(
+                    $this, $text, $attachments, $provider, $model, $this->getTimeout($timeout),
+                    invocationId: $invocationId,
+                    approvalDecisions: $approvalDecisions,
+                    parentInvocationId: $parentInvocationId,
+                    parentToolInvocationId: $parentToolInvocationId,
+                    isFinalAttempt: $isFinalAttempt,
+                )
+            );
+        };
 
         if ($approvalDecisions !== null) {
             [$provider, $model] = $this->iterateProvidersWithFailover($providers)->current();
@@ -147,7 +153,7 @@ trait Promptable
             function () use ($providers, $prompt, $approvalDecisions, $attachments, $resolvedTimeout, $invocationId, $parentInvocationId, $parentToolInvocationId, &$outer) {
                 $lastException = null;
 
-                foreach ($this->iterateProvidersWithFailover($providers) as [$provider, $model]) {
+                foreach ($this->iterateProvidersWithFailover($providers) as [$provider, $model, $isFinalAttempt]) {
                     $innerResponse = null;
 
                     try {
@@ -158,6 +164,7 @@ trait Promptable
                                 approvalDecisions: $approvalDecisions,
                                 parentInvocationId: $parentInvocationId,
                                 parentToolInvocationId: $parentToolInvocationId,
+                                isFinalAttempt: $isFinalAttempt,
                             )
                         );
 
@@ -173,7 +180,9 @@ trait Promptable
                             throw $e;
                         }
 
-                        $lastException = $this->recordAgentFailover($invocationId, $provider, $model, $e);
+                        $lastException = $isFinalAttempt
+                            ? $e
+                            : $this->recordAgentFailover($invocationId, $provider, $model, $e);
                     }
                 }
 
@@ -265,11 +274,13 @@ trait Promptable
     {
         $lastException = null;
 
-        foreach ($this->iterateProvidersWithFailover($providers) as [$provider, $model]) {
+        foreach ($this->iterateProvidersWithFailover($providers) as [$provider, $model, $isFinalAttempt]) {
             try {
-                return $callback($provider, $model);
+                return $callback($provider, $model, $isFinalAttempt);
             } catch (FailoverableException $e) {
-                $lastException = $this->recordAgentFailover($invocationId, $provider, $model, $e);
+                $lastException = $isFinalAttempt
+                    ? $e
+                    : $this->recordAgentFailover($invocationId, $provider, $model, $e);
             }
         }
 
@@ -299,17 +310,19 @@ trait Promptable
     }
 
     /**
-     * Iterate the configured provider / model pairs.
+     * Iterate the configured provider / model pairs, flagging the attempt that has no provider left to fall back to.
      *
      * @param  array<string, string|null>  $providers
-     * @return Generator<int, array{TextProvider, string}>
+     * @return Generator<int, array{TextProvider, string, bool}>
      */
     private function iterateProvidersWithFailover(array $providers): Generator
     {
+        $remaining = count($providers);
+
         foreach ($providers as $provider => $model) {
             $provider = Ai::textProviderFor($this, $provider);
 
-            yield [$provider, $model ?? $this->getDefaultModelFor($provider)];
+            yield [$provider, $model ?? $this->getDefaultModelFor($provider), --$remaining === 0];
         }
     }
 

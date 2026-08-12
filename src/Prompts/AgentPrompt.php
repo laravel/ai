@@ -22,6 +22,14 @@ class AgentPrompt extends Prompt
 
     public readonly ?string $parentToolInvocationId;
 
+    // Internal failover bookkeeping, deliberately not part of the prompt's public surface. It rides on the prompt
+    // because the provider catches the failure but only the caller knows whether another provider is queued, and
+    // moving the dispatch up to the caller would lose the prompt the middleware produced...
+    protected readonly bool $isFinalAttempt;
+
+    /**
+     * @param  bool  $isFinalAttempt  whether the caller has run out of providers to retry this prompt against, so a failoverable exception is terminal
+     */
     public function __construct(
         Agent $agent,
         string $prompt,
@@ -33,6 +41,7 @@ class AgentPrompt extends Prompt
         ?Decisions $approvalDecisions = null,
         ?string $parentInvocationId = null,
         ?string $parentToolInvocationId = null,
+        bool $isFinalAttempt = true,
     ) {
         parent::__construct($prompt, $provider, $model, $approvalDecisions);
 
@@ -42,6 +51,17 @@ class AgentPrompt extends Prompt
         $this->invocationId = $invocationId;
         $this->parentInvocationId = $parentInvocationId;
         $this->parentToolInvocationId = $parentToolInvocationId;
+        $this->isFinalAttempt = $isFinalAttempt;
+    }
+
+    /**
+     * Determine whether the caller has run out of providers to retry this prompt against.
+     *
+     * @internal
+     */
+    public function isFinalAttempt(): bool
+    {
+        return $this->isFinalAttempt;
     }
 
     /**
@@ -92,6 +112,7 @@ class AgentPrompt extends Prompt
             $this->approvalDecisions,
             $this->parentInvocationId,
             $this->parentToolInvocationId,
+            $this->isFinalAttempt,
         );
     }
 
