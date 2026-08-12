@@ -3,6 +3,8 @@
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Providers\Tools\FileSearch;
+use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 use Tests\Fixtures\Tools\NamedTool;
@@ -119,6 +121,7 @@ test('web search tool forwards xai provider options into the tool payload', func
         (new WebSearch)->withProviderOptions([
             'excluded_domains' => ['spam.example.com'],
             'enable_image_understanding' => true,
+            'enable_image_search' => true,
         ]),
     ])->prompt('Search', provider: 'xai');
 
@@ -127,7 +130,21 @@ test('web search tool forwards xai provider options into the tool payload', func
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
 
         return data_get($tool, 'excluded_domains') === ['spam.example.com']
-            && data_get($tool, 'enable_image_understanding') === true;
+            && data_get($tool, 'enable_image_understanding') === true
+            && data_get($tool, 'enable_image_search') === true;
+    });
+});
+
+test('unsupported provider tools are omitted from the tools payload', function (): void {
+    Http::fake(['*' => fakeXaiToolMappingResponse('result')]);
+
+    agent(tools: [new WebFetch, new FileSearch(['store-id']), new WebSearch])
+        ->prompt('Search', provider: 'xai');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+
+        return data_get($body, 'tools') === [['type' => 'web_search']];
     });
 });
 
