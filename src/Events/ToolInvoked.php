@@ -9,7 +9,7 @@ class ToolInvoked
 {
     /**
      * @param  array<string, mixed>  $arguments
-     * @param  float|null  $time  wall time spent in the tool's handler, in milliseconds
+     * @param  float  $time  wall time spent in the tool's handler, in milliseconds
      */
     public function __construct(
         public string $invocationId,
@@ -18,6 +18,6 @@ class ToolInvoked
         public Tool $tool,
         public array $arguments,
         public mixed $result,
-        public ?float $time = null,
+        public float $time,
     ) {}
 }
