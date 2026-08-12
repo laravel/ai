@@ -4,12 +4,13 @@ namespace Laravel\Ai\Events;
 
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Tool;
+use Throwable;
 
-class ToolInvoked
+class ToolFailed
 {
     /**
      * @param  array<string, mixed>  $arguments
-     * @param  float  $time  wall time spent in the tool's handler, in milliseconds
+     * @param  float  $time  wall time spent in the tool's handler before it threw, in milliseconds
      */
     public function __construct(
         public string $invocationId,
@@ -17,7 +18,7 @@ class ToolInvoked
         public Agent $agent,
         public Tool $tool,
         public array $arguments,
-        public mixed $result,
+        public Throwable $exception,
         public float $time,
     ) {}
 }

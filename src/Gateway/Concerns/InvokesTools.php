@@ -8,9 +8,12 @@ use Laravel\Ai\Gateway\RunContext;
 use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Tools\Request;
 use Laravel\Ai\Tools\ToolNameResolver;
+use Throwable;
 
 trait InvokesTools
 {
+    use MeasuresDuration;
+
     /**
      * Execute the given tool with the given arguments.
      *
@@ -22,9 +25,18 @@ trait InvokesTools
 
         $context?->invokingTool($tool, $arguments, $toolInvocationId);
 
-        $result = $tool->handle(new Request($arguments, $toolCallId, $toolInvocationId));
+        $startedAt = hrtime(true);
 
-        $context?->toolInvoked($tool, $arguments, $result, $toolInvocationId);
+        // Only the handler itself may fail the tool call, so a listener that throws is never reported as a tool failure...
+        try {
+            $result = $tool->handle(new Request($arguments, $toolCallId, $toolInvocationId));
+        } catch (Throwable $exception) {
+            $context?->toolFailed($tool, $arguments, $exception, $toolInvocationId, $this->elapsedMilliseconds($startedAt));
+
+            throw $exception;
+        }
+
+        $context?->toolInvoked($tool, $arguments, $result, $toolInvocationId, $this->elapsedMilliseconds($startedAt));
 
         return (string) $result;
     }

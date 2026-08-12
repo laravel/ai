@@ -10,6 +10,7 @@ use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\StartingStep;
 use Laravel\Ai\Events\StepCompleted;
 use Laravel\Ai\Events\StepFailed;
+use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Messages\Message;
 use Throwable;
@@ -76,10 +77,22 @@ class RunContext
      *
      * @param  array<string, mixed>  $arguments
      */
-    public function toolInvoked(Tool $tool, array $arguments, mixed $result, string $toolInvocationId): void
+    public function toolInvoked(Tool $tool, array $arguments, mixed $result, string $toolInvocationId, float $time): void
     {
         $this->events->dispatch(new ToolInvoked(
-            $this->invocationId, $toolInvocationId, $this->agent, $tool, $arguments, $result,
+            $this->invocationId, $toolInvocationId, $this->agent, $tool, $arguments, $result, $time,
+        ));
+    }
+
+    /**
+     * Report that a tool's handler threw.
+     *
+     * @param  array<string, mixed>  $arguments
+     */
+    public function toolFailed(Tool $tool, array $arguments, Throwable $exception, string $toolInvocationId, float $time): void
+    {
+        $this->events->dispatch(new ToolFailed(
+            $this->invocationId, $toolInvocationId, $this->agent, $tool, $arguments, $exception, $time,
         ));
     }
 }

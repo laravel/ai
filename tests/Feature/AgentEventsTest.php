@@ -1,7 +1,9 @@
 <?php
 
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Events\AgentPrompted;
@@ -10,6 +12,7 @@ use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\StartingStep;
 use Laravel\Ai\Events\StepCompleted;
 use Laravel\Ai\Events\StepFailed;
+use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Exceptions\StreamErrorException;
@@ -27,8 +30,11 @@ use Tests\Fixtures\Agents\MiddleManagerAgent;
 use Tests\Fixtures\Agents\MultiStepToolAgent;
 use Tests\Fixtures\Agents\OrchestratorAgent;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
+use Tests\Fixtures\Agents\RememberingThrowingApprovableAgent;
 use Tests\Fixtures\Agents\ResearchAgent;
+use Tests\Fixtures\Agents\ToolUsingAgent;
 use Tests\Fixtures\FakeConversationStore;
+use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 test('a synchronous prompt threads one invocation id through the prompt and its events', function (): void {
     Event::fake();
@@ -356,4 +362,98 @@ test('step failed carries the wall time spent before the failure', function (): 
     $failed = Event::dispatched(StepFailed::class)->first()[0];
 
     expect($failed->time)->toBeFloat()->toBeGreaterThan(0.0);
+});
+
+test('a throwing tool dispatches tool failed and still propagates the exception', function (): void {
+    Event::fake();
+
+    ToolUsingAgent::fake([
+        new ToolCall('call_1', 'FixedNumberGenerator', []),
+        ['number' => 5],
+    ]);
+
+    expect(fn (): mixed => (new ToolUsingAgent(fixed: true, toolThrowsException: true))->prompt('Generate'))
+        ->toThrow(Exception::class, 'Forced to throw exception.');
+
+    Event::assertDispatched(ToolFailed::class, fn (ToolFailed $event): bool => $event->tool instanceof FixedNumberGenerator
+        && $event->exception->getMessage() === 'Forced to throw exception.');
+
+    Event::assertNotDispatched(ToolInvoked::class);
+
+    $invoking = Event::dispatched(InvokingTool::class)->first()[0];
+    $failed = Event::dispatched(ToolFailed::class)->first()[0];
+
+    expect($failed->toolInvocationId)->toBe($invoking->toolInvocationId)
+        ->and($failed->invocationId)->toBe($invoking->invocationId);
+});
+
+test('a tool that fails while resuming an approval reports the failure once and continues the run', function (): void {
+    Event::fake();
+
+    Config::set('ai.conversations.generate_title', false);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            Http::response([
+                'id' => 'msg_tool_1',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [[
+                    'type' => 'tool_use',
+                    'id' => 'toolu_1',
+                    'name' => 'ThrowingApprovableGenerator',
+                    'input' => (object) [],
+                ]],
+                'stop_reason' => 'tool_use',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+            Http::response([
+                'id' => 'msg_2',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [['type' => 'text', 'text' => 'The tool could not run.']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+        ]),
+    ]);
+
+    $user = (object) ['id' => 1];
+
+    $paused = (new RememberingThrowingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
+
+    expect($paused->hasPendingApprovals())->toBeTrue();
+
+    $resumed = (new RememberingThrowingApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->prompt(Decisions::from(['toolu_1' => true]), provider: 'anthropic');
+
+    // The resume path turns the failure into a tool result, so the run survives but still reports the failure exactly once...
+    Event::assertDispatchedTimes(ToolFailed::class, 1);
+    Event::assertNotDispatched(ToolInvoked::class);
+
+    expect($resumed->text)->toBe('The tool could not run.');
+
+    $failed = Event::dispatched(ToolFailed::class)->first()[0];
+    $invoking = Event::dispatched(InvokingTool::class)->first()[0];
+
+    expect($failed->exception->getMessage())->toBe('Forced to throw exception.')
+        ->and($failed->toolInvocationId)->toBe($invoking->toolInvocationId);
+});
+
+test('tool events carry the wall time spent in the tool', function (): void {
+    Event::fake();
+
+    MultiStepToolAgent::fake([
+        new ToolCall('call_1', 'FixedNumberGenerator', []),
+        'The number is 72019.',
+    ]);
+
+    (new MultiStepToolAgent)->prompt('Generate a number');
+
+    $invoked = Event::dispatched(ToolInvoked::class)->first()[0];
+
+    expect($invoked->time)->toBeFloat()->toBeGreaterThan(0.0);
 });
