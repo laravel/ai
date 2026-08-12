@@ -1,25 +1,33 @@
 <?php
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Events\Dispatcher;
 use Illuminate\JsonSchema\Types\Type;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Events\InvokingTool;
+use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
+use Laravel\Ai\Gateway\RunContext;
 use Laravel\Ai\Tools\Request;
 
-test('tool invocation callbacks are restored after nested tool invocations', function (): void {
-    $events = [];
-
-    $gateway = new class
+function toolInvokingGateway(): object
+{
+    return new class
     {
         use InvokesTools;
 
-        public function invoke(Tool $tool, array $arguments = []): string
+        public function invoke(Tool $tool, array $arguments = [], ?RunContext $context = null): string
         {
-            return $this->executeTool($tool, $arguments);
+            return $this->executeTool($tool, $arguments, null, $context);
         }
     };
+}
 
-    $makeTool = fn (string $name, Closure $handler): Tool => new class($name, $handler) implements Tool
+function stubTool(string $name, Closure $handler): Tool
+{
+    return new class($name, $handler) implements Tool
     {
         public function __construct(
             protected string $name,
@@ -44,39 +52,52 @@ test('tool invocation callbacks are restored after nested tool invocations', fun
             return [];
         }
     };
+}
 
-    $gateway->onToolInvocation(
-        invoking: function (Tool $tool) use (&$events): void {
-            $events[] = 'parent invoking '.($tool->description());
-        },
-        invoked: function (Tool $tool, array $arguments, mixed $result) use (&$events): void {
-            $events[] = 'parent invoked '.($tool->description()).':'.$result;
-        },
+function stubRunContext(Dispatcher $events, string $invocationId = 'inv_1'): RunContext
+{
+    return new RunContext(
+        $invocationId,
+        Mockery::mock(Agent::class),
+        Mockery::mock(TextProvider::class),
+        'stub-model',
+        $events,
     );
+}
 
-    $nestedTool = $makeTool('nested', fn (): string => 'nested result');
+test('each tool invocation reports against the context it was given', function (): void {
+    $seen = [];
 
-    $delegatingTool = $makeTool('delegating', function () use ($gateway, $nestedTool, &$events): string {
-        $gateway->onToolInvocation(
-            invoking: function (Tool $tool) use (&$events): void {
-                $events[] = 'sub invoking '.($tool->description());
-            },
-            invoked: function (Tool $tool, array $arguments, mixed $result) use (&$events): void {
-                $events[] = 'sub invoked '.($tool->description()).':'.$result;
-            },
-        );
+    $context = function (string $label) use (&$seen): RunContext {
+        $events = new Dispatcher;
 
-        $gateway->invoke($nestedTool);
+        $events->listen(InvokingTool::class, function (InvokingTool $event) use (&$seen, $label): void {
+            $seen[] = $label.' invoking '.$event->tool->description();
+        });
+
+        $events->listen(ToolInvoked::class, function (ToolInvoked $event) use (&$seen, $label): void {
+            $seen[] = $label.' invoked '.$event->tool->description().':'.$event->result;
+        });
+
+        return stubRunContext($events);
+    };
+
+    $gateway = toolInvokingGateway();
+
+    $nestedTool = stubTool('nested', fn (): string => 'nested result');
+
+    $delegatingTool = stubTool('delegating', function () use ($gateway, $nestedTool, $context): string {
+        $gateway->invoke($nestedTool, context: $context('sub'));
 
         return 'delegated result';
     });
 
-    $siblingTool = $makeTool('sibling', fn (): string => 'sibling result');
+    $siblingTool = stubTool('sibling', fn (): string => 'sibling result');
 
-    $gateway->invoke($delegatingTool);
-    $gateway->invoke($siblingTool);
+    $gateway->invoke($delegatingTool, context: $context('parent'));
+    $gateway->invoke($siblingTool, context: $context('parent'));
 
-    expect($events)->toBe([
+    expect($seen)->toBe([
         'parent invoking delegating',
         'sub invoking nested',
         'sub invoked nested:nested result',
@@ -84,4 +105,35 @@ test('tool invocation callbacks are restored after nested tool invocations', fun
         'parent invoking sibling',
         'parent invoked sibling:sibling result',
     ]);
+});
+
+test('the invoking and invoked events share a tool invocation id', function (): void {
+    $ids = [];
+
+    $events = new Dispatcher;
+    $events->listen(InvokingTool::class, function (InvokingTool $event) use (&$ids): void {
+        $ids[] = $event->toolInvocationId;
+    });
+    $events->listen(ToolInvoked::class, function (ToolInvoked $event) use (&$ids): void {
+        $ids[] = $event->toolInvocationId;
+    });
+
+    toolInvokingGateway()->invoke(stubTool('paired', fn (): string => 'result'), context: stubRunContext($events));
+
+    expect($ids)->toHaveCount(2)
+        ->and($ids[0])->toBe($ids[1]);
+});
+
+test('a tool invocation without a run context is silent', function (): void {
+    $gateway = new class
+    {
+        use InvokesTools;
+
+        public function invoke(Tool $tool): string
+        {
+            return $this->executeTool($tool, []);
+        }
+    };
+
+    expect($gateway->invoke(stubTool('unobserved', fn (): string => 'result')))->toBe('result');
 });

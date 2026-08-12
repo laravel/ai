@@ -70,8 +70,6 @@ trait StreamsText
                     function () use ($invocationId, $prompt, $agent, $messages, $tools, $approval, $recordApprovalResults, $validatedApproval) {
                         $this->events->dispatch(new StreamingAgent($invocationId, $prompt));
 
-                        $this->listenForToolInvocations($invocationId, $agent);
-
                         foreach ($this->textGenerationLoop()->stream(
                             $invocationId,
                             $this,
@@ -85,6 +83,7 @@ trait StreamsText
                             $approval,
                             $recordApprovalResults,
                             $validatedApproval,
+                            $this->runContextFor($invocationId, $prompt),
                         ) as $event) {
                             if ($event instanceof ToolApprovalRequest) {
                                 $this->throwIfNotResumable($agent);

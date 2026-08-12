@@ -15,12 +15,11 @@ use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\AgentPrompted;
-use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\ToolApprovalRequested;
 use Laravel\Ai\Events\ToolApprovalResolved;
-use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Exceptions\ApprovalNotResumableException;
+use Laravel\Ai\Gateway\RunContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Middleware\RememberConversation;
@@ -39,8 +38,6 @@ use function Laravel\Ai\pipeline;
 trait GeneratesText
 {
     use ResumesToolApprovals;
-
-    protected string $currentToolInvocationId;
 
     /**
      * Invoke the given agent.
@@ -70,8 +67,6 @@ trait GeneratesText
                     $messages[] = new UserMessage($prompt->prompt, $prompt->attachments->all());
                 }
 
-                $this->listenForToolInvocations($invocationId, $agent);
-
                 $schema = $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null;
 
                 $response = $this->textGenerationLoop()->generate(
@@ -85,6 +80,7 @@ trait GeneratesText
                     $prompt->timeout,
                     $this->resumableApprovalFor($prompt),
                     $this->approvalResultRecorderFor($prompt, $resolvedApprovalResults),
+                    $this->runContextFor($invocationId, $prompt),
                 );
 
                 if ($response->hasPendingApprovals()) {
@@ -188,24 +184,11 @@ trait GeneratesText
     }
 
     /**
-     * Listen for gateway tool invocations and dispatch events for the given agent when the tools are invoked.
+     * Build the context that identifies this run and reports its tool events.
      */
-    protected function listenForToolInvocations(string $invocationId, Agent $agent): void
+    protected function runContextFor(string $invocationId, AgentPrompt $prompt): RunContext
     {
-        $this->textGenerationLoop()->onToolInvocation(
-            invoking: function (Tool $tool, array $arguments) use ($invocationId, $agent): void {
-                $this->currentToolInvocationId = (string) Str::uuid7();
-
-                $this->events->dispatch(new InvokingTool(
-                    $invocationId, $this->currentToolInvocationId, $agent, $tool, $arguments
-                ));
-            },
-            invoked: function (Tool $tool, array $arguments, mixed $result) use ($invocationId, $agent): void {
-                $this->events->dispatch(new ToolInvoked(
-                    $invocationId, $this->currentToolInvocationId, $agent, $tool, $arguments, $result
-                ));
-            },
-        );
+        return new RunContext($invocationId, $prompt->agent, $this, $prompt->model, $this->events);
     }
 
     /**

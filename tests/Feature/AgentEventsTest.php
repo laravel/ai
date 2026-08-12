@@ -4,9 +4,15 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Events\AgentPrompted;
+use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
+use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Prompts\AgentPrompt;
+use Laravel\Ai\Tools\AgentTool;
 use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Agents\MiddleManagerAgent;
+use Tests\Fixtures\Agents\OrchestratorAgent;
+use Tests\Fixtures\Agents\ResearchAgent;
 
 test('a synchronous prompt threads one invocation id through the prompt and its events', function (): void {
     Event::fake();
@@ -81,4 +87,42 @@ test('a failed over run names the invocation it belongs to', function (): void {
     $response = (new AssistantAgent)->prompt('Hi', provider: ['primary', 'backup']);
 
     Event::assertDispatched(AgentFailedOver::class, fn (AgentFailedOver $event): bool => $event->invocationId === $response->invocationId);
+});
+test('a nested sub agent sharing the parent provider instance does not overwrite the parent tool invocation id', function (): void {
+    Event::fake();
+
+    // Unfaked agents share one memoized provider, and therefore one generation loop, which is the case the tool invocation id has to survive...
+    config([
+        'ai.default' => 'shared',
+        'ai.providers.shared' => ['driver' => 'groq', 'key' => 'test-key'],
+    ]);
+
+    Http::preventStrayRequests();
+
+    Http::fakeSequence()
+        ->pushResponse(fakeGroqToolCallResponse('middle_manager', ['task' => 'Deep-dive on Laravel caching'], 'call_001'))
+        ->pushResponse(fakeGroqToolCallResponse('research_agent', ['task' => 'Research Laravel caching internals'], 'call_002'))
+        ->pushResponse(fakeGroqResponse('Deep research result'))
+        ->pushResponse(fakeGroqResponse('Research delegated.'))
+        ->pushResponse(fakeGroqResponse('Delegated to middle manager.'));
+
+    (new OrchestratorAgent)->prompt('Do a deep dive on Laravel caching');
+
+    $invoking = Event::dispatched(InvokingTool::class)->map(fn (array $dispatched) => $dispatched[0]);
+    $invoked = Event::dispatched(ToolInvoked::class)->map(fn (array $dispatched) => $dispatched[0]);
+
+    expect($invoking)->toHaveCount(2)->and($invoked)->toHaveCount(2);
+
+    $delegatedTo = fn (string $agent): Closure => fn ($event): bool => $event->tool instanceof AgentTool
+        && $event->tool->agent() instanceof $agent;
+
+    foreach ([MiddleManagerAgent::class, ResearchAgent::class] as $agent) {
+        $start = $invoking->first($delegatedTo($agent));
+        $end = $invoked->first($delegatedTo($agent));
+
+        expect($end)->not->toBeNull()
+            ->and($end->toolInvocationId)->toBe($start->toolInvocationId);
+    }
+
+    expect($invoking->map(fn ($event): string => $event->toolInvocationId)->unique())->toHaveCount(2);
 });

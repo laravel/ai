@@ -14,8 +14,11 @@ class Request implements Arrayable, ArrayAccess
     use InteractsWithData;
     use Macroable;
 
-    public function __construct(protected array $arguments = [], protected ?string $toolCallId = null)
-    {
+    public function __construct(
+        protected array $arguments = [],
+        protected ?string $toolCallId = null,
+        protected ?string $toolInvocationId = null,
+    ) {
         //
     }
 
@@ -25,6 +28,14 @@ class Request implements Arrayable, ArrayAccess
     public function toolCallId(): ?string
     {
         return $this->toolCallId;
+    }
+
+    /**
+     * Get the ID correlating this execution with the tool invocation events dispatched around it.
+     */
+    public function toolInvocationId(): ?string
+    {
+        return $this->toolInvocationId;
     }
 
     /**
