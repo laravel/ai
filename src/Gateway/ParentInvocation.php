@@ -30,8 +30,6 @@ class ParentInvocation
     {
         $previous = static::$current;
 
-        // A tool handler is arbitrary user code, so the delegating pair waits here rather than travelling as a parameter...
-        // ponytail: correct while tools run sequentially; concurrent or fiber-based tool execution needs a fiber-local...
         static::$current = [$invocationId, $toolInvocationId];
 
         try {
