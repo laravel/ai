@@ -7,6 +7,9 @@ use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\Message;
 
+/**
+ * Intended for synchronous listeners. A queued listener serializes the whole message history, attachments included, once per step.
+ */
 class StartingStep
 {
     /**
