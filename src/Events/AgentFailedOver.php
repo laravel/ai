@@ -12,5 +12,6 @@ class AgentFailedOver extends ProviderFailedOver
         public Agent $agent,
         public Provider $provider,
         public string $model,
-        public FailoverableException $exception) {}
+        public FailoverableException $exception,
+        public string $invocationId) {}
 }

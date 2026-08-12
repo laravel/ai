@@ -62,19 +62,27 @@ trait Promptable
     {
         [$text, $approvalDecisions] = $this->extractPromptInput($prompt);
 
+        $invocationId = (string) Str::uuid7();
+
+        $providers = $approvalDecisions !== null
+            ? $this->providersForApprovalContinuation($provider, $model)
+            : $this->getProvidersAndModelsForFailover($provider, $model);
+
         $run = fn (TextProvider $provider, string $model): AgentResponse => $provider->prompt(
-            new AgentPrompt($this, $text, $attachments, $provider, $model, $this->getTimeout($timeout), approvalDecisions: $approvalDecisions)
+            new AgentPrompt(
+                $this, $text, $attachments, $provider, $model, $this->getTimeout($timeout),
+                invocationId: $invocationId,
+                approvalDecisions: $approvalDecisions,
+            )
         );
 
         if ($approvalDecisions !== null) {
-            [$provider, $model] = $this->iterateProvidersWithFailover(
-                $this->providersForApprovalContinuation($provider, $model)
-            )->current();
+            [$provider, $model] = $this->iterateProvidersWithFailover($providers)->current();
 
             return $run($provider, $model);
         }
 
-        return $this->withModelFailover($run, $provider, $model);
+        return $this->withModelFailover($run, $providers, $invocationId);
     }
 
     /**
@@ -146,7 +154,7 @@ trait Promptable
                             throw $e;
                         }
 
-                        $lastException = $this->recordAgentFailover($provider, $model, $e);
+                        $lastException = $this->recordAgentFailover($invocationId, $provider, $model, $e);
                     }
                 }
 
@@ -231,16 +239,18 @@ trait Promptable
 
     /**
      * Invoke the given Closure with provider / model failover.
+     *
+     * @param  array<string, string|null>  $providers
      */
-    private function withModelFailover(Closure $callback, Lab|array|string|null $provider, ?string $model): mixed
+    private function withModelFailover(Closure $callback, array $providers, string $invocationId): mixed
     {
         $lastException = null;
 
-        foreach ($this->iterateProvidersWithFailover($this->getProvidersAndModelsForFailover($provider, $model)) as [$provider, $model]) {
+        foreach ($this->iterateProvidersWithFailover($providers) as [$provider, $model]) {
             try {
                 return $callback($provider, $model);
             } catch (FailoverableException $e) {
-                $lastException = $this->recordAgentFailover($provider, $model, $e);
+                $lastException = $this->recordAgentFailover($invocationId, $provider, $model, $e);
             }
         }
 
@@ -287,9 +297,9 @@ trait Promptable
     /**
      * Record that an agent failed over to the next configured provider.
      */
-    private function recordAgentFailover(Provider $provider, string $model, FailoverableException $exception): FailoverableException
+    private function recordAgentFailover(string $invocationId, Provider $provider, string $model, FailoverableException $exception): FailoverableException
     {
-        event(new AgentFailedOver($this, $provider, $model, $exception));
+        event(new AgentFailedOver($this, $provider, $model, $exception, $invocationId));
 
         return $exception;
     }

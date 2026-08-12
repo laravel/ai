@@ -47,7 +47,7 @@ trait GeneratesText
      */
     public function prompt(AgentPrompt $prompt): AgentResponse
     {
-        $invocationId = (string) Str::uuid7();
+        $invocationId = $prompt->invocationId ?? (string) Str::uuid7();
 
         $processedPrompt = null;
         $resolvedApprovalResults = null;
