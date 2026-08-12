@@ -20,6 +20,7 @@ use Laravel\Ai\Exceptions\NoSuchToolException;
 use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Gateway\Concerns\HandlesToolApprovals;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
+use Laravel\Ai\Gateway\Concerns\MeasuresDuration;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
@@ -44,7 +45,7 @@ use Throwable;
 
 class TextGenerationLoop
 {
-    use HandlesToolApprovals, InvokesTools;
+    use HandlesToolApprovals, InvokesTools, MeasuresDuration;
 
     private bool $repairsToolCalls = false;
 
@@ -109,17 +110,31 @@ class TextGenerationLoop
                 continuationToken: $continuationToken,
             );
 
-            $lastResult = $this->gateway->generateTextStep(
-                $provider,
-                $model,
-                $instructions,
-                $allMessages,
-                $tools,
-                $schema,
-                $options?->forStep($step),
-                $timeout,
-                $stepContext,
-            );
+            $stepOptions = $options?->forStep($step);
+
+            $context?->startingStep($stepContext, $allMessages, $stepOptions);
+
+            $startedAt = hrtime(true);
+
+            try {
+                $lastResult = $this->gateway->generateTextStep(
+                    $provider,
+                    $model,
+                    $instructions,
+                    $allMessages,
+                    $tools,
+                    $schema,
+                    $stepOptions,
+                    $timeout,
+                    $stepContext,
+                );
+            } catch (Throwable $exception) {
+                $context?->stepFailed($stepContext, $exception, $this->elapsedMilliseconds($startedAt));
+
+                throw $exception;
+            }
+
+            $context?->stepCompleted($stepContext, $lastResult, $this->elapsedMilliseconds($startedAt));
 
             [$toolResults, $pendingApprovals] = $this->stepToolResultsWithOptions($lastResult, $stepContext->isFinalStep, $tools, $options, $context);
 
@@ -221,35 +236,52 @@ class TextGenerationLoop
                 continuationToken: $continuationToken,
             );
 
-            $stream = $this->gateway->generateStreamStep(
-                $invocationId,
-                $provider,
-                $model,
-                $instructions,
-                $allMessages,
-                $tools,
-                $schema,
-                $options?->forStep($step),
-                $timeout,
-                $stepContext,
-            );
+            $stepOptions = $options?->forStep($step);
+
+            $context?->startingStep($stepContext, $allMessages, $stepOptions);
 
             $lastError = null;
+            $startedAt = hrtime(true);
 
-            foreach ($stream as $event) {
-                yield $event;
+            try {
+                $stream = $this->gateway->generateStreamStep(
+                    $invocationId,
+                    $provider,
+                    $model,
+                    $instructions,
+                    $allMessages,
+                    $tools,
+                    $schema,
+                    $stepOptions,
+                    $timeout,
+                    $stepContext,
+                );
 
-                if ($event instanceof Error) {
-                    $lastError = $event;
+                foreach ($stream as $event) {
+                    yield $event;
+
+                    if ($event instanceof Error) {
+                        $lastError = $event;
+                    }
                 }
-            }
 
-            $result = $stream->getReturn();
+                $result = $stream->getReturn();
+            } catch (Throwable $exception) {
+                $context?->stepFailed($stepContext, $exception, $this->elapsedMilliseconds($startedAt));
+
+                throw $exception;
+            }
 
             // A provider may report an error in the stream itself rather than throwing, which still ends the step. The error event travels on the exception so its type and metadata are not lost...
             if (! $result instanceof StepResponse) {
-                throw new StreamErrorException($lastError);
+                $exception = new StreamErrorException($lastError);
+
+                $context?->stepFailed($stepContext, $exception, $this->elapsedMilliseconds($startedAt));
+
+                throw $exception;
             }
+
+            $context?->stepCompleted($stepContext, $result, $this->elapsedMilliseconds($startedAt));
 
             $accumulatedUsage = $accumulatedUsage->add($result->usage);
             $finalReason = $result->finishReason;

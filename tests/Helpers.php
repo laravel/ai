@@ -58,6 +58,34 @@ function fakeGroqResponse(string $text = 'Hello'): PromiseInterface
     ]);
 }
 
+function fakeGroqStreamResponse(string $text = 'Hello'): PromiseInterface
+{
+    $chunk = fn (array|object $delta, ?string $finishReason = null): array => [
+        'id' => 'chatcmpl-123',
+        'object' => 'chat.completion.chunk',
+        'model' => 'openai/gpt-oss-20b',
+        'choices' => [['index' => 0, 'delta' => $delta, 'finish_reason' => $finishReason]],
+    ];
+
+    $body = implode("\n\n", [
+        'data: '.json_encode($chunk(['role' => 'assistant', 'content' => $text])),
+        'data: '.json_encode($chunk((object) [], 'stop')),
+        'data: [DONE]',
+    ])."\n\n";
+
+    return Http::response($body, 200, ['Content-Type' => 'text/event-stream']);
+}
+
+function fakeGroqStreamErrorResponse(string $message = 'Upstream exploded.'): PromiseInterface
+{
+    $body = implode("\n\n", [
+        'data: '.json_encode(['error' => ['code' => 'server_error', 'message' => $message]]),
+        'data: [DONE]',
+    ])."\n\n";
+
+    return Http::response($body, 200, ['Content-Type' => 'text/event-stream']);
+}
+
 function fakeGroqToolCallResponse(string $name = 'FixedNumberGenerator', array $arguments = [], string $id = 'call_123'): PromiseInterface
 {
     return Http::response([

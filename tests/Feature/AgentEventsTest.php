@@ -2,17 +2,33 @@
 
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
+use Laravel\Ai\Events\StartingStep;
+use Laravel\Ai\Events\StepCompleted;
+use Laravel\Ai\Events\StepFailed;
 use Laravel\Ai\Events\ToolInvoked;
+use Laravel\Ai\Exceptions\RateLimitedException;
+use Laravel\Ai\Exceptions\StreamErrorException;
+use Laravel\Ai\Gateway\StepResponse;
+use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Messages\ToolResultMessage;
+use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
+use Laravel\Ai\Responses\Data\FinishReason;
+use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Tools\AgentTool;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\MiddleManagerAgent;
+use Tests\Fixtures\Agents\MultiStepToolAgent;
 use Tests\Fixtures\Agents\OrchestratorAgent;
+use Tests\Fixtures\Agents\RememberingAssistantAgent;
 use Tests\Fixtures\Agents\ResearchAgent;
+use Tests\Fixtures\FakeConversationStore;
 
 test('a synchronous prompt threads one invocation id through the prompt and its events', function (): void {
     Event::fake();
@@ -125,4 +141,219 @@ test('a nested sub agent sharing the parent provider instance does not overwrite
     }
 
     expect($invoking->map(fn ($event): string => $event->toolInvocationId)->unique())->toHaveCount(2);
+});
+
+test('step events are dispatched for each step of a tool calling run', function (): void {
+    Event::fake();
+
+    MultiStepToolAgent::fake([
+        new ToolCall('call_1', 'FixedNumberGenerator', []),
+        'The number is 72019.',
+    ]);
+
+    $response = (new MultiStepToolAgent)->prompt('Generate a number');
+
+    Event::assertDispatchedTimes(StartingStep::class, 2);
+    Event::assertDispatchedTimes(StepCompleted::class, 2);
+
+    Event::assertDispatched(StartingStep::class, fn (StartingStep $event): bool => $event->invocationId === $response->invocationId
+        && $event->stepNumber === 0
+        && $event->isFinalStep === false
+        && $event->model !== '');
+
+    Event::assertDispatched(StepCompleted::class, fn (StepCompleted $event): bool => $event->invocationId === $response->invocationId
+        && $event->stepNumber === 0
+        && $event->response->finishReason === FinishReason::ToolCalls
+        && count($event->response->toolCalls) === 1);
+
+    Event::assertDispatched(StepCompleted::class, fn (StepCompleted $event): bool => $event->stepNumber === 1
+        && $event->response->finishReason === FinishReason::Stop
+        && $event->response->toolCalls === []);
+});
+
+test('step completed carries the whole step response', function (): void {
+    Event::fake();
+
+    AssistantAgent::fake(['Hello!']);
+
+    (new AssistantAgent)->prompt('Hi');
+
+    $completed = Event::dispatched(StepCompleted::class)->first()[0];
+
+    // The response travels whole so a consumer can record the text and usage of a step, not only that it finished...
+    expect($completed->response)->toBeInstanceOf(StepResponse::class)
+        ->and($completed->response->text)->toBe('Hello!')
+        ->and($completed->response->meta->model)->not->toBeEmpty()
+        ->and($completed->response->meta->provider)->not->toBeEmpty()
+        ->and($completed->response->usage)->toBeInstanceOf(Usage::class);
+});
+
+test('starting step carries the messages and options the step is sent with', function (): void {
+    Event::fake();
+
+    MultiStepToolAgent::fake([
+        new ToolCall('call_1', 'FixedNumberGenerator', []),
+        'The number is 72019.',
+    ]);
+
+    (new MultiStepToolAgent)->prompt('Generate a number');
+
+    [$first, $second] = Event::dispatched(StartingStep::class)->map(fn (array $dispatched): StartingStep => $dispatched[0])->all();
+
+    expect($first->messages)->toHaveCount(1)
+        ->and($first->messages[0])->toBeInstanceOf(UserMessage::class)
+        ->and($first->options)->toBeInstanceOf(TextGenerationOptions::class);
+
+    // The second step is sent the assistant turn and the tool result the first step produced...
+    expect($second->messages)->toHaveCount(3)
+        ->and($second->messages[2])->toBeInstanceOf(ToolResultMessage::class);
+});
+
+test('conversation title generation does not report steps against the run that triggered it', function (): void {
+    app()->instance(ConversationStore::class, new FakeConversationStore);
+
+    Event::fake();
+
+    RememberingAssistantAgent::fake(['Fake response', 'A Nice Title']);
+
+    $user = new class
+    {
+        public int $id = 1;
+    };
+
+    $response = (new RememberingAssistantAgent)->forUser($user)->prompt('Test prompt');
+
+    // Title generation runs its own loop on the same provider, and must not be attributed to this run...
+    Event::assertDispatchedTimes(StartingStep::class, 1);
+    Event::assertDispatchedTimes(StepCompleted::class, 1);
+
+    Event::assertDispatched(StartingStep::class, fn (StartingStep $event): bool => $event->invocationId === $response->invocationId
+        && $event->stepNumber === 0);
+});
+
+test('step events are dispatched on the streaming path', function (): void {
+    Event::fake();
+
+    AssistantAgent::fake(['Hello!']);
+
+    $response = (new AssistantAgent)->stream('Hi');
+
+    foreach ($response as $event) {
+        //
+    }
+
+    Event::assertDispatchedTimes(StartingStep::class, 1);
+
+    Event::assertDispatched(StepCompleted::class, fn (StepCompleted $event): bool => $event->invocationId === $response->invocationId
+        && $event->stepNumber === 0
+        && $event->response->finishReason === FinishReason::Stop);
+});
+
+test('a step that throws carries no stream error', function (): void {
+    Event::fake();
+
+    config(['ai.providers.only' => ['driver' => 'groq', 'key' => 'test-key']]);
+
+    Http::preventStrayRequests();
+
+    Http::fakeSequence()->push(status: 429);
+
+    expect(fn (): mixed => (new AssistantAgent)->prompt('Hi', provider: 'only'))
+        ->toThrow(RateLimitedException::class);
+
+    $failed = Event::dispatched(StepFailed::class)->first()[0];
+
+    expect($failed->exception)->toBeInstanceOf(RateLimitedException::class)
+        ->and($failed->exception)->not->toBeInstanceOf(StreamErrorException::class);
+});
+
+test('step events carry the agent that ran them', function (): void {
+    Event::fake();
+
+    AssistantAgent::fake(['Hello!']);
+
+    $agent = new AssistantAgent;
+
+    $agent->prompt('Hi');
+
+    $starting = Event::dispatched(StartingStep::class)->first()[0];
+    $completed = Event::dispatched(StepCompleted::class)->first()[0];
+
+    expect($starting->agent)->toBe($agent)
+        ->and($completed->agent)->toBe($agent)
+        ->and($starting->model)->not->toBeEmpty();
+});
+
+test('a failed step identifies the provider and model that failed it', function (): void {
+    Event::fake();
+
+    config([
+        'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
+        'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
+    ]);
+
+    Http::preventStrayRequests();
+
+    Http::fakeSequence()
+        ->push(status: 429)
+        ->pushResponse(fakeGroqResponse('Hello from the backup.'));
+
+    (new AssistantAgent)->prompt('Hi', provider: ['primary', 'backup']);
+
+    $starting = Event::dispatched(StartingStep::class)->first()[0];
+    $failed = Event::dispatched(StepFailed::class)->first()[0];
+
+    // Failover attempts share an invocation id and both restart at step zero, so the step events must name their own provider...
+    expect($failed->agent)->toBeInstanceOf(AssistantAgent::class)
+        ->and($failed->provider)->toBe($starting->provider)
+        ->and($failed->model)->toBe($starting->model);
+});
+
+test('every step event names the provider and model the step ran against', function (): void {
+    Event::fake();
+
+    MultiStepToolAgent::fake([
+        new ToolCall('call_1', 'FixedNumberGenerator', []),
+        'The number is 72019.',
+    ]);
+
+    (new MultiStepToolAgent)->prompt('Generate a number');
+
+    $starting = Event::dispatched(StartingStep::class)->first()[0];
+    $completed = Event::dispatched(StepCompleted::class)->first()[0];
+
+    // A consumer builds a span from whichever event it sees, so the identity is read the same way on all of them...
+    expect($completed->provider)->toBe($starting->provider)
+        ->and($completed->model)->toBe($starting->model)
+        ->and($completed->isFinalStep)->toBe($starting->isFinalStep)
+        ->and($completed->agent)->toBe($starting->agent);
+});
+
+test('step completed carries the wall time spent in the provider call', function (): void {
+    Event::fake();
+
+    AssistantAgent::fake(['Hello!']);
+
+    (new AssistantAgent)->prompt('Hi');
+
+    $completed = Event::dispatched(StepCompleted::class)->first()[0];
+
+    expect($completed->time)->toBeFloat()->toBeGreaterThan(0.0);
+});
+
+test('step failed carries the wall time spent before the failure', function (): void {
+    Event::fake();
+
+    config(['ai.providers.only' => ['driver' => 'groq', 'key' => 'test-key']]);
+
+    Http::preventStrayRequests();
+
+    Http::fakeSequence()->push(status: 429);
+
+    expect(fn (): mixed => (new AssistantAgent)->prompt('Hi', provider: 'only'))
+        ->toThrow(RateLimitedException::class);
+
+    $failed = Event::dispatched(StepFailed::class)->first()[0];
+
+    expect($failed->time)->toBeFloat()->toBeGreaterThan(0.0);
 });
