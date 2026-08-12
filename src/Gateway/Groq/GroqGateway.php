@@ -3,13 +3,13 @@
 namespace Laravel\Ai\Gateway\Groq;
 
 use Illuminate\Contracts\Events\Dispatcher;
-use Laravel\Ai\Contracts\Files\HasName;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
+use Laravel\Ai\Gateway\Concerns\ResolvesAudioFilenames;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionMessages;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionTools;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\PerformsChatCompletionSteps;
@@ -31,6 +31,7 @@ class GroqGateway implements StepTextGateway, TranscriptionGateway
     use MapsChatCompletionTools;
     use ParsesServerSentEvents;
     use PerformsChatCompletionSteps;
+    use ResolvesAudioFilenames;
 
     public function __construct(protected Dispatcher $events) {}
 
@@ -61,7 +62,7 @@ class GroqGateway implements StepTextGateway, TranscriptionGateway
                 ->post('audio/transcriptions', array_merge($providerOptions, array_filter([
                     'model' => $model,
                     'language' => $language,
-                    'response_format' => 'json',
+                    'response_format' => $providerOptions['response_format'] ?? 'json',
                 ]))),
         );
 
@@ -81,28 +82,5 @@ class GroqGateway implements StepTextGateway, TranscriptionGateway
             ),
             new Meta($provider->name(), $model),
         );
-    }
-
-    /**
-     * Determine the filename to send for the given audio.
-     */
-    protected function audioFilename(TranscribableAudio $audio): string
-    {
-        if ($audio instanceof HasName && $audio->name()) {
-            return $audio->name();
-        }
-
-        $extension = match ($audio->mimeType()) {
-            'audio/webm' => 'webm',
-            'audio/ogg', 'audio/ogg; codecs=opus' => 'ogg',
-            'audio/wav', 'audio/x-wav' => 'wav',
-            'audio/mp4', 'audio/m4a', 'audio/x-m4a' => 'm4a',
-            'audio/flac', 'audio/x-flac' => 'flac',
-            'audio/mpeg', 'audio/mp3' => 'mp3',
-            'audio/mpga' => 'mpga',
-            default => 'mp3',
-        };
-
-        return "audio.{$extension}";
     }
 }
