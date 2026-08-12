@@ -13,6 +13,7 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Enums\PromptCacheTarget;
 use Laravel\Ai\Gateway\Bedrock\Concerns\CreatesBedrockClient;
 use Laravel\Ai\Gateway\Bedrock\Concerns\MapsAttachments;
 use Laravel\Ai\Gateway\Cohere\Concerns\ParsesEmbeddings;
@@ -642,14 +643,26 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             'messages' => $conversationMessages,
         ];
 
+        $providerOptions = $options?->providerOptions(Lab::Bedrock) ?? [];
+
+        $cache = PromptCacheTarget::normalize(Arr::pull($providerOptions, 'prompt_cache'));
+
         if ($instructions) {
             $parameters['system'] = [['text' => $instructions]];
+
+            if (PromptCacheTarget::System->requestedIn($cache)) {
+                $parameters['system'][] = ['cachePoint' => ['type' => 'default']];
+            }
         }
 
         $toolConfig = $this->buildToolConfig($schemaTools, $formattedTools, $toolsEmpty, $isFinalStep);
 
         if ($toolConfig !== null) {
             $parameters['toolConfig'] = $toolConfig;
+
+            if (PromptCacheTarget::Tools->requestedIn($cache)) {
+                $parameters['toolConfig']['tools'][] = ['cachePoint' => ['type' => 'default']];
+            }
         }
 
         $inferenceConfig = $this->buildInferenceConfig($options);
@@ -658,9 +671,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             $parameters['inferenceConfig'] = $inferenceConfig;
         }
 
-        $providerOptions = $options?->providerOptions(Lab::Bedrock);
-
-        if (! empty($providerOptions)) {
+        if (filled($providerOptions)) {
             return array_merge($parameters, $providerOptions);
         }
 

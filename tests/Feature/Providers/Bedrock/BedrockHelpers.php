@@ -7,6 +7,8 @@ use Aws\MockHandler;
 use Aws\Result;
 use GuzzleHttp\Psr7\Utils;
 use Laravel\Ai\Gateway\Bedrock\BedrockTextGateway;
+use Laravel\Ai\Gateway\TextGenerationLoop;
+use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Providers\BedrockProvider;
 use Laravel\Ai\Providers\Provider;
 
@@ -50,6 +52,34 @@ trait BedrockHelpers
             fn (array $result): Result => new Result($result),
             $results,
         )));
+    }
+
+    /**
+     * Run a single generation step and return the parameters sent to the Converse API.
+     */
+    protected function capturedConverseParameters(?TextGenerationOptions $options = null, array $tools = [], ?string $instructions = 'You are a helpful assistant.'): array
+    {
+        $captured = [];
+
+        $client = $this->bedrockClient(new MockHandler([function ($command) use (&$captured): Result {
+            $captured = $command->toArray();
+
+            return new Result([
+                'output' => ['message' => ['content' => [['text' => 'Hello']]]],
+                'usage' => ['inputTokens' => 10, 'outputTokens' => 5],
+                'stopReason' => 'end_turn',
+            ]);
+        }]));
+
+        (new TextGenerationLoop($this->gatewayWithClient($client)))->generate(
+            $this->bedrockProvider(),
+            'anthropic.claude-opus-4-7-v1:0',
+            $instructions,
+            tools: $tools,
+            options: $options,
+        );
+
+        return $captured;
     }
 
     protected function bedrockClient(MockHandler $mock): BedrockRuntimeClient
