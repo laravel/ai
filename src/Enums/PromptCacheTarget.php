@@ -19,9 +19,4 @@ enum PromptCacheTarget: string
             Arr::wrap($targets)
         );
     }
-
-    public function requestedIn(array $targets): bool
-    {
-        return in_array($this, $targets, true);
-    }
 }

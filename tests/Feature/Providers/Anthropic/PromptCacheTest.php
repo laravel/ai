@@ -96,3 +96,60 @@ test('other provider options still merge alongside the prompt cache option', fun
 test('an unknown prompt cache target throws', function (): void {
     (new PromptCacheAgent(['messages']))->prompt('Hi', provider: 'anthropic');
 })->throws(ValueError::class);
+
+test('a falsy prompt cache option is a no-op rather than an error', function (mixed $cache): void {
+    (new PromptCacheAgent($cache))->prompt('Hi', provider: 'anthropic');
+
+    Http::assertSent(function ($request): bool {
+        $body = $request->data();
+
+        return is_string($body['system'])
+            && ! array_key_exists('cache_control', Arr::last($body['tools']));
+    });
+})->with([false, 0, '', null]);
+
+test('breakpoints survive provider options that override the same keys', function (): void {
+    (new PromptCacheAgent([PromptCacheTarget::System, PromptCacheTarget::Tools], options: [
+        'system' => 'Overridden instructions.',
+        'tools' => [['name' => 'custom', 'description' => '', 'input_schema' => ['type' => 'object']]],
+    ]))->prompt('Hi', provider: 'anthropic');
+
+    Http::assertSent(function ($request): bool {
+        $body = $request->data();
+
+        return $body['system'] === [[
+            'type' => 'text',
+            'text' => 'Overridden instructions.',
+            'cache_control' => ['type' => 'ephemeral'],
+        ]]
+            && Arr::last($body['tools'])['name'] === 'custom'
+            && Arr::last($body['tools'])['cache_control'] === ['type' => 'ephemeral'];
+    });
+});
+
+test('the tools target is a no-op when the request carries no tools', function (): void {
+    (new PromptCacheStructuredAgent)->prompt('Iron', provider: 'anthropic');
+
+    Http::assertSent(fn ($request): bool => ! array_key_exists('tools', $request->data()));
+});
+
+test('the streaming path stamps the same breakpoints', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response($this->ssePayload([
+            $this->messageStart(),
+            $this->contentBlockStart(0, ['type' => 'text', 'text' => '']),
+            $this->contentBlockDelta(0, ['type' => 'text_delta', 'text' => 'Hi']),
+            $this->contentBlockStop(0),
+            $this->messageDelta('end_turn', 5),
+        ]), 200, ['Content-Type' => 'text/event-stream']),
+    ]);
+
+    $this->collectStreamEvents(new PromptCacheAgent([PromptCacheTarget::System, PromptCacheTarget::Tools]));
+
+    Http::assertSent(function ($request): bool {
+        $body = $request->data();
+
+        return isset($body['system'][0]['cache_control'])
+            && Arr::last($body['tools'])['cache_control'] === ['type' => 'ephemeral'];
+    });
+});

@@ -645,24 +645,16 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
 
         $providerOptions = $options?->providerOptions(Lab::Bedrock) ?? [];
 
-        $cache = PromptCacheTarget::normalize(Arr::pull($providerOptions, 'prompt_cache'));
+        $cache = $options?->promptCache(Lab::Bedrock) ?? [];
 
         if ($instructions) {
             $parameters['system'] = [['text' => $instructions]];
-
-            if (PromptCacheTarget::System->requestedIn($cache)) {
-                $parameters['system'][] = ['cachePoint' => ['type' => 'default']];
-            }
         }
 
         $toolConfig = $this->buildToolConfig($schemaTools, $formattedTools, $toolsEmpty, $isFinalStep);
 
         if ($toolConfig !== null) {
             $parameters['toolConfig'] = $toolConfig;
-
-            if (PromptCacheTarget::Tools->requestedIn($cache)) {
-                $parameters['toolConfig']['tools'][] = ['cachePoint' => ['type' => 'default']];
-            }
         }
 
         $inferenceConfig = $this->buildInferenceConfig($options);
@@ -671,8 +663,14 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             $parameters['inferenceConfig'] = $inferenceConfig;
         }
 
-        if (filled($providerOptions)) {
-            return array_merge($parameters, $providerOptions);
+        $parameters = array_merge($parameters, $providerOptions);
+
+        if (isset($parameters['system']) && in_array(PromptCacheTarget::System, $cache, true)) {
+            $parameters['system'][] = ['cachePoint' => ['type' => 'default']];
+        }
+
+        if (isset($parameters['toolConfig']['tools']) && in_array(PromptCacheTarget::Tools, $cache, true)) {
+            $parameters['toolConfig']['tools'][] = ['cachePoint' => ['type' => 'default']];
         }
 
         return $parameters;

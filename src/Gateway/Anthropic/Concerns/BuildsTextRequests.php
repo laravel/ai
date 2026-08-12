@@ -33,12 +33,10 @@ trait BuildsTextRequests
 
         $providerOptions = $options?->providerOptions($provider->driver()) ?? [];
 
-        $cache = PromptCacheTarget::normalize(Arr::pull($providerOptions, 'prompt_cache'));
+        $cache = $options?->promptCache($provider->driver()) ?? [];
 
         if (filled($instructions)) {
-            $body['system'] = PromptCacheTarget::System->requestedIn($cache)
-                ? [['type' => 'text', 'text' => $instructions, 'cache_control' => ['type' => 'ephemeral']]]
-                : $instructions;
+            $body['system'] = $instructions;
         }
 
         $mappedTools = filled($tools) ? $this->mapTools($tools, $provider) : [];
@@ -68,16 +66,36 @@ trait BuildsTextRequests
             }
         }
 
-        if (isset($body['tools']) && PromptCacheTarget::Tools->requestedIn($cache)) {
-            $body['tools'][array_key_last($body['tools'])]['cache_control'] = ['type' => 'ephemeral'];
-        }
-
         $body = array_merge($body, Arr::whereNotNull([
             'temperature' => $options?->temperature,
             'top_p' => $options?->topP,
         ]));
 
-        return array_merge($body, $providerOptions);
+        return $this->applyPromptCacheBreakpoints(array_merge($body, $providerOptions), $cache);
+    }
+
+    /**
+     * Stamp the requested cache breakpoints onto the final request body.
+     *
+     * @param  array<int, PromptCacheTarget>  $cache
+     */
+    protected function applyPromptCacheBreakpoints(array $body, array $cache): array
+    {
+        if (isset($body['system']) && in_array(PromptCacheTarget::System, $cache, true)) {
+            $system = is_string($body['system'])
+                ? [['type' => 'text', 'text' => $body['system']]]
+                : $body['system'];
+
+            $system[array_key_last($system)]['cache_control'] = ['type' => 'ephemeral'];
+
+            $body['system'] = $system;
+        }
+
+        if (isset($body['tools']) && in_array(PromptCacheTarget::Tools, $cache, true)) {
+            $body['tools'][array_key_last($body['tools'])]['cache_control'] = ['type' => 'ephemeral'];
+        }
+
+        return $body;
     }
 
     /**

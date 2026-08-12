@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway;
 
+use Illuminate\Support\Arr;
 use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Attributes\MaxTokens;
 use Laravel\Ai\Attributes\Temperature;
@@ -9,6 +10,7 @@ use Laravel\Ai\Attributes\TopP;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Enums\PromptCacheTarget;
 use Laravel\Ai\ToolChoice;
 use ReflectionClass;
 
@@ -31,6 +33,30 @@ class TextGenerationOptions
      * @return array<string, mixed>|null
      */
     public function providerOptions(Lab|string $provider): ?array
+    {
+        $options = $this->resolveProviderOptions($provider);
+
+        return $options === null ? null : Arr::except($options, 'prompt_cache');
+    }
+
+    /**
+     * Get the requested prompt cache breakpoints for the given provider.
+     *
+     * @return array<int, PromptCacheTarget>
+     */
+    public function promptCache(Lab|string $provider): array
+    {
+        $targets = $this->resolveProviderOptions($provider)['prompt_cache'] ?? null;
+
+        return $targets ? PromptCacheTarget::normalize($targets) : [];
+    }
+
+    /**
+     * Resolve the raw provider options declared by the agent.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function resolveProviderOptions(Lab|string $provider): ?array
     {
         if ($this->agent instanceof HasProviderOptions) {
             return $this->agent->providerOptions(
