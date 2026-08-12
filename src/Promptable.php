@@ -127,7 +127,7 @@ trait Promptable
                 $lastException = null;
 
                 foreach ($this->iterateProvidersWithFailover($providers) as [$provider, $model]) {
-                    $started = false;
+                    $innerResponse = null;
 
                     try {
                         $innerResponse = $provider->stream(
@@ -137,14 +137,12 @@ trait Promptable
                         $innerResponse->then(fn (StreamedAgentResponse $response): StreamableAgentResponse => $outer->adoptStateFrom($response));
 
                         foreach ($innerResponse as $event) {
-                            $started = true;
-
                             yield $event;
                         }
 
                         return;
                     } catch (FailoverableException $e) {
-                        if ($started) {
+                        if ($innerResponse?->hasYielded()) {
                             throw $e;
                         }
 

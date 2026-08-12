@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
@@ -100,12 +101,17 @@ test('streaming error event stops stream with string payload', function (): void
         ),
     ]);
 
-    $events = $this->collectStreamEvents();
+    $error = null;
 
-    expect($events)->toHaveCount(1)
-        ->and($events[0])->toBeInstanceOf(Error::class)
-        ->and($events[0]->type)->toBe('unknown_error')
-        ->and($events[0]->message)->toBe('model not found');
+    try {
+        $this->collectStreamEvents();
+    } catch (StreamErrorException $exception) {
+        $error = $exception->error;
+    }
+
+    expect($error)->toBeInstanceOf(Error::class)
+        ->and($error->type)->toBe('unknown_error')
+        ->and($error->message)->toBe('model not found');
 });
 
 test('streaming error event also handles structured payload', function (): void {
@@ -116,12 +122,17 @@ test('streaming error event also handles structured payload', function (): void 
         ),
     ]);
 
-    $events = $this->collectStreamEvents();
+    $error = null;
 
-    expect($events)->toHaveCount(1)
-        ->and($events[0])->toBeInstanceOf(Error::class)
-        ->and($events[0]->type)->toBe('model_error')
-        ->and($events[0]->message)->toBe('Model not found');
+    try {
+        $this->collectStreamEvents();
+    } catch (StreamErrorException $exception) {
+        $error = $exception->error;
+    }
+
+    expect($error)->toBeInstanceOf(Error::class)
+        ->and($error->type)->toBe('model_error')
+        ->and($error->message)->toBe('Model not found');
 });
 
 test('streaming accumulates tool call arguments across chunks', function (): void {

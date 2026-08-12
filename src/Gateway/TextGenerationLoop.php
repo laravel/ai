@@ -15,6 +15,7 @@ use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Exceptions\NoSuchToolException;
+use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Gateway\Concerns\HandlesToolApprovals;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -160,7 +161,6 @@ class TextGenerationLoop
         $continuationToken = null;
         $accumulatedUsage = new Usage;
         $finalReason = null;
-        $sawError = false;
 
         if ($approval !== null) {
             $resumption = $this->resumeFromApproval($approval, $messages, $tools, $validatedApproval);
@@ -218,18 +218,21 @@ class TextGenerationLoop
                 $stepContext,
             );
 
+            $lastError = null;
+
             foreach ($stream as $event) {
                 yield $event;
 
                 if ($event instanceof Error) {
-                    $sawError = true;
+                    $lastError = $event;
                 }
             }
 
             $result = $stream->getReturn();
 
+            // A provider may report an error in the stream itself rather than throwing, which still ends the step. The error event travels on the exception so its type and metadata are not lost...
             if (! $result instanceof StepResponse) {
-                break;
+                throw new StreamErrorException($lastError);
             }
 
             $accumulatedUsage = $accumulatedUsage->add($result->usage);
@@ -271,16 +274,13 @@ class TextGenerationLoop
             $continuationToken = $result->continuationToken;
         }
 
-        $reason = $finalReason ?? ($sawError ? null : FinishReason::Error);
-
-        if ($reason !== null) {
-            yield (new StreamEnd(
-                $this->generateEventId(),
-                $reason->value,
-                $accumulatedUsage,
-                time(),
-            ))->withInvocationId($invocationId);
-        }
+        // A step that never produced a response has already thrown, so the loop only reaches here having set a reason...
+        yield (new StreamEnd(
+            $this->generateEventId(),
+            ($finalReason ?? FinishReason::Stop)->value,
+            $accumulatedUsage,
+            time(),
+        ))->withInvocationId($invocationId);
     }
 
     /**

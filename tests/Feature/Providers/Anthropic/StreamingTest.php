@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ProviderToolEvent;
@@ -258,10 +259,15 @@ describe('error handling', function (): void {
             ),
         ]);
 
-        $events = $this->collectStreamEvents();
+        $error = null;
 
-        expect($events)->toHaveCount(1)
-            ->and($events[0])->toBeInstanceOf(Error::class)->type->toBe('overloaded_error')->message->toBe('Server overloaded');
+        try {
+            $this->collectStreamEvents();
+        } catch (StreamErrorException $exception) {
+            $error = $exception->error;
+        }
+
+        expect($error)->toBeInstanceOf(Error::class)->type->toBe('overloaded_error')->message->toBe('Server overloaded');
     });
 });
 
