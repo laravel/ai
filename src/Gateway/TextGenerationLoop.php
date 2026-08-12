@@ -42,6 +42,8 @@ class TextGenerationLoop
 {
     use HandlesToolApprovals, InvokesTools;
 
+    private bool $repairsToolCalls = false;
+
     /**
      * Create a new text generation loop instance.
      */
@@ -110,7 +112,7 @@ class TextGenerationLoop
                 $stepContext,
             );
 
-            [$toolResults, $pendingApprovals] = $this->stepToolResults($lastResult, $stepContext->isFinalStep, $tools, $options);
+            [$toolResults, $pendingApprovals] = $this->stepToolResultsWithOptions($lastResult, $stepContext->isFinalStep, $tools, $options);
 
             $steps->push($this->buildStep($lastResult, $toolResults));
 
@@ -238,14 +240,16 @@ class TextGenerationLoop
             $accumulatedUsage = $accumulatedUsage->add($result->usage);
             $finalReason = $result->finishReason;
 
-            [$toolResults, $pendingApprovals] = $this->stepToolResults($result, $stepContext->isFinalStep, $tools, $options);
+            [$toolResults, $pendingApprovals] = $this->stepToolResultsWithOptions($result, $stepContext->isFinalStep, $tools, $options);
 
             foreach ($toolResults as $toolResult) {
+                $successful = ! $stepContext->isFinalStep && $this->findTool($toolResult->name, $tools) instanceof Tool;
+
                 yield (new ToolResultEvent(
                     $this->generateEventId(),
                     $toolResult,
-                    ! $stepContext->isFinalStep,
-                    $stepContext->isFinalStep ? $toolResult->result : null,
+                    $successful,
+                    $successful ? null : $toolResult->result,
                     time(),
                 ))->withInvocationId($invocationId);
             }
@@ -297,7 +301,25 @@ class TextGenerationLoop
             return max(1, $options->maxSteps);
         }
 
-        return $tools !== [] ? (int) round(count($tools) * 1.5) : 5;
+        $maxSteps = $tools !== [] ? (int) round(count($tools) * 1.5) : 5;
+
+        return $maxSteps + (int) RepairToolCalls::isAppliedTo($options?->agent);
+    }
+
+    /**
+     * @param  array<Tool|ProviderTool>  $tools
+     * @return array{array<int, ToolResult>, Collection<int, PendingApproval>}
+     */
+    private function stepToolResultsWithOptions(StepResponse $result, bool $isFinalStep, array $tools, ?TextGenerationOptions $options): array
+    {
+        $repairsToolCalls = $this->repairsToolCalls;
+        $this->repairsToolCalls = RepairToolCalls::isAppliedTo($options?->agent);
+
+        try {
+            return $this->stepToolResults($result, $isFinalStep, $tools);
+        } finally {
+            $this->repairsToolCalls = $repairsToolCalls;
+        }
     }
 
     /**
@@ -306,7 +328,7 @@ class TextGenerationLoop
      * @param  array<Tool|ProviderTool>  $tools
      * @return array{array<int, ToolResult>, Collection<int, PendingApproval>}
      */
-    protected function stepToolResults(StepResponse $result, bool $isFinalStep, array $tools, ?TextGenerationOptions $options): array
+    protected function stepToolResults(StepResponse $result, bool $isFinalStep, array $tools): array
     {
         if (filled($result->pendingApprovals)) {
             return [[], collect($result->pendingApprovals)];
@@ -316,7 +338,7 @@ class TextGenerationLoop
             return [[], collect()];
         }
 
-        return $this->approvalAwareToolResults($result->toolCalls, $tools, $isFinalStep, $options);
+        return $this->approvalAwareToolResults($result->toolCalls, $tools, $isFinalStep);
     }
 
     /**
@@ -324,7 +346,7 @@ class TextGenerationLoop
      * @param  array<Tool|ProviderTool>  $tools
      * @return array{array<int, ToolResult>, Collection<int, PendingApproval>}
      */
-    protected function approvalAwareToolResults(array $toolCalls, array $tools, bool $isFinalStep = false, ?TextGenerationOptions $options = null): array
+    protected function approvalAwareToolResults(array $toolCalls, array $tools, bool $isFinalStep = false): array
     {
         $pendingApprovals = collect();
         $resolved = [];
@@ -345,7 +367,7 @@ class TextGenerationLoop
                 continue;
             }
 
-            if (! $tool instanceof Tool && ! $isFinalStep && ! RepairToolCalls::isAppliedTo($options?->agent)) {
+            if (! $tool instanceof Tool && ! $isFinalStep && ! $this->repairsToolCalls) {
                 throw new NoSuchToolException($toolCall->name);
             }
 
@@ -360,7 +382,7 @@ class TextGenerationLoop
                 $toolCall->name,
                 $toolCall->arguments,
                 match (true) {
-                    ! $tool instanceof Tool => "Tool '{$toolCall->name}' does not exist. Available tools: {$this->availableToolNames($tools)}.",
+                    ! $tool instanceof Tool && $this->repairsToolCalls => "Tool '{$toolCall->name}' does not exist. Available tools: {$this->availableToolNames($tools)}.",
                     $isFinalStep => 'The agent reached its maximum number of steps without running this tool call.',
                     default => $this->executeTool($tool, $toolCall->arguments, $toolCall->id),
                 },
