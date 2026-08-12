@@ -88,7 +88,7 @@ trait ParsesTextResponses
     }
 
     /**
-     * Extract citations from the output array.
+     * Extract citations from the output array, merging multiple text ranges per unique URL.
      */
     protected function extractCitations(array $output): Collection
     {
@@ -101,16 +101,22 @@ trait ParsesTextResponses
 
             foreach ($item['content'] ?? [] as $content) {
                 foreach ($content['annotations'] ?? [] as $annotation) {
-                    if (($annotation['type'] ?? '') !== 'url_citation') {
+                    if (($annotation['type'] ?? '') !== 'url_citation' || empty($annotation['url'])) {
                         continue;
                     }
 
-                    $citations->push(new UrlCitation(
-                        $annotation['url'] ?? '',
-                        $annotation['title'] ?? null,
+                    $url = $annotation['url'];
+                    $existing = $citations->first(fn (UrlCitation $c) => $c->url === $url);
+
+                    if ($existing === null) {
+                        $existing = new UrlCitation($url, $annotation['title'] ?? null);
+                        $citations->push($existing);
+                    }
+
+                    $existing->addRange(
                         isset($annotation['start_index']) ? (int) $annotation['start_index'] : null,
                         isset($annotation['end_index']) ? (int) $annotation['end_index'] : null,
-                    ));
+                    );
                 }
             }
         }

@@ -8,6 +8,7 @@ use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
@@ -185,12 +186,24 @@ trait HandlesTextStreaming
             }
         }
 
+        // Emit any citations found in the final response chunk...
+        $citations = $this->extractCitations($data);
+
+        foreach ($citations as $citation) {
+            yield (new CitationEvent(
+                $this->generateEventId(),
+                $messageId,
+                $citation,
+                time(),
+            ))->withInvocationId($invocationId);
+        }
+
         return new StepResponse(
             text: $currentText,
             toolCalls: $toolCalls,
             finishReason: $this->extractFinishReason($data, $pendingToolCalls),
             usage: $usage ?? new Usage(0, 0),
-            meta: new Meta($provider->name(), $model),
+            meta: new Meta($provider->name(), $model, $citations->isNotEmpty() ? $citations : null),
             providerContentBlocks: $this->sanitizeRequestParts($this->excludeThinkingParts($modelParts)),
         );
     }

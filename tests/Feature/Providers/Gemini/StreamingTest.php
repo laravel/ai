@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Responses\Data\FinishReason;
+use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
@@ -304,4 +305,95 @@ describe('usage tracking', function (): void {
         'MALFORMED_FUNCTION_CALL maps to ContentFilter' => ['MALFORMED_FUNCTION_CALL', FinishReason::ContentFilter],
         'RECITATION maps to ContentFilter' => ['RECITATION', FinishReason::ContentFilter],
     ]);
+});
+
+describe('citations', function () {
+    test('streaming emits citation events from grounding metadata in the final chunk', function () {
+        $finalChunk = $this->geminiChunkWithUsage([['text' => 'Spain won Euro 2024.']], 10, 5, finishReason: 'STOP');
+        $finalChunk['candidates'][0]['groundingMetadata'] = [
+            'groundingChunks' => [
+                ['web' => ['uri' => 'https://example.com/euro', 'title' => 'Euro 2024']],
+                ['web' => ['uri' => 'https://example.com/spain', 'title' => 'Spain Wins']],
+            ],
+            'groundingSupports' => [
+                ['segment' => ['startIndex' => 0, 'endIndex' => 20], 'groundingChunkIndices' => [0, 1]],
+            ],
+        ];
+
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response(
+                body: $this->ssePayload([
+                    $this->geminiChunk([['text' => 'Spain won']]),
+                    $finalChunk,
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $events = $this->collectStreamEvents();
+
+        $citationEvents = array_values(array_filter($events, fn ($e) => $e instanceof CitationEvent));
+
+        expect($citationEvents)->toHaveCount(2)
+            ->and($citationEvents[0]->citation->url)->toBe('https://example.com/euro')
+            ->and($citationEvents[0]->citation->isByteOffset)->toBeTrue()
+            ->and($citationEvents[0]->citation->ranges->all())->toBe([[0, 20]])
+            ->and($citationEvents[1]->citation->url)->toBe('https://example.com/spain');
+    });
+
+    test('streaming emits citation events from legacy citationMetadata', function () {
+        $finalChunk = $this->geminiChunkWithUsage([['text' => 'Some content.']], 10, 5, finishReason: 'STOP');
+        $finalChunk['candidates'][0]['citationMetadata'] = [
+            'citationSources' => [
+                ['uri' => 'https://example.com/source', 'title' => 'The Source'],
+            ],
+        ];
+
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response(
+                body: $this->ssePayload([$finalChunk]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $events = $this->collectStreamEvents();
+
+        $citationEvents = array_values(array_filter($events, fn ($e) => $e instanceof CitationEvent));
+
+        expect($citationEvents)->toHaveCount(1)
+            ->and($citationEvents[0]->citation->url)->toBe('https://example.com/source')
+            ->and($citationEvents[0]->citation->isByteOffset)->toBeFalse();
+    });
+
+    test('citation events appear after text events and before stream end', function () {
+        $finalChunk = $this->geminiChunkWithUsage([['text' => 'Answer.']], 10, 5, finishReason: 'STOP');
+        $finalChunk['candidates'][0]['groundingMetadata'] = [
+            'groundingChunks' => [
+                ['web' => ['uri' => 'https://example.com/ref', 'title' => 'Ref']],
+            ],
+            'groundingSupports' => [
+                ['segment' => ['startIndex' => 0, 'endIndex' => 7], 'groundingChunkIndices' => [0]],
+            ],
+        ];
+
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response(
+                body: $this->ssePayload([$finalChunk]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $events = $this->collectStreamEvents();
+        $types = array_map(fn ($e) => get_class($e), $events);
+
+        $textEndPos = array_search(\Laravel\Ai\Streaming\Events\TextEnd::class, $types);
+        $citationPos = array_search(CitationEvent::class, $types);
+        $streamEndPos = array_search(\Laravel\Ai\Streaming\Events\StreamEnd::class, $types);
+
+        expect($citationPos)->toBeGreaterThan($textEndPos)
+            ->and($citationPos)->toBeLessThan($streamEndPos);
+    });
 });

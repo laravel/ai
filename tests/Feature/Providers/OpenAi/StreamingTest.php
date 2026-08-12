@@ -193,3 +193,108 @@ test('streaming finish reason maps correctly', function (string $status, string 
     'unknown status maps to Unknown' => ['mystery_status', 'message', FinishReason::Unknown],
     'completed unknown type maps to Unknown' => ['completed', 'mystery_output', FinishReason::Unknown],
 ]);
+
+describe('citations', function () {
+    test('streaming emits citation events from url_citation annotations in response.completed', function () {
+        Http::fake([
+            'api.openai.com/*' => Http::response(
+                body: $this->ssePayload([
+                    $this->responseCreated(),
+                    $this->outputTextDelta('Here are sources'),
+                    $this->outputTextDone('Here are sources'),
+                    $this->responseCompleted(10, 5, output: [[
+                        'type' => 'message',
+                        'status' => 'completed',
+                        'content' => [[
+                            'type' => 'output_text',
+                            'text' => 'Here are sources',
+                            'annotations' => [
+                                ['type' => 'url_citation', 'url' => 'https://example.com/a', 'title' => 'A', 'start_index' => 0, 'end_index' => 5],
+                                ['type' => 'url_citation', 'url' => 'https://example.com/b', 'title' => 'B', 'start_index' => 6, 'end_index' => 11],
+                            ],
+                        ]],
+                    ]]),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $events = $this->collectStreamEvents();
+
+        $citationEvents = array_values(array_filter($events, fn ($e) => $e instanceof \Laravel\Ai\Streaming\Events\Citation));
+
+        expect($citationEvents)->toHaveCount(2)
+            ->and($citationEvents[0]->citation->url)->toBe('https://example.com/a')
+            ->and($citationEvents[0]->citation->ranges->all())->toBe([[0, 5]])
+            ->and($citationEvents[1]->citation->url)->toBe('https://example.com/b');
+    });
+
+    test('streaming deduplicates citations by url and accumulates ranges', function () {
+        Http::fake([
+            'api.openai.com/*' => Http::response(
+                body: $this->ssePayload([
+                    $this->responseCreated(),
+                    $this->outputTextDone('text'),
+                    $this->responseCompleted(10, 5, output: [[
+                        'type' => 'message',
+                        'status' => 'completed',
+                        'content' => [[
+                            'type' => 'output_text',
+                            'text' => 'text',
+                            'annotations' => [
+                                ['type' => 'url_citation', 'url' => 'https://example.com/same', 'title' => 'X', 'start_index' => 0, 'end_index' => 4],
+                                ['type' => 'url_citation', 'url' => 'https://example.com/same', 'title' => 'X', 'start_index' => 10, 'end_index' => 20],
+                            ],
+                        ]],
+                    ]]),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $events = $this->collectStreamEvents();
+
+        $citationEvents = array_values(array_filter($events, fn ($e) => $e instanceof \Laravel\Ai\Streaming\Events\Citation));
+
+        expect($citationEvents)->toHaveCount(1)
+            ->and($citationEvents[0]->citation->url)->toBe('https://example.com/same')
+            ->and($citationEvents[0]->citation->ranges->all())->toBe([[0, 4], [10, 20]]);
+    });
+
+    test('citation events appear after text events and before stream end', function () {
+        Http::fake([
+            'api.openai.com/*' => Http::response(
+                body: $this->ssePayload([
+                    $this->responseCreated(),
+                    $this->outputTextDelta('Answer'),
+                    $this->outputTextDone('Answer'),
+                    $this->responseCompleted(10, 5, output: [[
+                        'type' => 'message',
+                        'status' => 'completed',
+                        'content' => [[
+                            'type' => 'output_text',
+                            'text' => 'Answer',
+                            'annotations' => [
+                                ['type' => 'url_citation', 'url' => 'https://example.com/ref', 'title' => 'Ref', 'start_index' => 0, 'end_index' => 6],
+                            ],
+                        ]],
+                    ]]),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $events = $this->collectStreamEvents();
+        $types = array_map(fn ($e) => get_class($e), $events);
+
+        $textEndPos  = array_search(\Laravel\Ai\Streaming\Events\TextEnd::class, $types);
+        $citationPos = array_search(\Laravel\Ai\Streaming\Events\Citation::class, $types);
+        $streamEndPos = array_search(\Laravel\Ai\Streaming\Events\StreamEnd::class, $types);
+
+        expect($citationPos)->toBeGreaterThan($textEndPos)
+            ->and($citationPos)->toBeLessThan($streamEndPos);
+    });
+});
