@@ -9,9 +9,9 @@ use Laravel\Ai\Providers\Provider;
 class AgentFailedOver extends ProviderFailedOver
 {
     public function __construct(
+        public string $invocationId,
         public Agent $agent,
         public Provider $provider,
         public string $model,
-        public FailoverableException $exception,
-        public string $invocationId) {}
+        public FailoverableException $exception) {}
 }

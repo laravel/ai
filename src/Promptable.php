@@ -299,7 +299,7 @@ trait Promptable
      */
     private function recordAgentFailover(string $invocationId, Provider $provider, string $model, FailoverableException $exception): FailoverableException
     {
-        event(new AgentFailedOver($this, $provider, $model, $exception, $invocationId));
+        event(new AgentFailedOver($invocationId, $this, $provider, $model, $exception));
 
         return $exception;
     }
