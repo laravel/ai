@@ -10,7 +10,7 @@ class ToolFailed
 {
     /**
      * @param  array<string, mixed>  $arguments
-     * @param  float  $time  wall time spent in the tool's handler before it threw, in milliseconds
+     * @param  float  $time  Wall time spent in the tool's handler before it threw, in milliseconds.
      */
     public function __construct(
         public string $invocationId,
