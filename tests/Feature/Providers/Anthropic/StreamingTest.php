@@ -41,6 +41,42 @@ describe('text streaming', function (): void {
             ->and($events[4])->toBeInstanceOf(TextEnd::class)
             ->and($events[5])->toBeInstanceOf(StreamEnd::class);
     });
+
+    test('streaming starts a new text part after each text block', function (): void {
+        Http::fake([
+            'api.anthropic.com/*' => Http::response(
+                body: $this->ssePayload([
+                    $this->messageStart(),
+                    $this->contentBlockStart(0, ['type' => 'text', 'text' => '']),
+                    $this->contentBlockDelta(0, ['type' => 'text_delta', 'text' => 'First']),
+                    $this->contentBlockStop(0),
+                    $this->contentBlockStart(1, ['type' => 'server_tool_use', 'id' => 'srvtoolu_1', 'name' => 'web_search']),
+                    $this->contentBlockStop(1),
+                    $this->contentBlockStart(2, ['type' => 'text', 'text' => '']),
+                    $this->contentBlockDelta(2, ['type' => 'text_delta', 'text' => 'Second']),
+                    $this->contentBlockStop(2),
+                    $this->messageDelta('end_turn', 10),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $events = $this->collectStreamEvents();
+
+        $textStarts = array_values(array_filter($events, fn ($e): bool => $e instanceof TextStart));
+        $textEnds = array_values(array_filter($events, fn ($e): bool => $e instanceof TextEnd));
+        $textDeltas = array_values(array_filter($events, fn ($e): bool => $e instanceof TextDelta));
+
+        expect($textStarts)->toHaveCount(2)
+            ->and($textEnds)->toHaveCount(2)
+            ->and($textDeltas)->toHaveCount(2)
+            ->and($textStarts[0]->messageId)->not->toBe($textStarts[1]->messageId)
+            ->and($textEnds[0]->messageId)->toBe($textStarts[0]->messageId)
+            ->and($textEnds[1]->messageId)->toBe($textStarts[1]->messageId)
+            ->and($textDeltas[0]->messageId)->toBe($textStarts[0]->messageId)
+            ->and($textDeltas[1]->messageId)->toBe($textStarts[1]->messageId);
+    });
 });
 
 describe('tool calls', function (): void {
