@@ -14,6 +14,7 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Exceptions\NoSuchToolException;
 use Laravel\Ai\Exceptions\StreamErrorException;
+use Laravel\Ai\Gateway\RunContext;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationLoop;
@@ -1202,14 +1203,14 @@ class TextGenerationLoopAgent implements Agent
 
 class ExtendedTextGenerationLoop extends TextGenerationLoop
 {
-    protected function stepToolResults(StepResponse $result, bool $isFinalStep, array $tools): array
+    protected function stepToolResults(StepResponse $result, bool $isFinalStep, array $tools, ?RunContext $context = null): array
     {
-        return parent::stepToolResults($result, $isFinalStep, $tools);
+        return parent::stepToolResults($result, $isFinalStep, $tools, $context);
     }
 
-    protected function approvalAwareToolResults(array $toolCalls, array $tools, bool $isFinalStep = false): array
+    protected function approvalAwareToolResults(array $toolCalls, array $tools, bool $isFinalStep = false, ?RunContext $context = null): array
     {
-        return parent::approvalAwareToolResults($toolCalls, $tools, $isFinalStep);
+        return parent::approvalAwareToolResults($toolCalls, $tools, $isFinalStep, $context);
     }
 }
 
