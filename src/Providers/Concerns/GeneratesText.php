@@ -202,18 +202,19 @@ trait GeneratesText
 
     /**
      * Dispatch the terminal failure event for a run, unless the caller may still retry it against another provider.
-     *
-     * Terminality is read from the prompt the caller handed us, since middleware that builds a new prompt
-     * by hand rather than revising ours would not carry the attempt bookkeeping forward...
      */
     protected function recordAgentFailure(string $invocationId, AgentPrompt $prompt, Throwable $exception, ?AgentPrompt $processedPrompt = null, bool $retryable = true): void
     {
         // A failoverable exception is only terminal once the caller has run out of providers to try...
-        if ($retryable && ! $prompt->isFinalAttempt() && $exception instanceof FailoverableException) {
+        if ($retryable &&
+            ! $prompt->isFinalAttempt() &&
+            $exception instanceof FailoverableException) {
             return;
         }
 
-        $this->events->dispatch(new AgentFailed($invocationId, $processedPrompt ?? $prompt, $exception));
+        $this->events->dispatch(
+            new AgentFailed($invocationId, $processedPrompt ?? $prompt, $exception)
+        );
     }
 
     /**
