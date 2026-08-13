@@ -278,6 +278,20 @@ class MyAgent implements Agent
 
 The `#[UseCheapestModel]` and `#[UseSmartestModel]` attributes are also available for automatic model selection.
 
+Use `#[RepairToolCalls]` to let an agent recover when a model calls an unknown local tool. The failed call is returned to the model with the available local tool names, and the implicit step budget includes one repair step. Explicit `#[MaxSteps]` limits remain unchanged.
+
+```php
+use Laravel\Ai\Attributes\RepairToolCalls;
+
+#[RepairToolCalls]
+class SupportAgent implements Agent, HasTools
+{
+    use Promptable;
+
+    // ...
+}
+```
+
 The `#[WithoutBroadcasting]` attribute stops the given stream event types from broadcasting (e.g. data-heavy `ToolResult` payloads that exceed the WebSocket frame limit). The events are still streamed and persisted; they just never hit the channel:
 
 ```php
