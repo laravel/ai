@@ -330,6 +330,8 @@ describe('usage tracking', function (): void {
         'end_turn maps to Stop' => ['end_turn', FinishReason::Stop],
         'stop_sequence maps to Stop' => ['stop_sequence', FinishReason::Stop],
         'max_tokens maps to Length' => ['max_tokens', FinishReason::Length],
+        'model_context_window_exceeded maps to Length' => ['model_context_window_exceeded', FinishReason::Length],
+        'refusal maps to ContentFilter' => ['refusal', FinishReason::ContentFilter],
         'tool_use without tool blocks normalizes to Stop (StreamEnd still emitted)' => ['tool_use', FinishReason::Stop],
     ]);
 });
