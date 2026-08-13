@@ -47,12 +47,12 @@ trait ParsesTextResponses
         $parts = $candidate['content']['parts'] ?? [];
 
         $text = $this->extractText($parts);
-        $rawToolCalls = $this->extractRawToolCalls($parts);
+        $functionCallParts = $this->extractFunctionCallParts($parts);
 
         return new StepResponse(
             text: $text,
-            toolCalls: $this->mapToolCalls($rawToolCalls),
-            finishReason: $this->extractFinishReason($data, $rawToolCalls),
+            toolCalls: $this->mapToolCalls($functionCallParts),
+            finishReason: $this->extractFinishReason($data, $functionCallParts),
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model, $this->extractCitations($data)),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
@@ -119,11 +119,7 @@ trait ParsesTextResponses
         return implode('', $textParts);
     }
 
-    /**
-     * Extract the response parts that carry a function call, keeping the full
-     * part so sibling fields such as thoughtSignature travel with the call.
-     */
-    protected function extractRawToolCalls(array $parts): array
+    protected function extractFunctionCallParts(array $parts): array
     {
         return array_values(
             array_filter($parts, fn (array $part): bool => isset($part['functionCall']))
@@ -131,14 +127,12 @@ trait ParsesTextResponses
     }
 
     /**
-     * Map function call parts to ToolCall DTOs.
-     *
      * @return array<ToolCall>
      */
-    protected function mapToolCalls(array $rawToolCalls): array
+    protected function mapToolCalls(array $functionCallParts): array
     {
         return array_map(function (array $part): ToolCall {
-            $functionCall = $part['functionCall'] ?? $part;
+            $functionCall = $part['functionCall'];
 
             $id = $functionCall['id'] ?? (string) Str::uuid7();
 
@@ -149,7 +143,7 @@ trait ParsesTextResponses
                 $id,
                 thoughtSignature: $part['thoughtSignature'] ?? null,
             );
-        }, $rawToolCalls);
+        }, $functionCallParts);
     }
 
     /**
@@ -221,9 +215,9 @@ trait ParsesTextResponses
     /**
      * Extract and map the finish reason from the Gemini response.
      */
-    protected function extractFinishReason(array $data, array $rawToolCalls): FinishReason
+    protected function extractFinishReason(array $data, array $functionCallParts): FinishReason
     {
-        if (filled($rawToolCalls)) {
+        if (filled($functionCallParts)) {
             return FinishReason::ToolCalls;
         }
 
