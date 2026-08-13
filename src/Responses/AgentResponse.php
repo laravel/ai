@@ -68,4 +68,27 @@ class AgentResponse extends TextResponse
 
         return $this->messages->whereInstanceOf(AssistantMessage::class)->last()?->providerContentBlocks ?? [];
     }
+
+    /**
+     * Get the raw provider replay state for the steps before the paused one, which pausedProviderContentBlocks() does not describe.
+     *
+     * @return array<int, array{tool_call_ids: array<int, string>, blocks: array<int|string, mixed>, content: string}>
+     */
+    public function precedingProviderContentBlockSteps(): array
+    {
+        if (! $this->hasPendingApprovals()) {
+            return [];
+        }
+
+        return $this->messages
+            ->whereInstanceOf(AssistantMessage::class)
+            ->values()
+            ->slice(0, -1)
+            ->map(fn (AssistantMessage $message): array => [
+                'tool_call_ids' => $message->toolCalls->pluck('id')->values()->all(),
+                'blocks' => $message->providerContentBlocks,
+                'content' => $message->content,
+            ])
+            ->all();
+    }
 }

@@ -210,6 +210,8 @@ class TextGenerationLoop
             $allMessages = $this->settleAbandonedToolCalls($messages);
         }
 
+        $turnAssistantMessages = [];
+
         for ($step = 0; $step < $maxSteps; $step++) {
             $stepContext = new StepContext(
                 stepNumber: $step,
@@ -259,7 +261,7 @@ class TextGenerationLoop
                 ))->withInvocationId($invocationId);
             }
 
-            $allMessages[] = $this->buildAssistantMessage($result);
+            $allMessages[] = $turnAssistantMessages[] = $this->buildAssistantMessage($result);
 
             if (filled($toolResults)) {
                 $allMessages[] = new ToolResultMessage(collect($toolResults));
@@ -271,6 +273,7 @@ class TextGenerationLoop
                     $pendingApprovals,
                     time(),
                     $result->providerContentBlocks,
+                    $this->precedingProviderContentBlockSteps($turnAssistantMessages),
                 ))->withInvocationId($invocationId);
 
                 break;
@@ -544,6 +547,21 @@ class TextGenerationLoop
             collect($result->toolCalls),
             $result->providerContentBlocks,
         );
+    }
+
+    /**
+     * Build the replay state for the steps that ran before the paused one, which the pause's own blocks do not describe.
+     *
+     * @param  AssistantMessage[]  $assistantMessages  every assistant message of the turn, the paused step last
+     * @return array<int, array{tool_call_ids: array<int, string>, blocks: array<int|string, mixed>, content: string}>
+     */
+    protected function precedingProviderContentBlockSteps(array $assistantMessages): array
+    {
+        return array_map(fn (AssistantMessage $message): array => [
+            'tool_call_ids' => $message->toolCalls->pluck('id')->values()->all(),
+            'blocks' => $message->providerContentBlocks,
+            'content' => $message->content,
+        ], array_slice(array_values($assistantMessages), 0, -1));
     }
 
     /**

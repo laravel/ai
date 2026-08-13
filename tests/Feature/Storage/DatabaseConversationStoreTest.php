@@ -646,6 +646,110 @@ test('it preserves provider content blocks when a mixed pause carries an execute
         ->and($messages[1]->toolResults[0]->id)->toBe('call-1');
 });
 
+test('it persists the steps preceding a multi-step pause and replays each one verbatim', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    $prompt = new AgentPrompt(new ToolUsingAgent, 'Refund my order.', [], Mockery::mock(TextProvider::class), 'test-model');
+
+    $stepOneBlocks = [
+        ['type' => 'thinking', 'thinking' => 'find the order first', 'signature' => 'sig-1'],
+        ['type' => 'tool_use', 'id' => 'call-1', 'name' => 'lookup_order', 'input' => []],
+    ];
+
+    $stepTwoBlocks = [
+        ['type' => 'thinking', 'thinking' => 'refund it', 'signature' => 'sig-2'],
+        ['type' => 'text', 'text' => 'Refunding order 883'],
+        ['type' => 'tool_use', 'id' => 'call-2', 'name' => 'issue_refund', 'input' => ['order' => 883]],
+    ];
+
+    $response = (new AgentResponse('invocation-id', 'Refunding order 883', new Usage, new Meta('anthropic', 'test-model')))
+        ->withMessages(collect([
+            new AssistantMessage('Looking up the order', collect([new ToolCall('call-1', 'lookup_order', [])]), $stepOneBlocks),
+            new ToolResultMessage(collect([new ToolResult('call-1', 'lookup_order', [], 'Order #883')])),
+            new AssistantMessage('Refunding order 883', collect([new ToolCall('call-2', 'issue_refund', ['order' => 883])]), $stepTwoBlocks),
+        ]))
+        ->withPendingApprovals(collect([new PendingApproval('call-2', 'issue_refund', ['order' => 883])]));
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $meta = json_decode((string) DB::table('agent_conversation_messages')->where('role', 'assistant')->value('meta'), true);
+
+    // The paused step is described by provider_content_blocks, so only the step before it is stored...
+    expect($meta['preceding_provider_content_block_steps'])->toHaveCount(1)
+        ->and($meta['preceding_provider_content_block_steps'][0]['tool_call_ids'])->toBe(['call-1'])
+        ->and($meta['preceding_provider_content_block_steps'][0]['blocks'])->toBe($stepOneBlocks)
+        ->and($meta['provider_content_blocks'])->toBe($stepTwoBlocks);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toHaveCount(3)
+        ->and($messages[0]->content)->toBe('Looking up the order')
+        ->and($messages[0]->toolCalls->pluck('id')->all())->toBe(['call-1'])
+        ->and($messages[0]->providerContentBlocks)->toBe($stepOneBlocks)
+        ->and($messages[0]->providerContentBlocksProvider)->toBe('anthropic')
+        ->and($messages[1])->toBeInstanceOf(ToolResultMessage::class)
+        ->and($messages[1]->toolResults->pluck('id')->all())->toBe(['call-1'])
+        ->and($messages[2]->content)->toBe('Refunding order 883')
+        ->and($messages[2]->toolCalls->pluck('id')->all())->toBe(['call-2'])
+        ->and($messages[2]->providerContentBlocks)->toBe($stepTwoBlocks);
+});
+
+test('it omits preceding-step state for a single-step pause', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    $prompt = new AgentPrompt(new ToolUsingAgent, 'Refund my order.', [], Mockery::mock(TextProvider::class), 'test-model');
+
+    $blocks = [['type' => 'tool_use', 'id' => 'call-1', 'name' => 'issue_refund', 'input' => []]];
+
+    $response = (new AgentResponse('invocation-id', '', new Usage, new Meta('anthropic', 'test-model')))
+        ->withMessages(collect([
+            new AssistantMessage('', collect([new ToolCall('call-1', 'issue_refund', [])]), $blocks),
+        ]))
+        ->withPendingApprovals(collect([new PendingApproval('call-1', 'issue_refund', [])]));
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $meta = json_decode((string) DB::table('agent_conversation_messages')->where('role', 'assistant')->value('meta'), true);
+
+    expect($meta['provider_content_blocks'])->toBe($blocks)
+        ->and($meta)->not->toHaveKey('preceding_provider_content_block_steps');
+});
+
+test('it keeps a same-step executed result behind the paused turn raw blocks', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    $prompt = new AgentPrompt(new ToolUsingAgent, 'Read b and delete c.', [], Mockery::mock(TextProvider::class), 'test-model');
+
+    $blocks = [
+        ['type' => 'tool_use', 'id' => 'call-1', 'name' => 'read_file', 'input' => ['path' => 'b']],
+        ['type' => 'tool_use', 'id' => 'call-2', 'name' => 'delete_file', 'input' => ['path' => 'c']],
+    ];
+
+    $response = (new AgentResponse('invocation-id', 'Reading b and deleting c', new Usage, new Meta('anthropic', 'test-model')))
+        ->withMessages(collect([
+            new AssistantMessage('Reading b and deleting c', collect([
+                new ToolCall('call-1', 'read_file', ['path' => 'b']),
+                new ToolCall('call-2', 'delete_file', ['path' => 'c']),
+            ]), $blocks),
+            new ToolResultMessage(collect([new ToolResult('call-1', 'read_file', ['path' => 'b'], 'contents')])),
+        ]))
+        ->withPendingApprovals(collect([new PendingApproval('call-2', 'delete_file', ['path' => 'c'])]));
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    // Both calls belong to the paused step, so its result stays behind the blocks where the resume merges the approved one...
+    expect($messages)->toHaveCount(2)
+        ->and($messages[0]->toolCalls->pluck('id')->all())->toBe(['call-1', 'call-2'])
+        ->and($messages[0]->providerContentBlocks)->toBe($blocks)
+        ->and($messages[1])->toBeInstanceOf(ToolResultMessage::class)
+        ->and($messages[1]->toolResults->pluck('id')->all())->toBe(['call-1']);
+});
+
 test('it drops a leading orphaned tool_result when the row window splits a pause from its resume', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');

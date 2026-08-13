@@ -119,6 +119,66 @@ return new class extends Migration
 };
 ```
 
+### Widened `meta` Column On Conversation Messages
+
+**Likelihood Of Impact: Low**
+
+A paused turn now records the raw provider replay state for every step it ran, not just the step it paused on, so the `meta` column on the conversation messages table is `LONGTEXT` in the published migration. Existing `TEXT` columns keep working, but a long reasoning turn that pauses can exceed their 64KB limit. If you have already published and run the conversation migrations, create a new migration to widen the column, then run `php artisan migrate`:
+
+```php
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table(config('ai.conversations.tables.messages', 'agent_conversation_messages'), function (Blueprint $table) {
+            $table->longText('meta')->change();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table(config('ai.conversations.tables.messages', 'agent_conversation_messages'), function (Blueprint $table) {
+            $table->text('meta')->change();
+        });
+    }
+};
+```
+
+### Conversations Already Paused For Approval
+
+**Likelihood Of Impact: Low**
+
+Only turns that pause after upgrading record the replay state for their earlier steps. A conversation that was already sitting at a multi-step approval pause when you upgraded has no such state, so resuming it is still rejected by the provider. Prompt the affected agents again to start a fresh turn, or drop the stale replay state so those pauses fall back to the generic mapping:
+
+```php
+use Illuminate\Support\Facades\DB;
+
+DB::table(config('ai.conversations.tables.messages', 'agent_conversation_messages'))
+    ->where('role', 'assistant')
+    ->whereNotNull('approval_state')
+    ->where('tool_results', '!=', '[]')
+    ->get(['id', 'meta'])
+    ->each(function ($message): void {
+        $meta = json_decode($message->meta, true);
+
+        if (! isset($meta['provider_content_blocks']) || isset($meta['preceding_provider_content_block_steps'])) {
+            return;
+        }
+
+        unset($meta['provider_content_blocks']);
+
+        DB::table(config('ai.conversations.tables.messages', 'agent_conversation_messages'))
+            ->where('id', $message->id)
+            ->update(['meta' => json_encode($meta)]);
+    });
+```
+
+Those turns then replay through the provider's own message mapping rather than the raw blocks, which resumes cleanly but drops the reasoning the paused step had already produced.
+
 ### The `Agent` Contract Now Accepts `Decisions|string`
 
 **Likelihood Of Impact: Low**

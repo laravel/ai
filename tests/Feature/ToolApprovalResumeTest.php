@@ -9,6 +9,7 @@ use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Storage\DatabaseConversationStore;
 use Tests\Fixtures\Agents\RememberingApprovableAgent;
+use Tests\Fixtures\Agents\RememberingMultiStepApprovableAgent;
 use Tests\Fixtures\Tools\ApprovableNumberGenerator;
 
 test('a remembered agent pauses for approval, persists the tool_use, and resumes from history when approved', function () {
@@ -654,4 +655,242 @@ test('a resume that fails after the tool runs does not re-execute the tool on re
     )->toThrow(ApprovalMismatchException::class);
 
     expect(ApprovableNumberGenerator::$invocations)->toBe(1);
+});
+
+test('a resume of a pause on a later step replays every earlier step so no tool_result is orphaned', function () {
+    Config::set('ai.conversations.generate_title', false);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            Http::response([
+                'id' => 'msg_tool_1',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [
+                    ['type' => 'thinking', 'thinking' => 'Research first.', 'signature' => 'signature-1'],
+                    ['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'FixedNumberGenerator', 'input' => (object) []],
+                ],
+                'stop_reason' => 'tool_use',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+            Http::response([
+                'id' => 'msg_tool_2',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [
+                    ['type' => 'thinking', 'thinking' => 'Now the gated tool.', 'signature' => 'signature-2'],
+                    ['type' => 'text', 'text' => 'Generating the approved number.'],
+                    ['type' => 'tool_use', 'id' => 'toolu_2', 'name' => 'ApprovableNumberGenerator', 'input' => (object) []],
+                ],
+                'stop_reason' => 'tool_use',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+            Http::response([
+                'id' => 'msg_3',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [['type' => 'text', 'text' => 'The number is 72019.']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+        ]),
+    ]);
+
+    $user = (object) ['id' => 1];
+
+    $paused = (new RememberingMultiStepApprovableAgent)->forUser($user)->prompt('Research, then generate', provider: 'anthropic');
+
+    expect($paused->pendingApprovals->pluck('id')->all())->toBe(['toolu_2']);
+
+    $resumed = (new RememberingMultiStepApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->prompt(Decisions::from(['toolu_2' => true]), provider: 'anthropic');
+
+    expect($resumed->text)->toBe('The number is 72019.');
+
+    $messages = collect(Http::recorded())->last()[0]->data()['messages'];
+
+    // Anthropic rejects the request unless every tool_result is answered by a tool_use in the message right before it...
+    foreach ($messages as $index => $message) {
+        $resultIds = collect($message['content'])->where('type', 'tool_result')->pluck('tool_use_id')->all();
+
+        if ($resultIds === []) {
+            continue;
+        }
+
+        $callIds = collect($messages[$index - 1]['content'] ?? [])->where('type', 'tool_use')->pluck('id')->all();
+
+        expect(array_diff($resultIds, $callIds))->toBe([], "orphaned tool_result in message {$index}");
+    }
+
+    $assistantTurns = collect($messages)->where('role', 'assistant')->values();
+
+    // Each step replays with its own signed thinking block, in the order it happened...
+    expect($assistantTurns)->toHaveCount(2)
+        ->and($assistantTurns[0]['content'][0]['signature'])->toBe('signature-1')
+        ->and(collect($assistantTurns[0]['content'])->firstWhere('type', 'tool_use')['id'])->toBe('toolu_1')
+        ->and($assistantTurns[1]['content'][0]['signature'])->toBe('signature-2')
+        ->and(collect($assistantTurns[1]['content'])->firstWhere('type', 'tool_use')['id'])->toBe('toolu_2');
+});
+
+function assertToolCallsArePaired(array $messages, string $label): void
+{
+    foreach ($messages as $index => $message) {
+        $resultIds = collect($message['content'])->where('type', 'tool_result')->pluck('tool_use_id')->all();
+
+        if ($resultIds === []) {
+            continue;
+        }
+
+        $callIds = collect($messages[$index - 1]['content'] ?? [])->where('type', 'tool_use')->pluck('id')->all();
+
+        expect(array_diff($resultIds, $callIds))->toBe([], "{$label}: orphaned tool_result in message {$index}");
+    }
+
+    // And the reverse: no tool_use may go unanswered except in the final assistant turn.
+    foreach ($messages as $index => $message) {
+        if (($message['role'] ?? '') !== 'assistant' || $index === count($messages) - 1) {
+            continue;
+        }
+
+        $callIds = collect($message['content'])->where('type', 'tool_use')->pluck('id')->all();
+
+        if ($callIds === []) {
+            continue;
+        }
+
+        $resultIds = collect($messages[$index + 1]['content'] ?? [])->where('type', 'tool_result')->pluck('tool_use_id')->all();
+
+        expect(array_diff($callIds, $resultIds))->toBe([], "{$label}: unanswered tool_use in message {$index}");
+    }
+}
+
+function anthropicToolStep(string $id, string $tool, string $callId, string $signature): array
+{
+    return [
+        'id' => $id,
+        'type' => 'message',
+        'role' => 'assistant',
+        'model' => 'claude-sonnet-4-6',
+        'content' => [
+            ['type' => 'thinking', 'thinking' => 'thinking', 'signature' => $signature],
+            ['type' => 'tool_use', 'id' => $callId, 'name' => $tool, 'input' => (object) []],
+        ],
+        'stop_reason' => 'tool_use',
+        'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+    ];
+}
+
+function anthropicFinalStep(string $id): array
+{
+    return [
+        'id' => $id,
+        'type' => 'message',
+        'role' => 'assistant',
+        'model' => 'claude-sonnet-4-6',
+        'content' => [['type' => 'text', 'text' => 'Done.']],
+        'stop_reason' => 'end_turn',
+        'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+    ];
+}
+
+test('a resume that pauses again on a later step resumes cleanly', function () {
+    Config::set('ai.conversations.generate_title', false);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            anthropicToolStep('m1', 'FixedNumberGenerator', 'toolu_1', 'sig-1'),
+            anthropicToolStep('m2', 'ApprovableNumberGenerator', 'toolu_2', 'sig-2'),
+            // Resume: an auto step, then a second pause.
+            anthropicToolStep('m3', 'FixedNumberGenerator', 'toolu_3', 'sig-3'),
+            anthropicToolStep('m4', 'ApprovableNumberGenerator', 'toolu_4', 'sig-4'),
+            anthropicFinalStep('m5'),
+        ]),
+    ]);
+
+    $user = (object) ['id' => 1];
+
+    $paused = (new RememberingMultiStepApprovableAgent)->forUser($user)->prompt('Go', provider: 'anthropic');
+    expect($paused->pendingApprovals->pluck('id')->all())->toBe(['toolu_2']);
+
+    $repaused = (new RememberingMultiStepApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->prompt(Decisions::from(['toolu_2' => true]), provider: 'anthropic');
+
+    expect($repaused->pendingApprovals->pluck('id')->all())->toBe(['toolu_4']);
+
+    assertToolCallsArePaired(collect(Http::recorded())->last()[0]->data()['messages'], 'second pause request');
+
+    $final = (new RememberingMultiStepApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->prompt(Decisions::from(['toolu_4' => true]), provider: 'anthropic');
+
+    expect($final->text)->toBe('Done.');
+
+    assertToolCallsArePaired(collect(Http::recorded())->last()[0]->data()['messages'], 'second resume request');
+});
+
+test('an abandoned multi-step pause settles when the conversation continues', function () {
+    Config::set('ai.conversations.generate_title', false);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            anthropicToolStep('m1', 'FixedNumberGenerator', 'toolu_1', 'sig-1'),
+            anthropicToolStep('m2', 'ApprovableNumberGenerator', 'toolu_2', 'sig-2'),
+            anthropicFinalStep('m3'),
+        ]),
+    ]);
+
+    $user = (object) ['id' => 1];
+
+    $paused = (new RememberingMultiStepApprovableAgent)->forUser($user)->prompt('Go', provider: 'anthropic');
+    expect($paused->hasPendingApprovals())->toBeTrue();
+
+    (new RememberingMultiStepApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->prompt('Never mind, something else', provider: 'anthropic');
+
+    assertToolCallsArePaired(collect(Http::recorded())->last()[0]->data()['messages'], 'abandoned pause');
+});
+
+test('a resolved pause keeps replaying its steps once the approval has landed', function () {
+    Config::set('ai.conversations.generate_title', false);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            anthropicToolStep('m1', 'FixedNumberGenerator', 'toolu_1', 'sig-1'),
+            anthropicToolStep('m2', 'ApprovableNumberGenerator', 'toolu_2', 'sig-2'),
+            anthropicFinalStep('m3'),
+            anthropicFinalStep('m4'),
+        ]),
+    ]);
+
+    $user = (object) ['id' => 1];
+
+    $paused = (new RememberingMultiStepApprovableAgent)->forUser($user)->prompt('Go', provider: 'anthropic');
+
+    (new RememberingMultiStepApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->prompt(Decisions::from(['toolu_2' => true]), provider: 'anthropic');
+
+    // A fresh turn: the resolved row still describes itself step by step rather than collapsing into one parallel call...
+    (new RememberingMultiStepApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->prompt('And now something else', provider: 'anthropic');
+
+    $messages = collect(Http::recorded())->last()[0]->data()['messages'];
+
+    assertToolCallsArePaired($messages, 'resolved turn replay');
+
+    $assistantTurns = collect($messages)->where('role', 'assistant')->values();
+
+    expect($assistantTurns)->toHaveCount(3)
+        ->and($assistantTurns[0]['content'][0]['signature'])->toBe('sig-1')
+        ->and(collect($assistantTurns[0]['content'])->where('type', 'tool_use')->pluck('id')->all())->toBe(['toolu_1'])
+        ->and($assistantTurns[1]['content'][0]['signature'])->toBe('sig-2')
+        ->and(collect($assistantTurns[1]['content'])->where('type', 'tool_use')->pluck('id')->all())->toBe(['toolu_2'])
+        ->and($assistantTurns[2]['content'][0]['text'])->toBe('Done.');
 });

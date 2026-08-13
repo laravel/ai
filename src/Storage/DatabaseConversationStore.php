@@ -207,6 +207,11 @@ class DatabaseConversationStore implements ConversationStore
 
         if (filled($blocks = $response->pausedProviderContentBlocks())) {
             $meta['provider_content_blocks'] = $blocks;
+
+            // The blocks above describe the paused step; a multi-step turn also needs the steps that ran before it...
+            if (filled($steps = $response->precedingProviderContentBlockSteps())) {
+                $meta['preceding_provider_content_block_steps'] = $steps;
+            }
         }
 
         return $meta;
@@ -292,8 +297,11 @@ class DatabaseConversationStore implements ConversationStore
 
         $pausedCallIds = $this->pausedCallIds($record);
 
-        $isPause = $pendingCalls->isNotEmpty()
-            && $pendingCalls->every(fn (array $toolCall) => in_array($toolCall['id'], $pausedCallIds, true));
+        // The blocks keep describing the turn once its pause resolves, so replay them for any call still gating or answered on a later row...
+        $blocksDescribeTurn = $pendingCalls->every(
+            fn (array $toolCall) => in_array($toolCall['id'], $pausedCallIds, true)
+                || in_array($toolCall['id'], $resolvedCallIds, true)
+        );
 
         $messages = [];
 
@@ -305,7 +313,28 @@ class DatabaseConversationStore implements ConversationStore
 
         $providerContentBlocks = $meta['provider_content_blocks'] ?? [];
 
-        if ($isPause && filled($providerContentBlocks)) {
+        if ($blocksDescribeTurn && filled($providerContentBlocks)) {
+            // The blocks replay the paused step verbatim, so any step before it has to be replayed ahead of them...
+            foreach ($meta['preceding_provider_content_block_steps'] ?? [] as $step) {
+                $stepCallIds = $step['tool_call_ids'];
+
+                $messages[] = new AssistantMessage(
+                    $step['content'],
+                    $toolCalls->filter(fn (array $toolCall) => in_array($toolCall['id'], $stepCallIds, true))->map(ToolCall::fromArray(...))->values(),
+                    $step['blocks'],
+                    $meta['provider'] ?? null,
+                );
+
+                $stepResults = $ownResults->filter(fn (array $toolResult) => in_array($toolResult['id'], $stepCallIds, true))->values();
+
+                if ($stepResults->isNotEmpty()) {
+                    $messages[] = new ToolResultMessage($stepResults->map(ToolResult::fromArray(...)));
+                }
+
+                $toolCalls = $toolCalls->reject(fn (array $toolCall) => in_array($toolCall['id'], $stepCallIds, true))->values();
+                $ownResults = $ownResults->reject(fn (array $toolResult) => in_array($toolResult['id'], $stepCallIds, true))->values();
+            }
+
             $messages[] = new AssistantMessage($record->content, $toolCalls->map(ToolCall::fromArray(...))->values(), $providerContentBlocks, $meta['provider'] ?? null);
 
             if ($ownResults->isNotEmpty()) {
