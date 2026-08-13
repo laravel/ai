@@ -27,6 +27,7 @@ class ToolSearch extends ProviderTool
     public function withTools(array $tools): self
     {
         $clone = new self($tools, $this->strategy);
+
         $clone->providerOptions = $this->providerOptions;
 
         return $clone;

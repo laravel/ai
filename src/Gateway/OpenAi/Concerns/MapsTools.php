@@ -35,7 +35,10 @@ trait MapsTools
                     continue;
                 }
 
-                $mapped[] = ['type' => 'tool_search', ...array_diff_key($tool->providerOptions(Lab::OpenAI), ['type' => true])];
+                $mapped[] = [
+                    'type' => 'tool_search',
+                    ...array_diff_key($tool->providerOptions(Lab::OpenAI), ['type' => true])
+                ];
 
                 foreach ($tool->tools as $deferred) {
                     $mapped[] = $this->mapTool($deferred, defer: true);

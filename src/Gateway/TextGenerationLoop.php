@@ -72,7 +72,7 @@ class TextGenerationLoop
         ?array $approval = null,
         ?Closure $recordApprovalResults = null,
     ): TextResponse {
-        $this->guardToolSearch($provider, $tools);
+        $this->ensureToolSearchIsApplicable($provider, $tools);
 
         $steps = new Collection;
         $maxSteps = $this->resolveMaxSteps($options, $tools);
@@ -166,7 +166,7 @@ class TextGenerationLoop
         ?Closure $recordApprovalResults = null,
         ?array $validatedApproval = null,
     ): Generator {
-        $this->guardToolSearch($provider, $tools);
+        $this->ensureToolSearchIsApplicable($provider, $tools);
 
         $maxSteps = $this->resolveMaxSteps($options, $tools);
         $continuationToken = null;
@@ -309,28 +309,6 @@ class TextGenerationLoop
         $count = ToolSearch::budget($tools);
 
         return $count > 0 ? min((int) round($count * 1.5), self::DEFAULT_MAX_STEPS) : 5;
-    }
-
-    /**
-     * Ensure hosted tool search is only used with a supporting provider and a single wrapper.
-     *
-     * @param  Tool[]  $tools
-     */
-    protected function guardToolSearch(TextProvider $provider, array $tools): void
-    {
-        $wrappers = array_filter($tools, fn ($tool): bool => $tool instanceof ToolSearch);
-
-        if ($wrappers === []) {
-            return;
-        }
-
-        if (! $provider instanceof SupportsToolSearch) {
-            throw new LogicException("Provider [{$provider->name()}] does not support tool search.");
-        }
-
-        if (count($wrappers) > 1) {
-            throw new LogicException('Only a single tool search wrapper may be registered per request.');
-        }
     }
 
     /**
@@ -619,5 +597,27 @@ class TextGenerationLoop
             $totalUsage,
             $finalStep->meta,
         ))->withMessages($newMessages)->withSteps($steps);
+    }
+
+    /**
+     * Ensure hosted tool search is only used with a supporting provider and a single wrapper.
+     *
+     * @param  Tool[]  $tools
+     */
+    protected function ensureToolSearchIsApplicable(TextProvider $provider, array $tools): void
+    {
+        $wrappers = array_filter($tools, fn ($tool): bool => $tool instanceof ToolSearch);
+
+        if ($wrappers === []) {
+            return;
+        }
+
+        if (! $provider instanceof SupportsToolSearch) {
+            throw new LogicException("Provider [{$provider->name()}] does not support tool search.");
+        }
+
+        if (count($wrappers) > 1) {
+            throw new LogicException('Only a single tool search wrapper may be registered per request.');
+        }
     }
 }

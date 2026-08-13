@@ -63,7 +63,7 @@ trait MapsMessages
      */
     protected function mapAssistantMessage(AssistantMessage|Message $message, array &$input): void
     {
-        // Only reached on stateless (store=false) full-history replay.
+        // Only reached on stateless (store=false) full-history replay...
         if ($message instanceof AssistantMessage && filled($message->providerContentBlocks)) {
             foreach ($message->providerContentBlocks as $block) {
                 $input[] = $block;

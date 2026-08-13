@@ -128,6 +128,9 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, StepTextGate
         );
     }
 
+    /**
+     * Map a regular tool to an Azure OpenAI function definition.
+     */
     protected function mapTool(Tool $tool, bool $defer = false): array
     {
         $schema = $tool->schema(new JsonSchemaTypeFactory);

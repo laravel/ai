@@ -67,16 +67,6 @@ trait ParsesTextResponses
     }
 
     /**
-     * Capture the ordered response output for stateless (store=false) replay.
-     *
-     * @return array<int, array<string, mixed>>
-     */
-    protected function extractReplayBlocks(array $output): array
-    {
-        return array_values(array_filter($output, 'is_array'));
-    }
-
-    /**
      * Serialize a tool result output value to a string.
      */
     protected function serializeToolResultOutput(mixed $output): string
@@ -127,6 +117,16 @@ trait ParsesTextResponses
         }
 
         return $citations->values();
+    }
+
+    /**
+     * Extract the ordered response output for stateless (store=false) replay.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function extractReplayBlocks(array $output): array
+    {
+        return array_values(array_filter($output, 'is_array'));
     }
 
     /**
