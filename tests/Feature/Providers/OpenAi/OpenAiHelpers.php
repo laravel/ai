@@ -35,13 +35,13 @@ trait OpenAiHelpers
         return implode("\n\n", $lines)."\n\n";
     }
 
-    protected function responseCreated(string $model = 'gpt-5.4'): array
+    protected function responseCreated(): array
     {
         return [
             'type' => 'response.created',
             'response' => [
                 'id' => 'resp_1',
-                'model' => $model,
+                'model' => 'gpt-5.4',
                 'status' => 'in_progress',
                 'output' => [],
             ],
@@ -106,13 +106,13 @@ trait OpenAiHelpers
         ];
     }
 
-    protected function responseCompleted(int $inputTokens, int $outputTokens, int $cachedTokens = 0, int $reasoningTokens = 0, int $cacheWriteTokens = 0, string $model = 'gpt-5.4', ?array $output = null): array
+    protected function responseCompleted(int $inputTokens, int $outputTokens, int $cachedTokens = 0, int $reasoningTokens = 0, int $cacheWriteTokens = 0, ?array $output = null): array
     {
         return [
             'type' => 'response.completed',
             'response' => [
                 'id' => 'resp_1',
-                'model' => $model,
+                'model' => 'gpt-5.4',
                 'status' => 'completed',
                 'output' => $output ?? [
                     [

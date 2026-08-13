@@ -198,10 +198,10 @@ test('streaming captures cache write tokens from response completed', function (
     Http::fake([
         'api.openai.com/*' => Http::response(
             body: $this->ssePayload([
-                $this->responseCreated('gpt-5.6-luna'),
+                $this->responseCreated(),
                 $this->outputTextDelta('Hello'),
                 $this->outputTextDone('Hello'),
-                $this->responseCompleted(8817, 120, cachedTokens: 0, cacheWriteTokens: 8814, model: 'gpt-5.6-luna'),
+                $this->responseCompleted(8817, 120, cachedTokens: 0, cacheWriteTokens: 8814),
             ]),
             status: 200,
             headers: ['Content-Type' => 'text/event-stream'],
