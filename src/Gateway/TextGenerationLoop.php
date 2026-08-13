@@ -509,6 +509,7 @@ class TextGenerationLoop
         [$pendingToolCalls, $resolvedToolCallIds] = $this->pendingToolCalls($messages);
 
         $pendingIds = $pendingToolCalls->pluck('id');
+
         $decisionIds = collect(array_keys($approval))->reject(
             fn ($id) => $id === '*',
         );
@@ -521,8 +522,12 @@ class TextGenerationLoop
             $toolCall->id => $this->approvalForTool($resolvedTools[$toolCall->id], $toolCall),
         ]);
 
-        $gated = $pendingToolCalls->filter(fn (ToolCall $toolCall) => $approvals[$toolCall->id] instanceof Approval);
+        $gated = $pendingToolCalls->filter(
+            fn (ToolCall $toolCall) => $approvals[$toolCall->id] instanceof Approval
+        );
+
         $unknown = $decisionIds->diff($pendingIds);
+
         $missing = array_key_exists('*', $approval)
             ? collect()
             : $gated->pluck('id')->diff($decisionIds);
