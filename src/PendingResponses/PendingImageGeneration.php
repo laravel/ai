@@ -8,7 +8,6 @@ use Laravel\Ai\Ai;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
-use Laravel\Ai\FakePendingDispatch;
 use Laravel\Ai\Files\Image;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\StoredImage;
@@ -166,8 +165,6 @@ class PendingImageGeneration
                     $model
                 )
             );
-
-            return new QueuedImageResponse(new FakePendingDispatch);
         }
 
         return new QueuedImageResponse(

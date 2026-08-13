@@ -42,6 +42,28 @@ test('streaming emits text events', function (): void {
         ->and($events[5])->toBeInstanceOf(StreamEnd::class);
 });
 
+test('streaming flattens block content deltas', function (): void {
+    Http::fake([
+        '*' => Http::response(
+            body: $this->ssePayload([
+                ['id' => 'chatcmpl-123', 'object' => 'chat.completion.chunk', 'model' => 'mistral-medium-latest', 'choices' => [['index' => 0, 'delta' => ['role' => 'assistant', 'content' => [['type' => 'text', 'text' => 'Hello']]], 'finish_reason' => null]]],
+                ['id' => 'chatcmpl-123', 'object' => 'chat.completion.chunk', 'model' => 'mistral-medium-latest', 'choices' => [['index' => 0, 'delta' => ['content' => [['type' => 'reference', 'reference_ids' => ['search_documents']]]], 'finish_reason' => null]]],
+                ['id' => 'chatcmpl-123', 'object' => 'chat.completion.chunk', 'model' => 'mistral-medium-latest', 'choices' => [['index' => 0, 'delta' => [], 'finish_reason' => 'stop']], 'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5]],
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents();
+
+    expect($events[0])->toBeInstanceOf(StreamStart::class)
+        ->and($events[1])->toBeInstanceOf(TextStart::class)
+        ->and($events[2])->toBeInstanceOf(TextDelta::class)->delta->toBe('Hello')
+        ->and($events[3])->toBeInstanceOf(TextEnd::class)
+        ->and($events[4])->toBeInstanceOf(StreamEnd::class);
+});
+
 test('streaming handles tool calls', function (): void {
     Http::fake([
         '*' => Http::sequence([

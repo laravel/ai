@@ -434,6 +434,7 @@ Point the SDK at any OpenAI-compatible endpoint (LM Studio, vLLM, Together, etc.
             'default' => 'some-embedding-model',
             'dimensions' => 1024, // optional; omit to use native dimensions
         ],
+        'transcription' => ['default' => 'some-transcription-model'],
     ],
 ],
 ```
@@ -449,7 +450,15 @@ Embeddings::for(['Hello'])->generate(
 );
 ```
 
-It uses OpenAI-standard shapes and supports text, streaming, tools, structured output, image attachments, and text embeddings. Embedding dimensions are optional; omit them to use the model's native dimensions. For extra request-body fields, implement `HasProviderOptions` — the returned array is merged into the body.
+It uses OpenAI-standard shapes and supports text, streaming, tools, structured output, image attachments, text embeddings, and audio transcription. Embedding dimensions are optional; omit them to use the model's native dimensions. For extra request-body fields, implement `HasProviderOptions` — the returned array is merged into the body.
+
+Transcription uploads standard multipart (`file` + `model` + optional `language`) and defaults to `response_format: json`. Because endpoints vary, provider options override the defaults — pass `response_format: 'verbose_json'` for segments, or use `diarize()` on servers that implement `diarized_json`:
+
+```php
+Transcription::fromDisk('recordings', $path)
+    ->withProviderOptions(['response_format' => 'verbose_json'])
+    ->generate(provider: 'my-llm');
+```
 
 ## Common Pitfalls
 
@@ -479,7 +488,7 @@ Calling a capability not supported by a provider throws a `LogicException`. Refe
 | Text       | OpenAI, Anthropic, Gemini, Azure, Groq, xAI, DeepSeek, Mistral, Ollama, OpenRouter, OpenAI-compatible |
 | Images     | OpenAI, Gemini, xAI                                            |
 | TTS        | OpenAI, ElevenLabs                                              |
-| STT        | OpenAI, ElevenLabs, Mistral                                     |
+| STT        | OpenAI, ElevenLabs, Mistral, Groq, OpenAI-compatible            |
 | Embeddings | OpenAI, OpenAI-compatible, Gemini, Azure, Cohere, Mistral, Jina, VoyageAI |
 | Reranking  | Cohere, Jina                                                    |
 | Files      | OpenAI, Anthropic, Gemini                                       |

@@ -12,6 +12,7 @@ use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Attributes\RepairToolCalls;
 use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
+use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
@@ -22,6 +23,7 @@ use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Providers\Tools\ProviderTool;
+use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Step;
@@ -36,6 +38,7 @@ use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Laravel\Ai\Tools\Request;
 use Laravel\Ai\Tools\ToolNameResolver;
+use LogicException;
 use Throwable;
 
 class TextGenerationLoop
@@ -43,6 +46,11 @@ class TextGenerationLoop
     use HandlesToolApprovals, InvokesTools;
 
     private bool $repairsToolCalls = false;
+
+    /**
+     * The default ceiling for the derived step budget when it is not set explicitly.
+     */
+    protected const DEFAULT_MAX_STEPS = 25;
 
     /**
      * Create a new text generation loop instance.
@@ -69,6 +77,8 @@ class TextGenerationLoop
         ?array $approval = null,
         ?Closure $recordApprovalResults = null,
     ): TextResponse {
+        $this->ensureToolSearchIsApplicable($provider, $tools);
+
         $steps = new Collection;
         $maxSteps = $this->resolveMaxSteps($options, $tools);
         $continuationToken = null;
@@ -161,6 +171,8 @@ class TextGenerationLoop
         ?Closure $recordApprovalResults = null,
         ?array $validatedApproval = null,
     ): Generator {
+        $this->ensureToolSearchIsApplicable($provider, $tools);
+
         $maxSteps = $this->resolveMaxSteps($options, $tools);
         $continuationToken = null;
         $accumulatedUsage = new Usage;
@@ -291,7 +303,7 @@ class TextGenerationLoop
     }
 
     /**
-     * Resolve the step budget: explicit `maxSteps`, else 1.5x tools, else 5.
+     * Resolve the step budget: explicit `maxSteps`, else 1.5x tools capped at the ceiling, else 5.
      *
      * @param  array<Tool|ProviderTool>  $tools
      */
@@ -301,7 +313,8 @@ class TextGenerationLoop
             return max(1, $options->maxSteps);
         }
 
-        $maxSteps = $tools !== [] ? (int) round(count($tools) * 1.5) : 5;
+        $count = ToolSearch::budget($tools);
+        $maxSteps = $count > 0 ? min((int) round($count * 1.5), self::DEFAULT_MAX_STEPS) : 5;
 
         return $maxSteps + (int) RepairToolCalls::isAppliedTo($options?->agent);
     }
@@ -631,5 +644,27 @@ class TextGenerationLoop
             $totalUsage,
             $finalStep->meta,
         ))->withMessages($newMessages)->withSteps($steps)->withRawResponse($lastResult?->raw);
+    }
+
+    /**
+     * Ensure hosted tool search is only used with a supporting provider and a single wrapper.
+     *
+     * @param  Tool[]  $tools
+     */
+    protected function ensureToolSearchIsApplicable(TextProvider $provider, array $tools): void
+    {
+        $wrappers = array_filter($tools, fn ($tool): bool => $tool instanceof ToolSearch);
+
+        if ($wrappers === []) {
+            return;
+        }
+
+        if (! $provider instanceof SupportsToolSearch) {
+            throw new LogicException("Provider [{$provider->name()}] does not support tool search.");
+        }
+
+        if (count($wrappers) > 1) {
+            throw new LogicException('Only a single tool search wrapper may be registered per request.');
+        }
     }
 }

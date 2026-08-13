@@ -12,7 +12,6 @@ use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
-use Laravel\Ai\FakePendingDispatch;
 use Laravel\Ai\Files\Audio;
 use Laravel\Ai\Files\Document;
 use Laravel\Ai\Files\Image;
@@ -313,8 +312,6 @@ class PendingEmbeddingsGeneration
                     is_array($this->providerOptions) ? $this->providerOptions : [],
                 )
             );
-
-            return new QueuedEmbeddingsResponse(new FakePendingDispatch);
         }
 
         return new QueuedEmbeddingsResponse(

@@ -8,6 +8,7 @@ use Laravel\Ai\Concerns\InteractsWithApprovals;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
+use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
@@ -20,6 +21,7 @@ use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Promptable;
+use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
@@ -961,9 +963,96 @@ test('it does not emit a stream end when a turn errors without a stream end', fu
         ->and(collect($events)->whereInstanceOf(Error::class))->toHaveCount(1);
 });
 
+test('it rejects tool search on a provider that does not support it before calling the gateway', function (): void {
+    $gateway = new TextGenerationLoopFakeGateway;
+    $tools = [new TextGenerationLoopCountingTool, new ToolSearch(tools: [new TextGenerationLoopCountingTool])];
+
+    expect(fn () => (new TextGenerationLoop($gateway))->generate(
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [],
+        $tools,
+        null,
+        null,
+        null,
+    ))->toThrow(LogicException::class, 'does not support tool search');
+
+    expect($gateway->generateCalls)->toBe(0);
+});
+
+test('it rejects tool search on a streamed generation for an unsupported provider', function (): void {
+    $gateway = new TextGenerationLoopFakeGateway;
+    $tools = [new TextGenerationLoopCountingTool, new ToolSearch(tools: [new TextGenerationLoopCountingTool])];
+
+    expect(fn () => iterator_to_array((new TextGenerationLoop($gateway))->stream(
+        'invocation-1',
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [],
+        $tools,
+        null,
+        null,
+        null,
+    )))->toThrow(LogicException::class, 'does not support tool search');
+
+    expect($gateway->streamCalls)->toBe(0);
+});
+
+test('it rejects more than one tool search wrapper on a supporting provider', function (): void {
+    $gateway = new TextGenerationLoopFakeGateway;
+    $tools = [
+        new TextGenerationLoopCountingTool,
+        new ToolSearch(tools: [new TextGenerationLoopCountingTool]),
+        new ToolSearch(tools: [new TextGenerationLoopCountingTool]),
+    ];
+
+    expect(fn () => (new TextGenerationLoop($gateway))->generate(
+        textGenerationLoopToolSearchProvider(),
+        'model',
+        null,
+        [],
+        $tools,
+        null,
+        null,
+        null,
+    ))->toThrow(LogicException::class, 'single tool search wrapper');
+
+    expect($gateway->generateCalls)->toBe(0);
+});
+
+test('it allows a single tool search wrapper on a supporting provider', function (): void {
+    $gateway = new TextGenerationLoopFakeGateway([
+        new StepResponse('done', [], FinishReason::Stop, new Usage, new Meta('fake', 'model')),
+    ]);
+
+    $response = (new TextGenerationLoop($gateway))->generate(
+        textGenerationLoopToolSearchProvider(),
+        'model',
+        null,
+        [],
+        [new TextGenerationLoopCountingTool, new ToolSearch(tools: [new TextGenerationLoopCountingTool])],
+        null,
+        null,
+        null,
+    );
+
+    expect($gateway->generateCalls)->toBe(1)
+        ->and($response->text)->toBe('done');
+});
+
 function textGenerationLoopProvider(): TextProvider
 {
     $provider = Mockery::mock(TextProvider::class);
+    $provider->shouldReceive('name')->andReturn('fake');
+
+    return $provider;
+}
+
+function textGenerationLoopToolSearchProvider(): TextProvider
+{
+    $provider = Mockery::mock(TextProvider::class, SupportsToolSearch::class);
     $provider->shouldReceive('name')->andReturn('fake');
 
     return $provider;

@@ -3,19 +3,27 @@
 namespace Laravel\Ai\Gateway\OpenAiCompatible;
 
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
+use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
+use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
+use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
+use Laravel\Ai\Gateway\Concerns\ResolvesAudioFilenames;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\TranscriptionSegment;
+use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
+use Laravel\Ai\Responses\TranscriptionResponse;
 
-class OpenAiCompatibleGateway implements EmbeddingGateway, StepTextGateway
+class OpenAiCompatibleGateway implements EmbeddingGateway, StepTextGateway, TranscriptionGateway
 {
     use Concerns\BuildsTextRequests;
     use Concerns\CreatesOpenAiCompatibleClient;
@@ -27,6 +35,7 @@ class OpenAiCompatibleGateway implements EmbeddingGateway, StepTextGateway
     use Concerns\PerformsChatCompletionSteps;
     use HandlesFailoverErrors;
     use ParsesServerSentEvents;
+    use ResolvesAudioFilenames;
 
     public function __construct(protected Dispatcher $events)
     {
@@ -90,6 +99,47 @@ class OpenAiCompatibleGateway implements EmbeddingGateway, StepTextGateway
 
             return array_map(floatval(...), $embedding);
         })->all();
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function generateTranscription(
+        TranscriptionProvider $provider,
+        string $model,
+        TranscribableAudio $audio,
+        ?string $language = null,
+        bool $diarize = false,
+        int $timeout = 30,
+        array $providerOptions = [],
+    ): TranscriptionResponse {
+        $response = $this->withErrorHandling(
+            $provider->name(),
+            fn () => $this->client($provider, $timeout)
+                ->attach('file', $audio->content(), $this->audioFilename($audio), array_filter(['Content-Type' => $audio->mimeType()]))
+                ->post('audio/transcriptions', array_merge(array_filter([
+                    'model' => $model,
+                    'language' => $language,
+                    'response_format' => $diarize ? 'diarized_json' : 'json',
+                ]), $providerOptions)),
+        );
+
+        $data = $response->json();
+
+        return new TranscriptionResponse(
+            $data['text'] ?? '',
+            collect($data['segments'] ?? [])->map(fn (array $segment): TranscriptionSegment => new TranscriptionSegment(
+                $segment['text'] ?? '',
+                $segment['speaker'] ?? '',
+                $segment['start'] ?? 0,
+                $segment['end'] ?? 0,
+            )),
+            new Usage(
+                Arr::get($data, 'usage.input_tokens') ?? Arr::get($data, 'usage.prompt_tokens', 0),
+                Arr::get($data, 'usage.output_tokens') ?? Arr::get($data, 'usage.completion_tokens', 0),
+            ),
+            new Meta($provider->name(), $model),
+        );
     }
 
     /**
