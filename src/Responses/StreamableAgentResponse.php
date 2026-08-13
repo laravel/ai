@@ -40,6 +40,9 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
 
     protected bool $hasYielded = false;
 
+    /**
+     * Create a new streamable agent response instance.
+     */
     public function __construct(
         public string $invocationId,
         protected Closure $generator,
@@ -194,6 +197,9 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
         $this->syncConversationFromStreamedResponse();
     }
 
+    /**
+     * Synchronize the conversation state from the completed streamed response.
+     */
     protected function syncConversationFromStreamedResponse(): void
     {
         if ($this->streamedResponse->conversationId === null) {
