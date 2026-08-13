@@ -102,6 +102,22 @@ test('structured output defaults to json schema response format', function (): v
     });
 });
 
+test('structured response is correctly parsed', function (): void {
+    Http::fake(['*' => fakeOpenAiCompatibleResponse('{"symbol": "Au"}')]);
+
+    $response = (new StructuredAgent)->prompt('What is the symbol for Gold?', provider: 'openai-compatible');
+
+    expect($response->structured['symbol'])->toBe('Au');
+});
+
+test('structured response tolerates a markdown code fence', function (): void {
+    Http::fake(['*' => fakeOpenAiCompatibleResponse("```json\n".'{"symbol": "Au"}'."\n```")]);
+
+    $response = (new StructuredAgent)->prompt('What is the symbol for Gold?', provider: 'openai-compatible');
+
+    expect($response->structured['symbol'])->toBe('Au');
+});
+
 test('required tool choice forces the model to call a tool', function (): void {
     Http::fake(['*' => fakeOpenAiCompatibleResponse('42')]);
 
