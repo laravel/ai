@@ -49,14 +49,6 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     }
 
     /**
-     * Determine whether this response has handed at least one event to a consumer.
-     */
-    public function hasYielded(): bool
-    {
-        return $this->hasYielded;
-    }
-
-    /**
      * Execute a callback over each event.
      */
     public function each(callable $callback): self
@@ -210,5 +202,13 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
 
         $this->conversationId = $this->streamedResponse->conversationId;
         $this->conversationUser = $this->streamedResponse->conversationUser;
+    }
+
+    /**
+     * Determine whether this response has handed at least one event to a consumer.
+     */
+    public function hasYielded(): bool
+    {
+        return $this->hasYielded;
     }
 }
