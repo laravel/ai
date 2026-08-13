@@ -9,8 +9,8 @@ use Laravel\Ai\Gateway\StepResponse;
 class StepCompleted
 {
     /**
-     * @param  string  $model  the model the step was requested against, which the responding model reported in $response->meta may differ from
-     * @param  float  $time  wall time spent in the provider call, in milliseconds
+     * @param  string  $model  The model the step was requested against, which the responding model reported in $response->meta may differ from.
+     * @param  float  $time  Wall time spent in the provider call, in milliseconds.
      */
     public function __construct(
         public string $invocationId,

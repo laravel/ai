@@ -9,8 +9,8 @@ use Throwable;
 class StepFailed
 {
     /**
-     * @param  Throwable  $exception  a StreamErrorException carries the provider's own error event on ->error
-     * @param  float  $time  wall time spent in the provider call before it failed, in milliseconds
+     * @param  Throwable  $exception  A StreamErrorException carries the provider's own error event on ->error.
+     * @param  float  $time  Wall time spent in the provider call before it failed, in milliseconds.
      */
     public function __construct(
         public string $invocationId,
