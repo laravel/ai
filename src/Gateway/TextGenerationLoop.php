@@ -307,12 +307,15 @@ class TextGenerationLoop
     }
 
     /**
+     * Resolve tool results using the generation options for the current step.
+     *
      * @param  array<Tool|ProviderTool>  $tools
      * @return array{array<int, ToolResult>, Collection<int, PendingApproval>}
      */
     private function stepToolResultsWithOptions(StepResponse $result, bool $isFinalStep, array $tools, ?TextGenerationOptions $options): array
     {
         $repairsToolCalls = $this->repairsToolCalls;
+
         $this->repairsToolCalls = RepairToolCalls::isAppliedTo($options?->agent);
 
         try {
