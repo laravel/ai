@@ -989,3 +989,74 @@ test('a pre-validated streamed resume executes the approved tool exactly once', 
 
     expect($tool->calls)->toBe(1);
 });
+
+test('a nested generation on a shared loop preserves the callers nested tool records', function (): void {
+    $gateway = new TextGenerationLoopFakeGateway([
+        new StepResponse('', [new ToolCall('c1', 'batch', [], 'c1')], FinishReason::ToolCalls, new Usage, new Meta('fake', 'model')),
+        new StepResponse('inner done', [], FinishReason::Stop, new Usage, new Meta('fake', 'model')),
+        new StepResponse('outer done', [], FinishReason::Stop, new Usage, new Meta('fake', 'model')),
+    ]);
+
+    $loop = new TextGenerationLoop($gateway);
+    $provider = textGenerationLoopProvider();
+
+    $prompting = new class($loop, $provider) implements Tool
+    {
+        public function __construct(protected TextGenerationLoop $loop, protected TextProvider $provider) {}
+
+        public function name(): string
+        {
+            return 'prompting_tool';
+        }
+
+        public function description(): string
+        {
+            return 'Re-enters the shared generation loop, like an agent-backed catalog tool.';
+        }
+
+        public function handle(Request $request): string
+        {
+            return $this->loop->generate($this->provider, 'model', null)->text;
+        }
+
+        public function schema(JsonSchema $schema): array
+        {
+            return [];
+        }
+    };
+
+    $batch = new class($loop, $prompting) implements Tool
+    {
+        public function __construct(protected TextGenerationLoop $loop, protected Tool $prompting) {}
+
+        public function name(): string
+        {
+            return 'batch';
+        }
+
+        public function description(): string
+        {
+            return 'Executes a catalog tool through invokeNestedTool, like execute_tools.';
+        }
+
+        public function handle(Request $request): string
+        {
+            return $this->loop->invokeNestedTool($this->prompting, 'prompting_tool', [], $request->toolCallId().':0');
+        }
+
+        public function schema(JsonSchema $schema): array
+        {
+            return [];
+        }
+    };
+
+    $response = $loop->generate(
+        $provider, 'model', null, [], [$batch], null, new TextGenerationOptions(maxSteps: 2), null,
+    );
+
+    expect($response->text)->toBe('outer done')
+        ->and($response->toolCalls->pluck('name')->all())->toBe(['batch', 'prompting_tool'])
+        ->and($response->toolResults->pluck('name')->all())->toBe(['batch', 'prompting_tool'])
+        ->and($response->toolCalls->firstWhere('name', 'prompting_tool')->id)->toBe('c1:0')
+        ->and($response->toolResults->firstWhere('name', 'prompting_tool')->result)->toBe('inner done');
+});

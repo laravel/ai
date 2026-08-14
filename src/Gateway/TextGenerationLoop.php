@@ -70,8 +70,35 @@ class TextGenerationLoop
         ?array $approval = null,
         ?Closure $recordApprovalResults = null,
     ): TextResponse {
-        $this->nestedToolCalls = [];
-        $this->nestedToolResults = [];
+        $restoreNestedToolRecords = $this->reserveNestedToolRecords();
+
+        try {
+            return $this->runGenerate(
+                $provider, $model, $instructions, $messages, $tools, $schema,
+                $options, $timeout, $approval, $recordApprovalResults,
+            );
+        } finally {
+            $restoreNestedToolRecords();
+        }
+    }
+
+    /**
+     * @param  Tool[]  $tools
+     * @param  array<string, mixed>|null  $schema
+     * @param  array<string, Decision>|null  $approval
+     */
+    protected function runGenerate(
+        TextProvider $provider,
+        string $model,
+        ?string $instructions,
+        array $messages = [],
+        array $tools = [],
+        ?array $schema = null,
+        ?TextGenerationOptions $options = null,
+        ?int $timeout = null,
+        ?array $approval = null,
+        ?Closure $recordApprovalResults = null,
+    ): TextResponse {
         $steps = new Collection;
         $maxSteps = $this->resolveMaxSteps($options, $tools);
         $continuationToken = null;
@@ -164,8 +191,38 @@ class TextGenerationLoop
         ?Closure $recordApprovalResults = null,
         ?array $validatedApproval = null,
     ): Generator {
-        $this->nestedToolCalls = [];
-        $this->nestedToolResults = [];
+        $restoreNestedToolRecords = $this->reserveNestedToolRecords();
+
+        try {
+            yield from $this->runStream(
+                $invocationId, $provider, $model, $instructions, $messages, $tools,
+                $schema, $options, $timeout, $approval, $recordApprovalResults, $validatedApproval,
+            );
+        } finally {
+            $restoreNestedToolRecords();
+        }
+    }
+
+    /**
+     * @param  Tool[]  $tools
+     * @param  array<string, mixed>|null  $schema
+     * @param  array<string, Decision>|null  $approval
+     * @param  array{Collection<int, ToolCall>, Collection<string, ?Tool>}|null  $validatedApproval
+     */
+    protected function runStream(
+        string $invocationId,
+        TextProvider $provider,
+        string $model,
+        ?string $instructions,
+        array $messages = [],
+        array $tools = [],
+        ?array $schema = null,
+        ?TextGenerationOptions $options = null,
+        ?int $timeout = null,
+        ?array $approval = null,
+        ?Closure $recordApprovalResults = null,
+        ?array $validatedApproval = null,
+    ): Generator {
         $maxSteps = $this->resolveMaxSteps($options, $tools);
         $continuationToken = null;
         $accumulatedUsage = new Usage;
@@ -629,6 +686,24 @@ class TextGenerationLoop
         $this->nestedToolResults[] = new ToolResult($toolCallId, $name, $arguments, $result);
 
         return $result;
+    }
+
+    /**
+     * Start fresh nested tool accumulators, returning a closure that restores the caller's records.
+     *
+     * @return Closure(): void
+     */
+    protected function reserveNestedToolRecords(): Closure
+    {
+        [$calls, $results] = [$this->nestedToolCalls, $this->nestedToolResults];
+
+        $this->nestedToolCalls = [];
+        $this->nestedToolResults = [];
+
+        return function () use ($calls, $results): void {
+            $this->nestedToolCalls = $calls;
+            $this->nestedToolResults = $results;
+        };
     }
 
     protected function appendNestedToolRecords(TextResponse $response): TextResponse
