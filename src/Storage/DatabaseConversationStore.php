@@ -213,13 +213,17 @@ class DatabaseConversationStore implements ConversationStore
         if (! $response->hasPendingApprovals()) {
             $toolCallRounds = $response->steps
                 ->filter(fn ($step): bool => $step instanceof Step && filled($step->toolCalls))
-                ->map(fn (Step $step): array => array_values(array_map(
-                    fn (ToolCall $toolCall): string => $toolCall->id,
-                    $step->toolCalls,
-                )))
+                ->map(fn (Step $step): array => [
+                    'text' => $step->text,
+                    'tool_call_ids' => array_values(array_map(
+                        fn (ToolCall $toolCall): string => $toolCall->id,
+                        $step->toolCalls,
+                    )),
+                ])
                 ->values();
 
-            if ($toolCallRounds->count() > 1) {
+            if ($toolCallRounds->count() > 1
+                || $toolCallRounds->contains(fn (array $round): bool => filled($round['text']))) {
                 $meta['tool_call_rounds'] = $toolCallRounds->all();
             }
         }
@@ -364,7 +368,7 @@ class DatabaseConversationStore implements ConversationStore
     }
 
     /**
-     * Rebuild a completed multi-round tool turn from its persisted call ID grouping.
+     * Rebuild a completed tool turn from its persisted call ID grouping.
      *
      * @param  array<mixed>  $rounds
      * @param  Collection<int, array<string, mixed>>  $toolCalls
@@ -373,7 +377,7 @@ class DatabaseConversationStore implements ConversationStore
      */
     protected function reconstructToolCallRounds(array $rounds, Collection $toolCalls, Collection $toolResults, string $content): ?array
     {
-        if (! array_is_list($rounds) || count($rounds) < 2) {
+        if (! array_is_list($rounds) || $rounds === []) {
             return null;
         }
 
@@ -393,13 +397,17 @@ class DatabaseConversationStore implements ConversationStore
         $messages = [];
 
         foreach ($rounds as $round) {
-            if (! is_array($round) || ! array_is_list($round) || $round === []) {
+            if (! is_array($round)
+                || ! is_string($round['text'] ?? null)
+                || ! is_array($round['tool_call_ids'] ?? null)
+                || ! array_is_list($round['tool_call_ids'])
+                || $round['tool_call_ids'] === []) {
                 return null;
             }
 
             $roundIds = [];
 
-            foreach ($round as $id) {
+            foreach ($round['tool_call_ids'] as $id) {
                 if (! is_string($id) || $id === '' || isset($groupedIds[$id]) || ! $callsById->has($id) || ! $resultsById->has($id)) {
                     return null;
                 }
@@ -408,7 +416,7 @@ class DatabaseConversationStore implements ConversationStore
                 $roundIds[] = $id;
             }
 
-            $messages[] = new AssistantMessage('', collect($roundIds)->map(
+            $messages[] = new AssistantMessage($round['text'], collect($roundIds)->map(
                 fn (string $id): ToolCall => ToolCall::fromArray($callsById->get($id)),
             ));
             $messages[] = new ToolResultMessage(collect($roundIds)->map(

@@ -289,14 +289,14 @@ test('it preserves multiple tool call round boundaries when replaying a stored a
 
     $response = (new AgentResponse('invocation-id', 'The order has shipped with UPS.', new Usage, new Meta))
         ->withMessages(collect([
-            new AssistantMessage('', collect([$firstCall])),
+            new AssistantMessage('Sure, I will check.', collect([$firstCall])),
             new ToolResultMessage(collect([$firstResult])),
             new AssistantMessage('', collect([$secondCall])),
             new ToolResultMessage(collect([$secondResult])),
             new AssistantMessage('The order has shipped with UPS.'),
         ]))
         ->withSteps(collect([
-            new Step('', [$firstCall], [$firstResult], FinishReason::ToolCalls, new Usage, new Meta),
+            new Step('Sure, I will check.', [$firstCall], [$firstResult], FinishReason::ToolCalls, new Usage, new Meta),
             new Step('', [$secondCall], [$secondResult], FinishReason::ToolCalls, new Usage, new Meta),
             new Step('The order has shipped with UPS.', [], [], FinishReason::Stop, new Usage, new Meta),
         ]));
@@ -306,9 +306,13 @@ test('it preserves multiple tool call round boundaries when replaying a stored a
     $meta = json_decode((string) DB::table('agent_conversation_messages')->where('role', 'assistant')->value('meta'), true);
     $messages = $store->getLatestConversationMessages($conversationId, 10);
 
-    expect($meta)->toHaveKey('tool_call_rounds', [['call-1'], ['call-2']])
+    expect($meta)->toHaveKey('tool_call_rounds', [
+        ['text' => 'Sure, I will check.', 'tool_call_ids' => ['call-1']],
+        ['text' => '', 'tool_call_ids' => ['call-2']],
+    ])
         ->and($messages)->toHaveCount(5)
         ->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[0]->content)->toBe('Sure, I will check.')
         ->and($messages[0]->toolCalls->pluck('id')->all())->toBe(['call-1'])
         ->and($messages[1])->toBeInstanceOf(ToolResultMessage::class)
         ->and($messages[1]->toolResults->pluck('id')->all())->toBe(['call-1'])
@@ -318,6 +322,53 @@ test('it preserves multiple tool call round boundaries when replaying a stored a
         ->and($messages[3]->toolResults->pluck('id')->all())->toBe(['call-2'])
         ->and($messages[4])->toBeInstanceOf(AssistantMessage::class)
         ->and($messages[4]->content)->toBe('The order has shipped with UPS.');
+});
+
+test('it preserves assistant text before tool calls when replaying a stored turn', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    $orderCall = new ToolCall('call-1', 'lookup_order', ['id' => 1]);
+    $orderResult = new ToolResult('call-1', 'lookup_order', ['id' => 1], ['status' => 'shipped']);
+    $carrierCall = new ToolCall('call-2', 'lookup_carrier', ['id' => 1]);
+    $carrierResult = new ToolResult('call-2', 'lookup_carrier', ['id' => 1], ['carrier' => 'UPS']);
+
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        'Check my order status.',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $response = (new AgentResponse('invocation-id', 'Here you go, the order has shipped with UPS.', new Usage, new Meta))
+        ->withMessages(collect([
+            new AssistantMessage('Sure, I will check.', collect([$orderCall, $carrierCall])),
+            new ToolResultMessage(collect([$orderResult, $carrierResult])),
+            new AssistantMessage('Here you go, the order has shipped with UPS.'),
+        ]))
+        ->withSteps(collect([
+            new Step('Sure, I will check.', [$orderCall, $carrierCall], [$orderResult, $carrierResult], FinishReason::ToolCalls, new Usage, new Meta),
+            new Step('Here you go, the order has shipped with UPS.', [], [], FinishReason::Stop, new Usage, new Meta),
+        ]));
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $meta = json_decode((string) DB::table('agent_conversation_messages')->where('role', 'assistant')->value('meta'), true);
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($meta)->toHaveKey('tool_call_rounds', [[
+        'text' => 'Sure, I will check.',
+        'tool_call_ids' => ['call-1', 'call-2'],
+    ]])
+        ->and($messages)->toHaveCount(3)
+        ->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[0]->content)->toBe('Sure, I will check.')
+        ->and($messages[0]->toolCalls->pluck('id')->all())->toBe(['call-1', 'call-2'])
+        ->and($messages[1])->toBeInstanceOf(ToolResultMessage::class)
+        ->and($messages[1]->toolResults->pluck('id')->all())->toBe(['call-1', 'call-2'])
+        ->and($messages[2])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[2]->content)->toBe('Here you go, the order has shipped with UPS.');
 });
 
 test('it drops unresolved tool calls on an unmarked legacy row keeping the final assistant text', function (): void {
