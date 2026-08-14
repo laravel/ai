@@ -18,13 +18,13 @@ test('transcription request sends audio as inline data with correct mime type', 
     ]);
 
     Transcription::of(base64_encode('fake-audio'))
-        ->generate(provider: 'gemini', model: 'gemini-3.5-flash');
+        ->generate(provider: 'gemini', model: 'gemini-3.7-flash');
 
     Http::assertSent(function (Request $request): bool {
         $body = $request->data();
         $parts = $body['contents'][0]['parts'];
 
-        return str_contains($request->url(), 'models/gemini-3.5-flash:generateContent')
+        return str_contains($request->url(), 'models/gemini-3.7-flash:generateContent')
             && $parts[1]['inlineData']['mimeType'] === 'audio/mp3'
             && $parts[1]['inlineData']['data'] === base64_encode('fake-audio');
     });
@@ -37,7 +37,7 @@ test('transcription request includes language in prompt when specified', functio
 
     Transcription::of(base64_encode('fake-audio'))
         ->language('fr')
-        ->generate(provider: 'gemini', model: 'gemini-3.5-flash');
+        ->generate(provider: 'gemini', model: 'gemini-3.7-flash');
 
     Http::assertSent(fn (Request $request): bool => str_contains(
         (string) $request->data()['contents'][0]['parts'][0]['text'],
@@ -51,12 +51,12 @@ test('transcription response returns text with correct meta', function (): void 
     ]);
 
     $response = Transcription::of(base64_encode('fake-audio'))
-        ->generate(provider: 'gemini', model: 'gemini-3.5-flash');
+        ->generate(provider: 'gemini', model: 'gemini-3.7-flash');
 
     expect($response->text)->toBe('Hello world')
         ->and($response->segments)->toHaveCount(0)
         ->and($response->meta->provider)->toBe('gemini')
-        ->and($response->meta->model)->toBe('gemini-3.5-flash')
+        ->and($response->meta->model)->toBe('gemini-3.7-flash')
         ->and($response->usage->promptTokens)->toBe(10)
         ->and($response->usage->completionTokens)->toBe(5);
 });
@@ -78,7 +78,7 @@ test('diarized transcription request sends json schema in generation config', fu
 
     Transcription::of(base64_encode('fake-audio'))
         ->diarize()
-        ->generate(provider: 'gemini', model: 'gemini-3.5-flash');
+        ->generate(provider: 'gemini', model: 'gemini-3.7-flash');
 
     Http::assertSent(function (Request $request): bool {
         $body = $request->data();
@@ -97,7 +97,7 @@ test('diarized transcription response returns text and segments', function (): v
 
     $response = Transcription::of(base64_encode('fake-audio'))
         ->diarize()
-        ->generate(provider: 'gemini', model: 'gemini-3.5-flash');
+        ->generate(provider: 'gemini', model: 'gemini-3.7-flash');
 
     expect($response->text)->toBe('Hello world')
         ->and($response->segments)->toHaveCount(2)
@@ -121,7 +121,7 @@ test('diarized transcription parses srt and hour timestamp formats', function ()
 
     $response = Transcription::of(base64_encode('fake-audio'))
         ->diarize()
-        ->generate(provider: 'gemini', model: 'gemini-3.5-flash');
+        ->generate(provider: 'gemini', model: 'gemini-3.7-flash');
 
     expect($response->segments[0]->startSeconds)->toBe(1.5)
         ->and($response->segments[0]->endSeconds)->toBe(62.25)

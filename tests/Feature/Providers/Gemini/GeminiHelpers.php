@@ -23,7 +23,7 @@ trait GeminiHelpers
                 'candidatesTokenCount' => 5,
                 'totalTokenCount' => 15,
             ],
-            'modelVersion' => 'gemini-3.5-flash',
+            'modelVersion' => 'gemini-3.7-flash',
         ]);
     }
 
@@ -48,7 +48,7 @@ trait GeminiHelpers
                 'candidatesTokenCount' => 5,
                 'totalTokenCount' => 15,
             ],
-            'modelVersion' => 'gemini-3.5-flash',
+            'modelVersion' => 'gemini-3.7-flash',
         ]);
     }
 
@@ -67,7 +67,7 @@ trait GeminiHelpers
                 'candidatesTokenCount' => 5,
                 'totalTokenCount' => 15,
             ],
-            'modelVersion' => 'gemini-3.5-flash',
+            'modelVersion' => 'gemini-3.7-flash',
         ]);
     }
 
@@ -92,7 +92,7 @@ trait GeminiHelpers
                 'candidatesTokenCount' => 5,
                 'totalTokenCount' => 15,
             ],
-            'modelVersion' => 'gemini-3.5-flash',
+            'modelVersion' => 'gemini-3.7-flash',
         ]);
     }
 
@@ -140,7 +140,7 @@ trait GeminiHelpers
 
         return [
             'candidates' => [$candidate],
-            'modelVersion' => $modelVersion ?? 'gemini-3.5-flash',
+            'modelVersion' => $modelVersion ?? 'gemini-3.7-flash',
         ];
     }
 
