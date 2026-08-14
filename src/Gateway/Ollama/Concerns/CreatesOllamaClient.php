@@ -13,17 +13,14 @@ trait CreatesOllamaClient
     /**
      * Get an HTTP client for the Ollama API.
      */
-    /**
-     * @param  array<string, string>  $requestHeaders
-     */
-    protected function client(Provider $provider, ?int $timeout = null, array $requestHeaders = []): PendingRequest
+    protected function client(Provider $provider, ?int $timeout = null): PendingRequest
     {
         $key = $provider->providerCredentials()['key'] ?? null;
 
         return $this->createClient(
             $this->baseUrl($provider),
             filled($key) ? ['Authorization' => 'Bearer '.$key] : [],
-            array_merge($provider->additionalConfiguration()['headers'] ?? [], $requestHeaders),
+            $provider->additionalConfiguration()['headers'] ?? [],
             $timeout ?? 60,
         );
     }

@@ -56,7 +56,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, StepTextGate
     ): EmbeddingsResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout, $headers)->post('embeddings', array_merge($providerOptions, [
+            fn () => $this->client($provider, $timeout)->withHeaders($headers)->post('embeddings', array_merge($providerOptions, [
                 'model' => $model,
                 'input' => $inputs,
                 'dimensions' => $dimensions,
@@ -97,7 +97,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, StepTextGate
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout ?? 120, $headers)->post('images/generations', [
+            fn () => $this->client($provider, $timeout ?? 120)->withHeaders($headers)->post('images/generations', [
                 'model' => $model,
                 'prompt' => $prompt,
                 'moderation' => 'low',

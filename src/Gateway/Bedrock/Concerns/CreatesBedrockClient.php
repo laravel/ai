@@ -22,10 +22,8 @@ trait CreatesBedrockClient
 
     /**
      * Create a new Bedrock client instance.
-     *
-     * @param  array<string, string>  $requestHeaders
      */
-    protected function createBedrockClient(Provider $provider, ?int $timeout = null, array $requestHeaders = []): BedrockRuntimeClient
+    protected function createBedrockClient(Provider $provider, ?int $timeout = null): BedrockRuntimeClient
     {
         $credentials = $provider->providerCredentials();
 
@@ -43,7 +41,7 @@ trait CreatesBedrockClient
 
         $client = new BedrockRuntimeClient($clientConfig);
 
-        if ($headers = array_merge($config['headers'] ?? [], $requestHeaders)) {
+        if ($headers = $config['headers'] ?? []) {
             $client->getHandlerList()->appendBuild(Middleware::mapRequest(
                 function (RequestInterface $request) use ($headers): RequestInterface {
                     foreach ($headers as $name => $value) {

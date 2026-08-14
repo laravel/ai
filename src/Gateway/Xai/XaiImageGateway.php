@@ -37,7 +37,7 @@ class XaiImageGateway implements ImageGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout ?? 120, $headers)
+            fn () => $this->client($provider, $timeout ?? 120)->withHeaders($headers)
                 ->post('images/generations', array_merge(array_filter([
                     'model' => $model,
                     'prompt' => $prompt,

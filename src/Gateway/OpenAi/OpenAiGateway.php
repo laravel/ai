@@ -102,7 +102,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
         ?int $timeout,
         array $headers = [],
     ) {
-        return $this->client($provider, $timeout ?? 120, $headers)->post('images/generations', [
+        return $this->client($provider, $timeout ?? 120)->withHeaders($headers)->post('images/generations', [
             'model' => $model,
             'prompt' => $prompt,
             ...$provider->defaultImageOptions($size, $quality),
@@ -127,7 +127,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
         ?int $timeout,
         array $headers = [],
     ) {
-        $request = $this->client($provider, $timeout ?? 120, $headers);
+        $request = $this->client($provider, $timeout ?? 120)->withHeaders($headers);
 
         $isGptImage = str_starts_with($model, 'gpt-image');
         $field = $isGptImage ? 'image[]' : 'image';
@@ -179,7 +179,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout, $headers)->post('audio/speech', array_filter([
+            fn () => $this->client($provider, $timeout)->withHeaders($headers)->post('audio/speech', array_filter([
                 'model' => $model,
                 'input' => $text,
                 'voice' => $voice,
@@ -223,7 +223,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout, $headers)
+            fn () => $this->client($provider, $timeout)->withHeaders($headers)
                 ->attach('file', $audio->content(), $this->audioFilename($audio), array_filter(['Content-Type' => $audio->mimeType()]))
                 ->post('audio/transcriptions', array_merge($providerOptions, array_filter([
                     'model' => $model,
@@ -264,7 +264,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
     ): EmbeddingsResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout, $headers)->post('embeddings', array_merge($providerOptions, [
+            fn () => $this->client($provider, $timeout)->withHeaders($headers)->post('embeddings', array_merge($providerOptions, [
                 'model' => $model,
                 'input' => $inputs,
                 'dimensions' => $dimensions,

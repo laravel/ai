@@ -75,9 +75,13 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
         ?int $timeout,
         StepContext $stepContext,
     ): StepResponse {
-        $client = $this->createBedrockClient($provider, $timeout, $options?->headers($provider->driver()) ?? []);
+        $client = $this->createBedrockClient($provider, $timeout);
 
         $parameters = $this->buildStepBody($provider, $model, $instructions, $messages, $tools, $schema, $options, $stepContext);
+
+        if (filled($headers = $options?->headers($provider->driver()) ?? [])) {
+            $parameters['@http'] = ['headers' => $headers];
+        }
 
         try {
             $response = $this->withErrorHandling(
@@ -108,9 +112,13 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
         ?int $timeout,
         StepContext $stepContext,
     ): Generator {
-        $client = $this->createBedrockClient($provider, $timeout, $options?->headers($provider->driver()) ?? []);
+        $client = $this->createBedrockClient($provider, $timeout);
 
         $parameters = $this->buildStepBody($provider, $model, $instructions, $messages, $tools, $schema, $options, $stepContext);
+
+        if (filled($headers = $options?->headers($provider->driver()) ?? [])) {
+            $parameters['@http'] = ['headers' => $headers];
+        }
 
         try {
             $response = $this->withErrorHandling(
@@ -502,10 +510,10 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
         array $providerOptions = [],
         array $headers = [],
     ): EmbeddingsResponse {
-        $client = $this->createBedrockClient($provider, $timeout, $headers);
+        $client = $this->createBedrockClient($provider, $timeout);
 
         if ($this->isCohereEmbeddingModel($model)) {
-            return $this->generateCohereEmbeddings($provider, $model, $client, $inputs, $providerOptions);
+            return $this->generateCohereEmbeddings($provider, $model, $client, $inputs, $providerOptions, $headers);
         }
 
         $embeddings = [];
@@ -515,7 +523,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             try {
                 $response = $this->withErrorHandling(
                     $provider->name(),
-                    fn () => $client->invokeModel([
+                    fn () => $client->invokeModel(array_merge([
                         'modelId' => $model,
                         'contentType' => 'application/json',
                         'accept' => 'application/json',
@@ -523,7 +531,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
                             'inputText' => $input,
                             'dimensions' => $dimensions,
                         ])),
-                    ]),
+                    ], filled($headers) ? ['@http' => ['headers' => $headers]] : [])),
                 );
 
                 $result = json_decode((string) $response->get('body')->getContents(), true);
@@ -556,11 +564,12 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
         $client,
         array $inputs,
         array $providerOptions = [],
+        array $headers = [],
     ): EmbeddingsResponse {
         try {
             $response = $this->withErrorHandling(
                 $provider->name(),
-                fn () => $client->invokeModel([
+                fn () => $client->invokeModel(array_merge([
                     'modelId' => $model,
                     'contentType' => 'application/json',
                     'accept' => 'application/json',
@@ -569,7 +578,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
                         $providerOptions,
                         ['texts' => array_values($inputs)],
                     )),
-                ]),
+                ], filled($headers) ? ['@http' => ['headers' => $headers]] : [])),
             );
 
             $result = json_decode((string) $response->get('body')->getContents(), true);

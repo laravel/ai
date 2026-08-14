@@ -55,7 +55,7 @@ class XaiGateway implements Gateway, StepTextGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout, $options?->headers($provider->driver()) ?? [])
+            fn () => $this->client($provider, $timeout)->withHeaders($options?->headers($provider->driver()) ?? [])
                 ->post('responses', $body),
         );
 
@@ -87,7 +87,7 @@ class XaiGateway implements Gateway, StepTextGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout, $options?->headers($provider->driver()) ?? [])
+            fn () => $this->client($provider, $timeout)->withHeaders($options?->headers($provider->driver()) ?? [])
                 ->withOptions(['stream' => true])
                 ->post('responses', $body),
         );

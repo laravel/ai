@@ -59,7 +59,7 @@ class GroqGateway implements StepTextGateway, TranscriptionGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout, $headers)
+            fn () => $this->client($provider, $timeout)->withHeaders($headers)
                 ->attach('file', $audio->content(), $this->audioFilename($audio), array_filter(['Content-Type' => $audio->mimeType()]))
                 ->post('audio/transcriptions', array_merge($providerOptions, array_filter([
                     'model' => $model,

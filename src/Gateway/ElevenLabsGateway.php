@@ -39,7 +39,7 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
             default => $voice,
         };
 
-        $response = $this->withErrorHandling($provider->name(), fn () => $this->client($provider, $timeout, $headers)
+        $response = $this->withErrorHandling($provider->name(), fn () => $this->client($provider, $timeout)->withHeaders($headers)
             ->post('text-to-speech/'.$voice, [
                 'model_id' => $model,
                 'text' => $text,
@@ -67,7 +67,7 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
         array $providerOptions = [],
         array $headers = [],
     ): TranscriptionResponse {
-        $response = $this->withErrorHandling($provider->name(), fn () => $this->client($provider, $timeout, $headers)
+        $response = $this->withErrorHandling($provider->name(), fn () => $this->client($provider, $timeout)->withHeaders($headers)
             ->attach('file', $audio->content(), 'file', array_filter(['Content-Type' => $audio->mimeType()]))
             ->post('speech-to-text', array_merge($providerOptions, array_filter([
                 'model_id' => $model,
@@ -103,15 +103,12 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
     /**
      * Get an HTTP client for the ElevenLabs API.
      */
-    /**
-     * @param  array<string, string>  $requestHeaders
-     */
-    protected function client(AudioProvider|TranscriptionProvider $provider, int $timeout = 30, array $requestHeaders = []): PendingRequest
+    protected function client(AudioProvider|TranscriptionProvider $provider, int $timeout = 30): PendingRequest
     {
         return $this->createClient(
             $this->baseUrl($provider),
             array_filter(['xi-api-key' => $provider->providerCredentials()['key']]),
-            array_merge($provider->additionalConfiguration()['headers'] ?? [], $requestHeaders),
+            $provider->additionalConfiguration()['headers'] ?? [],
             $timeout,
             false,
         );

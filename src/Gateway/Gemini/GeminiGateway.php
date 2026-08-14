@@ -68,7 +68,7 @@ class GeminiGateway implements Gateway, StepTextGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout, $options?->headers($provider->driver()) ?? [])
+            fn () => $this->client($provider, $timeout)->withHeaders($options?->headers($provider->driver()) ?? [])
                 ->post("models/{$model}:generateContent", $body),
         );
 
@@ -98,7 +98,7 @@ class GeminiGateway implements Gateway, StepTextGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout, $options?->headers($provider->driver()) ?? [])
+            fn () => $this->client($provider, $timeout)->withHeaders($options?->headers($provider->driver()) ?? [])
                 ->withOptions(['stream' => true])
                 ->post("models/{$model}:streamGenerateContent?alt=sse", $body),
         );
@@ -144,7 +144,7 @@ class GeminiGateway implements Gateway, StepTextGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout ?? 120, $headers)->post("models/{$model}:generateContent", $body),
+            fn () => $this->client($provider, $timeout ?? 120)->withHeaders($headers)->post("models/{$model}:generateContent", $body),
         );
 
         $data = $response->json();
@@ -186,7 +186,7 @@ class GeminiGateway implements Gateway, StepTextGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout, $headers)->post("models/{$model}:batchEmbedContents", [
+            fn () => $this->client($provider, $timeout)->withHeaders($headers)->post("models/{$model}:batchEmbedContents", [
                 'requests' => $requests,
             ]),
         );
@@ -216,7 +216,7 @@ class GeminiGateway implements Gateway, StepTextGateway
     ): AudioResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout, $headers)->post("models/{$model}:generateContent", [
+            fn () => $this->client($provider, $timeout)->withHeaders($headers)->post("models/{$model}:generateContent", [
                 'contents' => [[
                     'role' => 'user',
                     'parts' => [[
@@ -290,7 +290,7 @@ class GeminiGateway implements Gateway, StepTextGateway
 
             $response = $this->withErrorHandling(
                 $provider->name(),
-                fn () => $this->client($provider, $timeout, $headers)->post("models/{$model}:generateContent", array_merge($providerOptions, [
+                fn () => $this->client($provider, $timeout)->withHeaders($headers)->post("models/{$model}:generateContent", array_merge($providerOptions, [
                     'contents' => [[
                         'parts' => [['text' => $prompt], $inlineData],
                     ]],
@@ -336,7 +336,7 @@ class GeminiGateway implements Gateway, StepTextGateway
 
             $response = $this->withErrorHandling(
                 $provider->name(),
-                fn () => $this->client($provider, $timeout, $headers)->post("models/{$model}:generateContent", array_merge($providerOptions, [
+                fn () => $this->client($provider, $timeout)->withHeaders($headers)->post("models/{$model}:generateContent", array_merge($providerOptions, [
                     'contents' => [[
                         'parts' => [['text' => $prompt], $inlineData],
                     ]],

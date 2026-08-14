@@ -13,10 +13,7 @@ trait CreatesAzureOpenAiClient
     /**
      * Get an HTTP client for the Azure OpenAI v1-compatible API.
      */
-    /**
-     * @param  array<string, string>  $requestHeaders
-     */
-    protected function client(Provider $provider, ?int $timeout = null, array $requestHeaders = []): PendingRequest
+    protected function client(Provider $provider, ?int $timeout = null): PendingRequest
     {
         $config = $provider->additionalConfiguration();
 
@@ -25,7 +22,7 @@ trait CreatesAzureOpenAiClient
         return $this->createClient(
             "{$base}/openai/v1",
             ['api-key' => $provider->providerCredentials()['key']],
-            array_merge($config['headers'] ?? [], $requestHeaders),
+            $config['headers'] ?? [],
             $timeout ?? 60,
         );
     }

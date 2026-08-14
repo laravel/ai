@@ -13,15 +13,12 @@ trait CreatesGeminiClient
     /**
      * Get an HTTP client for the Gemini API.
      */
-    /**
-     * @param  array<string, string>  $requestHeaders
-     */
-    protected function client(Provider $provider, ?int $timeout = null, array $requestHeaders = []): PendingRequest
+    protected function client(Provider $provider, ?int $timeout = null): PendingRequest
     {
         return $this->createClient(
             $this->baseUrl($provider),
             array_filter(['x-goog-api-key' => $provider->providerCredentials()['key']]),
-            array_merge($provider->additionalConfiguration()['headers'] ?? [], $requestHeaders),
+            $provider->additionalConfiguration()['headers'] ?? [],
             $timeout ?? 60,
         );
     }

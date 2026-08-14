@@ -7,7 +7,7 @@ use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\UserMessage;
 use Tests\Fixtures\Agents\HeadersAgent;
 
-test('custom headers are forwarded on converse requests', function (): void {
+test('custom headers are forwarded via @http on converse', function (): void {
     $history = new History;
 
     $client = $this->fakeBedrockConverse([
@@ -33,7 +33,9 @@ test('custom headers are forwarded on converse requests', function (): void {
     );
 
     expect($history)->not->toBeEmpty()
-        ->and($history->getLastRequest()->getHeaderLine('X-Custom-Header'))->toBe('bedrock-value');
+        ->and($history->getLastCommand()['@http']['headers'])->toEqual([
+            'X-Custom-Header' => 'bedrock-value',
+        ]);
 });
 
 test('converse request does not include custom headers when agent does not implement interface', function (): void {
@@ -62,5 +64,5 @@ test('converse request does not include custom headers when agent does not imple
     );
 
     expect($history)->not->toBeEmpty()
-        ->and($history->getLastRequest()->hasHeader('X-Custom-Header'))->toBeFalse();
+        ->and(data_get($history->getLastCommand()->toArray(), '@http.headers'))->toBeNull();
 });

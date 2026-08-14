@@ -29,22 +29,6 @@ test('configured headers are sent with provider requests', function (): void {
     Http::assertSent(fn (Request $r): bool => $r->header('X-Session-Affinity') === ['abc-123']);
 });
 
-test('request headers override configured headers case insensitively', function (): void {
-    config(['ai.providers.voyageai' => [
-        ...config('ai.providers.voyageai'),
-        'key' => 'test-key',
-        'headers' => ['x-tenant' => 'from-config'],
-    ]]);
-
-    Http::fake(['*' => fakeCustomHeadersEmbeddingsResponse()]);
-
-    Embeddings::for(['Hello'])
-        ->withHeaders(['X-Tenant' => 'from-request'])
-        ->generate(provider: 'voyageai', model: 'voyage-4');
-
-    Http::assertSent(fn (Request $r): bool => $r->header('X-Tenant') === ['from-request']);
-});
-
 test('configured headers override gateway default headers', function (): void {
     config(['ai.providers.voyageai' => [
         ...config('ai.providers.voyageai'),

@@ -13,10 +13,7 @@ trait CreatesOpenRouterClient
     /**
      * Get an HTTP client for the OpenRouter API.
      */
-    /**
-     * @param  array<string, string>  $requestHeaders
-     */
-    protected function client(Provider $provider, ?int $timeout = null, array $requestHeaders = []): PendingRequest
+    protected function client(Provider $provider, ?int $timeout = null): PendingRequest
     {
         $config = $provider->additionalConfiguration();
 
@@ -27,7 +24,7 @@ trait CreatesOpenRouterClient
                 'HTTP-Referer' => $config['http_referer'] ?? null,
                 'X-OpenRouter-Title' => $config['x_title'] ?? null,
             ]),
-            array_merge($config['headers'] ?? [], $requestHeaders),
+            $config['headers'] ?? [],
             $timeout ?? 60,
         );
     }

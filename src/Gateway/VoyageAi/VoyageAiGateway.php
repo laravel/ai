@@ -37,7 +37,7 @@ class VoyageAiGateway implements EmbeddingGateway, RerankingGateway
 
         $data = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout, $headers)->post('/embeddings', array_merge($providerOptions, [
+            fn () => $this->client($provider, $timeout)->withHeaders($headers)->post('/embeddings', array_merge($providerOptions, [
                 'model' => $model,
                 'input' => $inputs,
                 'output_dimension' => $dimensions,
@@ -66,7 +66,7 @@ class VoyageAiGateway implements EmbeddingGateway, RerankingGateway
     ): RerankingResponse {
         $data = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, requestHeaders: $headers)->post('/rerank', array_filter([
+            fn () => $this->client($provider)->withHeaders($headers)->post('/rerank', array_filter([
                 'model' => $model,
                 'query' => $query,
                 'documents' => $documents,

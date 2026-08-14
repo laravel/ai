@@ -36,7 +36,7 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
     ): EmbeddingsResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout, $headers)->post('/embeddings', array_merge(
+            fn () => $this->client($provider, $timeout)->withHeaders($headers)->post('/embeddings', array_merge(
                 ['task' => 'retrieval.passage'],
                 $providerOptions,
                 [
@@ -73,7 +73,7 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
     ): RerankingResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, requestHeaders: $headers)->post('/rerank', array_filter([
+            fn () => $this->client($provider)->withHeaders($headers)->post('/rerank', array_filter([
                 'model' => $model,
                 'query' => $query,
                 'documents' => $documents,
@@ -98,10 +98,7 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
     /**
      * Get an HTTP client for the Jina API.
      */
-    /**
-     * @param  array<string, string>  $requestHeaders
-     */
-    protected function client(EmbeddingProvider|RerankingProvider $provider, int $timeout = 30, array $requestHeaders = []): PendingRequest
+    protected function client(EmbeddingProvider|RerankingProvider $provider, int $timeout = 30): PendingRequest
     {
         return $this->createClient(
             $this->baseUrl($provider),
@@ -109,7 +106,7 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
                 'Authorization' => 'Bearer '.$provider->providerCredentials()['key'],
                 'Content-Type' => 'application/json',
             ],
-            array_merge($provider->additionalConfiguration()['headers'] ?? [], $requestHeaders),
+            $provider->additionalConfiguration()['headers'] ?? [],
             $timeout,
         );
     }

@@ -38,7 +38,7 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway
     ): EmbeddingsResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout, $headers)->post('/embed', array_merge(
+            fn () => $this->client($provider, $timeout)->withHeaders($headers)->post('/embed', array_merge(
                 [
                     'input_type' => 'search_document',
                     'embedding_types' => ['float'],
@@ -75,7 +75,7 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway
     ): RerankingResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, requestHeaders: $headers)->post('/rerank', array_filter([
+            fn () => $this->client($provider)->withHeaders($headers)->post('/rerank', array_filter([
                 'model' => $model,
                 'query' => $query,
                 'documents' => $documents,
@@ -100,10 +100,7 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway
     /**
      * Get an HTTP client for the Cohere API.
      */
-    /**
-     * @param  array<string, string>  $requestHeaders
-     */
-    protected function client(EmbeddingProvider|RerankingProvider $provider, int $timeout = 30, array $requestHeaders = []): PendingRequest
+    protected function client(EmbeddingProvider|RerankingProvider $provider, int $timeout = 30): PendingRequest
     {
         $config = $provider->additionalConfiguration();
 
@@ -113,7 +110,7 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway
                 'Authorization' => 'Bearer '.$provider->providerCredentials()['key'],
                 'Content-Type' => 'application/json',
             ],
-            array_merge($config['headers'] ?? [], $requestHeaders),
+            $config['headers'] ?? [],
             $timeout,
         );
     }

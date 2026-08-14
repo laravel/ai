@@ -69,7 +69,7 @@ class OpenAiCompatibleGateway implements EmbeddingGateway, StepTextGateway, Tran
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout, $headers)->post('embeddings', $body),
+            fn () => $this->client($provider, $timeout)->withHeaders($headers)->post('embeddings', $body),
         );
 
         $data = $response->json();
@@ -120,7 +120,7 @@ class OpenAiCompatibleGateway implements EmbeddingGateway, StepTextGateway, Tran
     ): TranscriptionResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout, $headers)
+            fn () => $this->client($provider, $timeout)->withHeaders($headers)
                 ->attach('file', $audio->content(), $this->audioFilename($audio), array_filter(['Content-Type' => $audio->mimeType()]))
                 ->post('audio/transcriptions', array_merge(array_filter([
                     'model' => $model,

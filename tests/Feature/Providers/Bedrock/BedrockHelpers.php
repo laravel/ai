@@ -3,14 +3,12 @@
 namespace Tests\Feature\Providers\Bedrock;
 
 use Aws\BedrockRuntime\BedrockRuntimeClient;
-use Aws\Middleware;
 use Aws\MockHandler;
 use Aws\Result;
 use GuzzleHttp\Psr7\Utils;
 use Laravel\Ai\Gateway\Bedrock\BedrockTextGateway;
 use Laravel\Ai\Providers\BedrockProvider;
 use Laravel\Ai\Providers\Provider;
-use Psr\Http\Message\RequestInterface;
 
 trait BedrockHelpers
 {
@@ -73,20 +71,8 @@ trait BedrockHelpers
                 parent::__construct();
             }
 
-            protected function createBedrockClient(Provider $provider, ?int $timeout = null, array $requestHeaders = []): BedrockRuntimeClient
+            protected function createBedrockClient(Provider $provider, ?int $timeout = null): BedrockRuntimeClient
             {
-                if ($requestHeaders !== []) {
-                    $this->stub->getHandlerList()->appendBuild(Middleware::mapRequest(
-                        function (RequestInterface $request) use ($requestHeaders): RequestInterface {
-                            foreach ($requestHeaders as $name => $value) {
-                                $request = $request->withHeader($name, $value);
-                            }
-
-                            return $request;
-                        }
-                    ), 'laravel-ai.headers');
-                }
-
                 return $this->stub;
             }
         };
