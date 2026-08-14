@@ -35,9 +35,9 @@ class ExecuteTools implements Tool
      */
     public function description(): string
     {
-        return 'Execute multiple independent catalog tools synchronously in order, stopping on the first error. '
-            .'Use the exact names and arguments returned by search_tools. When a call depends on a previous '
-            .'result, call execute_tools again.';
+        return 'Execute multiple catalog tools synchronously in order, stopping on the first error so later '
+            .'calls never run against a failed state. Use the exact names and arguments returned by '
+            .'search_tools. When a call depends on a previous result, call execute_tools again.';
     }
 
     /**
@@ -129,7 +129,7 @@ class ExecuteTools implements Tool
                 ]))
                 ->min(1)
                 ->max($this->maxToolCalls)
-                ->description('Independent tool calls to execute synchronously in order.')
+                ->description('Tool calls to execute synchronously in order, stopping on the first error.')
                 ->required(),
         ];
     }

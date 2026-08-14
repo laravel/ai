@@ -72,6 +72,24 @@ test('search_tools returns names, descriptions, and complete schemas', function 
         ->and($browsed)->toHaveCount(1);
 });
 
+test('grouped catalogs surface group names in search results and the search_tools description', function (): void {
+    [$searchTools, $executeTools] = ToolSearch::for([
+        'github' => [new ToolSearchWeatherTool],
+        new ToolSearchFillerTool(1),
+    ])->expand(fn ($leaf) => $leaf);
+
+    $found = json_decode($searchTools->handle(new Request(['query' => 'github'])), true, flags: JSON_THROW_ON_ERROR);
+    $result = json_decode($executeTools->handle(new Request(['calls' => [
+        ['name' => 'get_weather', 'arguments' => ['city' => 'Paris']],
+    ]])), true, flags: JSON_THROW_ON_ERROR);
+
+    expect($searchTools->description())->toContain('The catalog covers: github.')
+        ->and($found)->toHaveCount(1)
+        ->and($found[0]['name'])->toBe('get_weather')
+        ->and($found[0]['group'])->toBe('github')
+        ->and($result['ok'])->toBeTrue();
+});
+
 test('execute_tools runs calls in order and stops on the first error', function (): void {
     ToolSearchWeatherTool::$lastToolCallId = null;
 

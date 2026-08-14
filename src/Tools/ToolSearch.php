@@ -13,37 +13,41 @@ use Laravel\Ai\Contracts\Tool;
 class ToolSearch
 {
     /**
-     * The catalog of tools the model can discover and run on demand.
+     * The catalog of tools the model can discover and run on demand, each paired with its optional group.
      *
-     * @var array<int, mixed>
+     * @var array<int, array{group: ?string, entry: mixed}>
      */
-    protected array $tools;
+    protected array $tools = [];
 
     protected int $maxToolCalls = 25;
 
     protected int $maxOutputBytes = 65536;
 
     /**
-     * @param  iterable<int, mixed>  $tools
+     * @param  iterable<int|string, mixed>  $tools
      */
     public function __construct(iterable $tools)
     {
-        $this->tools = is_array($tools) ? array_values($tools) : iterator_to_array($tools, false);
+        foreach ($tools as $key => $entry) {
+            $group = is_string($key) ? $key : null;
 
-        foreach ($this->tools as $tool) {
-            if ($tool instanceof Approvable) {
-                throw new InvalidArgumentException(sprintf(
-                    'Tool approvals are not supported inside tool search: [%s]. Pass this tool to the agent directly instead.',
-                    $tool instanceof Tool ? ToolNameResolver::resolve($tool) : get_debug_type($tool),
-                ));
+            foreach (is_iterable($entry) ? $entry : [$entry] as $leaf) {
+                if ($leaf instanceof Approvable) {
+                    throw new InvalidArgumentException(sprintf(
+                        'Tool approvals are not supported inside tool search: [%s]. Pass this tool to the agent directly instead.',
+                        $leaf instanceof Tool ? ToolNameResolver::resolve($leaf) : get_debug_type($leaf),
+                    ));
+                }
+
+                $this->tools[] = ['group' => $group, 'entry' => $leaf];
             }
         }
     }
 
     /**
-     * Create a new tool search over the given catalog of tools.
+     * Create a new tool search over the given catalog of tools, optionally grouped by string key.
      *
-     * @param  iterable<int, mixed>  $tools
+     * @param  iterable<int|string, mixed>  $tools
      */
     public static function for(iterable $tools): self
     {
@@ -88,8 +92,9 @@ class ToolSearch
     public function expand(Closure $resolver, ?Closure $toolInvoker = null): array
     {
         $catalog = [];
+        $groups = [];
 
-        foreach ($this->tools as $entry) {
+        foreach ($this->tools as ['group' => $group, 'entry' => $entry]) {
             $tool = $resolver($entry);
 
             if (! $tool instanceof Tool) {
@@ -115,9 +120,13 @@ class ToolSearch
             }
 
             $catalog[$name] = $tool;
+
+            if ($group !== null) {
+                $groups[$name] = $group;
+            }
         }
 
-        $catalog = new ToolCatalog($catalog);
+        $catalog = new ToolCatalog($catalog, $groups);
 
         return [
             new SearchTools($catalog),

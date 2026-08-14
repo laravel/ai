@@ -20,14 +20,15 @@ class ToolCatalog
     protected const MAX_SEARCH_BYTES = 32000;
 
     /**
-     * @var array<string, array{name: string, description: string, schema: array<string, mixed>}>
+     * @var array<string, array{name: string, group?: string, description: string, schema: array<string, mixed>}>
      */
     protected array $entries = [];
 
     /**
      * @param  array<string, Tool>  $tools
+     * @param  array<string, string>  $groups
      */
-    public function __construct(protected array $tools)
+    public function __construct(protected array $tools, protected array $groups = [])
     {
         foreach ($tools as $name => $tool) {
             $schema = (new ObjectSchema((array) $tool->schema(new JsonSchemaTypeFactory)))->toSchema();
@@ -39,17 +40,28 @@ class ToolCatalog
                 ));
             }
 
-            $this->entries[$name] = [
+            $this->entries[$name] = array_filter([
                 'name' => $name,
+                'group' => $groups[$name] ?? null,
                 'description' => (string) $tool->description(),
                 'schema' => $schema,
-            ];
+            ], fn (mixed $value): bool => $value !== null);
         }
     }
 
     public function tool(string $name): ?Tool
     {
         return $this->tools[$name] ?? null;
+    }
+
+    /**
+     * Get the unique group names in the catalog, in insertion order.
+     *
+     * @return array<int, string>
+     */
+    public function groups(): array
+    {
+        return array_values(array_unique(array_column($this->entries, 'group')));
     }
 
     /**
@@ -62,15 +74,27 @@ class ToolCatalog
         $scores = [];
 
         foreach ($this->entries as $name => $entry) {
-            $nameText = Str::lower($name);
-            $descriptionText = Str::lower($entry['description']);
-            $schemaText = Str::lower($this->schemaSearchText($entry['schema']));
-            $scores[$name] = array_sum(array_map(
-                fn (string $term): int => (str_contains($nameText, $term) ? 4 : 0)
-                    + (str_contains($descriptionText, $term) ? 2 : 0)
-                    + (str_contains($schemaText, $term) ? 1 : 0),
-                $terms,
-            ));
+            $fields = [
+                [Str::lower($name), 8],
+                [Str::lower($entry['group'] ?? ''), 8],
+                [Str::lower($entry['description']), 4],
+                [Str::lower($this->schemaSearchText($entry['schema'])), 2],
+            ];
+
+            $score = 0;
+
+            // Whole-token matches outrank substring fallbacks, which keep unsegmented (CJK) text searchable...
+            foreach ($fields as [$text, $weight]) {
+                $tokens = $this->terms($text);
+
+                foreach ($terms as $term) {
+                    $score += in_array($term, $tokens, true)
+                        ? $weight
+                        : (str_contains($text, $term) ? intdiv($weight, 2) : 0);
+                }
+            }
+
+            $scores[$name] = $score;
         }
 
         if ($terms !== []) {

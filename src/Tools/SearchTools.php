@@ -25,8 +25,10 @@ class SearchTools implements Tool
      */
     public function description(): string
     {
-        return 'Search the tools available through execute_tools. Returns exact tool names, descriptions, and '
-            .'complete argument JSON Schemas, ranked by relevance. An empty query browses the catalog.';
+        $groups = implode(', ', $this->catalog->groups());
+        $covers = $groups === '' ? '' : " The catalog covers: {$groups}.";
+
+        return "Search the tools available through execute_tools. Returns exact tool names, descriptions, and complete argument JSON Schemas, ranked by relevance. An empty query browses the catalog.{$covers}";
     }
 
     /**
