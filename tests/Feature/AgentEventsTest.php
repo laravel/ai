@@ -940,3 +940,61 @@ test('a single provider synchronous failure reports the prompt the middleware pr
     Event::assertDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->prompt->prompt === $prompted->prompt->prompt
         && $event->prompt->prompt === 'Revised by middleware.');
 });
+
+test('a caller supplied invocation id is threaded through the run and its events', function (): void {
+    Event::fake();
+
+    AssistantAgent::fake(['Hello!']);
+
+    $response = (new AssistantAgent)->withInvocationId('run-1-step-2')->prompt('Hi');
+
+    expect($response->invocationId)->toBe('run-1-step-2');
+
+    Event::assertDispatched(PromptingAgent::class, fn (PromptingAgent $event): bool => $event->invocationId === 'run-1-step-2'
+        && $event->prompt->invocationId === 'run-1-step-2');
+
+    Event::assertDispatched(StepCompleted::class, fn (StepCompleted $event): bool => $event->invocationId === 'run-1-step-2');
+
+    Event::assertDispatched(AgentPrompted::class, fn (AgentPrompted $event): bool => $event->invocationId === 'run-1-step-2');
+});
+
+test('a run that throws still reports the caller supplied invocation id', function (): void {
+    Event::fake();
+
+    ToolUsingAgent::fake([
+        new ToolCall('call_1', 'FixedNumberGenerator', []),
+        ['number' => 5],
+    ]);
+
+    // Nothing is returned to the caller here, so the id it supplied is the only
+    // thing tying the dispatched events back to the work it was doing...
+    expect(fn (): mixed => (new ToolUsingAgent(fixed: true, toolThrowsException: true))
+        ->withInvocationId('run-1-step-3')
+        ->prompt('Generate'))->toThrow(Exception::class, 'Forced to throw exception.');
+
+    Event::assertDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->invocationId === 'run-1-step-3');
+
+    Event::assertDispatched(ToolFailed::class, fn (ToolFailed $event): bool => $event->invocationId === 'run-1-step-3');
+});
+
+test('a supplied invocation id belongs to a single run', function (): void {
+    AssistantAgent::fake(['First', 'Second']);
+
+    $agent = new AssistantAgent;
+
+    $first = $agent->withInvocationId('run-1-step-4')->prompt('Hi');
+    $second = $agent->prompt('Hi again');
+
+    expect($first->invocationId)->toBe('run-1-step-4')
+        ->and($second->invocationId)->not->toBe('run-1-step-4');
+});
+
+test('a streamed run uses the caller supplied invocation id', function (): void {
+    AssistantAgent::fake(['Hello!']);
+
+    $response = (new AssistantAgent)->withInvocationId('run-1-step-5')->stream('Hi');
+
+    $response->each(fn (): true => true);
+
+    expect($response->invocationId)->toBe('run-1-step-5');
+});

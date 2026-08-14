@@ -40,6 +40,38 @@ trait Promptable
     use SerializesModels;
 
     /**
+     * The invocation id supplied by the caller for the agent's next run, if any.
+     */
+    protected ?string $pendingInvocationId = null;
+
+    /**
+     * Use the given invocation id for the agent's next run instead of a generated one.
+     *
+     * The id identifies the run in every event it dispatches, so a caller that
+     * already records its own work may reuse that record's identifier here.
+     */
+    public function withInvocationId(string $invocationId): static
+    {
+        $this->pendingInvocationId = $invocationId;
+
+        return $this;
+    }
+
+    /**
+     * Get the invocation id for a run, consuming any the caller supplied.
+     */
+    protected function resolveInvocationId(): string
+    {
+        $invocationId = $this->pendingInvocationId ?? (string) Str::uuid7();
+
+        // Consumed rather than retained, so a reused agent instance cannot
+        // silently stamp a later run with an earlier run's identifier.
+        $this->pendingInvocationId = null;
+
+        return $invocationId;
+    }
+
+    /**
      * Create a new instance of the agent.
      */
     public static function make(...$arguments): static
@@ -63,7 +95,7 @@ trait Promptable
     {
         [$text, $approvalDecisions] = $this->extractPromptInput($prompt);
 
-        $invocationId = (string) Str::uuid7();
+        $invocationId = $this->resolveInvocationId();
 
         $providers = $approvalDecisions !== null
             ? $this->providersForApprovalContinuation($provider, $model)
@@ -127,7 +159,7 @@ trait Promptable
             : $this->getProvidersAndModelsForFailover($provider, $model);
         $resolvedTimeout = $this->getTimeout($timeout);
 
-        $invocationId = (string) Str::uuid7();
+        $invocationId = $this->resolveInvocationId();
 
         [$parentInvocationId, $parentToolInvocationId] = ParentInvocation::current();
 
