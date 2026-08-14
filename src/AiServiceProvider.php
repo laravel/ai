@@ -162,7 +162,6 @@ class AiServiceProvider extends ServiceProvider
 
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'ai');
 
-        // Deferred so the cards register only once Livewire itself has booted, which never happens on a console-only app...
         $this->callAfterResolving(LivewireManager::class, function (LivewireManager $livewire): void {
             $livewire->component('ai.pulse.token-usage', TokenUsage::class);
             $livewire->component('ai.pulse.step-latency', StepLatency::class);

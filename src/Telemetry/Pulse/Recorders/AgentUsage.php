@@ -2,14 +2,13 @@
 
 namespace Laravel\Ai\Telemetry\Pulse\Recorders;
 
-use Illuminate\Support\Facades\Config;
 use Laravel\Ai\Events\StepCompleted;
 use Laravel\Pulse\Facades\Pulse;
-use Laravel\Pulse\Recorders\Concerns\Sampling;
+use Laravel\Pulse\Recorders\Concerns\Ignores;
 
 class AgentUsage
 {
-    use Sampling;
+    use Ignores;
 
     /**
      * The events to listen for.
@@ -25,10 +24,6 @@ class AgentUsage
      */
     public function record(StepCompleted $event): void
     {
-        if (! $this->shouldSample()) {
-            return;
-        }
-
         $key = $event->provider->name().':'.$event->model;
 
         if ($this->shouldIgnore($key)) {
@@ -37,23 +32,9 @@ class AgentUsage
 
         $usage = $event->response->usage;
 
-        Pulse::record('ai_prompt_tokens', $key, $usage->promptTokens)->sum()->count();
+        Pulse::record('ai_prompt_tokens', $key, $usage->promptTokens)->sum();
         Pulse::record('ai_completion_tokens', $key, $usage->completionTokens)->sum();
         Pulse::record('ai_cached_tokens', $key, $usage->cacheReadInputTokens)->sum();
         Pulse::record('ai_step_duration', $key, (int) round($event->time))->avg()->max()->count();
-    }
-
-    /**
-     * Determine whether the given provider and model should not be recorded.
-     */
-    protected function shouldIgnore(string $key): bool
-    {
-        foreach (Config::get('pulse.recorders.'.static::class.'.ignore', []) as $pattern) {
-            if (preg_match($pattern, $key)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

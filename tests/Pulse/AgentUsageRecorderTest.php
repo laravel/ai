@@ -61,10 +61,11 @@ test('it records the token usage of a completed step against the provider and mo
         ->and($entries['ai_cached_tokens']->value)->toBe(640);
 });
 
-test('it counts steps once rather than once per token bucket', function (): void {
+test('it counts steps on the duration alone so the token types do not each carry a duplicate count', function (): void {
     $entries = recordedEntries(stepCompleted(new Usage(promptTokens: 10, completionTokens: 5)));
 
-    expect($entries['ai_prompt_tokens']->isCount())->toBeTrue()
+    expect($entries['ai_step_duration']->isCount())->toBeTrue()
+        ->and($entries['ai_prompt_tokens']->isCount())->toBeFalse()
         ->and($entries['ai_completion_tokens']->isCount())->toBeFalse()
         ->and($entries['ai_cached_tokens']->isCount())->toBeFalse();
 });
