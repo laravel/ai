@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\OpenAiCompatible;
 
 use Generator;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
@@ -176,9 +177,24 @@ class ChatCompletionReasoning
      */
     public static function replayableDetailsFrom(array $providerContentBlocks): ?array
     {
-        $details = $providerContentBlocks[static::DETAILS_BLOCK_KEY] ?? null;
+        $details = Arr::where(
+            Arr::wrap($providerContentBlocks[static::DETAILS_BLOCK_KEY] ?? null),
+            fn (mixed $detail): bool => is_array($detail) && ! static::isUnsignedAnthropicText($detail),
+        );
 
-        return is_array($details) && $details !== [] ? array_values($details) : null;
+        return $details === [] ? null : array_values($details);
+    }
+
+    /**
+     * Determine if the given detail is an Anthropic reasoning text block that lost the signature Anthropic requires back.
+     *
+     * @param  array<string, mixed>  $detail
+     */
+    protected static function isUnsignedAnthropicText(array $detail): bool
+    {
+        return ($detail['type'] ?? null) === 'reasoning.text'
+            && str_starts_with((string) ($detail['format'] ?? ''), 'anthropic')
+            && blank($detail['signature'] ?? null);
     }
 
     /**
@@ -216,7 +232,7 @@ class ChatCompletionReasoning
         $arrived = '';
 
         foreach (static::detailsFrom($delta) as $position => $detail) {
-            // The type joins the key so a reused id or index never welds two distinct blocks together...
+            // Reasoning details of different types may share an id or index...
             $key = ($detail['type'] ?? '').'#'.($detail['id'] ?? $detail['index'] ?? $position);
 
             if (! isset($this->details[$key])) {

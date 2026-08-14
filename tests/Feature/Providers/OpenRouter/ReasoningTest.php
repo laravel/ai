@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
@@ -296,6 +297,76 @@ test('captures encrypted reasoning details so they can be replayed', function ()
     ]]);
 });
 
+test('strips anthropic reasoning text that lost its signature before replaying', function (): void {
+    Http::fake([
+        '*' => Http::sequence([
+            fakeOpenRouterToolCallResponse([
+                'reasoning' => 'I need the generator for this.',
+                'reasoning_details' => [[
+                    'type' => 'reasoning.text',
+                    'text' => 'I need the generator for this.',
+                    'id' => 'reasoning-text-1',
+                    'format' => 'anthropic-claude-v1',
+                ]],
+            ]),
+            fakeOpenRouterResponse('The number is 72019'),
+        ]),
+    ]);
+
+    agent(tools: [new FixedNumberGenerator])->prompt('Give me a number', provider: 'openrouter');
+
+    $assistantMessage = $this->findMessage($this->requestMessages(1), role: 'assistant', has: 'tool_calls');
+
+    // An unsigned thinking block is rejected by Anthropic, so the plain text is replayed instead...
+    expect($assistantMessage)->not->toHaveKey('reasoning_details')
+        ->and($assistantMessage['reasoning'])->toBe('I need the generator for this.');
+});
+
+test('replays anthropic reasoning text that kept its signature', function (): void {
+    Http::fake([
+        '*' => Http::sequence([
+            fakeOpenRouterToolCallResponse([
+                'reasoning_details' => [[
+                    'type' => 'reasoning.text',
+                    'text' => 'I need the generator for this.',
+                    'signature' => 'sha256:abc123',
+                    'id' => 'reasoning-text-1',
+                    'format' => 'anthropic-claude-v1',
+                ]],
+            ]),
+            fakeOpenRouterResponse('The number is 72019'),
+        ]),
+    ]);
+
+    agent(tools: [new FixedNumberGenerator])->prompt('Give me a number', provider: 'openrouter');
+
+    $assistantMessage = $this->findMessage($this->requestMessages(1), role: 'assistant', has: 'tool_calls');
+
+    expect($assistantMessage['reasoning_details'][0]['signature'])->toBe('sha256:abc123');
+});
+
+test('replays unsigned reasoning text from providers that issue no signatures', function (): void {
+    Http::fake([
+        '*' => Http::sequence([
+            fakeOpenRouterToolCallResponse([
+                'reasoning_details' => [[
+                    'type' => 'reasoning.text',
+                    'text' => 'I need the generator for this.',
+                    'id' => 'reasoning-text-1',
+                    'format' => 'openai-responses-v1',
+                ]],
+            ]),
+            fakeOpenRouterResponse('The number is 72019'),
+        ]),
+    ]);
+
+    agent(tools: [new FixedNumberGenerator])->prompt('Give me a number', provider: 'openrouter');
+
+    $assistantMessage = $this->findMessage($this->requestMessages(1), role: 'assistant', has: 'tool_calls');
+
+    expect($assistantMessage['reasoning_details'][0]['format'])->toBe('openai-responses-v1');
+});
+
 test('merges streamed reasoning detail fragments into one replayable block', function (): void {
     // Text arrives in fragments under one index and the signature lands on the last of them...
     Http::fake([
@@ -383,7 +454,15 @@ test('closes an open reasoning block before an upstream error', function (): voi
         ])),
     ]);
 
-    $types = array_map(fn ($e): string => $e::class, $this->collectStreamEvents());
+    $types = [];
+
+    try {
+        foreach (agent()->stream('Hello', provider: 'openrouter') as $event) {
+            $types[] = $event::class;
+        }
+    } catch (StreamErrorException) {
+        //
+    }
 
     expect(array_search(ReasoningEnd::class, $types, true))
         ->toBeLessThan(array_search(Error::class, $types, true));

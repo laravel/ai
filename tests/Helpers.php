@@ -262,7 +262,7 @@ function fakeOpenRouterResponse(string $text = 'Hello'): PromiseInterface
     ]);
 }
 
-function fakeOpenRouterToolCallResponse(): PromiseInterface
+function fakeOpenRouterToolCallResponse(array $message = []): PromiseInterface
 {
     return Http::response([
         'id' => 'chatcmpl-tool-123',
@@ -281,6 +281,7 @@ function fakeOpenRouterToolCallResponse(): PromiseInterface
                         'arguments' => '{}',
                     ],
                 ]],
+                ...$message,
             ],
             'finish_reason' => 'tool_calls',
         ]],

@@ -87,9 +87,7 @@ class GroqGateway implements StepTextGateway, TranscriptionGateway
     }
 
     /**
-     * Get the reasoning fields to replay for the given assistant message.
-     *
-     * Groq returns and accepts reasoning under `reasoning`, not the `reasoning_content` field DeepSeek uses.
+     * Get the reasoning fields to replay for the given assistant message, which Groq accepts under `reasoning` rather than DeepSeek's `reasoning_content`.
      *
      * @return array<string, mixed>
      */
