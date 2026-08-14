@@ -77,25 +77,35 @@ trait BuildsTextRequests
     /**
      * Stamp the requested cache breakpoints onto the final request body.
      *
-     * @param  array<int, PromptCacheTarget>  $cache
+     * @param  array<string, string|null>  $cache
      */
     protected function applyPromptCacheBreakpoints(array $body, array $cache): array
     {
-        if (isset($body['system']) && in_array(PromptCacheTarget::System, $cache, true)) {
+        if (isset($body['system']) && array_key_exists(PromptCacheTarget::System->value, $cache)) {
             $system = is_string($body['system'])
                 ? [['type' => 'text', 'text' => $body['system']]]
                 : $body['system'];
 
-            $system[array_key_last($system)]['cache_control'] = ['type' => 'ephemeral'];
+            $system[array_key_last($system)]['cache_control'] = $this->cacheControl($cache[PromptCacheTarget::System->value]);
 
             $body['system'] = $system;
         }
 
-        if (isset($body['tools']) && in_array(PromptCacheTarget::Tools, $cache, true)) {
-            $body['tools'][array_key_last($body['tools'])]['cache_control'] = ['type' => 'ephemeral'];
+        if (isset($body['tools']) && array_key_exists(PromptCacheTarget::Tools->value, $cache)) {
+            $body['tools'][array_key_last($body['tools'])]['cache_control'] = $this->cacheControl($cache[PromptCacheTarget::Tools->value]);
         }
 
         return $body;
+    }
+
+    /**
+     * Build the cache control block for the given TTL.
+     *
+     * @return array<string, string>
+     */
+    protected function cacheControl(?string $ttl): array
+    {
+        return array_filter(['type' => 'ephemeral', 'ttl' => $ttl]);
     }
 
     /**

@@ -665,11 +665,12 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
 
         $parameters = array_merge($parameters, $providerOptions);
 
-        if (isset($parameters['system']) && in_array(PromptCacheTarget::System, $cache, true)) {
+        // Bedrock cache points have no TTL control, so any requested TTL is ignored here.
+        if (isset($parameters['system']) && array_key_exists(PromptCacheTarget::System->value, $cache)) {
             $parameters['system'][] = ['cachePoint' => ['type' => 'default']];
         }
 
-        if (isset($parameters['toolConfig']['tools']) && in_array(PromptCacheTarget::Tools, $cache, true)) {
+        if (isset($parameters['toolConfig']['tools']) && array_key_exists(PromptCacheTarget::Tools->value, $cache)) {
             $parameters['toolConfig']['tools'][] = ['cachePoint' => ['type' => 'default']];
         }
 

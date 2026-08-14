@@ -37,6 +37,17 @@ test('an empty prompt cache option leaks nothing to aws', function (): void {
         ->and($parameters['toolConfig']['tools'])->each->toHaveKey('toolSpec');
 });
 
+test('a requested ttl is ignored since bedrock cache points have none', function (): void {
+    $parameters = $this->capturedConverseParameters(
+        TextGenerationOptions::forAgent(new PromptCacheAgent(['system' => '1h']))
+    );
+
+    expect($parameters['system'])->toBe([
+        ['text' => 'You are a helpful assistant.'],
+        ['cachePoint' => ['type' => 'default']],
+    ]);
+});
+
 test('an unknown prompt cache target throws', function (): void {
     $this->capturedConverseParameters(TextGenerationOptions::forAgent(new PromptCacheAgent(['messages'])));
 })->throws(ValueError::class);

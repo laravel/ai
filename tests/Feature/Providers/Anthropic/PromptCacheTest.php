@@ -93,6 +93,27 @@ test('other provider options still merge alongside the prompt cache option', fun
     });
 });
 
+test('a target may request the extended ttl', function (): void {
+    (new PromptCacheAgent(['tools' => '5m', 'system' => '1h']))->prompt('Hi', provider: 'anthropic');
+
+    Http::assertSent(function ($request): bool {
+        $body = $request->data();
+
+        return $body['system'][0]['cache_control'] === ['type' => 'ephemeral', 'ttl' => '1h']
+            && Arr::last($body['tools'])['cache_control'] === ['type' => 'ephemeral', 'ttl' => '5m'];
+    });
+});
+
+test('a target given true rather than a ttl uses the default ttl', function (): void {
+    (new PromptCacheAgent(['system' => true]))->prompt('Hi', provider: 'anthropic');
+
+    Http::assertSent(fn ($request): bool => $request->data()['system'][0]['cache_control'] === ['type' => 'ephemeral']);
+});
+
+test('an unsupported ttl throws', function (): void {
+    (new PromptCacheAgent(['system' => '1hr']))->prompt('Hi', provider: 'anthropic');
+})->throws(InvalidArgumentException::class, 'Unsupported prompt cache TTL [1hr]. Supported values are [5m, 1h].');
+
 test('an unknown prompt cache target throws', function (): void {
     (new PromptCacheAgent(['messages']))->prompt('Hi', provider: 'anthropic');
 })->throws(ValueError::class);

@@ -40,9 +40,9 @@ class TextGenerationOptions
     }
 
     /**
-     * Get the requested prompt cache breakpoints for the given provider.
+     * Get the requested prompt cache breakpoints, keyed by target, for the given provider.
      *
-     * @return array<int, PromptCacheTarget>
+     * @return array<string, string|null>
      */
     public function promptCache(Lab|string $provider): array
     {
