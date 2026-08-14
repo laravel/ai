@@ -1,14 +1,14 @@
 # Upgrade Guide
 
-## Upgrading To 1.0 From 0.9
+## Upgrading To 0.10 From 0.9
 
 ### Polymorphic Conversation Participants
 
 **Likelihood Of Impact: High**
 
-Remembered conversations now use a polymorphic participant instead of a `user_id`. The conversation tables contain nullable `participant_type` and `participant_id` columns, and the `HasConversations` concern now returns a `MorphMany` relationship.
+Remembered conversations now use a polymorphic participant instead of a `user_id`. The conversation tables now contain nullable `participant_type` and `participant_id` columns, and the `HasConversations` concern returns a `MorphMany` relationship.
 
-The package's existing create migration is not run again during an upgrade. Applications that have already migrated the conversation tables should create a new migration similar to the following, replacing `App\Models\User` with the model represented by existing rows:
+The package's existing migration will not run again during an upgrade. Applications that have already migrated the conversation tables should create a new migration similar to the following, replacing `App\Models\User` with the model associated with the existing rows:
 
 ```php
 use App\Models\User;
@@ -54,7 +54,7 @@ Schema::table($messagesTable, function (Blueprint $table) {
 });
 ```
 
-If existing rows belong to more than one model, backfill each model separately. Data that previously collided on the same `user_id` cannot be assigned automatically because the old schema did not record its model type.
+If existing rows belong to more than one model, backfill each model separately. Rows for different model types that previously shared the same `user_id` cannot be assigned automatically because the old schema did not record their model type.
 
 Custom `ConversationStore` implementations must update their method signatures to receive the participant type before the participant ID:
 
@@ -86,18 +86,15 @@ public function storeAssistantMessage(
 ): ?string;
 ```
 
-Use `forParticipant($participant)` when starting a conversation for models that are not users. The existing `forUser($user)` method remains available as an alias.
+Use `forParticipant($participant)` when starting a conversation for a participant other than a user. The existing `forUser($user)` method remains available as an alias.
 
 ### New `approval_state` Column On Conversation Messages
 
 **Likelihood Of Impact: High**
 
-Human-in-the-loop tool approval records its pause and resolution state on the
-conversation messages table via a new nullable `TEXT` column, `approval_state`.
-Fresh installs get the column from the published migration.
+The human-in-the-loop tool approval flow records its pause and resolution details on the conversation messages table in a new nullable `TEXT` column named `approval_state`. Fresh installations receive the column through the published migration.
 
-If you have already published and run the conversation migrations, add the
-column with a new migration and run `php artisan migrate`:
+If you have already published and run the conversation migrations, create a new migration to add the column, then run `php artisan migrate`:
 
 ```php
 use Illuminate\Database\Migrations\Migration;
@@ -122,25 +119,29 @@ return new class extends Migration
 };
 ```
 
-### The `Agent` Contract Now Accepts `array|string`
+### The `Agent` Contract Now Accepts `Decisions|string`
 
 **Likelihood Of Impact: Low**
 
-`Agent::prompt()`, `stream()`, `queue()`, `broadcast()`, `broadcastNow()`, and
-`broadcastOnQueue()` now accept `array|string` instead of `string`. The array is
-a tool-call-id-keyed map of approval decisions passed when resuming a paused run.
+`Agent::prompt()`, `stream()`, `queue()`, `broadcast()`, `broadcastNow()`, and `broadcastOnQueue()` now accept `Decisions|string` instead of `string`. A `Decisions` instance contains a map of approval decisions keyed by tool call ID and is used to resume a paused run:
 
-Nothing to do if your agents use the `Promptable` trait. If you implement
-`Laravel\Ai\Contracts\Agent` directly, widen those prompt parameters to
-`array|string` to match the contract.
+```php
+use Laravel\Ai\Approvals\Decision;
+use Laravel\Ai\Approvals\Decisions;
 
-### The `ConversationStore` Contract Gains `storeApprovalResults()`
+$agent->prompt(Decisions::from([
+    'call_abc' => true,
+    'call_def' => Decision::reject('Not permitted.'),
+]));
+```
+
+No changes are needed if your agents use the `Promptable` trait. If you implement `Laravel\Ai\Contracts\Agent` directly, change the type of each `$prompt` parameter to `Decisions|string` and import `Laravel\Ai\Approvals\Decisions` to match the contract.
+
+### The `ConversationStore` Contract Adds `storeApprovalResults()`
 
 **Likelihood Of Impact: Low**
 
-The `ConversationStore` interface adds a `storeApprovalResults()` method, and
-`storeAssistantMessage()` now returns `?string` — `null` when a resume produced
-nothing new to store:
+The `ConversationStore` interface now includes a `storeApprovalResults()` method. In addition, `storeAssistantMessage()` now returns `?string`, with `null` indicating that a resumed run produced nothing new to store:
 
 ```php
 public function storeApprovalResults(
@@ -151,11 +152,7 @@ public function storeApprovalResults(
 ): void;
 ```
 
-Nothing to do if you use the shipped database store. If you bind a custom
-`ConversationStore`, implement `storeApprovalResults()` to merge the given
-results into the paused turn and throw `ApprovalMismatchException` when no
-paused turn matches. Existing `storeAssistantMessage()` implementations that
-return `string` continue to satisfy the widened return type.
+No changes are needed if you use the included database store. If you bind a custom `ConversationStore`, implement `storeApprovalResults()` to merge the given results into the paused turn and throw an `ApprovalMismatchException` when no paused turn matches. Existing `storeAssistantMessage()` implementations that return `string` continue to satisfy the widened return type.
 
 ## Upgrading To 0.9 From 0.8
 

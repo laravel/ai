@@ -3,17 +3,32 @@
 namespace Tests\Feature\Providers\Bedrock;
 
 use Aws\BedrockRuntime\BedrockRuntimeClient;
+use Aws\Middleware;
 use Aws\MockHandler;
 use Aws\Result;
+use GuzzleHttp\Psr7\Utils;
 use Laravel\Ai\Gateway\Bedrock\BedrockTextGateway;
 use Laravel\Ai\Providers\BedrockProvider;
 use Laravel\Ai\Providers\Provider;
+use Psr\Http\Message\RequestInterface;
 
 trait BedrockHelpers
 {
     protected function fakeBedrockConverse(array $result): BedrockRuntimeClient
     {
         return $this->bedrockClient(new MockHandler([new Result($result)]));
+    }
+
+    protected function fakeBedrockInvoke(array $body): BedrockRuntimeClient
+    {
+        return $this->bedrockClient($this->bedrockInvokeMock($body));
+    }
+
+    protected function bedrockInvokeMock(array|string $body): MockHandler
+    {
+        return new MockHandler([new Result([
+            'body' => Utils::streamFor(is_string($body) ? $body : json_encode($body)),
+        ])]);
     }
 
     protected function fakeBedrockStream(array $events): BedrockRuntimeClient
@@ -58,8 +73,20 @@ trait BedrockHelpers
                 parent::__construct();
             }
 
-            protected function createBedrockClient(Provider $provider, ?int $timeout = null): BedrockRuntimeClient
+            protected function createBedrockClient(Provider $provider, ?int $timeout = null, array $requestHeaders = []): BedrockRuntimeClient
             {
+                if ($requestHeaders !== []) {
+                    $this->stub->getHandlerList()->appendBuild(Middleware::mapRequest(
+                        function (RequestInterface $request) use ($requestHeaders): RequestInterface {
+                            foreach ($requestHeaders as $name => $value) {
+                                $request = $request->withHeader($name, $value);
+                            }
+
+                            return $request;
+                        }
+                    ), 'laravel-ai.headers');
+                }
+
                 return $this->stub;
             }
         };

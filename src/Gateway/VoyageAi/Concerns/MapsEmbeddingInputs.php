@@ -49,7 +49,7 @@ trait MapsEmbeddingInputs
 
         $data = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->withHeaders($headers)->post('/multimodalembeddings', array_merge($providerOptions, [
+            fn () => $this->client($provider, $timeout, $headers)->post('/multimodalembeddings', array_merge($providerOptions, [
                 'model' => $model,
                 'inputs' => array_map(fn (mixed $input) => [
                     'content' => [$this->mapMultimodalEmbeddingInput($input)],

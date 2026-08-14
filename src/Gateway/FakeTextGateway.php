@@ -116,7 +116,8 @@ class FakeTextGateway implements StepTextGateway
             $provider, $model, $prompt, $attachments, $schema
         );
 
-        return $this->toStepResponse($response, $provider, $model);
+        return $this->toStepResponse($response, $provider, $model)
+            ->withRawResponse($response instanceof TextResponse ? $response->raw : null);
     }
 
     /**
@@ -136,7 +137,7 @@ class FakeTextGateway implements StepTextGateway
             );
         }
 
-        if ($response instanceof TextResponse && $response->awaitingApproval()) {
+        if ($response instanceof TextResponse && $response->hasPendingApprovals()) {
             return new StepResponse(
                 $response->text, [], FinishReason::Stop, $response->usage, $response->meta,
                 pendingApprovals: $response->pendingApprovals->all(),

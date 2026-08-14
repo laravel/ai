@@ -14,13 +14,16 @@ use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
+use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\AzureOpenAi\AzureOpenAiFileGateway;
 use Laravel\Ai\Gateway\AzureOpenAi\AzureOpenAiGateway;
 use Laravel\Ai\Gateway\AzureOpenAi\AzureOpenAiStoreGateway;
 use Laravel\Ai\Providers\Tools\FileSearch;
+use Laravel\Ai\Providers\Tools\WebSearch;
 
-class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FileProvider, ImageProvider, StoreProvider, SupportsFileSearch, TextProvider
+class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FileProvider, ImageProvider, StoreProvider, SupportsFileSearch, SupportsWebSearch, TextProvider
 {
     use Concerns\GeneratesEmbeddings;
     use Concerns\GeneratesImages;
@@ -165,6 +168,33 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FilePro
     }
 
     /**
+     * Get the web search tool options for the provider.
+     */
+    public function webSearchToolOptions(WebSearch $search): array
+    {
+        $options = $search->providerOptions(Lab::Azure);
+
+        $filters = array_merge(
+            filled($search->allowedDomains) ? ['allowed_domains' => $search->allowedDomains] : [],
+            $options['filters'] ?? [],
+        );
+
+        unset($options['filters']);
+
+        return array_filter([
+            'filters' => filled($filters) ? $filters : null,
+            'user_location' => $search->hasLocation()
+                ? array_filter([
+                    'type' => 'approximate',
+                    'city' => $search->city,
+                    'region' => $search->region,
+                    'country' => $search->country,
+                ])
+                : null,
+        ]) + $options;
+    }
+
+    /**
      * Get the provider connection configuration other than the driver, key, and name.
      */
     #[\Override]
@@ -174,6 +204,7 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FilePro
             'url' => rtrim($this->config['url'] ?? '', '/'),
             'api_version' => $this->config['api_version'] ?? '2025-04-01-preview',
             'store' => $this->config['store'] ?? true,
+            'headers' => $this->config['headers'] ?? [],
         ];
     }
 

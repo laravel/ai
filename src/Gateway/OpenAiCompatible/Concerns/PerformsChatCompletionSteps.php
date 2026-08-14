@@ -29,8 +29,7 @@ trait PerformsChatCompletionSteps
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)
-                ->withHeaders($options?->headers($provider->driver()) ?? [])
+            fn () => $this->client($provider, $timeout, $options?->headers($provider->driver()) ?? [])
                 ->post('chat/completions', $body),
         );
 
@@ -38,7 +37,7 @@ trait PerformsChatCompletionSteps
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, filled($schema));
+        return $this->parseTextResponse($data, $provider, filled($schema))->withRawResponse($response);
     }
 
     /**
@@ -66,8 +65,7 @@ trait PerformsChatCompletionSteps
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)
-                ->withHeaders($options?->headers($provider->driver()) ?? [])
+            fn () => $this->client($provider, $timeout, $options?->headers($provider->driver()) ?? [])
                 ->withOptions(['stream' => true])
                 ->post('chat/completions', $body),
         );

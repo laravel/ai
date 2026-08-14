@@ -9,7 +9,6 @@ use Laravel\Ai\Ai;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
-use Laravel\Ai\FakePendingDispatch;
 use Laravel\Ai\Jobs\GenerateAudio;
 use Laravel\Ai\PendingResponses\Concerns\ResolvesHeaders;
 use Laravel\Ai\Prompts\QueuedAudioPrompt;
@@ -139,8 +138,6 @@ class PendingAudioGeneration
                     is_array($this->headers) ? $this->headers : [],
                 )
             );
-
-            return new QueuedAudioResponse(new FakePendingDispatch);
         }
 
         return new QueuedAudioResponse(

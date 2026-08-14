@@ -28,8 +28,7 @@ trait HandlesTextSteps
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)
-                ->withHeaders($options?->headers($provider->driver()) ?? [])
+            fn () => $this->client($provider, $timeout, $options?->headers($provider->driver()) ?? [])
                 ->post('responses', $body),
         );
 
@@ -37,7 +36,7 @@ trait HandlesTextSteps
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, filled($schema));
+        return $this->parseTextResponse($data, $provider, filled($schema))->withRawResponse($response);
     }
 
     /**
@@ -60,8 +59,7 @@ trait HandlesTextSteps
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)
-                ->withHeaders($options?->headers($provider->driver()) ?? [])
+            fn () => $this->client($provider, $timeout, $options?->headers($provider->driver()) ?? [])
                 ->withOptions(['stream' => true])
                 ->post('responses', $body),
         );

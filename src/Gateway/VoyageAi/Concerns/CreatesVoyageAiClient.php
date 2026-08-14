@@ -3,20 +3,27 @@
 namespace Laravel\Ai\Gateway\VoyageAi\Concerns;
 
 use Illuminate\Http\Client\PendingRequest;
-use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Gateway\Concerns\CreatesClient;
 use Laravel\Ai\Providers\Provider;
 
 trait CreatesVoyageAiClient
 {
+    use CreatesClient;
+
     /**
      * Get an HTTP client for the Voyage AI API.
      */
-    protected function client(Provider $provider, ?int $timeout = null): PendingRequest
+    /**
+     * @param  array<string, string>  $requestHeaders
+     */
+    protected function client(Provider $provider, ?int $timeout = null, array $requestHeaders = []): PendingRequest
     {
-        return Http::baseUrl($this->baseUrl($provider))
-            ->withToken($provider->providerCredentials()['key'])
-            ->timeout($timeout ?? 30)
-            ->throw();
+        return $this->createClient(
+            $this->baseUrl($provider),
+            ['Authorization' => 'Bearer '.$provider->providerCredentials()['key']],
+            array_merge($provider->additionalConfiguration()['headers'] ?? [], $requestHeaders),
+            $timeout ?? 30,
+        );
     }
 
     /**

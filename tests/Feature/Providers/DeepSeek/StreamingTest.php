@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
@@ -79,6 +80,41 @@ test('streaming handles tool calls', function (): void {
         ->and($toolCallEvents[0]->toolCall->id)->toBe('call_1');
 });
 
+test('streaming tool loop emits a single stream end with accumulated usage', function (): void {
+    Http::fake([
+        'api.deepseek.com/*' => Http::sequence([
+            Http::response(
+                body: $this->ssePayload([
+                    $this->chatChunkToolCallStart(0, 'call_1', 'FixedNumberGenerator'),
+                    $this->chatChunkToolCallDelta(0, '{}'),
+                    $this->chatChunkFinish('tool_calls', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
+                    '[DONE]',
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+            Http::response(
+                body: $this->ssePayload([
+                    $this->chatChunk(['role' => 'assistant', 'content' => 'The number is 72019']),
+                    $this->chatChunkFinish('stop', ['prompt_tokens' => 20, 'completion_tokens' => 10]),
+                    '[DONE]',
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]),
+    ]);
+
+    $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+    $streamEnds = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd));
+
+    expect($streamEnds)->toHaveCount(1)
+        ->and($streamEnds[0]->reason)->toBe(FinishReason::Stop->value)
+        ->and($streamEnds[0]->usage->promptTokens)->toBe(30)
+        ->and($streamEnds[0]->usage->completionTokens)->toBe(15);
+});
+
 test('streaming error event stops stream', function (): void {
     Http::fake([
         'api.deepseek.com/*' => Http::response(
@@ -90,12 +126,17 @@ test('streaming error event stops stream', function (): void {
         ),
     ]);
 
-    $events = $this->collectStreamEvents();
+    $error = null;
 
-    expect($events)->toHaveCount(1)
-        ->and($events[0])->toBeInstanceOf(Error::class)
-        ->and($events[0]->type)->toBe('rate_limit_exceeded')
-        ->and($events[0]->message)->toBe('Rate limit exceeded');
+    try {
+        $this->collectStreamEvents();
+    } catch (StreamErrorException $exception) {
+        $error = $exception->error;
+    }
+
+    expect($error)->toBeInstanceOf(Error::class)
+        ->and($error->type)->toBe('rate_limit_exceeded')
+        ->and($error->message)->toBe('Rate limit exceeded');
 });
 
 test('streaming captures usage from final chunk', function (): void {

@@ -4,9 +4,12 @@ namespace Laravel\Ai\Responses\Data;
 
 use Illuminate\Contracts\Support\Arrayable;
 use JsonSerializable;
+use Laravel\Ai\Responses\Concerns\HasRawResponse;
 
 class Step implements Arrayable, JsonSerializable
 {
+    use HasRawResponse;
+
     /**
      * @param  array<int, ToolCall>  $toolCalls
      * @param  array<int, ToolResult>  $toolResults

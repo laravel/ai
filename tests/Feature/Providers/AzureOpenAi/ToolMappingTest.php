@@ -2,6 +2,8 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Providers\Tools\WebSearch;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 use Tests\Fixtures\Tools\NamedTool;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
@@ -64,5 +66,178 @@ test('tool with empty schema omits parameters key', function (): void {
 
         return ! array_key_exists('strict', $tool)
             && ! array_key_exists('parameters', $tool);
+    });
+});
+
+test('web search tool sends type web_search', function (): void {
+    Http::fake([
+        '*' => fakeAzureResponse('result'),
+    ]);
+
+    agent(tools: [new WebSearch])->prompt('Search the web', provider: 'azure');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
+
+        return $tool !== null;
+    });
+});
+
+test('web search tool omits azure-specific options by default', function (): void {
+    Http::fake([
+        '*' => fakeAzureResponse('result'),
+    ]);
+
+    agent(tools: [new WebSearch])->prompt('Search the web', provider: 'azure');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
+
+        return ! array_key_exists('external_web_access', $tool);
+    });
+});
+
+test('web search tool forwards azure provider options into the tool payload', function (): void {
+    Http::fake([
+        '*' => fakeAzureResponse('result'),
+    ]);
+
+    agent(tools: [
+        (new WebSearch)->withProviderOptions([
+            'external_web_access' => false,
+            'search_context_size' => 'high',
+        ]),
+    ])->prompt('Search', provider: 'azure');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
+
+        return data_get($tool, 'external_web_access') === false
+            && data_get($tool, 'search_context_size') === 'high';
+    });
+});
+
+test('web search tool ignores provider options keyed to another provider', function (): void {
+    Http::fake([
+        '*' => fakeAzureResponse('result'),
+    ]);
+
+    agent(tools: [
+        (new WebSearch)->withProviderOptions(fn (Lab|string $provider): array => $provider === Lab::Anthropic
+            ? ['external_web_access' => false]
+            : []),
+    ])->prompt('Search', provider: 'azure');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
+
+        return ! array_key_exists('external_web_access', $tool);
+    });
+});
+
+test('web search tool sends allowed_domains filter', function (): void {
+    Http::fake([
+        '*' => fakeAzureResponse('result'),
+    ]);
+
+    agent(tools: [(new WebSearch)->allow(['example.com', 'docs.example.com'])])
+        ->prompt('Search', provider: 'azure');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
+
+        return data_get($tool, 'filters.allowed_domains') === ['example.com', 'docs.example.com'];
+    });
+});
+
+test('web search tool sends blocked_domains via provider options', function (): void {
+    Http::fake([
+        '*' => fakeAzureResponse('result'),
+    ]);
+
+    agent(tools: [
+        (new WebSearch)->withProviderOptions([
+            'filters' => ['blocked_domains' => ['spam.com', 'ads.example.com']],
+        ]),
+    ])->prompt('Search', provider: 'azure');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
+
+        return data_get($tool, 'filters.blocked_domains') === ['spam.com', 'ads.example.com'];
+    });
+});
+
+test('web search tool merges allow() with blocked_domains provider option', function (): void {
+    Http::fake([
+        '*' => fakeAzureResponse('result'),
+    ]);
+
+    agent(tools: [
+        (new WebSearch)
+            ->allow(['good.com'])
+            ->withProviderOptions(['filters' => ['blocked_domains' => ['bad.com']]]),
+    ])->prompt('Search', provider: 'azure');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
+
+        return data_get($tool, 'filters.allowed_domains') === ['good.com']
+            && data_get($tool, 'filters.blocked_domains') === ['bad.com'];
+    });
+});
+
+test('web search tool omits filters when no domains configured', function (): void {
+    Http::fake([
+        '*' => fakeAzureResponse('result'),
+    ]);
+
+    agent(tools: [new WebSearch])->prompt('Search', provider: 'azure');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
+
+        return ! array_key_exists('filters', $tool);
+    });
+});
+
+test('web search tool sends user_location when location is set', function (): void {
+    Http::fake([
+        '*' => fakeAzureResponse('result'),
+    ]);
+
+    agent(tools: [(new WebSearch)->location(city: 'Warsaw', country: 'PL')])
+        ->prompt('Search', provider: 'azure');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
+
+        return data_get($tool, 'user_location.type') === 'approximate'
+            && data_get($tool, 'user_location.city') === 'Warsaw'
+            && data_get($tool, 'user_location.country') === 'PL';
+    });
+});
+
+test('web search tool omits user_location when no location set', function (): void {
+    Http::fake([
+        '*' => fakeAzureResponse('result'),
+    ]);
+
+    agent(tools: [new WebSearch])->prompt('Search', provider: 'azure');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
+
+        return ! array_key_exists('user_location', $tool);
     });
 });

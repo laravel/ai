@@ -1,10 +1,14 @@
 <?php
 
+use GuzzleHttp\Psr7\Response as Psr7Response;
+use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Queue;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Jobs\InvokeAgent;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\QueuedAgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
@@ -52,6 +56,19 @@ describe('prompt responses', function (): void {
         AssistantAgent::fake();
 
         AssistantAgent::assertNeverPrompted();
+    });
+
+    test('fake responses may expose a raw http response', function (): void {
+        AssistantAgent::fake([
+            (new TextResponse('Hello', new Usage, new Meta))->withRawResponse(new Response(
+                new Psr7Response(200, ['x-ratelimit-remaining-requests' => '99'], '{}')
+            )),
+        ]);
+
+        $response = (new AssistantAgent)->prompt('Hi');
+
+        expect($response->raw)->toBeInstanceOf(Response::class)
+            ->and($response->raw->header('x-ratelimit-remaining-requests'))->toBe('99');
     });
 
     test('agents can be faked with no predefined responses', function (): void {
@@ -132,7 +149,7 @@ describe('prompt responses', function (): void {
 
     test('agents can fake paused approval responses and assert resume prompts', function () {
         ConversationalAgent::fake([
-            AgentResponse::fakeAwaitingApproval([
+            AgentResponse::fakeWithPendingApprovals([
                 new PendingApproval('call-1', 'DeleteFile', ['path' => 'config/app.php'], 'Deletes a file'),
             ]),
             'Resumed',
@@ -140,7 +157,7 @@ describe('prompt responses', function (): void {
 
         $response = (new ConversationalAgent)->prompt('Delete config/app.php');
 
-        expect($response->awaitingApproval())->toBeTrue()
+        expect($response->hasPendingApprovals())->toBeTrue()
             ->and($response->pendingApprovals)->toHaveCount(1);
 
         (new ConversationalAgent)->prompt(Decisions::from(['call-1' => true]));
@@ -229,6 +246,38 @@ describe('queue responses', function (): void {
         AssistantAgent::assertQueued(fn (QueuedAgentPrompt $prompt): bool => $prompt->prompt === 'First prompt');
 
         AssistantAgent::assertNotQueued(fn (QueuedAgentPrompt $prompt): bool => $prompt->prompt === 'Second prompt');
+    });
+
+    test('queued agents can be faked and then callback is executed', function (): void {
+        AssistantAgent::fake(['First response']);
+
+        $GLOBALS['agentResponse'] = null;
+
+        (new AssistantAgent)->queue('First prompt')->then(function ($response): void {
+            $GLOBALS['agentResponse'] = $response;
+        });
+
+        AssistantAgent::assertQueued('First prompt');
+
+        expect($GLOBALS['agentResponse'])->toBeInstanceOf(AgentResponse::class);
+        expect($GLOBALS['agentResponse']->text)->toEqual('First response');
+    });
+
+    test('queued agents can be faked and then callback is not executed if queue is faked', function (): void {
+        AssistantAgent::fake(['First response']);
+        Queue::fake();
+
+        $GLOBALS['agentResponse'] = null;
+
+        (new AssistantAgent)->queue('First prompt')->then(function ($response): void {
+            $GLOBALS['agentResponse'] = $response;
+        });
+
+        AssistantAgent::assertQueued('First prompt');
+
+        expect($GLOBALS['agentResponse'])->toBeNull();
+
+        Queue::assertPushed(InvokeAgent::class);
     });
 
     test('can assert agent was never queued', function (): void {

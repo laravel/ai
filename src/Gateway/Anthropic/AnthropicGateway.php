@@ -63,8 +63,7 @@ class AnthropicGateway implements Gateway, StepTextGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)
-                ->withHeaders($options?->headers($provider->driver()) ?? [])
+            fn () => $this->client($provider, $timeout, $options?->headers($provider->driver()) ?? [])
                 ->post('messages', $body),
         );
 
@@ -72,7 +71,7 @@ class AnthropicGateway implements Gateway, StepTextGateway
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, filled($schema));
+        return $this->parseTextResponse($data, $provider, filled($schema))->withRawResponse($response);
     }
 
     /**
@@ -104,8 +103,7 @@ class AnthropicGateway implements Gateway, StepTextGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)
-                ->withHeaders($options?->headers($provider->driver()) ?? [])
+            fn () => $this->client($provider, $timeout, $options?->headers($provider->driver()) ?? [])
                 ->withOptions(['stream' => true])
                 ->post('messages', $body),
         );
@@ -207,6 +205,7 @@ class AnthropicGateway implements Gateway, StepTextGateway
             'quota exceeded',
             'exceeded your current quota',
             'billing',
+            'usage limit',
         ];
     }
 }

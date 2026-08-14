@@ -41,11 +41,11 @@ class SpyOpenAiGateway extends OpenAiGateway
     public array $capturedTimeouts = [];
 
     #[Override]
-    protected function client(Provider $provider, ?int $timeout = null): PendingRequest
+    protected function client(Provider $provider, ?int $timeout = null, array $requestHeaders = []): PendingRequest
     {
         $this->capturedTimeouts[] = $timeout;
 
-        return parent::client($provider, $timeout);
+        return parent::client($provider, $timeout, $requestHeaders);
     }
 }
 
@@ -54,11 +54,11 @@ class SpyAnthropicGateway extends AnthropicGateway
     public array $capturedTimeouts = [];
 
     #[Override]
-    protected function client(Provider $provider, ?int $timeout = null): PendingRequest
+    protected function client(Provider $provider, ?int $timeout = null, array $requestHeaders = []): PendingRequest
     {
         $this->capturedTimeouts[] = $timeout;
 
-        return parent::client($provider, $timeout);
+        return parent::client($provider, $timeout, $requestHeaders);
     }
 }
 
@@ -67,11 +67,11 @@ class SpyGroqGateway extends GroqGateway
     public array $capturedTimeouts = [];
 
     #[Override]
-    protected function client(Provider $provider, ?int $timeout = null): PendingRequest
+    protected function client(Provider $provider, ?int $timeout = null, array $requestHeaders = []): PendingRequest
     {
         $this->capturedTimeouts[] = $timeout;
 
-        return parent::client($provider, $timeout);
+        return parent::client($provider, $timeout, $requestHeaders);
     }
 }
 
@@ -80,11 +80,11 @@ class SpyGeminiGateway extends GeminiGateway
     public array $capturedTimeouts = [];
 
     #[Override]
-    protected function client(Provider $provider, ?int $timeout = null): PendingRequest
+    protected function client(Provider $provider, ?int $timeout = null, array $requestHeaders = []): PendingRequest
     {
         $this->capturedTimeouts[] = $timeout;
 
-        return parent::client($provider, $timeout);
+        return parent::client($provider, $timeout, $requestHeaders);
     }
 }
 

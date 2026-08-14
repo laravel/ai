@@ -5,9 +5,11 @@ namespace Laravel\Ai\Gateway\Bedrock\Concerns;
 use Aws\BedrockRuntime\BedrockRuntimeClient;
 use Aws\Credentials\AssumeRoleCredentialProvider;
 use Aws\Credentials\CredentialProvider;
+use Aws\Middleware;
 use Aws\Sts\StsClient;
 use Closure;
 use Laravel\Ai\Providers\Provider;
+use Psr\Http\Message\RequestInterface;
 
 trait CreatesBedrockClient
 {
@@ -20,8 +22,10 @@ trait CreatesBedrockClient
 
     /**
      * Create a new Bedrock client instance.
+     *
+     * @param  array<string, string>  $requestHeaders
      */
-    protected function createBedrockClient(Provider $provider, ?int $timeout = null): BedrockRuntimeClient
+    protected function createBedrockClient(Provider $provider, ?int $timeout = null, array $requestHeaders = []): BedrockRuntimeClient
     {
         $credentials = $provider->providerCredentials();
 
@@ -37,7 +41,21 @@ trait CreatesBedrockClient
             $clientConfig['http'] = ['timeout' => $timeout];
         }
 
-        return new BedrockRuntimeClient($clientConfig);
+        $client = new BedrockRuntimeClient($clientConfig);
+
+        if ($headers = array_merge($config['headers'] ?? [], $requestHeaders)) {
+            $client->getHandlerList()->appendBuild(Middleware::mapRequest(
+                function (RequestInterface $request) use ($headers): RequestInterface {
+                    foreach ($headers as $name => $value) {
+                        $request = $request->withHeader($name, $value);
+                    }
+
+                    return $request;
+                }
+            ), 'laravel-ai.headers');
+        }
+
+        return $client;
     }
 
     /**

@@ -4,7 +4,6 @@ namespace Laravel\Ai\Gateway;
 
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\RerankingGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
@@ -17,6 +16,7 @@ use Laravel\Ai\Responses\RerankingResponse;
 
 class JinaGateway implements EmbeddingGateway, RerankingGateway
 {
+    use Concerns\CreatesClient;
     use HandlesFailoverErrors;
 
     /**
@@ -36,7 +36,7 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
     ): EmbeddingsResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->withHeaders($headers)->post('/embeddings', array_merge(
+            fn () => $this->client($provider, $timeout, $headers)->post('/embeddings', array_merge(
                 ['task' => 'retrieval.passage'],
                 $providerOptions,
                 [
@@ -73,7 +73,7 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
     ): RerankingResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider)->withHeaders($headers)->post('/rerank', array_filter([
+            fn () => $this->client($provider, requestHeaders: $headers)->post('/rerank', array_filter([
                 'model' => $model,
                 'query' => $query,
                 'documents' => $documents,
@@ -98,15 +98,20 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
     /**
      * Get an HTTP client for the Jina API.
      */
-    protected function client(EmbeddingProvider|RerankingProvider $provider, int $timeout = 30): PendingRequest
+    /**
+     * @param  array<string, string>  $requestHeaders
+     */
+    protected function client(EmbeddingProvider|RerankingProvider $provider, int $timeout = 30, array $requestHeaders = []): PendingRequest
     {
-        return Http::baseUrl($this->baseUrl($provider))
-            ->withHeaders([
+        return $this->createClient(
+            $this->baseUrl($provider),
+            [
                 'Authorization' => 'Bearer '.$provider->providerCredentials()['key'],
                 'Content-Type' => 'application/json',
-            ])
-            ->timeout($timeout)
-            ->throw();
+            ],
+            array_merge($provider->additionalConfiguration()['headers'] ?? [], $requestHeaders),
+            $timeout,
+        );
     }
 
     /**

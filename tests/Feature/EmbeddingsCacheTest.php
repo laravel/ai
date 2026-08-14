@@ -63,6 +63,27 @@ test('toEmbeddings honors cache false even when enabled globally', function (): 
     expect(Http::recorded())->toHaveCount(2);
 });
 
+test('inputs that differ only in their boundaries do not share a cache entry', function (): void {
+    Embeddings::for(['a-b', 'c'])->cache(3600)->generate(provider: 'cohere', model: 'embed-v4.0');
+    Embeddings::for(['a', 'b-c'])->cache(3600)->generate(provider: 'cohere', model: 'embed-v4.0');
+
+    expect(Http::recorded())->toHaveCount(2);
+});
+
+test('identical string inputs still share a cache entry', function (): void {
+    Embeddings::for(['a-b', 'c'])->cache(3600)->generate(provider: 'cohere', model: 'embed-v4.0');
+    Embeddings::for(['a-b', 'c'])->cache(3600)->generate(provider: 'cohere', model: 'embed-v4.0');
+
+    expect(Http::recorded())->toHaveCount(1);
+});
+
+test('reordered string inputs do not share a cache entry', function (): void {
+    Embeddings::for(['a', 'b'])->cache(3600)->generate(provider: 'cohere', model: 'embed-v4.0');
+    Embeddings::for(['b', 'a'])->cache(3600)->generate(provider: 'cohere', model: 'embed-v4.0');
+
+    expect(Http::recorded())->toHaveCount(2);
+});
+
 test('toEmbeddings uses cache when enabled globally', function (): void {
     config(['ai.caching.embeddings.cache' => true]);
 

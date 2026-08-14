@@ -75,7 +75,7 @@ test('a gated tool on a conversational agent pauses ownerless instead of throwin
 
     $paused = (new RememberingApprovableAgent)->prompt('Generate a number', provider: 'anthropic');
 
-    expect($paused->awaitingApproval())->toBeTrue()
+    expect($paused->hasPendingApprovals())->toBeTrue()
         ->and($paused->conversationId)->not->toBeNull()
         ->and($paused->conversationUser)->toBeNull();
 });

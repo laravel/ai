@@ -278,6 +278,20 @@ class MyAgent implements Agent
 
 The `#[UseCheapestModel]` and `#[UseSmartestModel]` attributes are also available for automatic model selection.
 
+Use `#[RepairToolCalls]` to let an agent recover when a model calls an unknown local tool. The failed call is returned to the model with the available local tool names, and the implicit step budget includes one repair step. Explicit `#[MaxSteps]` limits remain unchanged.
+
+```php
+use Laravel\Ai\Attributes\RepairToolCalls;
+
+#[RepairToolCalls]
+class SupportAgent implements Agent, HasTools
+{
+    use Promptable;
+
+    // ...
+}
+```
+
 The `#[WithoutBroadcasting]` attribute stops the given stream event types from broadcasting (e.g. data-heavy `ToolResult` payloads that exceed the WebSocket frame limit). The events are still streamed and persisted; they just never hit the channel:
 
 ```php
@@ -407,23 +421,44 @@ $store->assertAdded('file_id');
 
 ## OpenAI-Compatible Provider
 
-Point the SDK at any OpenAI Chat Completions endpoint (LM Studio, vLLM, Together, etc.) with the config-driven `openai-compatible` driver. Define named instances in `config/ai.php`, no code required:
+Point the SDK at any OpenAI-compatible endpoint (LM Studio, vLLM, Together, etc.) with the config-driven `openai-compatible` driver. Define named instances in `config/ai.php`, no code required:
 
 ```php
 'my-llm' => [
     'driver' => 'openai-compatible',
     'url' => env('MY_LLM_URL'),        // required
     'key' => env('MY_LLM_API_KEY'),    // optional Bearer token
+    'models' => [
+        'text' => ['default' => 'some-chat-model'],
+        'embeddings' => [
+            'default' => 'some-embedding-model',
+            'dimensions' => 1024, // optional; omit to use native dimensions
+        ],
+        'transcription' => ['default' => 'some-transcription-model'],
+    ],
 ],
 ```
 
-Reference it by config key (or `Lab::OpenAiCompatible`). A model is required via `models.text.default` or per-call `model:`:
+Reference it by config key (or `Lab::OpenAiCompatible`). A model is required via the corresponding `models` configuration or per-call `model:`:
 
 ```php
 agent()->prompt('Hello', provider: 'my-llm', model: 'some-model');
+
+Embeddings::for(['Hello'])->generate(
+    provider: 'my-llm',
+    model: 'some-embedding-model',
+);
 ```
 
-It uses OpenAI-standard shapes and supports text, streaming, tools, structured output, and image attachments. For extra request-body fields, implement `HasProviderOptions` — the returned array is merged into the body.
+It uses OpenAI-standard shapes and supports text, streaming, tools, structured output, image attachments, text embeddings, and audio transcription. Embedding dimensions are optional; omit them to use the model's native dimensions. For extra request-body fields, implement `HasProviderOptions` — the returned array is merged into the body.
+
+Transcription uploads standard multipart (`file` + `model` + optional `language`) and defaults to `response_format: json`. Because endpoints vary, provider options override the defaults — pass `response_format: 'verbose_json'` for segments, or use `diarize()` on servers that implement `diarized_json`:
+
+```php
+Transcription::fromDisk('recordings', $path)
+    ->withProviderOptions(['response_format' => 'verbose_json'])
+    ->generate(provider: 'my-llm');
+```
 
 ## Common Pitfalls
 
@@ -453,8 +488,8 @@ Calling a capability not supported by a provider throws a `LogicException`. Refe
 | Text       | OpenAI, Anthropic, Gemini, Azure, Groq, xAI, DeepSeek, Mistral, Ollama, OpenRouter, OpenAI-compatible |
 | Images     | OpenAI, Gemini, xAI                                            |
 | TTS        | OpenAI, ElevenLabs                                              |
-| STT        | OpenAI, ElevenLabs, Mistral                                     |
-| Embeddings | OpenAI, Gemini, Azure, Cohere, Mistral, Jina, VoyageAI         |
+| STT        | OpenAI, ElevenLabs, Mistral, Groq, OpenAI-compatible            |
+| Embeddings | OpenAI, OpenAI-compatible, Gemini, Azure, Cohere, Mistral, Jina, VoyageAI |
 | Reranking  | Cohere, Jina                                                    |
 | Files      | OpenAI, Anthropic, Gemini                                       |
 
@@ -466,6 +501,6 @@ use Laravel\Ai\Enums\Lab;
 Lab::Anthropic;
 Lab::OpenAI;
 Lab::Gemini;
-Lab::OpenAiCompatible; // configurable OpenAI Chat Completions endpoint
+Lab::OpenAiCompatible; // configurable OpenAI-compatible endpoint
 // ...
 ```

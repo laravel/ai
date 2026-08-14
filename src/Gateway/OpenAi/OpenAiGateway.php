@@ -7,7 +7,6 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
-use Laravel\Ai\Contracts\Files\HasName;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\Gateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
@@ -21,6 +20,7 @@ use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\StoredImage;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
+use Laravel\Ai\Gateway\Concerns\ResolvesAudioFilenames;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
@@ -43,6 +43,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
     use Concerns\ParsesTextResponses;
     use HandlesFailoverErrors;
     use ParsesServerSentEvents;
+    use ResolvesAudioFilenames;
 
     public function __construct(protected Dispatcher $events)
     {
@@ -101,7 +102,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
         ?int $timeout,
         array $headers = [],
     ) {
-        return $this->client($provider, $timeout ?? 120)->withHeaders($headers)->post('images/generations', [
+        return $this->client($provider, $timeout ?? 120, $headers)->post('images/generations', [
             'model' => $model,
             'prompt' => $prompt,
             ...$provider->defaultImageOptions($size, $quality),
@@ -126,7 +127,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
         ?int $timeout,
         array $headers = [],
     ) {
-        $request = $this->client($provider, $timeout ?? 120)->withHeaders($headers);
+        $request = $this->client($provider, $timeout ?? 120, $headers);
 
         $isGptImage = str_starts_with($model, 'gpt-image');
         $field = $isGptImage ? 'image[]' : 'image';
@@ -178,7 +179,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->withHeaders($headers)->post('audio/speech', array_filter([
+            fn () => $this->client($provider, $timeout, $headers)->post('audio/speech', array_filter([
                 'model' => $model,
                 'input' => $text,
                 'voice' => $voice,
@@ -222,8 +223,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)
-                ->withHeaders($headers)
+            fn () => $this->client($provider, $timeout, $headers)
                 ->attach('file', $audio->content(), $this->audioFilename($audio), array_filter(['Content-Type' => $audio->mimeType()]))
                 ->post('audio/transcriptions', array_merge($providerOptions, array_filter([
                     'model' => $model,
@@ -251,29 +251,6 @@ class OpenAiGateway implements Gateway, StepTextGateway
     }
 
     /**
-     * Determine the appropriate filename for the audio file based on its MIME type.
-     */
-    protected function audioFilename(TranscribableAudio $audio): string
-    {
-        if ($audio instanceof HasName && $audio->name()) {
-            return $audio->name();
-        }
-
-        $extension = match ($audio->mimeType()) {
-            'audio/webm' => 'webm',
-            'audio/ogg', 'audio/ogg; codecs=opus' => 'ogg',
-            'audio/wav', 'audio/x-wav' => 'wav',
-            'audio/mp4', 'audio/m4a', 'audio/x-m4a' => 'm4a',
-            'audio/flac', 'audio/x-flac' => 'flac',
-            'audio/mpeg', 'audio/mp3' => 'mp3',
-            'audio/mpga' => 'mpga',
-            default => 'mp3',
-        };
-
-        return "audio.{$extension}";
-    }
-
-    /**
      * {@inheritdoc}
      */
     public function generateEmbeddings(
@@ -287,7 +264,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
     ): EmbeddingsResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->withHeaders($headers)->post('embeddings', array_merge($providerOptions, [
+            fn () => $this->client($provider, $timeout, $headers)->post('embeddings', array_merge($providerOptions, [
                 'model' => $model,
                 'input' => $inputs,
                 'dimensions' => $dimensions,

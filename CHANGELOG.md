@@ -1,6 +1,65 @@
 # Release Notes
 
-## [Unreleased](https://github.com/laravel/ai/compare/v0.9.1...0.x)
+## [Unreleased](https://github.com/laravel/ai/compare/v0.10.3...0.x)
+
+## [v0.10.3](https://github.com/laravel/ai/compare/v0.10.2...v0.10.3) - 2026-08-06
+
+### What's Changed
+
+* Change minimum required AWS SDK version by [@stevencsimpson](https://github.com/stevencsimpson) in https://github.com/laravel/ai/pull/808
+* Add Vercel protocol coverage for text and reasoning stream events by [@dfinchenko](https://github.com/dfinchenko) in https://github.com/laravel/ai/pull/845
+* Add Gemini tool-loop coverage for thought signature preservation by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/834
+* Azure OpenAI - Add web search support by [@jesse-bos](https://github.com/jesse-bos) in https://github.com/laravel/ai/pull/843
+* Parse Cohere Embed v4's type-keyed embeddings shape on Bedrock by [@serpentblade](https://github.com/serpentblade) in https://github.com/laravel/ai/pull/725
+* Expose raw http response in model API response by [@dumbbellcode](https://github.com/dumbbellcode) in https://github.com/laravel/ai/pull/714
+* Add embeddings support to the OpenAI-compatible provider by [@ademola-emmanuel](https://github.com/ademola-emmanuel) in https://github.com/laravel/ai/pull/841
+* Add Vercel protocol coverage for citation, error, and default tool error parts by [@dfinchenko](https://github.com/dfinchenko) in https://github.com/laravel/ai/pull/849
+* Support custom HTTP headers via provider connection config by [@AngadSethi](https://github.com/AngadSethi) in https://github.com/laravel/ai/pull/838
+* Run the test suite in parallel by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/851
+* Preserve header casing when merging configured headers by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/852
+
+### New Contributors
+
+* [@stevencsimpson](https://github.com/stevencsimpson) made their first contribution in https://github.com/laravel/ai/pull/808
+* [@jesse-bos](https://github.com/jesse-bos) made their first contribution in https://github.com/laravel/ai/pull/843
+* [@serpentblade](https://github.com/serpentblade) made their first contribution in https://github.com/laravel/ai/pull/725
+* [@AngadSethi](https://github.com/AngadSethi) made their first contribution in https://github.com/laravel/ai/pull/838
+
+**Full Changelog**: https://github.com/laravel/ai/compare/v0.10.2...v0.10.3
+
+## [v0.10.2](https://github.com/laravel/ai/compare/v0.10.1...v0.10.2) - 2026-07-28
+
+### What's Changed
+
+* Preserve conversation title language by [@yuters](https://github.com/yuters) in https://github.com/laravel/ai/pull/814
+* Bump actions/checkout from 7.0.0 to 7.0.1 in the github-actions group by [@dependabot](https://github.com/dependabot)[bot] in https://github.com/laravel/ai/pull/830
+* Fix Anthropic structured output rejecting JSON Schema constraints by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/718
+* Bump postcss from 8.5.16 to 8.5.23 in /workbench by [@dependabot](https://github.com/dependabot)[bot] in https://github.com/laravel/ai/pull/831
+* Fix colliding embeddings cache keys for distinct string batches by [@ademola-emmanuel](https://github.com/ademola-emmanuel) in https://github.com/laravel/ai/pull/832
+* Replace deprected DeepSeek model  name with deepseek-v4-flash by [@peter-nassef](https://github.com/peter-nassef) in https://github.com/laravel/ai/pull/829
+* Fix: SimilaritySearch tool output with additional JSON flags (for other languages) by [@yuters](https://github.com/yuters) in https://github.com/laravel/ai/pull/820
+
+### New Contributors
+
+* [@yuters](https://github.com/yuters) made their first contribution in https://github.com/laravel/ai/pull/814
+* [@ademola-emmanuel](https://github.com/ademola-emmanuel) made their first contribution in https://github.com/laravel/ai/pull/832
+* [@peter-nassef](https://github.com/peter-nassef) made their first contribution in https://github.com/laravel/ai/pull/829
+
+**Full Changelog**: https://github.com/laravel/ai/compare/v0.10.1...v0.10.2
+
+## [v0.10.1](https://github.com/laravel/ai/compare/v0.10.0...v0.10.1) - 2026-07-21
+
+* [0.x] Update .gitattributes by [@jackbayliss](https://github.com/jackbayliss) in https://github.com/laravel/ai/pull/806
+* Update Gemini default models by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/807
+
+## [v0.10.0](https://github.com/laravel/ai/compare/v0.9.1...v0.10.0) - 2026-07-21
+
+* Add Rector and Laravel Rector, apply automated refactors by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/784
+* Support multimodal for Gemini and VoyageAI by [@paulinevos](https://github.com/paulinevos) in https://github.com/laravel/ai/pull/798
+* Bedrock: support cross-account AssumeRole credential provider by [@amjosuesanchez](https://github.com/amjosuesanchez) in https://github.com/laravel/ai/pull/566
+* Add summarize macro for text summarization by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/800
+* Add human-in-the-loop by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/773
+* Store conversation participants polymorphically by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/795
 
 ## [v0.9.1](https://github.com/laravel/ai/compare/v0.9.0...v0.9.1) - 2026-07-14
 

@@ -26,7 +26,11 @@ trait GeneratesEmbeddings
     public function embeddings(array $inputs, ?int $dimensions = null, ?string $model = null, int $timeout = 30, array $providerOptions = [], array $headers = []): EmbeddingsResponse
     {
         if (! is_null($model) && is_null($dimensions)) {
-            throw new InvalidArgumentException('Dimensions must be provided when model is specified.');
+            if (! $this->supportsNativeEmbeddingDimensions()) {
+                throw new InvalidArgumentException('Dimensions must be provided when model is specified.');
+            }
+
+            $dimensions = 0;
         }
 
         $invocationId = (string) Str::uuid7();
@@ -57,6 +61,14 @@ trait GeneratesEmbeddings
         ), fn (EmbeddingsResponse $response) => $this->events->dispatch(new EmbeddingsGenerated(
             $invocationId, $this, $model, $prompt, $response,
         )));
+    }
+
+    /**
+     * Determine if the provider may omit dimensions and use a model's native embedding dimensions.
+     */
+    protected function supportsNativeEmbeddingDimensions(): bool
+    {
+        return false;
     }
 
     /**

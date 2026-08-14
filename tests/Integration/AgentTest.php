@@ -378,3 +378,21 @@ test('agent tool exception handling is not magical', function (string $provider,
 
     expect($caught)->toBeTrue();
 })->with('agent-providers');
+
+test('openai replays echoed output blocks on a store=false tool-call continuation', function () {
+    requiresApiKey('OPENAI_API_KEY');
+
+    config(['ai.providers.openai' => [
+        ...config('ai.providers.openai'),
+        'store' => false,
+    ]]);
+
+    $response = (new ToolUsingAgent(fixed: true))->prompt(
+        'Give me a random number.',
+        provider: 'openai',
+        model: 'gpt-5.4',
+    );
+
+    expect($response['number'])->toBe(72019)
+        ->and($response->toolCalls)->toHaveCount(1);
+});

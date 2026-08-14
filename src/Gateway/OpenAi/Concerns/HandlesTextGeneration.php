@@ -104,6 +104,9 @@ trait HandlesTextGeneration
                     time(),
                 ))->withInvocationId($invocationId);
 
+                $textStartEmitted = false;
+                $messageId = $this->generateEventId();
+
                 continue;
             }
 
@@ -265,15 +268,8 @@ trait HandlesTextGeneration
                 $response = $data['response'] ?? [];
                 $responseData = $response;
                 $responseId = $response['id'] ?? $responseId;
-                $responseUsage = $response['usage'] ?? [];
 
-                $usage = new Usage(
-                    ($responseUsage['input_tokens'] ?? 0) - ($responseUsage['input_tokens_details']['cached_tokens'] ?? 0),
-                    $responseUsage['output_tokens'] ?? 0,
-                    0,
-                    $responseUsage['input_tokens_details']['cached_tokens'] ?? 0,
-                    $responseUsage['output_tokens_details']['reasoning_tokens'] ?? 0,
-                );
+                $usage = $this->extractUsage($response);
             }
         }
 
@@ -284,6 +280,9 @@ trait HandlesTextGeneration
             usage: $usage ?? new Usage(0, 0),
             meta: new Meta($provider->name(), $responseData['model'] ?? $model),
             continuationToken: $responseId,
+            providerContentBlocks: $this->isStateless($provider)
+                ? $this->extractReplayBlocks($responseData['output'] ?? [])
+                : [],
         );
     }
 

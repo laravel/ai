@@ -12,7 +12,6 @@ use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
-use Laravel\Ai\FakePendingDispatch;
 use Laravel\Ai\Files\Audio;
 use Laravel\Ai\Files\Document;
 use Laravel\Ai\Files\Image;
@@ -215,23 +214,12 @@ class PendingEmbeddingsGeneration
      */
     protected function cacheKey(Provider $provider, string $model, int $dimensions, array $providerOptions, array $headers = []): string
     {
-        $optionsFingerprint = $this->fingerprintProviderOptions($providerOptions);
-
-        $headersFingerprint = $this->fingerprintProviderOptions($headers);
-
-        if (array_all($this->inputs, fn ($input) => is_string($input))) {
-            return 'laravel-embeddings:'.hash(
-                'sha256',
-                $provider->driver().'-'.$model.'-'.$dimensions.'-'.$optionsFingerprint.'-'.$headersFingerprint.'-'.implode('-', $this->inputs),
-            );
-        }
-
         return 'laravel-embeddings:'.hash('sha256', json_encode([
             'driver' => $provider->driver(),
             'model' => $model,
             'dimensions' => $dimensions,
-            'options' => $optionsFingerprint,
-            'headers' => $headersFingerprint,
+            'options' => $this->fingerprintProviderOptions($providerOptions),
+            'headers' => $this->fingerprintProviderOptions($headers),
             'inputs' => array_map($this->normalizeInputForCache(...), $this->inputs),
         ], JSON_THROW_ON_ERROR));
     }
@@ -333,8 +321,6 @@ class PendingEmbeddingsGeneration
                     is_array($this->headers) ? $this->headers : [],
                 )
             );
-
-            return new QueuedEmbeddingsResponse(new FakePendingDispatch);
         }
 
         return new QueuedEmbeddingsResponse(

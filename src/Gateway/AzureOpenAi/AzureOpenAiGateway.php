@@ -56,7 +56,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, StepTextGate
     ): EmbeddingsResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->withHeaders($headers)->post('embeddings', array_merge($providerOptions, [
+            fn () => $this->client($provider, $timeout, $headers)->post('embeddings', array_merge($providerOptions, [
                 'model' => $model,
                 'input' => $inputs,
                 'dimensions' => $dimensions,
@@ -97,7 +97,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, StepTextGate
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout ?? 120)->withHeaders($headers)->post('images/generations', [
+            fn () => $this->client($provider, $timeout ?? 120, $headers)->post('images/generations', [
                 'model' => $model,
                 'prompt' => $prompt,
                 'moderation' => 'low',
@@ -130,7 +130,10 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, StepTextGate
         );
     }
 
-    protected function mapTool(Tool $tool): array
+    /**
+     * Map a regular tool to an Azure OpenAI function definition.
+     */
+    protected function mapTool(Tool $tool, bool $defer = false): array
     {
         $schema = $tool->schema(new JsonSchemaTypeFactory);
 
@@ -138,7 +141,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, StepTextGate
             ? (new ObjectSchema($schema))->toSchema()
             : [];
 
-        return array_filter([
+        $definition = array_filter([
             'type' => 'function',
             'name' => ToolNameResolver::resolve($tool),
             'description' => (string) $tool->description(),
@@ -148,5 +151,11 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, StepTextGate
                 'required' => $schemaArray['required'] ?? [],
             ] : null,
         ]);
+
+        if ($defer) {
+            $definition['defer_loading'] = true;
+        }
+
+        return $definition;
     }
 }

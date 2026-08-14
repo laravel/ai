@@ -7,6 +7,7 @@ use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
+use Laravel\Ai\Responses\Concerns\HasRawResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Step;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -15,6 +16,8 @@ use Laravel\Ai\Responses\Data\Usage;
 
 class TextResponse implements \Stringable
 {
+    use HasRawResponse;
+
     /** @var Collection<int, Message> */
     public Collection $messages;
 
@@ -111,9 +114,9 @@ class TextResponse implements \Stringable
     }
 
     /**
-     * Determine whether the response is awaiting tool approval.
+     * Determine whether the response has tool calls pending approval.
      */
-    public function awaitingApproval(): bool
+    public function hasPendingApprovals(): bool
     {
         return $this->pendingApprovals->isNotEmpty();
     }

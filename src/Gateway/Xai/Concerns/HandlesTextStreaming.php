@@ -106,6 +106,9 @@ trait HandlesTextStreaming
                     time(),
                 ))->withInvocationId($invocationId);
 
+                $textStartEmitted = false;
+                $messageId = $this->generateEventId();
+
                 continue;
             }
 
