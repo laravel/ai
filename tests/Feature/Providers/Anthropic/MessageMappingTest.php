@@ -253,6 +253,33 @@ test('local text document maps to text source block', function (): void {
     }
 });
 
+test('local text document that is not plain text is sent as plain text', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse(),
+    ]);
+
+    $path = tempnam(sys_get_temp_dir(), 'ai-').'.csv';
+    file_put_contents($path, "email,state\na@b.it,ongoing\n");
+
+    try {
+        agent('You are helpful.')->prompt(
+            'Read this.',
+            attachments: [Files\Document::fromPath($path)->withMimeType('text/csv')],
+            provider: 'anthropic',
+        );
+
+        Http::assertSent(function ($request): bool {
+            $docBlock = $request->data()['messages'][0]['content'][0];
+
+            return $docBlock['source']['type'] === 'text'
+                && $docBlock['source']['media_type'] === 'text/plain'
+                && $docBlock['source']['data'] === "email,state\na@b.it,ongoing\n";
+        });
+    } finally {
+        @unlink($path);
+    }
+});
+
 test('uploaded text file maps to text source block', function (): void {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse(),
@@ -272,6 +299,30 @@ test('uploaded text file maps to text source block', function (): void {
         return $docBlock['type'] === 'document'
             && $docBlock['source']['type'] === 'text'
             && $docBlock['source']['data'] === 'uploaded text contents';
+    });
+});
+
+test('uploaded text file that is not plain text is sent as plain text', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse(),
+    ]);
+
+    // The upload reports text/csv from its own extension, so nothing the caller
+    // passes is what makes the media type unacceptable to a text source.
+    $upload = UploadedFile::fake()->createWithContent('leads.csv', "email,state\na@b.it,ongoing\n");
+
+    agent('You are helpful.')->prompt(
+        'Read this.',
+        attachments: [$upload],
+        provider: 'anthropic',
+    );
+
+    Http::assertSent(function ($request): bool {
+        $docBlock = $request->data()['messages'][0]['content'][0];
+
+        return $docBlock['source']['type'] === 'text'
+            && $docBlock['source']['media_type'] === 'text/plain'
+            && $docBlock['source']['data'] === "email,state\na@b.it,ongoing\n";
     });
 });
 
