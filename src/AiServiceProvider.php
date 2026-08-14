@@ -16,6 +16,10 @@ use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Storage\DatabaseConversationStore;
+use Laravel\Ai\Telemetry\Pulse\Livewire\StepLatency;
+use Laravel\Ai\Telemetry\Pulse\Livewire\TokenUsage;
+use Laravel\Pulse\Pulse;
+use Livewire\LivewireManager;
 
 class AiServiceProvider extends ServiceProvider
 {
@@ -43,6 +47,8 @@ class AiServiceProvider extends ServiceProvider
             $this->registerCommands();
             $this->registerPublishing();
         }
+
+        $this->registerPulseCards();
 
         // Embeddings macro...
         Stringable::macro('toEmbeddings', function (
@@ -142,6 +148,24 @@ class AiServiceProvider extends ServiceProvider
             return (new Collection($response->results))->map(
                 fn ($result): mixed => $this->values()[$result->index]
             );
+        });
+    }
+
+    /**
+     * Register the package's Laravel Pulse cards.
+     */
+    protected function registerPulseCards(): void
+    {
+        if (! class_exists(Pulse::class) || ! class_exists(LivewireManager::class)) {
+            return;
+        }
+
+        $this->loadViewsFrom(__DIR__.'/../resources/views', 'ai');
+
+        // Deferred so the cards register only once Livewire itself has booted, which never happens on a console-only app...
+        $this->callAfterResolving(LivewireManager::class, function (LivewireManager $livewire): void {
+            $livewire->component('ai.pulse.token-usage', TokenUsage::class);
+            $livewire->component('ai.pulse.step-latency', StepLatency::class);
         });
     }
 

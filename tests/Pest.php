@@ -10,6 +10,7 @@ use Tests\Feature\Providers\Ollama\OllamaHelpers;
 use Tests\Feature\Providers\OpenAi\OpenAiHelpers;
 use Tests\Feature\Providers\OpenRouter\OpenRouterHelpers;
 use Tests\Feature\Providers\Xai\XaiHelpers;
+use Tests\PulseTestCase;
 use Tests\TestCase;
 
 require __DIR__.'/Expectations.php';
@@ -18,6 +19,7 @@ require_once __DIR__.'/Helpers.php';
 Dotenv\Dotenv::createImmutable(dirname(__DIR__), ['.env', '.env.testing'])->safeLoad();
 
 pest()->extend(TestCase::class)->in('Feature', 'Integration');
+pest()->extend(PulseTestCase::class)->in('Pulse');
 pest()->use(AnthropicHelpers::class)->group('provider-anthropic')->in('Feature/Providers/Anthropic');
 pest()->use(AzureOpenAiHelpers::class)->group('provider-azure')->in('Feature/Providers/AzureOpenAi');
 pest()->use(BedrockHelpers::class)->group('provider-bedrock')->in('Feature/Providers/Bedrock');

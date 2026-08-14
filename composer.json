@@ -28,6 +28,7 @@
         "driftingly/rector-laravel": "^2.5",
         "laravel/mcp": "^0.8",
         "laravel/pint": "^1.26",
+        "laravel/pulse": "^1.4",
         "mockery/mockery": "^1.6.12",
         "orchestra/testbench": "^10.6|^11.0",
         "pestphp/pest": "^3.0|^4.0",
@@ -36,7 +37,8 @@
         "rector/rector": "^2.5"
     },
     "suggest": {
-        "laravel/mcp": "Required to use MCP client tools or MCP server tools with Laravel AI agents."
+        "laravel/mcp": "Required to use MCP client tools or MCP server tools with Laravel AI agents.",
+        "laravel/pulse": "Required to display the AI token usage and step latency cards on the Pulse dashboard."
     },
     "minimum-stability": "dev",
     "prefer-stable": true,
