@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
@@ -42,6 +43,38 @@ test('streaming emits text events', function (): void {
         ->and($events[3])->toBeInstanceOf(TextDelta::class)->delta->toBe(' world')
         ->and($events[4])->toBeInstanceOf(TextEnd::class)
         ->and($events[5])->toBeInstanceOf(StreamEnd::class);
+});
+
+test('streaming starts a new text part after each text end in the same step', function (): void {
+    Http::fake([
+        '*' => Http::response(
+            body: $this->ssePayload([
+                ['type' => 'response.created', 'response' => ['id' => 'resp_123', 'model' => 'grok-4-1-fast-reasoning']],
+                ['type' => 'response.output_text.delta', 'delta' => 'First'],
+                ['type' => 'response.output_text.done'],
+                ['type' => 'response.output_text.delta', 'delta' => 'Second'],
+                ['type' => 'response.output_text.done'],
+                ['type' => 'response.completed', 'response' => ['id' => 'resp_123', 'status' => 'completed', 'output' => [['type' => 'message', 'status' => 'completed', 'role' => 'assistant', 'content' => [['type' => 'output_text', 'text' => 'FirstSecond']]]], 'usage' => ['input_tokens' => 10, 'output_tokens' => 5, 'input_tokens_details' => ['cached_tokens' => 0], 'output_tokens_details' => ['reasoning_tokens' => 0]]]],
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents();
+
+    $textStarts = array_values(array_filter($events, fn ($e): bool => $e instanceof TextStart));
+    $textEnds = array_values(array_filter($events, fn ($e): bool => $e instanceof TextEnd));
+    $textDeltas = array_values(array_filter($events, fn ($e): bool => $e instanceof TextDelta));
+
+    expect($textStarts)->toHaveCount(2)
+        ->and($textEnds)->toHaveCount(2)
+        ->and($textDeltas)->toHaveCount(2)
+        ->and($textStarts[0]->messageId)->not->toBe($textStarts[1]->messageId)
+        ->and($textEnds[0]->messageId)->toBe($textStarts[0]->messageId)
+        ->and($textEnds[1]->messageId)->toBe($textStarts[1]->messageId)
+        ->and($textDeltas[0]->messageId)->toBe($textStarts[0]->messageId)
+        ->and($textDeltas[1]->messageId)->toBe($textStarts[1]->messageId);
 });
 
 test('streaming handles tool calls', function (): void {
@@ -116,12 +149,17 @@ test('streaming error event stops stream', function (): void {
         ),
     ]);
 
-    $events = $this->collectStreamEvents();
+    $error = null;
 
-    expect($events)->toHaveCount(1)
-        ->and($events[0])->toBeInstanceOf(Error::class)
-        ->and($events[0]->type)->toBe('server_error')
-        ->and($events[0]->message)->toBe('Internal server error');
+    try {
+        $this->collectStreamEvents();
+    } catch (StreamErrorException $exception) {
+        $error = $exception->error;
+    }
+
+    expect($error)->toBeInstanceOf(Error::class)
+        ->and($error->type)->toBe('server_error')
+        ->and($error->message)->toBe('Internal server error');
 });
 
 test('streaming finish reason maps correctly', function (string $status, string $type, $expected): void {

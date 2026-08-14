@@ -37,11 +37,6 @@ function resolverHost(): object
     {
         use InvokesTools;
 
-        public function __construct()
-        {
-            $this->initializeToolCallbacks();
-        }
-
         public function callResolve(Tool $tool): string
         {
             return ToolNameResolver::resolve($tool);

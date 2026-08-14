@@ -1,7 +1,9 @@
 <?php
 
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Queue;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Jobs\GenerateTranscription;
 use Laravel\Ai\Prompts\QueuedTranscriptionPrompt;
 use Laravel\Ai\Prompts\TranscriptionPrompt;
 use Laravel\Ai\Responses\Data\Meta;
@@ -133,6 +135,38 @@ test('queued transcriptions can be faked', function (): void {
     Transcription::assertQueued(fn (QueuedTranscriptionPrompt $prompt): bool => $prompt->audio->path === '/path/to/audio.mp3');
 
     Transcription::assertNotQueued(fn (QueuedTranscriptionPrompt $prompt): bool => $prompt->audio->path === '/path/to/other.mp3');
+});
+
+test('queued transcriptions can be faked and then callback is executed', function (): void {
+    Transcription::fake(['Some transcription text']);
+
+    $GLOBALS['transcriptionResponse'] = null;
+
+    Transcription::fromPath('/path/to/audio.mp3')->queue()->then(function ($response): void {
+        $GLOBALS['transcriptionResponse'] = $response;
+    });
+
+    Transcription::assertQueued(fn (QueuedTranscriptionPrompt $prompt): bool => $prompt->audio->path === '/path/to/audio.mp3');
+
+    expect($GLOBALS['transcriptionResponse'])->toBeInstanceOf(TranscriptionResponse::class);
+    expect($GLOBALS['transcriptionResponse']->text)->toEqual('Some transcription text');
+});
+
+test('queued transcriptions can be faked and then callback is not executed if queue is faked', function (): void {
+    Transcription::fake(['Some transcription text']);
+    Queue::fake();
+
+    $GLOBALS['transcriptionResponse'] = null;
+
+    Transcription::fromPath('/path/to/audio.mp3')->queue()->then(function ($response): void {
+        $GLOBALS['transcriptionResponse'] = $response;
+    });
+
+    Transcription::assertQueued(fn (QueuedTranscriptionPrompt $prompt): bool => $prompt->audio->path === '/path/to/audio.mp3');
+
+    expect($GLOBALS['transcriptionResponse'])->toBeNull();
+
+    Queue::assertPushed(GenerateTranscription::class);
 });
 
 test('can assert no transcriptions were queued', function (): void {

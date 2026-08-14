@@ -21,6 +21,7 @@ use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Gateway\FakeTextGateway;
+use Laravel\Ai\Gateway\ParentInvocation;
 use Laravel\Ai\Jobs\BroadcastAgent;
 use Laravel\Ai\Jobs\InvokeAgent;
 use Laravel\Ai\Prompts\AgentPrompt;
@@ -62,19 +63,37 @@ trait Promptable
     {
         [$text, $approvalDecisions] = $this->extractPromptInput($prompt);
 
-        $run = fn (TextProvider $provider, string $model): AgentResponse => $provider->prompt(
-            new AgentPrompt($this, $text, $attachments, $provider, $model, $this->getTimeout($timeout), approvalDecisions: $approvalDecisions)
-        );
+        $invocationId = (string) Str::uuid7();
+
+        $providers = $approvalDecisions !== null
+            ? $this->providersForApprovalContinuation($provider, $model)
+            : $this->getProvidersAndModelsForFailover($provider, $model);
+
+        [$parentInvocationId, $parentToolInvocationId] = ParentInvocation::current();
+
+        $run = function (TextProvider $provider, string $model, bool $isFinalAttempt = true) use (
+            $text, $attachments, $timeout, $invocationId, $approvalDecisions,
+            $parentInvocationId, $parentToolInvocationId
+        ): AgentResponse {
+            return $provider->prompt(
+                new AgentPrompt(
+                    $this, $text, $attachments, $provider, $model, $this->getTimeout($timeout),
+                    invocationId: $invocationId,
+                    approvalDecisions: $approvalDecisions,
+                    parentInvocationId: $parentInvocationId,
+                    parentToolInvocationId: $parentToolInvocationId,
+                    isFinalAttempt: $isFinalAttempt,
+                )
+            );
+        };
 
         if ($approvalDecisions !== null) {
-            [$provider, $model] = $this->iterateProvidersWithFailover(
-                $this->providersForApprovalContinuation($provider, $model)
-            )->current();
+            [$provider, $model] = $this->iterateProvidersWithFailover($providers)->current();
 
             return $run($provider, $model);
         }
 
-        return $this->withModelFailover($run, $provider, $model);
+        return $this->withModelFailover($run, $providers, $invocationId);
     }
 
     /**
@@ -110,11 +129,19 @@ trait Promptable
 
         $invocationId = (string) Str::uuid7();
 
+        [$parentInvocationId, $parentToolInvocationId] = ParentInvocation::current();
+
         if (count($providers) === 1) {
             [$resolved, $resolvedModel] = $this->iterateProvidersWithFailover($providers)->current();
 
             return $resolved->stream(
-                new AgentPrompt($this, $prompt, $attachments, $resolved, $resolvedModel, $resolvedTimeout, $invocationId, $approvalDecisions)
+                new AgentPrompt(
+                    $this, $prompt, $attachments, $resolved, $resolvedModel, $resolvedTimeout,
+                    invocationId: $invocationId,
+                    approvalDecisions: $approvalDecisions,
+                    parentInvocationId: $parentInvocationId,
+                    parentToolInvocationId: $parentToolInvocationId,
+                )
             );
         }
 
@@ -123,32 +150,39 @@ trait Promptable
 
         $outer = new StreamableAgentResponse(
             $invocationId,
-            function () use ($providers, $prompt, $approvalDecisions, $attachments, $resolvedTimeout, $invocationId, &$outer) {
+            function () use ($providers, $prompt, $approvalDecisions, $attachments, $resolvedTimeout, $invocationId, $parentInvocationId, $parentToolInvocationId, &$outer) {
                 $lastException = null;
 
-                foreach ($this->iterateProvidersWithFailover($providers) as [$provider, $model]) {
-                    $started = false;
+                foreach ($this->iterateProvidersWithFailover($providers) as [$provider, $model, $isFinalAttempt]) {
+                    $innerResponse = null;
 
                     try {
                         $innerResponse = $provider->stream(
-                            new AgentPrompt($this, $prompt, $attachments, $provider, $model, $resolvedTimeout, $invocationId, $approvalDecisions)
+                            new AgentPrompt(
+                                $this, $prompt, $attachments, $provider, $model, $resolvedTimeout,
+                                invocationId: $invocationId,
+                                approvalDecisions: $approvalDecisions,
+                                parentInvocationId: $parentInvocationId,
+                                parentToolInvocationId: $parentToolInvocationId,
+                                isFinalAttempt: $isFinalAttempt,
+                            )
                         );
 
                         $innerResponse->then(fn (StreamedAgentResponse $response): StreamableAgentResponse => $outer->adoptStateFrom($response));
 
                         foreach ($innerResponse as $event) {
-                            $started = true;
-
                             yield $event;
                         }
 
                         return;
                     } catch (FailoverableException $e) {
-                        if ($started) {
+                        if ($innerResponse?->hasYielded()) {
                             throw $e;
                         }
 
-                        $lastException = $this->recordAgentFailover($provider, $model, $e);
+                        $lastException = $isFinalAttempt
+                            ? $e
+                            : $this->recordAgentFailover($invocationId, $provider, $model, $e);
                     }
                 }
 
@@ -169,8 +203,6 @@ trait Promptable
             Ai::recordPrompt(
                 new QueuedAgentPrompt($this, $prompt, $attachments, $provider, $model),
             );
-
-            return new QueuedAgentResponse(new FakePendingDispatch);
         }
 
         return new QueuedAgentResponse(
@@ -226,8 +258,6 @@ trait Promptable
             Ai::recordPrompt(
                 new QueuedAgentPrompt($this, $prompt, $attachments, $provider, $model),
             );
-
-            return new QueuedAgentResponse(new FakePendingDispatch);
         }
 
         return new QueuedAgentResponse(
@@ -237,16 +267,20 @@ trait Promptable
 
     /**
      * Invoke the given Closure with provider / model failover.
+     *
+     * @param  array<string, string|null>  $providers
      */
-    private function withModelFailover(Closure $callback, Lab|array|string|null $provider, ?string $model): mixed
+    private function withModelFailover(Closure $callback, array $providers, string $invocationId): mixed
     {
         $lastException = null;
 
-        foreach ($this->iterateProvidersWithFailover($this->getProvidersAndModelsForFailover($provider, $model)) as [$provider, $model]) {
+        foreach ($this->iterateProvidersWithFailover($providers) as [$provider, $model, $isFinalAttempt]) {
             try {
-                return $callback($provider, $model);
+                return $callback($provider, $model, $isFinalAttempt);
             } catch (FailoverableException $e) {
-                $lastException = $this->recordAgentFailover($provider, $model, $e);
+                $lastException = $isFinalAttempt
+                    ? $e
+                    : $this->recordAgentFailover($invocationId, $provider, $model, $e);
             }
         }
 
@@ -276,26 +310,28 @@ trait Promptable
     }
 
     /**
-     * Iterate the configured provider / model pairs.
+     * Iterate the configured provider / model pairs, flagging the attempt that has no provider left to fall back to.
      *
      * @param  array<string, string|null>  $providers
-     * @return Generator<int, array{TextProvider, string}>
+     * @return Generator<int, array{TextProvider, string, bool}>
      */
     private function iterateProvidersWithFailover(array $providers): Generator
     {
+        $remaining = count($providers);
+
         foreach ($providers as $provider => $model) {
             $provider = Ai::textProviderFor($this, $provider);
 
-            yield [$provider, $model ?? $this->getDefaultModelFor($provider)];
+            yield [$provider, $model ?? $this->getDefaultModelFor($provider), --$remaining === 0];
         }
     }
 
     /**
      * Record that an agent failed over to the next configured provider.
      */
-    private function recordAgentFailover(Provider $provider, string $model, FailoverableException $exception): FailoverableException
+    private function recordAgentFailover(string $invocationId, Provider $provider, string $model, FailoverableException $exception): FailoverableException
     {
-        event(new AgentFailedOver($this, $provider, $model, $exception));
+        event(new AgentFailedOver($invocationId, $this, $provider, $model, $exception));
 
         return $exception;
     }

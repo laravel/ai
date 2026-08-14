@@ -58,7 +58,62 @@ function fakeGroqResponse(string $text = 'Hello'): PromiseInterface
     ]);
 }
 
-function fakeGroqToolCallResponse(): PromiseInterface
+function fakeGroqStreamResponse(string $text = 'Hello'): PromiseInterface
+{
+    $chunk = fn (array|object $delta, ?string $finishReason = null): array => [
+        'id' => 'chatcmpl-123',
+        'object' => 'chat.completion.chunk',
+        'model' => 'openai/gpt-oss-20b',
+        'choices' => [['index' => 0, 'delta' => $delta, 'finish_reason' => $finishReason]],
+    ];
+
+    $body = implode("\n\n", [
+        'data: '.json_encode($chunk(['role' => 'assistant', 'content' => $text])),
+        'data: '.json_encode($chunk((object) [], 'stop')),
+        'data: [DONE]',
+    ])."\n\n";
+
+    return Http::response($body, 200, ['Content-Type' => 'text/event-stream']);
+}
+
+function fakeGroqStreamErrorResponse(string $message = 'Upstream exploded.'): PromiseInterface
+{
+    $body = implode("\n\n", [
+        'data: '.json_encode(['error' => ['code' => 'server_error', 'message' => $message]]),
+        'data: [DONE]',
+    ])."\n\n";
+
+    return Http::response($body, 200, ['Content-Type' => 'text/event-stream']);
+}
+
+function fakeGroqStreamToolCallResponse(string $name = 'FixedNumberGenerator', string $id = 'call_123'): PromiseInterface
+{
+    $chunk = fn (array|object $delta, ?string $finishReason = null): array => [
+        'id' => 'chatcmpl-123',
+        'object' => 'chat.completion.chunk',
+        'model' => 'openai/gpt-oss-20b',
+        'choices' => [['index' => 0, 'delta' => $delta, 'finish_reason' => $finishReason]],
+    ];
+
+    $body = implode("\n\n", [
+        'data: '.json_encode($chunk(['role' => 'assistant', 'tool_calls' => [[
+            'index' => 0,
+            'id' => $id,
+            'type' => 'function',
+            'function' => ['name' => $name, 'arguments' => ''],
+        ]]])),
+        'data: '.json_encode($chunk(['tool_calls' => [[
+            'index' => 0,
+            'function' => ['arguments' => '{}'],
+        ]]])),
+        'data: '.json_encode($chunk((object) [], 'tool_calls')),
+        'data: [DONE]',
+    ])."\n\n";
+
+    return Http::response($body, 200, ['Content-Type' => 'text/event-stream']);
+}
+
+function fakeGroqToolCallResponse(string $name = 'FixedNumberGenerator', array $arguments = [], string $id = 'call_123'): PromiseInterface
 {
     return Http::response([
         'id' => 'chatcmpl-tool-123',
@@ -70,11 +125,11 @@ function fakeGroqToolCallResponse(): PromiseInterface
                 'role' => 'assistant',
                 'content' => null,
                 'tool_calls' => [[
-                    'id' => 'call_123',
+                    'id' => $id,
                     'type' => 'function',
                     'function' => [
-                        'name' => 'FixedNumberGenerator',
-                        'arguments' => '{}',
+                        'name' => $name,
+                        'arguments' => $arguments === [] ? '{}' : json_encode($arguments),
                     ],
                 ]],
             ],

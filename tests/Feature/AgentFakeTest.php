@@ -2,11 +2,13 @@
 
 use GuzzleHttp\Psr7\Response as Psr7Response;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Queue;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Jobs\InvokeAgent;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\QueuedAgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
@@ -244,6 +246,38 @@ describe('queue responses', function (): void {
         AssistantAgent::assertQueued(fn (QueuedAgentPrompt $prompt): bool => $prompt->prompt === 'First prompt');
 
         AssistantAgent::assertNotQueued(fn (QueuedAgentPrompt $prompt): bool => $prompt->prompt === 'Second prompt');
+    });
+
+    test('queued agents can be faked and then callback is executed', function (): void {
+        AssistantAgent::fake(['First response']);
+
+        $GLOBALS['agentResponse'] = null;
+
+        (new AssistantAgent)->queue('First prompt')->then(function ($response): void {
+            $GLOBALS['agentResponse'] = $response;
+        });
+
+        AssistantAgent::assertQueued('First prompt');
+
+        expect($GLOBALS['agentResponse'])->toBeInstanceOf(AgentResponse::class);
+        expect($GLOBALS['agentResponse']->text)->toEqual('First response');
+    });
+
+    test('queued agents can be faked and then callback is not executed if queue is faked', function (): void {
+        AssistantAgent::fake(['First response']);
+        Queue::fake();
+
+        $GLOBALS['agentResponse'] = null;
+
+        (new AssistantAgent)->queue('First prompt')->then(function ($response): void {
+            $GLOBALS['agentResponse'] = $response;
+        });
+
+        AssistantAgent::assertQueued('First prompt');
+
+        expect($GLOBALS['agentResponse'])->toBeNull();
+
+        Queue::assertPushed(InvokeAgent::class);
     });
 
     test('can assert agent was never queued', function (): void {
