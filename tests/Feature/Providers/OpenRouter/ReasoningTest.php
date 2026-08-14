@@ -419,31 +419,42 @@ test('merges streamed reasoning detail fragments into one replayable block', fun
     ]]);
 });
 
-test('does not duplicate reasoning when details are resent accumulated', function (): void {
-    // Some upstreams resend the whole block each chunk rather than streaming fragments...
+test('concatenates a fragment that happens to start with the text captured so far', function (): void {
     Http::fake([
-        '*' => Http::response($this->ssePayload([
-            $this->chatChunk(['role' => 'assistant', 'reasoning_details' => [[
-                'type' => 'reasoning.text',
-                'text' => 'Step by step,',
-                'index' => 0,
-            ]]]),
-            $this->chatChunk(['reasoning_details' => [[
-                'type' => 'reasoning.text',
-                'text' => 'Step by step, then.',
-                'index' => 0,
-            ]]]),
-            $this->chatChunk(['content' => 'Answer']),
-            $this->chatChunkFinish('stop', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
-        ])),
+        '*' => Http::sequence([
+            Http::response($this->ssePayload([
+                $this->chatChunk(['role' => 'assistant', 'reasoning_details' => [[
+                    'type' => 'reasoning.text',
+                    'text' => '**',
+                    'format' => 'anthropic-claude-v1',
+                    'index' => 0,
+                ]]]),
+                $this->chatChunk(['reasoning_details' => [[
+                    'type' => 'reasoning.text',
+                    'text' => '**Analysis**',
+                    'signature' => 'sig-abc',
+                    'format' => 'anthropic-claude-v1',
+                    'index' => 0,
+                ]]]),
+                $this->chatChunkToolCallStart(0, 'call_1', 'FixedNumberGenerator'),
+                $this->chatChunkToolCallDelta(0, '{}'),
+                $this->chatChunkFinish('tool_calls', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
+            ])),
+            Http::response($this->ssePayload([
+                $this->chatChunk(['role' => 'assistant', 'content' => 'The number is 72019']),
+                $this->chatChunkFinish('stop', ['prompt_tokens' => 20, 'completion_tokens' => 5]),
+            ])),
+        ]),
     ]);
 
-    $deltas = array_values(array_filter(
-        $this->collectStreamEvents(), fn ($e): bool => $e instanceof ReasoningDelta
-    ));
+    foreach (agent(tools: [new FixedNumberGenerator])->stream('Give me a number', provider: 'openrouter') as $event) {
+        //
+    }
 
-    expect(implode('', array_map(fn ($e): string => $e->delta, $deltas)))->toBe('Step by step, then.')
-        ->and($deltas[1]->delta)->toBe(' then.');
+    $assistantMessage = $this->findMessage($this->requestMessages(1), role: 'assistant', has: 'tool_calls');
+
+    // A signed block must be replayed byte for byte, even when a fragment restates a captured prefix...
+    expect($assistantMessage['reasoning_details'][0]['text'])->toBe('****Analysis**');
 });
 
 test('closes an open reasoning block before an upstream error', function (): void {

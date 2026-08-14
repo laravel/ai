@@ -251,10 +251,9 @@ class ChatCompletionReasoning
     protected function mergeDetail(string $key, array $detail): string
     {
         $captured = static::readableTextFrom($this->details[$key]);
-        $incoming = static::readableTextFrom($detail);
 
-        // Upstreams either stream detail fragments or resend the block accumulated so far — a fragment that restates the whole captured text is indistinguishable from the latter...
-        $arrived = str_starts_with($incoming, $captured) ? substr($incoming, strlen($captured)) : $incoming;
+        // Repeated blocks stream incremental fragments that concatenate in order, per OpenRouter's reasoning contract...
+        $arrived = static::readableTextFrom($detail);
 
         $this->details[$key] = [...$this->details[$key], ...$detail];
 
