@@ -37,12 +37,9 @@ class AgentUsage
 
         $usage = $event->response->usage;
 
-        // Counted here rather than on every type so the step count is not multiplied by the number of token buckets...
         Pulse::record('ai_prompt_tokens', $key, $usage->promptTokens)->sum()->count();
         Pulse::record('ai_completion_tokens', $key, $usage->completionTokens)->sum();
         Pulse::record('ai_cached_tokens', $key, $usage->cacheReadInputTokens)->sum();
-
-        // Pulse only aggregates integers, and sub-millisecond provider calls do not exist...
         Pulse::record('ai_step_duration', $key, (int) round($event->time))->avg()->max()->count();
     }
 
