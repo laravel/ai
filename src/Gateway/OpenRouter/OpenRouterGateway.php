@@ -56,11 +56,7 @@ class OpenRouterGateway implements Gateway, StepTextGateway
     }
 
     /**
-     * Get the reasoning fields to replay for the given assistant message.
-     *
-     * OpenRouter accepts `reasoning_details` verbatim or `reasoning` as plain text, and the details
-     * are preferred because they carry the signatures and encrypted payloads that thinking models
-     * require back unmodified. It does not accept the `reasoning_content` field DeepSeek uses.
+     * Get the reasoning fields to replay for the given assistant message, preferring `reasoning_details` since they carry the signatures and encrypted payloads OpenRouter requires back unmodified.
      *
      * @return array<string, mixed>
      */

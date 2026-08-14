@@ -12,11 +12,6 @@ use Laravel\Ai\Streaming\Events\StreamEvent;
 
 /**
  * Tracks the reasoning block of a Chat Completions response.
- *
- * Chat Completions has no reasoning block delimiters, so the block opens on the first
- * reasoning delta and closes as soon as answer text or tool calls begin, or when the
- * stream ends. Both the readable text and the structured details are captured, since
- * replaying reasoning needs the details verbatim while rendering it needs the text.
  */
 class ChatCompletionReasoning
 {
@@ -98,7 +93,6 @@ class ChatCompletionReasoning
             yield $this->event(new ReasoningDelta($this->generateEventId(), $this->reasoningId, $reasoning, time()));
         }
 
-        // Answer text or tool calls mean the model has stopped thinking...
         if ($this->startsAnswer($delta)) {
             yield from $this->close();
         }
@@ -232,7 +226,7 @@ class ChatCompletionReasoning
         $arrived = '';
 
         foreach (static::detailsFrom($delta) as $position => $detail) {
-            // Reasoning details of different types may share an id or index...
+            // Reasoning details of different types may share an id or index; those with neither carry no signatures a wrong positional merge could invalidate...
             $key = ($detail['type'] ?? '').'#'.($detail['id'] ?? $detail['index'] ?? $position);
 
             if (! isset($this->details[$key])) {
@@ -259,7 +253,7 @@ class ChatCompletionReasoning
         $captured = static::readableTextFrom($this->details[$key]);
         $incoming = static::readableTextFrom($detail);
 
-        // Upstreams either stream detail fragments or resend the block accumulated so far...
+        // Upstreams either stream detail fragments or resend the block accumulated so far — a fragment that restates the whole captured text is indistinguishable from the latter...
         $arrived = str_starts_with($incoming, $captured) ? substr($incoming, strlen($captured)) : $incoming;
 
         $this->details[$key] = [...$this->details[$key], ...$detail];
