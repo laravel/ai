@@ -99,3 +99,20 @@ test('529 overloaded response throws provider overloaded exception', function ()
         provider: 'anthropic',
     );
 })->throws(ProviderOverloadedException::class);
+
+test('transient upstream errors fail over as overloaded', function (int $status): void {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response([
+            'type' => 'error',
+            'error' => [
+                'type' => 'api_error',
+                'message' => 'The service is temporarily unavailable.',
+            ],
+        ], $status),
+    ]);
+
+    (new AssistantAgent)->prompt(
+        'Hi',
+        provider: 'anthropic',
+    );
+})->with([502, 503, 504, 520, 522, 524])->throws(ProviderOverloadedException::class);
