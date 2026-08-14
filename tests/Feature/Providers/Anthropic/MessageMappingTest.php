@@ -178,6 +178,53 @@ test('stored text document maps to text source block', function (): void {
     });
 });
 
+test('base64 text document that is not plain text is sent as plain text', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse(),
+    ]);
+
+    // A text source only accepts text/plain, so a csv sent under its own media
+    // type is rejected before the model reads a byte.
+    $document = Files\Document::fromString("email,state\na@b.it,ongoing\n", 'text/csv');
+
+    agent('You are helpful.')->prompt(
+        'Read this.',
+        attachments: [$document],
+        provider: 'anthropic',
+    );
+
+    Http::assertSent(function ($request): bool {
+        $docBlock = $request->data()['messages'][0]['content'][0];
+
+        return $docBlock['source']['type'] === 'text'
+            && $docBlock['source']['media_type'] === 'text/plain'
+            && $docBlock['source']['data'] === "email,state\na@b.it,ongoing\n";
+    });
+});
+
+test('stored text document that is not plain text is sent as plain text', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse(),
+    ]);
+
+    Storage::fake('docs');
+    Storage::disk('docs')->put('leads.csv', "email,state\na@b.it,ongoing\n");
+
+    agent('You are helpful.')->prompt(
+        'Analyze the attached record.',
+        attachments: [Files\Document::fromStorage('leads.csv', 'docs')->withMimeType('text/csv')],
+        provider: 'anthropic',
+    );
+
+    Http::assertSent(function ($request): bool {
+        $docBlock = $request->data()['messages'][0]['content'][0];
+
+        return $docBlock['source']['type'] === 'text'
+            && $docBlock['source']['media_type'] === 'text/plain'
+            && $docBlock['source']['data'] === "email,state\na@b.it,ongoing\n";
+    });
+});
+
 test('local text document maps to text source block', function (): void {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse(),

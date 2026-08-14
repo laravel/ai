@@ -136,6 +136,9 @@ trait MapsAttachments
     /**
      * Build the Anthropic document `source` block for the given mime type.
      *
+     * A `text` source only accepts `text/plain`, so any other text type is sent
+     * under that media type rather than the one it was given.
+     *
      * @param  callable():string  $rawResolver
      * @param  callable():string  $base64Resolver
      * @return array<string, string>
@@ -145,7 +148,7 @@ trait MapsAttachments
         if ($mimeType !== null && Str::startsWith($mimeType, 'text/')) {
             return [
                 'type' => 'text',
-                'media_type' => $mimeType,
+                'media_type' => 'text/plain',
                 'data' => $rawResolver(),
             ];
         }
