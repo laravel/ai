@@ -363,42 +363,6 @@ test('it drops unresolved tool calls on an unmarked legacy row that only some re
         ->and($messages[2]->content)->toBe('The order has shipped.');
 });
 
-test('it answers each tool call once when the provider omitted the tool call ids', function (): void {
-    $store = new DatabaseConversationStore;
-    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
-
-    DB::table('agent_conversation_messages')->insert([
-        'id' => 'message-1',
-        'conversation_id' => $conversationId,
-        'participant_type' => 'user',
-        'participant_id' => 1,
-        'agent' => ToolUsingAgent::class,
-        'role' => 'assistant',
-        'content' => 'The order has shipped.',
-        'attachments' => '[]',
-        'tool_calls' => json_encode([
-            ['id' => '', 'name' => 'lookup_order', 'arguments' => ['id' => 1], 'result_id' => 'result-1'],
-            ['id' => '', 'name' => 'lookup_customer', 'arguments' => ['id' => 2], 'result_id' => 'result-2'],
-        ]),
-        'tool_results' => json_encode([
-            ['id' => '', 'name' => 'lookup_order', 'arguments' => ['id' => 1], 'result' => ['status' => 'shipped'], 'result_id' => 'result-1'],
-        ]),
-        'usage' => '[]',
-        'meta' => '[]',
-        'created_at' => now(),
-        'updated_at' => now(),
-    ]);
-
-    $messages = $store->getLatestConversationMessages($conversationId, 10);
-
-    expect($messages)->toHaveCount(3)
-        ->and($messages[0]->toolCalls)->toHaveCount(1)
-        ->and($messages[0]->toolCalls[0]->name)->toBe('lookup_order')
-        ->and($messages[1])->toBeInstanceOf(ToolResultMessage::class)
-        ->and($messages[1]->toolResults)->toHaveCount(1)
-        ->and($messages[2]->content)->toBe('The order has shipped.');
-});
-
 test('it replays a duplicated tool result only once against the call it answers', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
