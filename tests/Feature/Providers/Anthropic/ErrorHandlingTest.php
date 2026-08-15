@@ -63,6 +63,7 @@ test('insufficient credit response throws insufficient credits exception', funct
     'quota exceeded' => ['Your monthly quota exceeded the configured limit.'],
     'exceeded your current quota' => ['You have exceeded your current quota, please check your plan.'],
     'billing' => ['There is a billing issue with your account; please update your payment method.'],
+    'usage limit' => ['You have reached your specified API usage limits. To continue, please adjust your limits.'],
 ])->throws(InsufficientCreditsException::class);
 
 test('error in 200 response throws ai exception', function (): void {

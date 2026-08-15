@@ -180,7 +180,8 @@ trait ParsesTextResponses
             'end_turn', 'stop_sequence' => FinishReason::Stop,
             'tool_use' => FinishReason::ToolCalls,
             'pause_turn' => FinishReason::Continue,
-            'max_tokens' => FinishReason::Length,
+            'max_tokens', 'model_context_window_exceeded' => FinishReason::Length,
+            'refusal' => FinishReason::ContentFilter,
             default => FinishReason::Unknown,
         };
     }

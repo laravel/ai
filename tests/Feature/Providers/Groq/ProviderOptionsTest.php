@@ -1,6 +1,5 @@
 <?php
 
-use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\ProviderOptionsAgent;
@@ -64,32 +63,3 @@ test('provider options are persisted in tool call follow up requests', function 
 
     expect(data_get($followUpBody, 'frequency_penalty'))->toBe(0.5);
 });
-
-function fakeGroqToolCallResponse(): PromiseInterface
-{
-    return Http::response([
-        'id' => 'chatcmpl-tool-123',
-        'object' => 'chat.completion',
-        'model' => 'openai/gpt-oss-20b',
-        'choices' => [[
-            'index' => 0,
-            'message' => [
-                'role' => 'assistant',
-                'content' => null,
-                'tool_calls' => [[
-                    'id' => 'call_123',
-                    'type' => 'function',
-                    'function' => [
-                        'name' => 'FixedNumberGenerator',
-                        'arguments' => '{}',
-                    ],
-                ]],
-            ],
-            'finish_reason' => 'tool_calls',
-        ]],
-        'usage' => [
-            'prompt_tokens' => 10,
-            'completion_tokens' => 5,
-        ],
-    ]);
-}

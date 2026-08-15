@@ -70,7 +70,7 @@ class AnthropicGateway implements Gateway, StepTextGateway
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, filled($schema));
+        return $this->parseTextResponse($data, $provider, filled($schema))->withRawResponse($response);
     }
 
     /**
@@ -200,6 +200,7 @@ class AnthropicGateway implements Gateway, StepTextGateway
             'quota exceeded',
             'exceeded your current quota',
             'billing',
+            'usage limit',
         ];
     }
 }

@@ -3,11 +3,14 @@
 namespace Laravel\Ai\Gateway\Xai\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\ProviderTool;
+use Laravel\Ai\Providers\Tools\WebSearch;
 use Laravel\Ai\Tools\ToolNameResolver;
+use RuntimeException;
 
 trait MapsTools
 {
@@ -20,15 +23,41 @@ trait MapsTools
 
         foreach ($tools as $tool) {
             if ($tool instanceof ProviderTool) {
-                continue;
-            }
-
-            if ($tool instanceof Tool) {
+                if (filled($providerTool = $this->mapProviderTool($tool, $provider))) {
+                    $mapped[] = $providerTool;
+                }
+            } elseif ($tool instanceof Tool) {
                 $mapped[] = $this->mapTool($tool);
             }
         }
 
         return $mapped;
+    }
+
+    /**
+     * Map a provider tool to an xAI provider tool definition.
+     */
+    protected function mapProviderTool(ProviderTool $tool, Provider $provider): array
+    {
+        return match (true) {
+            $tool instanceof WebSearch => $this->mapWebSearchTool($tool, $provider),
+            default => [],
+        };
+    }
+
+    /**
+     * Map a web search tool to an xAI web search definition.
+     */
+    protected function mapWebSearchTool(WebSearch $tool, Provider $provider): array
+    {
+        if (! $provider instanceof SupportsWebSearch) {
+            throw new RuntimeException('Provider ['.$provider->name().'] does not support web search.');
+        }
+
+        return [
+            'type' => 'web_search',
+            ...$provider->webSearchToolOptions($tool),
+        ];
     }
 
     /**

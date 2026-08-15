@@ -284,11 +284,15 @@ class DatabaseConversationStore implements ConversationStore
             fn (array $toolResult) => ! in_array($toolResult['id'], $callIds, true)
         );
 
-        $ownResultIds = $ownResults->pluck('id')->all();
+        $resultsById = $ownResults->keyBy('id');
 
         [$resolvedCalls, $pendingCalls] = $toolCalls->partition(
-            fn (array $toolCall) => in_array($toolCall['id'], $ownResultIds, true)
+            fn (array $toolCall) => filled($toolCall['id'] ?? null) && $resultsById->has($toolCall['id'])
         );
+
+        $ownResults = $resolvedCalls->map(fn (array $toolCall) => $resultsById[$toolCall['id']])->values();
+        $resolvedCalls = $resolvedCalls->values();
+        $pendingCalls = $pendingCalls->values();
 
         $pausedCallIds = $this->pausedCallIds($record);
 

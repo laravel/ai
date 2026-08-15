@@ -4,7 +4,6 @@ namespace Laravel\Ai\Gateway;
 
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\AudioGateway;
 use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
@@ -19,6 +18,7 @@ use Laravel\Ai\Responses\TranscriptionResponse;
 
 class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
 {
+    use Concerns\CreatesClient;
     use Concerns\HandlesFailoverErrors;
 
     /**
@@ -103,9 +103,13 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
      */
     protected function client(AudioProvider|TranscriptionProvider $provider, int $timeout = 30): PendingRequest
     {
-        return Http::baseUrl($this->baseUrl($provider))
-            ->withHeaders(array_filter(['xi-api-key' => $provider->providerCredentials()['key']]))
-            ->timeout($timeout);
+        return $this->createClient(
+            $this->baseUrl($provider),
+            array_filter(['xi-api-key' => $provider->providerCredentials()['key']]),
+            $provider->additionalConfiguration()['headers'] ?? [],
+            $timeout,
+            false,
+        );
     }
 
     /**

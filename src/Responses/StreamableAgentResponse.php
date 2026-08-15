@@ -38,6 +38,11 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
 
     protected ?StreamedAgentResponse $streamedResponse = null;
 
+    protected bool $hasYielded = false;
+
+    /**
+     * Create a new streamable agent response instance.
+     */
     public function __construct(
         public string $invocationId,
         protected Closure $generator,
@@ -149,6 +154,8 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
         // Use existing events if we've already streamed them once...
         if (count($this->events) > 0) {
             foreach ($this->events as $event) {
+                $this->hasYielded = true;
+
                 yield $event;
             }
 
@@ -160,6 +167,8 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
         // Resolve the stream of the prompt and yield the events...
         foreach (call_user_func($this->generator) as $event) {
             $events[] = $event;
+
+            $this->hasYielded = true;
 
             yield $event;
         }
@@ -188,6 +197,9 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
         $this->syncConversationFromStreamedResponse();
     }
 
+    /**
+     * Synchronize the conversation state from the completed streamed response.
+     */
     protected function syncConversationFromStreamedResponse(): void
     {
         if ($this->streamedResponse->conversationId === null) {
@@ -196,5 +208,13 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
 
         $this->conversationId = $this->streamedResponse->conversationId;
         $this->conversationUser = $this->streamedResponse->conversationUser;
+    }
+
+    /**
+     * Determine whether this response has handed at least one event to a consumer.
+     */
+    public function hasYielded(): bool
+    {
+        return $this->hasYielded;
     }
 }

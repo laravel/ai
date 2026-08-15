@@ -15,6 +15,7 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Bedrock\Concerns\CreatesBedrockClient;
 use Laravel\Ai\Gateway\Bedrock\Concerns\MapsAttachments;
+use Laravel\Ai\Gateway\Cohere\Concerns\ParsesEmbeddings;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\StepContext;
@@ -51,6 +52,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
     use DecodesStructuredOutput;
     use HandlesFailoverErrors;
     use MapsAttachments;
+    use ParsesEmbeddings;
 
     protected const STRUCTURED_OUTPUT_TOOL = 'structured_output';
 
@@ -501,7 +503,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
     ): EmbeddingsResponse {
         $client = $this->createBedrockClient($provider, $timeout);
 
-        if (str_starts_with($model, 'cohere.')) {
+        if ($this->isCohereEmbeddingModel($model)) {
             return $this->generateCohereEmbeddings($provider, $model, $client, $inputs, $providerOptions);
         }
 
@@ -574,16 +576,20 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             throw BedrockException::toAiException($throwable, $provider->name(), $model);
         }
 
-        $embeddings = array_values(array_filter(
-            $result['embeddings'] ?? [],
-            is_array(...),
-        ));
-
+        // Cohere's Bedrock responses carry no usage, so no input token count is available.
         return new EmbeddingsResponse(
-            $embeddings,
+            $this->parseCohereEmbeddings($result['embeddings'] ?? []),
             0,
             new Meta($provider->name(), $model),
         );
+    }
+
+    /**
+     * Determine if the given model identifier refers to a Cohere embeddings model.
+     */
+    protected function isCohereEmbeddingModel(string $model): bool
+    {
+        return str_contains($model, 'cohere.embed-');
     }
 
     /**

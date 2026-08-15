@@ -3,27 +3,26 @@
 namespace Laravel\Ai\Gateway\Ollama\Concerns;
 
 use Illuminate\Http\Client\PendingRequest;
-use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Gateway\Concerns\CreatesClient;
 use Laravel\Ai\Providers\Provider;
 
 trait CreatesOllamaClient
 {
+    use CreatesClient;
+
     /**
      * Get an HTTP client for the Ollama API.
      */
     protected function client(Provider $provider, ?int $timeout = null): PendingRequest
     {
-        $client = Http::baseUrl($this->baseUrl($provider))
-            ->timeout($timeout ?? 60)
-            ->throw();
-
         $key = $provider->providerCredentials()['key'] ?? null;
 
-        if (filled($key)) {
-            return $client->withToken($key);
-        }
-
-        return $client;
+        return $this->createClient(
+            $this->baseUrl($provider),
+            filled($key) ? ['Authorization' => 'Bearer '.$key] : [],
+            $provider->additionalConfiguration()['headers'] ?? [],
+            $timeout ?? 60,
+        );
     }
 
     /**

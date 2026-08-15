@@ -7,12 +7,15 @@ use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\ProviderTool;
+use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Laravel\Ai\Tools\ToolNameResolver;
+use LogicException;
 use RuntimeException;
 
 trait MapsTools
@@ -20,12 +23,27 @@ trait MapsTools
     /**
      * Map the given tools to OpenAI function definitions.
      */
-    protected function mapTools(array $tools, Provider $provider): array
+    protected function mapTools(array $tools, Provider $provider, bool $stateless = false): array
     {
         $mapped = [];
 
         foreach ($tools as $tool) {
-            if ($tool instanceof ProviderTool) {
+            if ($tool instanceof ToolSearch) {
+                $this->guardStatelessToolSearch($provider, $stateless);
+
+                if (blank($tool->tools)) {
+                    continue;
+                }
+
+                $mapped[] = [
+                    'type' => 'tool_search',
+                    ...array_diff_key($tool->providerOptions(Lab::OpenAI), ['type' => true]),
+                ];
+
+                foreach ($tool->tools as $deferred) {
+                    $mapped[] = $this->mapTool($deferred, defer: true);
+                }
+            } elseif ($tool instanceof ProviderTool) {
                 $mapped[] = $this->mapProviderTool($tool, $provider);
             } elseif ($tool instanceof Tool) {
                 $mapped[] = $this->mapTool($tool);
@@ -36,9 +54,21 @@ trait MapsTools
     }
 
     /**
+     * Ensure hosted tool search is not used while response storage is disabled.
+     */
+    protected function guardStatelessToolSearch(Provider $provider, bool $stateless): void
+    {
+        if ($stateless) {
+            throw new LogicException(
+                "Provider [{$provider->name()}] does not support tool search when response storage is disabled (store=false)."
+            );
+        }
+    }
+
+    /**
      * Map a regular tool to an OpenAI function definition.
      */
-    protected function mapTool(Tool $tool): array
+    protected function mapTool(Tool $tool, bool $defer = false): array
     {
         $strict = Strict::isAppliedTo($tool);
 
@@ -48,7 +78,7 @@ trait MapsTools
             ? (new ObjectSchema($schema, strict: $strict))->toSchema()
             : [];
 
-        return [
+        $definition = [
             'type' => 'function',
             'name' => ToolNameResolver::resolve($tool),
             'description' => (string) $tool->description(),
@@ -60,6 +90,12 @@ trait MapsTools
                 'additionalProperties' => false,
             ],
         ];
+
+        if ($defer) {
+            $definition['defer_loading'] = true;
+        }
+
+        return $definition;
     }
 
     /**
@@ -70,7 +106,7 @@ trait MapsTools
         return match (true) {
             $tool instanceof FileSearch => $this->mapFileSearchTool($tool, $provider),
             $tool instanceof WebSearch => $this->mapWebSearchTool($tool, $provider),
-            default => [],
+            default => throw new RuntimeException('Provider ['.$provider->name().'] does not support the ['.class_basename($tool).'] tool.'),
         };
     }
 

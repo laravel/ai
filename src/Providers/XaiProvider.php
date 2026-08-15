@@ -6,11 +6,14 @@ use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
+use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Xai\XaiGateway;
 use Laravel\Ai\Gateway\Xai\XaiImageGateway;
+use Laravel\Ai\Providers\Tools\WebSearch;
 
-class XaiProvider extends Provider implements ImageProvider, TextProvider
+class XaiProvider extends Provider implements ImageProvider, SupportsWebSearch, TextProvider
 {
     use Concerns\GeneratesImages;
     use Concerns\GeneratesText;
@@ -22,6 +25,18 @@ class XaiProvider extends Provider implements ImageProvider, TextProvider
         protected array $config,
         protected Dispatcher $events,
     ) {}
+
+    /**
+     * Get the web search tool options for the provider.
+     */
+    public function webSearchToolOptions(WebSearch $search): array
+    {
+        $options = $search->providerOptions(Lab::xAI);
+
+        return array_filter([
+            'allowed_domains' => filled($search->allowedDomains) ? $search->allowedDomains : null,
+        ]) + $options;
+    }
 
     /**
      * Get the provider's text gateway.
