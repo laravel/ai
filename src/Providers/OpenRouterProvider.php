@@ -11,14 +11,16 @@ use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
+use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\OpenRouter\OpenRouterGateway;
+use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 
-class OpenRouterProvider extends Provider implements AudioProvider, EmbeddingProvider, ImageProvider, SupportsWebSearch, TextProvider, TranscriptionProvider
+class OpenRouterProvider extends Provider implements AudioProvider, EmbeddingProvider, ImageProvider, SupportsWebFetch, SupportsWebSearch, TextProvider, TranscriptionProvider
 {
     use Concerns\GeneratesAudio;
     use Concerns\GeneratesEmbeddings;
@@ -35,6 +37,23 @@ class OpenRouterProvider extends Provider implements AudioProvider, EmbeddingPro
     public function __construct(protected array $config, protected Dispatcher $events)
     {
         //
+    }
+
+    /**
+     * Get the web fetch tool options for the provider.
+     */
+    public function webFetchToolOptions(WebFetch $fetch): array
+    {
+        $options = $fetch->providerOptions(Lab::OpenRouter);
+
+        $parameters = array_filter([
+            'max_uses' => $fetch->maxSearches,
+            'allowed_domains' => filled($fetch->allowedDomains) ? $fetch->allowedDomains : null,
+        ]) + $options;
+
+        return array_filter([
+            'parameters' => filled($parameters) ? $parameters : null,
+        ]);
     }
 
     /**

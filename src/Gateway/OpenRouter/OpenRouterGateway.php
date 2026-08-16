@@ -12,6 +12,7 @@ use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
+use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Files\Image;
@@ -23,6 +24,7 @@ use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionTools;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\PerformsChatCompletionSteps;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\ProviderTool;
+use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
@@ -58,10 +60,33 @@ class OpenRouterGateway implements Gateway, StepTextGateway
      */
     protected function mapProviderTool(ProviderTool $tool, Provider $provider): array
     {
-        if (! $tool instanceof WebSearch) {
-            throw new RuntimeException('OpenRouter does not support ['.class_basename($tool).'] provider tools.');
+        return match (true) {
+            $tool instanceof WebFetch => $this->mapWebFetchTool($tool, $provider),
+            $tool instanceof WebSearch => $this->mapWebSearchTool($tool, $provider),
+            default => throw new RuntimeException('OpenRouter does not support ['.class_basename($tool).'] provider tools.'),
+        };
+    }
+
+    /**
+     * Map a web fetch tool to an OpenRouter server tool definition.
+     */
+    protected function mapWebFetchTool(WebFetch $tool, Provider $provider): array
+    {
+        if (! $provider instanceof SupportsWebFetch) {
+            throw new RuntimeException('Provider ['.$provider->name().'] does not support web fetch.');
         }
 
+        return [
+            'type' => 'openrouter:web_fetch',
+            ...$provider->webFetchToolOptions($tool),
+        ];
+    }
+
+    /**
+     * Map a web search tool to an OpenRouter server tool definition.
+     */
+    protected function mapWebSearchTool(WebSearch $tool, Provider $provider): array
+    {
         if (! $provider instanceof SupportsWebSearch) {
             throw new RuntimeException('Provider ['.$provider->name().'] does not support web search.');
         }
