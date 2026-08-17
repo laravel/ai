@@ -61,6 +61,15 @@ test('handles mixed-case json fence language tag', function (): void {
         ->and($host->decode("```jSoN\n{\"ok\":true}\n```"))->toBe(['ok' => true]);
 });
 
+test('strips a fence wrapped in conversational prose', function (): void {
+    $host = decoderHost();
+
+    expect($host->decode("Here's the JSON you asked for:\n\n```json\n{\"symbol\":\"Au\"}\n```"))
+        ->toBe(['symbol' => 'Au'])
+        ->and($host->decode("```json\n{\"symbol\":\"Au\"}\n```\n\nHope that helps!"))
+        ->toBe(['symbol' => 'Au']);
+});
+
 test('returns empty array for invalid JSON', function (): void {
     $host = decoderHost();
 
