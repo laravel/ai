@@ -175,6 +175,51 @@ test('web fetch tool forwards provider options', function () {
     });
 });
 
+test('web fetch tool result surfaces the fetched url as a citation', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response([
+            'id' => 'msg_fetch_1',
+            'type' => 'message',
+            'role' => 'assistant',
+            'model' => 'claude-sonnet-4-6',
+            'content' => [
+                ['type' => 'text', 'text' => "I'll fetch that."],
+                [
+                    'type' => 'server_tool_use',
+                    'id' => 'srvtoolu_1',
+                    'name' => 'web_fetch',
+                    'input' => (object) ['url' => 'https://example.com/article'],
+                ],
+                [
+                    'type' => 'web_fetch_tool_result',
+                    'tool_use_id' => 'srvtoolu_1',
+                    'content' => [
+                        'type' => 'web_fetch_result',
+                        'url' => 'https://example.com/article',
+                        'content' => [
+                            'type' => 'document',
+                            'source' => ['type' => 'text', 'media_type' => 'text/plain', 'data' => 'Full text.'],
+                            'title' => 'Article Title',
+                            'citations' => ['enabled' => true],
+                        ],
+                        'retrieved_at' => '2026-08-17T10:30:00Z',
+                    ],
+                ],
+                ['type' => 'text', 'text' => 'The article argues X.'],
+            ],
+            'stop_reason' => 'end_turn',
+            'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+        ]),
+    ]);
+
+    $response = agent(tools: [(new WebFetch)->withProviderOptions(['citations' => ['enabled' => true]])])
+        ->prompt('Fetch it', provider: 'anthropic');
+
+    expect($response->meta->citations)->toHaveCount(1)
+        ->and($response->meta->citations[0]->url)->toBe('https://example.com/article')
+        ->and($response->meta->citations[0]->title)->toBe('Article Title');
+});
+
 test('web fetch tool forwards a custom max_uses', function () {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
