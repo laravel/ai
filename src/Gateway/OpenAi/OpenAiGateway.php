@@ -5,8 +5,8 @@ namespace Laravel\Ai\Gateway\OpenAi;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
+use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\Gateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
@@ -16,8 +16,6 @@ use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Files\Image;
-use Laravel\Ai\Files\LocalImage;
-use Laravel\Ai\Files\StoredImage;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\Concerns\ResolvesAudioFilenames;
@@ -133,8 +131,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
             }
 
             $content = match (true) {
-                $attachment instanceof LocalImage => file_get_contents($attachment->path),
-                $attachment instanceof StoredImage => Storage::disk($attachment->disk)->get($attachment->path),
+                $attachment instanceof StorableFile => $attachment->content(),
                 $attachment instanceof UploadedFile => $attachment->get(),
                 default => throw new InvalidArgumentException('Unsupported image attachment type ['.$attachment::class.']'),
             };
