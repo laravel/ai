@@ -27,6 +27,7 @@ use Laravel\Ai\Providers\ElevenLabsProvider;
 use Laravel\Ai\Providers\GeminiProvider;
 use Laravel\Ai\Providers\GroqProvider;
 use Laravel\Ai\Providers\JinaProvider;
+use Laravel\Ai\Providers\MiniMaxProvider;
 use Laravel\Ai\Providers\MistralProvider;
 use Laravel\Ai\Providers\OllamaProvider;
 use Laravel\Ai\Providers\OpenAiCompatibleProvider;
@@ -375,6 +376,17 @@ class AiManager extends MultipleInstanceManager
     public function createJinaDriver(array $config): JinaProvider
     {
         return new JinaProvider(
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create a MiniMax powered instance.
+     */
+    public function createMinimaxDriver(array $config): MiniMaxProvider
+    {
+        return new MiniMaxProvider(
             $config,
             $this->app->make(Dispatcher::class)
         );

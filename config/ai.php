@@ -114,6 +114,12 @@ return [
             'key' => env('JINA_API_KEY'),
         ],
 
+        'minimax' => [
+            'driver' => 'minimax',
+            'key' => env('MINIMAX_API_KEY'),
+            'url' => env('MINIMAX_URL', 'https://api.minimax.io/v1'),
+        ],
+
         'mistral' => [
             'driver' => 'mistral',
             'key' => env('MISTRAL_API_KEY'),
