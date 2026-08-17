@@ -39,20 +39,14 @@ trait Promptable
 {
     use SerializesModels;
 
-    /**
-     * The invocation id supplied by the caller for the agent's next run, if any.
-     */
-    protected ?string $pendingInvocationId = null;
+    protected ?string $invocationId = null;
 
     /**
      * Use the given invocation id for the agent's next run instead of a generated one.
-     *
-     * The id identifies the run in every event it dispatches, so a caller that
-     * already records its own work may reuse that record's identifier here.
      */
     public function withInvocationId(string $invocationId): static
     {
-        $this->pendingInvocationId = $invocationId;
+        $this->invocationId = $invocationId;
 
         return $this;
     }
@@ -60,13 +54,11 @@ trait Promptable
     /**
      * Get the invocation id for a run, consuming any the caller supplied.
      */
-    protected function resolveInvocationId(): string
+    private function resolveInvocationId(): string
     {
-        $invocationId = $this->pendingInvocationId ?? (string) Str::uuid7();
+        $invocationId = $this->invocationId ?: (string) Str::uuid7();
 
-        // Consumed rather than retained, so a reused agent instance cannot
-        // silently stamp a later run with an earlier run's identifier.
-        $this->pendingInvocationId = null;
+        $this->invocationId = null; // Consumed, so a later run can't inherit an earlier run's id.
 
         return $invocationId;
     }
@@ -293,7 +285,7 @@ trait Promptable
         }
 
         return new QueuedAgentResponse(
-            BroadcastAgent::dispatch($this, $prompt, $channels, $attachments, $provider, $model)
+            BroadcastAgent::dispatch($this, $prompt, $channels, $attachments, $provider, $model, $this->invocationId)
         );
     }
 

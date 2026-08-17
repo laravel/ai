@@ -35,8 +35,9 @@ class BroadcastAgent implements ShouldQueue
         public array $attachments = [],
         public Lab|array|string|null $provider = null,
         public ?string $model = null,
+        ?string $invocationId = null,
     ) {
-        $this->invocationId = (string) Str::uuid7();
+        $this->invocationId = $invocationId ?: (string) Str::uuid7();
     }
 
     /**

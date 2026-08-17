@@ -1,5 +1,7 @@
 <?php
 
+use Illuminate\Broadcasting\Channel;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Event;
@@ -23,6 +25,7 @@ use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Gateway\ParentInvocation;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Jobs\BroadcastAgent;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
@@ -941,23 +944,6 @@ test('a single provider synchronous failure reports the prompt the middleware pr
         && $event->prompt->prompt === 'Revised by middleware.');
 });
 
-test('a caller supplied invocation id is threaded through the run and its events', function (): void {
-    Event::fake();
-
-    AssistantAgent::fake(['Hello!']);
-
-    $response = (new AssistantAgent)->withInvocationId('run-1-step-2')->prompt('Hi');
-
-    expect($response->invocationId)->toBe('run-1-step-2');
-
-    Event::assertDispatched(PromptingAgent::class, fn (PromptingAgent $event): bool => $event->invocationId === 'run-1-step-2'
-        && $event->prompt->invocationId === 'run-1-step-2');
-
-    Event::assertDispatched(StepCompleted::class, fn (StepCompleted $event): bool => $event->invocationId === 'run-1-step-2');
-
-    Event::assertDispatched(AgentPrompted::class, fn (AgentPrompted $event): bool => $event->invocationId === 'run-1-step-2');
-});
-
 test('a run that throws still reports the caller supplied invocation id', function (): void {
     Event::fake();
 
@@ -966,15 +952,16 @@ test('a run that throws still reports the caller supplied invocation id', functi
         ['number' => 5],
     ]);
 
-    // Nothing is returned to the caller here, so the id it supplied is the only
-    // thing tying the dispatched events back to the work it was doing...
     expect(fn (): mixed => (new ToolUsingAgent(fixed: true, toolThrowsException: true))
-        ->withInvocationId('run-1-step-3')
+        ->withInvocationId('run-1')
         ->prompt('Generate'))->toThrow(Exception::class, 'Forced to throw exception.');
 
-    Event::assertDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->invocationId === 'run-1-step-3');
+    Event::assertDispatched(PromptingAgent::class, fn (PromptingAgent $event): bool => $event->invocationId === 'run-1'
+        && $event->prompt->invocationId === 'run-1');
 
-    Event::assertDispatched(ToolFailed::class, fn (ToolFailed $event): bool => $event->invocationId === 'run-1-step-3');
+    Event::assertDispatched(ToolFailed::class, fn (ToolFailed $event): bool => $event->invocationId === 'run-1');
+
+    Event::assertDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->invocationId === 'run-1');
 });
 
 test('a supplied invocation id belongs to a single run', function (): void {
@@ -982,19 +969,26 @@ test('a supplied invocation id belongs to a single run', function (): void {
 
     $agent = new AssistantAgent;
 
-    $first = $agent->withInvocationId('run-1-step-4')->prompt('Hi');
-    $second = $agent->prompt('Hi again');
-
-    expect($first->invocationId)->toBe('run-1-step-4')
-        ->and($second->invocationId)->not->toBe('run-1-step-4');
+    expect($agent->withInvocationId('run-2')->prompt('Hi')->invocationId)->toBe('run-2')
+        ->and($agent->prompt('Hi again')->invocationId)->not->toBe('run-2');
 });
 
 test('a streamed run uses the caller supplied invocation id', function (): void {
     AssistantAgent::fake(['Hello!']);
 
-    $response = (new AssistantAgent)->withInvocationId('run-1-step-5')->stream('Hi');
+    $response = (new AssistantAgent)->withInvocationId('run-3')->stream('Hi');
 
     $response->each(fn (): true => true);
 
-    expect($response->invocationId)->toBe('run-1-step-5');
+    expect($response->invocationId)->toBe('run-3');
+});
+
+test('a broadcast queued run stamps its events with the caller supplied invocation id', function (): void {
+    Bus::fake();
+
+    AssistantAgent::fake(['Hello!']);
+
+    (new AssistantAgent)->withInvocationId('run-4')->broadcastOnQueue('Hi', new Channel('agents'));
+
+    Bus::assertDispatched(BroadcastAgent::class, fn (BroadcastAgent $job): bool => $job->invocationId === 'run-4');
 });
