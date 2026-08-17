@@ -687,7 +687,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
      * Build the assistant conversation message block combining text and tool calls.
      *
      * @param  array<ToolCall>  $toolCalls
-     * @param  array<int, array<string, mixed>>  $providerContentBlocks
+     * @param  array<array-key, mixed>  $providerContentBlocks
      */
     protected function buildAssistantConversationMessage(string $text, array $toolCalls, array $providerContentBlocks = []): array
     {

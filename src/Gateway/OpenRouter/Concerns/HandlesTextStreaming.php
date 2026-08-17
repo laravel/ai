@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\OpenRouter\Concerns;
 
 use Generator;
 use Illuminate\Support\Str;
+use Laravel\Ai\Gateway\OpenAiCompatible\ChatCompletionReasoning;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
@@ -32,6 +33,7 @@ trait HandlesTextStreaming
         $streamModel = $model;
         $streamStartEmitted = false;
         $textStartEmitted = false;
+        $reasoning = new ChatCompletionReasoning($invocationId);
         $currentText = '';
         $toolCalls = [];
         $pendingToolCalls = [];
@@ -40,6 +42,8 @@ trait HandlesTextStreaming
 
         foreach ($this->parseServerSentEvents($streamBody) as $data) {
             if (isset($data['error'])) {
+                yield from $reasoning->close();
+
                 yield (new Error(
                     $this->generateEventId(),
                     $data['error']['code'] ?? 'unknown_error',
@@ -67,6 +71,8 @@ trait HandlesTextStreaming
             if (($choice['finish_reason'] ?? null) === 'error') {
                 $error = $choice['error'] ?? [];
 
+                yield from $reasoning->close();
+
                 yield (new Error(
                     $this->generateEventId(),
                     (string) ($error['code'] ?? 'provider_error'),
@@ -89,6 +95,8 @@ trait HandlesTextStreaming
                     time(),
                 ))->withInvocationId($invocationId);
             }
+
+            yield from $reasoning->process($delta);
 
             if (isset($delta['content']) && $delta['content'] !== '') {
                 if (! $textStartEmitted) {
@@ -158,6 +166,8 @@ trait HandlesTextStreaming
             }
         }
 
+        yield from $reasoning->close();
+
         if ($textStartEmitted) {
             yield (new TextEnd(
                 $this->generateEventId(),
@@ -191,6 +201,7 @@ trait HandlesTextStreaming
             finishReason: $this->extractFinishReason(['finish_reason' => $finishReason ?? '']),
             usage: $usage ?? new Usage(0, 0),
             meta: new Meta($provider->name(), $streamModel),
+            providerContentBlocks: $reasoning->providerContentBlocks(),
         );
     }
 

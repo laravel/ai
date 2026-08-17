@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\DeepSeek\Concerns;
 
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
+use Laravel\Ai\Gateway\OpenAiCompatible\ChatCompletionReasoning;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
@@ -57,12 +58,6 @@ trait ParsesTextResponses
             $toolCall['id'] ?? null,
         ), $rawToolCalls);
 
-        $providerContentBlocks = [];
-
-        if (filled($message['reasoning_content'] ?? null)) {
-            $providerContentBlocks['reasoning_content'] = $message['reasoning_content'];
-        }
-
         return new StepResponse(
             text: $text,
             toolCalls: $mappedToolCalls,
@@ -70,7 +65,7 @@ trait ParsesTextResponses
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
-            providerContentBlocks: $providerContentBlocks,
+            providerContentBlocks: ChatCompletionReasoning::providerContentBlocksIn($message),
         );
     }
 

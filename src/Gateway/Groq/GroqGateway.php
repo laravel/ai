@@ -10,9 +10,11 @@ use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\Concerns\ResolvesAudioFilenames;
+use Laravel\Ai\Gateway\OpenAiCompatible\ChatCompletionReasoning;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionMessages;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionTools;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\PerformsChatCompletionSteps;
+use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
 use Laravel\Ai\Responses\Data\Usage;
@@ -82,5 +84,17 @@ class GroqGateway implements StepTextGateway, TranscriptionGateway
             ),
             new Meta($provider->name(), $model),
         );
+    }
+
+    /**
+     * Get the reasoning fields to replay for the given assistant message, which Groq accepts under `reasoning` rather than DeepSeek's `reasoning_content`.
+     *
+     * @return array<string, mixed>
+     */
+    protected function replayableReasoningFor(AssistantMessage $message): array
+    {
+        $reasoning = ChatCompletionReasoning::replayableFrom($message->providerContentBlocks);
+
+        return $reasoning === null ? [] : ['reasoning' => $reasoning];
     }
 }
