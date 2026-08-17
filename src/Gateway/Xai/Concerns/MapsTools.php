@@ -3,10 +3,12 @@
 namespace Laravel\Ai\Gateway\Xai\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\ProviderTool;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Laravel\Ai\Tools\ToolNameResolver;
@@ -40,9 +42,25 @@ trait MapsTools
     protected function mapProviderTool(ProviderTool $tool, Provider $provider): array
     {
         return match (true) {
+            $tool instanceof FileSearch => $this->mapFileSearchTool($tool, $provider),
             $tool instanceof WebSearch => $this->mapWebSearchTool($tool, $provider),
             default => [],
         };
+    }
+
+    /**
+     * Map a file search tool to an xAI file search definition.
+     */
+    protected function mapFileSearchTool(FileSearch $tool, Provider $provider): array
+    {
+        if (! $provider instanceof SupportsFileSearch) {
+            throw new RuntimeException('Provider ['.$provider->name().'] does not support file search.');
+        }
+
+        return [
+            'type' => 'file_search',
+            ...$provider->fileSearchToolOptions($tool),
+        ];
     }
 
     /**

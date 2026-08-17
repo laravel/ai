@@ -135,10 +135,40 @@ test('web search tool forwards xai provider options into the tool payload', func
     });
 });
 
+test('file search tool sends file_search with vector store ids', function (): void {
+    Http::fake(['*' => fakeXaiToolMappingResponse('result')]);
+
+    agent(tools: [new FileSearch(['collection-id'])])->prompt('Search my docs', provider: 'xai');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'file_search');
+
+        return data_get($tool, 'vector_store_ids') === ['collection-id'];
+    });
+});
+
+test('file search tool forwards xai provider options into the tool payload', function (): void {
+    Http::fake(['*' => fakeXaiToolMappingResponse('result')]);
+
+    agent(tools: [
+        (new FileSearch(['collection-id']))->withProviderOptions([
+            'max_num_results' => 5,
+        ]),
+    ])->prompt('Search my docs', provider: 'xai');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'file_search');
+
+        return data_get($tool, 'max_num_results') === 5;
+    });
+});
+
 test('unsupported provider tools are omitted from the tools payload', function (): void {
     Http::fake(['*' => fakeXaiToolMappingResponse('result')]);
 
-    agent(tools: [new WebFetch, new FileSearch(['store-id']), new WebSearch])
+    agent(tools: [new WebFetch, new WebSearch])
         ->prompt('Search', provider: 'xai');
 
     Http::assertSent(function (Request $request): bool {
