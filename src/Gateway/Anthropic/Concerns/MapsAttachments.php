@@ -139,24 +139,32 @@ trait MapsAttachments
      */
     protected function documentSource(?string $mimeType, callable $rawResolver, callable $base64Resolver): array
     {
-        $mimeType = $this->normalizeMimeType($mimeType);
-
-        if ($this->isPlainText($mimeType)) {
+        if ($this->normalizeMimeType($mimeType) === 'application/pdf') {
             return [
-                'type' => 'text',
-                'media_type' => 'text/plain',
-                'data' => $rawResolver(),
+                'type' => 'base64',
+                'media_type' => 'application/pdf',
+                'data' => $base64Resolver(),
             ];
         }
 
-        if ($mimeType !== 'application/pdf') {
-            throw new InvalidArgumentException('Anthropic documents must be PDF or plain text, ['.($mimeType ?? 'unknown').'] must be converted first.');
+        $raw = (string) $rawResolver();
+
+        if (str_starts_with($raw, '%PDF-')) {
+            return [
+                'type' => 'base64',
+                'media_type' => 'application/pdf',
+                'data' => base64_encode($raw),
+            ];
+        }
+
+        if (! mb_check_encoding($raw, 'UTF-8') || str_contains($raw, "\0")) {
+            throw new InvalidArgumentException('Anthropic only accepts PDF or plain text documents; ['.($mimeType ?? 'unknown').'] must be converted first.');
         }
 
         return [
-            'type' => 'base64',
-            'media_type' => 'application/pdf',
-            'data' => $base64Resolver(),
+            'type' => 'text',
+            'media_type' => 'text/plain',
+            'data' => $raw,
         ];
     }
 
@@ -194,17 +202,6 @@ trait MapsAttachments
     protected function normalizeMimeType(?string $mimeType): ?string
     {
         return blank($mimeType) ? null : strtolower(trim(Str::before($mimeType, ';')));
-    }
-
-    /**
-     * Determine if the given mime type describes content Anthropic can read as plain text.
-     */
-    protected function isPlainText(?string $mimeType): bool
-    {
-        return $mimeType !== null && (
-            Str::startsWith($mimeType, 'text/')
-                || Str::is(['application/json', 'application/*+json', 'application/xml', 'application/*+xml'], $mimeType)
-        );
     }
 
     /**
