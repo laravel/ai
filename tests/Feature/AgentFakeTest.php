@@ -47,6 +47,7 @@ describe('prompt responses', function (): void {
 
         // Assertion tests...
         AssistantAgent::assertPrompted('First prompt');
+        AssistantAgent::assertPromptedTimes(3);
         AssistantAgent::assertNotPrompted('Missing prompt');
 
         AssistantAgent::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->prompt === 'First prompt');
