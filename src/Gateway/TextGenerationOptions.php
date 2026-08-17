@@ -44,21 +44,21 @@ class TextGenerationOptions
     }
 
     /**
+     * Return a copy of the options with the given attribute overrides.
+     */
+    public function with(mixed ...$attributes): self
+    {
+        return new self(...array_merge(get_object_vars($this), $attributes));
+    }
+
+    /**
      * Return a copy of the options with the given middleware.
      *
      * @param  Middleware[]  $middleware
      */
     public function withMiddleware(array $middleware): self
     {
-        return new self(
-            maxSteps: $this->maxSteps,
-            maxTokens: $this->maxTokens,
-            temperature: $this->temperature,
-            agent: $this->agent,
-            topP: $this->topP,
-            toolChoice: $this->toolChoice,
-            middleware: $middleware,
-        );
+        return $this->with(middleware: $middleware);
     }
 
     /**
@@ -90,14 +90,7 @@ class TextGenerationOptions
             return $this;
         }
 
-        return new self(
-            maxSteps: $this->maxSteps,
-            maxTokens: $this->maxTokens,
-            temperature: $this->temperature,
-            agent: $this->agent,
-            topP: $this->topP,
-            middleware: $this->middleware,
-        );
+        return $this->with(toolChoice: null);
     }
 
     /**

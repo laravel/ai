@@ -24,6 +24,14 @@ class RecordingStepGateway implements StepTextGateway
 
     public array $tools = [];
 
+    public ?array $schema = null;
+
+    public ?TextGenerationOptions $options = null;
+
+    public ?int $timeout = null;
+
+    public ?TextProvider $provider = null;
+
     public int $steps = 0;
 
     /**
@@ -33,22 +41,26 @@ class RecordingStepGateway implements StepTextGateway
 
     public function generateTextStep(TextProvider $provider, string $model, ?string $instructions, array $messages, array $tools, ?array $schema, ?TextGenerationOptions $options, ?int $timeout, StepContext $stepContext): StepResponse
     {
-        return $this->record($provider, $model, $instructions, $messages, $tools);
+        return $this->record($provider, $model, $instructions, $messages, $tools, $schema, $options, $timeout);
     }
 
     public function generateStreamStep(string $invocationId, TextProvider $provider, string $model, ?string $instructions, array $messages, array $tools, ?array $schema, ?TextGenerationOptions $options, ?int $timeout, StepContext $stepContext): Generator
     {
-        return $this->record($provider, $model, $instructions, $messages, $tools);
+        return $this->record($provider, $model, $instructions, $messages, $tools, $schema, $options, $timeout);
 
         yield;
     }
 
-    protected function record(TextProvider $provider, string $model, ?string $instructions, array $messages, array $tools): StepResponse
+    protected function record(TextProvider $provider, string $model, ?string $instructions, array $messages, array $tools, ?array $schema = null, ?TextGenerationOptions $options = null, ?int $timeout = null): StepResponse
     {
         $this->model = $model;
         $this->instructions = $instructions;
         $this->received = $messages;
         $this->tools = $tools;
+        $this->schema = $schema;
+        $this->options = $options;
+        $this->timeout = $timeout;
+        $this->provider = $provider;
         $this->steps++;
 
         return array_shift($this->responses)

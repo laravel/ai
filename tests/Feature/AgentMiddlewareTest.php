@@ -307,6 +307,116 @@ test('middleware can control the model, instructions, and tools of each step', f
         ->and($recorder->tools)->toHaveCount(1);
 });
 
+test('middleware can control the generation options of each step', function () {
+    $recorder = new RecordingStepGateway;
+
+    Ai::textProvider('openai')->useTextGateway($recorder);
+
+    $middleware = new class extends Middleware
+    {
+        public function handle(PendingStep $step, Closure $next)
+        {
+            return $next($step->withOptions(temperature: 0.25, maxTokens: 4000));
+        }
+    };
+
+    (new AssistantAgent)
+        ->withMiddleware([$middleware])
+        ->prompt('Hello', provider: 'openai');
+
+    expect($recorder->options->temperature)->toBe(0.25)
+        ->and($recorder->options->maxTokens)->toBe(4000)
+        ->and($recorder->options->agent)->toBeInstanceOf(AssistantAgent::class);
+});
+
+test('middleware can control the schema and timeout of each step', function () {
+    $recorder = new RecordingStepGateway;
+
+    Ai::textProvider('openai')->useTextGateway($recorder);
+
+    $middleware = new class extends Middleware
+    {
+        public function handle(PendingStep $step, Closure $next)
+        {
+            return $next($step->withSchema(null)->withTimeout(90));
+        }
+    };
+
+    $response = (new StructuredMiddlewareAgent)
+        ->withMiddleware([$middleware])
+        ->prompt('Hello', provider: 'openai');
+
+    expect($recorder->steps)->toBe(1)
+        ->and($recorder->schema)->toBeNull()
+        ->and($recorder->timeout)->toBe(90)
+        ->and($response->text)->toBe('ok');
+});
+
+test('middleware can transform the response of each step', function () {
+    Ai::textProvider('openai')->useTextGateway(new RecordingStepGateway([
+        new StepResponse('the secret is hunter2', [], FinishReason::Stop, new Usage, new Meta),
+    ]));
+
+    $middleware = new class extends Middleware
+    {
+        public function handle(PendingStep $step, Closure $next)
+        {
+            $response = $next($step);
+
+            return new StepResponse(
+                str_replace('hunter2', '[redacted]', $response->text),
+                $response->toolCalls,
+                $response->finishReason,
+                $response->usage,
+                $response->meta,
+            );
+        }
+    };
+
+    $response = (new AssistantAgent)
+        ->withMiddleware([$middleware])
+        ->prompt('Hello', provider: 'openai');
+
+    expect($response->text)->toBe('the secret is [redacted]');
+});
+
+test('middleware can transform the stream of each step', function () {
+    AssistantAgent::fake(['Fake response']);
+
+    $middleware = new class extends Middleware
+    {
+        public function handle(PendingStep $step, Closure $next)
+        {
+            $_SERVER['__testing.middleware-streaming'] = $step->streaming;
+
+            $stream = $next($step);
+
+            foreach ($stream as $event) {
+                yield $event instanceof TextDelta
+                    ? new TextDelta($event->id, $event->messageId, strtoupper($event->delta), $event->timestamp)
+                    : $event;
+            }
+
+            return $stream->getReturn();
+        }
+    };
+
+    $response = (new AssistantAgent)
+        ->withMiddleware([$middleware])
+        ->stream('Test prompt');
+
+    $events = [];
+
+    foreach ($response as $event) {
+        $events[] = $event;
+    }
+
+    expect($_SERVER['__testing.middleware-streaming'])->toBeTrue()
+        ->and(TextDelta::combine($events))->toBe('FAKE RESPONSE');
+
+    unset($_SERVER['__testing.middleware-streaming']);
+});
+
 test('the step falls back to the agent when middleware overrides nothing', function () {
     $recorder = new RecordingStepGateway;
 

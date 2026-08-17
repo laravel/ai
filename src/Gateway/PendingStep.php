@@ -24,6 +24,7 @@ class PendingStep
         public readonly ?TextGenerationOptions $options,
         public readonly ?int $timeout,
         public readonly StepContext $context,
+        public readonly bool $streaming = false,
     ) {}
 
     /**
@@ -62,6 +63,34 @@ class PendingStep
     public function withModel(string $model): PendingStep
     {
         return $this->copy(['model' => $model]);
+    }
+
+    /**
+     * Change the structured output schema, returning a new pending step instance.
+     *
+     * @param  array<string, mixed>|null  $schema
+     */
+    public function withSchema(?array $schema): PendingStep
+    {
+        return $this->copy(['schema' => $schema]);
+    }
+
+    /**
+     * Change the request timeout, returning a new pending step instance.
+     */
+    public function withTimeout(?int $timeout): PendingStep
+    {
+        return $this->copy(['timeout' => $timeout]);
+    }
+
+    /**
+     * Change the given generation options, returning a new pending step instance.
+     */
+    public function withOptions(mixed ...$options): PendingStep
+    {
+        return $this->copy([
+            'options' => ($this->options ?? new TextGenerationOptions)->with(...$options),
+        ]);
     }
 
     /**

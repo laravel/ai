@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway;
 
+use Closure;
 use Generator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -73,27 +74,21 @@ class TextGenerationLoop
                 $schema, $options?->forStep($step), $timeout, $stepContext,
             );
 
-            $outcome = $this->sendThroughMiddleware($pending, $middleware);
+            $lastResult = $this->sendThroughMiddleware($pending, $middleware, fn (PendingStep $step) => $this->gateway->generateTextStep(
+                $step->provider,
+                $step->model,
+                $step->instructions,
+                $step->messages,
+                $step->tools,
+                $step->schema,
+                $step->options,
+                $step->timeout,
+                $step->context,
+            ));
 
-            if ($outcome instanceof PendingStep) {
-                $pending = $outcome;
+            $lastResult = $this->resolveShortCircuitedStep($pending, $lastResult);
 
-                $maxSteps = max($maxSteps, $this->resolveMaxSteps($pending->options, $pending->tools));
-
-                $lastResult = $this->gateway->generateTextStep(
-                    $pending->provider,
-                    $pending->model,
-                    $pending->instructions,
-                    $pending->messages,
-                    $pending->tools,
-                    $pending->schema,
-                    $pending->options,
-                    $pending->timeout,
-                    $pending->context,
-                );
-            } else {
-                $lastResult = $this->resolveShortCircuitedStep($pending, $outcome);
-            }
+            $maxSteps = max($maxSteps, $this->resolveMaxSteps($pending->options, $pending->tools));
 
             if ($lastResult->finishReason === FinishReason::Continue) {
                 $steps->push($this->buildStep($lastResult));
@@ -170,30 +165,30 @@ class TextGenerationLoop
 
             $pending = new PendingStep(
                 $provider, $model, $instructions, $allMessages, $tools,
-                $schema, $options?->forStep($step), $timeout, $stepContext,
+                $schema, $options?->forStep($step), $timeout, $stepContext, streaming: true,
             );
 
-            $outcome = $this->sendThroughMiddleware($pending, $middleware);
+            $outcome = $this->sendThroughMiddleware($pending, $middleware, fn (PendingStep $step) => $this->gateway->generateStreamStep(
+                $invocationId,
+                $step->provider,
+                $step->model,
+                $step->instructions,
+                $step->messages,
+                $step->tools,
+                $step->schema,
+                $step->options,
+                $step->timeout,
+                $step->context,
+            ));
 
-            if ($outcome instanceof PendingStep) {
-                $pending = $outcome;
+            $maxSteps = max($maxSteps, $this->resolveMaxSteps($pending->options, $pending->tools));
 
-                $maxSteps = max($maxSteps, $this->resolveMaxSteps($pending->options, $pending->tools));
+            if ($outcome instanceof StepResponse) {
+                $result = $outcome;
 
-                $stream = $this->gateway->generateStreamStep(
-                    $invocationId,
-                    $pending->provider,
-                    $pending->model,
-                    $pending->instructions,
-                    $pending->messages,
-                    $pending->tools,
-                    $pending->schema,
-                    $pending->options,
-                    $pending->timeout,
-                    $pending->context,
-                );
-
-                foreach ($stream as $event) {
+                yield from $this->shortCircuitedStepEvents($invocationId, $pending, $result);
+            } else {
+                foreach ($outcome as $event) {
                     yield $event;
 
                     if ($event instanceof Error) {
@@ -201,11 +196,7 @@ class TextGenerationLoop
                     }
                 }
 
-                $result = $stream->getReturn();
-            } else {
-                $result = $outcome;
-
-                yield from $this->shortCircuitedStepEvents($invocationId, $pending, $result);
+                $result = $outcome->getReturn();
             }
 
             if ($result !== null) {
@@ -271,12 +262,16 @@ class TextGenerationLoop
     }
 
     /**
-     * Run the pending step through the given middleware, tracking the step each middleware receives so short-circuited tool calls execute against it.
+     * Run the pending step through the given middleware and into the gateway, tracking the step each middleware receives so short-circuited tool calls execute against it.
      */
-    protected function sendThroughMiddleware(PendingStep &$pending, array $middleware): PendingStep|StepResponse
+    protected function sendThroughMiddleware(PendingStep &$pending, array $middleware, Closure $call): mixed
     {
+        $call = function (PendingStep $step) use ($call, &$pending) {
+            return $call($pending = $step);
+        };
+
         if ($middleware === []) {
-            return $pending;
+            return $call($pending);
         }
 
         $through = [];
@@ -290,9 +285,9 @@ class TextGenerationLoop
         $outcome = pipeline()
             ->send($pending)
             ->through($through)
-            ->thenReturn();
+            ->then($call);
 
-        if (! $outcome instanceof PendingStep && ! $outcome instanceof StepResponse) {
+        if ($outcome instanceof PendingStep) {
             throw new InvalidArgumentException('Agent middleware must return $next($step) or a StepResponse.');
         }
 
