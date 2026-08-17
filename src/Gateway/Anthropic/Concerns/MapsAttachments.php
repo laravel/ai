@@ -93,10 +93,7 @@ trait MapsAttachments
                 ],
                 $attachment instanceof RemoteDocument => [
                     'type' => 'document',
-                    'source' => [
-                        'type' => 'url',
-                        'url' => $attachment->url,
-                    ],
+                    'source' => $this->remoteDocumentSource($attachment),
                 ],
                 $attachment instanceof StoredDocument => [
                     'type' => 'document',
@@ -125,8 +122,8 @@ trait MapsAttachments
                 default => throw new InvalidArgumentException('Unsupported attachment type ['.$attachment::class.']'),
             };
 
-            if (($mapped['type'] ?? '') === 'document' && $attachment instanceof File && filled($attachment->name)) {
-                $mapped['title'] = $attachment->name;
+            if (($mapped['type'] ?? '') === 'document' && $attachment instanceof File && filled($attachment->name())) {
+                $mapped['title'] = $attachment->name();
             }
 
             return $mapped;
@@ -136,16 +133,15 @@ trait MapsAttachments
     /**
      * Build the Anthropic document `source` block for the given mime type.
      *
-     * A `text` source only accepts `text/plain`, so any other text type is sent
-     * under that media type rather than the one it was given.
-     *
      * @param  callable():string  $rawResolver
      * @param  callable():string  $base64Resolver
      * @return array<string, string>
      */
     protected function documentSource(?string $mimeType, callable $rawResolver, callable $base64Resolver): array
     {
-        if ($mimeType !== null && Str::startsWith($mimeType, 'text/')) {
+        $mimeType = $this->normalizeMimeType($mimeType);
+
+        if ($this->isPlainText($mimeType)) {
             return [
                 'type' => 'text',
                 'media_type' => 'text/plain',
@@ -153,11 +149,62 @@ trait MapsAttachments
             ];
         }
 
+        if ($mimeType !== 'application/pdf') {
+            throw new InvalidArgumentException('Anthropic documents must be PDF or plain text, ['.($mimeType ?? 'unknown').'] must be converted first.');
+        }
+
         return [
             'type' => 'base64',
-            'media_type' => $mimeType,
+            'media_type' => 'application/pdf',
             'data' => $base64Resolver(),
         ];
+    }
+
+    /**
+     * Build the Anthropic document `source` block for the given remote document.
+     *
+     * @return array<string, string>
+     */
+    protected function remoteDocumentSource(RemoteDocument $document): array
+    {
+        $mimeType = $this->normalizeMimeType($document->declaredMimeType());
+
+        // A `url` source is PDF-only, so anything else has to be fetched and inlined.
+        $isPdf = $mimeType === null
+            ? in_array(strtolower(pathinfo((string) parse_url($document->url, PHP_URL_PATH), PATHINFO_EXTENSION)), ['', 'pdf'], true)
+            : $mimeType === 'application/pdf';
+
+        if ($isPdf) {
+            return [
+                'type' => 'url',
+                'url' => $document->url,
+            ];
+        }
+
+        return $this->documentSource(
+            $document->mimeType(),
+            fn (): string => $document->content(),
+            fn (): string => base64_encode($document->content()),
+        );
+    }
+
+    /**
+     * Strip any parameters from the given mime type.
+     */
+    protected function normalizeMimeType(?string $mimeType): ?string
+    {
+        return blank($mimeType) ? null : strtolower(trim(Str::before($mimeType, ';')));
+    }
+
+    /**
+     * Determine if the given mime type describes content Anthropic can read as plain text.
+     */
+    protected function isPlainText(?string $mimeType): bool
+    {
+        return $mimeType !== null && (
+            Str::startsWith($mimeType, 'text/')
+                || Str::is(['application/json', 'application/*+json', 'application/xml', 'application/*+xml'], $mimeType)
+        );
     }
 
     /**
