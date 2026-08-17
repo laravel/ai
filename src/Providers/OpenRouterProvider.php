@@ -44,16 +44,7 @@ class OpenRouterProvider extends Provider implements AudioProvider, EmbeddingPro
      */
     public function webFetchToolOptions(WebFetch $fetch): array
     {
-        $options = $fetch->providerOptions(Lab::OpenRouter);
-
-        $parameters = array_filter([
-            'max_uses' => $fetch->maxSearches,
-            'allowed_domains' => filled($fetch->allowedDomains) ? $fetch->allowedDomains : null,
-        ]) + $options;
-
-        return array_filter([
-            'parameters' => filled($parameters) ? $parameters : null,
-        ]);
+        return $this->serverToolOptions($fetch);
     }
 
     /**
@@ -61,15 +52,19 @@ class OpenRouterProvider extends Provider implements AudioProvider, EmbeddingPro
      */
     public function webSearchToolOptions(WebSearch $search): array
     {
-        $options = $search->providerOptions(Lab::OpenRouter);
+        return $this->serverToolOptions($search);
+    }
 
-        $parameters = array_filter([
-            'max_results' => $search->maxSearches,
-            'allowed_domains' => filled($search->allowedDomains) ? $search->allowedDomains : null,
-        ]) + $options;
-
+    /**
+     * Get the parameters for an OpenRouter server tool.
+     */
+    protected function serverToolOptions(WebFetch|WebSearch $tool): array
+    {
         return array_filter([
-            'parameters' => filled($parameters) ? $parameters : null,
+            'parameters' => array_filter([
+                'max_uses' => $tool->maxSearches,
+                'allowed_domains' => $tool->allowedDomains,
+            ]) + $tool->providerOptions(Lab::OpenRouter),
         ]);
     }
 

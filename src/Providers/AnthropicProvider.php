@@ -27,11 +27,11 @@ class AnthropicProvider extends Provider implements FileProvider, SupportsToolSe
     public function webFetchToolOptions(WebFetch $fetch): array
     {
         return array_filter([
-            'max_uses' => $fetch->maxSearches ?? 10,
+            'max_uses' => $fetch->maxSearches,
             'allowed_domains' => $fetch->allowedDomains === []
                 ? null
                 : $fetch->allowedDomains,
-        ]);
+        ]) + $fetch->providerOptions(Lab::Anthropic);
     }
 
     /**

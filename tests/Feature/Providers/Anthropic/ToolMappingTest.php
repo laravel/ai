@@ -141,7 +141,7 @@ test('web fetch tool sends allowed_domains', function () {
     });
 });
 
-test('web fetch tool defaults max_uses to ten', function () {
+test('web fetch tool omits max_uses when none is set', function () {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
     ]);
@@ -151,7 +151,27 @@ test('web fetch tool defaults max_uses to ten', function () {
     Http::assertSent(function ($request) {
         $tool = collect($request->data()['tools'] ?? [])->firstWhere('name', 'web_fetch');
 
-        return data_get($tool, 'max_uses') === 10;
+        return $tool !== null && ! array_key_exists('max_uses', $tool);
+    });
+});
+
+test('web fetch tool forwards provider options', function () {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    $fetch = (new WebFetch)->withProviderOptions([
+        'citations' => ['enabled' => true],
+        'max_content_tokens' => 50000,
+    ]);
+
+    agent(tools: [$fetch])->prompt('Fetch', provider: 'anthropic');
+
+    Http::assertSent(function ($request) {
+        $tool = collect($request->data()['tools'] ?? [])->firstWhere('name', 'web_fetch');
+
+        return data_get($tool, 'citations.enabled') === true
+            && data_get($tool, 'max_content_tokens') === 50000;
     });
 });
 

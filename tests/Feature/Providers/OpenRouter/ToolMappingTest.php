@@ -164,7 +164,7 @@ test('web search tool is sent as openrouter:web_search type', function (): void 
     });
 });
 
-test('web search tool sends max_results when maxSearches is set', function (): void {
+test('web search tool sends max_uses when maxSearches is set', function (): void {
     Http::fake(['*' => fakeOpenRouterResponse('done')]);
 
     agent(tools: [(new WebSearch)->max(5)])->prompt('Search the web', provider: 'openrouter');
@@ -173,7 +173,23 @@ test('web search tool sends max_results when maxSearches is set', function (): v
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'openrouter:web_search');
 
-        return data_get($tool, 'parameters.max_results') === 5;
+        return data_get($tool, 'parameters.max_uses') === 5;
+    });
+});
+
+test('web search tool forwards max_results through provider options', function (): void {
+    Http::fake(['*' => fakeOpenRouterResponse('done')]);
+
+    $search = (new WebSearch)->max(3)->withProviderOptions(['max_results' => 10]);
+
+    agent(tools: [$search])->prompt('Search the web', provider: 'openrouter');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'openrouter:web_search');
+
+        return data_get($tool, 'parameters.max_uses') === 3
+            && data_get($tool, 'parameters.max_results') === 10;
     });
 });
 
