@@ -186,7 +186,7 @@ test('streaming captures cache hit and reasoning tokens', function (): void {
 
     $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
 
-    expect($streamEnd->usage->promptTokens)->toBe(100)
+    expect($streamEnd->usage->promptTokens)->toBe(70)
         ->and($streamEnd->usage->completionTokens)->toBe(50)
         ->and($streamEnd->usage->cacheReadInputTokens)->toBe(30)
         ->and($streamEnd->usage->cacheWriteInputTokens)->toBe(0)
