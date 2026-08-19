@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Responses\Data\FinishReason;
+use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ProviderToolEvent;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
@@ -197,6 +198,7 @@ describe('thinking blocks', function (): void {
         expect($providerEvents)->not->toBeEmpty()
             ->and($providerEvents[0])->status->toBe('result_received')->type->toBe('web_search_tool_result');
     });
+
 });
 
 describe('pause_turn', function (): void {
@@ -409,4 +411,62 @@ describe('usage tracking', function (): void {
         'refusal maps to ContentFilter' => ['refusal', FinishReason::ContentFilter],
         'tool_use without tool blocks normalizes to Stop (StreamEnd still emitted)' => ['tool_use', FinishReason::Stop],
     ]);
+});
+
+describe('provider tool citations', function (): void {
+    test('streaming emits a citation for a fetched url', function (): void {
+        Http::fake([
+            'api.anthropic.com/*' => Http::response(
+                body: $this->ssePayload([
+                    $this->messageStart(),
+                    $this->contentBlockStart(0, [
+                        'type' => 'web_fetch_tool_result',
+                        'tool_use_id' => 'srvtoolu_1',
+                        'content' => [
+                            'type' => 'web_fetch_result',
+                            'url' => 'https://example.com/article',
+                            'content' => ['type' => 'document', 'title' => 'Article Title'],
+                        ],
+                    ]),
+                    $this->contentBlockStop(0),
+                    $this->contentBlockStart(1, ['type' => 'text', 'text' => '']),
+                    $this->contentBlockDelta(1, ['type' => 'text_delta', 'text' => 'The article argues X.']),
+                    $this->contentBlockStop(1),
+                    $this->messageDelta('end_turn', 10),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $events = $this->collectStreamEvents();
+
+        $citations = array_values(array_filter($events, fn ($e): bool => $e instanceof CitationEvent));
+
+        expect($citations)->toHaveCount(1)
+            ->and($citations[0]->citation)->url->toBe('https://example.com/article')->title->toBe('Article Title');
+    });
+
+    test('streaming skips citations for a failed fetch', function (): void {
+        Http::fake([
+            'api.anthropic.com/*' => Http::response(
+                body: $this->ssePayload([
+                    $this->messageStart(),
+                    $this->contentBlockStart(0, [
+                        'type' => 'web_fetch_tool_result',
+                        'tool_use_id' => 'srvtoolu_1',
+                        'content' => ['type' => 'web_fetch_tool_result_error', 'error_code' => 'url_not_accessible'],
+                    ]),
+                    $this->contentBlockStop(0),
+                    $this->messageDelta('end_turn', 10),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $citations = array_filter($this->collectStreamEvents(), fn ($e): bool => $e instanceof CitationEvent);
+
+        expect($citations)->toBeEmpty();
+    });
 });

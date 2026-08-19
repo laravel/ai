@@ -220,6 +220,31 @@ test('web fetch tool result surfaces the fetched url as a citation', function ()
         ->and($response->meta->citations[0]->title)->toBe('Article Title');
 });
 
+test('web fetch tool result skips citations for a failed fetch', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response([
+            'id' => 'msg_fetch_2',
+            'type' => 'message',
+            'role' => 'assistant',
+            'model' => 'claude-sonnet-4-6',
+            'content' => [
+                [
+                    'type' => 'web_fetch_tool_result',
+                    'tool_use_id' => 'srvtoolu_1',
+                    'content' => ['type' => 'web_fetch_tool_result_error', 'error_code' => 'url_not_accessible'],
+                ],
+                ['type' => 'text', 'text' => "I couldn't reach that page."],
+            ],
+            'stop_reason' => 'end_turn',
+            'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+        ]),
+    ]);
+
+    $response = agent(tools: [new WebFetch])->prompt('Fetch it', provider: 'anthropic');
+
+    expect($response->meta->citations)->toBeEmpty();
+});
+
 test('web fetch tool forwards a custom max_uses', function () {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse('ok'),

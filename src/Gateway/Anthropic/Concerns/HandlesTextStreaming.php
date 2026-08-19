@@ -155,6 +155,17 @@ trait HandlesTextStreaming
                         time(),
                     ))->withInvocationId($invocationId);
                 } elseif ($this->isProviderToolResultBlock($blockType)) {
+                    $fetchResult = $data['content_block']['content'] ?? [];
+
+                    if ($blockType === 'web_fetch_tool_result' && ($fetchResult['type'] ?? '') === 'web_fetch_result' && filled($fetchResult['url'] ?? null)) {
+                        yield (new CitationEvent(
+                            $this->generateEventId(),
+                            $messageId,
+                            new UrlCitation($fetchResult['url'], $fetchResult['content']['title'] ?? null),
+                            time(),
+                        ))->withInvocationId($invocationId);
+                    }
+
                     yield (new ProviderToolEvent(
                         $this->generateEventId(),
                         $data['content_block']['tool_use_id'] ?? $data['content_block']['id'] ?? '',
