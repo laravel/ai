@@ -427,6 +427,14 @@ trait Promptable
     }
 
     /**
+     * Assert that a certain number of prompts were received.
+     */
+    public static function assertPromptedTimes(int $times = 1): void
+    {
+        Ai::assertAgentWasPromptedTimes(static::class, $times);
+    }
+
+    /**
      * Assert that a prompt was not received matching a given truth test.
      */
     public static function assertNotPrompted(Closure|string $callback): void

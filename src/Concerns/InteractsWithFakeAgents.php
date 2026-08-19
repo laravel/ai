@@ -4,6 +4,7 @@ namespace Laravel\Ai\Concerns;
 
 use Closure;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Gateway\FakeTextGateway;
@@ -90,6 +91,25 @@ trait InteractsWithFakeAgents
         PHPUnit::assertTrue(
             (new Collection($prompts ?? $this->recordedPrompts[$agent] ?? []))->contains(fn ($prompt) => $callback($prompt)),
             $message ?? 'An expected prompt was not received.'
+        );
+
+        return $this;
+    }
+
+    /**
+     * Assert that a certain number of prompts were received.
+     */
+    public function assertAgentWasPromptedTimes(string $agent, int $times = 1): self
+    {
+        $count = count($this->recordedPrompts[$agent] ?? []);
+
+        PHPUnit::assertSame(
+            $times, $count,
+            sprintf(
+                "Received {$count} %s instead of {$times} %s.",
+                Str::plural('prompt', $count),
+                Str::plural('prompt', $times),
+            ),
         );
 
         return $this;
