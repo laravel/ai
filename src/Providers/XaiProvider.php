@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Providers;
 
 use Illuminate\Contracts\Events\Dispatcher;
+use InvalidArgumentException;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
@@ -33,6 +34,10 @@ class XaiProvider extends Provider implements ImageProvider, SupportsFileSearch,
      */
     public function fileSearchToolOptions(FileSearch $search): array
     {
+        if (filled($search->filters)) {
+            throw new InvalidArgumentException('xAI does not support file search metadata filters.');
+        }
+
         return array_filter([
             'vector_store_ids' => $search->ids(),
         ]) + $search->providerOptions(Lab::xAI);

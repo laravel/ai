@@ -3,6 +3,7 @@
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Ai;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
@@ -146,6 +147,13 @@ test('file search tool sends file_search with vector store ids', function (): vo
 
         return data_get($tool, 'vector_store_ids') === ['collection-id'];
     });
+});
+
+test('file search metadata filters throw an exception', function (): void {
+    $search = new FileSearch(['collection-id'], where: ['company' => 'laravel']);
+
+    expect(fn () => Ai::textProvider('xai')->fileSearchToolOptions($search))
+        ->toThrow(InvalidArgumentException::class, 'xAI does not support file search metadata filters.');
 });
 
 test('file search tool forwards xai provider options into the tool payload', function (): void {
