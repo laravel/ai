@@ -111,6 +111,7 @@ class GeminiGateway implements Gateway, StepTextGateway
      * @param  array<ImageFile>  $attachments
      * @param  '3:2'|'2:3'|'1:1'|null  $size
      * @param  'low'|'medium'|'high'|null  $quality
+     * @param  array<string, mixed>  $providerOptions
      */
     public function generateImage(
         ImageProvider $provider,
@@ -120,6 +121,7 @@ class GeminiGateway implements Gateway, StepTextGateway
         ?string $size = null,
         ?string $quality = null,
         ?int $timeout = null,
+        array $providerOptions = [],
     ): ImageResponse {
         $parts = [['text' => $prompt]];
 
@@ -129,7 +131,7 @@ class GeminiGateway implements Gateway, StepTextGateway
 
         $imageOptions = $provider->defaultImageOptions($size, $quality);
 
-        $body = [
+        $body = array_merge($providerOptions, [
             'contents' => [['role' => 'user', 'parts' => $parts]],
             'generationConfig' => array_filter([
                 'responseModalities' => ['IMAGE', 'TEXT'],
@@ -138,7 +140,7 @@ class GeminiGateway implements Gateway, StepTextGateway
                     'aspectRatio' => $imageOptions['aspect_ratio'] ?? null,
                 ]),
             ]),
-        ];
+        ]);
 
         $response = $this->withErrorHandling(
             $provider->name(),
