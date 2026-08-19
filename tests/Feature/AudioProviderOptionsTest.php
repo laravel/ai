@@ -3,6 +3,7 @@
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Audio;
+use Laravel\Ai\Jobs\GenerateAudio;
 use Laravel\Ai\Prompts\QueuedAudioPrompt;
 use Laravel\Ai\Providers\Provider;
 
@@ -52,4 +53,32 @@ test('flat provider options are recorded on the queued audio prompt fake', funct
     Audio::assertQueued(
         fn (QueuedAudioPrompt $prompt): bool => $prompt->providerOptions === ['stream_format' => 'sse'],
     );
+});
+
+test('falsy provider options are not dropped from the audio request', function (): void {
+    Http::fake(['*' => Http::response('fake-audio-bytes')]);
+
+    Audio::of('Hello world')
+        ->withProviderOptions(['stream' => false])
+        ->generate(provider: 'openai', model: 'gpt-4o-mini-tts');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+
+        return array_key_exists('stream', $body) && $body['stream'] === false;
+    });
+});
+
+test('closure provider options survive queue serialization round-trip', function (): void {
+    Http::fake(['*' => Http::response('fake-audio-bytes')]);
+
+    $job = new GenerateAudio(
+        Audio::of('Hello world')->withProviderOptions(fn (Provider $provider): array => ['stream_format' => 'sse']),
+        'openai',
+        'gpt-4o-mini-tts',
+    );
+
+    unserialize(serialize($job))->handle();
+
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['stream_format'] === 'sse');
 });

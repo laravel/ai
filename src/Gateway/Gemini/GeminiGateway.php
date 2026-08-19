@@ -226,7 +226,7 @@ class GeminiGateway implements Gateway, StepTextGateway
                             : $text,
                     ]],
                 ]],
-                'generationConfig' => [
+                'generationConfig' => array_replace_recursive($providerOptions['generationConfig'] ?? [], [
                     'responseModalities' => ['AUDIO'],
                     'speechConfig' => [
                         'voiceConfig' => [
@@ -239,7 +239,7 @@ class GeminiGateway implements Gateway, StepTextGateway
                             ],
                         ],
                     ],
-                ],
+                ]),
             ])),
         );
 
