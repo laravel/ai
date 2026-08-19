@@ -151,15 +151,14 @@ class OpenAiGateway implements Gateway, StepTextGateway
             $request = $request->attach($field, $content, 'image.png');
         }
 
-        return $request->post('images/edits', array_filter([
-            ...$providerOptions,
+        return $request->post('images/edits', array_merge($providerOptions, array_filter([
             'model' => $model,
             'prompt' => $prompt,
             ...$provider->defaultImageOptions($size, $quality),
             ...($isGptImage
                 ? ['moderation' => 'low']
                 : ['response_format' => 'b64_json']),
-        ]));
+        ])));
     }
 
     /**

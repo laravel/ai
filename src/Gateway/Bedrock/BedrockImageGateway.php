@@ -47,7 +47,7 @@ class BedrockImageGateway implements ImageGateway
                     'modelId' => $model,
                     'contentType' => 'application/json',
                     'accept' => 'application/json',
-                    'body' => json_encode(array_merge($providerOptions, $this->prepareImageRequestBody($model, $prompt, $size, $options))),
+                    'body' => json_encode(array_replace_recursive($providerOptions, $this->prepareImageRequestBody($model, $prompt, $size, $options))),
                 ]),
             );
         } catch (Throwable $throwable) {

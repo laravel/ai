@@ -120,13 +120,12 @@ class OpenRouterGateway implements Gateway, StepTextGateway
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout ?? 120)
-                ->post('chat/completions', array_filter([
-                    ...$providerOptions,
+                ->post('chat/completions', array_merge($providerOptions, array_filter([
                     'model' => $model,
                     'messages' => $this->buildImageMessages($prompt, $attachments),
                     'modalities' => ['image'],
                     'image_config' => $imageConfig ?: null,
-                ]))
+                ])))
         );
 
         $data = $response->json();

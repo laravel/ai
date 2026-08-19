@@ -3,6 +3,7 @@
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Image;
+use Laravel\Ai\Jobs\GenerateImage;
 use Laravel\Ai\Prompts\QueuedImagePrompt;
 use Laravel\Ai\Providers\Provider;
 
@@ -62,4 +63,18 @@ test('flat provider options are recorded on the queued image prompt fake', funct
     Image::assertQueued(
         fn (QueuedImagePrompt $prompt): bool => $prompt->providerOptions === ['background' => 'transparent'],
     );
+});
+
+test('closure provider options survive queue serialization round-trip', function (): void {
+    Http::fake(['*' => Http::response(['data' => [['b64_json' => base64_encode('fake-image')]]])]);
+
+    $job = new GenerateImage(
+        Image::of('A red apple')->withProviderOptions(fn (Provider $provider): array => ['background' => 'transparent']),
+        'openai',
+        'gpt-image-1',
+    );
+
+    unserialize(serialize($job))->handle();
+
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['background'] === 'transparent');
 });

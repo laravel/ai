@@ -133,13 +133,13 @@ class GeminiGateway implements Gateway, StepTextGateway
 
         $body = array_merge($providerOptions, [
             'contents' => [['role' => 'user', 'parts' => $parts]],
-            'generationConfig' => array_filter([
+            'generationConfig' => array_replace_recursive($providerOptions['generationConfig'] ?? [], array_filter([
                 'responseModalities' => ['IMAGE', 'TEXT'],
                 'imageConfig' => array_filter([
                     'imageSize' => $imageOptions['image_size'] ?? null,
                     'aspectRatio' => $imageOptions['aspect_ratio'] ?? null,
                 ]),
-            ]),
+            ])),
         ]);
 
         $response = $this->withErrorHandling(
