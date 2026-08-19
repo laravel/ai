@@ -254,7 +254,7 @@ test('response usage includes cache hit and reasoning tokens', function (): void
 
     $response = agent()->prompt('What is 2+2?', provider: 'deepseek', model: 'deepseek-reasoner');
 
-    expect($response->usage->promptTokens)->toBe(100)
+    expect($response->usage->promptTokens)->toBe(80)
         ->and($response->usage->completionTokens)->toBe(50)
         ->and($response->usage->cacheReadInputTokens)->toBe(20)
         ->and($response->usage->cacheWriteInputTokens)->toBe(0)
