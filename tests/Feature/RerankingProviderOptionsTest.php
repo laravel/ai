@@ -6,7 +6,10 @@ use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Reranking;
 
 beforeEach(function (): void {
-    config(['ai.providers.cohere' => [...config('ai.providers.cohere'), 'key' => 'test-key']]);
+    config([
+        'ai.providers.cohere' => [...config('ai.providers.cohere'), 'key' => 'test-key'],
+        'ai.providers.voyageai' => [...config('ai.providers.voyageai'), 'key' => 'test-key'],
+    ]);
 });
 
 function fakeRerankingResponse(): array
@@ -67,5 +70,20 @@ test('falsy provider options are not dropped from the reranking request', functi
         $body = json_decode($request->body(), true);
 
         return array_key_exists('return_documents', $body) && $body['return_documents'] === false;
+    });
+});
+
+test('the limit still wins over a voyage top_k provider option', function (): void {
+    Http::fake(['*' => Http::response(['data' => [['index' => 0, 'relevance_score' => 0.9]]])]);
+
+    Reranking::of(['Laravel is a PHP framework'])
+        ->limit(1)
+        ->withProviderOptions(['top_k' => 99, 'truncation' => false])
+        ->rerank('What is Laravel?', provider: 'voyageai', model: 'rerank-2.5-lite');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+
+        return $body['top_k'] === 1 && $body['truncation'] === false;
     });
 });
