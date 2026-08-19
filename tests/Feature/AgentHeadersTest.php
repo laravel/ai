@@ -22,7 +22,7 @@ test('agent headers are sent with the request and stay out of the body', functio
 
         return $request->hasHeader('X-Custom-Header', 'openai-value')
             && $request->hasHeader('X-Request-Source', 'laravel-ai')
-            && ! array_key_exists('extra_headers', $body)
+            && ! array_key_exists('ai_sdk_extra_headers', $body)
             && ! array_key_exists('X-Custom-Header', $body);
     });
 });

@@ -21,12 +21,11 @@ class HeadersAgent implements Agent, HasProviderOptions
         $provider = is_string($provider) ? Lab::tryFrom($provider) : $provider;
 
         return match ($provider) {
-            Lab::OpenAI => ['extra_headers' => [
+            Lab::OpenAI => ['ai_sdk_extra_headers' => [
                 'X-Custom-Header' => 'openai-value',
                 'X-Request-Source' => 'laravel-ai',
             ]],
-            Lab::Anthropic => ['extra_headers' => ['X-Custom-Header' => 'anthropic-value']],
-            Lab::Groq => ['extra_headers' => ['X-Custom-Header' => 'groq-value']],
+            Lab::Groq => ['ai_sdk_extra_headers' => ['X-Custom-Header' => 'groq-value']],
             default => [],
         };
     }
