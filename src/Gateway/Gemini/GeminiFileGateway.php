@@ -51,6 +51,8 @@ class GeminiFileGateway implements FileGateway
 
         $providerOptions = $this->resolveProviderOptions($file, Lab::Gemini);
 
+        $provider = $provider->withHeaders($this->resolveRequestHeaders($file, Lab::Gemini));
+
         $response = $this->withErrorHandling($provider->name(), fn () => $this->client($provider)->attach(
             'file', $content, $name, ['Content-Type' => $mime]
         )->post("{$uploadUrl}/files", array_replace_recursive([

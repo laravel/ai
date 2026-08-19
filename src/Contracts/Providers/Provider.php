@@ -32,6 +32,8 @@ interface Provider
      * Get a provider instance that sends the given HTTP headers with each request.
      *
      * @param  array<string, string>  $headers
+     *
+     * @internal
      */
     public function withHeaders(array $headers): static;
 }

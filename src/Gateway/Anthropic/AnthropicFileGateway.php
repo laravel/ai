@@ -46,6 +46,8 @@ class AnthropicFileGateway implements FileGateway
 
         $providerOptions = $this->resolveProviderOptions($file, Lab::Anthropic);
 
+        $provider = $provider->withHeaders($this->resolveRequestHeaders($file, Lab::Anthropic));
+
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider)

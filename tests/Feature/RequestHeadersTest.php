@@ -2,9 +2,9 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
-use Laravel\Ai\Ai;
 use Laravel\Ai\Audio;
 use Laravel\Ai\Embeddings;
+use Laravel\Ai\Files\Document;
 use Laravel\Ai\Image;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Reranking;
@@ -142,23 +142,14 @@ test('extra headers are sent with reranking requests', function (): void {
     });
 });
 
-test('headers may be set on any resolved provider', function (): void {
-    Http::fake([
-        'api.openai.com/v1/files/*' => Http::response(['id' => 'file-abc123']),
-        'api.openai.com/v1/vector_stores*' => Http::response([
-            'id' => 'vs_abc123',
-            'name' => 'Docs',
-            'status' => 'completed',
-            'file_counts' => ['completed' => 0, 'in_progress' => 0, 'failed' => 0],
-        ]),
-    ]);
+test('extra headers are sent with file uploads', function (): void {
+    Http::fake(['api.openai.com/*' => Http::response(['id' => 'file-abc123'])]);
 
-    Ai::fileProvider('openai')->withHeaders(['X-Tenant' => 'acme'])->getFile('file-abc123');
-    Ai::storeProvider('openai')->withHeaders(['X-Tenant' => 'acme'])->createStore('Docs');
+    Document::fromString('Hello, World!', 'text/plain')
+        ->as('hello.txt')
+        ->withProviderOptions(['extra_headers' => ['X-Tenant' => 'acme']])
+        ->put(provider: 'openai');
 
-    expect(Http::recorded())->toHaveCount(3);
-
-    foreach (Http::recorded() as [$request, $response]) {
-        expect($request->hasHeader('X-Tenant', 'acme'))->toBeTrue();
-    }
+    Http::assertSent(fn (Request $request): bool => $request->hasHeader('X-Tenant', 'acme')
+        && multipartField($request, 'extra_headers') === null);
 });

@@ -44,6 +44,8 @@ class OpenAiFileGateway implements FileGateway
 
         $providerOptions = $this->resolveProviderOptions($file, $this->providerOptionsKey());
 
+        $provider = $provider->withHeaders($this->resolveRequestHeaders($file, $this->providerOptionsKey()));
+
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider)
