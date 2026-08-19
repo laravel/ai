@@ -55,3 +55,17 @@ test('closure provider options receive the resolved reranking provider', functio
 
     Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['max_tokens_per_doc'] === 512);
 });
+
+test('falsy provider options are not dropped from the reranking request', function (): void {
+    Http::fake(['*' => Http::response(fakeRerankingResponse())]);
+
+    Reranking::of(['Laravel is a PHP framework'])
+        ->withProviderOptions(['return_documents' => false])
+        ->rerank('What is Laravel?', provider: 'cohere', model: 'rerank-v3.5');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+
+        return array_key_exists('return_documents', $body) && $body['return_documents'] === false;
+    });
+});
