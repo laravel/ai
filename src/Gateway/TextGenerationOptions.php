@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway;
 
+use Illuminate\Support\Arr;
 use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Attributes\MaxTokens;
 use Laravel\Ai\Attributes\Temperature;
@@ -33,9 +34,9 @@ class TextGenerationOptions
     public function providerOptions(Lab|string $provider): ?array
     {
         if ($this->agent instanceof HasProviderOptions) {
-            return $this->agent->providerOptions(
+            return Arr::except($this->agent->providerOptions(
                 $provider instanceof Lab ? $provider : (Lab::tryFrom($provider) ?? $provider)
-            );
+            ), HasProviderOptions::HEADERS);
         }
 
         return null;

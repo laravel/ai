@@ -2,9 +2,11 @@
 
 namespace Laravel\Ai\PendingResponses;
 
+use Illuminate\Support\Arr;
 use Illuminate\Support\Traits\Conditionable;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
+use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
@@ -82,6 +84,8 @@ class PendingTranscriptionGeneration
             $model ??= $provider->defaultTranscriptionModel();
 
             $providerOptions = $this->resolveProviderOptions($provider);
+
+            $provider = $provider->withHeaders(Arr::pull($providerOptions, HasProviderOptions::HEADERS) ?? []);
 
             try {
                 return $provider->transcribe($this->audio, $this->language, $this->diarize, $model, $this->timeout, $providerOptions);

@@ -16,6 +16,7 @@ use Laravel\Ai\Attributes\Timeout as TimeoutAttribute;
 use Laravel\Ai\Attributes\UseCheapestModel;
 use Laravel\Ai\Attributes\UseSmartestModel;
 use Laravel\Ai\Attributes\WithoutBroadcasting;
+use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\AgentFailedOver;
@@ -321,6 +322,12 @@ trait Promptable
 
         foreach ($providers as $provider => $model) {
             $provider = Ai::textProviderFor($this, $provider);
+
+            if ($this instanceof HasProviderOptions) {
+                $provider = $provider->withHeaders($this->providerOptions(
+                    Lab::tryFrom($provider->driver()) ?? $provider->driver()
+                )[HasProviderOptions::HEADERS] ?? []);
+            }
 
             yield [$provider, $model ?? $this->getDefaultModelFor($provider), --$remaining === 0];
         }
