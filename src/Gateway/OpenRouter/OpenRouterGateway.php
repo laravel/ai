@@ -170,6 +170,8 @@ class OpenRouterGateway implements Gateway, StepTextGateway
 
     /**
      * Generate audio from the given text.
+     *
+     * @param  array<string, mixed>  $providerOptions
      */
     public function generateAudio(
         AudioProvider $provider,
@@ -178,12 +180,14 @@ class OpenRouterGateway implements Gateway, StepTextGateway
         string $voice,
         ?string $instructions = null,
         int $timeout = 30,
+        array $providerOptions = [],
     ): AudioResponse {
         $format = $this->audioResponseFormat($model);
 
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post('audio/speech', array_filter([
+                ...$providerOptions,
                 'model' => $model,
                 'input' => $text,
                 'voice' => $this->resolveVoice($model, $voice),

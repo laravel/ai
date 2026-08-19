@@ -125,6 +125,7 @@ class XaiGateway implements Gateway, StepTextGateway
         string $voice,
         ?string $instructions = null,
         int $timeout = 30,
+        array $providerOptions = [],
     ): AudioResponse {
         throw new LogicException('xAI does not support audio generation.');
     }
