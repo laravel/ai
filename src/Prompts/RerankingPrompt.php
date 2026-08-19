@@ -12,6 +12,7 @@ class RerankingPrompt implements Countable
      * Create a new reranking prompt instance.
      *
      * @param  array<int, string>  $documents
+     * @param  array<string, mixed>  $providerOptions
      */
     public function __construct(
         public readonly array $documents,
@@ -19,6 +20,7 @@ class RerankingPrompt implements Countable
         public readonly ?int $limit,
         public readonly RerankingProvider $provider,
         public readonly string $model,
+        public readonly array $providerOptions = [],
     ) {}
 
     /**
