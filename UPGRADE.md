@@ -1,5 +1,97 @@
 # Upgrade Guide
 
+## Upgrading To 0.11 From 0.10
+
+### Connection Failures Throw `ProviderConnectionException`
+
+**Likelihood Of Impact: Medium**
+
+A failed connection to a provider is now caught and rethrown as `Laravel\Ai\Exceptions\ProviderConnectionException`, which implements `FailoverableException` so the request fails over to your next configured provider or model.
+
+Code that catches the underlying HTTP client exception must be updated:
+
+```php
+// Before...
+use Illuminate\Http\Client\ConnectionException;
+
+try {
+    $agent->prompt('...');
+} catch (ConnectionException $e) {
+    // ...
+}
+
+// After...
+use Laravel\Ai\Exceptions\ProviderConnectionException;
+
+try {
+    $agent->prompt('...');
+} catch (ProviderConnectionException $e) {
+    $original = $e->getPrevious();
+}
+```
+
+In addition, the status codes that trigger failover now include `502`, `504`, `520`, `522`, and `524` rather than only `503`, and Anthropic requests rejected for hitting a usage limit now fail over as well.
+
+### Stream Errors Throw Instead Of Ending The Run
+
+**Likelihood Of Impact: Medium**
+
+When a provider reports an error inside the stream body rather than throwing, the step previously ended quietly, handing the consumer a partial `text`, no finish reason, and no terminal `StreamEnd` event. The step now throws `Laravel\Ai\Exceptions\StreamErrorException`, which carries the provider's own `Error` event:
+
+```php
+use Laravel\Ai\Exceptions\StreamErrorException;
+
+try {
+    foreach ($agent->stream('...') as $event) {
+        // ...
+    }
+} catch (StreamErrorException $e) {
+    $e->error; // The Laravel\Ai\Streaming\Events\Error event, if the provider sent one...
+}
+```
+
+A run that reaches the end of its stream now always emits a `StreamEnd` event.
+
+### Queued Fakes Dispatch The Real Job
+
+**Likelihood Of Impact: Low**
+
+Queueing an agent prompt, transcription, image, audio, or embeddings generation while faking now dispatches the real job, so `then(...)` callbacks execute. The `Laravel\Ai\FakePendingDispatch` class has been removed.
+
+Existing tests continue to pass unless they relied on the callback never running.
+
+### Gemini Default Text Model
+
+**Likelihood Of Impact: Medium**
+
+The Gemini provider's default and smartest text models are now `gemini-3.7-flash` instead of `gemini-3.6-flash`. To stay on the previous model, pin it in your provider configuration:
+
+```php
+'gemini' => [
+    'driver' => 'gemini',
+    'key' => env('GEMINI_API_KEY'),
+    'models' => [
+        'text' => [
+            'default' => 'gemini-3.6-flash',
+            'smartest' => 'gemini-3.6-flash',
+        ],
+    ],
+],
+```
+
+### Event Constructor Signatures
+
+**Likelihood Of Impact: Low**
+
+Agent runs now thread an invocation ID through the events they dispatch, and tool events report how long the tool ran:
+
+- `Laravel\Ai\Events\AgentFailedOver` takes a new required `string $invocationId` as its first constructor argument.
+- `Laravel\Ai\Events\ToolInvoked` takes a new required `float $time` as its final constructor argument, the wall time spent in the tool's handler in milliseconds.
+
+No changes are needed if you only listen for these events. If you construct them directly, such as when dispatching them by hand in a test, update the arguments to match.
+
+`Laravel\Ai\Tools\Request` also accepts a third `?string $toolInvocationId` argument, exposed through `toolInvocationId()` to correlate an execution with the tool events dispatched around it. Update any subclass that overrides the constructor.
+
 ## Upgrading To 0.10 From 0.9
 
 ### Polymorphic Conversation Participants
