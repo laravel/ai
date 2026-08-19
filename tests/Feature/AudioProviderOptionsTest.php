@@ -15,13 +15,13 @@ test('provider options may not override the core audio request payload', functio
     Http::fake(['*' => Http::response('fake-audio-bytes')]);
 
     Audio::of('Hello world')
-        ->withProviderOptions(['model' => 'hijacked', 'stream_format' => 'sse'])
+        ->withProviderOptions(['model' => 'hijacked', 'speed' => 0.8])
         ->generate(provider: 'openai', model: 'gpt-4o-mini-tts');
 
     Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
-        return $body['model'] === 'gpt-4o-mini-tts' && $body['stream_format'] === 'sse';
+        return $body['model'] === 'gpt-4o-mini-tts' && $body['speed'] === 0.8;
     });
 });
 
@@ -34,24 +34,24 @@ test('closure provider options receive the resolved audio provider', function ()
         ->withProviderOptions(function (Provider $provider) use (&$seen): array {
             $seen[] = $provider->driver();
 
-            return ['stream_format' => 'sse'];
+            return ['speed' => 0.8];
         })
         ->generate(provider: 'openai', model: 'gpt-4o-mini-tts');
 
     expect($seen)->toBe(['openai']);
 
-    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['stream_format'] === 'sse');
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['speed'] === 0.8);
 });
 
 test('flat provider options are recorded on the queued audio prompt fake', function (): void {
     Audio::fake();
 
     Audio::of('Hello world')
-        ->withProviderOptions(['stream_format' => 'sse'])
+        ->withProviderOptions(['speed' => 0.8])
         ->queue(provider: 'openai');
 
     Audio::assertQueued(
-        fn (QueuedAudioPrompt $prompt): bool => $prompt->providerOptions === ['stream_format' => 'sse'],
+        fn (QueuedAudioPrompt $prompt): bool => $prompt->providerOptions === ['speed' => 0.8],
     );
 });
 
@@ -73,12 +73,12 @@ test('closure provider options survive queue serialization round-trip', function
     Http::fake(['*' => Http::response('fake-audio-bytes')]);
 
     $job = new GenerateAudio(
-        Audio::of('Hello world')->withProviderOptions(fn (Provider $provider): array => ['stream_format' => 'sse']),
+        Audio::of('Hello world')->withProviderOptions(fn (Provider $provider): array => ['speed' => 0.8]),
         'openai',
         'gpt-4o-mini-tts',
     );
 
     unserialize(serialize($job))->handle();
 
-    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['stream_format'] === 'sse');
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['speed'] === 0.8);
 });

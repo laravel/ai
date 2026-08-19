@@ -183,12 +183,11 @@ class OpenAiGateway implements Gateway, StepTextGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('audio/speech', array_merge($providerOptions, array_filter([
+            fn () => $this->client($provider, $timeout)->post('audio/speech', array_merge(['speed' => 1.0], $providerOptions, array_filter([
                 'model' => $model,
                 'input' => $text,
                 'voice' => $voice,
                 'response_format' => 'mp3',
-                'speed' => 1.0,
                 'instructions' => $instructions,
             ]))),
         );

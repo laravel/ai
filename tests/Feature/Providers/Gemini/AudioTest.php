@@ -111,7 +111,7 @@ test('nested generation config provider options are merged beneath the core conf
         ->voice('Kore')
         ->withProviderOptions(['generationConfig' => [
             'temperature' => 0.1,
-            'responseModalities' => ['TEXT'],
+            'responseModalities' => ['TEXT', 'IMAGE'],
             'speechConfig' => ['languageCode' => 'en-US'],
         ]])
         ->generate(provider: 'gemini', model: 'gemini-2.5-flash-preview-tts');
