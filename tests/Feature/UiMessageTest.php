@@ -9,6 +9,7 @@ use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Models\ConversationMessage;
+use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Vercel\Vercel;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
@@ -171,15 +172,18 @@ describe('streaming with the Vercel protocol', function () {
     });
 });
 
-describe('chat input from a useChat request', function () {
-    $body = fn () => [
+function useChatMessages(): array
+{
+    return [
         ['id' => 'm1', 'role' => 'user', 'parts' => [['type' => 'text', 'text' => 'What is Laravel?']]],
         ['id' => 'm2', 'role' => 'assistant', 'parts' => [['type' => 'text', 'text' => 'A PHP framework.']]],
         ['id' => 'm3', 'role' => 'user', 'parts' => [['type' => 'text', 'text' => 'Who made it?']]],
     ];
+}
 
-    test('the newest user message becomes the prompt and the rest becomes history', function () use ($body) {
-        $chat = Vercel::chat($body());
+describe('chat input from a useChat request', function () {
+    test('the newest user message becomes the prompt and the rest becomes history', function () {
+        $chat = Vercel::chat(useChatMessages());
 
         expect($chat->message()->content)->toBe('Who made it?')
             ->and($chat->decisions())->toBeNull()
@@ -187,8 +191,8 @@ describe('chat input from a useChat request', function () {
             ->and($chat->history()[1])->toBeInstanceOf(AssistantMessage::class);
     });
 
-    test('a chat may be created from the request itself', function () use ($body) {
-        $request = Request::create('/chat', 'POST', ['messages' => $body()]);
+    test('a chat may be created from the request itself', function () {
+        $request = Request::create('/chat', 'POST', ['messages' => useChatMessages()]);
 
         expect(Vercel::chat($request)->message()->content)->toBe('Who made it?');
     });
@@ -218,12 +222,12 @@ describe('chat input from a useChat request', function () {
         expect($chat->decisions())->toBeNull();
     });
 
-    test('a chat prompts an agent directly', function () use ($body) {
+    test('a chat prompts an agent directly', function () {
         AssistantAgent::fake(['Taylor Otwell.']);
 
-        (new AssistantAgent)->prompt(Vercel::chat($body()));
+        (new AssistantAgent)->prompt(Vercel::chat(useChatMessages()));
 
-        AssistantAgent::assertPrompted(fn ($prompt) => $prompt->prompt === 'Who made it?');
+        AssistantAgent::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->prompt === 'Who made it?');
     });
 });
 
