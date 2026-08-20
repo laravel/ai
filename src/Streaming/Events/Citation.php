@@ -47,7 +47,7 @@ class Citation extends StreamEvent
                 'sourceId' => $this->citation->url,
                 'url' => $this->citation->url,
                 'title' => $this->citation->title,
-            ]),
+            ], fn ($value) => $value !== null),
             default => null,
         };
     }

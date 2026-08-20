@@ -30,6 +30,8 @@ trait CanStreamUsingVercelProtocol
 
             public ?StreamEnd $lastStreamEnd = null;
 
+            public ?Usage $usage = null;
+
             public bool $errored = false;
         };
 
@@ -37,15 +39,11 @@ trait CanStreamUsingVercelProtocol
             try {
                 foreach ($this as $event) {
                     // Send one stream start event, wrapping each subsequent provider step in step parts...
-                    if ($event instanceof StreamStart) {
-                        if ($state->streamStarted) {
-                            yield 'data: '.json_encode(['type' => 'finish-step'])."\n\n";
-                            yield 'data: '.json_encode(['type' => 'start-step'])."\n\n";
+                    if ($event instanceof StreamStart && $state->streamStarted) {
+                        yield $this->toVercelProtocolLine(['type' => 'finish-step']);
+                        yield $this->toVercelProtocolLine(['type' => 'start-step']);
 
-                            continue;
-                        }
-
-                        $state->streamStarted = true;
+                        continue;
                     }
 
                     // Track tool calls initiated within this stream.
@@ -79,12 +77,8 @@ trait CanStreamUsingVercelProtocol
 
                     // Save the last stream end event until the very end, combining usage across steps...
                     if ($event instanceof StreamEnd) {
-                        $state->lastStreamEnd = new StreamEnd(
-                            $event->id,
-                            $event->reason,
-                            ($state->lastStreamEnd?->usage ?? new Usage)->add($event->usage),
-                            $event->timestamp,
-                        );
+                        $state->lastStreamEnd = $event;
+                        $state->usage = ($state->usage ?? new Usage)->add($event->usage);
 
                         continue;
                     }
@@ -97,20 +91,27 @@ trait CanStreamUsingVercelProtocol
                 }
 
                 if ($state->streamStarted && ! $state->errored) {
-                    yield 'data: '.json_encode(['type' => 'finish-step'])."\n\n";
-                }
+                    yield $this->toVercelProtocolLine(['type' => 'finish-step']);
 
-                if ($state->lastStreamEnd) {
-                    yield 'data: '.json_encode($state->lastStreamEnd->toVercelProtocolArray())."\n\n";
+                    if ($state->lastStreamEnd) {
+                        yield $this->toVercelProtocolLine((new StreamEnd(
+                            $state->lastStreamEnd->id,
+                            $state->lastStreamEnd->reason,
+                            $state->usage,
+                            $state->lastStreamEnd->timestamp,
+                        ))->toVercelProtocolArray());
+                    }
                 }
             } catch (Throwable $e) {
-                // The response is already streaming, so surface the failure as a terminal error part instead of re-throwing...
-                report($e);
+                // The response is already streaming, so surface a masked terminal error part instead of re-throwing, unless an error part was already sent...
+                if (! $state->errored) {
+                    report($e);
 
-                yield from $this->toVercelProtocolPart($state, [
-                    'type' => 'error',
-                    'errorText' => $e->getMessage(),
-                ]);
+                    yield from $this->toVercelProtocolPart($state, [
+                        'type' => 'error',
+                        'errorText' => 'An error occurred.',
+                    ]);
+                }
             }
 
             yield "data: [DONE]\n\n";
@@ -127,18 +128,28 @@ trait CanStreamUsingVercelProtocol
     protected function toVercelProtocolPart(object $state, array $data): Generator
     {
         if ($data['type'] === 'start') {
-            $data['messageId'] = $this->vercelProtocolMessageId ?? $data['messageId'];
-        } elseif (! $state->streamStarted) {
             $state->streamStarted = true;
 
-            yield 'data: '.json_encode(['type' => 'start', 'messageId' => $this->vercelProtocolMessageId ?? $this->invocationId])."\n\n";
-            yield 'data: '.json_encode(['type' => 'start-step'])."\n\n";
+            $data['messageId'] = $this->vercelProtocolMessageId ?? $data['messageId'];
+
+            yield $this->toVercelProtocolLine($data);
+            yield $this->toVercelProtocolLine(['type' => 'start-step']);
+
+            return;
         }
 
-        yield 'data: '.json_encode($data)."\n\n";
-
-        if ($data['type'] === 'start') {
-            yield 'data: '.json_encode(['type' => 'start-step'])."\n\n";
+        if (! $state->streamStarted) {
+            yield from $this->toVercelProtocolPart($state, ['type' => 'start', 'messageId' => $this->invocationId]);
         }
+
+        yield $this->toVercelProtocolLine($data);
+    }
+
+    /**
+     * Encode the given protocol part as a server-sent event line.
+     */
+    protected function toVercelProtocolLine(array $data): string
+    {
+        return 'data: '.json_encode($data)."\n\n";
     }
 }

@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Exceptions;
 use Laravel\Ai\Approvals\PendingApproval;
+use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Responses\Data;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StreamableAgentResponse;
@@ -121,6 +122,36 @@ test('a cited text stream emits a source url part for the cited page', function 
     ]);
 });
 
+test('a url citation without a title omits only the title from the source url part', function () {
+    $parts = vercelProtocolParts([
+        new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
+        new Citation('event-1', 'msg-1', new Data\UrlCitation('https://laravel.com/docs'), time()),
+        new StreamEnd('event-2', 'stop', new Usage, time()),
+    ]);
+
+    expect($parts[2])->toBe([
+        'type' => 'source-url',
+        'sourceId' => 'https://laravel.com/docs',
+        'url' => 'https://laravel.com/docs',
+    ]);
+});
+
+test('an unknown citation type is skipped instead of ending the stream', function () {
+    $parts = vercelProtocolParts([
+        new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
+        new Citation('event-1', 'msg-1', new class extends Data\Citation {}, time()),
+        new StreamEnd('event-2', 'stop', new Usage, time()),
+    ]);
+
+    expect($parts)->toBe([
+        ['type' => 'start', 'messageId' => 'msg-1'],
+        ['type' => 'start-step'],
+        ['type' => 'finish-step'],
+        vercelFinishPart(),
+        ['type' => 'done'],
+    ]);
+});
+
 test('a failed stream emits an error part instead of a finish part', function () {
     $parts = vercelProtocolParts([
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
@@ -213,7 +244,6 @@ test('a tool result without a prior call or existing message is skipped', functi
     ]);
 
     expect($parts)->toBe([
-        vercelFinishPart(),
         ['type' => 'done'],
     ]);
 });
@@ -261,10 +291,19 @@ test('the finish part carries the stream usage and finish reason as message meta
 test('finish reasons outside the Vercel enum emit as other', function () {
     $parts = vercelProtocolParts([
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
-        new StreamEnd('event-1', 'unknown', new Usage, time()),
+        new StreamEnd('event-1', 'continue', new Usage, time()),
     ]);
 
     expect($parts[count($parts) - 2])->toBe(vercelFinishPart('other'));
+});
+
+test('an unknown finish reason is preserved', function () {
+    $parts = vercelProtocolParts([
+        new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
+        new StreamEnd('event-1', 'unknown', new Usage, time()),
+    ]);
+
+    expect($parts[count($parts) - 2])->toBe(vercelFinishPart('unknown'));
 });
 
 test('a multi-step stream emits one finish part with combined usage and the final reason', function () {
@@ -288,25 +327,65 @@ test('a multi-step stream emits one finish part with combined usage and the fina
     ]);
 });
 
-test('an exception mid-stream is reported and emitted as a terminal error part', function () {
+test('an exception mid-stream is reported and emitted as a masked terminal error part', function () {
     Exceptions::fake();
 
     $parts = vercelProtocolParts(function () {
         yield new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time());
         yield new TextDelta('event-1', 'msg-1', 'Hel', time());
 
-        throw new RuntimeException('Provider connection lost.');
+        throw new RuntimeException('SQLSTATE[HY000] [2002] Connection refused');
     });
 
     expect($parts)->toBe([
         ['type' => 'start', 'messageId' => 'msg-1'],
         ['type' => 'start-step'],
         ['type' => 'text-delta', 'id' => 'msg-1', 'delta' => 'Hel'],
-        ['type' => 'error', 'errorText' => 'Provider connection lost.'],
+        ['type' => 'error', 'errorText' => 'An error occurred.'],
         ['type' => 'done'],
     ]);
 
     Exceptions::assertReported(RuntimeException::class);
+});
+
+test('a provider stream error followed by the loop exception emits a single error part', function () {
+    Exceptions::fake();
+
+    $parts = vercelProtocolParts(function () {
+        yield new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time());
+        yield new TextDelta('event-1', 'msg-1', 'Hel', time());
+
+        $error = new Error('event-2', 'overloaded_error', 'Overloaded', false, time());
+
+        yield $error;
+
+        throw new StreamErrorException($error);
+    });
+
+    expect($parts)->toBe([
+        ['type' => 'start', 'messageId' => 'msg-1'],
+        ['type' => 'start-step'],
+        ['type' => 'text-delta', 'id' => 'msg-1', 'delta' => 'Hel'],
+        ['type' => 'error', 'errorText' => 'Overloaded'],
+        ['type' => 'done'],
+    ]);
+
+    Exceptions::assertNothingReported();
+});
+
+test('a stream end after an error does not emit finish parts', function () {
+    $parts = vercelProtocolParts([
+        new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
+        new Error('event-1', 'overloaded_error', 'Overloaded', false, time()),
+        new StreamEnd('event-2', 'error', new Usage, time()),
+    ]);
+
+    expect($parts)->toBe([
+        ['type' => 'start', 'messageId' => 'msg-1'],
+        ['type' => 'start-step'],
+        ['type' => 'error', 'errorText' => 'Overloaded'],
+        ['type' => 'done'],
+    ]);
 });
 
 test('a tool executed within the stream emits its input and output parts', function () {
