@@ -53,6 +53,24 @@ class StreamEnd extends StreamEvent
     {
         return [
             'type' => 'finish',
+            'finishReason' => match ($this->reason) {
+                'stop' => 'stop',
+                'tool_calls' => 'tool-calls',
+                'length' => 'length',
+                'content_filter' => 'content-filter',
+                'error' => 'error',
+                'unknown' => 'unknown',
+                default => 'other',
+            },
+            'messageMetadata' => [
+                'usage' => [
+                    'inputTokens' => $this->usage->promptTokens,
+                    'outputTokens' => $this->usage->completionTokens,
+                    'totalTokens' => $this->usage->promptTokens + $this->usage->completionTokens,
+                    'reasoningTokens' => $this->usage->reasoningTokens,
+                    'cachedInputTokens' => $this->usage->cacheReadInputTokens,
+                ],
+            ],
         ];
     }
 }

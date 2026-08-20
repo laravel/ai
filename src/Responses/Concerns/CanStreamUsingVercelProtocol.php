@@ -3,12 +3,16 @@
 namespace Laravel\Ai\Responses\Concerns;
 
 use Generator;
+use Laravel\Ai\Exceptions\StreamErrorException;
+use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Laravel\Ai\Streaming\Events\ToolCall;
 use Laravel\Ai\Streaming\Events\ToolResult;
 use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 
 trait CanStreamUsingVercelProtocol
 {
@@ -25,61 +29,93 @@ trait CanStreamUsingVercelProtocol
 
             public array $toolCalls = [];
 
-            public ?array $lastStreamEndEvent = null;
+            public ?StreamEnd $lastStreamEnd = null;
+
+            public ?Usage $usage = null;
+
+            public bool $errored = false;
         };
 
         return response()->stream(function () use ($state) {
-            foreach ($this as $event) {
-                // Send one stream start event...
-                if ($event instanceof StreamStart) {
-                    if ($state->streamStarted) {
+            try {
+                foreach ($this as $event) {
+                    // Send one stream start event, wrapping each subsequent provider step in step parts...
+                    if ($event instanceof StreamStart && $state->streamStarted) {
+                        yield $this->toVercelProtocolFormat(['type' => 'finish-step']);
+                        yield $this->toVercelProtocolFormat(['type' => 'start-step']);
+
                         continue;
                     }
 
-                    $state->streamStarted = true;
-                }
-
-                // Track tool calls initiated within this stream.
-                if ($event instanceof ToolCall) {
-                    $state->toolCalls[$event->toolCall->id] = true;
-                }
-
-                // A result without a local call is valid only when continuing the client message that contains the call...
-                if ($event instanceof ToolResult
-                    && ! isset($state->toolCalls[$event->toolResult->id])
-                    && $this->vercelProtocolMessageId === null) {
-                    continue;
-                }
-
-                if ($event instanceof ToolApprovalRequest) {
-                    foreach ($event->pendingApprovals as $pendingApproval) {
-                        yield from $this->toVercelProtocolPart($state, [
-                            'type' => 'tool-approval-request',
-                            'toolCallId' => $pendingApproval->id,
-                            'approvalId' => $pendingApproval->id,
-                            'reason' => $pendingApproval->reason,
-                        ]);
+                    // Track tool calls initiated within this stream.
+                    if ($event instanceof ToolCall) {
+                        $state->toolCalls[$event->toolCall->id] = true;
                     }
 
-                    continue;
+                    if ($event instanceof Error) {
+                        $state->errored = true;
+                    }
+
+                    // A result without a local call is valid only when continuing the client message that contains the call...
+                    if ($event instanceof ToolResult
+                        && ! isset($state->toolCalls[$event->toolResult->id])
+                        && $this->vercelProtocolMessageId === null) {
+                        continue;
+                    }
+
+                    if ($event instanceof ToolApprovalRequest) {
+                        foreach ($event->pendingApprovals as $pendingApproval) {
+                            yield from $this->toVercelProtocolPart($state, [
+                                'type' => 'tool-approval-request',
+                                'toolCallId' => $pendingApproval->id,
+                                'approvalId' => $pendingApproval->id,
+                                'reason' => $pendingApproval->reason,
+                            ]);
+                        }
+
+                        continue;
+                    }
+
+                    // Save the last stream end event until the very end, combining usage across steps...
+                    if ($event instanceof StreamEnd) {
+                        $state->lastStreamEnd = $event;
+                        $state->usage = ($state->usage ?? new Usage)->add($event->usage);
+
+                        continue;
+                    }
+
+                    if (empty($data = $event->toVercelProtocolArray())) {
+                        continue;
+                    }
+
+                    yield from $this->toVercelProtocolPart($state, $data);
                 }
 
-                // Save the last stream end event until the very end...
-                if ($event instanceof StreamEnd) {
-                    $state->lastStreamEndEvent = $event->toVercelProtocolArray();
+                if ($state->streamStarted && ! $state->errored) {
+                    yield $this->toVercelProtocolFormat(['type' => 'finish-step']);
 
-                    continue;
+                    if ($state->lastStreamEnd) {
+                        yield $this->toVercelProtocolFormat((new StreamEnd(
+                            $state->lastStreamEnd->id,
+                            $state->lastStreamEnd->reason,
+                            $state->usage,
+                            $state->lastStreamEnd->timestamp,
+                        ))->toVercelProtocolArray());
+                    }
+                }
+            } catch (Throwable $e) {
+                // A stream error exception carries a provider error the stream already surfaced, so only report anything else...
+                if (! $e instanceof StreamErrorException) {
+                    report($e);
                 }
 
-                if (empty($data = $event->toVercelProtocolArray())) {
-                    continue;
+                // The response is already streaming, so surface a masked terminal error part instead of re-throwing, unless an error part was already sent...
+                if (! $state->errored) {
+                    yield from $this->toVercelProtocolPart($state, [
+                        'type' => 'error',
+                        'errorText' => 'An error occurred.',
+                    ]);
                 }
-
-                yield from $this->toVercelProtocolPart($state, $data);
-            }
-
-            if ($state->lastStreamEndEvent) {
-                yield 'data: '.json_encode($state->lastStreamEndEvent)."\n\n";
             }
 
             yield "data: [DONE]\n\n";
@@ -96,13 +132,28 @@ trait CanStreamUsingVercelProtocol
     protected function toVercelProtocolPart(object $state, array $data): Generator
     {
         if ($data['type'] === 'start') {
-            $data['messageId'] = $this->vercelProtocolMessageId ?? $data['messageId'];
-        } elseif (! $state->streamStarted) {
             $state->streamStarted = true;
 
-            yield 'data: '.json_encode(['type' => 'start', 'messageId' => $this->vercelProtocolMessageId ?? $this->invocationId])."\n\n";
+            $data['messageId'] = $this->vercelProtocolMessageId ?? $data['messageId'];
+
+            yield $this->toVercelProtocolFormat($data);
+            yield $this->toVercelProtocolFormat(['type' => 'start-step']);
+
+            return;
         }
 
-        yield 'data: '.json_encode($data)."\n\n";
+        if (! $state->streamStarted) {
+            yield from $this->toVercelProtocolPart($state, ['type' => 'start', 'messageId' => $this->invocationId]);
+        }
+
+        yield $this->toVercelProtocolFormat($data);
+    }
+
+    /**
+     * Encode the given protocol part as a server-sent event line.
+     */
+    protected function toVercelProtocolFormat(array $data): string
+    {
+        return 'data: '.json_encode($data)."\n\n";
     }
 }
