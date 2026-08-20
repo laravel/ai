@@ -73,7 +73,7 @@ trait ParsesTextResponses
         $completionDetails = $usage['completion_tokens_details'] ?? [];
 
         return new Usage(
-            promptTokens: $usage['prompt_tokens'] ?? 0,
+            promptTokens: ($usage['prompt_tokens'] ?? 0) - ($promptDetails['cached_tokens'] ?? 0),
             completionTokens: $usage['completion_tokens'] ?? 0,
             cacheReadInputTokens: $promptDetails['cached_tokens'] ?? 0,
             reasoningTokens: $completionDetails['reasoning_tokens'] ?? 0,
