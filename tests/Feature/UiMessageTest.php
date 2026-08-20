@@ -4,9 +4,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Files\Base64Image;
+use Laravel\Ai\Files\Base64Video;
 use Laravel\Ai\Files\ProviderImage;
 use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Files\RemoteImage;
+use Laravel\Ai\Files\RemoteVideo;
 use Laravel\Ai\Files\StoredImage;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
@@ -76,6 +78,38 @@ describe('creating messages from UI messages', function () {
         expect($message->attachments[0])->toBeInstanceOf(RemoteImage::class)
             ->and($message->attachments[0]->url)->toBe('https://example.com/photo.jpg')
             ->and($message->attachments[1])->toBeInstanceOf(RemoteDocument::class);
+    });
+
+    test('video file parts become video attachments', function () {
+        $message = Vercel::messageFrom([
+            'id' => 'm1',
+            'role' => 'user',
+            'parts' => [
+                ['type' => 'file', 'mediaType' => 'video/mp4', 'url' => 'data:video/mp4;base64,'.base64_encode('fake-mp4')],
+                ['type' => 'file', 'mediaType' => 'video/mp4', 'url' => 'https://example.com/clip.mp4'],
+            ],
+        ]);
+
+        expect($message->attachments[0])->toBeInstanceOf(Base64Video::class)
+            ->and($message->attachments[0]->base64)->toBe(base64_encode('fake-mp4'))
+            ->and($message->attachments[1])->toBeInstanceOf(RemoteVideo::class)
+            ->and($message->attachments[1]->url)->toBe('https://example.com/clip.mp4');
+    });
+
+    test('malformed file parts are skipped', function () {
+        $message = Vercel::messageFrom([
+            'id' => 'm1',
+            'role' => 'user',
+            'parts' => [
+                ['type' => 'file', 'mediaType' => ['image/png'], 'url' => 'https://example.com/a.png'],
+                ['type' => 'file', 'mediaType' => 'image/png', 'url' => ['https://example.com/b.png']],
+                ['type' => 'file', 'mediaType' => 'image/png', 'url' => 'https://example.com/c.png', 'filename' => 123],
+            ],
+        ]);
+
+        expect($message->attachments)->toHaveCount(1)
+            ->and($message->attachments[0]->url)->toBe('https://example.com/c.png')
+            ->and($message->attachments[0]->name())->toBe('c.png');
     });
 
     test('reasoning and step parts are ignored while tool parts become tool calls', function () {
@@ -258,6 +292,42 @@ describe('chat input from a useChat request', function () {
             ->and($chat->history())->toHaveCount(2)
             ->and($chat->history()[1]->toolCalls)->toHaveCount(1)
             ->and($chat->history()[1]->toolCalls->first()->id)->toBe('call-1');
+    });
+
+    test('approval responses are still resolved when a user message rides the same submit', function () {
+        $chat = Vercel::chat([
+            ['id' => 'm1', 'role' => 'user', 'parts' => [['type' => 'text', 'text' => 'Delete a.txt']]],
+            ['id' => 'm2', 'role' => 'assistant', 'parts' => [
+                ['type' => 'tool-DeleteFile', 'toolCallId' => 'call-1', 'state' => 'approval-responded', 'input' => ['path' => 'a.txt'], 'approval' => ['id' => 'call-1', 'approved' => true]],
+            ]],
+            ['id' => 'm3', 'role' => 'user', 'parts' => [['type' => 'text', 'text' => 'Also delete b.txt']]],
+        ]);
+
+        expect($chat->decisions()->get('call-1')->isApproved())->toBeTrue()
+            ->and($chat->message()->content)->toBe('Also delete b.txt')
+            ->and($chat->history())->toHaveCount(2)
+            ->and($chat->history()[1]->toolCalls)->toHaveCount(1);
+    });
+
+    test('settled tool parts yield no decisions even when they retain an approval response', function () {
+        $chat = Vercel::chat([
+            ['id' => 'm1', 'role' => 'user', 'parts' => [['type' => 'text', 'text' => 'Delete a.txt']]],
+            ['id' => 'm2', 'role' => 'assistant', 'parts' => [
+                ['type' => 'tool-DeleteFile', 'toolCallId' => 'call-1', 'state' => 'output-available', 'input' => ['path' => 'a.txt'], 'output' => 'Deleted.', 'approval' => ['id' => 'call-1', 'approved' => true]],
+            ]],
+        ]);
+
+        expect($chat->decisions())->toBeNull();
+    });
+
+    test('a non-iterable messages payload creates an empty chat', function () {
+        $request = Request::create('/chat', 'POST', ['messages' => 'hi']);
+
+        $chat = Vercel::chat($request);
+
+        expect($chat->message())->toBeNull()
+            ->and($chat->decisions())->toBeNull()
+            ->and($chat->history())->toBe([]);
     });
 
     test('unanswered approval requests yield no decisions', function () {

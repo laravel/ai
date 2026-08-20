@@ -64,7 +64,7 @@ trait GeneratesText
                     $agent = $prompt->agent;
 
                     $messages = $this->withoutForeignProviderContentBlocks([
-                        ...$prompt->messages,
+                        ...($prompt->messages ?? []),
                         ...($agent instanceof Conversational ? $agent->messages() : []),
                     ]);
 
@@ -89,7 +89,7 @@ trait GeneratesText
                     );
 
                     if ($response->hasPendingApprovals()) {
-                        $this->throwIfNotResumable($agent);
+                        $this->throwIfNotResumable($prompt);
                     }
 
                     $agentResponse = $response instanceof StructuredTextResponse
@@ -219,22 +219,13 @@ trait GeneratesText
     }
 
     /**
-     * Throw when a pause has surfaced on an agent that cannot resume it from persisted history.
+     * Throw when a pause has surfaced on a prompt that cannot be resumed from persisted or replayed history.
      */
-    protected function throwIfNotResumable(Agent $agent): void
+    protected function throwIfNotResumable(AgentPrompt $prompt): void
     {
-        if (! $this->agentCanResumeApprovals($agent)) {
+        // A conversational agent replays from the database; an ad-hoc history (even an empty first turn) replays from the client...
+        if (! ($prompt->agent instanceof Conversational || $prompt->messages !== null)) {
             throw ApprovalNotResumableException::make();
         }
-    }
-
-    /**
-     * Determine whether the given agent can resume a paused approval from persisted or ad-hoc history.
-     */
-    protected function agentCanResumeApprovals(Agent $agent): bool
-    {
-        // A conversational agent replays from the database; an ad-hoc history replays from the client...
-        return $agent instanceof Conversational
-            || (method_exists($agent, 'hasMessages') && $agent->hasMessages());
     }
 }

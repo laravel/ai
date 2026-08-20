@@ -10,10 +10,12 @@ use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Base64Audio;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Base64Image;
+use Laravel\Ai\Files\Base64Video;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Files\RemoteAudio;
 use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Files\RemoteImage;
+use Laravel\Ai\Files\RemoteVideo;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
@@ -32,6 +34,10 @@ class Vercel
     public static function chat(Request|iterable $input): Chat
     {
         $messages = $input instanceof Request ? $input->input('messages', []) : $input;
+
+        if (! is_iterable($messages)) {
+            $messages = [];
+        }
 
         return new Chat(is_array($messages) ? array_values($messages) : iterator_to_array($messages, false));
     }
@@ -172,9 +178,10 @@ class Vercel
      */
     protected static function uiFilePartFrom(File $file): ?array
     {
-        $mime = rescue(fn () => $file->mimeType(), report: false) ?? 'application/octet-stream';
+        $mime = rescue(fn () => method_exists($file, 'declaredMimeType')
+            ? $file->declaredMimeType()
+            : $file->mimeType(), report: false) ?? 'application/octet-stream';
 
-        // Provider-hosted files expose no content or URL, so they cannot render client-side...
         $url = rescue(fn () => match (true) {
             isset($file->url) => $file->url,
             isset($file->base64) => 'data:'.$mime.';base64,'.$file->base64,
@@ -241,7 +248,7 @@ class Vercel
             'assistant' => new AssistantMessage($text, static::toolParts($parts)
                 ->map(fn (array $part) => new ToolCall(
                     id: $part['toolCallId'],
-                    name: substr($part['type'], 5),
+                    name: static::toolName($part),
                     arguments: is_array($part['input'] ?? null) ? $part['input'] : [],
                 ))
                 ->values()),
@@ -261,12 +268,28 @@ class Vercel
             ->filter(fn (array $part) => in_array($part['state'] ?? null, ['output-available', 'output-error', 'output-denied'], true))
             ->map(fn (array $part) => new ToolResult(
                 id: $part['toolCallId'],
-                name: substr($part['type'], 5),
+                name: static::toolName($part),
                 arguments: is_array($part['input'] ?? null) ? $part['input'] : [],
                 result: $part['output'] ?? $part['errorText'] ?? null,
                 denied: ($part['state'] ?? null) === 'output-denied',
             ))
             ->values();
+    }
+
+    /**
+     * Get the tool approval responses awaiting execution on a UI message, keyed by tool call id.
+     *
+     * @param  array<string, mixed>  $message
+     * @return array<string, bool>
+     */
+    public static function approvalResponsesFrom(array $message): array
+    {
+        // Settled parts may still carry stale approval responses, so only pending states count...
+        return static::toolParts(new Collection($message['parts'] ?? []))
+            ->filter(fn (array $part) => in_array($part['state'] ?? null, ['approval-requested', 'approval-responded'], true)
+                && is_bool($part['approval']['approved'] ?? null))
+            ->mapWithKeys(fn (array $part) => [$part['toolCallId'] => $part['approval']['approved']])
+            ->all();
     }
 
     /**
@@ -283,6 +306,16 @@ class Vercel
     }
 
     /**
+     * Get the tool name encoded in a UI tool part's type.
+     *
+     * @param  array<string, mixed>  $part
+     */
+    protected static function toolName(array $part): string
+    {
+        return substr($part['type'], strlen('tool-'));
+    }
+
+    /**
      * Create a file instance from a Vercel AI SDK UI message file part.
      *
      * @param  array<string, mixed>  $part
@@ -290,17 +323,27 @@ class Vercel
     protected static function fileFrom(array $part): ?File
     {
         $url = $part['url'] ?? '';
-        $mime = strtolower($part['mediaType'] ?? '');
+        $mime = $part['mediaType'] ?? '';
+
+        // Malformed client parts are skipped rather than failing the request...
+        if (! is_string($url) || ! is_string($mime)) {
+            return null;
+        }
+
+        $mime = strtolower($mime);
 
         $file = match (true) {
             blank($url) => null,
             str_starts_with($url, 'data:') => static::fileFromDataUrl($url, $mime),
             str_starts_with($mime, 'image/') => new RemoteImage($url, $mime),
             str_starts_with($mime, 'audio/') => new RemoteAudio($url, $mime),
+            str_starts_with($mime, 'video/') => new RemoteVideo($url, $mime),
             default => new RemoteDocument($url, $mime ?: null),
         };
 
-        return $file?->as($part['filename'] ?? null);
+        $filename = $part['filename'] ?? null;
+
+        return $file?->as(is_string($filename) ? $filename : null);
     }
 
     /**
@@ -316,6 +359,7 @@ class Vercel
             blank($base64) => null,
             str_starts_with($mime, 'image/') => new Base64Image($base64, $mime),
             str_starts_with($mime, 'audio/') => new Base64Audio($base64, $mime),
+            str_starts_with($mime, 'video/') => new Base64Video($base64, $mime),
             default => new Base64Document($base64, $mime ?: null),
         };
     }

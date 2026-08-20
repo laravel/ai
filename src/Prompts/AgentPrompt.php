@@ -16,11 +16,11 @@ class AgentPrompt extends Prompt
     public readonly Collection $attachments;
 
     /**
-     * The ad-hoc message history to send ahead of the prompt.
+     * The ad-hoc message history to send ahead of the prompt, or null when the prompt carries none.
      *
-     * @var list<Message>
+     * @var list<Message>|null
      */
-    public readonly array $messages;
+    public readonly ?array $messages;
 
     public readonly ?int $timeout;
 
@@ -47,7 +47,7 @@ class AgentPrompt extends Prompt
         ?string $parentInvocationId = null,
         ?string $parentToolInvocationId = null,
         bool $isFinalAttempt = true,
-        array $messages = [],
+        ?array $messages = null,
     ) {
         parent::__construct($prompt, $provider, $model, $approvalDecisions);
 

@@ -117,3 +117,43 @@ test('ad-hoc message history may be given as UI message arrays', function () {
 test('ad-hoc message history may not be combined with a conversational agent', function () {
     (new ConversationalAgent)->withMessages([new UserMessage('Hello')]);
 })->throws(LogicException::class);
+
+test('ad-hoc message history does not leak into a later prompt', function () {
+    AssistantAgent::fake(['First.', 'Second.']);
+
+    $agent = new AssistantAgent;
+
+    $agent->withMessages([new UserMessage('Hello')])->prompt('First prompt');
+    $agent->prompt('Second prompt');
+
+    AssistantAgent::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->prompt === 'First prompt'
+        && count($prompt->messages) === 1);
+
+    AssistantAgent::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->prompt === 'Second prompt'
+        && $prompt->messages === null);
+});
+
+test('chat input resolves to its approval decisions when broadcasting on the queue', function () {
+    Queue::fake();
+    AssistantAgent::fake();
+
+    (new AssistantAgent)->broadcastOnQueue(chatInput(
+        message: new UserMessage('Ignored'),
+        decisions: Decision::approveAll(),
+    ), []);
+
+    AssistantAgent::assertQueued(fn (QueuedAgentPrompt $prompt): bool => $prompt->hasApprovalDecisions());
+});
+
+test('a user message keeps its attachments when broadcasting on the queue', function () {
+    Queue::fake();
+    AssistantAgent::fake();
+
+    (new AssistantAgent)->broadcastOnQueue(
+        new UserMessage('Hello', [new Base64Image(base64_encode('image'), 'image/png')]), []
+    );
+
+    AssistantAgent::assertQueued(fn (QueuedAgentPrompt $prompt): bool => $prompt->prompt === 'Hello'
+        && count($prompt->attachments) === 1
+        && $prompt->attachments[0] instanceof Base64Image);
+});

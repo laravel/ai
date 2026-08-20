@@ -54,7 +54,7 @@ trait StreamsText
                     $meta = new Meta($this->name(), $prompt->model);
 
                     $messages = $this->withoutForeignProviderContentBlocks([
-                        ...$prompt->messages,
+                        ...($prompt->messages ?? []),
                         ...($agent instanceof Conversational ? $agent->messages() : []),
                     ]);
 
@@ -96,7 +96,7 @@ trait StreamsText
                                     $this->runContextFor($invocationId, $prompt),
                                 ) as $event) {
                                     if ($event instanceof ToolApprovalRequest) {
-                                        $this->throwIfNotResumable($agent);
+                                        $this->throwIfNotResumable($prompt);
                                     }
 
                                     yield $event;

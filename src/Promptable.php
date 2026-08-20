@@ -47,11 +47,11 @@ trait Promptable
     use SerializesModels;
 
     /**
-     * The ad-hoc message history to send ahead of the next prompt.
+     * The ad-hoc message history to send ahead of the next prompt, or null when none has been given.
      *
-     * @var list<Message>
+     * @var list<Message>|null
      */
-    protected array $withMessages = [];
+    protected ?array $adHocMessages = null;
 
     /**
      * Create a new instance of the agent.
@@ -77,6 +77,8 @@ trait Promptable
     {
         [$text, $approvalDecisions, $attachments] = $this->extractPromptInput($prompt, $attachments);
 
+        $messages = $this->flushAdHocMessages();
+
         $invocationId = (string) Str::uuid7();
 
         $providers = $approvalDecisions !== null
@@ -87,7 +89,7 @@ trait Promptable
 
         $run = function (TextProvider $provider, string $model, bool $isFinalAttempt = true) use (
             $text, $attachments, $timeout, $invocationId, $approvalDecisions,
-            $parentInvocationId, $parentToolInvocationId
+            $parentInvocationId, $parentToolInvocationId, $messages
         ): AgentResponse {
             return $provider->prompt(
                 new AgentPrompt(
@@ -97,7 +99,7 @@ trait Promptable
                     parentInvocationId: $parentInvocationId,
                     parentToolInvocationId: $parentToolInvocationId,
                     isFinalAttempt: $isFinalAttempt,
-                    messages: $this->withMessages,
+                    messages: $messages,
                 )
             );
         };
@@ -142,6 +144,8 @@ trait Promptable
             : $this->getProvidersAndModelsForFailover($provider, $model);
         $resolvedTimeout = $this->getTimeout($timeout);
 
+        $messages = $this->flushAdHocMessages();
+
         $invocationId = (string) Str::uuid7();
 
         [$parentInvocationId, $parentToolInvocationId] = ParentInvocation::current();
@@ -156,7 +160,7 @@ trait Promptable
                     approvalDecisions: $approvalDecisions,
                     parentInvocationId: $parentInvocationId,
                     parentToolInvocationId: $parentToolInvocationId,
-                    messages: $this->withMessages,
+                    messages: $messages,
                 )
             );
         }
@@ -166,7 +170,7 @@ trait Promptable
 
         $outer = new StreamableAgentResponse(
             $invocationId,
-            function () use ($providers, $prompt, $approvalDecisions, $attachments, $resolvedTimeout, $invocationId, $parentInvocationId, $parentToolInvocationId, &$outer) {
+            function () use ($providers, $prompt, $approvalDecisions, $attachments, $resolvedTimeout, $invocationId, $parentInvocationId, $parentToolInvocationId, $messages, &$outer) {
                 $lastException = null;
 
                 foreach ($this->iterateProvidersWithFailover($providers) as [$provider, $model, $isFinalAttempt]) {
@@ -181,7 +185,7 @@ trait Promptable
                                 parentInvocationId: $parentInvocationId,
                                 parentToolInvocationId: $parentToolInvocationId,
                                 isFinalAttempt: $isFinalAttempt,
-                                messages: $this->withMessages,
+                                messages: $messages,
                             )
                         );
 
@@ -216,9 +220,7 @@ trait Promptable
      */
     public function queue(ChatInput|Decisions|UserMessage|string $prompt, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
     {
-        [$text, $approvalDecisions, $attachments] = $this->extractPromptInput($prompt, $attachments);
-
-        $prompt = $approvalDecisions ?? $text;
+        [$prompt, $attachments] = $this->queueablePrompt($prompt, $attachments);
 
         if (static::isFaked()) {
             Ai::recordPrompt(
@@ -232,9 +234,21 @@ trait Promptable
     }
 
     /**
+     * Resolve a prompt input into its queueable prompt value and attachments.
+     *
+     * @return array{Decisions|string, list<mixed>}
+     */
+    private function queueablePrompt(ChatInput|Decisions|UserMessage|string $prompt, array $attachments): array
+    {
+        [$text, $approvalDecisions, $attachments] = $this->extractPromptInput($prompt, $attachments);
+
+        return [$approvalDecisions ?? $text, $attachments];
+    }
+
+    /**
      * Split a prompt input into its text, tool approval decisions, and attachments.
      *
-     * @return array{string, ?Decisions, array}
+     * @return array{string, ?Decisions, list<mixed>}
      */
     private function extractPromptInput(ChatInput|Decisions|UserMessage|string $prompt, array $attachments = []): array
     {
@@ -256,14 +270,6 @@ trait Promptable
     }
 
     /**
-     * Determine whether an ad-hoc message history has been set for the agent.
-     */
-    public function hasMessages(): bool
-    {
-        return $this->withMessages !== [];
-    }
-
-    /**
      * Set the ad-hoc message history to send ahead of the next prompt.
      *
      * @param  iterable<int, mixed>  $messages
@@ -274,13 +280,24 @@ trait Promptable
             throw new LogicException('Ad-hoc message history may not be combined with a conversational agent.');
         }
 
-        $this->withMessages = Collection::make($messages)
-            ->map(fn ($message) => is_array($message) && isset($message['parts'])
-                ? Vercel::messageFrom($message)
-                : Message::tryFrom($message))
+        $this->adHocMessages = Collection::make($messages)
+            ->flatMap(fn ($message) => is_array($message) && isset($message['parts'])
+                ? Vercel::messagesFrom([$message])
+                : [Message::tryFrom($message)])
+            ->values()
             ->all();
 
         return $this;
+    }
+
+    /**
+     * Get the ad-hoc history for the next prompt and reset it so it cannot leak into a later prompt.
+     *
+     * @return list<Message>|null
+     */
+    private function flushAdHocMessages(): ?array
+    {
+        return tap($this->adHocMessages, fn () => $this->adHocMessages = null);
     }
 
     /**
@@ -313,9 +330,7 @@ trait Promptable
      */
     public function broadcastOnQueue(ChatInput|Decisions|UserMessage|string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
     {
-        [$text, $approvalDecisions, $attachments] = $this->extractPromptInput($prompt, $attachments);
-
-        $prompt = $approvalDecisions ?? $text;
+        [$prompt, $attachments] = $this->queueablePrompt($prompt, $attachments);
 
         if (static::isFaked()) {
             Ai::recordPrompt(

@@ -29,15 +29,11 @@ class Chat implements ChatInput
      */
     public function decisions(): ?Decisions
     {
-        $message = $this->latestMessageOfRole('assistant');
+        $message = $this->latestAssistantMessage();
 
-        $responses = collect($message['parts'] ?? [])
-            ->filter(fn (array $part) => str_starts_with($part['type'] ?? '', 'tool-')
-                && isset($part['toolCallId'])
-                && is_bool($part['approval']['approved'] ?? null))
-            ->mapWithKeys(fn (array $part) => [$part['toolCallId'] => $part['approval']['approved']]);
+        $responses = $message === null ? [] : Vercel::approvalResponsesFrom($message);
 
-        return $responses->isEmpty() ? null : Decisions::from($responses->all());
+        return $responses === [] ? null : Decisions::from($responses);
     }
 
     /**
@@ -65,5 +61,21 @@ class Chat implements ChatInput
         $message = $this->messages === [] ? null : $this->messages[array_key_last($this->messages)];
 
         return ($message['role'] ?? null) === $role ? $message : null;
+    }
+
+    /**
+     * Get the newest assistant message, looking past a user message submitted in the same turn.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function latestAssistantMessage(): ?array
+    {
+        $messages = $this->latestMessageOfRole('user') !== null
+            ? array_slice($this->messages, 0, -1)
+            : $this->messages;
+
+        $message = $messages === [] ? null : $messages[array_key_last($messages)];
+
+        return ($message['role'] ?? null) === 'assistant' ? $message : null;
     }
 }
