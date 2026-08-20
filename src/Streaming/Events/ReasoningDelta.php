@@ -29,16 +29,4 @@ class ReasoningDelta extends StreamEvent
             'summary' => $this->summary,
         ];
     }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function toVercelProtocolArray(): ?array
-    {
-        return [
-            'type' => 'reasoning-delta',
-            'id' => $this->reasoningId,
-            'delta' => $this->delta,
-        ];
-    }
 }

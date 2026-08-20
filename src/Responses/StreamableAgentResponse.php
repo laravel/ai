@@ -12,13 +12,14 @@ use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Streaming\Events\TextDelta;
+use Laravel\Ai\Streaming\Protocols\AgUiProtocol;
+use Laravel\Ai\Streaming\Protocols\StreamProtocol;
+use Laravel\Ai\Streaming\Protocols\VercelProtocol;
 use Symfony\Component\HttpFoundation\Response;
 use Traversable;
 
 class StreamableAgentResponse implements IteratorAggregate, Responsable
 {
-    use Concerns\CanStreamUsingVercelProtocol;
-
     public ?string $text = null;
 
     public ?Usage $usage = null;
@@ -32,9 +33,7 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
 
     protected array $thenCallbacks = [];
 
-    protected bool $usesVercelProtocol = false;
-
-    protected ?string $vercelProtocolMessageId = null;
+    protected ?StreamProtocol $protocol = null;
 
     protected ?StreamedAgentResponse $streamedResponse = null;
 
@@ -120,8 +119,19 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
      */
     public function usingVercelDataProtocol(bool $value = true, ?string $messageId = null): self
     {
-        $this->usesVercelProtocol = $value;
-        $this->vercelProtocolMessageId = $messageId;
+        $this->protocol = $value ? new VercelProtocol($messageId) : null;
+
+        return $this;
+    }
+
+    /**
+     * Stream the response using the Agent User Interaction (AG-UI) protocol.
+     *
+     * See: https://docs.ag-ui.com/concepts/events
+     */
+    public function usingAgUiProtocol(?string $threadId = null, ?string $runId = null): self
+    {
+        $this->protocol = new AgUiProtocol($threadId, $runId);
 
         return $this;
     }
@@ -133,8 +143,8 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
      */
     public function toResponse($request): Response
     {
-        if ($this->usesVercelProtocol) {
-            return $this->toVercelProtocolResponse();
+        if ($this->protocol instanceof StreamProtocol) {
+            return $this->protocol->response($this);
         }
 
         return response()->stream(function () {

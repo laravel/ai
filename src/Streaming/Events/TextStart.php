@@ -25,15 +25,4 @@ class TextStart extends StreamEvent
             'timestamp' => $this->timestamp,
         ];
     }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function toVercelProtocolArray(): ?array
-    {
-        return [
-            'type' => 'text-start',
-            'id' => $this->messageId,
-        ];
-    }
 }
