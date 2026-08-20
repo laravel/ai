@@ -64,6 +64,7 @@ trait GeneratesText
                     $agent = $prompt->agent;
 
                     $messages = $this->withoutForeignProviderContentBlocks([
+                        ...$prompt->messages,
                         ...($agent instanceof Conversational ? $agent->messages() : []),
                     ]);
 

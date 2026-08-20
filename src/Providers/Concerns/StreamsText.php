@@ -54,6 +54,7 @@ trait StreamsText
                     $meta = new Meta($this->name(), $prompt->model);
 
                     $messages = $this->withoutForeignProviderContentBlocks([
+                        ...$prompt->messages,
                         ...($agent instanceof Conversational ? $agent->messages() : []),
                     ]);
 
