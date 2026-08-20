@@ -18,9 +18,11 @@ use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Laravel\Ai\Streaming\Events\ToolCall;
 use Laravel\Ai\Streaming\Events\ToolResult;
 
-function vercelProtocolParts(array $events, ?string $messageId = null): array
+function vercelProtocolParts(array|Closure $events, ?string $messageId = null): array
 {
-    $response = (new StreamableAgentResponse('invocation-1', fn () => yield from $events, new Data\Meta('anthropic', 'claude-sonnet-4-6')))
+    $stream = $events instanceof Closure ? $events : fn () => yield from $events;
+
+    $response = (new StreamableAgentResponse('invocation-1', $stream, new Data\Meta('anthropic', 'claude-sonnet-4-6')))
         ->usingVercelDataProtocol(messageId: $messageId)
         ->toResponse(request());
 
@@ -42,6 +44,17 @@ function vercelProtocolParts(array $events, ?string $messageId = null): array
         ->all();
 }
 
+function vercelFinishPart(string $reason = 'stop', ?Usage $usage = null): array
+{
+    return [
+        'type' => 'finish',
+        'finishReason' => $reason,
+        'messageMetadata' => [
+            'usage' => ($usage ?? new Usage)->toArray(),
+        ],
+    ];
+}
+
 test('a text stream emits start, delta, and end parts for the message', function () {
     $parts = vercelProtocolParts([
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
@@ -56,7 +69,7 @@ test('a text stream emits start, delta, and end parts for the message', function
         ['type' => 'text-start', 'id' => 'msg-1'],
         ['type' => 'text-delta', 'id' => 'msg-1', 'delta' => 'Hello.'],
         ['type' => 'text-end', 'id' => 'msg-1'],
-        ['type' => 'finish'],
+        vercelFinishPart(),
         ['type' => 'done'],
     ]);
 });
@@ -75,7 +88,7 @@ test('a reasoning stream emits start, delta, and end parts for the reasoning blo
         ['type' => 'reasoning-start', 'id' => 'reasoning-1'],
         ['type' => 'reasoning-delta', 'id' => 'reasoning-1', 'delta' => 'Considering the options.'],
         ['type' => 'reasoning-end', 'id' => 'reasoning-1'],
-        ['type' => 'finish'],
+        vercelFinishPart(),
         ['type' => 'done'],
     ]);
 });
@@ -96,7 +109,7 @@ test('a cited text stream emits a source url part for the cited page', function 
         ['type' => 'text-delta', 'id' => 'msg-1', 'delta' => 'Laravel is a PHP framework.'],
         ['type' => 'source-url', 'sourceId' => 'https://laravel.com/docs', 'url' => 'https://laravel.com/docs'],
         ['type' => 'text-end', 'id' => 'msg-1'],
-        ['type' => 'finish'],
+        vercelFinishPart(),
         ['type' => 'done'],
     ]);
 });
@@ -130,7 +143,7 @@ test('a paused stream emits an approval request part for each pending approval',
         ['type' => 'start', 'messageId' => 'msg-1'],
         ['type' => 'tool-input-available', 'toolCallId' => 'call-1', 'toolName' => 'DeleteFile', 'input' => ['path' => 'a.txt']],
         ['type' => 'tool-approval-request', 'toolCallId' => 'call-1', 'approvalId' => 'call-1', 'reason' => 'Destructive operation.'],
-        ['type' => 'finish'],
+        vercelFinishPart('tool-calls'),
         ['type' => 'done'],
     ]);
 });
@@ -147,7 +160,7 @@ test('a resumed stream emits the approved tool output for the prior turn tool ca
         ['type' => 'start', 'messageId' => 'client-message-1'],
         ['type' => 'tool-output-available', 'toolCallId' => 'call-1', 'output' => 'deleted'],
         ['type' => 'text-delta', 'id' => 'msg-2', 'delta' => 'Done.'],
-        ['type' => 'finish'],
+        vercelFinishPart(),
         ['type' => 'done'],
     ]);
 });
@@ -172,7 +185,7 @@ test('a rejected approval streams as a denied tool output', function () {
     expect($parts)->toBe([
         ['type' => 'start', 'messageId' => 'client-message-1'],
         ['type' => 'tool-output-denied', 'toolCallId' => 'call-1'],
-        ['type' => 'finish'],
+        vercelFinishPart(),
         ['type' => 'done'],
     ]);
 });
@@ -184,7 +197,7 @@ test('a tool result without a prior call or existing message is skipped', functi
     ]);
 
     expect($parts)->toBe([
-        ['type' => 'finish'],
+        vercelFinishPart(),
         ['type' => 'done'],
     ]);
 });
@@ -219,6 +232,41 @@ test('a failed tool call without an error message streams a default error text',
     ]);
 });
 
+test('the finish part carries the stream usage and finish reason as message metadata', function () {
+    $parts = vercelProtocolParts([
+        new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
+        new TextDelta('event-1', 'msg-1', 'Hello.', time()),
+        new StreamEnd('event-2', 'length', new Usage(promptTokens: 10, completionTokens: 20), time()),
+    ]);
+
+    expect($parts[count($parts) - 2])->toBe(vercelFinishPart('length', new Usage(promptTokens: 10, completionTokens: 20)));
+});
+
+test('finish reasons outside the Vercel enum emit as other', function () {
+    $parts = vercelProtocolParts([
+        new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
+        new StreamEnd('event-1', 'unknown', new Usage, time()),
+    ]);
+
+    expect($parts[count($parts) - 2])->toBe(vercelFinishPart('other'));
+});
+
+test('a multi-step stream emits one finish part with combined usage and the final reason', function () {
+    $parts = vercelProtocolParts([
+        new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
+        new ToolCall('event-1', new Data\ToolCall('call-1', 'GetWeather', ['city' => 'Lisbon']), time()),
+        new StreamEnd('event-2', 'tool_calls', new Usage(promptTokens: 10, completionTokens: 5), time()),
+        new ToolResult('event-3', new Data\ToolResult('call-1', 'GetWeather', ['city' => 'Lisbon'], 'sunny'), true, null, time()),
+        new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
+        new TextDelta('event-4', 'msg-1', 'Sunny.', time()),
+        new StreamEnd('event-5', 'stop', new Usage(promptTokens: 20, completionTokens: 15), time()),
+    ]);
+
+    expect(collect($parts)->where('type', 'finish')->values()->all())->toBe([
+        vercelFinishPart('stop', new Usage(promptTokens: 30, completionTokens: 20)),
+    ]);
+});
+
 test('a tool executed within the stream emits its input and output parts', function () {
     $parts = vercelProtocolParts([
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
@@ -231,7 +279,7 @@ test('a tool executed within the stream emits its input and output parts', funct
         ['type' => 'start', 'messageId' => 'msg-1'],
         ['type' => 'tool-input-available', 'toolCallId' => 'call-1', 'toolName' => 'GetWeather', 'input' => ['city' => 'Lisbon']],
         ['type' => 'tool-output-available', 'toolCallId' => 'call-1', 'output' => 'sunny'],
-        ['type' => 'finish'],
+        vercelFinishPart(),
         ['type' => 'done'],
     ]);
 });

@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Responses\Concerns;
 
 use Generator;
+use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
@@ -25,7 +26,7 @@ trait CanStreamUsingVercelProtocol
 
             public array $toolCalls = [];
 
-            public ?array $lastStreamEndEvent = null;
+            public ?StreamEnd $lastStreamEnd = null;
         };
 
         return response()->stream(function () use ($state) {
@@ -64,9 +65,14 @@ trait CanStreamUsingVercelProtocol
                     continue;
                 }
 
-                // Save the last stream end event until the very end...
+                // Save the last stream end event until the very end, combining usage across steps...
                 if ($event instanceof StreamEnd) {
-                    $state->lastStreamEndEvent = $event->toVercelProtocolArray();
+                    $state->lastStreamEnd = new StreamEnd(
+                        $event->id,
+                        $event->reason,
+                        ($state->lastStreamEnd?->usage ?? new Usage)->add($event->usage),
+                        $event->timestamp,
+                    );
 
                     continue;
                 }
@@ -78,8 +84,8 @@ trait CanStreamUsingVercelProtocol
                 yield from $this->toVercelProtocolPart($state, $data);
             }
 
-            if ($state->lastStreamEndEvent) {
-                yield 'data: '.json_encode($state->lastStreamEndEvent)."\n\n";
+            if ($state->lastStreamEnd) {
+                yield 'data: '.json_encode($state->lastStreamEnd->toVercelProtocolArray())."\n\n";
             }
 
             yield "data: [DONE]\n\n";

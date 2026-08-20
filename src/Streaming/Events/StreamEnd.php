@@ -53,6 +53,17 @@ class StreamEnd extends StreamEvent
     {
         return [
             'type' => 'finish',
+            'finishReason' => match ($this->reason) {
+                'stop' => 'stop',
+                'tool_calls' => 'tool-calls',
+                'length' => 'length',
+                'content_filter' => 'content-filter',
+                'error' => 'error',
+                default => 'other',
+            },
+            'messageMetadata' => [
+                'usage' => $this->usage->toArray(),
+            ],
         ];
     }
 }
