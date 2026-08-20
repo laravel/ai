@@ -85,15 +85,15 @@ test('identical string inputs still share a cache entry', function (): void {
 });
 
 test('reordered string inputs do not share a cache entry', function (): void {
-    Embeddings::for(['a', 'b'])->cache(3600)->generate(provider: 'cohere', model: 'embed-v4.0');
-    Embeddings::for(['b', 'a'])->cache(3600)->generate(provider: 'cohere', model: 'embed-v4.0');
+    Embeddings::for(['a', 'b'])->cache(3600, individually: false)->generate(provider: 'cohere', model: 'embed-v4.0');
+    Embeddings::for(['b', 'a'])->cache(3600, individually: false)->generate(provider: 'cohere', model: 'embed-v4.0');
 
     expect(Http::recorded())->toHaveCount(2);
 });
 
-test('inputs are not cached individually by default', function (): void {
-    Embeddings::for(['a', 'b'])->cache(3600)->generate(provider: 'cohere', model: 'embed-v4.0');
-    Embeddings::for(['b'])->cache(3600)->generate(provider: 'cohere', model: 'embed-v4.0');
+test('inputs can opt out of individual caching', function (): void {
+    Embeddings::for(['a', 'b'])->cache(3600, individually: false)->generate(provider: 'cohere', model: 'embed-v4.0');
+    Embeddings::for(['b'])->cache(3600, individually: false)->generate(provider: 'cohere', model: 'embed-v4.0');
 
     expect(Http::recorded())->toHaveCount(2);
 });
@@ -176,7 +176,7 @@ test('individual caching throws when the provider returns a mismatched embedding
 })->throws(EmbeddingsCountMismatchException::class, 'Provider returned 1 embeddings for 2 inputs.');
 
 test('individually cached inputs do not share entries with batch cached inputs', function (): void {
-    Embeddings::for(['a'])->cache(3600)->generate(provider: 'cohere', model: 'embed-v4.0');
+    Embeddings::for(['a'])->cache(3600, individually: false)->generate(provider: 'cohere', model: 'embed-v4.0');
     Embeddings::for(['a'])->cache(3600, individually: true)->generate(provider: 'cohere', model: 'embed-v4.0');
 
     expect(Http::recorded())->toHaveCount(2);
