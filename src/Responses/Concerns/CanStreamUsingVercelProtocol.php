@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Responses\Concerns;
 
 use Generator;
+use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
@@ -40,8 +41,8 @@ trait CanStreamUsingVercelProtocol
                 foreach ($this as $event) {
                     // Send one stream start event, wrapping each subsequent provider step in step parts...
                     if ($event instanceof StreamStart && $state->streamStarted) {
-                        yield $this->toVercelProtocolLine(['type' => 'finish-step']);
-                        yield $this->toVercelProtocolLine(['type' => 'start-step']);
+                        yield $this->toVercelProtocolFormat(['type' => 'finish-step']);
+                        yield $this->toVercelProtocolFormat(['type' => 'start-step']);
 
                         continue;
                     }
@@ -91,10 +92,10 @@ trait CanStreamUsingVercelProtocol
                 }
 
                 if ($state->streamStarted && ! $state->errored) {
-                    yield $this->toVercelProtocolLine(['type' => 'finish-step']);
+                    yield $this->toVercelProtocolFormat(['type' => 'finish-step']);
 
                     if ($state->lastStreamEnd) {
-                        yield $this->toVercelProtocolLine((new StreamEnd(
+                        yield $this->toVercelProtocolFormat((new StreamEnd(
                             $state->lastStreamEnd->id,
                             $state->lastStreamEnd->reason,
                             $state->usage,
@@ -103,10 +104,13 @@ trait CanStreamUsingVercelProtocol
                     }
                 }
             } catch (Throwable $e) {
+                // A stream error exception carries a provider error the stream already surfaced, so only report anything else...
+                if (! $e instanceof StreamErrorException) {
+                    report($e);
+                }
+
                 // The response is already streaming, so surface a masked terminal error part instead of re-throwing, unless an error part was already sent...
                 if (! $state->errored) {
-                    report($e);
-
                     yield from $this->toVercelProtocolPart($state, [
                         'type' => 'error',
                         'errorText' => 'An error occurred.',
@@ -132,8 +136,8 @@ trait CanStreamUsingVercelProtocol
 
             $data['messageId'] = $this->vercelProtocolMessageId ?? $data['messageId'];
 
-            yield $this->toVercelProtocolLine($data);
-            yield $this->toVercelProtocolLine(['type' => 'start-step']);
+            yield $this->toVercelProtocolFormat($data);
+            yield $this->toVercelProtocolFormat(['type' => 'start-step']);
 
             return;
         }
@@ -142,13 +146,13 @@ trait CanStreamUsingVercelProtocol
             yield from $this->toVercelProtocolPart($state, ['type' => 'start', 'messageId' => $this->invocationId]);
         }
 
-        yield $this->toVercelProtocolLine($data);
+        yield $this->toVercelProtocolFormat($data);
     }
 
     /**
      * Encode the given protocol part as a server-sent event line.
      */
-    protected function toVercelProtocolLine(array $data): string
+    protected function toVercelProtocolFormat(array $data): string
     {
         return 'data: '.json_encode($data)."\n\n";
     }

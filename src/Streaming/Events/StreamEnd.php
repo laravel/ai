@@ -63,7 +63,13 @@ class StreamEnd extends StreamEvent
                 default => 'other',
             },
             'messageMetadata' => [
-                'usage' => $this->usage->toArray(),
+                'usage' => [
+                    'inputTokens' => $this->usage->promptTokens,
+                    'outputTokens' => $this->usage->completionTokens,
+                    'totalTokens' => $this->usage->promptTokens + $this->usage->completionTokens,
+                    'reasoningTokens' => $this->usage->reasoningTokens,
+                    'cachedInputTokens' => $this->usage->cacheReadInputTokens,
+                ],
             ],
         ];
     }

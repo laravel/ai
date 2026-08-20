@@ -48,11 +48,19 @@ function vercelProtocolParts(array|Closure $events, ?string $messageId = null): 
 
 function vercelFinishPart(string $reason = 'stop', ?Usage $usage = null): array
 {
+    $usage ??= new Usage;
+
     return [
         'type' => 'finish',
         'finishReason' => $reason,
         'messageMetadata' => [
-            'usage' => ($usage ?? new Usage)->toArray(),
+            'usage' => [
+                'inputTokens' => $usage->promptTokens,
+                'outputTokens' => $usage->completionTokens,
+                'totalTokens' => $usage->promptTokens + $usage->completionTokens,
+                'reasoningTokens' => $usage->reasoningTokens,
+                'cachedInputTokens' => $usage->cacheReadInputTokens,
+            ],
         ],
     ];
 }
@@ -371,6 +379,21 @@ test('a provider stream error followed by the loop exception emits a single erro
     ]);
 
     Exceptions::assertNothingReported();
+});
+
+test('an unexpected exception after an error part is still reported', function () {
+    Exceptions::fake();
+
+    $parts = vercelProtocolParts(function () {
+        yield new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time());
+        yield new Error('event-1', 'overloaded_error', 'Overloaded', false, time());
+
+        throw new RuntimeException('Broken pipe');
+    });
+
+    expect(collect($parts)->where('type', 'error')->count())->toBe(1);
+
+    Exceptions::assertReported(RuntimeException::class);
 });
 
 test('a stream end after an error does not emit finish parts', function () {
