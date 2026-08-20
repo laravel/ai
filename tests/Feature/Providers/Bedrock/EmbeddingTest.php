@@ -63,6 +63,22 @@ describe('cohere embeddings', function () {
         expect($response->embeddings)->toBe([]);
     });
 
+    test('reports the input token count from the response header', function () {
+        $client = $this->fakeBedrockInvokeWithHeaders(
+            ['embeddings' => [[0.1, 0.2, 0.3]]],
+            ['x-amzn-bedrock-input-token-count' => '7'],
+        );
+
+        $response = $this->gatewayWithClient($client)->generateEmbeddings(
+            $this->bedrockProvider(),
+            'cohere.embed-v4:0',
+            ['The quick brown fox.'],
+            1024,
+        );
+
+        expect($response->tokens)->toBe(7);
+    });
+
     test('sends the Cohere request shape rather than the Titan one', function () {
         $mock = $this->bedrockInvokeMock(['embeddings' => ['float' => [[0.1, 0.2, 0.3]]]]);
 

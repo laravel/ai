@@ -29,6 +29,14 @@ trait BedrockHelpers
         ])]);
     }
 
+    protected function fakeBedrockInvokeWithHeaders(array $body, array $headers): BedrockRuntimeClient
+    {
+        return $this->bedrockClient(new MockHandler([new Result([
+            'body' => Utils::streamFor(json_encode($body)),
+            '@metadata' => ['headers' => $headers],
+        ])]));
+    }
+
     protected function fakeBedrockStream(array $events): BedrockRuntimeClient
     {
         return $this->bedrockClient(new MockHandler([
