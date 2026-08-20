@@ -229,10 +229,12 @@ trait GeneratesText
     }
 
     /**
-     * Determine whether the given agent can resume a paused approval from persisted history.
+     * Determine whether the given agent can resume a paused approval from persisted or ad-hoc history.
      */
     protected function agentCanResumeApprovals(Agent $agent): bool
     {
-        return $agent instanceof Conversational;
+        // A conversational agent replays from the database; an ad-hoc history replays from the client...
+        return $agent instanceof Conversational
+            || (method_exists($agent, 'hasMessages') && $agent->hasMessages());
     }
 }

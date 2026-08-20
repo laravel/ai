@@ -47,7 +47,12 @@ class Chat implements ChatInput
      */
     public function history(): array
     {
-        return Vercel::messagesFrom(array_slice($this->messages, 0, -1));
+        // On a resume turn the trailing assistant message carries the pending tool calls and must replay...
+        $messages = $this->latestMessageOfRole('user') !== null
+            ? array_slice($this->messages, 0, -1)
+            : $this->messages;
+
+        return Vercel::messagesFrom($messages);
     }
 
     /**

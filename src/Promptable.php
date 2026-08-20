@@ -37,6 +37,7 @@ use Laravel\Ai\Responses\QueuedAgentResponse;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Streaming\Events\StreamEvent;
+use Laravel\Ai\Vercel\Vercel;
 use LogicException;
 use ReflectionClass;
 use RuntimeException;
@@ -255,6 +256,14 @@ trait Promptable
     }
 
     /**
+     * Determine whether an ad-hoc message history has been set for the agent.
+     */
+    public function hasMessages(): bool
+    {
+        return $this->withMessages !== [];
+    }
+
+    /**
      * Set the ad-hoc message history to send ahead of the next prompt.
      *
      * @param  iterable<int, mixed>  $messages
@@ -265,7 +274,11 @@ trait Promptable
             throw new LogicException('Ad-hoc message history may not be combined with a conversational agent.');
         }
 
-        $this->withMessages = Collection::make($messages)->map(Message::tryFrom(...))->all();
+        $this->withMessages = Collection::make($messages)
+            ->map(fn ($message) => is_array($message) && isset($message['parts'])
+                ? Vercel::messageFrom($message)
+                : Message::tryFrom($message))
+            ->all();
 
         return $this;
     }

@@ -103,6 +103,17 @@ test('ad-hoc message history may be given as raw arrays', function () {
         && $prompt->messages[0]->content === 'Hello');
 });
 
+test('ad-hoc message history may be given as UI message arrays', function () {
+    AssistantAgent::fake(['Sure.']);
+
+    (new AssistantAgent)
+        ->withMessages([['role' => 'user', 'parts' => [['type' => 'text', 'text' => 'Hello']]]])
+        ->prompt('Continue');
+
+    AssistantAgent::assertPrompted(fn (AgentPrompt $prompt): bool => count($prompt->messages) === 1
+        && $prompt->messages[0]->content === 'Hello');
+});
+
 test('ad-hoc message history may not be combined with a conversational agent', function () {
     (new ConversationalAgent)->withMessages([new UserMessage('Hello')]);
 })->throws(LogicException::class);

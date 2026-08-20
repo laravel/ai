@@ -10,6 +10,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $id
  * @property string $role
  * @property ?string $content
+ * @property ?array $attachments
+ * @property ?array $tool_calls
+ * @property ?array $tool_results
+ * @property ?array $approval_state
  */
 #[WithoutIncrementing]
 class ConversationMessage extends Model
