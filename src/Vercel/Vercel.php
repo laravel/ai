@@ -2,7 +2,9 @@
 
 namespace Laravel\Ai\Vercel;
 
+use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Files\Base64Audio;
 use Laravel\Ai\Files\Base64Document;
@@ -14,9 +16,50 @@ use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\UserMessage;
+use Laravel\Ai\Models\ConversationMessage;
 
 class Vercel
 {
+    /**
+     * Create a chat input from a useChat request or its UI message list.
+     *
+     * @param  Request|iterable<int, array<string, mixed>>  $input
+     */
+    public static function chat(Request|iterable $input): Chat
+    {
+        $messages = $input instanceof Request ? $input->input('messages', []) : $input;
+
+        return new Chat(is_array($messages) ? array_values($messages) : iterator_to_array($messages, false));
+    }
+
+    /**
+     * Convert messages or conversation message models into UI message arrays for hydrating useChat.
+     *
+     * @param  iterable<int, Message|ConversationMessage>  $messages
+     * @return list<array<string, mixed>>
+     */
+    public static function uiMessagesFrom(iterable $messages): array
+    {
+        $result = [];
+
+        // ponytail: text-only hydration, file and tool parts when a UI needs them...
+        foreach ($messages as $message) {
+            $role = $message instanceof Message ? $message->role->value : $message->role;
+
+            if (! in_array($role, ['user', 'assistant'], true)) {
+                continue;
+            }
+
+            $result[] = [
+                'id' => $message instanceof ConversationMessage ? $message->id : (string) Str::ulid(),
+                'role' => $role,
+                'parts' => [['type' => 'text', 'text' => $message->content ?? '']],
+            ];
+        }
+
+        return $result;
+    }
+
     /**
      * Create messages from a list of Vercel AI SDK UI messages (a useChat request body).
      *

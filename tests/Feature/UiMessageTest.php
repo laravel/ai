@@ -1,11 +1,14 @@
 <?php
 
+use Illuminate\Http\Request;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Messages\AssistantMessage;
+use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\UserMessage;
+use Laravel\Ai\Models\ConversationMessage;
 use Laravel\Ai\Vercel\Vercel;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
@@ -165,5 +168,87 @@ describe('streaming with the Vercel protocol', function () {
             ->toContain('"type":"text-delta"')
             ->toContain('Hello')
             ->toEndWith("data: [DONE]\n\n");
+    });
+});
+
+describe('chat input from a useChat request', function () {
+    $body = fn () => [
+        ['id' => 'm1', 'role' => 'user', 'parts' => [['type' => 'text', 'text' => 'What is Laravel?']]],
+        ['id' => 'm2', 'role' => 'assistant', 'parts' => [['type' => 'text', 'text' => 'A PHP framework.']]],
+        ['id' => 'm3', 'role' => 'user', 'parts' => [['type' => 'text', 'text' => 'Who made it?']]],
+    ];
+
+    test('the newest user message becomes the prompt and the rest becomes history', function () use ($body) {
+        $chat = Vercel::chat($body());
+
+        expect($chat->message()->content)->toBe('Who made it?')
+            ->and($chat->decisions())->toBeNull()
+            ->and($chat->history())->toHaveCount(2)
+            ->and($chat->history()[1])->toBeInstanceOf(AssistantMessage::class);
+    });
+
+    test('a chat may be created from the request itself', function () use ($body) {
+        $request = Request::create('/chat', 'POST', ['messages' => $body()]);
+
+        expect(Vercel::chat($request)->message()->content)->toBe('Who made it?');
+    });
+
+    test('approval responses on the trailing assistant message become decisions', function () {
+        $chat = Vercel::chat([
+            ['id' => 'm1', 'role' => 'user', 'parts' => [['type' => 'text', 'text' => 'Delete a.txt']]],
+            ['id' => 'm2', 'role' => 'assistant', 'parts' => [
+                ['type' => 'tool-DeleteFile', 'toolCallId' => 'call-1', 'state' => 'approval-requested', 'approval' => ['id' => 'call-1', 'approved' => true]],
+                ['type' => 'tool-DeleteFile', 'toolCallId' => 'call-2', 'state' => 'approval-requested', 'approval' => ['id' => 'call-2', 'approved' => false]],
+            ]],
+        ]);
+
+        expect($chat->message())->toBeNull()
+            ->and($chat->decisions()->get('call-1')->isApproved())->toBeTrue()
+            ->and($chat->decisions()->get('call-2')->isRejected())->toBeTrue();
+    });
+
+    test('unanswered approval requests yield no decisions', function () {
+        $chat = Vercel::chat([
+            ['id' => 'm1', 'role' => 'user', 'parts' => [['type' => 'text', 'text' => 'Delete a.txt']]],
+            ['id' => 'm2', 'role' => 'assistant', 'parts' => [
+                ['type' => 'tool-DeleteFile', 'toolCallId' => 'call-1', 'state' => 'approval-requested', 'approval' => ['id' => 'call-1']],
+            ]],
+        ]);
+
+        expect($chat->decisions())->toBeNull();
+    });
+
+    test('a chat prompts an agent directly', function () use ($body) {
+        AssistantAgent::fake(['Taylor Otwell.']);
+
+        (new AssistantAgent)->prompt(Vercel::chat($body()));
+
+        AssistantAgent::assertPrompted(fn ($prompt) => $prompt->prompt === 'Who made it?');
+    });
+});
+
+describe('hydrating useChat from stored messages', function () {
+    test('messages become text-only UI message arrays', function () {
+        $ui = Vercel::uiMessagesFrom([
+            new UserMessage('What is Laravel?'),
+            new AssistantMessage('A PHP framework.'),
+            new Message('tool_result', 'ignored'),
+        ]);
+
+        expect($ui)->toHaveCount(2)
+            ->and($ui[0]['role'])->toBe('user')
+            ->and($ui[0]['parts'])->toBe([['type' => 'text', 'text' => 'What is Laravel?']])
+            ->and($ui[1]['role'])->toBe('assistant')
+            ->and($ui[0]['id'])->toBeString()->not->toBe('');
+    });
+
+    test('conversation message models keep their stored id', function () {
+        $ui = Vercel::uiMessagesFrom([
+            new ConversationMessage(['id' => 'msg-1', 'role' => 'user', 'content' => 'Hello']),
+        ]);
+
+        expect($ui)->toBe([
+            ['id' => 'msg-1', 'role' => 'user', 'parts' => [['type' => 'text', 'text' => 'Hello']]],
+        ]);
     });
 });
