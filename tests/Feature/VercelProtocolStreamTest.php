@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Facades\Exceptions;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Responses\Data;
 use Laravel\Ai\Responses\Data\Usage;
@@ -265,6 +266,26 @@ test('a multi-step stream emits one finish part with combined usage and the fina
     expect(collect($parts)->where('type', 'finish')->values()->all())->toBe([
         vercelFinishPart('stop', new Usage(promptTokens: 30, completionTokens: 20)),
     ]);
+});
+
+test('an exception mid-stream is reported and emitted as a terminal error part', function () {
+    Exceptions::fake();
+
+    $parts = vercelProtocolParts(function () {
+        yield new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time());
+        yield new TextDelta('event-1', 'msg-1', 'Hel', time());
+
+        throw new RuntimeException('Provider connection lost.');
+    });
+
+    expect($parts)->toBe([
+        ['type' => 'start', 'messageId' => 'msg-1'],
+        ['type' => 'text-delta', 'id' => 'msg-1', 'delta' => 'Hel'],
+        ['type' => 'error', 'errorText' => 'Provider connection lost.'],
+        ['type' => 'done'],
+    ]);
+
+    Exceptions::assertReported(RuntimeException::class);
 });
 
 test('a tool executed within the stream emits its input and output parts', function () {
