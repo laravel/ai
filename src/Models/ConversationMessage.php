@@ -6,6 +6,11 @@ use Illuminate\Database\Eloquent\Attributes\WithoutIncrementing;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property string $id
+ * @property string $role
+ * @property ?string $content
+ */
 #[WithoutIncrementing]
 class ConversationMessage extends Model
 {
