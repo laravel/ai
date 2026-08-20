@@ -4,6 +4,7 @@ namespace Laravel\Ai\Responses\Concerns;
 
 use Generator;
 use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
@@ -28,14 +29,19 @@ trait CanStreamUsingVercelProtocol
             public array $toolCalls = [];
 
             public ?StreamEnd $lastStreamEnd = null;
+
+            public bool $errored = false;
         };
 
         return response()->stream(function () use ($state) {
             try {
                 foreach ($this as $event) {
-                    // Send one stream start event...
+                    // Send one stream start event, wrapping each subsequent provider step in step parts...
                     if ($event instanceof StreamStart) {
                         if ($state->streamStarted) {
+                            yield 'data: '.json_encode(['type' => 'finish-step'])."\n\n";
+                            yield 'data: '.json_encode(['type' => 'start-step'])."\n\n";
+
                             continue;
                         }
 
@@ -45,6 +51,10 @@ trait CanStreamUsingVercelProtocol
                     // Track tool calls initiated within this stream.
                     if ($event instanceof ToolCall) {
                         $state->toolCalls[$event->toolCall->id] = true;
+                    }
+
+                    if ($event instanceof Error) {
+                        $state->errored = true;
                     }
 
                     // A result without a local call is valid only when continuing the client message that contains the call...
@@ -86,6 +96,10 @@ trait CanStreamUsingVercelProtocol
                     yield from $this->toVercelProtocolPart($state, $data);
                 }
 
+                if ($state->streamStarted && ! $state->errored) {
+                    yield 'data: '.json_encode(['type' => 'finish-step'])."\n\n";
+                }
+
                 if ($state->lastStreamEnd) {
                     yield 'data: '.json_encode($state->lastStreamEnd->toVercelProtocolArray())."\n\n";
                 }
@@ -118,8 +132,13 @@ trait CanStreamUsingVercelProtocol
             $state->streamStarted = true;
 
             yield 'data: '.json_encode(['type' => 'start', 'messageId' => $this->vercelProtocolMessageId ?? $this->invocationId])."\n\n";
+            yield 'data: '.json_encode(['type' => 'start-step'])."\n\n";
         }
 
         yield 'data: '.json_encode($data)."\n\n";
+
+        if ($data['type'] === 'start') {
+            yield 'data: '.json_encode(['type' => 'start-step'])."\n\n";
+        }
     }
 }

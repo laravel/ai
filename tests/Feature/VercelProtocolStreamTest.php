@@ -67,9 +67,11 @@ test('a text stream emits start, delta, and end parts for the message', function
 
     expect($parts)->toBe([
         ['type' => 'start', 'messageId' => 'msg-1'],
+        ['type' => 'start-step'],
         ['type' => 'text-start', 'id' => 'msg-1'],
         ['type' => 'text-delta', 'id' => 'msg-1', 'delta' => 'Hello.'],
         ['type' => 'text-end', 'id' => 'msg-1'],
+        ['type' => 'finish-step'],
         vercelFinishPart(),
         ['type' => 'done'],
     ]);
@@ -86,9 +88,11 @@ test('a reasoning stream emits start, delta, and end parts for the reasoning blo
 
     expect($parts)->toBe([
         ['type' => 'start', 'messageId' => 'msg-1'],
+        ['type' => 'start-step'],
         ['type' => 'reasoning-start', 'id' => 'reasoning-1'],
         ['type' => 'reasoning-delta', 'id' => 'reasoning-1', 'delta' => 'Considering the options.'],
         ['type' => 'reasoning-end', 'id' => 'reasoning-1'],
+        ['type' => 'finish-step'],
         vercelFinishPart(),
         ['type' => 'done'],
     ]);
@@ -106,10 +110,12 @@ test('a cited text stream emits a source url part for the cited page', function 
 
     expect($parts)->toBe([
         ['type' => 'start', 'messageId' => 'msg-1'],
+        ['type' => 'start-step'],
         ['type' => 'text-start', 'id' => 'msg-1'],
         ['type' => 'text-delta', 'id' => 'msg-1', 'delta' => 'Laravel is a PHP framework.'],
-        ['type' => 'source-url', 'sourceId' => 'https://laravel.com/docs', 'url' => 'https://laravel.com/docs'],
+        ['type' => 'source-url', 'sourceId' => 'https://laravel.com/docs', 'url' => 'https://laravel.com/docs', 'title' => 'Laravel Documentation'],
         ['type' => 'text-end', 'id' => 'msg-1'],
+        ['type' => 'finish-step'],
         vercelFinishPart(),
         ['type' => 'done'],
     ]);
@@ -124,6 +130,7 @@ test('a failed stream emits an error part instead of a finish part', function ()
 
     expect($parts)->toBe([
         ['type' => 'start', 'messageId' => 'msg-1'],
+        ['type' => 'start-step'],
         ['type' => 'text-start', 'id' => 'msg-1'],
         ['type' => 'error', 'errorText' => 'Overloaded'],
         ['type' => 'done'],
@@ -142,8 +149,10 @@ test('a paused stream emits an approval request part for each pending approval',
 
     expect($parts)->toBe([
         ['type' => 'start', 'messageId' => 'msg-1'],
+        ['type' => 'start-step'],
         ['type' => 'tool-input-available', 'toolCallId' => 'call-1', 'toolName' => 'DeleteFile', 'input' => ['path' => 'a.txt']],
         ['type' => 'tool-approval-request', 'toolCallId' => 'call-1', 'approvalId' => 'call-1', 'reason' => 'Destructive operation.'],
+        ['type' => 'finish-step'],
         vercelFinishPart('tool-calls'),
         ['type' => 'done'],
     ]);
@@ -159,8 +168,12 @@ test('a resumed stream emits the approved tool output for the prior turn tool ca
 
     expect($parts)->toBe([
         ['type' => 'start', 'messageId' => 'client-message-1'],
+        ['type' => 'start-step'],
         ['type' => 'tool-output-available', 'toolCallId' => 'call-1', 'output' => 'deleted'],
+        ['type' => 'finish-step'],
+        ['type' => 'start-step'],
         ['type' => 'text-delta', 'id' => 'msg-2', 'delta' => 'Done.'],
+        ['type' => 'finish-step'],
         vercelFinishPart(),
         ['type' => 'done'],
     ]);
@@ -185,7 +198,9 @@ test('a rejected approval streams as a denied tool output', function () {
 
     expect($parts)->toBe([
         ['type' => 'start', 'messageId' => 'client-message-1'],
+        ['type' => 'start-step'],
         ['type' => 'tool-output-denied', 'toolCallId' => 'call-1'],
+        ['type' => 'finish-step'],
         vercelFinishPart(),
         ['type' => 'done'],
     ]);
@@ -211,7 +226,7 @@ test('an unexecuted tool call streams as a tool output error', function () {
         new StreamEnd('event-3', 'stop', new Usage, time()),
     ]);
 
-    expect($parts[2])->toBe([
+    expect($parts[3])->toBe([
         'type' => 'tool-output-error',
         'toolCallId' => 'call-1',
         'errorText' => 'The agent reached its maximum number of steps without running this tool call.',
@@ -226,7 +241,7 @@ test('a failed tool call without an error message streams a default error text',
         new StreamEnd('event-3', 'stop', new Usage, time()),
     ]);
 
-    expect($parts[2])->toBe([
+    expect($parts[3])->toBe([
         'type' => 'tool-output-error',
         'toolCallId' => 'call-1',
         'errorText' => 'The tool call failed.',
@@ -265,6 +280,11 @@ test('a multi-step stream emits one finish part with combined usage and the fina
 
     expect(collect($parts)->where('type', 'finish')->values()->all())->toBe([
         vercelFinishPart('stop', new Usage(promptTokens: 30, completionTokens: 20)),
+    ])->and(collect($parts)->pluck('type')->all())->toBe([
+        'start', 'start-step',
+        'tool-input-available', 'tool-output-available', 'finish-step',
+        'start-step', 'text-delta', 'finish-step',
+        'finish', 'done',
     ]);
 });
 
@@ -280,6 +300,7 @@ test('an exception mid-stream is reported and emitted as a terminal error part',
 
     expect($parts)->toBe([
         ['type' => 'start', 'messageId' => 'msg-1'],
+        ['type' => 'start-step'],
         ['type' => 'text-delta', 'id' => 'msg-1', 'delta' => 'Hel'],
         ['type' => 'error', 'errorText' => 'Provider connection lost.'],
         ['type' => 'done'],
@@ -298,8 +319,10 @@ test('a tool executed within the stream emits its input and output parts', funct
 
     expect($parts)->toBe([
         ['type' => 'start', 'messageId' => 'msg-1'],
+        ['type' => 'start-step'],
         ['type' => 'tool-input-available', 'toolCallId' => 'call-1', 'toolName' => 'GetWeather', 'input' => ['city' => 'Lisbon']],
         ['type' => 'tool-output-available', 'toolCallId' => 'call-1', 'output' => 'sunny'],
+        ['type' => 'finish-step'],
         vercelFinishPart(),
         ['type' => 'done'],
     ]);

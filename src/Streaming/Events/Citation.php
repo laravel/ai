@@ -42,11 +42,13 @@ class Citation extends StreamEvent
     public function toVercelProtocolArray(): ?array
     {
         return match (true) {
-            $this->citation instanceof UrlCitation => [
+            $this->citation instanceof UrlCitation => array_filter([
                 'type' => 'source-url',
                 'sourceId' => $this->citation->url,
                 'url' => $this->citation->url,
-            ],
+                'title' => $this->citation->title,
+            ]),
+            default => null,
         };
     }
 }
