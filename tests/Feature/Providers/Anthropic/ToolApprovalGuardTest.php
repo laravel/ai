@@ -53,6 +53,32 @@ test('a gated tool on a non-conversational agent throws before streaming a pause
         ->and(array_filter($events, fn ($event) => $event instanceof ToolApprovalRequest))->toBeEmpty();
 });
 
+test('a gated tool pauses instead of throwing when the client replays history, even on the first turn', function () {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response([
+            'id' => 'msg_tool_1',
+            'type' => 'message',
+            'role' => 'assistant',
+            'model' => 'claude-sonnet-4-6',
+            'content' => [[
+                'type' => 'tool_use',
+                'id' => 'toolu_1',
+                'name' => 'ApprovableNumberGenerator',
+                'input' => (object) [],
+            ]],
+            'stop_reason' => 'tool_use',
+            'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+        ]),
+    ]);
+
+    $paused = (new StatelessApprovableAgent)
+        ->withMessages([])
+        ->prompt('Generate a number', provider: 'anthropic');
+
+    expect($paused->hasPendingApprovals())->toBeTrue()
+        ->and($paused->pendingApprovals[0]->id)->toBe('toolu_1');
+});
+
 test('a gated tool on a conversational agent pauses ownerless instead of throwing', function () {
     Config::set('ai.conversations.generate_title', false);
 

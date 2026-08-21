@@ -5,6 +5,7 @@ namespace Laravel\Ai\Contracts;
 use Illuminate\Broadcasting\Channel;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\QueuedAgentResponse;
 use Laravel\Ai\Responses\StreamableAgentResponse;
@@ -21,7 +22,7 @@ interface Agent
      * Invoke the agent with a given prompt, or resume a paused run with tool approval decisions.
      */
     public function prompt(
-        Decisions|string $prompt,
+        ChatInput|Decisions|UserMessage|string $prompt,
         array $attachments = [],
         Lab|array|string|null $provider = null,
         ?string $model = null,
@@ -32,7 +33,7 @@ interface Agent
      * Invoke the agent with a given prompt and return a streamable response.
      */
     public function stream(
-        Decisions|string $prompt,
+        ChatInput|Decisions|UserMessage|string $prompt,
         array $attachments = [],
         Lab|array|string|null $provider = null,
         ?string $model = null,
@@ -43,7 +44,7 @@ interface Agent
      * Invoke the agent in a queued job.
      */
     public function queue(
-        Decisions|string $prompt,
+        ChatInput|Decisions|UserMessage|string $prompt,
         array $attachments = [],
         Lab|array|string|null $provider = null,
         ?string $model = null
@@ -53,7 +54,7 @@ interface Agent
      * Invoke the agent with a given prompt and broadcast the streamed events.
      */
     public function broadcast(
-        Decisions|string $prompt,
+        ChatInput|Decisions|UserMessage|string $prompt,
         Channel|array $channels,
         array $attachments = [],
         bool $now = false,
@@ -65,7 +66,7 @@ interface Agent
      * Invoke the agent with a given prompt and broadcast the streamed events immediately.
      */
     public function broadcastNow(
-        Decisions|string $prompt,
+        ChatInput|Decisions|UserMessage|string $prompt,
         Channel|array $channels,
         array $attachments = [],
         Lab|array|string|null $provider = null,
@@ -76,7 +77,7 @@ interface Agent
      * Queue the agent with a given prompt and broadcast the streamed events.
      */
     public function broadcastOnQueue(
-        Decisions|string $prompt,
+        ChatInput|Decisions|UserMessage|string $prompt,
         Channel|array $channels,
         array $attachments = [],
         Lab|array|string|null $provider = null,
