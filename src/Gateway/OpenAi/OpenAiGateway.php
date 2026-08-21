@@ -56,6 +56,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
      * @param  array<Image>  $attachments
      * @param  '3:2'|'2:3'|'1:1'|null  $size
      * @param  'low'|'medium'|'high'|null  $quality
+     * @param  array<string, mixed>  $providerOptions
      */
     public function generateImage(
         ImageProvider $provider,
@@ -65,14 +66,15 @@ class OpenAiGateway implements Gateway, StepTextGateway
         ?string $size = null,
         ?string $quality = null,
         ?int $timeout = null,
+        array $providerOptions = [],
     ): ImageResponse {
         $hasAttachments = filled($attachments);
 
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $hasAttachments
-                ? $this->sendImageEditRequest($provider, $model, $prompt, $attachments, $size, $quality, $timeout)
-                : $this->sendImageGenerationRequest($provider, $model, $prompt, $size, $quality, $timeout),
+                ? $this->sendImageEditRequest($provider, $model, $prompt, $attachments, $size, $quality, $timeout, $providerOptions)
+                : $this->sendImageGenerationRequest($provider, $model, $prompt, $size, $quality, $timeout, $providerOptions),
         );
 
         $data = $response->json();
@@ -89,6 +91,8 @@ class OpenAiGateway implements Gateway, StepTextGateway
 
     /**
      * Send an image generation request.
+     *
+     * @param  array<string, mixed>  $providerOptions
      */
     protected function sendImageGenerationRequest(
         ImageProvider $provider,
@@ -97,8 +101,10 @@ class OpenAiGateway implements Gateway, StepTextGateway
         ?string $size,
         ?string $quality,
         ?int $timeout,
+        array $providerOptions = [],
     ) {
         return $this->client($provider, $timeout ?? 120)->post('images/generations', [
+            ...$providerOptions,
             'model' => $model,
             'prompt' => $prompt,
             ...$provider->defaultImageOptions($size, $quality),
@@ -110,6 +116,8 @@ class OpenAiGateway implements Gateway, StepTextGateway
 
     /**
      * Send an image edit request with attachments.
+     *
+     * @param  array<string, mixed>  $providerOptions
      */
     protected function sendImageEditRequest(
         ImageProvider $provider,
@@ -119,6 +127,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
         ?string $size,
         ?string $quality,
         ?int $timeout,
+        array $providerOptions = [],
     ) {
         $request = $this->client($provider, $timeout ?? 120);
 
@@ -142,14 +151,14 @@ class OpenAiGateway implements Gateway, StepTextGateway
             $request = $request->attach($field, $content, 'image.png');
         }
 
-        return $request->post('images/edits', array_filter([
+        return $request->post('images/edits', array_merge($providerOptions, array_filter([
             'model' => $model,
             'prompt' => $prompt,
             ...$provider->defaultImageOptions($size, $quality),
             ...($isGptImage
                 ? ['moderation' => 'low']
                 : ['response_format' => 'b64_json']),
-        ]));
+        ])));
     }
 
     /**

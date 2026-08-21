@@ -77,6 +77,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, StepTextGate
      * @param  array<Image>  $attachments
      * @param  '3:2'|'2:3'|'1:1'|null  $size
      * @param  'low'|'medium'|'high'|null  $quality
+     * @param  array<string, mixed>  $providerOptions
      *
      * @throws LogicException if attachments are passed; Azure OpenAI does not support image edits.
      */
@@ -88,6 +89,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, StepTextGate
         ?string $size = null,
         ?string $quality = null,
         ?int $timeout = null,
+        array $providerOptions = [],
     ): ImageResponse {
         if (filled($attachments)) {
             throw new LogicException('Azure OpenAI does not support image editing.');
@@ -96,6 +98,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, StepTextGate
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout ?? 120)->post('images/generations', [
+                ...$providerOptions,
                 'model' => $model,
                 'prompt' => $prompt,
                 'moderation' => 'low',
