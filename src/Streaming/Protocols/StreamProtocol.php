@@ -76,6 +76,14 @@ abstract class StreamProtocol
      */
     protected function encode(array $part): string
     {
-        return 'data: '.json_encode($part)."\n\n";
+        return 'data: '.$this->json($part)."\n\n";
+    }
+
+    /**
+     * Encode the given value as JSON, substituting bytes a provider streamed as invalid UTF-8.
+     */
+    protected function json(mixed $value): string
+    {
+        return (string) json_encode($value, JSON_INVALID_UTF8_SUBSTITUTE);
     }
 }

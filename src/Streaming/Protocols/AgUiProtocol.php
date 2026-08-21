@@ -3,8 +3,11 @@
 namespace Laravel\Ai\Streaming\Protocols;
 
 use Generator;
+use Illuminate\Support\Arr;
 use Laravel\Ai\Approvals\PendingApproval;
+use Laravel\Ai\Responses\Data;
 use Laravel\Ai\Responses\Data\UrlCitation;
+use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Streaming\Events\Citation;
 use Laravel\Ai\Streaming\Events\Error;
@@ -12,6 +15,7 @@ use Laravel\Ai\Streaming\Events\ProviderToolEvent;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
 use Laravel\Ai\Streaming\Events\ReasoningStart;
+use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
@@ -32,6 +36,8 @@ class AgUiProtocol extends StreamProtocol
 {
     protected int $step = 0;
 
+    protected bool $finished = false;
+
     public function __construct(
         protected ?string $threadId = null,
         protected ?string $runId = null,
@@ -46,22 +52,25 @@ class AgUiProtocol extends StreamProtocol
     {
         $this->started = false;
         $this->errored = false;
+        $this->finished = false;
         $this->step = 0;
-
-        $continuesThread = $this->threadId !== null;
 
         $this->threadId ??= $response->conversationId ?? ulid();
         $this->runId ??= $response->invocationId;
 
         $toolCalls = [];
-        $interrupts = [];
+        $usage = null;
+        $reason = null;
 
         foreach ($response as $event) {
-            // Start the run once, wrapping each subsequent provider step in step events...
+            if ($this->finished) {
+                continue;
+            }
+
             if ($event instanceof StreamStart) {
                 if ($this->started) {
-                    yield $this->stepPart('STEP_FINISHED');
-                    yield $this->stepPart('STEP_STARTED', next: true);
+                    yield $this->stepFinishedPart();
+                    yield $this->stepStartedPart();
                 } else {
                     yield from $this->runStartedParts();
                 }
@@ -69,7 +78,6 @@ class AgUiProtocol extends StreamProtocol
                 continue;
             }
 
-            // Track tool calls initiated within this run.
             if ($event instanceof ToolCall) {
                 $toolCalls[$event->toolCall->id] = true;
             }
@@ -78,18 +86,32 @@ class AgUiProtocol extends StreamProtocol
                 $this->errored = true;
             }
 
-            // A result without a local call is valid only when continuing a thread the client already holds the call for...
-            if ($event instanceof ToolResult
-                && ! isset($toolCalls[$event->toolResult->id])
-                && ! $continuesThread) {
+            // A result replayed from an earlier turn has no call the client can attach it to, so restate the call first...
+            if ($event instanceof ToolResult && ! isset($toolCalls[$event->toolResult->id])) {
+                $toolCalls[$event->toolResult->id] = true;
+
+                foreach ($this->toolCallParts($event->toolResult) as $part) {
+                    yield from $this->part($part);
+                }
+            }
+
+            // The run pauses on approvals, so finish it immediately with the outcome the client resumes from...
+            if ($event instanceof ToolApprovalRequest) {
+                yield from $this->part($this->stepFinishedPart());
+
+                yield $this->runFinishedPart([
+                    'outcome' => ['type' => 'interrupt', 'interrupts' => $this->interrupts($event)],
+                ]);
+
+                $this->finished = true;
+
                 continue;
             }
 
-            // The run pauses on approvals, so hold them for the terminal interrupt outcome...
-            if ($event instanceof ToolApprovalRequest) {
-                foreach ($event->pendingApprovals as $pendingApproval) {
-                    $interrupts[] = $this->interrupt($pendingApproval);
-                }
+            // Hold each step's usage and reason for the terminal run finished event...
+            if ($event instanceof StreamEnd) {
+                $usage = ($usage ?? new Usage)->add($event->usage);
+                $reason = $event->reason;
 
                 continue;
             }
@@ -99,9 +121,9 @@ class AgUiProtocol extends StreamProtocol
             }
         }
 
-        if ($this->started && ! $this->errored) {
-            yield $this->stepPart('STEP_FINISHED');
-            yield $this->runFinishedPart($interrupts);
+        if ($this->started && ! $this->errored && ! $this->finished) {
+            yield $this->stepFinishedPart();
+            yield $this->runFinishedPart($this->completion($usage, $reason));
         }
     }
 
@@ -110,6 +132,11 @@ class AgUiProtocol extends StreamProtocol
      */
     protected function maskedErrorParts(): Generator
     {
+        // The interrupt outcome already ended the run, so a trailing error would follow a terminal event...
+        if ($this->finished) {
+            return;
+        }
+
         yield from $this->part(['type' => 'RUN_ERROR', 'message' => 'An error occurred.']);
     }
 
@@ -151,58 +178,96 @@ class AgUiProtocol extends StreamProtocol
             'runId' => $this->runId,
         ];
 
-        yield $this->stepPart('STEP_STARTED', next: true);
+        yield $this->stepStartedPart();
     }
 
     /**
-     * Get the event that starts or finishes the current step.
+     * Get the event that starts the next step.
      *
      * @return array<string, mixed>
      */
-    protected function stepPart(string $type, bool $next = false): array
+    protected function stepStartedPart(): array
     {
-        return [
-            'type' => $type,
-            'stepName' => (string) ($next ? ++$this->step : $this->step),
-        ];
+        return ['type' => 'STEP_STARTED', 'stepName' => (string) ++$this->step];
     }
 
     /**
-     * Get the event that finishes the run, interrupting it when approvals are pending.
+     * Get the event that finishes the current step.
      *
-     * @param  array<int, array<string, mixed>>  $interrupts
      * @return array<string, mixed>
      */
-    protected function runFinishedPart(array $interrupts): array
+    protected function stepFinishedPart(): array
+    {
+        return ['type' => 'STEP_FINISHED', 'stepName' => (string) $this->step];
+    }
+
+    /**
+     * Get the event that finishes the run with the given additional attributes.
+     *
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed>
+     */
+    protected function runFinishedPart(array $attributes = []): array
     {
         return [
             'type' => 'RUN_FINISHED',
             'threadId' => $this->threadId,
             'runId' => $this->runId,
-            ...($interrupts === [] ? [] : [
-                'outcome' => ['type' => 'interrupt', 'interrupts' => $interrupts],
-            ]),
+            ...$attributes,
         ];
     }
 
     /**
-     * Get the interrupt that represents the given pending approval.
+     * Get the run finished attributes that report how the run completed.
      *
      * @return array<string, mixed>
      */
-    protected function interrupt(PendingApproval $pendingApproval): array
+    protected function completion(?Usage $usage, ?string $reason): array
     {
-        return array_filter([
-            'id' => $pendingApproval->id,
+        return [
+            ...($usage !== null ? ['usage' => [[
+                'inputTokens' => $usage->promptTokens,
+                'outputTokens' => $usage->completionTokens,
+                'totalTokens' => $usage->promptTokens + $usage->completionTokens,
+                'reasoningTokens' => $usage->reasoningTokens,
+                'cachedInputTokens' => $usage->cacheReadInputTokens,
+            ]]] : []),
+            ...($reason === null ? [] : ['metadata' => ['finishReason' => $reason]]),
+        ];
+    }
+
+    /**
+     * Get the interrupts that represent the given approval request's pending approvals.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function interrupts(ToolApprovalRequest $event): array
+    {
+        return $event->pendingApprovals->map(fn (PendingApproval $approval) => Arr::whereNotNull([
+            'id' => $approval->id,
             'reason' => 'tool_call',
-            'message' => $pendingApproval->reason,
-            'toolCallId' => $pendingApproval->id,
+            'message' => $approval->reason,
+            'toolCallId' => $approval->id,
             'responseSchema' => [
                 'type' => 'object',
                 'properties' => ['approved' => ['type' => 'boolean']],
                 'required' => ['approved'],
             ],
-        ], fn ($value) => $value !== null);
+        ]))->all();
+    }
+
+    /**
+     * Get the protocol parts that represent the given tool call.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function toolCallParts(Data\ToolCall|Data\ToolResult $call): array
+    {
+        return [
+            ['type' => 'TOOL_CALL_START', 'toolCallId' => $call->id, 'toolCallName' => $call->name],
+            ['type' => 'TOOL_CALL_ARGS', 'toolCallId' => $call->id, 'delta' => $this->json((object) $call->arguments)],
+            ['type' => 'TOOL_CALL_END', 'toolCallId' => $call->id],
+        ];
     }
 
     /**
@@ -229,7 +294,7 @@ class AgUiProtocol extends StreamProtocol
             ]],
             $event instanceof ReasoningStart => [
                 ['type' => 'REASONING_START', 'messageId' => $event->reasoningId],
-                ['type' => 'REASONING_MESSAGE_START', 'messageId' => $event->reasoningId, 'role' => 'assistant'],
+                ['type' => 'REASONING_MESSAGE_START', 'messageId' => $event->reasoningId, 'role' => 'reasoning'],
             ],
             $event instanceof ReasoningDelta => [[
                 'type' => 'REASONING_MESSAGE_CONTENT',
@@ -240,11 +305,7 @@ class AgUiProtocol extends StreamProtocol
                 ['type' => 'REASONING_MESSAGE_END', 'messageId' => $event->reasoningId],
                 ['type' => 'REASONING_END', 'messageId' => $event->reasoningId],
             ],
-            $event instanceof ToolCall => [
-                ['type' => 'TOOL_CALL_START', 'toolCallId' => $event->toolCall->id, 'toolCallName' => $event->toolCall->name],
-                ['type' => 'TOOL_CALL_ARGS', 'toolCallId' => $event->toolCall->id, 'delta' => json_encode($event->toolCall->arguments)],
-                ['type' => 'TOOL_CALL_END', 'toolCallId' => $event->toolCall->id],
-            ],
+            $event instanceof ToolCall => $this->toolCallParts($event->toolCall),
             $event instanceof ToolResult => [[
                 'type' => 'TOOL_CALL_RESULT',
                 'messageId' => $event->toolResult->resultId ?? $event->id,
@@ -283,10 +344,10 @@ class AgUiProtocol extends StreamProtocol
             $event->citation instanceof UrlCitation => [[
                 'type' => 'CUSTOM',
                 'name' => 'citation',
-                'value' => array_filter([
+                'value' => Arr::whereNotNull([
                     'url' => $event->citation->url,
                     'title' => $event->citation->title,
-                ], fn ($value) => $value !== null),
+                ]),
             ]],
             default => [],
         };
@@ -303,6 +364,6 @@ class AgUiProtocol extends StreamProtocol
 
         return is_string($event->toolResult->result)
             ? $event->toolResult->result
-            : (string) json_encode($event->toolResult->result);
+            : $this->json($event->toolResult->result);
     }
 }

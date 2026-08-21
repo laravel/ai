@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Streaming\Protocols;
 
 use Generator;
+use Illuminate\Support\Arr;
 use Laravel\Ai\Responses\Data\UrlCitation;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StreamableAgentResponse;
@@ -26,7 +27,7 @@ use Laravel\Ai\Streaming\Events\ToolResult;
  *
  * See: https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol
  */
-class VercelProtocol extends StreamProtocol
+class VercelDataProtocol extends StreamProtocol
 {
     protected ?string $invocationId = null;
 
@@ -45,8 +46,8 @@ class VercelProtocol extends StreamProtocol
         $this->invocationId = $response->invocationId;
 
         $toolCalls = [];
-        $lastStreamEnd = null;
-        $usage = null;
+        $reason = null;
+        $usage = new Usage;
 
         foreach ($response as $event) {
             // Send one stream start event, wrapping each subsequent provider step in step parts...
@@ -57,7 +58,6 @@ class VercelProtocol extends StreamProtocol
                 continue;
             }
 
-            // Track tool calls initiated within this stream.
             if ($event instanceof ToolCall) {
                 $toolCalls[$event->toolCall->id] = true;
             }
@@ -86,10 +86,10 @@ class VercelProtocol extends StreamProtocol
                 continue;
             }
 
-            // Save the last stream end event until the very end, combining usage across steps...
+            // Hold the finish reason and combined usage of every step for the terminal finish part...
             if ($event instanceof StreamEnd) {
-                $lastStreamEnd = $event;
-                $usage = ($usage ?? new Usage)->add($event->usage);
+                $reason = $event->reason;
+                $usage = $usage->add($event->usage);
 
                 continue;
             }
@@ -104,8 +104,8 @@ class VercelProtocol extends StreamProtocol
         if ($this->started && ! $this->errored) {
             yield ['type' => 'finish-step'];
 
-            if ($lastStreamEnd instanceof StreamEnd) {
-                yield $this->finishPart($lastStreamEnd->reason, $usage ?? new Usage);
+            if ($reason !== null) {
+                yield $this->finishPart($reason, $usage);
             }
         }
     }
@@ -254,12 +254,12 @@ class VercelProtocol extends StreamProtocol
     protected function citationPart(Citation $event): ?array
     {
         return match (true) {
-            $event->citation instanceof UrlCitation => array_filter([
+            $event->citation instanceof UrlCitation => Arr::whereNotNull([
                 'type' => 'source-url',
                 'sourceId' => $event->citation->url,
                 'url' => $event->citation->url,
                 'title' => $event->citation->title,
-            ], fn ($value) => $value !== null),
+            ]),
             default => null,
         };
     }

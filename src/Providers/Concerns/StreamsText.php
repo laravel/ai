@@ -4,6 +4,7 @@ namespace Laravel\Ai\Providers\Concerns;
 
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Events\AgentStreamed;
@@ -108,6 +109,13 @@ trait StreamsText
                         },
                         $meta,
                     );
+
+                    if (in_array(RemembersConversations::class, class_uses_recursive($agent)) && $agent->currentConversation() !== null) {
+                        $streamable->withinConversation(
+                            $agent->currentConversation(),
+                            $agent->conversationParticipant(),
+                        );
+                    }
 
                     return $streamable;
                 });
