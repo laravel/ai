@@ -35,6 +35,7 @@ return [
         'embeddings' => [
             'cache' => false,
             'store' => env('CACHE_STORE', 'database'),
+            'individually' => true,
         ],
     ],
 
