@@ -153,6 +153,7 @@ trait HandlesTextStreaming
                         $data['content_block'] ?? [],
                         'started',
                         time(),
+                        provider: $provider->name(),
                     ))->withInvocationId($invocationId);
                 } elseif ($this->isProviderToolResultBlock($blockType)) {
                     $fetchResult = $data['content_block']['content'] ?? [];
@@ -173,6 +174,7 @@ trait HandlesTextStreaming
                         $data['content_block'] ?? [],
                         'result_received',
                         time(),
+                        provider: $provider->name(),
                     ))->withInvocationId($invocationId);
                 }
 
@@ -310,6 +312,7 @@ trait HandlesTextStreaming
                         $responseContent[$index] ?? [],
                         'completed',
                         time(),
+                        provider: $provider->name(),
                     ))->withInvocationId($invocationId);
                 }
 

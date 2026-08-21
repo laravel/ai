@@ -167,6 +167,7 @@ trait HandlesTextStreaming
                         $data['item'] ?? [],
                         'completed',
                         time(),
+                        provider: $provider->name(),
                     ))->withInvocationId($invocationId);
 
                     continue;
@@ -184,6 +185,7 @@ trait HandlesTextStreaming
                         $data,
                         $parts[2],
                         time(),
+                        provider: $provider->name(),
                     ))->withInvocationId($invocationId);
 
                     continue;

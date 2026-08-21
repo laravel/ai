@@ -59,7 +59,7 @@ class StreamEnd extends StreamEvent
                 'length' => 'length',
                 'content_filter' => 'content-filter',
                 'error' => 'error',
-                'unknown' => 'unknown',
+                'unknown' => 'other',
                 default => 'other',
             },
             'messageMetadata' => [
