@@ -166,6 +166,7 @@ trait HandlesTextGeneration
                         $data['item'] ?? [],
                         'completed',
                         time(),
+                        provider: $provider->name(),
                     ))->withInvocationId($invocationId);
 
                     continue;
@@ -183,6 +184,7 @@ trait HandlesTextGeneration
                         $data,
                         $parts[2],
                         time(),
+                        provider: $provider->name(),
                     ))->withInvocationId($invocationId);
 
                     continue;

@@ -171,6 +171,7 @@ describe('thinking blocks', function (): void {
 
         expect($providerEvents)->toHaveCount(2)
             ->and($providerEvents[0])->status->toBe('started')->itemId->toBe('srvtoolu_1')
+            ->and($providerEvents[0]->provider)->toBe('anthropic')
             ->and($providerEvents[1]->status)->toBe('completed');
     });
 

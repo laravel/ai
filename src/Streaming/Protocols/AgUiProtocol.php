@@ -322,12 +322,13 @@ class AgUiProtocol extends StreamProtocol
             $event instanceof ProviderToolEvent => [[
                 'type' => 'CUSTOM',
                 'name' => 'provider-tool',
-                'value' => [
+                'value' => Arr::whereNotNull([
+                    'provider' => $event->provider,
                     'itemId' => $event->itemId,
                     'type' => $event->type,
                     'data' => $event->data,
                     'status' => $event->status,
-                ],
+                ]),
             ]],
             default => [],
         };

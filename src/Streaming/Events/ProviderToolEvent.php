@@ -14,6 +14,7 @@ class ProviderToolEvent extends StreamEvent
         public array $data,
         public string $status,
         public int $timestamp,
+        public ?string $provider = null,
     ) {}
 
     /**
@@ -28,6 +29,7 @@ class ProviderToolEvent extends StreamEvent
             'data' => $this->data,
             'status' => $this->status,
             'timestamp' => $this->timestamp,
+            'provider' => $this->provider,
         ];
     }
 }

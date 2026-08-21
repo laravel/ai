@@ -8,6 +8,7 @@ use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Streaming\Events\Citation;
 use Laravel\Ai\Streaming\Events\Error;
+use Laravel\Ai\Streaming\Events\ProviderToolEvent;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
 use Laravel\Ai\Streaming\Events\ReasoningStart;
@@ -306,13 +307,33 @@ test('finish reasons outside the Vercel enum emit as other', function () {
     expect($parts[count($parts) - 2])->toBe(vercelFinishPart('other'));
 });
 
-test('an unknown finish reason is preserved', function () {
+test('an unknown finish reason emits as other', function () {
     $parts = vercelProtocolParts([
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
         new StreamEnd('event-1', 'unknown', new Usage, time()),
     ]);
 
-    expect($parts[count($parts) - 2])->toBe(vercelFinishPart('unknown'));
+    expect($parts[count($parts) - 2])->toBe(vercelFinishPart('other'));
+});
+
+test('a provider tool event emits as a custom provider part', function () {
+    $parts = vercelProtocolParts([
+        new StreamStart('msg-1', 'openai', 'gpt-5', time()),
+        new ProviderToolEvent('event-1', 'search-1', 'web_search_call', ['query' => 'Laravel'], 'in_progress', time(), 'openai'),
+        new StreamEnd('event-2', 'stop', new Usage, time()),
+    ]);
+
+    expect($parts[2])->toBe([
+        'type' => 'custom',
+        'kind' => 'openai.web_search_call',
+        'providerMetadata' => [
+            'openai' => [
+                'itemId' => 'search-1',
+                'status' => 'in_progress',
+                'data' => ['query' => 'Laravel'],
+            ],
+        ],
+    ]);
 });
 
 test('a multi-step stream emits one finish part with combined usage and the final reason', function () {

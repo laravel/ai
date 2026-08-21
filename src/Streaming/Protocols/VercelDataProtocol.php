@@ -9,6 +9,7 @@ use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Streaming\Events\Citation;
 use Laravel\Ai\Streaming\Events\Error;
+use Laravel\Ai\Streaming\Events\ProviderToolEvent;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
 use Laravel\Ai\Streaming\Events\ReasoningStart;
@@ -213,6 +214,7 @@ class VercelDataProtocol extends StreamProtocol
                 'type' => 'error',
                 'errorText' => $event->message,
             ],
+            $event instanceof ProviderToolEvent => $this->providerToolPart($event),
             default => null,
         };
     }
@@ -243,6 +245,28 @@ class VercelDataProtocol extends StreamProtocol
             'type' => 'tool-output-available',
             'toolCallId' => $event->toolResult->id,
             'output' => $event->toolResult->result,
+        ];
+    }
+
+    /**
+     * Get the protocol part that represents the given provider tool event.
+     *
+     * @return array<string, mixed>
+     */
+    protected function providerToolPart(ProviderToolEvent $event): array
+    {
+        $provider = $event->provider ?? 'laravel';
+
+        return [
+            'type' => 'custom',
+            'kind' => $provider.'.'.$event->type,
+            'providerMetadata' => [
+                $provider => [
+                    'itemId' => $event->itemId,
+                    'status' => $event->status,
+                    'data' => $event->data,
+                ],
+            ],
         ];
     }
 
@@ -279,7 +303,6 @@ class VercelDataProtocol extends StreamProtocol
                 'length' => 'length',
                 'content_filter' => 'content-filter',
                 'error' => 'error',
-                'unknown' => 'unknown',
                 default => 'other',
             },
             'messageMetadata' => [
