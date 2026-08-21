@@ -8,12 +8,14 @@ use Laravel\Ai\Ai;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
+use Laravel\Ai\PendingResponses\Concerns\ResolvesProviderOptions;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\RerankingResponse;
 
 class PendingReranking
 {
     use Conditionable;
+    use ResolvesProviderOptions;
 
     protected ?int $limit = null;
 
@@ -71,7 +73,7 @@ class PendingReranking
             $model ??= $provider->defaultRerankingModel();
 
             try {
-                return $provider->rerank($this->documents, $query, $this->limit, $model);
+                return $provider->rerank($this->documents, $query, $this->limit, $model, $this->resolveProviderOptions($provider));
             } catch (FailoverableException $e) {
                 $lastException = $e;
 

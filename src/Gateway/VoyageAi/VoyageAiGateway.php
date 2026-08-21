@@ -54,22 +54,24 @@ class VoyageAiGateway implements EmbeddingGateway, RerankingGateway
      * Rerank the given documents based on their relevance to the query.
      *
      * @param  array<int, string>  $documents
+     * @param  array<string, mixed>  $providerOptions
      */
     public function rerank(
         RerankingProvider $provider,
         string $model,
         array $documents,
         string $query,
-        ?int $limit = null
+        ?int $limit = null,
+        array $providerOptions = [],
     ): RerankingResponse {
         $data = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider)->post('/rerank', array_filter([
+            fn () => $this->client($provider)->post('/rerank', array_merge($providerOptions, array_filter([
                 'model' => $model,
                 'query' => $query,
                 'documents' => $documents,
                 'top_k' => $limit,
-            ])),
+            ]))),
         )->json();
 
         return new RerankingResponse(
