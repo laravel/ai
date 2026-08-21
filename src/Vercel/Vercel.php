@@ -35,11 +35,7 @@ class Vercel
     {
         $messages = $input instanceof Request ? $input->input('messages', []) : $input;
 
-        if (! is_iterable($messages)) {
-            $messages = [];
-        }
-
-        return new Chat(is_array($messages) ? array_values($messages) : iterator_to_array($messages, false));
+        return new Chat(is_iterable($messages) ? array_values([...$messages]) : []);
     }
 
     /**
@@ -69,36 +65,12 @@ class Vercel
                 continue;
             }
 
-            $parts = [];
+            $parts = static::uiPartsFrom($message);
 
-            if (filled($message->content)) {
-                $parts[] = ['type' => 'text', 'text' => $message->content];
-            }
-
-            foreach (static::attachmentsFrom($message) as $attachment) {
-                if ($part = static::uiFilePartFrom($attachment)) {
-                    $parts[] = $part;
+            foreach ($parts as $index => $part) {
+                if (isset($part['toolCallId'])) {
+                    $partRefs[$part['toolCallId']] = [count($result), $index];
                 }
-            }
-
-            $pending = $message instanceof ConversationMessage
-                ? (array) (($message->approval_state ?? [])['pending'] ?? [])
-                : [];
-
-            $index = count($result);
-
-            foreach (static::toolCallArraysFrom($message) as $toolCall) {
-                $partRefs[$toolCall['id']] = [$index, count($parts)];
-
-                $parts[] = [
-                    'type' => 'tool-'.$toolCall['name'],
-                    'toolCallId' => $toolCall['id'],
-                    'state' => array_key_exists($toolCall['id'], $pending) ? 'approval-requested' : 'input-available',
-                    'input' => $toolCall['arguments'],
-                    ...(array_key_exists($toolCall['id'], $pending)
-                        ? ['approval' => ['id' => $toolCall['id'], 'reason' => $pending[$toolCall['id']]]]
-                        : []),
-                ];
             }
 
             $result[] = [
@@ -115,6 +87,46 @@ class Vercel
         }
 
         return $result;
+    }
+
+    /**
+     * Create the UI message parts for a single message.
+     *
+     * @return list<array<string, mixed>>
+     */
+    protected static function uiPartsFrom(Message|ConversationMessage $message): array
+    {
+        $parts = [];
+
+        if (filled($message->content)) {
+            $parts[] = ['type' => 'text', 'text' => $message->content];
+        }
+
+        foreach (static::attachmentsFrom($message) as $attachment) {
+            if ($part = static::uiFilePartFrom($attachment)) {
+                $parts[] = $part;
+            }
+        }
+
+        $pending = $message instanceof ConversationMessage
+            ? (array) (($message->approval_state ?? [])['pending'] ?? [])
+            : [];
+
+        foreach (static::toolCallArraysFrom($message) as $toolCall) {
+            $isPending = array_key_exists($toolCall['id'], $pending);
+
+            $parts[] = [
+                'type' => 'tool-'.$toolCall['name'],
+                'toolCallId' => $toolCall['id'],
+                'state' => $isPending ? 'approval-requested' : 'input-available',
+                'input' => $toolCall['arguments'],
+                ...($isPending
+                    ? ['approval' => ['id' => $toolCall['id'], 'reason' => $pending[$toolCall['id']]]]
+                    : []),
+            ];
+        }
+
+        return $parts;
     }
 
     /**
@@ -264,7 +276,7 @@ class Vercel
      */
     protected static function toolResultsFrom(array $message): Collection
     {
-        return static::toolParts(new Collection($message['parts'] ?? []))
+        return static::toolParts($message['parts'] ?? [])
             ->filter(fn (array $part) => in_array($part['state'] ?? null, ['output-available', 'output-error', 'output-denied'], true))
             ->map(fn (array $part) => new ToolResult(
                 id: $part['toolCallId'],
@@ -285,7 +297,7 @@ class Vercel
     public static function approvalResponsesFrom(array $message): array
     {
         // Settled parts may still carry stale approval responses, so only pending states count...
-        return static::toolParts(new Collection($message['parts'] ?? []))
+        return static::toolParts($message['parts'] ?? [])
             ->filter(fn (array $part) => in_array($part['state'] ?? null, ['approval-requested', 'approval-responded'], true)
                 && is_bool($part['approval']['approved'] ?? null))
             ->mapWithKeys(fn (array $part) => [$part['toolCallId'] => $part['approval']['approved']])
@@ -293,14 +305,14 @@ class Vercel
     }
 
     /**
-     * Filter a part collection down to its tool parts.
+     * Filter the given parts down to the tool parts.
      *
-     * @param  Collection<int, mixed>  $parts
+     * @param  iterable<int, mixed>  $parts
      * @return Collection<int, array<string, mixed>>
      */
-    protected static function toolParts(Collection $parts): Collection
+    protected static function toolParts(iterable $parts): Collection
     {
-        return $parts->filter(fn ($part) => is_array($part)
+        return (new Collection($parts))->filter(fn ($part) => is_array($part)
             && str_starts_with($part['type'] ?? '', 'tool-')
             && isset($part['toolCallId']));
     }

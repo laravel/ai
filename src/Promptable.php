@@ -47,7 +47,7 @@ trait Promptable
     use SerializesModels;
 
     /**
-     * The ad-hoc message history to send ahead of the next prompt, or null when none has been given.
+     * The ad-hoc message history to send ahead of the next prompt.
      *
      * @var list<Message>|null
      */
@@ -258,15 +258,11 @@ trait Promptable
                 ?? throw new InvalidArgumentException('The chat input contains no user message or approval decisions.');
         }
 
-        if ($prompt instanceof UserMessage) {
-            return [$prompt->content ?? '', null, [...$prompt->attachments->all(), ...$attachments]];
-        }
-
-        if (is_string($prompt)) {
-            return [$prompt, null, $attachments];
-        }
-
-        return ['', $prompt, $attachments];
+        return match (true) {
+            $prompt instanceof UserMessage => [$prompt->content ?? '', null, [...$prompt->attachments->all(), ...$attachments]],
+            $prompt instanceof Decisions => ['', $prompt, $attachments],
+            default => [$prompt, null, $attachments],
+        };
     }
 
     /**
@@ -284,14 +280,13 @@ trait Promptable
             ->flatMap(fn ($message) => is_array($message) && isset($message['parts'])
                 ? Vercel::messagesFrom([$message])
                 : [Message::tryFrom($message)])
-            ->values()
             ->all();
 
         return $this;
     }
 
     /**
-     * Get the ad-hoc history for the next prompt and reset it so it cannot leak into a later prompt.
+     * Get the ad-hoc history for the next prompt and reset it so it cannot leak into a later one.
      *
      * @return list<Message>|null
      */

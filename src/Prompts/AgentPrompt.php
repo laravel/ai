@@ -16,7 +16,7 @@ class AgentPrompt extends Prompt
     public readonly Collection $attachments;
 
     /**
-     * The ad-hoc message history to send ahead of the prompt, or null when the prompt carries none.
+     * The ad-hoc message history to send ahead of the prompt.
      *
      * @var list<Message>|null
      */

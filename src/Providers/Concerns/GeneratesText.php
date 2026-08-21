@@ -223,8 +223,8 @@ trait GeneratesText
      */
     protected function throwIfNotResumable(AgentPrompt $prompt): void
     {
-        // A conversational agent replays from the database; an ad-hoc history (even an empty first turn) replays from the client...
-        if (! ($prompt->agent instanceof Conversational || $prompt->messages !== null)) {
+        // An ad-hoc history replays from the client, even when the first turn carried no messages...
+        if (! $prompt->agent instanceof Conversational && $prompt->messages === null) {
             throw ApprovalNotResumableException::make();
         }
     }

@@ -19,7 +19,7 @@ class Chat implements ChatInput
      */
     public function message(): ?UserMessage
     {
-        $message = $this->latestMessageOfRole('user');
+        $message = static::latestOfRole($this->messages, 'user');
 
         return $message === null ? null : Vercel::messageFrom($message);
     }
@@ -29,7 +29,7 @@ class Chat implements ChatInput
      */
     public function decisions(): ?Decisions
     {
-        $message = $this->latestAssistantMessage();
+        $message = static::latestOfRole($this->precedingMessages(), 'assistant');
 
         $responses = $message === null ? [] : Vercel::approvalResponsesFrom($message);
 
@@ -43,39 +43,31 @@ class Chat implements ChatInput
      */
     public function history(): array
     {
-        // On a resume turn the trailing assistant message carries the pending tool calls and must replay...
-        $messages = $this->latestMessageOfRole('user') !== null
-            ? array_slice($this->messages, 0, -1)
-            : $this->messages;
-
-        return Vercel::messagesFrom($messages);
+        return Vercel::messagesFrom($this->precedingMessages());
     }
 
     /**
-     * Get the newest message when it matches the given role.
+     * Get the raw messages preceding the turn this input resolves to.
      *
-     * @return array<string, mixed>|null
+     * @return array<int, array<string, mixed>>
      */
-    protected function latestMessageOfRole(string $role): ?array
+    protected function precedingMessages(): array
     {
-        $message = $this->messages === [] ? null : $this->messages[array_key_last($this->messages)];
-
-        return ($message['role'] ?? null) === $role ? $message : null;
+        return static::latestOfRole($this->messages, 'user') === null
+            ? $this->messages
+            : array_slice($this->messages, 0, -1);
     }
 
     /**
-     * Get the newest assistant message, looking past a user message submitted in the same turn.
+     * Get the newest of the given messages when it matches the given role.
      *
+     * @param  array<int, array<string, mixed>>  $messages
      * @return array<string, mixed>|null
      */
-    protected function latestAssistantMessage(): ?array
+    protected static function latestOfRole(array $messages, string $role): ?array
     {
-        $messages = $this->latestMessageOfRole('user') !== null
-            ? array_slice($this->messages, 0, -1)
-            : $this->messages;
-
         $message = $messages === [] ? null : $messages[array_key_last($messages)];
 
-        return ($message['role'] ?? null) === 'assistant' ? $message : null;
+        return ($message['role'] ?? null) === $role ? $message : null;
     }
 }
