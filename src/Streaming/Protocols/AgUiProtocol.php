@@ -38,6 +38,8 @@ class AgUiProtocol extends StreamProtocol
 
     protected bool $finished = false;
 
+    protected ?StreamableAgentResponse $response = null;
+
     public function __construct(
         protected ?string $threadId = null,
         protected ?string $runId = null,
@@ -54,13 +56,14 @@ class AgUiProtocol extends StreamProtocol
         $this->errored = false;
         $this->finished = false;
         $this->step = 0;
+        $this->response = $response;
 
-        $this->threadId ??= $response->conversationId ?? ulid();
         $this->runId ??= $response->invocationId;
 
-        $toolCalls = [];
         $usage = null;
         $reason = null;
+        $provider = null;
+        $model = null;
 
         foreach ($response as $event) {
             if ($this->finished) {
@@ -68,6 +71,9 @@ class AgUiProtocol extends StreamProtocol
             }
 
             if ($event instanceof StreamStart) {
+                $provider = $event->provider;
+                $model = $event->model;
+
                 if ($this->started) {
                     yield $this->stepFinishedPart();
                     yield $this->stepStartedPart();
@@ -78,26 +84,19 @@ class AgUiProtocol extends StreamProtocol
                 continue;
             }
 
-            if ($event instanceof ToolCall) {
-                $toolCalls[$event->toolCall->id] = true;
-            }
-
+            // The terminal error event ends the run, so anything the provider streams afterwards is dropped...
             if ($event instanceof Error) {
                 $this->errored = true;
-            }
-
-            // A result replayed from an earlier turn has no call the client can attach it to, so restate the call first...
-            if ($event instanceof ToolResult && ! isset($toolCalls[$event->toolResult->id])) {
-                $toolCalls[$event->toolResult->id] = true;
-
-                foreach ($this->toolCallParts($event->toolResult) as $part) {
-                    yield from $this->part($part);
-                }
+                $this->finished = true;
             }
 
             // The run pauses on approvals, so finish it immediately with the outcome the client resumes from...
             if ($event instanceof ToolApprovalRequest) {
-                yield from $this->part($this->stepFinishedPart());
+                if (! $this->started) {
+                    yield from $this->runStartedParts();
+                }
+
+                yield $this->stepFinishedPart();
 
                 yield $this->runFinishedPart([
                     'outcome' => ['type' => 'interrupt', 'interrupts' => $this->interrupts($event)],
@@ -123,7 +122,7 @@ class AgUiProtocol extends StreamProtocol
 
         if ($this->started && ! $this->errored && ! $this->finished) {
             yield $this->stepFinishedPart();
-            yield $this->runFinishedPart($this->completion($usage, $reason));
+            yield $this->runFinishedPart($this->completion($usage, $reason, $provider, $model));
         }
     }
 
@@ -171,6 +170,9 @@ class AgUiProtocol extends StreamProtocol
     protected function runStartedParts(): Generator
     {
         $this->started = true;
+
+        // Resolved on first emission so a conversation id surfaced after streaming begins is still adopted...
+        $this->threadId ??= $this->response->conversationId ?? ulid();
 
         yield [
             'type' => 'RUN_STARTED',
@@ -222,16 +224,18 @@ class AgUiProtocol extends StreamProtocol
      *
      * @return array<string, mixed>
      */
-    protected function completion(?Usage $usage, ?string $reason): array
+    protected function completion(?Usage $usage, ?string $reason, ?string $provider, ?string $model): array
     {
         return [
-            ...($usage !== null ? ['usage' => [[
+            ...($usage !== null ? ['usage' => [Arr::whereNotNull([
+                'provider' => $provider,
+                'model' => $model,
                 'inputTokens' => $usage->promptTokens,
                 'outputTokens' => $usage->completionTokens,
                 'totalTokens' => $usage->promptTokens + $usage->completionTokens,
                 'reasoningTokens' => $usage->reasoningTokens,
                 'cachedInputTokens' => $usage->cacheReadInputTokens,
-            ]]] : []),
+            ])]] : []),
             ...($reason === null ? [] : ['metadata' => ['finishReason' => $reason]]),
         ];
     }
@@ -261,7 +265,7 @@ class AgUiProtocol extends StreamProtocol
      *
      * @return array<int, array<string, mixed>>
      */
-    protected function toolCallParts(Data\ToolCall|Data\ToolResult $call): array
+    protected function toolCallParts(Data\ToolCall $call): array
     {
         return [
             ['type' => 'TOOL_CALL_START', 'toolCallId' => $call->id, 'toolCallName' => $call->name],
@@ -322,13 +326,13 @@ class AgUiProtocol extends StreamProtocol
             $event instanceof ProviderToolEvent => [[
                 'type' => 'CUSTOM',
                 'name' => 'provider-tool',
-                'value' => Arr::whereNotNull([
+                'value' => [
                     'provider' => $event->provider,
                     'itemId' => $event->itemId,
                     'type' => $event->type,
                     'data' => $event->data,
                     'status' => $event->status,
-                ]),
+                ],
             ]],
             default => [],
         };

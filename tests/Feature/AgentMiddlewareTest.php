@@ -99,13 +99,16 @@ test('stream response conversation id is available after remembered conversation
         public int $id = 1;
     };
 
-    $response = (new RememberingAssistantAgent)->forUser($user)->stream('Test prompt');
+    $agent = (new RememberingAssistantAgent)->forUser($user);
+
+    $response = $agent->stream('Test prompt');
 
     foreach ($response as $event) {
         expect($event)->not->toBeNull();
     }
 
-    expect($response->conversationId)->toBe('conversation-123')
+    expect($response->conversationId)->not->toBeNull()
+        ->and($response->conversationId)->toBe($agent->currentConversation())
         ->and($response->conversationUser)->toBe($user);
 });
 

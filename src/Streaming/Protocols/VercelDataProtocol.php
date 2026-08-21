@@ -255,13 +255,11 @@ class VercelDataProtocol extends StreamProtocol
      */
     protected function providerToolPart(ProviderToolEvent $event): array
     {
-        $provider = $event->provider ?? 'laravel';
-
         return [
             'type' => 'custom',
-            'kind' => $provider.'.'.$event->type,
+            'kind' => $event->provider.'.'.$event->type,
             'providerMetadata' => [
-                $provider => [
+                $event->provider => [
                     'itemId' => $event->itemId,
                     'status' => $event->status,
                     'data' => $event->data,

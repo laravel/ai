@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Exceptions;
 use Laravel\Ai\Approvals\PendingApproval;
+use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Responses\Data;
 use Laravel\Ai\Responses\Data\Usage;
@@ -23,6 +24,8 @@ use Laravel\Ai\Streaming\Events\ToolResult;
 use Laravel\Ai\Streaming\Protocols\AgUiProtocol;
 use Symfony\Component\HttpFoundation\Response;
 use Tests\Fixtures\Agents\MultiStepToolAgent;
+use Tests\Fixtures\Agents\RememberingAssistantAgent;
+use Tests\Fixtures\FakeConversationStore;
 
 function agUiProtocolEvents(array|Closure $events, ?string $threadId = 'thread-1', ?string $runId = 'run-1'): array
 {
@@ -63,6 +66,8 @@ function agUiRunFinished(string $reason = 'stop'): array
         'threadId' => 'thread-1',
         'runId' => 'run-1',
         'usage' => [[
+            'provider' => 'anthropic',
+            'model' => 'claude-sonnet-4-6',
             'inputTokens' => 0,
             'outputTokens' => 0,
             'totalTokens' => 0,
@@ -113,6 +118,8 @@ test('the run finished event carries the combined usage and finish reason', func
         'threadId' => 'thread-1',
         'runId' => 'run-1',
         'usage' => [[
+            'provider' => 'anthropic',
+            'model' => 'claude-sonnet-4-6',
             'inputTokens' => 10,
             'outputTokens' => 5,
             'totalTokens' => 15,
@@ -132,6 +139,8 @@ test('a multi step run combines the usage of every step', function () {
     ]);
 
     expect(end($events)['usage'][0])->toBe([
+        'provider' => 'anthropic',
+        'model' => 'claude-sonnet-4-6',
         'inputTokens' => 30,
         'outputTokens' => 12,
         'totalTokens' => 42,
@@ -147,6 +156,25 @@ test('the response is served as an unbuffered event stream', function () {
 
     expect($response->headers->get('Content-Type'))->toBe('text/event-stream')
         ->and($response->headers->get('Cache-Control'))->toContain('no-cache, no-transform');
+});
+
+test('a first turn stream emits the thread id the conversation is stored under', function () {
+    app()->instance(ConversationStore::class, new FakeConversationStore);
+
+    RememberingAssistantAgent::fake(['Fake response']);
+
+    $user = new class
+    {
+        public int $id = 1;
+    };
+
+    $agent = (new RememberingAssistantAgent)->forUser($user);
+
+    $events = agUiEvents($agent->stream('Hello')->usingProtocol(new AgUiProtocol)->toResponse(request()));
+
+    expect($agent->currentConversation())->not->toBeNull()
+        ->and($events[0]['threadId'])->toBe($agent->currentConversation())
+        ->and(end($events)['threadId'])->toBe($agent->currentConversation());
 });
 
 test('a run without an explicit identity falls back to the conversation and invocation ids', function () {
@@ -368,9 +396,6 @@ test('a resumed run emits the approved tool result for the prior turn tool call'
     expect($events)->toBe([
         ['type' => 'RUN_STARTED', 'threadId' => 'thread-1', 'runId' => 'run-1'],
         ['type' => 'STEP_STARTED', 'stepName' => '1'],
-        ['type' => 'TOOL_CALL_START', 'toolCallId' => 'call-1', 'toolCallName' => 'DeleteFile'],
-        ['type' => 'TOOL_CALL_ARGS', 'toolCallId' => 'call-1', 'delta' => '{"path":"a.txt"}'],
-        ['type' => 'TOOL_CALL_END', 'toolCallId' => 'call-1'],
         ['type' => 'TOOL_CALL_RESULT', 'messageId' => 'event-1', 'toolCallId' => 'call-1', 'content' => 'deleted', 'role' => 'tool'],
         ['type' => 'STEP_FINISHED', 'stepName' => '1'],
         ['type' => 'STEP_STARTED', 'stepName' => '2'],
@@ -380,16 +405,14 @@ test('a resumed run emits the approved tool result for the prior turn tool call'
     ]);
 });
 
-test('a resumed run restates the prior turn tool call without an explicit thread id', function () {
+test('a resumed run streams the replayed tool result without restating its call', function () {
     $events = agUiProtocolEvents([
         new ToolResult('event-1', new Data\ToolResult('call-1', 'DeleteFile', ['path' => 'a.txt'], 'deleted'), true, null, time()),
         new StreamEnd('event-2', 'stop', new Usage, time()),
     ], threadId: null, runId: null);
 
     expect(collect($events)->pluck('type')->all())->toBe([
-        'RUN_STARTED', 'STEP_STARTED',
-        'TOOL_CALL_START', 'TOOL_CALL_ARGS', 'TOOL_CALL_END', 'TOOL_CALL_RESULT',
-        'STEP_FINISHED', 'RUN_FINISHED',
+        'RUN_STARTED', 'STEP_STARTED', 'TOOL_CALL_RESULT', 'STEP_FINISHED', 'RUN_FINISHED',
     ]);
 });
 
@@ -399,7 +422,7 @@ test('a rejected approval streams the rejection as the tool result content', fun
         new StreamEnd('event-2', 'stop', new Usage, time()),
     ]);
 
-    expect($events[5])->toBe([
+    expect($events[2])->toBe([
         'type' => 'TOOL_CALL_RESULT',
         'messageId' => 'event-1',
         'toolCallId' => 'call-1',
@@ -447,7 +470,7 @@ test('an unknown citation type is skipped instead of ending the run', function (
 test('a provider hosted tool emits a custom provider tool event', function () {
     $events = agUiProtocolEvents([
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
-        new ProviderToolEvent('event-1', 'item-1', 'web_search_call', ['query' => 'laravel'], 'completed', time()),
+        new ProviderToolEvent('event-1', 'item-1', 'web_search_call', ['query' => 'laravel'], 'completed', time(), 'anthropic'),
         new StreamEnd('event-2', 'stop', new Usage, time()),
     ]);
 
@@ -455,11 +478,44 @@ test('a provider hosted tool emits a custom provider tool event', function () {
         'type' => 'CUSTOM',
         'name' => 'provider-tool',
         'value' => [
+            'provider' => 'anthropic',
             'itemId' => 'item-1',
             'type' => 'web_search_call',
             'data' => ['query' => 'laravel'],
             'status' => 'completed',
         ],
+    ]);
+});
+
+test('events streamed after an error are dropped because the run has ended', function () {
+    $events = agUiProtocolEvents([
+        new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
+        new Error('event-1', 'overloaded_error', 'Overloaded', false, time()),
+        new TextDelta('event-2', 'msg-1', 'Ghost.', time()),
+        new StreamEnd('event-3', 'stop', new Usage, time()),
+    ]);
+
+    expect(collect($events)->pluck('type')->all())->toBe([
+        'RUN_STARTED', 'STEP_STARTED', 'RUN_ERROR',
+    ]);
+});
+
+test('the thread id adopts a conversation id surfaced after streaming begins', function () {
+    $response = null;
+
+    $response = new StreamableAgentResponse('invocation-1', function () use (&$response) {
+        $response->withinConversation('conversation-9');
+
+        yield new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time());
+        yield new StreamEnd('event-1', 'stop', new Usage, time());
+    }, new Data\Meta('anthropic', 'claude-sonnet-4-6'));
+
+    $events = agUiEvents($response->usingProtocol(new AgUiProtocol)->toResponse(request()));
+
+    expect($events[0])->toBe([
+        'type' => 'RUN_STARTED',
+        'threadId' => 'conversation-9',
+        'runId' => 'invocation-1',
     ]);
 });
 

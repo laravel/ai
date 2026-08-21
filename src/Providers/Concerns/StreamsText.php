@@ -113,7 +113,7 @@ trait StreamsText
                     );
 
                     // Surfaced before iteration because the remembering middleware only records it once the stream has drained...
-                    if (in_array(RemembersConversations::class, class_uses_recursive($agent), true)) {
+                    if ($agent instanceof RemembersConversationsContract || in_array(RemembersConversations::class, class_uses_recursive($agent), true)) {
                         /** @var Agent&RemembersConversationsContract $agent */
                         if ($agent->currentConversation() !== null) {
                             $streamable->withinConversation(

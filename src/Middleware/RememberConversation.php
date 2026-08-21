@@ -29,7 +29,17 @@ class RememberConversation
      */
     public function handle(AgentPrompt $prompt, Closure $next)
     {
-        return $next($prompt)->then(function (AgentResponse $response) use ($prompt): void {
+        /** @var Agent&RemembersConversations $agent */
+        $agent = $prompt->agent;
+
+        $pendingConversationId = null;
+
+        // Assigned eagerly so streams can surface the id before the conversation is stored post-drain...
+        if ($agent->hasConversationParticipant() && ! $agent->currentConversation()) {
+            $agent->continue($pendingConversationId = (string) Str::uuid7(), $agent->conversationParticipant());
+        }
+
+        return $next($prompt)->then(function (AgentResponse $response) use ($prompt, $pendingConversationId): void {
             /** @var Agent&RemembersConversations $agent */
             $agent = $prompt->agent;
 
@@ -42,11 +52,12 @@ class RememberConversation
             $participantId = $participant === null ? null : Conversation::participantKey($participant);
 
             // Create conversation if necessary...
-            if (! $agent->currentConversation()) {
+            if ($pendingConversationId !== null || ! $agent->currentConversation()) {
                 $conversationId = $this->store->storeConversation(
                     $participantType,
                     $participantId,
                     $this->generateTitle($prompt->prompt),
+                    $pendingConversationId,
                 );
 
                 $agent->continue($conversationId, $participant);

@@ -14,7 +14,7 @@ class ProviderToolEvent extends StreamEvent
         public array $data,
         public string $status,
         public int $timestamp,
-        public ?string $provider = null,
+        public string $provider,
     ) {}
 
     /**

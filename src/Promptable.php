@@ -170,6 +170,10 @@ trait Promptable
 
                         $innerResponse->then(fn (StreamedAgentResponse $response): StreamableAgentResponse => $outer->adoptStateFrom($response));
 
+                        if ($innerResponse->conversationId !== null) {
+                            $outer->withinConversation($innerResponse->conversationId, $innerResponse->conversationUser);
+                        }
+
                         foreach ($innerResponse as $event) {
                             yield $event;
                         }
