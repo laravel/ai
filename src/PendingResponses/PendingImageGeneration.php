@@ -171,7 +171,7 @@ class PendingImageGeneration
                     $this->quality,
                     $provider,
                     $model,
-                    is_array($this->providerOptions) ? $this->providerOptions : [],
+                    $this->queuedProviderOptions(),
                 )
             );
         }

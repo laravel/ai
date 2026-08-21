@@ -49,9 +49,9 @@ class GeminiFileGateway implements FileGateway
 
         $uploadUrl = str_replace('/v1beta', '/upload/v1beta', $this->baseUrl($provider));
 
-        $providerOptions = $this->resolveProviderOptions($file, Lab::Gemini);
+        [$providerOptions, $headers] = $this->resolveProviderOptionsAndHeaders($file, Lab::Gemini);
 
-        $provider = $provider->withHeaders($this->resolveRequestHeaders($file, Lab::Gemini));
+        $provider = $provider->withHeaders($headers);
 
         $response = $this->withErrorHandling($provider->name(), fn () => $this->client($provider)->attach(
             'file', $content, $name, ['Content-Type' => $mime]
