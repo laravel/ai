@@ -3,9 +3,11 @@
 namespace Laravel\Ai\PendingResponses;
 
 use BackedEnum;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Traits\Conditionable;
 use InvalidArgumentException;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
@@ -101,11 +103,15 @@ class PendingAudioGeneration
         foreach ($providers as $provider => $model) {
             $provider = Ai::fakeableAudioProvider($provider);
 
+            $providerOptions = $this->resolveProviderOptions($provider);
+
+            $headers = Arr::pull($providerOptions, HasProviderOptions::HEADERS) ?? [];
+
             $model ??= $provider->defaultAudioModel();
 
             try {
-                return $provider->audio(
-                    $this->text, $this->voice, $this->instructions, $model, $this->timeout, $this->resolveProviderOptions($provider)
+                return $provider->withHeaders($headers)->audio(
+                    $this->text, $this->voice, $this->instructions, $model, $this->timeout, $providerOptions
                 );
             } catch (FailoverableException $e) {
                 $lastException = $e;
@@ -133,7 +139,7 @@ class PendingAudioGeneration
                     $provider,
                     $model,
                     $this->timeout,
-                    is_array($this->providerOptions) ? $this->providerOptions : [],
+                    $this->queuedProviderOptions(),
                 )
             );
         }
