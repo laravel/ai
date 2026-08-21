@@ -7,9 +7,11 @@ use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
+use Laravel\Ai\Contracts\Gateway\VoiceGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Contracts\Providers\VoiceProvider;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\Concerns\ResolvesAudioFilenames;
@@ -21,10 +23,12 @@ use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
 use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\Voice;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
+use Laravel\Ai\Responses\VoicesResponse;
 
-class MistralGateway implements EmbeddingGateway, StepTextGateway, TranscriptionGateway
+class MistralGateway implements EmbeddingGateway, StepTextGateway, TranscriptionGateway, VoiceGateway
 {
     use Concerns\BuildsTextRequests;
     use Concerns\CreatesMistralClient;
@@ -131,6 +135,45 @@ class MistralGateway implements EmbeddingGateway, StepTextGateway, Transcription
             ),
             new Meta($provider->name(), $model),
         );
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function listVoices(
+        VoiceProvider $provider,
+        int $timeout = 30,
+    ): VoicesResponse {
+        $voices = [];
+        $offset = 0;
+        $limit = 100;
+
+        do {
+            $response = $this->withErrorHandling(
+                $provider->name(),
+                fn () => $this->client($provider, $timeout)->get('audio/voices', ['limit' => $limit, 'offset' => $offset]),
+            );
+
+            $items = $response->json('items') ?? [];
+
+            foreach ($items as $voice) {
+                $voices[] = new Voice(
+                    $voice['slug'],
+                    $voice['name'] ?? $voice['slug'],
+                    $voice['gender'] ?? null,
+                    array_values(array_filter($voice['languages'] ?? [])),
+                );
+            }
+
+            $offset += count($items);
+            $total = $response->json('total');
+
+            $hasMore = $total !== null
+                ? $items !== [] && $offset < $total
+                : count($items) === $limit;
+        } while ($hasMore);
+
+        return new VoicesResponse($voices, new Meta($provider->name()));
     }
 
     /**

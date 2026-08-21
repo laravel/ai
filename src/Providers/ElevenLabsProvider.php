@@ -5,16 +5,20 @@ namespace Laravel\Ai\Providers;
 use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Contracts\Gateway\AudioGateway;
 use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
+use Laravel\Ai\Contracts\Gateway\VoiceGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Contracts\Providers\VoiceProvider;
 use Laravel\Ai\Gateway\ElevenLabsGateway;
 
-class ElevenLabsProvider extends Provider implements AudioProvider, TranscriptionProvider
+class ElevenLabsProvider extends Provider implements AudioProvider, TranscriptionProvider, VoiceProvider
 {
     use Concerns\GeneratesAudio;
     use Concerns\GeneratesTranscriptions;
     use Concerns\HasAudioGateway;
     use Concerns\HasTranscriptionGateway;
+    use Concerns\HasVoiceGateway;
+    use Concerns\ListsVoices;
 
     public function __construct(
         protected array $config,
@@ -26,6 +30,14 @@ class ElevenLabsProvider extends Provider implements AudioProvider, Transcriptio
     public function audioGateway(): AudioGateway
     {
         return $this->audioGateway ??= new ElevenLabsGateway;
+    }
+
+    /**
+     * Get the provider's voice gateway.
+     */
+    public function voiceGateway(): VoiceGateway
+    {
+        return $this->voiceGateway ??= new ElevenLabsGateway;
     }
 
     /**

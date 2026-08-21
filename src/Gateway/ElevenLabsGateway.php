@@ -7,16 +7,20 @@ use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\AudioGateway;
 use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
+use Laravel\Ai\Contracts\Gateway\VoiceGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Contracts\Providers\VoiceProvider;
 use Laravel\Ai\Files\Audio;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
 use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\Voice;
 use Laravel\Ai\Responses\TranscriptionResponse;
+use Laravel\Ai\Responses\VoicesResponse;
 
-class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
+class ElevenLabsGateway implements AudioGateway, TranscriptionGateway, VoiceGateway
 {
     use Concerns\CreatesClient;
     use Concerns\HandlesFailoverErrors;
@@ -99,9 +103,30 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
     }
 
     /**
+     * List the voices available for audio generation.
+     */
+    public function listVoices(
+        VoiceProvider $provider,
+        int $timeout = 30,
+    ): VoicesResponse {
+        $response = $this->withErrorHandling($provider->name(), fn () => $this->client($provider, $timeout)
+            ->get('voices')->throw());
+
+        $voices = (new Collection($response->json('voices') ?? []))
+            ->map(fn (array $voice): Voice => new Voice(
+                $voice['voice_id'],
+                $voice['name'] ?? $voice['voice_id'],
+                $voice['labels']['gender'] ?? null,
+                (new Collection($voice['verified_languages'] ?? []))->pluck('language')->filter()->unique()->values()->all(),
+            ))->all();
+
+        return new VoicesResponse($voices, new Meta($provider->name()));
+    }
+
+    /**
      * Get an HTTP client for the ElevenLabs API.
      */
-    protected function client(AudioProvider|TranscriptionProvider $provider, int $timeout = 30): PendingRequest
+    protected function client(AudioProvider|TranscriptionProvider|VoiceProvider $provider, int $timeout = 30): PendingRequest
     {
         return $this->createClient(
             $this->baseUrl($provider),
@@ -115,7 +140,7 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
     /**
      * Get the base URL for the ElevenLabs API.
      */
-    protected function baseUrl(AudioProvider|TranscriptionProvider $provider): string
+    protected function baseUrl(AudioProvider|TranscriptionProvider|VoiceProvider $provider): string
     {
         return rtrim($provider->additionalConfiguration()['url'] ?? 'https://api.elevenlabs.io/v1', '/');
     }
