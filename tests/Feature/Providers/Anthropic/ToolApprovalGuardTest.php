@@ -5,9 +5,11 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\ApprovalNotResumableException;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
+use Laravel\Ai\Vercel\Vercel;
 use Tests\Fixtures\Agents\RememberingApprovableAgent;
 use Tests\Fixtures\Agents\StatelessApprovableAgent;
 use Tests\Fixtures\Agents\StatelessMixedToolsAgent;
+use Tests\Fixtures\Tools\ApprovableNumberGenerator;
 use Tests\Fixtures\Tools\SideEffectRecorder;
 
 test('a gated tool on a non-conversational agent throws when it pauses', function () {
@@ -77,6 +79,36 @@ test('a gated tool pauses instead of throwing when the client replays history, e
 
     expect($paused->hasPendingApprovals())->toBeTrue()
         ->and($paused->pendingApprovals[0]->id)->toBe('toolu_1');
+});
+
+test('a stateless pause resumes from client-replayed history when approved', function () {
+    ApprovableNumberGenerator::$invocations = 0;
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::response([
+            'id' => 'msg_2',
+            'type' => 'message',
+            'role' => 'assistant',
+            'model' => 'claude-sonnet-4-6',
+            'content' => [['type' => 'text', 'text' => 'The number is 72019.']],
+            'stop_reason' => 'end_turn',
+            'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+        ]),
+    ]);
+
+    $chat = Vercel::chat([
+        ['id' => 'm1', 'role' => 'user', 'parts' => [['type' => 'text', 'text' => 'Generate a number']]],
+        ['id' => 'm2', 'role' => 'assistant', 'parts' => [
+            ['type' => 'tool-ApprovableNumberGenerator', 'toolCallId' => 'toolu_1', 'state' => 'approval-responded', 'input' => [], 'approval' => ['id' => 'toolu_1', 'approved' => true]],
+        ]],
+    ]);
+
+    $response = (new StatelessApprovableAgent)
+        ->withMessages($chat->history())
+        ->prompt($chat, provider: 'anthropic');
+
+    expect(ApprovableNumberGenerator::$invocations)->toBe(1)
+        ->and($response->text)->toBe('The number is 72019.');
 });
 
 test('a gated tool on a conversational agent pauses ownerless instead of throwing', function () {
