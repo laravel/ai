@@ -23,6 +23,8 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
 
     /**
      * Generate audio from the given text.
+     *
+     * @param  array<string, mixed>  $providerOptions
      */
     public function generateAudio(
         AudioProvider $provider,
@@ -31,6 +33,7 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
         string $voice,
         ?string $instructions = null,
         int $timeout = 30,
+        array $providerOptions = [],
     ): AudioResponse {
         $voice = match ($voice) {
             'default-male' => 'onwK4e9ZLuTAKqWW03F9',
@@ -39,10 +42,10 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
         };
 
         $response = $this->withErrorHandling($provider->name(), fn () => $this->client($provider, $timeout)
-            ->post('text-to-speech/'.$voice, [
+            ->post('text-to-speech/'.$voice, array_merge($providerOptions, [
                 'model_id' => $model,
                 'text' => $text,
-            ])->throw());
+            ]))->throw());
 
         return new AudioResponse(
             base64_encode((string) $response),
