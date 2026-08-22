@@ -7,11 +7,13 @@ use InvalidArgumentException;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
+use Laravel\Ai\Contracts\Gateway\RealtimeGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
+use Laravel\Ai\Contracts\Providers\RealtimeProvider;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
@@ -19,18 +21,21 @@ use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\AzureOpenAi\AzureOpenAiFileGateway;
 use Laravel\Ai\Gateway\AzureOpenAi\AzureOpenAiGateway;
+use Laravel\Ai\Gateway\AzureOpenAi\AzureOpenAiRealtimeGateway;
 use Laravel\Ai\Gateway\AzureOpenAi\AzureOpenAiStoreGateway;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 
-class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FileProvider, ImageProvider, StoreProvider, SupportsFileSearch, SupportsWebSearch, TextProvider
+class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FileProvider, ImageProvider, RealtimeProvider, StoreProvider, SupportsFileSearch, SupportsWebSearch, TextProvider
 {
     use Concerns\GeneratesEmbeddings;
     use Concerns\GeneratesImages;
+    use Concerns\GeneratesRealtimeSessions;
     use Concerns\GeneratesText;
     use Concerns\HasEmbeddingGateway;
     use Concerns\HasFileGateway;
     use Concerns\HasImageGateway;
+    use Concerns\HasRealtimeGateway;
     use Concerns\HasStoreGateway;
     use Concerns\HasTextGateway;
     use Concerns\ManagesFiles;
@@ -151,6 +156,30 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FilePro
     public function defaultEmbeddingsDimensions(): int
     {
         return $this->config['models']['embeddings']['dimensions'] ?? 1536;
+    }
+
+    /**
+     * Get the name of the default realtime deployment.
+     */
+    public function defaultRealtimeModel(): string
+    {
+        return $this->config['realtime_deployment'] ?? $this->config['deployment'] ?? 'gpt-4o-realtime';
+    }
+
+    /**
+     * Get the name of the default realtime voice.
+     */
+    public function defaultRealtimeVoice(): string
+    {
+        return $this->config['models']['realtime']['voice'] ?? 'alloy';
+    }
+
+    /**
+     * Get the default realtime gateway.
+     */
+    protected function defaultRealtimeGateway(): RealtimeGateway
+    {
+        return new AzureOpenAiRealtimeGateway;
     }
 
     /**

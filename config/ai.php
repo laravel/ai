@@ -19,6 +19,7 @@ return [
     'default_for_transcription' => 'openai',
     'default_for_embeddings' => 'openai',
     'default_for_reranking' => 'cohere',
+    'default_for_realtime' => 'openai',
 
     /*
     |--------------------------------------------------------------------------
@@ -64,6 +65,7 @@ return [
             'deployment' => env('AZURE_OPENAI_DEPLOYMENT', 'gpt-4o'),
             'embedding_deployment' => env('AZURE_OPENAI_EMBEDDING_DEPLOYMENT', 'text-embedding-3-small'),
             'image_deployment' => env('AZURE_OPENAI_IMAGE_DEPLOYMENT', 'gpt-image-1'),
+            'realtime_deployment' => env('AZURE_OPENAI_REALTIME_DEPLOYMENT', 'gpt-4o-realtime'),
             'store' => env('AZURE_OPENAI_STORE', true),
         ],
 

@@ -10,6 +10,7 @@ use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
+use Laravel\Ai\Contracts\Providers\RealtimeProvider;
 use Laravel\Ai\Contracts\Providers\RerankingProvider;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -44,6 +45,7 @@ class AiManager extends MultipleInstanceManager
     use Concerns\InteractsWithFakeEmbeddings;
     use Concerns\InteractsWithFakeFiles;
     use Concerns\InteractsWithFakeImages;
+    use Concerns\InteractsWithFakeRealtime;
     use Concerns\InteractsWithFakeReranking;
     use Concerns\InteractsWithFakeStores;
     use Concerns\InteractsWithFakeTranscriptions;
@@ -80,6 +82,34 @@ class AiManager extends MultipleInstanceManager
 
         return $this->audioIsFaked()
             ? (clone $provider)->useAudioGateway($this->fakeAudioGateway())
+            : $provider;
+    }
+
+    /**
+     * Get a provider instance by name.
+     *
+     * @throws LogicException
+     */
+    public function realtimeProvider(?string $name = null): RealtimeProvider
+    {
+        return tap($this->instance($name), function ($instance): void {
+            if (! $instance instanceof RealtimeProvider) {
+                throw new LogicException('Provider ['.$instance::class.'] does not support realtime sessions.');
+            }
+        });
+    }
+
+    /**
+     * Get a realtime provider instance, using a fake gateway if realtime is faked.
+     *
+     * @throws LogicException
+     */
+    public function fakeableRealtimeProvider(?string $name = null): RealtimeProvider
+    {
+        $provider = $this->realtimeProvider($name);
+
+        return $this->realtimeIsFaked()
+            ? (clone $provider)->useRealtimeGateway($this->fakeRealtimeGateway())
             : $provider;
     }
 

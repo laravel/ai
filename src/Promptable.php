@@ -16,19 +16,23 @@ use Laravel\Ai\Attributes\Timeout as TimeoutAttribute;
 use Laravel\Ai\Attributes\UseCheapestModel;
 use Laravel\Ai\Attributes\UseSmartestModel;
 use Laravel\Ai\Attributes\WithoutBroadcasting;
+use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\AgentFailedOver;
+use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Gateway\FakeTextGateway;
 use Laravel\Ai\Gateway\ParentInvocation;
 use Laravel\Ai\Jobs\BroadcastAgent;
 use Laravel\Ai\Jobs\InvokeAgent;
 use Laravel\Ai\Prompts\AgentPrompt;
+use Laravel\Ai\Prompts\RealtimePrompt;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\QueuedAgentResponse;
+use Laravel\Ai\Responses\RealtimeSession;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Streaming\Events\StreamEvent;
@@ -263,6 +267,70 @@ trait Promptable
         return new QueuedAgentResponse(
             BroadcastAgent::dispatch($this, $prompt, $channels, $attachments, $provider, $model)
         );
+    }
+
+    /**
+     * Create an ephemeral realtime session for the agent.
+     */
+    public function realtime(
+        Lab|array|string|null $provider = null,
+        ?string $model = null,
+        ?string $voice = null,
+        array $options = [],
+        ?int $timeout = null,
+    ): RealtimeSession {
+        $providers = Provider::formatProviderAndModelList(
+            $provider ?? config('ai.default_for_realtime', config('ai.default')), $model
+        );
+
+        $lastException = null;
+
+        foreach ($providers as $providerName => $providerModel) {
+            $realtimeProvider = Ai::fakeableRealtimeProvider($providerName);
+
+            $providerModel ??= $realtimeProvider->defaultRealtimeModel();
+            $resolvedVoice = $voice ?? $realtimeProvider->defaultRealtimeVoice();
+            $resolvedTimeout = $this->getTimeout($timeout);
+
+            $tools = $this instanceof HasTools ? [...$this->tools()] : [];
+
+            $prompt = new RealtimePrompt(
+                agent: $this,
+                provider: $realtimeProvider,
+                model: $providerModel,
+                voice: $resolvedVoice,
+                modalities: $options['modalities'] ?? ['text', 'audio'],
+                instructions: (string) $this->instructions(),
+                tools: $tools,
+                options: $options,
+                timeout: $resolvedTimeout,
+            );
+
+            try {
+                return $realtimeProvider->createRealtimeSession($prompt);
+            } catch (FailoverableException $e) {
+                $lastException = $e;
+
+                event(new ProviderFailedOver($realtimeProvider, $providerModel, $e));
+
+                continue;
+            }
+        }
+
+        throw $lastException;
+    }
+
+    /**
+     * Create ephemeral client credentials for the agent.
+     */
+    public function clientCredentials(
+        Lab|array|string|null $provider = null,
+        ?string $model = null,
+        ?string $voice = null,
+        array $options = [],
+        ?int $timeout = null,
+    ): RealtimeSession {
+        return $this->realtime($provider, $model, $voice, $options, $timeout);
     }
 
     /**

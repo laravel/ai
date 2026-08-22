@@ -4,11 +4,13 @@ namespace Laravel\Ai\Providers;
 
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
+use Laravel\Ai\Contracts\Gateway\RealtimeGateway;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
+use Laravel\Ai\Contracts\Providers\RealtimeProvider;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
@@ -17,21 +19,24 @@ use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\OpenAi\OpenAiFileGateway;
+use Laravel\Ai\Gateway\OpenAi\OpenAiRealtimeGateway;
 use Laravel\Ai\Gateway\OpenAi\OpenAiStoreGateway;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 
-class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvider, FileProvider, ImageProvider, StoreProvider, SupportsFileSearch, SupportsToolSearch, SupportsWebSearch, TextProvider, TranscriptionProvider
+class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvider, FileProvider, ImageProvider, RealtimeProvider, StoreProvider, SupportsFileSearch, SupportsToolSearch, SupportsWebSearch, TextProvider, TranscriptionProvider
 {
     use Concerns\GeneratesAudio;
     use Concerns\GeneratesEmbeddings;
     use Concerns\GeneratesImages;
+    use Concerns\GeneratesRealtimeSessions;
     use Concerns\GeneratesText;
     use Concerns\GeneratesTranscriptions;
     use Concerns\HasAudioGateway;
     use Concerns\HasEmbeddingGateway;
     use Concerns\HasFileGateway;
     use Concerns\HasImageGateway;
+    use Concerns\HasRealtimeGateway;
     use Concerns\HasStoreGateway;
     use Concerns\HasTextGateway;
     use Concerns\HasTranscriptionGateway;
@@ -162,6 +167,30 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     public function defaultEmbeddingsDimensions(): int
     {
         return $this->config['models']['embeddings']['dimensions'] ?? 1536;
+    }
+
+    /**
+     * Get the name of the default realtime model.
+     */
+    public function defaultRealtimeModel(): string
+    {
+        return $this->config['models']['realtime']['default'] ?? 'gpt-4o-realtime-preview';
+    }
+
+    /**
+     * Get the name of the default realtime voice.
+     */
+    public function defaultRealtimeVoice(): string
+    {
+        return $this->config['models']['realtime']['voice'] ?? 'alloy';
+    }
+
+    /**
+     * Get the default realtime gateway.
+     */
+    protected function defaultRealtimeGateway(): RealtimeGateway
+    {
+        return new OpenAiRealtimeGateway;
     }
 
     /**

@@ -7,6 +7,7 @@ use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\QueuedAgentResponse;
+use Laravel\Ai\Responses\RealtimeSession;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Stringable;
 
@@ -82,4 +83,26 @@ interface Agent
         Lab|array|string|null $provider = null,
         ?string $model = null
     ): QueuedAgentResponse;
+
+    /**
+     * Create an ephemeral realtime session for the agent.
+     */
+    public function realtime(
+        Lab|array|string|null $provider = null,
+        ?string $model = null,
+        ?string $voice = null,
+        array $options = [],
+        ?int $timeout = null,
+    ): RealtimeSession;
+
+    /**
+     * Create ephemeral client credentials for the agent.
+     */
+    public function clientCredentials(
+        Lab|array|string|null $provider = null,
+        ?string $model = null,
+        ?string $voice = null,
+        array $options = [],
+        ?int $timeout = null,
+    ): RealtimeSession;
 }
