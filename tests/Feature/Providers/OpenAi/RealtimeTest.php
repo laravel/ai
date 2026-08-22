@@ -20,20 +20,19 @@ function fakeOpenAiRealtimeSessionResponse(): PromiseInterface
 {
     return Http::response([
         'id' => 'sess_test_12345',
-        'object' => 'realtime.session',
-        'model' => 'gpt-4o-realtime-preview',
-        'modalities' => ['text', 'audio'],
-        'instructions' => 'You are a helpful assistant.',
-        'voice' => 'alloy',
-        'input_audio_format' => 'pcm16',
-        'output_audio_format' => 'pcm16',
-        'turn_detection' => [
-            'type' => 'server_vad',
-            'threshold' => 0.5,
-        ],
-        'client_secret' => [
-            'value' => 'ek_secret_abc123',
-            'expires_at' => 1790000000,
+        'object' => 'realtime.client_secret',
+        'value' => 'ek_secret_abc123',
+        'expires_at' => 1790000000,
+        'session' => [
+            'type' => 'realtime',
+            'model' => 'gpt-4o-realtime-preview',
+            'modalities' => ['text', 'audio'],
+            'instructions' => 'You are a helpful assistant.',
+            'audio' => [
+                'output' => [
+                    'voice' => 'alloy',
+                ],
+            ],
         ],
     ]);
 }
@@ -84,16 +83,18 @@ test('openai realtime session sends request with model, voice, instructions, and
 
     Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
+        $session = $body['session'] ?? [];
 
-        return $request->url() === 'https://api.openai.com/v1/realtime/sessions'
+        return $request->url() === 'https://api.openai.com/v1/realtime/client_secrets'
             && $request->hasHeader('Authorization', 'Bearer test-key')
-            && $body['model'] === 'gpt-4o-realtime-preview'
-            && $body['voice'] === 'alloy'
-            && $body['instructions'] === 'You are a support assistant.'
-            && $body['turn_detection'] === ['type' => 'server_vad']
-            && count($body['tools']) === 1
-            && $body['tools'][0]['name'] === 'TestSearchTool'
-            && $body['tools'][0]['description'] === 'Search database';
+            && $session['type'] === 'realtime'
+            && $session['model'] === 'gpt-4o-realtime-preview'
+            && $session['audio']['output']['voice'] === 'alloy'
+            && $session['instructions'] === 'You are a support assistant.'
+            && $session['audio']['input']['turn_detection'] === ['type' => 'server_vad']
+            && count($session['tools']) === 1
+            && $session['tools'][0]['name'] === 'TestSearchTool'
+            && $session['tools'][0]['description'] === 'Search database';
     });
 });
 
@@ -103,8 +104,8 @@ test('openai realtime session maps default-female and default-male voices', func
     $agent = agent(instructions: 'Voice check');
 
     $agent->realtime(provider: 'openai', voice: 'default-female');
-    Http::assertSent(fn (Request $req) => json_decode($req->body(), true)['voice'] === 'alloy');
+    Http::assertSent(fn (Request $req) => (json_decode($req->body(), true)['session']['audio']['output']['voice'] ?? null) === 'alloy');
 
     $agent->realtime(provider: 'openai', voice: 'default-male');
-    Http::assertSent(fn (Request $req) => json_decode($req->body(), true)['voice'] === 'ash');
+    Http::assertSent(fn (Request $req) => (json_decode($req->body(), true)['session']['audio']['output']['voice'] ?? null) === 'ash');
 });

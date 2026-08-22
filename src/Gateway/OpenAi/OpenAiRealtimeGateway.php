@@ -31,52 +31,79 @@ class OpenAiRealtimeGateway implements RealtimeGateway
             default => $prompt->voice,
         };
 
-        $payload = array_filter([
+        $session = array_filter([
+            'type' => 'realtime',
             'model' => $prompt->model,
-            'modalities' => $prompt->modalities,
             'instructions' => $prompt->instructions,
-            'voice' => $voice,
+            'modalities' => $prompt->modalities,
             'tools' => filled($prompt->tools) ? $this->mapTools($prompt->tools, $provider) : null,
-            'input_audio_format' => $prompt->options['input_audio_format'] ?? null,
-            'output_audio_format' => $prompt->options['output_audio_format'] ?? null,
-            'input_audio_transcription' => $prompt->options['input_audio_transcription'] ?? null,
-            'turn_detection' => $prompt->options['turn_detection'] ?? null,
             'tool_choice' => $prompt->options['tool_choice'] ?? null,
             'temperature' => $prompt->options['temperature'] ?? null,
             'max_response_output_tokens' => $prompt->options['max_response_output_tokens'] ?? null,
         ], fn ($value) => $value !== null);
 
+        if ($voice !== null || isset($prompt->options['output_audio_format'])) {
+            $session['audio']['output'] = array_filter([
+                'voice' => $voice,
+                'format' => $prompt->options['output_audio_format'] ?? null,
+            ], fn ($value) => $value !== null);
+        }
+
+        if (isset($prompt->options['input_audio_format']) || isset($prompt->options['input_audio_transcription']) || isset($prompt->options['turn_detection'])) {
+            $session['audio']['input'] = array_filter([
+                'format' => $prompt->options['input_audio_format'] ?? null,
+                'transcription' => $prompt->options['input_audio_transcription'] ?? null,
+                'turn_detection' => $prompt->options['turn_detection'] ?? null,
+            ], fn ($value) => $value !== null);
+        }
+
         $extraOptions = Arr::except($prompt->options, [
             'model', 'modalities', 'instructions', 'voice', 'tools',
             'input_audio_format', 'output_audio_format', 'input_audio_transcription',
             'turn_detection', 'tool_choice', 'temperature', 'max_response_output_tokens',
+            'session',
         ]);
 
-        $payload = array_merge($payload, $extraOptions);
+        $session = array_merge($session, $prompt->options['session'] ?? [], $extraOptions);
+
+        $payload = [
+            'session' => $session,
+        ];
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $prompt->timeout)->post('realtime/sessions', $payload),
+            fn () => $this->client($provider, $prompt->timeout)->post('realtime/client_secrets', $payload),
         );
 
         $data = $response->json();
 
-        $clientSecret = is_array($data['client_secret'] ?? null)
-            ? ($data['client_secret']['value'] ?? '')
-            : ($data['client_secret'] ?? '');
+        $clientSecret = $data['value']
+            ?? (is_array($data['client_secret'] ?? null)
+                ? ($data['client_secret']['value'] ?? '')
+                : ($data['client_secret'] ?? ''));
 
-        $expiresAt = is_array($data['client_secret'] ?? null)
-            ? ($data['client_secret']['expires_at'] ?? 0)
-            : ($data['expires_at'] ?? 0);
+        $expiresAt = $data['expires_at']
+            ?? (is_array($data['client_secret'] ?? null)
+                ? ($data['client_secret']['expires_at'] ?? 0)
+                : 0);
+
+        $model = $data['session']['model']
+            ?? ($data['model'] ?? $prompt->model);
+
+        $resolvedVoice = $data['session']['audio']['output']['voice']
+            ?? ($data['session']['voice'] ?? ($data['voice'] ?? $voice));
+
+        $resolvedModalities = $data['session']['modalities']
+            ?? ($data['modalities'] ?? $prompt->modalities);
 
         return new RealtimeSession(
             id: $data['id'] ?? '',
             clientSecret: $clientSecret,
             expiresAt: $expiresAt,
-            model: $data['model'] ?? $prompt->model,
-            meta: new Meta($provider->name(), $data['model'] ?? $prompt->model),
-            voice: $data['voice'] ?? $voice,
-            modalities: $data['modalities'] ?? $prompt->modalities,
+            model: $model,
+            meta: new Meta($provider->name(), $model),
+            voice: $resolvedVoice,
+            modalities: $resolvedModalities,
             raw: $data,
         );
     }

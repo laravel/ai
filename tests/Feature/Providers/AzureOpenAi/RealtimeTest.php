@@ -20,14 +20,19 @@ function fakeAzureRealtimeSessionResponse(): PromiseInterface
 {
     return Http::response([
         'id' => 'sess_azure_98765',
-        'object' => 'realtime.session',
-        'model' => 'my-realtime-deployment',
-        'modalities' => ['text', 'audio'],
-        'instructions' => 'You are an Azure support agent.',
-        'voice' => 'alloy',
-        'client_secret' => [
-            'value' => 'ek_azure_secret_789',
-            'expires_at' => 1795000000,
+        'object' => 'realtime.client_secret',
+        'value' => 'ek_azure_secret_789',
+        'expires_at' => 1795000000,
+        'session' => [
+            'type' => 'realtime',
+            'model' => 'my-realtime-deployment',
+            'modalities' => ['text', 'audio'],
+            'instructions' => 'You are an Azure support agent.',
+            'audio' => [
+                'output' => [
+                    'voice' => 'alloy',
+                ],
+            ],
         ],
     ]);
 }
@@ -51,10 +56,12 @@ test('azure realtime session sends request with api-key and deployment', functio
 
     Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
+        $session = $body['session'] ?? [];
 
-        return $request->url() === 'https://test-azure.openai.azure.com/openai/v1/realtime/sessions'
+        return $request->url() === 'https://test-azure.openai.azure.com/openai/v1/realtime/client_secrets'
             && $request->hasHeader('api-key', 'azure-test-key')
-            && $body['model'] === 'my-realtime-deployment'
-            && $body['instructions'] === 'You are an Azure support agent.';
+            && $session['type'] === 'realtime'
+            && $session['model'] === 'my-realtime-deployment'
+            && $session['instructions'] === 'You are an Azure support agent.';
     });
 });
