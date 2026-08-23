@@ -10,10 +10,12 @@ use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\RemembersConversations as RemembersConversationsContract;
+use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Models\Conversation;
 use Laravel\Ai\Prompts\AgentPrompt;
+use Laravel\Ai\Responses\Data\ToolCall;
 
 trait ResumesToolApprovals
 {
@@ -76,9 +78,53 @@ trait ResumesToolApprovals
     }
 
     /**
+     * Ensure the resumption's results could be recorded before any approved tool runs.
+     *
+     * The store rejects results that do not belong to the resuming participant's paused turn; checking that here
+     * keeps a mismatch from executing the tool first and only then failing to record it, which would leave the
+     * turn pending and the approval re-runnable.
+     *
+     * @param  Collection<int, ToolCall>  $pendingToolCalls
+     *
+     * @throws ApprovalMismatchException when the resuming participant does not own the paused turn
+     */
+    protected function ensureApprovalResumptionIsRecordable(AgentPrompt $prompt, Collection $pendingToolCalls): void
+    {
+        $context = $this->storeApprovalContextFor($prompt);
+
+        if ($context === null) {
+            return;
+        }
+
+        [$store, $conversationId, $participantType, $participantId] = $context;
+
+        if (! $store->hasPausedTurn($conversationId, $participantType, $participantId, $pendingToolCalls->pluck('id')->all())) {
+            throw new ApprovalMismatchException('The approval decisions do not match a paused conversation turn for this participant.', collect());
+        }
+    }
+
+    /**
      * Get a callback that durably records resolved approval results before the run continues, if the store supports it.
      */
     protected function storeApprovalResultRecorderFor(AgentPrompt $prompt): ?Closure
+    {
+        $context = $this->storeApprovalContextFor($prompt);
+
+        if ($context === null) {
+            return null;
+        }
+
+        [$store, $conversationId, $participantType, $participantId] = $context;
+
+        return fn (array $toolResults) => $store->storeApprovalResults($conversationId, $participantType, $participantId, $toolResults);
+    }
+
+    /**
+     * Resolve the store and the identity a durable resumption records under, or null when the agent does not remember conversations.
+     *
+     * @return array{ConversationStore, string, ?string, string|int|null}|null
+     */
+    protected function storeApprovalContextFor(AgentPrompt $prompt): ?array
     {
         $agent = $prompt->agent;
 
@@ -91,13 +137,13 @@ trait ResumesToolApprovals
             return null;
         }
 
-        $store = app(ConversationStore::class);
-
-        $conversationId = $agent->currentConversation();
         $participant = $agent->conversationParticipant();
-        $participantType = $participant === null ? null : Conversation::participantType($participant);
-        $participantId = $participant === null ? null : Conversation::participantKey($participant);
 
-        return fn (array $toolResults) => $store->storeApprovalResults($conversationId, $participantType, $participantId, $toolResults);
+        return [
+            app(ConversationStore::class),
+            $agent->currentConversation(),
+            $participant === null ? null : Conversation::participantType($participant),
+            $participant === null ? null : Conversation::participantKey($participant),
+        ];
     }
 }

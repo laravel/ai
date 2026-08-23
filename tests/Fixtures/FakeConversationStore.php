@@ -34,6 +34,11 @@ class FakeConversationStore implements ConversationStore
         return new Collection;
     }
 
+    public function hasPausedTurn(string $conversationId, ?string $participantType, string|int|null $participantId, array $toolCallIds): bool
+    {
+        return true;
+    }
+
     public function storeApprovalResults(string $conversationId, ?string $participantType, string|int|null $participantId, array $toolResults): void
     {
         //

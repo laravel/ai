@@ -51,6 +51,11 @@ test('it threads the participant type into latestConversationId when continuing 
             return new Collection;
         }
 
+        public function hasPausedTurn(string $conversationId, ?string $participantType, string|int|null $participantId, array $toolCallIds): bool
+        {
+            return true;
+        }
+
         public function storeApprovalResults(string $conversationId, ?string $participantType, string|int|null $participantId, array $toolResults): void
         {
             //
@@ -97,6 +102,11 @@ test('it continues the last conversation through a store that ignores the partic
         public function getLatestConversationMessages(string $conversationId, int $limit): Collection
         {
             return new Collection;
+        }
+
+        public function hasPausedTurn(string $conversationId, ?string $participantType, string|int|null $participantId, array $toolCallIds): bool
+        {
+            return true;
         }
 
         public function storeApprovalResults(string $conversationId, ?string $participantType, string|int|null $participantId, array $toolResults): void
@@ -155,6 +165,11 @@ test('it resolves the participant id via getKey for models with custom primary k
         public function getLatestConversationMessages(string $conversationId, int $limit): Collection
         {
             return new Collection;
+        }
+
+        public function hasPausedTurn(string $conversationId, ?string $participantType, string|int|null $participantId, array $toolCallIds): bool
+        {
+            return true;
         }
 
         public function storeApprovalResults(string $conversationId, ?string $participantType, string|int|null $participantId, array $toolResults): void

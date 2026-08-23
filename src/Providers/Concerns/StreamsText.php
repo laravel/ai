@@ -70,6 +70,10 @@ trait StreamsText
                         ? $this->textGenerationLoop()->validateApproval($approval, $messages, $tools)
                         : null;
 
+                    if ($validatedApproval !== null) {
+                        $this->ensureApprovalResumptionIsRecordable($prompt, $validatedApproval[0]);
+                    }
+
                     $streamable = null;
 
                     // The response owns the "has anything reached the consumer" flag so this failure check and the caller's failover decision can never drift apart...

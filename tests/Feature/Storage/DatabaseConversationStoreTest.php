@@ -1123,3 +1123,36 @@ function createConversationSchema(?string $connection = null): void
         $table->timestamps();
     });
 }
+
+test('hasPausedTurn reports whether the participant owns a paused turn awaiting the given tool calls', function () {
+    $store = new DatabaseConversationStore;
+
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'participant_type' => 'user',
+        'participant_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => '',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'x'], 'result_id' => 'result-1'],
+        ]),
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'approval_state' => json_encode(['pending' => ['call-1' => null]]),
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    expect($store->hasPausedTurn($conversationId, 'user', 1, ['call-1']))->toBeTrue()
+        ->and($store->hasPausedTurn($conversationId, 'user', 2, ['call-1']))->toBeFalse()
+        ->and($store->hasPausedTurn($conversationId, null, null, ['call-1']))->toBeFalse()
+        ->and($store->hasPausedTurn($conversationId, 'user', 1, ['call-2']))->toBeFalse()
+        ->and($store->hasPausedTurn($conversationId, 'user', 1, []))->toBeFalse()
+        ->and($store->hasPausedTurn('other-conversation', 'user', 1, ['call-1']))->toBeFalse();
+});
