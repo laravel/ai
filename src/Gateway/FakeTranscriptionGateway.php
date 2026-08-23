@@ -79,13 +79,14 @@ class FakeTranscriptionGateway implements TranscriptionGateway
         }
 
         if (is_string($response)) {
+            $segment = new TranscriptionSegment($response, 'Speaker 1', 0.0, 1.0);
+
             return new TranscriptionResponse(
                 $response,
-                new Collection([
-                    new TranscriptionSegment($response, 'Speaker 1', 0.0, 1.0),
-                ]),
-                new Usage,
+                new Collection([$segment]),
+                new Usage(durationSeconds: ceil($segment->endSeconds)),
                 new Meta($provider->name(), $model),
+                $segment->endSeconds,
             );
         }
 

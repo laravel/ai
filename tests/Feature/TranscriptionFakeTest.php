@@ -124,6 +124,15 @@ test('fake transcriptions include segments', function (): void {
         ->and($response->segments[0]->speaker)->toEqual('Speaker 1');
 });
 
+test('fake transcriptions include a duration', function (): void {
+    Transcription::fake(['Hello world']);
+
+    $response = Transcription::of(base64_encode('audio'))->generate();
+
+    expect($response->duration)->toEqual($response->segments->last()->endSeconds)
+        ->and($response->usage->durationSeconds)->toEqual(ceil($response->duration));
+});
+
 test('queued transcriptions can be faked', function (): void {
     Transcription::fake();
 
