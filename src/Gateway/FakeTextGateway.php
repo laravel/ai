@@ -167,6 +167,17 @@ class FakeTextGateway implements TextGateway
      */
     protected function nextResponse(TextProvider $provider, string $model, string $prompt, Collection $attachments, ?array $schema): mixed
     {
+        if (is_array($this->responses)
+            && $this->responses !== []
+            && ! array_key_exists($this->currentResponseIndex, $this->responses)) {
+            throw new RuntimeException(sprintf(
+                'Fake agent responses exhausted: [%d] response(s) were supplied but response [%d] was requested. '
+                .'Add the missing responses, or pass a Closure to answer every call.',
+                count($this->responses),
+                $this->currentResponseIndex,
+            ));
+        }
+
         $response = is_array($this->responses)
             ? ($this->responses[$this->currentResponseIndex] ?? null)
             : call_user_func($this->responses, $prompt, $attachments, $provider, $model);
