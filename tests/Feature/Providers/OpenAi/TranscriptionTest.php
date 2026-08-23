@@ -91,6 +91,49 @@ test('transcription usage is correctly parsed', function (): void {
         ->and($response->usage->completionTokens)->toBe(50);
 });
 
+test('transcription billed duration is parsed from duration based usage statistics', function (): void {
+    Http::fake(['*' => Http::response([
+        'text' => 'Hello',
+        'usage' => [
+            'type' => 'duration',
+            'seconds' => 3,
+        ],
+    ])]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->generate(provider: 'openai');
+
+    expect($response->usage->durationSeconds)->toBe(3.0);
+});
+
+test('transcription duration is correctly parsed', function (): void {
+    Http::fake(['*' => Http::response([
+        'text' => 'Hello',
+        'duration' => 2.11,
+        'usage' => [
+            'type' => 'duration',
+            'seconds' => 3,
+        ],
+    ])]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->generate(provider: 'openai');
+
+    // The audio is 2.11 seconds long, but a duration billed model bills whole seconds.
+    expect($response->duration)->toBe(2.11)
+        ->and($response->usage->durationSeconds)->toBe(3.0);
+});
+
+test('transcription duration is null when the provider does not report one', function (): void {
+    Http::fake(['*' => fakeOpenAiTranscriptionResponse()]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->generate(provider: 'openai');
+
+    expect($response->duration)->toBeNull()
+        ->and($response->usage->durationSeconds)->toBe(0.0);
+});
+
 test('transcription sends language when provided', function (): void {
     Http::fake(['*' => fakeOpenAiTranscriptionResponse()]);
 

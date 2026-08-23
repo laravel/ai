@@ -19,6 +19,14 @@ class TranscriptionResponse implements \Stringable
     public Meta $meta;
 
     /**
+     * The length of the transcribed audio in seconds, when the provider reports it.
+     *
+     * This is the audio itself, not the duration a duration billed model was billed
+     * for, which is rounded up and lives on the usage.
+     */
+    public ?float $duration;
+
+    /**
      * @param  Collection<int, TranscriptionSegment>  $segments
      */
     public function __construct(
@@ -26,11 +34,13 @@ class TranscriptionResponse implements \Stringable
         Collection $segments,
         Usage $usage,
         Meta $meta,
+        ?float $duration = null,
     ) {
         $this->text = $text;
         $this->segments = $segments;
         $this->usage = $usage;
         $this->meta = $meta;
+        $this->duration = $duration;
     }
 
     /**

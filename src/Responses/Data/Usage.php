@@ -13,6 +13,7 @@ class Usage implements Arrayable, JsonSerializable
         public int $cacheWriteInputTokens = 0,
         public int $cacheReadInputTokens = 0,
         public int $reasoningTokens = 0,
+        public float $durationSeconds = 0,
     ) {}
 
     /**
@@ -26,6 +27,7 @@ class Usage implements Arrayable, JsonSerializable
             $this->cacheWriteInputTokens + $usage->cacheWriteInputTokens,
             $this->cacheReadInputTokens + $usage->cacheReadInputTokens,
             $this->reasoningTokens + $usage->reasoningTokens,
+            $this->durationSeconds + $usage->durationSeconds,
         );
     }
 
@@ -40,6 +42,7 @@ class Usage implements Arrayable, JsonSerializable
             'cache_write_input_tokens' => $this->cacheWriteInputTokens,
             'cache_read_input_tokens' => $this->cacheReadInputTokens,
             'reasoning_tokens' => $this->reasoningTokens,
+            'duration_seconds' => $this->durationSeconds,
         ];
     }
 

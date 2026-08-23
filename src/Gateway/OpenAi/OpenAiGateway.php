@@ -236,8 +236,10 @@ class OpenAiGateway implements Gateway, StepTextGateway
             new Usage(
                 Arr::get($data, 'usage.input_tokens', 0),
                 Arr::get($data, 'usage.output_tokens', 0),
+                durationSeconds: Arr::get($data, 'usage.seconds', 0),
             ),
             new Meta($provider->name(), $model),
+            Arr::get($data, 'duration'),
         );
     }
 
