@@ -76,8 +76,7 @@ trait GeneratesText
                     $tools = $this->resolveTools($agent);
                     $approval = $this->resumableApprovalFor($prompt);
 
-                    // Validate eagerly so the resumption can be checked against the conversation store before any
-                    // approved tool runs, then thread the result into generate() so it isn't re-validated there...
+                    // Validate eagerly so the store can reject the resumption before any approved tool runs, then thread the result into generate() so it isn't re-validated there...
                     $validatedApproval = $approval !== null
                         ? $this->textGenerationLoop()->validateApproval($approval, $messages, $tools)
                         : null;

@@ -80,10 +80,6 @@ trait ResumesToolApprovals
     /**
      * Ensure the resumption's results could be recorded before any approved tool runs.
      *
-     * The store rejects results that do not belong to the resuming participant's paused turn; checking that here
-     * keeps a mismatch from executing the tool first and only then failing to record it, which would leave the
-     * turn pending and the approval re-runnable.
-     *
      * @param  Collection<int, ToolCall>  $pendingToolCalls
      *
      * @throws ApprovalMismatchException when the resuming participant does not own the paused turn

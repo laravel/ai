@@ -41,8 +41,6 @@ interface ConversationStore
     /**
      * Determine if the given participant owns a paused turn awaiting any of the given tool calls.
      *
-     * Checked before a resumption executes anything, so a mismatch is rejected while the turn is still pending.
-     *
      * @param  array<int, string>  $toolCallIds
      */
     public function hasPausedTurn(string $conversationId, ?string $participantType, string|int|null $participantId, array $toolCallIds): bool;
