@@ -195,7 +195,11 @@ class MistralGateway implements AudioGateway, EmbeddingGateway, StepTextGateway,
         do {
             $response = $this->withErrorHandling(
                 $provider->name(),
-                fn () => $this->client($provider, $timeout)->get('audio/voices', ['limit' => $limit, 'offset' => $offset]),
+                fn () => $this->client($provider, $timeout)->get('audio/voices', [
+                    'limit' => $limit,
+                    'offset' => $offset,
+                    'type' => 'all',
+                ]),
             );
 
             $items = $response->json('items') ?? [];

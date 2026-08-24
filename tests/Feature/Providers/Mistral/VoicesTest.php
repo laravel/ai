@@ -18,7 +18,7 @@ test('voices request hits the audio voices endpoint with a bearer token', functi
 
     Audio::voices(provider: 'mistral');
 
-    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://api.mistral.ai/v1/audio/voices?limit=100&offset=0'
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://api.mistral.ai/v1/audio/voices?limit=100&offset=0&type=all'
         && $request->method() === 'GET'
         && $request->hasHeader('Authorization', 'Bearer test-key'));
 });
