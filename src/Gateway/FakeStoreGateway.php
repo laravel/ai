@@ -7,6 +7,7 @@ use DateInterval;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
+use Laravel\Ai\Gateway\Concerns\ScriptsFakeResponses;
 use Laravel\Ai\Responses\Data\StoreFileCounts;
 use Laravel\Ai\Store;
 use Laravel\Ai\Stores;
@@ -14,7 +15,9 @@ use RuntimeException;
 
 class FakeStoreGateway implements StoreGateway
 {
-    protected int $currentResponseIndex = 0;
+    use ScriptsFakeResponses;
+
+    protected string $scriptNoun = 'store';
 
     protected bool $preventStrayOperations = false;
 
@@ -35,13 +38,11 @@ class FakeStoreGateway implements StoreGateway
      */
     protected function nextGetResponse(StoreProvider $provider, string $storeId): Store
     {
-        $response = is_array($this->responses)
-            ? ($this->responses[$this->currentResponseIndex] ?? null)
-            : call_user_func($this->responses, $storeId);
+        $response = $this->nextScriptedResponse($storeId);
 
-        return tap($this->marshalGetResponse(
+        return $this->marshalGetResponse(
             $provider, $response, $storeId
-        ), fn (): int => $this->currentResponseIndex++);
+        );
     }
 
     /**

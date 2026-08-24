@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway;
 use Closure;
 use Laravel\Ai\Contracts\Gateway\AudioGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
+use Laravel\Ai\Gateway\Concerns\ScriptsFakeResponses;
 use Laravel\Ai\Prompts\AudioPrompt;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\Meta;
@@ -12,7 +13,9 @@ use RuntimeException;
 
 class FakeAudioGateway implements AudioGateway
 {
-    protected int $currentResponseIndex = 0;
+    use ScriptsFakeResponses;
+
+    protected string $scriptNoun = 'audio';
 
     protected bool $preventStrayGenerations = false;
 
@@ -41,13 +44,11 @@ class FakeAudioGateway implements AudioGateway
      */
     protected function nextResponse(AudioProvider $provider, string $model, AudioPrompt $prompt): AudioResponse
     {
-        $response = is_array($this->responses)
-            ? ($this->responses[$this->currentResponseIndex] ?? null)
-            : call_user_func($this->responses, $prompt);
+        $response = $this->nextScriptedResponse($prompt);
 
-        return tap($this->marshalResponse(
+        return $this->marshalResponse(
             $response, $provider, $model, $prompt
-        ), fn (): int => $this->currentResponseIndex++);
+        );
     }
 
     /**

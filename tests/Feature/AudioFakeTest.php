@@ -122,6 +122,14 @@ test('stringable audio macro passes through options', function (): void {
         && $prompt->timeout === 45);
 });
 
+test('audio throws once its scripted responses are exhausted', function (): void {
+    Audio::fake([base64_encode('only-audio')]);
+
+    Audio::of('First text')->generate();
+
+    Audio::of('Second text')->generate();
+})->throws(RuntimeException::class, 'Fake audio responses exhausted: [1] response(s) were supplied but call [2] was made.');
+
 test('audio can prevent stray generations', function (): void {
     Audio::fake()->preventStrayAudio();
 

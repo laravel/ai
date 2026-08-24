@@ -43,6 +43,14 @@ describe('store operations', function (): void {
         expect($response)->id->toEqual('vs_1')->name->toEqual('name-for-vs_1');
     });
 
+    test('stores throw once their scripted responses are exhausted', function (): void {
+        Stores::fake(['only-store']);
+
+        Stores::get('vs_1');
+
+        Stores::get('vs_2');
+    })->throws(RuntimeException::class, 'Fake store responses exhausted: [1] response(s) were supplied but call [2] was made.');
+
     test('stores can prevent stray operations', function (): void {
         Stores::fake()->preventStrayOperations();
 

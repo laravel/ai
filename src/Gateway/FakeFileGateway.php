@@ -7,13 +7,16 @@ use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Files;
+use Laravel\Ai\Gateway\Concerns\ScriptsFakeResponses;
 use Laravel\Ai\Responses\FileResponse;
 use Laravel\Ai\Responses\StoredFileResponse;
 use RuntimeException;
 
 class FakeFileGateway implements FileGateway
 {
-    protected int $currentResponseIndex = 0;
+    use ScriptsFakeResponses;
+
+    protected string $scriptNoun = 'file';
 
     protected bool $preventStrayOperations = false;
 
@@ -34,13 +37,11 @@ class FakeFileGateway implements FileGateway
      */
     protected function nextGetResponse(string $fileId): FileResponse
     {
-        $response = is_array($this->responses)
-            ? ($this->responses[$this->currentResponseIndex] ?? null)
-            : call_user_func($this->responses, $fileId);
+        $response = $this->nextScriptedResponse($fileId);
 
-        return tap($this->marshalGetResponse(
+        return $this->marshalGetResponse(
             $response, $fileId
-        ), fn (): int => $this->currentResponseIndex++);
+        );
     }
 
     /**

@@ -118,6 +118,16 @@ test('can assert nothing reranked', function (): void {
     Reranking::assertNothingReranked();
 });
 
+test('reranking throws once its scripted responses are exhausted', function (): void {
+    Reranking::fake([
+        [new RankedDocument(index: 0, document: 'Only doc', score: 0.9)],
+    ]);
+
+    Reranking::of(['Only doc'])->rerank('query');
+
+    Reranking::of(['Only doc'])->rerank('another query');
+})->throws(RuntimeException::class, 'Fake reranking responses exhausted: [1] response(s) were supplied but call [2] was made.');
+
 test('can prevent stray rerankings', function (): void {
     Reranking::fake()->preventStrayRerankings();
 

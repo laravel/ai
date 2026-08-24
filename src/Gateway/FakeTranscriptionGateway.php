@@ -7,6 +7,7 @@ use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Gateway\Concerns\ScriptsFakeResponses;
 use Laravel\Ai\Prompts\TranscriptionPrompt;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
@@ -16,7 +17,9 @@ use RuntimeException;
 
 class FakeTranscriptionGateway implements TranscriptionGateway
 {
-    protected int $currentResponseIndex = 0;
+    use ScriptsFakeResponses;
+
+    protected string $scriptNoun = 'transcription';
 
     protected bool $preventStrayGenerations = false;
 
@@ -48,13 +51,11 @@ class FakeTranscriptionGateway implements TranscriptionGateway
      */
     protected function nextResponse(TranscriptionProvider $provider, string $model, TranscriptionPrompt $prompt): TranscriptionResponse
     {
-        $response = is_array($this->responses)
-            ? ($this->responses[$this->currentResponseIndex] ?? null)
-            : call_user_func($this->responses, $prompt);
+        $response = $this->nextScriptedResponse($prompt);
 
-        return tap($this->marshalResponse(
+        return $this->marshalResponse(
             $response, $provider, $model, $prompt
-        ), fn (): int => $this->currentResponseIndex++);
+        );
     }
 
     /**

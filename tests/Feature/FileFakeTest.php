@@ -51,6 +51,14 @@ test('files can be faked with a closure', function (): void {
         ->and($response->content)->toEqual('content-for-file_2');
 });
 
+test('files throw once their scripted responses are exhausted', function (): void {
+    Files::fake(['only-content']);
+
+    Files::get('file_1');
+
+    Files::get('file_2');
+})->throws(RuntimeException::class, 'Fake file responses exhausted: [1] response(s) were supplied but call [2] was made.');
+
 test('files can prevent stray operations', function (): void {
     Files::fake()->preventStrayOperations();
 

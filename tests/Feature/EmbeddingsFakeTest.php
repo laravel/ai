@@ -224,6 +224,14 @@ describe('generating embeddings', function (): void {
         expect($magnitude)->toEqualWithDelta(1.0, 0.0001);
     });
 
+    test('embeddings throw once their scripted responses are exhausted', function (): void {
+        Embeddings::fake([[array_fill(0, 3, 0.1)]]);
+
+        Embeddings::for(['Hello world'])->dimensions(3)->generate();
+
+        Embeddings::for(['Goodbye world'])->dimensions(3)->generate();
+    })->throws(RuntimeException::class, 'Fake embedding responses exhausted: [1] response(s) were supplied but call [2] was made.');
+
     test('can prevent stray embeddings generations', function (): void {
         Embeddings::fake()->preventStrayEmbeddings();
 

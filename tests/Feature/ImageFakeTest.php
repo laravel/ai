@@ -80,6 +80,14 @@ test('images can be faked with a single closure that is invoked for every genera
     expect($response->firstImage()->image)->toEqual(base64_encode('image-for-Second prompt'));
 });
 
+test('images throw once their scripted responses are exhausted', function (): void {
+    Image::fake([base64_encode('only-image')]);
+
+    Image::of('First prompt')->generate();
+
+    Image::of('Second prompt')->generate();
+})->throws(RuntimeException::class, 'Fake image responses exhausted: [1] response(s) were supplied but call [2] was made.');
+
 test('images can prevent stray generations', function (): void {
     Image::fake()->preventStrayImages();
 

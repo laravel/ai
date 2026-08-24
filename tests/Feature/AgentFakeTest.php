@@ -92,6 +92,30 @@ describe('prompt responses', function (): void {
         expect($response->text)->toEqual('Fake response for prompt: Second prompt');
     });
 
+    test('agents throw once their scripted responses are exhausted', function (): void {
+        AssistantAgent::fake(['Only response']);
+
+        expect((new AssistantAgent)->prompt('First prompt')->text)->toEqual('Only response');
+
+        (new AssistantAgent)->prompt('Second prompt');
+    })->throws(RuntimeException::class, 'Fake agent responses exhausted: [1] response(s) were supplied but call [2] was made.');
+
+    test('structured agents throw once their scripted responses are exhausted', function (): void {
+        StructuredAgent::fake([['symbol' => 'Au']]);
+
+        expect((new StructuredAgent)->prompt('Gold prompt')['symbol'])->toEqual('Au');
+
+        (new StructuredAgent)->prompt('Silver prompt');
+    })->throws(RuntimeException::class, 'Fake agent responses exhausted: [1] response(s) were supplied but call [2] was made.');
+
+    test('faked tool calls consume a scripted response for the follow up answer', function (): void {
+        MultiStepToolAgent::fake([
+            new ToolCall('call_123', 'FixedNumberGenerator', []),
+        ]);
+
+        (new MultiStepToolAgent)->prompt('Generate a number');
+    })->throws(RuntimeException::class, 'Fake agent responses exhausted: [1] response(s) were supplied but call [2] was made.');
+
     test('agents can prevent stray prompts', function (): void {
         AssistantAgent::fake()->preventStrayPrompts();
 
@@ -192,6 +216,14 @@ describe('stream responses', function (): void {
         expect($response->text)->toEqual('Third response')
             ->and($response->events)->toHaveCount(6);
     });
+
+    test('streamed agents throw once their scripted responses are exhausted', function (): void {
+        AssistantAgent::fake(['Only response']);
+
+        (new AssistantAgent)->stream('First prompt')->each(fn (): true => true);
+
+        (new AssistantAgent)->stream('Second prompt')->each(fn (): true => true);
+    })->throws(RuntimeException::class, 'Fake agent responses exhausted: [1] response(s) were supplied but call [2] was made.');
 
     test('faked stream events share the response invocation id', function (): void {
         AssistantAgent::fake(['Hello world']);

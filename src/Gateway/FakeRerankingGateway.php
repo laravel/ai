@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Support\Arr;
 use Laravel\Ai\Contracts\Gateway\RerankingGateway;
 use Laravel\Ai\Contracts\Providers\RerankingProvider;
+use Laravel\Ai\Gateway\Concerns\ScriptsFakeResponses;
 use Laravel\Ai\Prompts\RerankingPrompt;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\RankedDocument;
@@ -14,7 +15,9 @@ use RuntimeException;
 
 class FakeRerankingGateway implements RerankingGateway
 {
-    protected int $currentResponseIndex = 0;
+    use ScriptsFakeResponses;
+
+    protected string $scriptNoun = 'reranking';
 
     protected bool $preventStrayRerankings = false;
 
@@ -47,13 +50,11 @@ class FakeRerankingGateway implements RerankingGateway
         string $model,
         RerankingPrompt $prompt
     ): RerankingResponse {
-        $response = is_array($this->responses)
-            ? ($this->responses[$this->currentResponseIndex] ?? null)
-            : call_user_func($this->responses, $prompt);
+        $response = $this->nextScriptedResponse($prompt);
 
-        return tap($this->marshalResponse(
+        return $this->marshalResponse(
             $response, $provider, $model, $prompt
-        ), fn (): int => $this->currentResponseIndex++);
+        );
     }
 
     /**

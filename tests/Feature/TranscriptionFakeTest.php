@@ -82,6 +82,14 @@ test('transcriptions can be faked with a single closure that is invoked for ever
     expect($response->text)->toEqual('Transcription 2');
 });
 
+test('transcriptions throw once their scripted responses are exhausted', function (): void {
+    Transcription::fake(['Only transcription']);
+
+    Transcription::of(base64_encode('audio-1'))->generate();
+
+    Transcription::of(base64_encode('audio-2'))->generate();
+})->throws(RuntimeException::class, 'Fake transcription responses exhausted: [1] response(s) were supplied but call [2] was made.');
+
 test('transcriptions can prevent stray generations', function (): void {
     Transcription::fake()->preventStrayTranscriptions();
 

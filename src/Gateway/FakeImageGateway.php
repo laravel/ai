@@ -7,6 +7,7 @@ use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Files\Image;
+use Laravel\Ai\Gateway\Concerns\ScriptsFakeResponses;
 use Laravel\Ai\Prompts\ImagePrompt;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
@@ -16,7 +17,9 @@ use RuntimeException;
 
 class FakeImageGateway implements ImageGateway
 {
-    protected int $currentResponseIndex = 0;
+    use ScriptsFakeResponses;
+
+    protected string $scriptNoun = 'image';
 
     protected bool $preventStrayGenerations = false;
 
@@ -49,13 +52,11 @@ class FakeImageGateway implements ImageGateway
      */
     protected function nextResponse(ImageProvider $provider, string $model, ImagePrompt $prompt): ImageResponse
     {
-        $response = is_array($this->responses)
-            ? ($this->responses[$this->currentResponseIndex] ?? null)
-            : call_user_func($this->responses, $prompt);
+        $response = $this->nextScriptedResponse($prompt);
 
-        return tap($this->marshalResponse(
+        return $this->marshalResponse(
             $response, $provider, $model, $prompt
-        ), fn (): int => $this->currentResponseIndex++);
+        );
     }
 
     /**

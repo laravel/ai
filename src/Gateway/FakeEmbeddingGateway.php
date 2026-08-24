@@ -6,6 +6,7 @@ use Closure;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Embeddings;
+use Laravel\Ai\Gateway\Concerns\ScriptsFakeResponses;
 use Laravel\Ai\Prompts\EmbeddingsPrompt;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\EmbeddingsResponse;
@@ -13,7 +14,9 @@ use RuntimeException;
 
 class FakeEmbeddingGateway implements EmbeddingGateway
 {
-    protected int $currentResponseIndex = 0;
+    use ScriptsFakeResponses;
+
+    protected string $scriptNoun = 'embedding';
 
     protected bool $preventStrayGenerations = false;
 
@@ -48,13 +51,11 @@ class FakeEmbeddingGateway implements EmbeddingGateway
         string $model,
         EmbeddingsPrompt $prompt
     ): EmbeddingsResponse {
-        $response = is_array($this->responses)
-            ? ($this->responses[$this->currentResponseIndex] ?? null)
-            : call_user_func($this->responses, $prompt);
+        $response = $this->nextScriptedResponse($prompt);
 
-        return tap($this->marshalResponse(
+        return $this->marshalResponse(
             $response, $provider, $model, $prompt
-        ), fn (): int => $this->currentResponseIndex++);
+        );
     }
 
     /**
