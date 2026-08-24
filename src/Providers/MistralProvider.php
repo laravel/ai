@@ -3,21 +3,25 @@
 namespace Laravel\Ai\Providers;
 
 use Illuminate\Contracts\Events\Dispatcher;
+use Laravel\Ai\Contracts\Gateway\AudioGateway;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
 use Laravel\Ai\Contracts\Gateway\VoiceGateway;
+use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Contracts\Providers\VoiceProvider;
 use Laravel\Ai\Gateway\Mistral\MistralGateway;
 
-class MistralProvider extends Provider implements EmbeddingProvider, TextProvider, TranscriptionProvider, VoiceProvider
+class MistralProvider extends Provider implements AudioProvider, EmbeddingProvider, TextProvider, TranscriptionProvider, VoiceProvider
 {
+    use Concerns\GeneratesAudio;
     use Concerns\GeneratesEmbeddings;
     use Concerns\GeneratesText;
     use Concerns\GeneratesTranscriptions;
+    use Concerns\HasAudioGateway;
     use Concerns\HasEmbeddingGateway;
     use Concerns\HasTextGateway;
     use Concerns\HasTranscriptionGateway;
@@ -38,6 +42,14 @@ class MistralProvider extends Provider implements EmbeddingProvider, TextProvide
     protected function mistralGateway(): MistralGateway
     {
         return $this->mistralGateway ??= new MistralGateway($this->events);
+    }
+
+    /**
+     * Get the provider's audio gateway.
+     */
+    public function audioGateway(): AudioGateway
+    {
+        return $this->audioGateway ??= $this->mistralGateway();
     }
 
     /**
@@ -94,6 +106,14 @@ class MistralProvider extends Provider implements EmbeddingProvider, TextProvide
     public function smartestTextModel(): string
     {
         return $this->config['models']['text']['smartest'] ?? 'mistral-large-latest';
+    }
+
+    /**
+     * Get the name of the default audio (TTS) model.
+     */
+    public function defaultAudioModel(): string
+    {
+        return $this->config['models']['audio']['default'] ?? 'voxtral-mini-tts-2603';
     }
 
     /**

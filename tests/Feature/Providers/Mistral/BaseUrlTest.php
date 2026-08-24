@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Audio;
 
 use function Laravel\Ai\agent;
 
@@ -40,6 +41,19 @@ test('mistral requests fall back to the default base url', function (): void {
 
     Http::assertSentCount(1);
     mistralAssertRequestSent('POST', 'https://api.mistral.ai/v1/chat/completions');
+});
+
+test('mistral audio requests use the configured base url', function (): void {
+    configureMistralProvider($this->customUrl);
+
+    Http::fake([
+        '*' => Http::response(['audio_data' => base64_encode('fake-audio-bytes')]),
+    ]);
+
+    Audio::of('Hello')->generate(provider: 'mistral');
+
+    Http::assertSentCount(1);
+    mistralAssertRequestSent('POST', "{$this->customUrl}/audio/speech");
 });
 
 function configureMistralProvider(?string $url = null): void
