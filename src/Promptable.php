@@ -17,7 +17,7 @@ use Laravel\Ai\Attributes\Timeout as TimeoutAttribute;
 use Laravel\Ai\Attributes\UseCheapestModel;
 use Laravel\Ai\Attributes\UseSmartestModel;
 use Laravel\Ai\Attributes\WithoutBroadcasting;
-use Laravel\Ai\Contracts\ChatInput;
+use Laravel\Ai\Contracts\AgentInput;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Enums\Lab;
@@ -68,7 +68,7 @@ trait Promptable
      * Invoke the agent with a given prompt, or resume a paused run with tool approval decisions.
      */
     public function prompt(
-        ChatInput|Decisions|UserMessage|string $prompt,
+        AgentInput|UserMessage|Decisions|string $prompt,
         array $attachments = [],
         Lab|array|string|null $provider = null,
         ?string $model = null,
@@ -116,7 +116,7 @@ trait Promptable
      * Invoke the agent with a given prompt and return a streamable response.
      */
     public function stream(
-        ChatInput|Decisions|UserMessage|string $prompt,
+        AgentInput|UserMessage|Decisions|string $prompt,
         array $attachments = [],
         Lab|array|string|null $provider = null,
         ?string $model = null,
@@ -217,7 +217,7 @@ trait Promptable
     /**
      * Invoke the agent in a queued job.
      */
-    public function queue(ChatInput|Decisions|UserMessage|string $prompt, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
+    public function queue(AgentInput|UserMessage|Decisions|string $prompt, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
     {
         [$prompt, $attachments] = $this->queueablePrompt($prompt, $attachments);
 
@@ -237,7 +237,7 @@ trait Promptable
      *
      * @return array{Decisions|string, list<mixed>}
      */
-    private function queueablePrompt(ChatInput|Decisions|UserMessage|string $prompt, array $attachments): array
+    private function queueablePrompt(AgentInput|UserMessage|Decisions|string $prompt, array $attachments): array
     {
         [$text, $approvalDecisions, $attachments] = $this->extractPromptInput($prompt, $attachments);
 
@@ -249,12 +249,12 @@ trait Promptable
      *
      * @return array{string, ?Decisions, list<mixed>}
      */
-    private function extractPromptInput(ChatInput|Decisions|UserMessage|string $prompt, array $attachments = []): array
+    private function extractPromptInput(AgentInput|UserMessage|Decisions|string $prompt, array $attachments = []): array
     {
-        if ($prompt instanceof ChatInput) {
+        if ($prompt instanceof AgentInput) {
             $prompt = $prompt->decisions()
                 ?? $prompt->message()
-                ?? throw new InvalidArgumentException('The chat input contains no user message or approval decisions.');
+                ?? throw new InvalidArgumentException('The agent input contains no user message or approval decisions.');
         }
 
         return match (true) {
@@ -295,7 +295,7 @@ trait Promptable
     /**
      * Invoke the agent with a given prompt and broadcast the streamed events.
      */
-    public function broadcast(ChatInput|Decisions|UserMessage|string $prompt, Channel|array $channels, array $attachments = [], bool $now = false, Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
+    public function broadcast(AgentInput|UserMessage|Decisions|string $prompt, Channel|array $channels, array $attachments = [], bool $now = false, Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
     {
         $without = WithoutBroadcasting::eventsFor($this);
 
@@ -312,7 +312,7 @@ trait Promptable
     /**
      * Invoke the agent with a given prompt and broadcast the streamed events immediately.
      */
-    public function broadcastNow(ChatInput|Decisions|UserMessage|string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
+    public function broadcastNow(AgentInput|UserMessage|Decisions|string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
     {
         return $this->broadcast($prompt, $channels, $attachments, now: true, provider: $provider, model: $model);
     }
@@ -320,7 +320,7 @@ trait Promptable
     /**
      * Invoke the agent with a given prompt and broadcast the streamed events.
      */
-    public function broadcastOnQueue(ChatInput|Decisions|UserMessage|string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
+    public function broadcastOnQueue(AgentInput|UserMessage|Decisions|string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
     {
         [$prompt, $attachments] = $this->queueablePrompt($prompt, $attachments);
 

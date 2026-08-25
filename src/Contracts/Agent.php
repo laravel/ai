@@ -22,7 +22,7 @@ interface Agent
      * Invoke the agent with a given prompt, or resume a paused run with tool approval decisions.
      */
     public function prompt(
-        ChatInput|Decisions|UserMessage|string $prompt,
+        AgentInput|UserMessage|Decisions|string $prompt,
         array $attachments = [],
         Lab|array|string|null $provider = null,
         ?string $model = null,
@@ -33,7 +33,7 @@ interface Agent
      * Invoke the agent with a given prompt and return a streamable response.
      */
     public function stream(
-        ChatInput|Decisions|UserMessage|string $prompt,
+        AgentInput|UserMessage|Decisions|string $prompt,
         array $attachments = [],
         Lab|array|string|null $provider = null,
         ?string $model = null,
@@ -44,7 +44,7 @@ interface Agent
      * Invoke the agent in a queued job.
      */
     public function queue(
-        ChatInput|Decisions|UserMessage|string $prompt,
+        AgentInput|UserMessage|Decisions|string $prompt,
         array $attachments = [],
         Lab|array|string|null $provider = null,
         ?string $model = null
@@ -54,7 +54,7 @@ interface Agent
      * Invoke the agent with a given prompt and broadcast the streamed events.
      */
     public function broadcast(
-        ChatInput|Decisions|UserMessage|string $prompt,
+        AgentInput|UserMessage|Decisions|string $prompt,
         Channel|array $channels,
         array $attachments = [],
         bool $now = false,
@@ -66,7 +66,7 @@ interface Agent
      * Invoke the agent with a given prompt and broadcast the streamed events immediately.
      */
     public function broadcastNow(
-        ChatInput|Decisions|UserMessage|string $prompt,
+        AgentInput|UserMessage|Decisions|string $prompt,
         Channel|array $channels,
         array $attachments = [],
         Lab|array|string|null $provider = null,
@@ -77,7 +77,7 @@ interface Agent
      * Queue the agent with a given prompt and broadcast the streamed events.
      */
     public function broadcastOnQueue(
-        ChatInput|Decisions|UserMessage|string $prompt,
+        AgentInput|UserMessage|Decisions|string $prompt,
         Channel|array $channels,
         array $attachments = [],
         Lab|array|string|null $provider = null,

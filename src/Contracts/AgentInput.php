@@ -5,7 +5,7 @@ namespace Laravel\Ai\Contracts;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Messages\UserMessage;
 
-interface ChatInput
+interface AgentInput
 {
     /**
      * Get the newest user message, if the input contains one.

@@ -3,7 +3,7 @@
 use Illuminate\Support\Facades\Queue;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\Decisions;
-use Laravel\Ai\Contracts\ChatInput;
+use Laravel\Ai\Contracts\AgentInput;
 use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\UserMessage;
@@ -12,9 +12,9 @@ use Laravel\Ai\QueuedAgentPrompt;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ConversationalAgent;
 
-function chatInput(?UserMessage $message = null, ?Decisions $decisions = null): ChatInput
+function agentInput(?UserMessage $message = null, ?Decisions $decisions = null): AgentInput
 {
-    return new class($message, $decisions) implements ChatInput
+    return new class($message, $decisions) implements AgentInput
     {
         public function __construct(private ?UserMessage $message, private ?Decisions $decisions) {}
 
@@ -52,19 +52,19 @@ test('a user message may be given as the prompt when streaming', function () {
     AssistantAgent::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->prompt === 'Hello');
 });
 
-test('chat input resolves to its user message', function () {
+test('agent input resolves to its user message', function () {
     AssistantAgent::fake(['Hello there.']);
 
-    (new AssistantAgent)->prompt(chatInput(message: new UserMessage('From chat input')));
+    (new AssistantAgent)->prompt(agentInput(message: new UserMessage('From agent input')));
 
-    AssistantAgent::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->prompt === 'From chat input');
+    AssistantAgent::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->prompt === 'From agent input');
 });
 
-test('chat input resolves to its approval decisions before its user message', function () {
+test('agent input resolves to its approval decisions before its user message', function () {
     Queue::fake();
     AssistantAgent::fake();
 
-    (new AssistantAgent)->queue(chatInput(
+    (new AssistantAgent)->queue(agentInput(
         message: new UserMessage('Ignored'),
         decisions: Decision::approveAll(),
     ));
@@ -72,11 +72,11 @@ test('chat input resolves to its approval decisions before its user message', fu
     AssistantAgent::assertQueued(fn (QueuedAgentPrompt $prompt): bool => $prompt->hasApprovalDecisions());
 });
 
-test('empty chat input is rejected', function () {
+test('empty agent input is rejected', function () {
     AssistantAgent::fake();
 
-    (new AssistantAgent)->prompt(chatInput());
-})->throws(InvalidArgumentException::class, 'The chat input contains no user message or approval decisions.');
+    (new AssistantAgent)->prompt(agentInput());
+})->throws(InvalidArgumentException::class, 'The agent input contains no user message or approval decisions.');
 
 test('ad-hoc message history is sent ahead of the prompt', function () {
     AssistantAgent::fake(['How can I help?']);
@@ -122,11 +122,11 @@ test('ad-hoc message history does not leak into a later prompt', function () {
         && $prompt->messages === null);
 });
 
-test('chat input resolves to its approval decisions when broadcasting on the queue', function () {
+test('agent input resolves to its approval decisions when broadcasting on the queue', function () {
     Queue::fake();
     AssistantAgent::fake();
 
-    (new AssistantAgent)->broadcastOnQueue(chatInput(
+    (new AssistantAgent)->broadcastOnQueue(agentInput(
         message: new UserMessage('Ignored'),
         decisions: Decision::approveAll(),
     ), []);
