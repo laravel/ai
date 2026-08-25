@@ -98,16 +98,6 @@ trait BuildsTextRequests
     }
 
     /**
-     * Build the cache control block for the given TTL.
-     *
-     * @return array<string, string>
-     */
-    protected function cacheControl(?string $ttl): array
-    {
-        return array_filter(['type' => 'ephemeral', 'ttl' => $ttl]);
-    }
-
-    /**
      * Ensure longer-lived cache breakpoints precede shorter-lived breakpoints.
      */
     protected function ensureValidPromptCacheOrder(array $body, ?TextGenerationOptions $options): void
@@ -123,6 +113,16 @@ trait BuildsTextRequests
                 || ($options?->cacheToolDefinitions instanceof CacheToolDefinitions && $options->cacheToolDefinitions->ttl !== '1h'))) {
             throw new InvalidArgumentException('A one-hour automatic cache requires all explicit cache breakpoints to also use a one-hour TTL.');
         }
+    }
+
+    /**
+     * Build the cache control block for the given TTL.
+     *
+     * @return array<string, string>
+     */
+    protected function cacheControl(?string $ttl): array
+    {
+        return array_filter(['type' => 'ephemeral', 'ttl' => $ttl]);
     }
 
     /**

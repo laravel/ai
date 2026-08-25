@@ -679,14 +679,6 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
     }
 
     /**
-     * Build a Bedrock cache point for the requested TTL.
-     */
-    protected function cachePoint(?string $ttl): array
-    {
-        return ['cachePoint' => Arr::whereNotNull(['type' => 'default', 'ttl' => $ttl])];
-    }
-
-    /**
      * Ensure longer-lived cache points precede shorter-lived cache points.
      */
     protected function ensureValidPromptCacheOrder(?TextGenerationOptions $options): void
@@ -696,6 +688,14 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             && $options->cacheToolDefinitions->ttl !== '1h') {
             throw new InvalidArgumentException('A one-hour instructions cache requires the tool definitions cache to also use a one-hour TTL.');
         }
+    }
+
+    /**
+     * Build a Bedrock cache point for the requested TTL.
+     */
+    protected function cachePoint(?string $ttl): array
+    {
+        return ['cachePoint' => Arr::whereNotNull(['type' => 'default', 'ttl' => $ttl])];
     }
 
     /**

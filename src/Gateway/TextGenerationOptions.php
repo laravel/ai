@@ -89,22 +89,6 @@ class TextGenerationOptions
     }
 
     /**
-     * Resolve an attribute from the agent class.
-     *
-     * @template T of object
-     *
-     * @param  ReflectionClass<object>  $reflection
-     * @param  class-string<T>  $attribute
-     * @return T|null
-     */
-    private static function resolveAttribute(ReflectionClass $reflection, string $attribute): ?object
-    {
-        $attributes = $reflection->getAttributes($attribute);
-
-        return $attributes === [] ? null : $attributes[0]->newInstance();
-    }
-
-    /**
      * Resolve the tool choice from the agent's method, falling back to the attribute.
      */
     private static function resolveToolChoice(Agent $agent, ReflectionClass $reflection): ?ToolChoice
@@ -148,5 +132,21 @@ class TextGenerationOptions
         $attributes = $reflection->getAttributes($attribute);
 
         return $attributes === [] ? null : $attributes[0]->newInstance()->value;
+    }
+
+    /**
+     * Resolve an attribute from the agent class.
+     *
+     * @template T of object
+     *
+     * @param  ReflectionClass<object>  $reflection
+     * @param  class-string<T>  $attribute
+     * @return T|null
+     */
+    private static function resolveAttribute(ReflectionClass $reflection, string $attribute): ?object
+    {
+        $attributes = $reflection->getAttributes($attribute);
+
+        return $attributes === [] ? null : $attributes[0]->newInstance();
     }
 }
