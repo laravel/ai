@@ -12,7 +12,9 @@ use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Streaming\Events\TextDelta;
+use Laravel\Ai\Streaming\Protocols\AgUiProtocol;
 use Laravel\Ai\Streaming\Protocols\StreamProtocol;
+use Laravel\Ai\Streaming\Protocols\VercelDataProtocol;
 use Symfony\Component\HttpFoundation\Response;
 use Traversable;
 
@@ -118,6 +120,22 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
         $this->protocol = $protocol;
 
         return $this;
+    }
+
+    /**
+     * Stream the response using the Vercel AI SDK data stream protocol.
+     */
+    public function usingVercelDataProtocol(?string $messageId = null): self
+    {
+        return $this->usingProtocol(new VercelDataProtocol($messageId));
+    }
+
+    /**
+     * Stream the response using the Agent User Interaction protocol.
+     */
+    public function usingAgUiProtocol(?string $threadId = null, ?string $runId = null): self
+    {
+        return $this->usingProtocol(new AgUiProtocol($threadId, $runId));
     }
 
     /**

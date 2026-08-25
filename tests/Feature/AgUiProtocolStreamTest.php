@@ -34,7 +34,7 @@ function agUiProtocolEvents(array|Closure $events, ?string $threadId = 'thread-1
     $stream = $events instanceof Closure ? $events : fn () => yield from $events;
 
     return agUiEvents((new StreamableAgentResponse('invocation-1', $stream, new Data\Meta('anthropic', 'claude-sonnet-4-6')))
-        ->usingProtocol(new AgUiProtocol($threadId, $runId))
+        ->usingAgUiProtocol($threadId, $runId)
         ->toResponse(request()));
 }
 

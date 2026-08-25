@@ -20,14 +20,13 @@ use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Laravel\Ai\Streaming\Events\ToolCall;
 use Laravel\Ai\Streaming\Events\ToolResult;
-use Laravel\Ai\Streaming\Protocols\VercelDataProtocol;
 
 function vercelProtocolParts(array|Closure $events, ?string $messageId = null): array
 {
     $stream = $events instanceof Closure ? $events : fn () => yield from $events;
 
     $response = (new StreamableAgentResponse('invocation-1', $stream, new Data\Meta('anthropic', 'claude-sonnet-4-6')))
-        ->usingProtocol(new VercelDataProtocol($messageId))
+        ->usingVercelDataProtocol($messageId)
         ->toResponse(request());
 
     $output = '';
