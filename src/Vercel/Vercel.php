@@ -24,7 +24,7 @@ use Laravel\Ai\Responses\Data\ToolResult;
 class Vercel
 {
     /**
-     * Create a chat input from a useChat request or its UI message list.
+     * Create a chat instance from a useChat request or its UI message list.
      *
      * @param  Request|iterable<int, array<string, mixed>>  $input
      */
