@@ -196,10 +196,6 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
      */
     protected function syncConversationFromStreamedResponse(): void
     {
-        if ($this->streamedResponse->conversationId === null) {
-            return;
-        }
-
         $this->conversationId = $this->streamedResponse->conversationId;
         $this->conversationUser = $this->streamedResponse->conversationUser;
     }

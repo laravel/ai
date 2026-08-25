@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Exceptions;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Exceptions\StreamErrorException;
+use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StreamableAgentResponse;
@@ -24,6 +25,7 @@ use Laravel\Ai\Streaming\Events\ToolResult;
 use Laravel\Ai\Streaming\Protocols\AgUiProtocol;
 use Symfony\Component\HttpFoundation\Response;
 use Tests\Fixtures\Agents\MultiStepToolAgent;
+use Tests\Fixtures\Agents\RememberingApprovableAgent;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
 use Tests\Fixtures\FakeConversationStore;
 
@@ -175,6 +177,23 @@ test('a first turn stream emits the thread id the conversation is stored under',
     expect($agent->currentConversation())->not->toBeNull()
         ->and($events[0]['threadId'])->toBe($agent->currentConversation())
         ->and(end($events)['threadId'])->toBe($agent->currentConversation());
+});
+
+test('an ownerless approval stream persists the thread id it emits', function () {
+    app()->instance(ConversationStore::class, new FakeConversationStore);
+
+    RememberingApprovableAgent::fake([
+        AgentResponse::fakeWithPendingApprovals([
+            new PendingApproval('call-1', 'ApprovableNumberGenerator', [], 'Requires approval.'),
+        ]),
+    ]);
+
+    $agent = new RememberingApprovableAgent;
+    $events = agUiEvents($agent->stream('Generate a number')->usingProtocol(new AgUiProtocol)->toResponse(request()));
+
+    expect($events[0]['threadId'])->toBe($agent->currentConversation())
+        ->and(end($events)['threadId'])->toBe($agent->currentConversation())
+        ->and(end($events)['outcome']['type'])->toBe('interrupt');
 });
 
 test('a run without an explicit identity falls back to the conversation and invocation ids', function () {

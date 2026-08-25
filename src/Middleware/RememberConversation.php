@@ -12,6 +12,7 @@ use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Models\Conversation;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Responses\StreamableAgentResponse;
 use Throwable;
 
 class RememberConversation
@@ -32,18 +33,27 @@ class RememberConversation
         /** @var Agent&RemembersConversations $agent */
         $agent = $prompt->agent;
 
-        $pendingConversationId = null;
+        $pendingConversationId = $agent->currentConversation() === null
+            ? (string) Str::uuid7()
+            : null;
 
-        // Assigned eagerly so streams can surface the id before the conversation is stored post-drain...
-        if ($agent->hasConversationParticipant() && ! $agent->currentConversation()) {
-            $agent->continue($pendingConversationId = (string) Str::uuid7(), $agent->conversationParticipant());
+        $response = $next($prompt);
+
+        // Surface the ID to stream protocols without treating it as an existing conversation...
+        if ($pendingConversationId !== null && $response instanceof StreamableAgentResponse) {
+            $response->withinConversation($pendingConversationId, $agent->conversationParticipant());
         }
 
-        return $next($prompt)->then(function (AgentResponse $response) use ($prompt, $pendingConversationId): void {
+        return $response->then(function (AgentResponse $completedResponse) use ($prompt, $pendingConversationId): void {
             /** @var Agent&RemembersConversations $agent */
             $agent = $prompt->agent;
 
-            if (! $this->shouldRemember($agent, $prompt, $response)) {
+            if (! $this->shouldRemember($agent, $prompt, $completedResponse)) {
+                if ($pendingConversationId !== null) {
+                    $completedResponse->conversationId = null;
+                    $completedResponse->conversationUser = null;
+                }
+
                 return;
             }
 
@@ -79,10 +89,10 @@ class RememberConversation
                 $participantType,
                 $participantId,
                 $prompt,
-                $response,
+                $completedResponse,
             );
 
-            $response->withinConversation(
+            $completedResponse->withinConversation(
                 $agent->currentConversation(),
                 $participant,
             );

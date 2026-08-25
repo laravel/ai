@@ -177,6 +177,22 @@ test('stream response preserves manually assigned conversation id without a part
         ->and($response->conversationUser)->toBeNull();
 });
 
+test('an ownerless successful stream does not retain an unpersisted conversation id', function (): void {
+    RememberingAssistantAgent::fake([
+        'Fake response',
+    ]);
+
+    $agent = new RememberingAssistantAgent;
+    $response = $agent->stream('Test prompt');
+
+    foreach ($response as $_) {
+    }
+
+    expect($agent->currentConversation())->toBeNull()
+        ->and($response->conversationId)->toBeNull()
+        ->and($response->conversationUser)->toBeNull();
+});
+
 function shortCircuitingMiddleware(): object
 {
     return new class
