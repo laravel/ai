@@ -13,6 +13,7 @@ use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Contracts\RemembersConversations as RemembersConversationsContract;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\AgentPrompted;
@@ -151,7 +152,7 @@ trait GeneratesText
             return $next($prompt);
         }] : [];
 
-        if (in_array(RemembersConversations::class, class_uses_recursive($agent))) {
+        if ($agent instanceof RemembersConversationsContract || in_array(RemembersConversations::class, class_uses_recursive($agent), true)) {
             $middleware[] = new RememberConversation(resolve(ConversationStore::class), $this);
         }
 

@@ -298,6 +298,34 @@ test('stream conversation state survives failover', function (): void {
         ->and($thenResponse->conversationUser)->toBe($user);
 });
 
+test('first turn stream failover persists its reserved conversation', function (): void {
+    $store = new InMemoryConversationStore;
+    $this->app->instance(ConversationStore::class, $store);
+
+    config([
+        'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
+        'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
+    ]);
+
+    Http::preventStrayRequests();
+
+    Http::fakeSequence()
+        ->push(status: 429)
+        ->push(fakeGroqStreamBodyForStreamFailover(), 200);
+
+    $agent = (new RememberingAssistantAgent)->forUser((object) ['id' => 'user-1']);
+    $response = $agent->stream('Hello', provider: ['primary', 'backup']);
+
+    foreach ($response as $_) {
+    }
+
+    expect($store->conversations)->toHaveCount(1)
+        ->and($store->conversations)->toHaveKey($agent->currentConversation())
+        ->and($response->conversationId)->toBe($agent->currentConversation())
+        ->and(collect($store->messages)->pluck('conversation_id')->unique()->all())
+        ->toBe([$agent->currentConversation()]);
+});
+
 function fakeGroqStreamBodyForStreamFailover(): string
 {
     $chunks = [

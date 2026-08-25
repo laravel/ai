@@ -99,13 +99,16 @@ test('stream response conversation id is available after remembered conversation
         public int $id = 1;
     };
 
-    $response = (new RememberingAssistantAgent)->forUser($user)->stream('Test prompt');
+    $agent = (new RememberingAssistantAgent)->forUser($user);
+
+    $response = $agent->stream('Test prompt');
 
     foreach ($response as $event) {
         expect($event)->not->toBeNull();
     }
 
-    expect($response->conversationId)->toBe('conversation-123')
+    expect($response->conversationId)->not->toBeNull()
+        ->and($response->conversationId)->toBe($agent->currentConversation())
         ->and($response->conversationUser)->toBe($user);
 });
 
@@ -171,6 +174,22 @@ test('stream response preserves manually assigned conversation id without a part
     }
 
     expect($response->conversationId)->toBe('manual-conversation-id')
+        ->and($response->conversationUser)->toBeNull();
+});
+
+test('an ownerless successful stream does not retain an unpersisted conversation id', function (): void {
+    RememberingAssistantAgent::fake([
+        'Fake response',
+    ]);
+
+    $agent = new RememberingAssistantAgent;
+    $response = $agent->stream('Test prompt');
+
+    foreach ($response as $_) {
+    }
+
+    expect($agent->currentConversation())->toBeNull()
+        ->and($response->conversationId)->toBeNull()
         ->and($response->conversationUser)->toBeNull();
 });
 

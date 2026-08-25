@@ -31,7 +31,7 @@ test('it threads the participant type into latestConversationId when continuing 
             return $participantType === 'admin' ? 'conversation-admin' : null;
         }
 
-        public function storeConversation(?string $participantType, string|int|null $participantId, string $title): string
+        public function storeConversation(?string $participantType, string|int|null $participantId, string $title, ?string $id = null): string
         {
             return 'conversation-1';
         }
@@ -79,7 +79,7 @@ test('it continues the last conversation through a store that ignores the partic
             return 'conversation-1';
         }
 
-        public function storeConversation(?string $participantType, string|int|null $participantId, string $title): string
+        public function storeConversation(?string $participantType, string|int|null $participantId, string $title, ?string $id = null): string
         {
             return 'conversation-1';
         }
@@ -137,7 +137,7 @@ test('it resolves the participant id via getKey for models with custom primary k
             return 'conversation-1';
         }
 
-        public function storeConversation(?string $participantType, string|int|null $participantId, string $title): string
+        public function storeConversation(?string $participantType, string|int|null $participantId, string $title, ?string $id = null): string
         {
             return 'conversation-1';
         }

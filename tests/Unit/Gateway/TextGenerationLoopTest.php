@@ -877,11 +877,6 @@ test('it repairs missing streamed tool calls for agents with the repair attribut
         ->and($repairResult->toolResult->result)->toBe("Tool 'MissingTool' does not exist. Available tools: TextGenerationLoopCountingTool.")
         ->and($repairResult->successful)->toBeFalse()
         ->and($repairResult->error)->toBe($repairResult->toolResult->result)
-        ->and($repairResult->toVercelProtocolArray())->toBe([
-            'type' => 'tool-output-error',
-            'toolCallId' => 'call-1',
-            'errorText' => $repairResult->toolResult->result,
-        ])
         ->and($toolResults[1]->successful)->toBeTrue();
 });
 

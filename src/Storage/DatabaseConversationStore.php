@@ -44,9 +44,9 @@ class DatabaseConversationStore implements ConversationStore
     /**
      * Store a new conversation and return its ID.
      */
-    public function storeConversation(?string $participantType, string|int|null $participantId, string $title): string
+    public function storeConversation(?string $participantType, string|int|null $participantId, string $title, ?string $id = null): string
     {
-        $conversationId = (string) Str::uuid7();
+        $conversationId = $id ?? (string) Str::uuid7();
 
         $this->table($this->conversationsTable())->insert([
             'id' => $conversationId,

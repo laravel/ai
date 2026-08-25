@@ -12,6 +12,7 @@ use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Models\Conversation;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Responses\StreamableAgentResponse;
 use Throwable;
 
 class RememberConversation
@@ -29,11 +30,30 @@ class RememberConversation
      */
     public function handle(AgentPrompt $prompt, Closure $next)
     {
-        return $next($prompt)->then(function (AgentResponse $response) use ($prompt): void {
+        /** @var Agent&RemembersConversations $agent */
+        $agent = $prompt->agent;
+
+        $pendingConversationId = $agent->currentConversation() === null
+            ? (string) Str::uuid7()
+            : null;
+
+        $response = $next($prompt);
+
+        // Surface the ID to stream protocols without treating it as an existing conversation...
+        if ($pendingConversationId !== null && $response instanceof StreamableAgentResponse) {
+            $response->withinConversation($pendingConversationId, $agent->conversationParticipant());
+        }
+
+        return $response->then(function (AgentResponse $completedResponse) use ($prompt, $pendingConversationId): void {
             /** @var Agent&RemembersConversations $agent */
             $agent = $prompt->agent;
 
-            if (! $this->shouldRemember($agent, $prompt, $response)) {
+            if (! $this->shouldRemember($agent, $prompt, $completedResponse)) {
+                if ($pendingConversationId !== null) {
+                    $completedResponse->conversationId = null;
+                    $completedResponse->conversationUser = null;
+                }
+
                 return;
             }
 
@@ -42,11 +62,12 @@ class RememberConversation
             $participantId = $participant === null ? null : Conversation::participantKey($participant);
 
             // Create conversation if necessary...
-            if (! $agent->currentConversation()) {
+            if ($pendingConversationId !== null || ! $agent->currentConversation()) {
                 $conversationId = $this->store->storeConversation(
                     $participantType,
                     $participantId,
                     $this->generateTitle($prompt->prompt),
+                    $pendingConversationId,
                 );
 
                 $agent->continue($conversationId, $participant);
@@ -68,10 +89,10 @@ class RememberConversation
                 $participantType,
                 $participantId,
                 $prompt,
-                $response,
+                $completedResponse,
             );
 
-            $response->withinConversation(
+            $completedResponse->withinConversation(
                 $agent->currentConversation(),
                 $participant,
             );
