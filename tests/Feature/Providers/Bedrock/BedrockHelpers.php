@@ -17,24 +17,17 @@ trait BedrockHelpers
         return $this->bedrockClient(new MockHandler([new Result($result)]));
     }
 
-    protected function fakeBedrockInvoke(array $body): BedrockRuntimeClient
+    protected function fakeBedrockInvoke(array $body, array $headers = []): BedrockRuntimeClient
     {
-        return $this->bedrockClient($this->bedrockInvokeMock($body));
+        return $this->bedrockClient($this->bedrockInvokeMock($body, $headers));
     }
 
-    protected function bedrockInvokeMock(array|string $body): MockHandler
+    protected function bedrockInvokeMock(array|string $body, array $headers = []): MockHandler
     {
         return new MockHandler([new Result([
             'body' => Utils::streamFor(is_string($body) ? $body : json_encode($body)),
-        ])]);
-    }
-
-    protected function fakeBedrockInvokeWithHeaders(array $body, array $headers): BedrockRuntimeClient
-    {
-        return $this->bedrockClient(new MockHandler([new Result([
-            'body' => Utils::streamFor(json_encode($body)),
             '@metadata' => ['headers' => $headers],
-        ])]));
+        ])]);
     }
 
     protected function fakeBedrockStream(array $events): BedrockRuntimeClient

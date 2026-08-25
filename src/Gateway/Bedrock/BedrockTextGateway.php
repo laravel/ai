@@ -576,8 +576,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             throw BedrockException::toAiException($throwable, $provider->name(), $model);
         }
 
-        // Cohere's Bedrock response body carries no usage, but the input token
-        // count is reported in the `x-amzn-bedrock-input-token-count` header.
+        // Cohere's Bedrock response body carries no usage, so the input token count comes from the header.
         $inputTokens = (int) ($response->get('@metadata')['headers']['x-amzn-bedrock-input-token-count'] ?? 0);
 
         return new EmbeddingsResponse(

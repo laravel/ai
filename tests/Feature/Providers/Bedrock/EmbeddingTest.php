@@ -64,7 +64,7 @@ describe('cohere embeddings', function () {
     });
 
     test('reports the input token count from the response header', function () {
-        $client = $this->fakeBedrockInvokeWithHeaders(
+        $client = $this->fakeBedrockInvoke(
             ['embeddings' => [[0.1, 0.2, 0.3]]],
             ['x-amzn-bedrock-input-token-count' => '7'],
         );
