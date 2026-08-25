@@ -6,7 +6,6 @@ use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 use Tests\Fixtures\Agents\AssistantAgent;
-use Tests\Fixtures\Agents\PromptCacheAgent;
 use Tests\Fixtures\Agents\ProviderOptionsAgent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 
@@ -71,21 +70,6 @@ test('provider options are persisted in tool call follow up requests', function 
     $secondConfig = $recorded[1][0]->data()['generationConfig'] ?? [];
     expect($secondConfig)->toHaveKey('thinkingConfig')
         ->and($secondConfig['thinkingConfig']['thinkingBudget'])->toBe(10000);
-});
-
-test('the prompt cache option is never forwarded to providers that do not support it', function (): void {
-    Http::fake([
-        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
-    ]);
-
-    (new PromptCacheAgent(['system'], withTools: false))->prompt('Hi', provider: 'gemini');
-
-    Http::assertSent(function ($request): bool {
-        $body = $request->data();
-
-        return ! array_key_exists('prompt_cache', $body)
-            && ! array_key_exists('prompt_cache', $body['generationConfig'] ?? []);
-    });
 });
 
 test('cachedContent is placed at top level of request body, not in generationConfig', function (): void {

@@ -7,13 +7,15 @@ use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
+use Laravel\Ai\Attributes\CacheInstructions;
+use Laravel\Ai\Attributes\CacheToolDefinitions;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Enums\Lab;
-use Laravel\Ai\Enums\PromptCacheTarget;
 use Laravel\Ai\Gateway\Bedrock\Concerns\CreatesBedrockClient;
 use Laravel\Ai\Gateway\Bedrock\Concerns\MapsAttachments;
 use Laravel\Ai\Gateway\Cohere\Concerns\ParsesEmbeddings;
@@ -645,8 +647,6 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
 
         $providerOptions = $options?->providerOptions(Lab::Bedrock) ?? [];
 
-        $cache = $options?->promptCache(Lab::Bedrock) ?? [];
-
         if ($instructions) {
             $parameters['system'] = [['text' => $instructions]];
         }
@@ -665,16 +665,37 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
 
         $parameters = array_merge($parameters, $providerOptions);
 
-        // Bedrock cache points have no TTL control, so any requested TTL is ignored here.
-        if (isset($parameters['system']) && array_key_exists(PromptCacheTarget::System->value, $cache)) {
-            $parameters['system'][] = ['cachePoint' => ['type' => 'default']];
+        $this->ensureValidPromptCacheOrder($options);
+
+        if (isset($parameters['system']) && $options?->cacheInstructions instanceof CacheInstructions) {
+            $parameters['system'][] = $this->cachePoint($options->cacheInstructions->ttl);
         }
 
-        if (isset($parameters['toolConfig']['tools']) && array_key_exists(PromptCacheTarget::Tools->value, $cache)) {
-            $parameters['toolConfig']['tools'][] = ['cachePoint' => ['type' => 'default']];
+        if (isset($parameters['toolConfig']['tools']) && $options?->cacheToolDefinitions instanceof CacheToolDefinitions) {
+            $parameters['toolConfig']['tools'][] = $this->cachePoint($options->cacheToolDefinitions->ttl);
         }
 
         return $parameters;
+    }
+
+    /**
+     * Build a Bedrock cache point for the requested TTL.
+     */
+    protected function cachePoint(?string $ttl): array
+    {
+        return ['cachePoint' => Arr::whereNotNull(['type' => 'default', 'ttl' => $ttl])];
+    }
+
+    /**
+     * Ensure longer-lived cache points precede shorter-lived cache points.
+     */
+    protected function ensureValidPromptCacheOrder(?TextGenerationOptions $options): void
+    {
+        if ($options?->cacheInstructions?->ttl === '1h'
+            && $options->cacheToolDefinitions instanceof CacheToolDefinitions
+            && $options->cacheToolDefinitions->ttl !== '1h') {
+            throw new InvalidArgumentException('A one-hour instructions cache requires the tool definitions cache to also use a one-hour TTL.');
+        }
     }
 
     /**

@@ -2,7 +2,8 @@
 
 namespace Laravel\Ai\Gateway;
 
-use Illuminate\Support\Arr;
+use Laravel\Ai\Attributes\CacheInstructions;
+use Laravel\Ai\Attributes\CacheToolDefinitions;
 use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Attributes\MaxTokens;
 use Laravel\Ai\Attributes\Temperature;
@@ -10,7 +11,6 @@ use Laravel\Ai\Attributes\TopP;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Enums\Lab;
-use Laravel\Ai\Enums\PromptCacheTarget;
 use Laravel\Ai\ToolChoice;
 use ReflectionClass;
 
@@ -23,6 +23,8 @@ class TextGenerationOptions
         public readonly ?Agent $agent = null,
         public readonly ?float $topP = null,
         public readonly ?ToolChoice $toolChoice = null,
+        public readonly ?CacheInstructions $cacheInstructions = null,
+        public readonly ?CacheToolDefinitions $cacheToolDefinitions = null,
     ) {
         //
     }
@@ -33,30 +35,6 @@ class TextGenerationOptions
      * @return array<string, mixed>|null
      */
     public function providerOptions(Lab|string $provider): ?array
-    {
-        $options = $this->resolveProviderOptions($provider);
-
-        return $options === null ? null : Arr::except($options, 'prompt_cache');
-    }
-
-    /**
-     * Get the requested prompt cache breakpoints, keyed by target, for the given provider.
-     *
-     * @return array<string, string|null>
-     */
-    public function promptCache(Lab|string $provider): array
-    {
-        $targets = $this->resolveProviderOptions($provider)['prompt_cache'] ?? null;
-
-        return $targets ? PromptCacheTarget::normalize($targets) : [];
-    }
-
-    /**
-     * Resolve the raw provider options declared by the agent.
-     *
-     * @return array<string, mixed>|null
-     */
-    protected function resolveProviderOptions(Lab|string $provider): ?array
     {
         if ($this->agent instanceof HasProviderOptions) {
             return $this->agent->providerOptions(
@@ -86,6 +64,8 @@ class TextGenerationOptions
             temperature: $this->temperature,
             agent: $this->agent,
             topP: $this->topP,
+            cacheInstructions: $this->cacheInstructions,
+            cacheToolDefinitions: $this->cacheToolDefinitions,
         );
     }
 
@@ -103,7 +83,25 @@ class TextGenerationOptions
             agent: $agent,
             topP: self::resolve($agent, $reflection, 'topP', TopP::class),
             toolChoice: self::resolveToolChoice($agent, $reflection),
+            cacheInstructions: self::resolveAttribute($reflection, CacheInstructions::class),
+            cacheToolDefinitions: self::resolveAttribute($reflection, CacheToolDefinitions::class),
         );
+    }
+
+    /**
+     * Resolve an attribute from the agent class.
+     *
+     * @template T of object
+     *
+     * @param  ReflectionClass<object>  $reflection
+     * @param  class-string<T>  $attribute
+     * @return T|null
+     */
+    private static function resolveAttribute(ReflectionClass $reflection, string $attribute): ?object
+    {
+        $attributes = $reflection->getAttributes($attribute);
+
+        return $attributes === [] ? null : $attributes[0]->newInstance();
     }
 
     /**

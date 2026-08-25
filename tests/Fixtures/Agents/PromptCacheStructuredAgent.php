@@ -3,14 +3,13 @@
 namespace Tests\Fixtures\Agents;
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Laravel\Ai\Attributes\CacheToolDefinitions;
 use Laravel\Ai\Contracts\Agent;
-use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\HasStructuredOutput;
-use Laravel\Ai\Enums\Lab;
-use Laravel\Ai\Enums\PromptCacheTarget;
 use Laravel\Ai\Promptable;
 
-class PromptCacheStructuredAgent implements Agent, HasProviderOptions, HasStructuredOutput
+#[CacheToolDefinitions]
+class PromptCacheStructuredAgent implements Agent, HasStructuredOutput
 {
     use Promptable;
 
@@ -24,10 +23,5 @@ class PromptCacheStructuredAgent implements Agent, HasProviderOptions, HasStruct
         return [
             'symbol' => $schema->string()->required(),
         ];
-    }
-
-    public function providerOptions(Lab|string $provider): array
-    {
-        return ['prompt_cache' => [PromptCacheTarget::Tools]];
     }
 }

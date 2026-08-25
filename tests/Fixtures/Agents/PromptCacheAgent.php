@@ -14,7 +14,6 @@ class PromptCacheAgent implements Agent, HasProviderOptions, HasTools
     use Promptable;
 
     public function __construct(
-        protected mixed $cache = [],
         protected bool $withTools = true,
         protected array $options = [],
     ) {
@@ -33,6 +32,6 @@ class PromptCacheAgent implements Agent, HasProviderOptions, HasTools
 
     public function providerOptions(Lab|string $provider): array
     {
-        return [...$this->options, 'prompt_cache' => $this->cache];
+        return $this->options;
     }
 }

@@ -4,7 +4,8 @@ namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Illuminate\Support\Arr;
 use InvalidArgumentException;
-use Laravel\Ai\Enums\PromptCacheTarget;
+use Laravel\Ai\Attributes\CacheInstructions;
+use Laravel\Ai\Attributes\CacheToolDefinitions;
 use Laravel\Ai\Gateway\Anthropic\AnthropicSchemaSanitizer;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
@@ -32,8 +33,6 @@ trait BuildsTextRequests
         ];
 
         $providerOptions = $options?->providerOptions($provider->driver()) ?? [];
-
-        $cache = $options?->promptCache($provider->driver()) ?? [];
 
         if (filled($instructions)) {
             $body['system'] = $instructions;
@@ -71,28 +70,28 @@ trait BuildsTextRequests
             'top_p' => $options?->topP,
         ]));
 
-        return $this->applyPromptCacheBreakpoints(array_merge($body, $providerOptions), $cache);
+        return $this->applyPromptCacheBreakpoints(array_merge($body, $providerOptions), $options);
     }
 
     /**
      * Stamp the requested cache breakpoints onto the final request body.
-     *
-     * @param  array<string, string|null>  $cache
      */
-    protected function applyPromptCacheBreakpoints(array $body, array $cache): array
+    protected function applyPromptCacheBreakpoints(array $body, ?TextGenerationOptions $options): array
     {
-        if (isset($body['system']) && array_key_exists(PromptCacheTarget::System->value, $cache)) {
+        $this->ensureValidPromptCacheOrder($body, $options);
+
+        if (isset($body['system']) && $options?->cacheInstructions instanceof CacheInstructions) {
             $system = is_string($body['system'])
                 ? [['type' => 'text', 'text' => $body['system']]]
                 : $body['system'];
 
-            $system[array_key_last($system)]['cache_control'] = $this->cacheControl($cache[PromptCacheTarget::System->value]);
+            $system[array_key_last($system)]['cache_control'] = $this->cacheControl($options->cacheInstructions->ttl);
 
             $body['system'] = $system;
         }
 
-        if (isset($body['tools']) && array_key_exists(PromptCacheTarget::Tools->value, $cache)) {
-            $body['tools'][array_key_last($body['tools'])]['cache_control'] = $this->cacheControl($cache[PromptCacheTarget::Tools->value]);
+        if (isset($body['tools']) && $options?->cacheToolDefinitions instanceof CacheToolDefinitions) {
+            $body['tools'][array_key_last($body['tools'])]['cache_control'] = $this->cacheControl($options->cacheToolDefinitions->ttl);
         }
 
         return $body;
@@ -106,6 +105,24 @@ trait BuildsTextRequests
     protected function cacheControl(?string $ttl): array
     {
         return array_filter(['type' => 'ephemeral', 'ttl' => $ttl]);
+    }
+
+    /**
+     * Ensure longer-lived cache breakpoints precede shorter-lived breakpoints.
+     */
+    protected function ensureValidPromptCacheOrder(array $body, ?TextGenerationOptions $options): void
+    {
+        if ($options?->cacheInstructions?->ttl === '1h'
+            && $options->cacheToolDefinitions instanceof CacheToolDefinitions
+            && $options->cacheToolDefinitions->ttl !== '1h') {
+            throw new InvalidArgumentException('A one-hour instructions cache requires the tool definitions cache to also use a one-hour TTL.');
+        }
+
+        if (($body['cache_control']['ttl'] ?? null) === '1h'
+            && (($options?->cacheInstructions instanceof CacheInstructions && $options->cacheInstructions->ttl !== '1h')
+                || ($options?->cacheToolDefinitions instanceof CacheToolDefinitions && $options->cacheToolDefinitions->ttl !== '1h'))) {
+            throw new InvalidArgumentException('A one-hour automatic cache requires all explicit cache breakpoints to also use a one-hour TTL.');
+        }
     }
 
     /**
