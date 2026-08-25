@@ -3,11 +3,11 @@
 namespace Laravel\Ai\Vercel;
 
 use Laravel\Ai\Approvals\Decisions;
-use Laravel\Ai\Contracts\ChatInput;
+use Laravel\Ai\Contracts\AgentInput;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\UserMessage;
 
-class Chat implements ChatInput
+class Chat implements AgentInput
 {
     /**
      * @param  array<int, array<string, mixed>>  $messages
