@@ -63,7 +63,6 @@ class TextGenerationLoop
      * @param  array<Tool|ProviderTool>  $tools
      * @param  array<string, mixed>|null  $schema
      * @param  array<string, Decision>|null  $approval
-     * @param  array{Collection<int, ToolCall>, Collection<string, ?Tool>}|null  $validatedApproval  the caller's own eager validateApproval() result, reused instead of re-validating
      */
     public function generate(
         TextProvider $provider,
@@ -77,7 +76,6 @@ class TextGenerationLoop
         ?array $approval = null,
         ?Closure $recordApprovalResults = null,
         ?RunContext $context = null,
-        ?array $validatedApproval = null,
     ): TextResponse {
         $this->ensureToolSearchIsApplicable($provider, $tools);
 
@@ -87,7 +85,7 @@ class TextGenerationLoop
         $lastResult = null;
 
         if ($approval !== null) {
-            $resumption = $this->resumeFromApproval($approval, $messages, $tools, $validatedApproval, $context);
+            $resumption = $this->resumeFromApproval($approval, $messages, $tools, context: $context);
 
             $allMessages = $resumption->messages;
             $newMessages = $resumption->newMessages;

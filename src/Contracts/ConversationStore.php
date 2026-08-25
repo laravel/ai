@@ -39,13 +39,6 @@ interface ConversationStore
     public function getLatestConversationMessages(string $conversationId, int $limit): Collection;
 
     /**
-     * Determine if the given participant owns a paused turn awaiting any of the given tool calls.
-     *
-     * @param  array<int, string>  $toolCallIds
-     */
-    public function hasPausedTurn(string $conversationId, ?string $participantType, string|int|null $participantId, array $toolCallIds): bool;
-
-    /**
      * Durably record resolved approval results on the paused turn before the run continues.
      *
      * @param  array<int, ToolResult>  $toolResults

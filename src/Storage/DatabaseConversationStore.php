@@ -157,23 +157,11 @@ class DatabaseConversationStore implements ConversationStore
     }
 
     /**
-     * Find the participant's most recent paused turn awaiting any of the given tool calls.
-     *
-     * @param  array<int, string>  $toolCallIds
+     * Get the "type:id" participant a stored row belongs to.
      */
-    protected function findPausedTurn(string $conversationId, ?string $participantType, string|int|null $participantId, array $toolCallIds, bool $lock = false): ?object
+    protected function participantKey(object $record): string
     {
-        return $this->table($this->messagesTable())
-            ->where('conversation_id', $conversationId)
-            ->when($participantId === null,
-                fn ($query) => $query->whereNull('participant_type')->whereNull('participant_id'),
-                fn ($query) => $query->where('participant_type', $participantType)->where('participant_id', $participantId))
-            ->where('role', 'assistant')
-            ->whereNotNull('approval_state')
-            ->orderByDesc('id')
-            ->when($lock, fn ($query) => $query->lockForUpdate())
-            ->get()
-            ->first(fn ($record) => array_intersect($this->pausedCallIds($record), $toolCallIds) !== []);
+        return $record->participant_id === null ? ':' : $record->participant_type.':'.$record->participant_id;
     }
 
     /**
@@ -329,8 +317,10 @@ class DatabaseConversationStore implements ConversationStore
 
         $providerContentBlocks = $meta['provider_content_blocks'] ?? [];
 
+        $participant = $isPause ? $this->participantKey($record) : null;
+
         if ($isPause && filled($providerContentBlocks)) {
-            $messages[] = new AssistantMessage($record->content, $toolCalls->map(ToolCall::fromArray(...))->values(), $providerContentBlocks, $meta['provider'] ?? null);
+            $messages[] = new AssistantMessage($record->content, $toolCalls->map(ToolCall::fromArray(...))->values(), $providerContentBlocks, $meta['provider'] ?? null, $participant);
 
             if ($ownResults->isNotEmpty()) {
                 $messages[] = new ToolResultMessage($ownResults->map(ToolResult::fromArray(...))->values());
@@ -351,7 +341,7 @@ class DatabaseConversationStore implements ConversationStore
         )->values();
 
         if ($keptCalls->isNotEmpty()) {
-            $messages[] = new AssistantMessage($record->content, $keptCalls->map(ToolCall::fromArray(...))->values());
+            $messages[] = new AssistantMessage($record->content, $keptCalls->map(ToolCall::fromArray(...))->values(), participant: $participant);
         } elseif (filled($record->content)) {
             $messages[] = new AssistantMessage($record->content);
         }
@@ -389,20 +379,6 @@ class DatabaseConversationStore implements ConversationStore
     }
 
     /**
-     * Determine if the given participant owns a paused turn awaiting any of the given tool calls.
-     *
-     * @param  array<int, string>  $toolCallIds
-     */
-    public function hasPausedTurn(string $conversationId, ?string $participantType, string|int|null $participantId, array $toolCallIds): bool
-    {
-        if ($toolCallIds === []) {
-            return false;
-        }
-
-        return $this->findPausedTurn($conversationId, $participantType, $participantId, $toolCallIds) !== null;
-    }
-
-    /**
      * Durably record resolved approval results on the paused turn before the run continues.
      *
      * @param  array<int, ToolResult>  $toolResults
@@ -418,7 +394,17 @@ class DatabaseConversationStore implements ConversationStore
         $resultIds = array_map(fn (ToolResult $result) => $result->id, $toolResults);
 
         DB::connection($this->connection)->transaction(function () use ($conversationId, $participantType, $participantId, $toolResults, $resultIds) {
-            $row = $this->findPausedTurn($conversationId, $participantType, $participantId, $resultIds, lock: true);
+            $row = $this->table($this->messagesTable())
+                ->where('conversation_id', $conversationId)
+                ->when($participantId === null,
+                    fn ($query) => $query->whereNull('participant_type')->whereNull('participant_id'),
+                    fn ($query) => $query->where('participant_type', $participantType)->where('participant_id', $participantId))
+                ->where('role', 'assistant')
+                ->whereNotNull('approval_state')
+                ->orderByDesc('id')
+                ->lockForUpdate()
+                ->get()
+                ->first(fn ($record) => array_intersect($this->pausedCallIds($record), $resultIds) !== []);
 
             if ($row === null) {
                 throw new ApprovalMismatchException('The approval results do not match a paused conversation turn.', collect());

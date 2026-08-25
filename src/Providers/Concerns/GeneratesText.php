@@ -73,16 +73,8 @@ trait GeneratesText
 
                     $schema = $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null;
 
-                    $tools = $this->resolveTools($agent);
-                    $approval = $this->resumableApprovalFor($prompt);
-
-                    // Validate eagerly so the store can reject the resumption before any approved tool runs, then thread the result into generate() so it isn't re-validated there...
-                    $validatedApproval = $approval !== null
-                        ? $this->textGenerationLoop()->validateApproval($approval, $messages, $tools)
-                        : null;
-
-                    if ($validatedApproval !== null) {
-                        $this->ensureApprovalResumptionIsRecordable($prompt, $validatedApproval[0]);
+                    if ($this->resumesAgainstRealGateway($prompt)) {
+                        $this->ensureApprovalResumptionIsAuthorized($messages, $prompt);
                     }
 
                     $response = $this->textGenerationLoop()->generate(
@@ -90,14 +82,13 @@ trait GeneratesText
                         $prompt->model,
                         (string) $agent->instructions(),
                         $messages,
-                        $tools,
+                        $this->resolveTools($agent),
                         $schema,
                         TextGenerationOptions::forAgent($agent),
                         $prompt->timeout,
-                        $approval,
+                        $this->resumableApprovalFor($prompt),
                         $this->approvalResultRecorderFor($prompt, $resolvedApprovalResults),
                         $this->runContextFor($invocationId, $prompt),
-                        $validatedApproval,
                     );
 
                     if ($response->hasPendingApprovals()) {

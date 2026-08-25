@@ -65,14 +65,14 @@ trait StreamsText
                     $approval = $this->resumableApprovalFor($prompt);
                     $recordApprovalResults = $this->approvalResultRecorderFor($prompt, $resolvedApprovalResults);
 
+                    if ($this->resumesAgainstRealGateway($prompt)) {
+                        $this->ensureApprovalResumptionIsAuthorized($messages, $prompt);
+                    }
+
                     // Validate eagerly so a mismatch throws before the stream begins, then thread the result into stream() so it isn't re-validated there...
                     $validatedApproval = $approval !== null
                         ? $this->textGenerationLoop()->validateApproval($approval, $messages, $tools)
                         : null;
-
-                    if ($validatedApproval !== null) {
-                        $this->ensureApprovalResumptionIsRecordable($prompt, $validatedApproval[0]);
-                    }
 
                     $streamable = null;
 
