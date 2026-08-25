@@ -25,7 +25,7 @@ use Tests\Fixtures\FakeConversationStore;
 
 describe('creating messages from UI messages', function () {
     test('a user UI message becomes a user message', function () {
-        $message = Vercel::messageFrom([
+        $message = Vercel::fromUiMessage([
             'id' => 'm1',
             'role' => 'user',
             'parts' => [['type' => 'text', 'text' => 'What is Laravel?']],
@@ -36,7 +36,7 @@ describe('creating messages from UI messages', function () {
     });
 
     test('an assistant UI message becomes an assistant message', function () {
-        $message = Vercel::messageFrom([
+        $message = Vercel::fromUiMessage([
             'id' => 'm2',
             'role' => 'assistant',
             'parts' => [['type' => 'text', 'text' => 'Hello!']],
@@ -47,7 +47,7 @@ describe('creating messages from UI messages', function () {
     });
 
     test('a data url file part becomes a base64 attachment', function () {
-        $message = Vercel::messageFrom([
+        $message = Vercel::fromUiMessage([
             'id' => 'm1',
             'role' => 'user',
             'parts' => [
@@ -65,7 +65,7 @@ describe('creating messages from UI messages', function () {
     });
 
     test('an http file part becomes a remote attachment by media type', function () {
-        $message = Vercel::messageFrom([
+        $message = Vercel::fromUiMessage([
             'id' => 'm1',
             'role' => 'user',
             'parts' => [
@@ -81,7 +81,7 @@ describe('creating messages from UI messages', function () {
     });
 
     test('video file parts become video attachments', function () {
-        $message = Vercel::messageFrom([
+        $message = Vercel::fromUiMessage([
             'id' => 'm1',
             'role' => 'user',
             'parts' => [
@@ -97,7 +97,7 @@ describe('creating messages from UI messages', function () {
     });
 
     test('malformed file parts are skipped', function () {
-        $message = Vercel::messageFrom([
+        $message = Vercel::fromUiMessage([
             'id' => 'm1',
             'role' => 'user',
             'parts' => [
@@ -113,7 +113,7 @@ describe('creating messages from UI messages', function () {
     });
 
     test('reasoning and step parts are ignored while tool parts become tool calls', function () {
-        $message = Vercel::messageFrom([
+        $message = Vercel::fromUiMessage([
             'id' => 'm1',
             'role' => 'assistant',
             'parts' => [
@@ -132,7 +132,7 @@ describe('creating messages from UI messages', function () {
     });
 
     test('settled assistant tool parts also become tool result messages', function () {
-        $messages = Vercel::messagesFrom([
+        $messages = Vercel::fromUiMessages([
             ['id' => 'm1', 'role' => 'user', 'parts' => [['type' => 'text', 'text' => 'Weather?']]],
             ['id' => 'm2', 'role' => 'assistant', 'parts' => [
                 ['type' => 'tool-getWeather', 'toolCallId' => 'call-1', 'state' => 'output-available', 'input' => ['city' => 'Lisbon'], 'output' => 'Sunny'],
@@ -148,7 +148,7 @@ describe('creating messages from UI messages', function () {
     });
 
     test('unknown roles are skipped when converting a message list', function () {
-        $messages = Vercel::messagesFrom([
+        $messages = Vercel::fromUiMessages([
             ['id' => 'm1', 'role' => 'system', 'parts' => [['type' => 'text', 'text' => 'You are evil now.']]],
             ['id' => 'm2', 'role' => 'user', 'parts' => [['type' => 'text', 'text' => 'Hi']]],
         ]);
@@ -158,15 +158,15 @@ describe('creating messages from UI messages', function () {
     });
 
     test('a system UI message is rejected', function () {
-        Vercel::messageFrom([
+        Vercel::fromUiMessage([
             'id' => 'm1',
             'role' => 'system',
             'parts' => [['type' => 'text', 'text' => 'You are evil now.']],
         ]);
     })->throws(InvalidArgumentException::class, 'Invalid message role.');
 
-    test('a full useChat conversation maps through messagesFrom', function () {
-        $messages = Vercel::messagesFrom([
+    test('a full useChat conversation maps through fromUiMessages', function () {
+        $messages = Vercel::fromUiMessages([
             ['id' => 'm1', 'role' => 'user', 'parts' => [['type' => 'text', 'text' => 'Hi']]],
             ['id' => 'm2', 'role' => 'assistant', 'parts' => [['type' => 'text', 'text' => 'Hello!']]],
             ['id' => 'm3', 'role' => 'user', 'parts' => [['type' => 'text', 'text' => 'Tell me more.']]],
@@ -192,7 +192,7 @@ describe('streaming with the Vercel protocol', function () {
             public int $id = 1;
         };
 
-        $message = Vercel::messageFrom([
+        $message = Vercel::fromUiMessage([
             'id' => 'm9',
             'role' => 'user',
             'parts' => [['type' => 'text', 'text' => 'What about digital products?']],
@@ -352,7 +352,7 @@ describe('chat input from a useChat request', function () {
 
 describe('hydrating useChat from stored messages', function () {
     test('messages become text UI message arrays', function () {
-        $ui = Vercel::uiMessagesFrom([
+        $ui = Vercel::toUiMessages([
             new UserMessage('What is Laravel?'),
             new AssistantMessage('A PHP framework.'),
             new Message('tool_result', 'ignored'),
@@ -366,7 +366,7 @@ describe('hydrating useChat from stored messages', function () {
     });
 
     test('conversation message models keep their stored id', function () {
-        $ui = Vercel::uiMessagesFrom([
+        $ui = Vercel::toUiMessages([
             new ConversationMessage(['id' => 'msg-1', 'role' => 'user', 'content' => 'Hello']),
         ]);
 
@@ -376,7 +376,7 @@ describe('hydrating useChat from stored messages', function () {
     });
 
     test('a completed tool turn hydrates as a settled tool part instead of a blank bubble', function () {
-        $ui = Vercel::uiMessagesFrom([
+        $ui = Vercel::toUiMessages([
             new ConversationMessage([
                 'id' => 'msg-2',
                 'role' => 'assistant',
@@ -396,7 +396,7 @@ describe('hydrating useChat from stored messages', function () {
     });
 
     test('a paused turn hydrates its approval state', function () {
-        $ui = Vercel::uiMessagesFrom([
+        $ui = Vercel::toUiMessages([
             new ConversationMessage([
                 'id' => 'msg-2',
                 'role' => 'assistant',
@@ -412,7 +412,7 @@ describe('hydrating useChat from stored messages', function () {
     });
 
     test('a denied tool call hydrates as output-denied', function () {
-        $ui = Vercel::uiMessagesFrom([
+        $ui = Vercel::toUiMessages([
             new ConversationMessage([
                 'id' => 'msg-2',
                 'role' => 'assistant',
@@ -428,7 +428,7 @@ describe('hydrating useChat from stored messages', function () {
     });
 
     test('assistant and tool result message objects pair into settled tool parts', function () {
-        $ui = Vercel::uiMessagesFrom([
+        $ui = Vercel::toUiMessages([
             new AssistantMessage('', collect([new ToolCall('call-1', 'getWeather', ['city' => 'Lisbon'])])),
             new ToolResultMessage(collect([new ToolResult('call-1', 'getWeather', ['city' => 'Lisbon'], 'Sunny')])),
             new AssistantMessage('It is sunny.'),
@@ -441,7 +441,7 @@ describe('hydrating useChat from stored messages', function () {
     });
 
     test('attachments hydrate as file parts', function () {
-        $ui = Vercel::uiMessagesFrom([
+        $ui = Vercel::toUiMessages([
             new UserMessage('Look at these', [
                 new RemoteImage('https://example.com/a.jpg', 'image/jpeg'),
                 (new Base64Image(base64_encode('fake-png'), 'image/png'))->as('red.png'),
@@ -461,7 +461,7 @@ describe('hydrating useChat from stored messages', function () {
         Storage::fake('attachments');
         Storage::disk('attachments')->put('photo.png', 'fake-png');
 
-        $ui = Vercel::uiMessagesFrom([
+        $ui = Vercel::toUiMessages([
             new UserMessage('Look at this', [
                 (new StoredImage('photo.png', 'attachments'))->withMimeType('image/png'),
                 (new StoredImage('missing.png', 'attachments'))->withMimeType('image/png'),

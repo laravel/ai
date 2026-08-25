@@ -278,7 +278,7 @@ trait Promptable
 
         $this->adHocMessages = Collection::make($messages)
             ->flatMap(fn ($message) => is_array($message) && isset($message['parts'])
-                ? Vercel::messagesFrom([$message])
+                ? Vercel::fromUiMessages([$message])
                 : [Message::tryFrom($message)])
             ->all();
 

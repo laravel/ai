@@ -44,7 +44,7 @@ class Vercel
      * @param  iterable<int, Message|ConversationMessage>  $messages
      * @return list<array<string, mixed>>
      */
-    public static function uiMessagesFrom(iterable $messages): array
+    public static function toUiMessages(iterable $messages): array
     {
         $result = [];
 
@@ -219,7 +219,7 @@ class Vercel
      * @param  iterable<int, array<string, mixed>>  $messages
      * @return list<Message>
      */
-    public static function messagesFrom(iterable $messages): array
+    public static function fromUiMessages(iterable $messages): array
     {
         $result = [];
 
@@ -229,7 +229,7 @@ class Vercel
                 continue;
             }
 
-            $result[] = $converted = static::messageFrom($message);
+            $result[] = $converted = static::fromUiMessage($message);
 
             if ($converted instanceof AssistantMessage
                 && ($toolResults = static::toolResultsFrom($message))->isNotEmpty()) {
@@ -245,7 +245,7 @@ class Vercel
      *
      * @param  array<string, mixed>  $message
      */
-    public static function messageFrom(array $message): Message
+    public static function fromUiMessage(array $message): Message
     {
         $parts = new Collection($message['parts'] ?? []);
 
