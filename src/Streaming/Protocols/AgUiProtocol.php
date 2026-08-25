@@ -76,9 +76,9 @@ class AgUiProtocol extends StreamProtocol
 
                 if ($this->started) {
                     yield $this->stepFinishedPart();
-                    yield $this->stepStartedPart();
+                    yield $this->startNextStepPart();
                 } else {
-                    yield from $this->runStartedParts();
+                    yield from $this->beginRunParts();
                 }
 
                 continue;
@@ -93,7 +93,7 @@ class AgUiProtocol extends StreamProtocol
             // The run pauses on approvals, so finish it immediately with the outcome the client resumes from...
             if ($event instanceof ToolApprovalRequest) {
                 if (! $this->started) {
-                    yield from $this->runStartedParts();
+                    yield from $this->beginRunParts();
                 }
 
                 yield $this->stepFinishedPart();
@@ -115,14 +115,14 @@ class AgUiProtocol extends StreamProtocol
                 continue;
             }
 
-            foreach ($this->map($event) as $part) {
-                yield from $this->part($part);
+            foreach ($this->mapEvent($event) as $part) {
+                yield from $this->yieldPart($part);
             }
         }
 
         if ($this->started && ! $this->errored && ! $this->finished) {
             yield $this->stepFinishedPart();
-            yield $this->runFinishedPart($this->completion($usage, $reason, $provider, $model));
+            yield $this->runFinishedPart($this->completionAttributes($usage, $reason, $provider, $model));
         }
     }
 
@@ -136,7 +136,7 @@ class AgUiProtocol extends StreamProtocol
             return;
         }
 
-        yield from $this->part(['type' => 'RUN_ERROR', 'message' => 'An error occurred.']);
+        yield from $this->yieldPart(['type' => 'RUN_ERROR', 'message' => 'An error occurred.']);
     }
 
     /**
@@ -155,10 +155,10 @@ class AgUiProtocol extends StreamProtocol
      *
      * @param  array<string, mixed>  $part
      */
-    protected function part(array $part): Generator
+    protected function yieldPart(array $part): Generator
     {
         if (! $this->started) {
-            yield from $this->runStartedParts();
+            yield from $this->beginRunParts();
         }
 
         yield $part;
@@ -167,7 +167,7 @@ class AgUiProtocol extends StreamProtocol
     /**
      * Get the events that begin the run and its first step.
      */
-    protected function runStartedParts(): Generator
+    protected function beginRunParts(): Generator
     {
         $this->started = true;
 
@@ -180,7 +180,7 @@ class AgUiProtocol extends StreamProtocol
             'runId' => $this->runId,
         ];
 
-        yield $this->stepStartedPart();
+        yield $this->startNextStepPart();
     }
 
     /**
@@ -188,7 +188,7 @@ class AgUiProtocol extends StreamProtocol
      *
      * @return array<string, mixed>
      */
-    protected function stepStartedPart(): array
+    protected function startNextStepPart(): array
     {
         return ['type' => 'STEP_STARTED', 'stepName' => (string) ++$this->step];
     }
@@ -224,7 +224,7 @@ class AgUiProtocol extends StreamProtocol
      *
      * @return array<string, mixed>
      */
-    protected function completion(?Usage $usage, ?string $reason, ?string $provider, ?string $model): array
+    protected function completionAttributes(?Usage $usage, ?string $reason, ?string $provider, ?string $model): array
     {
         return [
             ...($usage !== null ? ['usage' => [Arr::whereNotNull([
@@ -279,7 +279,7 @@ class AgUiProtocol extends StreamProtocol
      *
      * @return array<int, array<string, mixed>>
      */
-    protected function map(StreamEvent $event): array
+    protected function mapEvent(StreamEvent $event): array
     {
         return match (true) {
             $event instanceof TextStart => [[
@@ -314,7 +314,7 @@ class AgUiProtocol extends StreamProtocol
                 'type' => 'TOOL_CALL_RESULT',
                 'messageId' => $event->toolResult->resultId ?? $event->id,
                 'toolCallId' => $event->toolResult->id,
-                'content' => $this->content($event),
+                'content' => $this->toolResultContent($event),
                 'role' => 'tool',
             ]],
             $event instanceof Error => [[
@@ -361,7 +361,7 @@ class AgUiProtocol extends StreamProtocol
     /**
      * Get the tool message content for the given tool result event.
      */
-    protected function content(ToolResult $event): string
+    protected function toolResultContent(ToolResult $event): string
     {
         if (! $event->successful) {
             return $event->error ?? 'The tool call failed.';

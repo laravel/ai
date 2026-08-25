@@ -76,7 +76,7 @@ class VercelDataProtocol extends StreamProtocol
 
             if ($event instanceof ToolApprovalRequest) {
                 foreach ($event->pendingApprovals as $pendingApproval) {
-                    yield from $this->part([
+                    yield from $this->yieldPart([
                         'type' => 'tool-approval-request',
                         'toolCallId' => $pendingApproval->id,
                         'approvalId' => $pendingApproval->id,
@@ -95,11 +95,11 @@ class VercelDataProtocol extends StreamProtocol
                 continue;
             }
 
-            if (empty($part = $this->map($event))) {
+            if (empty($part = $this->mapEvent($event))) {
                 continue;
             }
 
-            yield from $this->part($part);
+            yield from $this->yieldPart($part);
         }
 
         if ($this->started && ! $this->errored) {
@@ -116,7 +116,7 @@ class VercelDataProtocol extends StreamProtocol
      */
     protected function maskedErrorParts(): Generator
     {
-        yield from $this->part(['type' => 'error', 'errorText' => 'An error occurred.']);
+        yield from $this->yieldPart(['type' => 'error', 'errorText' => 'An error occurred.']);
     }
 
     /**
@@ -144,7 +144,7 @@ class VercelDataProtocol extends StreamProtocol
      *
      * @param  array<string, mixed>  $part
      */
-    protected function part(array $part): Generator
+    protected function yieldPart(array $part): Generator
     {
         if ($part['type'] === 'start') {
             $this->started = true;
@@ -158,7 +158,7 @@ class VercelDataProtocol extends StreamProtocol
         }
 
         if (! $this->started) {
-            yield from $this->part(['type' => 'start', 'messageId' => $this->invocationId]);
+            yield from $this->yieldPart(['type' => 'start', 'messageId' => $this->invocationId]);
         }
 
         yield $part;
@@ -169,7 +169,7 @@ class VercelDataProtocol extends StreamProtocol
      *
      * @return array<string, mixed>|null
      */
-    protected function map(StreamEvent $event): ?array
+    protected function mapEvent(StreamEvent $event): ?array
     {
         return match (true) {
             $event instanceof StreamStart => [
