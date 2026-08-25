@@ -171,7 +171,7 @@ class AgUiProtocol extends StreamProtocol
     {
         $this->started = true;
 
-        // Resolved on first emission so a conversation id surfaced after streaming begins is still adopted...
+        // Resolved on first emission so a conversation ID surfaced after streaming begins is still adopted...
         $this->threadId ??= $this->response->conversationId ?? ulid();
 
         yield [
