@@ -3,12 +3,12 @@
 namespace Laravel\Ai\AgUi;
 
 use Laravel\Ai\Approvals\Decisions;
-use Laravel\Ai\Contracts\ChatInput;
+use Laravel\Ai\Contracts\AgentInput;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Streaming\Protocols\AgUiProtocol;
 
-class Chat implements ChatInput
+class Chat implements AgentInput
 {
     /**
      * @param  array<string, mixed>  $input
@@ -22,7 +22,7 @@ class Chat implements ChatInput
     {
         $message = $this->trailingUserMessage();
 
-        return $message === null ? null : AgUi::messageFrom($message);
+        return $message === null ? null : AgUi::fromMessage($message);
     }
 
     /**
@@ -42,7 +42,7 @@ class Chat implements ChatInput
     {
         $messages = $this->messages();
 
-        return AgUi::messagesFrom($this->trailingUserMessage() === null
+        return AgUi::fromMessages($this->trailingUserMessage() === null
             ? $messages
             : array_slice($messages, 0, -1));
     }
@@ -52,7 +52,7 @@ class Chat implements ChatInput
      */
     public function protocol(): AgUiProtocol
     {
-        return new AgUiProtocol($this->threadId(), $this->runId());
+        return new AgUiProtocol($this->threadId() ?: null, $this->runId() ?: null);
     }
 
     /**

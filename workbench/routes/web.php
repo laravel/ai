@@ -61,11 +61,11 @@ Route::post('/ag-ui', function (Request $request) {
 });
 
 Route::get('/ag-ui/{conversation}', function (Conversation $conversation) {
-    $hydration = AgUi::hydrate($conversation->messages()->oldest('id')->get());
+    $messages = $conversation->messages()->oldest('id')->get();
 
     return response()->json([
         'threadId' => $conversation->id,
-        'messages' => $hydration->messages(),
-        'interrupts' => $hydration->interrupts(),
+        'messages' => AgUi::toMessages($messages),
+        'interrupts' => AgUi::toInterrupts($messages),
     ]);
 });

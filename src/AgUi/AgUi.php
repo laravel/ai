@@ -4,10 +4,7 @@ namespace Laravel\Ai\AgUi;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
-use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\Decisions;
@@ -41,32 +38,13 @@ use Laravel\Ai\Streaming\Protocols\AgUiProtocol;
 class AgUi
 {
     /**
-     * Create a chat input from a RunAgentInput request or its array representation.
+     * Create a chat instance from a RunAgentInput request or its array representation.
      *
      * @param  Request|array<string, mixed>  $input
      */
     public static function chat(Request|array $input): Chat
     {
-        $input = $input instanceof Request ? $input->all() : $input;
-
-        Validator::make($input, [
-            'threadId' => ['required', 'string'],
-            'runId' => ['required', 'string'],
-            'parentRunId' => ['nullable', 'string'],
-            'messages' => ['present', 'array'],
-            'messages.*.id' => ['required', 'string'],
-            'messages.*.role' => ['required', Rule::in(['user', 'assistant', 'system', 'developer', 'tool'])],
-            'messages.*.toolCallId' => ['required_if:messages.*.role,tool', 'string'],
-            'state' => ['sometimes', 'array'],
-            'tools' => ['sometimes', 'array'],
-            'context' => ['sometimes', 'array'],
-            'forwardedProps' => ['sometimes', 'array'],
-            'resume' => ['sometimes', 'array', 'min:1'],
-            'resume.*.interruptId' => ['required', 'string'],
-            'resume.*.status' => ['required', Rule::in(['resolved', 'cancelled'])],
-        ])->validate();
-
-        return new Chat($input);
+        return new Chat($input instanceof Request ? $input->all() : $input);
     }
 
     /**
@@ -85,7 +63,7 @@ class AgUi
      * @param  iterable<int, mixed>  $messages
      * @return list<Message>
      */
-    public static function messagesFrom(iterable $messages): array
+    public static function fromMessages(iterable $messages): array
     {
         $result = [];
         $calls = [];
@@ -114,7 +92,7 @@ class AgUi
                 continue;
             }
 
-            $result[] = $converted = static::messageFrom($message);
+            $result[] = $converted = static::fromMessage($message);
 
             if ($converted instanceof AssistantMessage) {
                 foreach ($converted->toolCalls as $call) {
@@ -131,7 +109,7 @@ class AgUi
      *
      * @param  array<string, mixed>  $message
      */
-    public static function messageFrom(array $message): Message
+    public static function fromMessage(array $message): Message
     {
         $content = $message['content'] ?? null;
 
@@ -152,12 +130,10 @@ class AgUi
     {
         $decisions = [];
 
-        // Repeated interrupt IDs collapse into a single decision, so a replayed resume is idempotent...
-        foreach ($resume as $index => $entry) {
+        // Malformed entries are skipped, and repeated interrupt IDs collapse so a replayed resume is idempotent...
+        foreach ($resume as $entry) {
             if (! is_array($entry) || ! is_string($id = $entry['interruptId'] ?? null) || blank($id)) {
-                throw ValidationException::withMessages([
-                    "resume.{$index}.interruptId" => 'A tool approval resumption requires an interrupt ID.',
-                ]);
+                continue;
             }
 
             if (($entry['status'] ?? null) === 'cancelled') {
@@ -166,27 +142,23 @@ class AgUi
                 continue;
             }
 
-            if (! is_bool($approved = $entry['payload']['approved'] ?? null)) {
-                throw ValidationException::withMessages([
-                    "resume.{$index}.payload.approved" => 'A resolved tool approval requires a boolean approved value.',
-                ]);
+            if (is_bool($approved = $entry['payload']['approved'] ?? null)) {
+                $decisions[$id] = $approved;
             }
-
-            $decisions[$id] = $approved;
         }
 
         return $decisions === [] ? null : Decisions::from($decisions);
     }
 
     /**
-     * Restore the AG-UI messages and open interrupts held by stored conversation messages.
+     * Convert messages or conversation message models into AG-UI message arrays for hydrating a client.
      *
      * @param  iterable<int, Message|ConversationMessage>  $messages
+     * @return list<array<string, mixed>>
      */
-    public static function hydrate(iterable $messages): Hydration
+    public static function toMessages(iterable $messages): array
     {
         $result = [];
-        $interrupts = [];
 
         foreach ($messages as $message) {
             if ($message instanceof ToolResultMessage) {
@@ -229,13 +201,9 @@ class AgUi
             foreach ($message->tool_results ?? [] as $toolResult) {
                 $result[] = static::toolMessageFrom($toolResult, $id);
             }
-
-            foreach (($message->approval_state ?? [])['pending'] ?? [] as $callId => $reason) {
-                $interrupts[] = static::interrupt((string) $callId, is_string($reason) ? $reason : null);
-            }
         }
 
-        return new Hydration($result, $interrupts);
+        return $result;
     }
 
     /**
@@ -244,9 +212,21 @@ class AgUi
      * @param  iterable<int, Message|ConversationMessage>  $messages
      * @return list<array<string, mixed>>
      */
-    public static function interruptsFrom(iterable $messages): array
+    public static function toInterrupts(iterable $messages): array
     {
-        return static::hydrate($messages)->interrupts();
+        $interrupts = [];
+
+        foreach ($messages as $message) {
+            if (! $message instanceof ConversationMessage) {
+                continue;
+            }
+
+            foreach (($message->approval_state ?? [])['pending'] ?? [] as $callId => $reason) {
+                $interrupts[] = static::interrupt((string) $callId, is_string($reason) ? $reason : null);
+            }
+        }
+
+        return $interrupts;
     }
 
     /**
