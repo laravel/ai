@@ -517,12 +517,13 @@ class TextGenerationLoop
                 continue;
             }
 
-            $arguments = $decision->arguments ?? $toolCall->arguments;
             $tool = $resolvedTools[$toolCall->id];
 
             if (! $tool instanceof Tool) {
                 throw new NoSuchToolException($toolCall->name);
             }
+
+            $arguments = $this->argumentsForDecision($decision, $toolCall);
 
             try {
                 $result = $this->executeTool($tool, $arguments, $toolCall->id, $context);
@@ -541,6 +542,22 @@ class TextGenerationLoop
         }
 
         return [$toolResults, ! $hasBareRejection, $failedToolCallIds];
+    }
+
+    /**
+     * Resolve the arguments a decision executes the tool with.
+     *
+     * An edit replaces them; a submission merges into what the model already
+     * supplied, so answering a paused call never requires the caller to re-send
+     * arguments the paused turn is still holding.
+     *
+     * @return array<string, mixed>
+     */
+    protected function argumentsForDecision(Decision $decision, ToolCall $toolCall): array
+    {
+        return $decision->isMerged()
+            ? [...$toolCall->arguments, ...($decision->arguments ?? [])]
+            : $decision->arguments ?? $toolCall->arguments;
     }
 
     /**
