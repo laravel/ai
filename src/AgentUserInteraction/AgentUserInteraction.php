@@ -74,7 +74,8 @@ class AgentUserInteraction
                 continue;
             }
 
-            [$result, $toolResults] = [static::flushToolResults($result, $toolResults), []];
+            $result = static::flushToolResults($result, $toolResults);
+            $toolResults = [];
 
             // System and developer messages are skipped since agent instructions are not client supplied...
             if (! in_array($role, ['user', 'assistant'], true)) {
@@ -149,7 +150,7 @@ class AgentUserInteraction
      */
     public static function toClientState(iterable $messages): array
     {
-        $messages = is_array($messages) ? $messages : [...$messages];
+        $messages = [...$messages];
 
         return [
             'messages' => static::toMessages($messages),
@@ -191,6 +192,7 @@ class AgentUserInteraction
             }
 
             $toolCalls = static::hydratedToolCalls($message);
+            $ownResults = new Collection;
 
             if ($message instanceof ConversationMessage) {
                 $toolCallIds = array_column($toolCalls, 'id');
@@ -211,10 +213,6 @@ class AgentUserInteraction
                     ...(filled($message->content) ? ['content' => $message->content] : []),
                     ...($toolCalls !== [] ? ['toolCalls' => $toolCalls] : []),
                 ];
-            }
-
-            if (! $message instanceof ConversationMessage) {
-                continue;
             }
 
             foreach ($ownResults as $toolResult) {
@@ -253,7 +251,7 @@ class AgentUserInteraction
      *
      * @return array<string, mixed>
      */
-    protected static function interrupt(string $id, ?string $reason): array
+    public static function interrupt(string $id, ?string $reason = null): array
     {
         return [
             'id' => $id,

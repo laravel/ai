@@ -215,31 +215,37 @@ class GeminiGateway implements Gateway, StepTextGateway
         int $timeout = 30,
         array $providerOptions = [],
     ): AudioResponse {
+        $generationConfig = array_replace_recursive($providerOptions['generationConfig'] ?? [], [
+            'speechConfig' => [
+                'voiceConfig' => [
+                    'prebuiltVoiceConfig' => [
+                        'voiceName' => match ($voice) {
+                            'default-female' => 'Kore',
+                            'default-male' => 'Puck',
+                            default => $voice,
+                        },
+                    ],
+                ],
+            ],
+        ]);
+
+        $generationConfig['responseModalities'] = ['AUDIO'];
+
+        $body = array_merge($providerOptions, [
+            'contents' => [[
+                'role' => 'user',
+                'parts' => [[
+                    'text' => $instructions !== null && trim($instructions) !== ''
+                        ? trim($instructions)."\n\n".$text
+                        : $text,
+                ]],
+            ]],
+            'generationConfig' => $generationConfig,
+        ]);
+
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post("models/{$model}:generateContent", array_merge($providerOptions, [
-                'contents' => [[
-                    'role' => 'user',
-                    'parts' => [[
-                        'text' => $instructions !== null && trim($instructions) !== ''
-                            ? trim($instructions)."\n\n".$text
-                            : $text,
-                    ]],
-                ]],
-                'generationConfig' => array_merge(array_replace_recursive($providerOptions['generationConfig'] ?? [], [
-                    'speechConfig' => [
-                        'voiceConfig' => [
-                            'prebuiltVoiceConfig' => [
-                                'voiceName' => match ($voice) {
-                                    'default-female' => 'Kore',
-                                    'default-male' => 'Puck',
-                                    default => $voice,
-                                },
-                            ],
-                        ],
-                    ],
-                ]), ['responseModalities' => ['AUDIO']]),
-            ])),
+            fn () => $this->client($provider, $timeout)->post("models/{$model}:generateContent", $body),
         );
 
         $data = $response->json();

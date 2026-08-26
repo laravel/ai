@@ -56,12 +56,9 @@ class Chat implements AgentInput
      */
     public function protocol(): AgUiProtocol
     {
-        $threadId = $this->threadId();
-        $runId = $this->runId();
-
         return new AgUiProtocol(
-            $threadId !== '' ? $threadId : null,
-            $runId !== '' ? $runId : null,
+            $this->threadId() ?: null,
+            $this->runId() ?: null,
         );
     }
 
