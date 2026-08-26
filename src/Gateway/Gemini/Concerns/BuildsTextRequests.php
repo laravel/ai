@@ -91,8 +91,15 @@ trait BuildsTextRequests
 
         $providerOptions = $options?->providerOptions($provider->driver()) ?? [];
 
+        if (isset($providerOptions['generationConfig'])) {
+            $providerOptions = array_merge(
+                Arr::except($providerOptions, 'generationConfig'),
+                $providerOptions['generationConfig'],
+            );
+        }
+
         // Hoist keys that need to be passed at top level, as everything else is passed in generationConfig
-        $topLevelKeys = ['cachedContent'];
+        $topLevelKeys = ['cachedContent', 'safetySettings'];
         foreach ($topLevelKeys as $key) {
             if (array_key_exists($key, $providerOptions)) {
                 $body[$key] = $providerOptions[$key];
@@ -106,30 +113,6 @@ trait BuildsTextRequests
 
         if (filled($generationConfig)) {
             $body['generationConfig'] = $generationConfig;
-        }
-
-        return $this->postProcessRequestBody($body);
-    }
-
-    /**
-     * Flatten a nested `generationConfig` key and hoist `safetySettings` to the top level.
-     *
-     * Some provider option payloads nest an entire `generationConfig` object under the
-     * `generationConfig` key (e.g. when the caller passes raw Gemini config objects). This
-     * merges those inner keys into the outer config and moves `safetySettings` up to the
-     * request root where the Gemini API expects it.
-     */
-    private function postProcessRequestBody(array $body): array
-    {
-        if (isset($body['generationConfig']['generationConfig'])) {
-            $inner = $body['generationConfig']['generationConfig'];
-            unset($body['generationConfig']['generationConfig']);
-            $body['generationConfig'] = array_merge($body['generationConfig'], $inner);
-        }
-
-        if (isset($body['generationConfig']['safetySettings'])) {
-            $body['safetySettings'] = $body['generationConfig']['safetySettings'];
-            unset($body['generationConfig']['safetySettings']);
         }
 
         return $body;

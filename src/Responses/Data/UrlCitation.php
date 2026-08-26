@@ -8,7 +8,7 @@ use JsonSerializable;
 
 class UrlCitation extends Citation implements Arrayable, JsonSerializable
 {
-    /** @var Collection<int, array{0: int, 1: int}> */
+    /** @var Collection<int, array{start: int, end: int}> */
     public Collection $ranges;
 
     public function __construct(
@@ -16,22 +16,16 @@ class UrlCitation extends Citation implements Arrayable, JsonSerializable
         ?string $title = null,
         public ?int $startIndex = null,
         public ?int $endIndex = null,
-        /**
-         * Whether startIndex/endIndex are byte offsets rather than character offsets.
-         * Used by providers that report grounding positions in bytes (e.g. Gemini Search grounding).
-         */
-        public bool $isByteOffset = false,
     ) {
         parent::__construct($title);
 
-        $this->ranges = ($startIndex !== null && $endIndex !== null)
-            ? collect([[$startIndex, $endIndex]])
-            : collect();
+        $this->ranges = new Collection;
+
+        $this->addRange($startIndex, $endIndex);
     }
 
     /**
-     * Add a text range for this citation.
-     * Duplicate ranges are silently ignored.
+     * Add a character range of the response text that this citation supports.
      */
     public function addRange(?int $startIndex, ?int $endIndex): void
     {
@@ -39,11 +33,11 @@ class UrlCitation extends Citation implements Arrayable, JsonSerializable
             return;
         }
 
-        if ($this->ranges->contains(fn ($r) => $r[0] === $startIndex && $r[1] === $endIndex)) {
+        if ($this->ranges->contains(fn (array $range): bool => $range['start'] === $startIndex && $range['end'] === $endIndex)) {
             return;
         }
 
-        $this->ranges[] = [$startIndex, $endIndex];
+        $this->ranges[] = ['start' => $startIndex, 'end' => $endIndex];
 
         if ($this->ranges->count() === 1) {
             $this->startIndex = $startIndex;
@@ -62,7 +56,6 @@ class UrlCitation extends Citation implements Arrayable, JsonSerializable
             'start_index' => $this->startIndex,
             'end_index' => $this->endIndex,
             'ranges' => $this->ranges->values()->all(),
-            'byte_offset' => $this->isByteOffset,
         ];
     }
 

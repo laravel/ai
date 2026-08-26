@@ -278,7 +278,6 @@ trait HandlesTextGeneration
             }
         }
 
-        // Emit any citations found in the completed response...
         $citations = $this->extractCitations($responseData['output'] ?? []);
 
         foreach ($citations as $citation) {
@@ -295,7 +294,7 @@ trait HandlesTextGeneration
             toolCalls: $toolCalls,
             finishReason: $this->extractFinishReason($responseData),
             usage: $usage ?? new Usage(0, 0),
-            meta: new Meta($provider->name(), $responseData['model'] ?? $model, $citations->isNotEmpty() ? $citations : null),
+            meta: new Meta($provider->name(), $responseData['model'] ?? $model, $citations),
             continuationToken: $responseId,
         );
     }

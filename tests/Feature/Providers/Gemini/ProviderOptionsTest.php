@@ -72,20 +72,20 @@ test('provider options are persisted in tool call follow up requests', function 
         ->and($secondConfig['thinkingConfig']['thinkingBudget'])->toBe(10000);
 });
 
-test('nested generationConfig inside providerOptions is flattened into the top-level generationConfig', function () {
+test('nested generationConfig inside providerOptions is flattened into the top-level generationConfig', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
     ]);
-    
+
     $agent = new class implements Agent, HasProviderOptions
     {
         use Promptable;
-        
+
         public function instructions(): string
         {
             return 'You are a helpful assistant.';
         }
-        
+
         public function providerOptions(Lab|string $provider): array
         {
             return match ($provider) {
@@ -94,51 +94,84 @@ test('nested generationConfig inside providerOptions is flattened into the top-l
             };
         }
     };
-    
+
     $agent->prompt('Hi', provider: 'gemini');
-    
-    Http::assertSent(function ($request) {
+
+    Http::assertSent(function ($request): bool {
         $config = $request->data()['generationConfig'] ?? [];
-        
+
         return ($config['temperature'] ?? null) === 0.5
             && ($config['topP'] ?? null) === 0.9
             && ! isset($config['generationConfig']);
     });
 });
 
-test('safetySettings inside providerOptions generationConfig is hoisted to request root', function () {
+test('safetySettings is placed at top level of request body, not in generationConfig', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
     ]);
-    
-    $safetySettings = [['category' => 'HARM_CATEGORY_HATE_SPEECH', 'threshold' => 'BLOCK_NONE']];
-    
-    $agent = new class ($safetySettings) implements Agent, HasProviderOptions
+
+    $agent = new class implements Agent, HasProviderOptions
     {
         use Promptable;
-        
-        public function __construct(private array $safetySettings) {}
-        
+
         public function instructions(): string
         {
             return 'You are a helpful assistant.';
         }
-        
+
         public function providerOptions(Lab|string $provider): array
         {
             return match ($provider) {
-                Lab::Gemini => ['safetySettings' => $this->safetySettings],
+                Lab::Gemini => ['safetySettings' => [['category' => 'HARM_CATEGORY_HATE_SPEECH', 'threshold' => 'BLOCK_NONE']]],
                 default => [],
             };
         }
     };
-    
+
     $agent->prompt('Hi', provider: 'gemini');
-    
-    Http::assertSent(function ($request) use ($safetySettings) {
+
+    Http::assertSent(function ($request): bool {
         $body = $request->data();
-        
-        return ($body['safetySettings'] ?? null) === $safetySettings
+
+        return ($body['safetySettings'][0]['threshold'] ?? null) === 'BLOCK_NONE'
+            && ! isset($body['generationConfig']['safetySettings']);
+    });
+});
+
+test('safetySettings nested inside a generationConfig option is hoisted to the request root', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
+    ]);
+
+    $agent = new class implements Agent, HasProviderOptions
+    {
+        use Promptable;
+
+        public function instructions(): string
+        {
+            return 'You are a helpful assistant.';
+        }
+
+        public function providerOptions(Lab|string $provider): array
+        {
+            return match ($provider) {
+                Lab::Gemini => ['generationConfig' => [
+                    'temperature' => 0.2,
+                    'safetySettings' => [['category' => 'HARM_CATEGORY_HARASSMENT', 'threshold' => 'BLOCK_ONLY_HIGH']],
+                ]],
+                default => [],
+            };
+        }
+    };
+
+    $agent->prompt('Hi', provider: 'gemini');
+
+    Http::assertSent(function ($request): bool {
+        $body = $request->data();
+
+        return ($body['safetySettings'][0]['threshold'] ?? null) === 'BLOCK_ONLY_HIGH'
+            && ($body['generationConfig']['temperature'] ?? null) === 0.2
             && ! isset($body['generationConfig']['safetySettings']);
     });
 });

@@ -54,7 +54,7 @@ trait ParsesTextResponses
             toolCalls: $this->mapToolCalls($rawToolCalls),
             finishReason: $this->extractFinishReason($data, $rawToolCalls),
             usage: $this->extractUsage($data),
-            meta: new Meta($provider->name(), $model, $this->extractCitations($data)),
+            meta: new Meta($provider->name(), $model, $this->extractCitations($data, $text)),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
             providerContentBlocks: $this->sanitizeRequestParts($this->excludeThinkingParts($parts)),
         );
@@ -154,7 +154,7 @@ trait ParsesTextResponses
     /**
      * Extract citations from the response data.
      */
-    protected function extractCitations(array $data): Collection
+    protected function extractCitations(array $data, string $text = ''): Collection
     {
         $citations = new Collection;
 
@@ -184,21 +184,33 @@ trait ParsesTextResponses
                     continue;
                 }
 
-                $existing = $citations->first(fn (UrlCitation $c) => $c->url === $web['uri']);
+                $existing = $citations->first(fn (UrlCitation $citation): bool => $citation->url === $web['uri']);
 
                 if ($existing === null) {
-                    $existing = new UrlCitation($web['uri'], $web['title'] ?? null, isByteOffset: true);
+                    $existing = new UrlCitation($web['uri'], $web['title'] ?? null);
                     $citations->push($existing);
                 }
 
                 $existing->addRange(
-                    $support['segment']['startIndex'] ?? null,
-                    $support['segment']['endIndex'] ?? null,
+                    $this->toCharacterOffset($text, $support['segment']['startIndex'] ?? null),
+                    $this->toCharacterOffset($text, $support['segment']['endIndex'] ?? null),
                 );
             }
         }
 
         return $citations->unique('url')->values();
+    }
+
+    /**
+     * Convert a Gemini grounding segment byte offset into a character offset.
+     */
+    protected function toCharacterOffset(string $text, ?int $byteOffset): ?int
+    {
+        if ($byteOffset === null || $text === '') {
+            return $byteOffset;
+        }
+
+        return mb_strlen(substr($text, 0, $byteOffset));
     }
 
     /**

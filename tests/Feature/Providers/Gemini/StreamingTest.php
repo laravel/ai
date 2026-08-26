@@ -264,9 +264,9 @@ describe('usage tracking', function (): void {
     ]);
 });
 
-describe('citations', function () {
-    test('streaming emits citation events from grounding metadata in the final chunk', function () {
-        $finalChunk = $this->geminiChunkWithUsage([['text' => 'Spain won Euro 2024.']], 10, 5, finishReason: 'STOP');
+describe('citations', function (): void {
+    test('streaming emits citation events from grounding metadata', function (): void {
+        $finalChunk = $this->geminiChunkWithUsage([['text' => ' Euro 2024.']], 10, 5, finishReason: 'STOP');
         $finalChunk['candidates'][0]['groundingMetadata'] = [
             'groundingChunks' => [
                 ['web' => ['uri' => 'https://example.com/euro', 'title' => 'Euro 2024']],
@@ -290,16 +290,77 @@ describe('citations', function () {
 
         $events = $this->collectStreamEvents();
 
-        $citationEvents = array_values(array_filter($events, fn ($e) => $e instanceof CitationEvent));
+        $citationEvents = array_values(array_filter($events, fn ($event): bool => $event instanceof CitationEvent));
 
         expect($citationEvents)->toHaveCount(2)
             ->and($citationEvents[0]->citation->url)->toBe('https://example.com/euro')
-            ->and($citationEvents[0]->citation->isByteOffset)->toBeTrue()
-            ->and($citationEvents[0]->citation->ranges->all())->toBe([[0, 20]])
+            ->and($citationEvents[0]->citation->ranges->all())->toBe([['start' => 0, 'end' => 20]])
             ->and($citationEvents[1]->citation->url)->toBe('https://example.com/spain');
     });
 
-    test('streaming emits citation events from legacy citationMetadata', function () {
+    test('streaming reads grounding metadata from a chunk before the final one', function (): void {
+        $groundedChunk = $this->geminiChunk([['text' => ' Euro 2024.']]);
+        $groundedChunk['candidates'][0]['groundingMetadata'] = [
+            'groundingChunks' => [
+                ['web' => ['uri' => 'https://example.com/euro', 'title' => 'Euro 2024']],
+            ],
+            'groundingSupports' => [
+                ['segment' => ['startIndex' => 0, 'endIndex' => 20], 'groundingChunkIndices' => [0]],
+            ],
+        ];
+
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response(
+                body: $this->ssePayload([
+                    $this->geminiChunk([['text' => 'Spain won']]),
+                    $groundedChunk,
+                    $this->geminiChunkWithUsage([['text' => '']], 10, 5, finishReason: 'STOP'),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $events = $this->collectStreamEvents();
+
+        $citationEvents = array_values(array_filter($events, fn ($event): bool => $event instanceof CitationEvent));
+
+        expect($citationEvents)->toHaveCount(1)
+            ->and($citationEvents[0]->citation->url)->toBe('https://example.com/euro')
+            ->and($citationEvents[0]->citation->ranges->all())->toBe([['start' => 0, 'end' => 20]]);
+    });
+
+    test('streaming converts grounding byte offsets into character offsets', function (): void {
+        $finalChunk = $this->geminiChunkWithUsage([['text' => ' won.']], 10, 5, finishReason: 'STOP');
+        $finalChunk['candidates'][0]['groundingMetadata'] = [
+            'groundingChunks' => [
+                ['web' => ['uri' => 'https://example.com/cafe', 'title' => 'Café']],
+            ],
+            'groundingSupports' => [
+                ['segment' => ['startIndex' => 0, 'endIndex' => 10], 'groundingChunkIndices' => [0]],
+            ],
+        ];
+
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response(
+                body: $this->ssePayload([
+                    $this->geminiChunk([['text' => 'Café Ärger']]),
+                    $finalChunk,
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $events = $this->collectStreamEvents();
+
+        $citationEvents = array_values(array_filter($events, fn ($event): bool => $event instanceof CitationEvent));
+
+        expect($citationEvents[0]->citation->ranges->all())->toBe([['start' => 0, 'end' => 8]])
+            ->and($citationEvents[0]->citation->endIndex)->toBe(8);
+    });
+
+    test('streaming emits citation events from legacy citationMetadata', function (): void {
         $finalChunk = $this->geminiChunkWithUsage([['text' => 'Some content.']], 10, 5, finishReason: 'STOP');
         $finalChunk['candidates'][0]['citationMetadata'] = [
             'citationSources' => [
@@ -317,14 +378,13 @@ describe('citations', function () {
 
         $events = $this->collectStreamEvents();
 
-        $citationEvents = array_values(array_filter($events, fn ($e) => $e instanceof CitationEvent));
+        $citationEvents = array_values(array_filter($events, fn ($event): bool => $event instanceof CitationEvent));
 
         expect($citationEvents)->toHaveCount(1)
-            ->and($citationEvents[0]->citation->url)->toBe('https://example.com/source')
-            ->and($citationEvents[0]->citation->isByteOffset)->toBeFalse();
+            ->and($citationEvents[0]->citation->url)->toBe('https://example.com/source');
     });
 
-    test('citation events appear after text events and before stream end', function () {
+    test('citation events appear after text events and before stream end', function (): void {
         $finalChunk = $this->geminiChunkWithUsage([['text' => 'Answer.']], 10, 5, finishReason: 'STOP');
         $finalChunk['candidates'][0]['groundingMetadata'] = [
             'groundingChunks' => [
@@ -344,11 +404,11 @@ describe('citations', function () {
         ]);
 
         $events = $this->collectStreamEvents();
-        $types = array_map(fn ($e) => get_class($e), $events);
+        $types = array_map(fn ($event): string => $event::class, $events);
 
-        $textEndPos = array_search(\Laravel\Ai\Streaming\Events\TextEnd::class, $types);
+        $textEndPos = array_search(TextEnd::class, $types);
         $citationPos = array_search(CitationEvent::class, $types);
-        $streamEndPos = array_search(\Laravel\Ai\Streaming\Events\StreamEnd::class, $types);
+        $streamEndPos = array_search(StreamEnd::class, $types);
 
         expect($citationPos)->toBeGreaterThan($textEndPos)
             ->and($citationPos)->toBeLessThan($streamEndPos);

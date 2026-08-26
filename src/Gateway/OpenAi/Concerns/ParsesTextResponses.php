@@ -88,7 +88,7 @@ trait ParsesTextResponses
     }
 
     /**
-     * Extract citations from the output array, merging multiple text ranges per unique URL.
+     * Extract citations from the output array.
      */
     protected function extractCitations(array $output): Collection
     {
@@ -106,7 +106,7 @@ trait ParsesTextResponses
                     }
 
                     $url = $annotation['url'];
-                    $existing = $citations->first(fn (UrlCitation $c) => $c->url === $url);
+                    $existing = $citations->first(fn (UrlCitation $citation): bool => $citation->url === $url);
 
                     if ($existing === null) {
                         $existing = new UrlCitation($url, $annotation['title'] ?? null);
