@@ -10,7 +10,6 @@ use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\QueuedAgentPrompt;
 use Tests\Fixtures\Agents\AssistantAgent;
-use Tests\Fixtures\Agents\ConversationalAgent;
 
 function agentInput(?UserMessage $message = null, ?Decisions $decisions = null): AgentInput
 {
@@ -113,10 +112,6 @@ test('ad-hoc message history may be given as UI message arrays', function () {
     AssistantAgent::assertPrompted(fn (AgentPrompt $prompt): bool => count($prompt->messages) === 1
         && $prompt->messages[0]->content === 'Hello');
 });
-
-test('ad-hoc message history may not be combined with a conversational agent', function () {
-    (new ConversationalAgent)->withMessages([new UserMessage('Hello')]);
-})->throws(LogicException::class);
 
 test('ad-hoc message history does not leak into a later prompt', function () {
     AssistantAgent::fake(['First.', 'Second.']);

@@ -18,7 +18,6 @@ use Laravel\Ai\Attributes\UseCheapestModel;
 use Laravel\Ai\Attributes\UseSmartestModel;
 use Laravel\Ai\Attributes\WithoutBroadcasting;
 use Laravel\Ai\Contracts\AgentInput;
-use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Enums\Lab;
@@ -39,7 +38,6 @@ use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Vercel\Vercel;
-use LogicException;
 use ReflectionClass;
 use RuntimeException;
 
@@ -277,10 +275,6 @@ trait Promptable
      */
     public function withMessages(iterable $messages): static
     {
-        if ($this instanceof Conversational) {
-            throw new LogicException('Ad-hoc message history may not be combined with a conversational agent.');
-        }
-
         $this->adHocMessages = Collection::make($messages)
             ->flatMap(fn ($message) => is_array($message) && isset($message['parts'])
                 ? Vercel::fromUiMessages([$message])
