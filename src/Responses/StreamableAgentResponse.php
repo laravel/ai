@@ -133,7 +133,7 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     /**
      * Stream the response using the Agent User Interaction protocol.
      */
-    public function usingAgUIprotocol(?string $threadId = null, ?string $runId = null): self
+    public function usingAgentUserInteractionProtocol(?string $threadId = null, ?string $runId = null): self
     {
         return $this->usingProtocol(new AgentUserInteractionProtocol($threadId, $runId));
     }
