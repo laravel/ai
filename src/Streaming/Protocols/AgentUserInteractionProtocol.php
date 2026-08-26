@@ -32,7 +32,7 @@ use function Laravel\Ai\ulid;
  *
  * See: https://docs.ag-ui.com/concepts/events
  */
-class AgUiProtocol extends StreamProtocol
+class AgentUserInteractionProtocol extends StreamProtocol
 {
     protected int $step = 0;
 
