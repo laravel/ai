@@ -2,7 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use Laravel\Ai\AgUi\AgUi;
+use Laravel\Ai\AgentUserInteraction\AgentUserInteraction;
 use Laravel\Ai\Models\Conversation;
 use Workbench\App\Agents\Assistant;
 use Workbench\App\Models\User;
@@ -41,7 +41,7 @@ Route::post('/chat/message', function (Request $request) {
 });
 
 Route::post('/ag-ui', function (Request $request) {
-    $chat = AgUi::chat($request);
+    $chat = AgentUserInteraction::chat($request);
 
     $user = User::firstOrCreate(
         ['email' => 'demo@workbench.test'],
@@ -65,7 +65,7 @@ Route::get('/ag-ui/{conversation}', function (Conversation $conversation) {
 
     return response()->json([
         'threadId' => $conversation->id,
-        'messages' => AgUi::toMessages($messages),
-        'interrupts' => AgUi::toInterrupts($messages),
+        'messages' => AgentUserInteraction::toMessages($messages),
+        'interrupts' => AgentUserInteraction::toInterrupts($messages),
     ]);
 });

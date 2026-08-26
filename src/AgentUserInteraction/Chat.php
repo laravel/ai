@@ -1,6 +1,6 @@
 <?php
 
-namespace Laravel\Ai\AgUi;
+namespace Laravel\Ai\AgentUserInteraction;
 
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Contracts\AgentInput;
@@ -22,7 +22,7 @@ class Chat implements AgentInput
     {
         $message = $this->trailingUserMessage();
 
-        return $message === null ? null : AgUi::fromMessage($message);
+        return $message === null ? null : AgentUserInteraction::fromMessage($message);
     }
 
     /**
@@ -30,7 +30,7 @@ class Chat implements AgentInput
      */
     public function decisions(): ?Decisions
     {
-        return AgUi::decisionsFrom($this->array('resume'));
+        return AgentUserInteraction::decisionsFrom($this->array('resume'));
     }
 
     /**
@@ -42,7 +42,7 @@ class Chat implements AgentInput
     {
         $messages = $this->messages();
 
-        return AgUi::fromMessages($this->trailingUserMessage() === null
+        return AgentUserInteraction::fromMessages($this->trailingUserMessage() === null
             ? $messages
             : array_slice($messages, 0, -1));
     }

@@ -1,6 +1,6 @@
 <?php
 
-namespace Laravel\Ai\AgUi;
+namespace Laravel\Ai\AgentUserInteraction;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -35,7 +35,7 @@ use Laravel\Ai\Streaming\Protocols\AgUiProtocol;
  *
  * See: https://docs.ag-ui.com/concepts/messages
  */
-class AgUi
+class AgentUserInteraction
 {
     /**
      * Create a chat instance from a RunAgentInput request or its array representation.
