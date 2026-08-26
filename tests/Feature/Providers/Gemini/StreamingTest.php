@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Responses\Data\FinishReason;
+use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
@@ -16,6 +17,78 @@ use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 
 describe('text streaming', function (): void {
+    test('streaming emits citation events for grounding metadata', function (): void {
+        $finalChunk = [
+            'candidates' => [[
+                'content' => ['parts' => [['text' => '']], 'role' => 'model'],
+                'finishReason' => 'STOP',
+                'groundingMetadata' => [
+                    'groundingChunks' => [
+                        ['web' => ['uri' => 'https://example.com/euro', 'title' => 'Euro 2024']],
+                        ['web' => ['uri' => 'https://example.com/spain', 'title' => 'Spain Wins']],
+                    ],
+                    'groundingSupports' => [
+                        ['segment' => ['startIndex' => 0, 'endIndex' => 20, 'text' => 'Spain won Euro 2024.'], 'groundingChunkIndices' => [0, 1]],
+                    ],
+                ],
+            ]],
+            'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5, 'totalTokenCount' => 15],
+            'modelVersion' => 'gemini-3.7-flash',
+        ];
+
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response(
+                body: $this->ssePayload([
+                    $this->geminiChunk([['text' => 'Spain won Euro 2024.']]),
+                    $finalChunk,
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $citations = array_values(array_filter($this->collectStreamEvents(), fn ($e): bool => $e instanceof CitationEvent));
+
+        expect($citations)->toHaveCount(2)
+            ->and($citations[0]->citation->url)->toBe('https://example.com/euro')
+            ->and($citations[1]->citation->url)->toBe('https://example.com/spain');
+    });
+
+    test('streaming emits citation events when grounding metadata is followed by a candidate-less chunk', function (): void {
+        $groundedChunk = [
+            'candidates' => [[
+                'content' => ['parts' => [['text' => 'Spain won Euro 2024.']], 'role' => 'model'],
+                'finishReason' => 'STOP',
+                'groundingMetadata' => [
+                    'groundingChunks' => [
+                        ['web' => ['uri' => 'https://example.com/euro', 'title' => 'Euro 2024']],
+                    ],
+                    'groundingSupports' => [
+                        ['segment' => ['startIndex' => 0, 'endIndex' => 20, 'text' => 'Spain won Euro 2024.'], 'groundingChunkIndices' => [0]],
+                    ],
+                ],
+            ]],
+        ];
+
+        $usageOnlyChunk = [
+            'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5, 'totalTokenCount' => 15],
+            'modelVersion' => 'gemini-3.7-flash',
+        ];
+
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response(
+                body: $this->ssePayload([$groundedChunk, $usageOnlyChunk]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $citations = array_values(array_filter($this->collectStreamEvents(), fn ($e): bool => $e instanceof CitationEvent));
+
+        expect($citations)->toHaveCount(1)
+            ->and($citations[0]->citation->url)->toBe('https://example.com/euro');
+    });
+
     test('streaming emits text events', function (): void {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::response(

@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeAgent;
 use Tests\Fixtures\Agents\AttributeToolChoiceAgent;
+use Tests\Fixtures\Agents\NestedStructuredAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
 use Tests\Fixtures\Agents\ToolChoiceAgent;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
@@ -149,6 +150,19 @@ test('structured output includes json schema text format', function (): void {
             && isset($format['name'])
             && isset($format['schema'])
             && $format['strict'] === true;
+    });
+});
+
+test('structured output without Strict attribute sends strict false in text format', function (): void {
+    Http::fake(['*' => fakeXaiRequestMappingResponse('{"elements": []}')]);
+
+    (new NestedStructuredAgent)->prompt('List elements.', provider: 'xai');
+
+    Http::assertSent(function (Request $request): bool {
+        $format = data_get(json_decode($request->body(), true), 'text.format');
+
+        return $format['type'] === 'json_schema'
+            && $format['strict'] === false;
     });
 });
 

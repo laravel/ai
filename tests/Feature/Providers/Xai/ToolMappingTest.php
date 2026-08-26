@@ -9,6 +9,7 @@ use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 use Tests\Fixtures\Tools\NamedTool;
+use Tests\Fixtures\Tools\NonStrictTool;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
 
 use function Laravel\Ai\agent;
@@ -37,6 +38,23 @@ test('tool with parameters includes correct schema', function (): void {
             && in_array('min', $tool['parameters']['required'])
             && in_array('max', $tool['parameters']['required'])
             && $tool['parameters']['additionalProperties'] === false;
+    });
+});
+
+test('tool without Strict attribute sends strict false', function (): void {
+    Http::fake([
+        '*' => fakeXaiToolMappingResponse('ok'),
+    ]);
+
+    agent(tools: [new NonStrictTool])->prompt('Hi', provider: 'xai');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'function');
+
+        return $tool['strict'] === false
+            && $tool['parameters']['required'] === ['query']
+            && array_key_exists('limit', $tool['parameters']['properties']);
     });
 });
 

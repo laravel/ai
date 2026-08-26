@@ -119,6 +119,18 @@ test('individual caching can be enabled globally via config', function (): void 
     expect(Http::recorded())->toHaveCount(1);
 });
 
+test('individual caching is enabled when the config value is missing', function (): void {
+    config(['ai.caching.embeddings' => [
+        'cache' => false,
+        'store' => 'array',
+    ]]);
+
+    Embeddings::for(['a', 'b'])->cache(3600)->generate(provider: 'cohere', model: 'embed-v4.0');
+    Embeddings::for(['b'])->cache(3600)->generate(provider: 'cohere', model: 'embed-v4.0');
+
+    expect(Http::recorded())->toHaveCount(1);
+});
+
 test('fully individually cached requests are served in any input order without a provider call', function (): void {
     Embeddings::for(['a', 'b'])->cache(3600, individually: true)->generate(provider: 'cohere', model: 'embed-v4.0');
 

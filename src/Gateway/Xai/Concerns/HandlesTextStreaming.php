@@ -9,6 +9,7 @@ use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ProviderToolEvent;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
@@ -40,6 +41,7 @@ trait HandlesTextStreaming
         $toolCalls = [];
         $pendingToolCalls = [];
         $reasoningItems = [];
+        $lastTextMessageId = null;
         $usage = null;
         $responseData = [];
 
@@ -106,6 +108,7 @@ trait HandlesTextStreaming
                     time(),
                 ))->withInvocationId($invocationId);
 
+                $lastTextMessageId = $messageId;
                 $textStartEmitted = false;
                 $messageId = $this->generateEventId();
 
@@ -278,6 +281,15 @@ trait HandlesTextStreaming
                     $responseUsage['input_tokens_details']['cached_tokens'] ?? 0,
                     $responseUsage['output_tokens_details']['reasoning_tokens'] ?? 0,
                 );
+
+                foreach ($this->extractCitations($response['output'] ?? []) as $citation) {
+                    yield (new CitationEvent(
+                        $this->generateEventId(),
+                        $lastTextMessageId ?? $messageId,
+                        $citation,
+                        time(),
+                    ))->withInvocationId($invocationId);
+                }
             }
         }
 

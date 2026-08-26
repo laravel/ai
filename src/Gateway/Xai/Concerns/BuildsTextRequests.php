@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\Xai\Concerns;
 
 use Illuminate\Support\Arr;
+use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\ToolResultMessage;
@@ -90,7 +91,7 @@ trait BuildsTextRequests
         }
 
         if (filled($schema)) {
-            $body['text'] = $this->buildSchemaFormat($schema);
+            $body['text'] = $this->buildSchemaFormat($schema, Strict::isAppliedTo($options?->agent));
         }
 
         if (! is_null($options?->maxTokens)) {
@@ -152,9 +153,9 @@ trait BuildsTextRequests
     /**
      * Build the text format options for structured output.
      */
-    protected function buildSchemaFormat(array $schema): array
+    protected function buildSchemaFormat(array $schema, bool $strict): array
     {
-        $objectSchema = new ObjectSchema($schema);
+        $objectSchema = new ObjectSchema($schema, strict: $strict);
 
         $schemaArray = $objectSchema->toSchema();
 
@@ -163,7 +164,7 @@ trait BuildsTextRequests
                 'type' => 'json_schema',
                 'name' => $schemaArray['name'] ?? 'schema_definition',
                 'schema' => Arr::except($schemaArray, ['name']),
-                'strict' => true,
+                'strict' => $strict,
             ],
         ];
     }

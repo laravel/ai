@@ -8,6 +8,7 @@ use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
@@ -42,6 +43,7 @@ trait HandlesTextStreaming
         $modelParts = [];
         $usage = null;
         $data = [];
+        $citationData = [];
 
         foreach ($this->parseServerSentEvents($streamBody) as $data) {
             if (isset($data['error'])) {
@@ -69,6 +71,11 @@ trait HandlesTextStreaming
 
             $candidate = $data['candidates'][0] ?? [];
             $parts = $candidate['content']['parts'] ?? [];
+
+            // Citation metadata may arrive on any chunk, not necessarily the last...
+            if (isset($candidate['groundingMetadata']) || isset($candidate['citationMetadata'])) {
+                $citationData = $data;
+            }
 
             foreach ($parts as $part) {
                 if (isset($part['text']) && $this->isThinkingPart($part)) {
@@ -183,6 +190,16 @@ trait HandlesTextStreaming
                     time(),
                 ))->withInvocationId($invocationId);
             }
+        }
+
+        // Emit citations from the last chunk that carried citation metadata...
+        foreach ($this->extractCitations($citationData) as $citation) {
+            yield (new CitationEvent(
+                $this->generateEventId(),
+                $messageId,
+                $citation,
+                time(),
+            ))->withInvocationId($invocationId);
         }
 
         return new StepResponse(

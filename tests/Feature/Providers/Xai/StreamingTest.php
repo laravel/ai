@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Responses\Data\FinishReason;
+use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
@@ -43,6 +44,36 @@ test('streaming emits text events', function (): void {
         ->and($events[3])->toBeInstanceOf(TextDelta::class)->delta->toBe(' world')
         ->and($events[4])->toBeInstanceOf(TextEnd::class)
         ->and($events[5])->toBeInstanceOf(StreamEnd::class);
+});
+
+test('streaming emits citation events from the completed response', function (): void {
+    Http::fake([
+        '*' => Http::response(
+            body: $this->ssePayload([
+                ['type' => 'response.created', 'response' => ['id' => 'resp_123', 'model' => 'grok-4-1-fast-reasoning']],
+                ['type' => 'response.output_text.delta', 'delta' => 'Here are sources'],
+                ['type' => 'response.output_text.done'],
+                ['type' => 'response.completed', 'response' => ['id' => 'resp_123', 'status' => 'completed', 'output' => [['type' => 'message', 'status' => 'completed', 'role' => 'assistant', 'content' => [['type' => 'output_text', 'text' => 'Here are sources', 'annotations' => [
+                    ['type' => 'url_citation', 'url' => 'https://example.com/one', 'title' => 'Example One', 'start_index' => 0, 'end_index' => 10],
+                    ['type' => 'url_citation', 'url' => 'https://example.com/two', 'title' => 'Example Two', 'start_index' => 11, 'end_index' => 25],
+                ]]]]], 'usage' => ['input_tokens' => 10, 'output_tokens' => 5, 'input_tokens_details' => ['cached_tokens' => 0], 'output_tokens_details' => ['reasoning_tokens' => 0]]]],
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents();
+    $textStart = collect($events)->first(fn ($event): bool => $event instanceof TextStart);
+    $citations = array_values(array_filter($events, fn ($event): bool => $event instanceof CitationEvent));
+
+    expect($citations)->toHaveCount(2)
+        ->and($citations[0]->messageId)->toBe($textStart->messageId)
+        ->and($citations[1]->messageId)->toBe($textStart->messageId)
+        ->and($citations[0]->citation->url)->toBe('https://example.com/one')
+        ->and($citations[0]->citation->title)->toBe('Example One')
+        ->and($citations[0]->citation->startIndex)->toBe(0)
+        ->and($citations[1]->citation->url)->toBe('https://example.com/two');
 });
 
 test('streaming starts a new text part after each text end in the same step', function (): void {

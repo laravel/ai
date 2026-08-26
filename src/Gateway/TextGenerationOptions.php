@@ -3,6 +3,8 @@
 namespace Laravel\Ai\Gateway;
 
 use Illuminate\Support\Arr;
+use Laravel\Ai\Attributes\CacheInstructions;
+use Laravel\Ai\Attributes\CacheToolDefinitions;
 use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Attributes\MaxTokens;
 use Laravel\Ai\Attributes\Temperature;
@@ -22,6 +24,8 @@ class TextGenerationOptions
         public readonly ?Agent $agent = null,
         public readonly ?float $topP = null,
         public readonly ?ToolChoice $toolChoice = null,
+        public readonly ?CacheInstructions $cacheInstructions = null,
+        public readonly ?CacheToolDefinitions $cacheToolDefinitions = null,
     ) {
         //
     }
@@ -61,6 +65,8 @@ class TextGenerationOptions
             temperature: $this->temperature,
             agent: $this->agent,
             topP: $this->topP,
+            cacheInstructions: $this->cacheInstructions,
+            cacheToolDefinitions: $this->cacheToolDefinitions,
         );
     }
 
@@ -78,6 +84,8 @@ class TextGenerationOptions
             agent: $agent,
             topP: self::resolve($agent, $reflection, 'topP', TopP::class),
             toolChoice: self::resolveToolChoice($agent, $reflection),
+            cacheInstructions: self::resolveAttribute($reflection, CacheInstructions::class),
+            cacheToolDefinitions: self::resolveAttribute($reflection, CacheToolDefinitions::class),
         );
     }
 
@@ -125,5 +133,21 @@ class TextGenerationOptions
         $attributes = $reflection->getAttributes($attribute);
 
         return $attributes === [] ? null : $attributes[0]->newInstance()->value;
+    }
+
+    /**
+     * Resolve an attribute from the agent class.
+     *
+     * @template T of object
+     *
+     * @param  ReflectionClass<object>  $reflection
+     * @param  class-string<T>  $attribute
+     * @return T|null
+     */
+    private static function resolveAttribute(ReflectionClass $reflection, string $attribute): ?object
+    {
+        $attributes = $reflection->getAttributes($attribute);
+
+        return $attributes === [] ? null : $attributes[0]->newInstance();
     }
 }

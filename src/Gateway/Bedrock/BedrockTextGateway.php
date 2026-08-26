@@ -7,6 +7,9 @@ use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
+use Laravel\Ai\Attributes\CacheInstructions;
+use Laravel\Ai\Attributes\CacheToolDefinitions;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
@@ -642,6 +645,8 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             'messages' => $conversationMessages,
         ];
 
+        $providerOptions = $options?->providerOptions(Lab::Bedrock) ?? [];
+
         if ($instructions) {
             $parameters['system'] = [['text' => $instructions]];
         }
@@ -658,13 +663,39 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             $parameters['inferenceConfig'] = $inferenceConfig;
         }
 
-        $providerOptions = $options?->providerOptions(Lab::Bedrock);
+        $parameters = array_merge($parameters, $providerOptions);
 
-        if (! empty($providerOptions)) {
-            return array_merge($parameters, $providerOptions);
+        $this->ensureValidPromptCacheOrder($options);
+
+        if (isset($parameters['system']) && $options?->cacheInstructions instanceof CacheInstructions) {
+            $parameters['system'][] = $this->cachePoint($options->cacheInstructions->ttl);
+        }
+
+        if (isset($parameters['toolConfig']['tools']) && $options?->cacheToolDefinitions instanceof CacheToolDefinitions) {
+            $parameters['toolConfig']['tools'][] = $this->cachePoint($options->cacheToolDefinitions->ttl);
         }
 
         return $parameters;
+    }
+
+    /**
+     * Ensure longer-lived cache points precede shorter-lived cache points.
+     */
+    protected function ensureValidPromptCacheOrder(?TextGenerationOptions $options): void
+    {
+        if ($options?->cacheInstructions?->ttl === '1h'
+            && $options->cacheToolDefinitions instanceof CacheToolDefinitions
+            && $options->cacheToolDefinitions->ttl !== '1h') {
+            throw new InvalidArgumentException('A one-hour instructions cache requires the tool definitions cache to also use a one-hour TTL.');
+        }
+    }
+
+    /**
+     * Build a Bedrock cache point for the requested TTL.
+     */
+    protected function cachePoint(?string $ttl): array
+    {
+        return ['cachePoint' => Arr::whereNotNull(['type' => 'default', 'ttl' => $ttl])];
     }
 
     /**

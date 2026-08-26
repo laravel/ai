@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeAgent;
 use Tests\Fixtures\Agents\AttributeToolChoiceAgent;
+use Tests\Fixtures\Agents\NestedStructuredAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
 use Tests\Fixtures\Agents\ToolChoiceAgent;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
@@ -147,6 +148,19 @@ test('structured output includes json schema response format', function (): void
             && isset($format['json_schema']['name'])
             && isset($format['json_schema']['schema'])
             && $format['json_schema']['strict'] === true;
+    });
+});
+
+test('structured output without Strict attribute sends strict false in response format', function (): void {
+    Http::fake(['*' => fakeGroqResponse('{"elements": []}')]);
+
+    (new NestedStructuredAgent)->prompt('List elements.', provider: 'groq');
+
+    Http::assertSent(function (Request $request): bool {
+        $format = data_get(json_decode($request->body(), true), 'response_format');
+
+        return $format['type'] === 'json_schema'
+            && $format['json_schema']['strict'] === false;
     });
 });
 
