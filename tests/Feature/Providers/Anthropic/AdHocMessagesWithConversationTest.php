@@ -11,20 +11,21 @@ beforeEach(function () {
     Config::set('ai.conversations.generate_title', false);
 });
 
-function conversationOwner(): object
-{
-    return new class
-    {
-        public int $id = 7;
-    };
-}
-
 function adHocSeed(): array
 {
     return [
         new UserMessage('Seed question'),
         new AssistantMessage('Seed answer'),
     ];
+}
+
+function storedConversationMessages(): array
+{
+    return DB::table('agent_conversation_messages')
+        ->orderBy('id')
+        ->get(['role', 'content'])
+        ->map(fn (object $message): array => [$message->role, $message->content])
+        ->all();
 }
 
 function anthropicMessageTexts(): array
@@ -41,7 +42,7 @@ test('ad-hoc messages are sent ahead of the prompt but never stored in the conve
     Http::fake(['api.anthropic.com/*' => $this->fakeTextResponse('Laravel is a framework.')]);
 
     (new RememberingConversationalAgent)
-        ->forUser(conversationOwner())
+        ->forUser((object) ['id' => 7])
         ->withMessages(adHocSeed())
         ->prompt('What is Laravel?', provider: 'anthropic');
 
@@ -51,20 +52,22 @@ test('ad-hoc messages are sent ahead of the prompt but never stored in the conve
         ['user', 'What is Laravel?'],
     ]);
 
-    expect(DB::table('agent_conversation_messages')->orderBy('created_at')->pluck('content', 'role')->all())
-        ->toBe(['user' => 'What is Laravel?', 'assistant' => 'Laravel is a framework.']);
+    expect(storedConversationMessages())->toBe([
+        ['user', 'What is Laravel?'],
+        ['assistant', 'Laravel is a framework.'],
+    ]);
 });
 
 test('a replayed seed precedes stored history on a continued conversation and is still not stored', function () {
     Http::fake(['api.anthropic.com/*' => $this->fakeTextResponse('Answer.')]);
 
     $first = (new RememberingConversationalAgent)
-        ->forUser(conversationOwner())
+        ->forUser((object) ['id' => 7])
         ->withMessages(adHocSeed())
         ->prompt('First prompt', provider: 'anthropic');
 
     (new RememberingConversationalAgent)
-        ->continue($first->conversationId, conversationOwner())
+        ->continue($first->conversationId, (object) ['id' => 7])
         ->withMessages(adHocSeed())
         ->prompt('Second prompt', provider: 'anthropic');
 
@@ -76,8 +79,12 @@ test('a replayed seed precedes stored history on a continued conversation and is
         ['user', 'Second prompt'],
     ]);
 
-    expect(DB::table('agent_conversation_messages')->pluck('content')->all())
-        ->toBe(['First prompt', 'Answer.', 'Second prompt', 'Answer.']);
+    expect(storedConversationMessages())->toBe([
+        ['user', 'First prompt'],
+        ['assistant', 'Answer.'],
+        ['user', 'Second prompt'],
+        ['assistant', 'Answer.'],
+    ]);
 });
 
 test('ad-hoc messages are sent ahead of the prompt but never stored when streaming', function () {
@@ -94,7 +101,7 @@ test('ad-hoc messages are sent ahead of the prompt but never stored when streami
 
     iterator_to_array(
         (new RememberingConversationalAgent)
-            ->forUser(conversationOwner())
+            ->forUser((object) ['id' => 7])
             ->withMessages(adHocSeed())
             ->stream('What is Laravel?', provider: 'anthropic')
     );
@@ -105,6 +112,8 @@ test('ad-hoc messages are sent ahead of the prompt but never stored when streami
         ['user', 'What is Laravel?'],
     ]);
 
-    expect(DB::table('agent_conversation_messages')->orderBy('created_at')->pluck('content', 'role')->all())
-        ->toBe(['user' => 'What is Laravel?', 'assistant' => 'Streamed.']);
+    expect(storedConversationMessages())->toBe([
+        ['user', 'What is Laravel?'],
+        ['assistant', 'Streamed.'],
+    ]);
 });
