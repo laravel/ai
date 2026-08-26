@@ -28,7 +28,6 @@ use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Models\ConversationMessage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
-use Laravel\Ai\Streaming\Protocols\AgUiProtocol;
 
 /**
  * The Agent User Interaction (AG-UI) protocol's input side.
@@ -45,16 +44,6 @@ class AgentUserInteraction
     public static function chat(Request|array $input): Chat
     {
         return new Chat($input instanceof Request ? $input->all() : $input);
-    }
-
-    /**
-     * Create the stream protocol that reports a RunAgentInput request's identity.
-     *
-     * @param  Request|array<string, mixed>  $input
-     */
-    public static function protocol(Request|array $input): AgUiProtocol
-    {
-        return static::chat($input)->protocol();
     }
 
     /**
@@ -136,18 +125,36 @@ class AgentUserInteraction
                 continue;
             }
 
-            if (($entry['status'] ?? null) === 'cancelled') {
+            $status = $entry['status'] ?? null;
+
+            if ($status === 'cancelled') {
                 $decisions[$id] = Decision::reject();
 
                 continue;
             }
 
-            if (is_bool($approved = $entry['payload']['approved'] ?? null)) {
+            if ($status === 'resolved' && is_bool($approved = $entry['payload']['approved'] ?? null)) {
                 $decisions[$id] = $approved;
             }
         }
 
         return $decisions === [] ? null : Decisions::from($decisions);
+    }
+
+    /**
+     * Convert messages or conversation message models into state for hydrating an AG-UI client.
+     *
+     * @param  iterable<int, Message|ConversationMessage>  $messages
+     * @return array{messages: list<array<string, mixed>>, interrupts: list<array<string, mixed>>}
+     */
+    public static function toClientState(iterable $messages): array
+    {
+        $messages = is_array($messages) ? $messages : [...$messages];
+
+        return [
+            'messages' => static::toMessages($messages),
+            'interrupts' => static::toInterrupts($messages),
+        ];
     }
 
     /**
@@ -185,6 +192,18 @@ class AgentUserInteraction
 
             $toolCalls = static::hydratedToolCalls($message);
 
+            if ($message instanceof ConversationMessage) {
+                $toolCallIds = array_column($toolCalls, 'id');
+
+                [$ownResults, $priorResults] = (new Collection($message->tool_results ?? []))->partition(
+                    fn (array $toolResult) => in_array($toolResult['id'] ?? null, $toolCallIds, true)
+                );
+
+                foreach ($priorResults as $toolResult) {
+                    $result[] = static::toolMessageFrom($toolResult, $id);
+                }
+            }
+
             if (filled($message->content) || $toolCalls !== []) {
                 $result[] = [
                     'id' => $id,
@@ -198,7 +217,7 @@ class AgentUserInteraction
                 continue;
             }
 
-            foreach ($message->tool_results ?? [] as $toolResult) {
+            foreach ($ownResults as $toolResult) {
                 $result[] = static::toolMessageFrom($toolResult, $id);
             }
         }
@@ -369,6 +388,9 @@ class AgentUserInteraction
                 'name' => $call['name'],
                 'arguments' => static::json((object) ($call['arguments'] ?? [])),
             ],
+            ...(is_string($call['reasoning_encrypted_content'] ?? null)
+                ? ['encryptedValue' => $call['reasoning_encrypted_content']]
+                : []),
         ], $calls));
     }
 
@@ -426,6 +448,7 @@ class AgentUserInteraction
                 id: $call['id'],
                 name: $call['function']['name'],
                 arguments: static::arguments($call['function']['arguments'] ?? null),
+                reasoningEncryptedContent: is_string($call['encryptedValue'] ?? null) ? $call['encryptedValue'] : null,
             ))
             ->values();
     }
@@ -490,7 +513,13 @@ class AgentUserInteraction
         }
 
         $mime = $mime === null ? null : strtolower($mime);
-        $remote = ($source['type'] ?? null) === 'url';
+        $sourceType = $source['type'] ?? null;
+
+        if (! in_array($sourceType, ['url', 'data'], true) || ($sourceType === 'data' && blank($mime))) {
+            return null;
+        }
+
+        $remote = $sourceType === 'url';
 
         $file = match ($part['type']) {
             'image' => $remote ? new RemoteImage($value, $mime) : new Base64Image($value, $mime),

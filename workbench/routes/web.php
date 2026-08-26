@@ -65,7 +65,6 @@ Route::get('/ag-ui/{conversation}', function (Conversation $conversation) {
 
     return response()->json([
         'threadId' => $conversation->id,
-        'messages' => AgentUserInteraction::toMessages($messages),
-        'interrupts' => AgentUserInteraction::toInterrupts($messages),
+        ...AgentUserInteraction::toClientState($messages),
     ]);
 });

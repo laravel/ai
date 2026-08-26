@@ -20,6 +20,10 @@ class Chat implements AgentInput
      */
     public function message(): ?UserMessage
     {
+        if (array_key_exists('resume', $this->input)) {
+            return null;
+        }
+
         $message = $this->trailingUserMessage();
 
         return $message === null ? null : AgentUserInteraction::fromMessage($message);
@@ -52,7 +56,13 @@ class Chat implements AgentInput
      */
     public function protocol(): AgUiProtocol
     {
-        return new AgUiProtocol($this->threadId() ?: null, $this->runId() ?: null);
+        $threadId = $this->threadId();
+        $runId = $this->runId();
+
+        return new AgUiProtocol(
+            $threadId !== '' ? $threadId : null,
+            $runId !== '' ? $runId : null,
+        );
     }
 
     /**
@@ -60,7 +70,7 @@ class Chat implements AgentInput
      */
     public function threadId(): string
     {
-        return (string) ($this->input['threadId'] ?? '');
+        return $this->string('threadId');
     }
 
     /**
@@ -68,17 +78,7 @@ class Chat implements AgentInput
      */
     public function runId(): string
     {
-        return (string) ($this->input['runId'] ?? '');
-    }
-
-    /**
-     * Get the ID of the run this run branches from, if any.
-     */
-    public function parentRunId(): ?string
-    {
-        $parentRunId = $this->input['parentRunId'] ?? null;
-
-        return is_string($parentRunId) && filled($parentRunId) ? $parentRunId : null;
+        return $this->string('runId');
     }
 
     /**
@@ -86,49 +86,9 @@ class Chat implements AgentInput
      *
      * @return array<int, mixed>
      */
-    public function messages(): array
+    protected function messages(): array
     {
         return array_values($this->array('messages'));
-    }
-
-    /**
-     * Get the shared state the client sent with the run.
-     *
-     * @return array<string, mixed>
-     */
-    public function state(): array
-    {
-        return $this->array('state');
-    }
-
-    /**
-     * Get the client provided tools the run may call.
-     *
-     * @return array<int, mixed>
-     */
-    public function tools(): array
-    {
-        return array_values($this->array('tools'));
-    }
-
-    /**
-     * Get the context the client sent with the run.
-     *
-     * @return array<int, mixed>
-     */
-    public function context(): array
-    {
-        return array_values($this->array('context'));
-    }
-
-    /**
-     * Get the framework specific properties the client forwarded with the run.
-     *
-     * @return array<string, mixed>
-     */
-    public function forwardedProps(): array
-    {
-        return $this->array('forwardedProps');
     }
 
     /**
@@ -155,5 +115,15 @@ class Chat implements AgentInput
         $value = $this->input[$key] ?? [];
 
         return is_array($value) ? $value : [];
+    }
+
+    /**
+     * Get the given input key as a string.
+     */
+    protected function string(string $key): string
+    {
+        $value = $this->input[$key] ?? '';
+
+        return is_string($value) ? $value : '';
     }
 }

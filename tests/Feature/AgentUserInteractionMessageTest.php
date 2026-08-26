@@ -96,6 +96,8 @@ describe('creating messages from AG-UI messages', function () {
             ['type' => 'image', 'source' => ['type' => 'url', 'value' => ['https://example.com/a.png']]],
             ['type' => 'image', 'source' => ['type' => 'url', 'value' => 'https://example.com/b.png', 'mimeType' => ['image/png']]],
             ['type' => 'image', 'source' => 'https://example.com/c.png'],
+            ['type' => 'image', 'source' => ['type' => 'unknown', 'value' => base64_encode('fake-png'), 'mimeType' => 'image/png']],
+            ['type' => 'image', 'source' => ['type' => 'data', 'value' => base64_encode('fake-png')]],
             ['type' => 'image', 'source' => ['type' => 'url', 'value' => 'https://example.com/d.png', 'metadata' => ['filename' => 123]]],
         ]]);
 
@@ -105,7 +107,7 @@ describe('creating messages from AG-UI messages', function () {
 
     test('an assistant message keeps its text and tool calls', function () {
         $message = AgentUserInteraction::fromMessage(['id' => 'm2', 'role' => 'assistant', 'content' => 'Checking.', 'toolCalls' => [
-            ['id' => 'call-1', 'type' => 'function', 'function' => ['name' => 'getWeather', 'arguments' => '{"city":"Lisbon"}']],
+            ['id' => 'call-1', 'type' => 'function', 'function' => ['name' => 'getWeather', 'arguments' => '{"city":"Lisbon"}'], 'encryptedValue' => 'encrypted-reasoning'],
             ['id' => 'call-2', 'type' => 'function', 'function' => ['name' => 'broken']],
             ['type' => 'function', 'function' => ['name' => 'missingId', 'arguments' => '{}']],
         ]]);
@@ -115,6 +117,7 @@ describe('creating messages from AG-UI messages', function () {
             ->and($message->toolCalls)->toHaveCount(2)
             ->and($message->toolCalls[0]->name)->toBe('getWeather')
             ->and($message->toolCalls[0]->arguments)->toBe(['city' => 'Lisbon'])
+            ->and($message->toolCalls[0]->reasoningEncryptedContent)->toBe('encrypted-reasoning')
             ->and($message->toolCalls[1]->arguments)->toBe([]);
     });
 
@@ -194,25 +197,7 @@ describe('chat input from a RunAgentInput request', function () {
 
         expect($chat->message()->content)->toBe('Who made it?')
             ->and($chat->threadId())->toBe('thread-1')
-            ->and($chat->runId())->toBe('run-1')
-            ->and($chat->parentRunId())->toBeNull();
-    });
-
-    test('the remaining run input is preserved for future support', function () {
-        $chat = AgentUserInteraction::chat(runAgentInput([
-            'parentRunId' => 'run-0',
-            'state' => ['step' => 2],
-            'tools' => [['name' => 'confirm', 'description' => 'Confirm', 'parameters' => []]],
-            'context' => [['description' => 'locale', 'value' => 'pt-PT']],
-            'forwardedProps' => ['copilotkit' => ['version' => '1.0']],
-        ]));
-
-        expect($chat->parentRunId())->toBe('run-0')
-            ->and($chat->state())->toBe(['step' => 2])
-            ->and($chat->tools()[0]['name'])->toBe('confirm')
-            ->and($chat->context()[0]['value'])->toBe('pt-PT')
-            ->and($chat->forwardedProps())->toBe(['copilotkit' => ['version' => '1.0']])
-            ->and($chat->messages())->toHaveCount(3);
+            ->and($chat->runId())->toBe('run-1');
     });
 
     test('malformed run input is tolerated rather than rejected', function () {
@@ -241,10 +226,18 @@ describe('chat input from a RunAgentInput request', function () {
             ->and(end($events)['runId'])->toBe('run-1');
     });
 
-    test('the protocol may be created from the request directly', function () {
-        $protocol = AgentUserInteraction::protocol(Request::create('/agent', 'POST', runAgentInput()));
+    test('string zero protocol identities are preserved', function () {
+        $chat = AgentUserInteraction::chat(runAgentInput(['threadId' => '0', 'runId' => '0']));
 
-        expect($protocol)->toBeInstanceOf(AgUiProtocol::class);
+        expect($chat->threadId())->toBe('0')
+            ->and($chat->runId())->toBe('0');
+    });
+
+    test('malformed protocol identities are ignored', function () {
+        $chat = AgentUserInteraction::chat(runAgentInput(['threadId' => ['thread-1'], 'runId' => 1]));
+
+        expect($chat->threadId())->toBe('')
+            ->and($chat->runId())->toBe('');
     });
 
     test('a chat prompts an agent directly', function () {
@@ -322,11 +315,34 @@ describe('resuming an interrupted run', function () {
     test('malformed resume entries are skipped rather than rejected', function () {
         expect(AgentUserInteraction::decisionsFrom([['status' => 'cancelled']]))->toBeNull()
             ->and(AgentUserInteraction::decisionsFrom([['interruptId' => 'call-1', 'status' => 'resolved', 'payload' => ['approved' => 'yes']]]))->toBeNull()
-            ->and(AgentUserInteraction::chat(runAgentInput(['resume' => [['interruptId' => 'call-1', 'status' => 'ignored']]]))->decisions())->toBeNull();
+            ->and(AgentUserInteraction::decisionsFrom([['interruptId' => 'call-1', 'status' => 'ignored', 'payload' => ['approved' => true]]]))->toBeNull();
+    });
+
+    test('a malformed resume cannot become a new user prompt', function () {
+        $chat = AgentUserInteraction::chat(runAgentInput([
+            'resume' => [['interruptId' => 'call-1', 'status' => 'ignored', 'payload' => ['approved' => true]]],
+        ]));
+
+        expect($chat->decisions())->toBeNull()
+            ->and($chat->message())->toBeNull();
     });
 });
 
 describe('hydrating AG-UI from stored messages', function () {
+    test('client state contains messages and pending interrupts', function () {
+        $state = AgentUserInteraction::toClientState((function () {
+            yield new ConversationMessage([
+                'id' => 'msg-2',
+                'role' => 'assistant',
+                'tool_calls' => [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt']]],
+                'approval_state' => ['pending' => ['call-1' => 'Deletes a file.']],
+            ]);
+        })());
+
+        expect($state['messages'][0]['toolCalls'][0]['id'])->toBe('call-1')
+            ->and($state['interrupts'][0]['toolCallId'])->toBe('call-1');
+    });
+
     test('stored text messages become AG-UI messages', function () {
         $stored = [
             new ConversationMessage(['id' => 'msg-1', 'role' => 'user', 'content' => 'What is Laravel?']),
@@ -362,6 +378,28 @@ describe('hydrating AG-UI from stored messages', function () {
             ],
             ['id' => 'result-1', 'role' => 'tool', 'toolCallId' => 'call-1', 'content' => 'Sunny'],
         ]);
+    });
+
+    test('tool results from an earlier turn hydrate before the resumed response', function () {
+        $messages = AgentUserInteraction::toMessages([
+            new ConversationMessage([
+                'id' => 'msg-1',
+                'role' => 'assistant',
+                'tool_calls' => [['id' => 'call-1', 'name' => 'getWeather', 'arguments' => ['city' => 'Lisbon']]],
+            ]),
+            new ConversationMessage([
+                'id' => 'msg-2',
+                'role' => 'assistant',
+                'content' => 'It is sunny.',
+                'tool_results' => [['id' => 'call-1', 'name' => 'getWeather', 'arguments' => ['city' => 'Lisbon'], 'result' => 'Sunny']],
+            ]),
+        ]);
+
+        expect($messages)->sequence(
+            fn ($message) => $message->role->toBe('assistant'),
+            fn ($message) => $message->role->toBe('tool'),
+            fn ($message) => $message->role->toBe('assistant'),
+        );
     });
 
     test('a non string tool result is encoded as json', function () {
@@ -439,7 +477,7 @@ describe('hydrating AG-UI from stored messages', function () {
     test('message objects hydrate alongside conversation models', function () {
         $messages = AgentUserInteraction::toMessages([
             new UserMessage('Weather?'),
-            new AssistantMessage('', collect([new ToolCall('call-1', 'getWeather', ['city' => 'Lisbon'])])),
+            new AssistantMessage('', collect([new ToolCall('call-1', 'getWeather', ['city' => 'Lisbon'], reasoningEncryptedContent: 'encrypted-reasoning')])),
             new ToolResultMessage(collect([new ToolResult('call-1', 'getWeather', ['city' => 'Lisbon'], 'Sunny')])),
             new AssistantMessage('It is sunny.'),
             new Message('tool_result', 'ignored'),
@@ -449,6 +487,7 @@ describe('hydrating AG-UI from stored messages', function () {
             ->and($messages[0]['id'])->toBeString()->not->toBe('')
             ->and($messages[0]['content'])->toBe('Weather?')
             ->and($messages[1]['toolCalls'][0]['function'])->toBe(['name' => 'getWeather', 'arguments' => '{"city":"Lisbon"}'])
+            ->and($messages[1]['toolCalls'][0]['encryptedValue'])->toBe('encrypted-reasoning')
             ->and($messages[2]['role'])->toBe('tool')
             ->and($messages[2]['content'])->toBe('Sunny')
             ->and($messages[3]['content'])->toBe('It is sunny.');
