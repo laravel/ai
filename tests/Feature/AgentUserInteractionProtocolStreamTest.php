@@ -22,7 +22,7 @@ use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Laravel\Ai\Streaming\Events\ToolCall;
 use Laravel\Ai\Streaming\Events\ToolResult;
-use Laravel\Ai\Streaming\Protocols\AgUiProtocol;
+use Laravel\Ai\Streaming\Protocols\AgentUserInteractionProtocol;
 use Symfony\Component\HttpFoundation\Response;
 use Tests\Fixtures\Agents\MultiStepToolAgent;
 use Tests\Fixtures\Agents\RememberingApprovableAgent;
@@ -34,7 +34,7 @@ function agUiProtocolEvents(array|Closure $events, ?string $threadId = 'thread-1
     $stream = $events instanceof Closure ? $events : fn () => yield from $events;
 
     return agUiEvents((new StreamableAgentResponse('invocation-1', $stream, new Data\Meta('anthropic', 'claude-sonnet-4-6')))
-        ->usingAgUiProtocol($threadId, $runId)
+        ->usingAgUIprotocol($threadId, $runId)
         ->toResponse(request()));
 }
 
@@ -153,7 +153,7 @@ test('a multi step run combines the usage of every step', function () {
 
 test('the response is served as an unbuffered event stream', function () {
     $response = (new StreamableAgentResponse('invocation-1', fn () => yield from [], new Data\Meta('anthropic', 'claude-sonnet-4-6')))
-        ->usingProtocol(new AgUiProtocol)
+        ->usingProtocol(new AgentUserInteractionProtocol)
         ->toResponse(request());
 
     expect($response->headers->get('Content-Type'))->toBe('text/event-stream')
@@ -172,7 +172,7 @@ test('a first turn stream emits the thread id the conversation is stored under',
 
     $agent = (new RememberingAssistantAgent)->forUser($user);
 
-    $events = agUiEvents($agent->stream('Hello')->usingProtocol(new AgUiProtocol)->toResponse(request()));
+    $events = agUiEvents($agent->stream('Hello')->usingProtocol(new AgentUserInteractionProtocol)->toResponse(request()));
 
     expect($agent->currentConversation())->not->toBeNull()
         ->and($events[0]['threadId'])->toBe($agent->currentConversation())
@@ -189,7 +189,7 @@ test('an ownerless approval stream persists the thread id it emits', function ()
     ]);
 
     $agent = new RememberingApprovableAgent;
-    $events = agUiEvents($agent->stream('Generate a number')->usingProtocol(new AgUiProtocol)->toResponse(request()));
+    $events = agUiEvents($agent->stream('Generate a number')->usingProtocol(new AgentUserInteractionProtocol)->toResponse(request()));
 
     expect($events[0]['threadId'])->toBe($agent->currentConversation())
         ->and(end($events)['threadId'])->toBe($agent->currentConversation())
@@ -202,7 +202,7 @@ test('a run without an explicit identity falls back to the conversation and invo
         new StreamEnd('event-1', 'stop', new Usage, time()),
     ], new Data\Meta('anthropic', 'claude-sonnet-4-6')))
         ->withinConversation('conversation-1')
-        ->usingProtocol(new AgUiProtocol);
+        ->usingProtocol(new AgentUserInteractionProtocol);
 
     expect(agUiEvents($response->toResponse(request()))[0])->toBe([
         'type' => 'RUN_STARTED',
@@ -215,7 +215,7 @@ test('rendering the same response twice emits the same run', function () {
     $response = (new StreamableAgentResponse('invocation-1', fn () => yield from [
         new ToolResult('event-1', new Data\ToolResult('call-1', 'DeleteFile', ['path' => 'a.txt'], 'deleted'), true, null, time()),
         new StreamEnd('event-2', 'stop', new Usage, time()),
-    ], new Data\Meta('anthropic', 'claude-sonnet-4-6')))->usingProtocol(new AgUiProtocol);
+    ], new Data\Meta('anthropic', 'claude-sonnet-4-6')))->usingProtocol(new AgentUserInteractionProtocol);
 
     $render = fn (): array => agUiEvents($response->toResponse(request()));
 
@@ -529,7 +529,7 @@ test('the thread id adopts a conversation id surfaced after streaming begins', f
         yield new StreamEnd('event-1', 'stop', new Usage, time());
     }, new Data\Meta('anthropic', 'claude-sonnet-4-6'));
 
-    $events = agUiEvents($response->usingProtocol(new AgUiProtocol)->toResponse(request()));
+    $events = agUiEvents($response->usingProtocol(new AgentUserInteractionProtocol)->toResponse(request()));
 
     expect($events[0])->toBe([
         'type' => 'RUN_STARTED',
@@ -629,7 +629,7 @@ test('a faked multi step agent stream emits a well formed run', function () {
     ]);
 
     $response = (new MultiStepToolAgent)->stream('Generate a number')
-        ->usingProtocol(new AgUiProtocol('thread-1', 'run-1'))
+        ->usingProtocol(new AgentUserInteractionProtocol('thread-1', 'run-1'))
         ->toResponse(request());
 
     $types = collect(agUiEvents($response))->pluck('type');
