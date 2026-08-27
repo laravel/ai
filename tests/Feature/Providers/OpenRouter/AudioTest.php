@@ -77,6 +77,20 @@ test('audio request omits instructions when not provided', function (): void {
     Http::assertSent(fn (Request $request): bool => ! array_key_exists('instructions', json_decode($request->body(), true)));
 });
 
+test('audio request merges provider options when provided', function (): void {
+    Http::fake(['*' => fakeOpenRouterAudioResponse()]);
+
+    Audio::of('Hello')
+        ->withProviderOptions(['speed' => 1.25, 'response_format' => 'opus'])
+        ->generate(provider: 'openrouter', model: 'openai/gpt-4o-mini-tts-2025-12-15');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+
+        return $body['speed'] == 1.25 && $body['response_format'] === 'opus';
+    });
+});
+
 test('audio uses default model when none specified', function (): void {
     Http::fake(['*' => fakeOpenRouterAudioResponse()]);
 

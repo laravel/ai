@@ -10,6 +10,7 @@ use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Jobs\GenerateAudio;
+use Laravel\Ai\PendingResponses\Concerns\ResolvesProviderOptions;
 use Laravel\Ai\Prompts\QueuedAudioPrompt;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\AudioResponse;
@@ -18,6 +19,7 @@ use Laravel\Ai\Responses\QueuedAudioResponse;
 class PendingAudioGeneration
 {
     use Conditionable;
+    use ResolvesProviderOptions;
 
     protected string $voice = 'default-female';
 
@@ -101,9 +103,16 @@ class PendingAudioGeneration
 
             $model ??= $provider->defaultAudioModel();
 
+            $providerOptions = $this->resolveProviderOptions($provider);
+
             try {
                 return $provider->audio(
-                    $this->text, $this->voice, $this->instructions, $model, $this->timeout
+                    $this->text,
+                    $this->voice,
+                    $this->instructions,
+                    $model,
+                    $this->timeout,
+                    $providerOptions,
                 );
             } catch (FailoverableException $e) {
                 $lastException = $e;
@@ -131,6 +140,7 @@ class PendingAudioGeneration
                     $provider,
                     $model,
                     $this->timeout,
+                    is_array($this->providerOptions) ? $this->providerOptions : [],
                 )
             );
         }

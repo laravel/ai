@@ -68,6 +68,30 @@ test('audio request includes instructions when provided', function (): void {
     Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['instructions'] === 'Speak slowly');
 });
 
+test('audio request merges provider options when provided', function (): void {
+    Http::fake(['*' => fakeOpenAiAudioResponse()]);
+
+    Audio::of('Hello')
+        ->withProviderOptions(['speed' => 1.5, 'response_format' => 'wav'])
+        ->generate(provider: 'openai', model: 'gpt-4o-mini-tts');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+
+        return $body['speed'] == 1.5 && $body['response_format'] === 'wav';
+    });
+});
+
+test('audio response uses content-type header for mime type', function (): void {
+    Http::fake(['*' => Http::response('fake-audio-bytes', 200, ['Content-Type' => 'audio/wav'])]);
+
+    $response = Audio::of('Hello')
+        ->withProviderOptions(['response_format' => 'wav'])
+        ->generate(provider: 'openai', model: 'gpt-4o-mini-tts');
+
+    expect($response->mimeType())->toBe('audio/wav');
+});
+
 test('audio response is base64-encoded with audio/mpeg mime type', function (): void {
     Http::fake(['*' => fakeOpenAiAudioResponse()]);
 

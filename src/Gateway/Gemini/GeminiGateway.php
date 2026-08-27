@@ -200,6 +200,8 @@ class GeminiGateway implements Gateway, StepTextGateway
     /**
      * Generate audio from the given text.
      *
+     * @param  array<string, mixed>  $providerOptions
+     *
      * @throws RuntimeException if Gemini returns no audio data or invalid base64 audio.
      */
     public function generateAudio(
@@ -209,6 +211,7 @@ class GeminiGateway implements Gateway, StepTextGateway
         string $voice,
         ?string $instructions = null,
         int $timeout = 30,
+        array $providerOptions = [],
     ): AudioResponse {
         $response = $this->withErrorHandling(
             $provider->name(),

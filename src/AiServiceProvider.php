@@ -83,6 +83,7 @@ class AiServiceProvider extends ServiceProvider
             ?string $instructions = null,
             ?string $model = null,
             ?int $timeout = null,
+            array|Closure $providerOptions = [],
         ): AudioResponse {
             $request = Audio::of($this->value());
 
@@ -96,6 +97,10 @@ class AiServiceProvider extends ServiceProvider
 
             if (! is_null($timeout)) {
                 $request->timeout($timeout);
+            }
+
+            if (filled($providerOptions)) {
+                $request->withProviderOptions($providerOptions);
             }
 
             return $request->generate(provider: $provider, model: $model);

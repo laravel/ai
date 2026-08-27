@@ -112,6 +112,7 @@ test('stringable audio macro passes through options', function (): void {
         instructions: 'Speak slowly',
         model: 'custom-model',
         timeout: 45,
+        providerOptions: ['speed' => 1.5],
     );
 
     Audio::assertGenerated(fn (AudioPrompt $prompt): bool => $prompt->text === 'Hello world'
@@ -119,7 +120,8 @@ test('stringable audio macro passes through options', function (): void {
         && $prompt->voice === 'alloy'
         && $prompt->instructions === 'Speak slowly'
         && $prompt->model === 'custom-model'
-        && $prompt->timeout === 45);
+        && $prompt->timeout === 45
+        && $prompt->providerOptions === ['speed' => 1.5]);
 });
 
 test('audio can prevent stray generations', function (): void {
@@ -144,6 +146,15 @@ test('audio voice and instructions are recorded', function (): void {
     Audio::assertGenerated(fn (AudioPrompt $prompt): bool => $prompt->text === 'Hello world'
         && $prompt->voice === 'alloy'
         && $prompt->instructions === 'Speak slowly');
+});
+
+test('audio provider options are recorded', function (): void {
+    Audio::fake();
+
+    Audio::of('Hello world')->withProviderOptions(['speed' => 1.75, 'response_format' => 'aac'])->generate();
+
+    Audio::assertGenerated(fn (AudioPrompt $prompt): bool => $prompt->text === 'Hello world'
+        && $prompt->providerOptions === ['speed' => 1.75, 'response_format' => 'aac']);
 });
 
 test('audio is stored under a random name derived from its mime type', function (): void {
@@ -285,6 +296,15 @@ test('queued audio voice and instructions are recorded', function (): void {
     Audio::assertQueued(fn (QueuedAudioPrompt $prompt): bool => $prompt->text === 'Hello world'
         && $prompt->voice === 'default-male'
         && $prompt->instructions === 'Speak quickly');
+});
+
+test('queued audio provider options are recorded', function (): void {
+    Audio::fake();
+
+    Audio::of('Hello world')->withProviderOptions(['speed' => 1.25, 'response_format' => 'wav'])->queue();
+
+    Audio::assertQueued(fn (QueuedAudioPrompt $prompt): bool => $prompt->text === 'Hello world'
+        && $prompt->providerOptions === ['speed' => 1.25, 'response_format' => 'wav']);
 });
 
 test('queued audio timeout is recorded', function (): void {
