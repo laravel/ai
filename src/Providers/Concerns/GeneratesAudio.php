@@ -18,6 +18,8 @@ trait GeneratesAudio
         string $text,
         string $voice = 'default-female',
         ?string $instructions = null,
+        ?float $speed = null,
+        ?string $format = null,
         ?string $model = null,
         int $timeout = 30,
     ): AudioResponse {
@@ -25,7 +27,7 @@ trait GeneratesAudio
 
         $model ??= $this->defaultAudioModel();
 
-        $prompt = new AudioPrompt($text, $voice, $instructions, $this, $model, $timeout);
+        $prompt = new AudioPrompt($text, $voice, $instructions, $speed, $format, $this, $model, $timeout);
 
         if (Ai::audioIsFaked()) {
             Ai::recordAudioGeneration($prompt);
@@ -36,7 +38,7 @@ trait GeneratesAudio
         ));
 
         return tap($this->audioGateway()->generateAudio(
-            $this, $model, $prompt->text, $prompt->voice, $prompt->instructions, $timeout,
+            $this, $model, $prompt->text, $prompt->voice, $prompt->instructions, $prompt->speed, $prompt->format, $timeout,
         ), function (AudioResponse $response) use ($invocationId, $model, $prompt): void {
             $this->events->dispatch(new AudioGenerated(
                 $invocationId, $this, $model, $prompt, $response,

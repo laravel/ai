@@ -16,6 +16,8 @@ interface AudioGateway
         string $text,
         string $voice,
         ?string $instructions = null,
+        ?float $speed = null,
+        ?string $format = null,
         int $timeout = 30,
     ): AudioResponse;
 }

@@ -21,6 +21,7 @@ use Laravel\Ai\Files\StoredImage;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\Concerns\ResolvesAudioFilenames;
+use Laravel\Ai\Gateway\Concerns\ResolvesAudioMimeTypes;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
@@ -44,6 +45,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
     use HandlesFailoverErrors;
     use ParsesServerSentEvents;
     use ResolvesAudioFilenames;
+    use ResolvesAudioMimeTypes;
 
     public function __construct(protected Dispatcher $events)
     {
@@ -161,6 +163,8 @@ class OpenAiGateway implements Gateway, StepTextGateway
         string $text,
         string $voice,
         ?string $instructions = null,
+        ?float $speed = null,
+        ?string $format = null,
         int $timeout = 30,
     ): AudioResponse {
         $voice = match ($voice) {
@@ -169,14 +173,16 @@ class OpenAiGateway implements Gateway, StepTextGateway
             default => $voice,
         };
 
+        $format ??= 'mp3';
+
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post('audio/speech', array_filter([
                 'model' => $model,
                 'input' => $text,
                 'voice' => $voice,
-                'response_format' => 'mp3',
-                'speed' => 1.0,
+                'response_format' => $format,
+                'speed' => $speed ?? 1.0,
                 'instructions' => $instructions,
             ])),
         );
@@ -184,7 +190,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
         return new AudioResponse(
             base64_encode($response->body()),
             new Meta($provider->name(), $model),
-            'audio/mpeg',
+            $this->audioResponseMimeType($format),
         );
     }
 

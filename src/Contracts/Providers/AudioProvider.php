@@ -14,6 +14,8 @@ interface AudioProvider extends Provider
         string $text,
         string $voice = 'default-female',
         ?string $instructions = null,
+        ?float $speed = null,
+        ?string $format = null,
         ?string $model = null,
         int $timeout = 30,
     ): AudioResponse;

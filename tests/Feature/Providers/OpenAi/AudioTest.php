@@ -68,6 +68,37 @@ test('audio request includes instructions when provided', function (): void {
     Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['instructions'] === 'Speak slowly');
 });
 
+test('audio request includes speed when provided', function (): void {
+    Http::fake(['*' => fakeOpenAiAudioResponse()]);
+
+    Audio::of('Hello')->speed(1.5)->generate(provider: 'openai', model: 'gpt-4o-mini-tts');
+
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['speed'] == 1.5);
+});
+
+test('audio request includes format when provided', function (): void {
+    Http::fake(['*' => fakeOpenAiAudioResponse()]);
+
+    Audio::of('Hello')->format('aac')->generate(provider: 'openai', model: 'gpt-4o-mini-tts');
+
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['response_format'] === 'aac');
+});
+
+test('audio response resolves correct mime type for custom format', function (string $format, string $expectedMimeType): void {
+    Http::fake(['*' => fakeOpenAiAudioResponse()]);
+
+    $response = Audio::of('Hello')->format($format)->generate(provider: 'openai', model: 'gpt-4o-mini-tts');
+
+    expect($response->mimeType())->toBe($expectedMimeType);
+})->with([
+    ['mp3', 'audio/mpeg'],
+    ['wav', 'audio/wav'],
+    ['aac', 'audio/aac'],
+    ['flac', 'audio/flac'],
+    ['opus', 'audio/opus'],
+    ['pcm', 'audio/pcm'],
+]);
+
 test('audio response is base64-encoded with audio/mpeg mime type', function (): void {
     Http::fake(['*' => fakeOpenAiAudioResponse()]);
 

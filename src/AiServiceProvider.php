@@ -81,6 +81,8 @@ class AiServiceProvider extends ServiceProvider
             Lab|array|string|null $provider = null,
             ?string $voice = null,
             ?string $instructions = null,
+            ?float $speed = null,
+            ?string $format = null,
             ?string $model = null,
             ?int $timeout = null,
         ): AudioResponse {
@@ -92,6 +94,14 @@ class AiServiceProvider extends ServiceProvider
 
             if (! is_null($instructions)) {
                 $request->instructions($instructions);
+            }
+
+            if (! is_null($speed)) {
+                $request->speed($speed);
+            }
+
+            if (! is_null($format)) {
+                $request->format($format);
             }
 
             if (! is_null($timeout)) {

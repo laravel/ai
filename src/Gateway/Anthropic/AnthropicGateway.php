@@ -143,6 +143,8 @@ class AnthropicGateway implements Gateway, StepTextGateway
         string $text,
         string $voice,
         ?string $instructions = null,
+        ?float $speed = null,
+        ?string $format = null,
         int $timeout = 30,
     ): AudioResponse {
         throw new LogicException('Anthropic does not support audio generation.');

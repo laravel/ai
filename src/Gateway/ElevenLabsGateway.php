@@ -20,6 +20,7 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
 {
     use Concerns\CreatesClient;
     use Concerns\HandlesFailoverErrors;
+    use Concerns\ResolvesAudioMimeTypes;
 
     /**
      * Generate audio from the given text.
@@ -30,6 +31,8 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
         string $text,
         string $voice,
         ?string $instructions = null,
+        ?float $speed = null,
+        ?string $format = null,
         int $timeout = 30,
     ): AudioResponse {
         $voice = match ($voice) {
@@ -38,16 +41,21 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
             default => $voice,
         };
 
+        $url = 'text-to-speech/'.$voice.($format ? '?output_format='.$format : '');
+
+        $payload = array_filter([
+            'model_id' => $model,
+            'text' => $text,
+            'voice_settings' => $speed !== null ? ['speed' => $speed] : null,
+        ]);
+
         $response = $this->withErrorHandling($provider->name(), fn () => $this->client($provider, $timeout)
-            ->post('text-to-speech/'.$voice, [
-                'model_id' => $model,
-                'text' => $text,
-            ])->throw());
+            ->post($url, $payload)->throw());
 
         return new AudioResponse(
             base64_encode((string) $response),
             new Meta($provider->name(), $model),
-            'audio/mpeg'
+            $format ? $this->audioResponseMimeType($format) : 'audio/mpeg'
         );
     }
 

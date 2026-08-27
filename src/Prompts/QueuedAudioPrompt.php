@@ -11,6 +11,8 @@ class QueuedAudioPrompt
         public readonly string $text,
         public readonly string $voice,
         public readonly ?string $instructions,
+        public readonly ?float $speed,
+        public readonly ?string $format,
         public readonly Lab|array|string|null $provider,
         public readonly ?string $model,
         public readonly int $timeout = 30,

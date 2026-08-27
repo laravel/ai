@@ -110,6 +110,8 @@ test('stringable audio macro passes through options', function (): void {
         provider: Lab::ElevenLabs,
         voice: 'alloy',
         instructions: 'Speak slowly',
+        speed: 1.5,
+        format: 'opus',
         model: 'custom-model',
         timeout: 45,
     );
@@ -118,6 +120,8 @@ test('stringable audio macro passes through options', function (): void {
         && $prompt->provider instanceof ElevenLabsProvider
         && $prompt->voice === 'alloy'
         && $prompt->instructions === 'Speak slowly'
+        && $prompt->speed === 1.5
+        && $prompt->format === 'opus'
         && $prompt->model === 'custom-model'
         && $prompt->timeout === 45);
 });
@@ -144,6 +148,16 @@ test('audio voice and instructions are recorded', function (): void {
     Audio::assertGenerated(fn (AudioPrompt $prompt): bool => $prompt->text === 'Hello world'
         && $prompt->voice === 'alloy'
         && $prompt->instructions === 'Speak slowly');
+});
+
+test('audio speed and format are recorded', function (): void {
+    Audio::fake();
+
+    Audio::of('Hello world')->speed(1.75)->format('aac')->generate();
+
+    Audio::assertGenerated(fn (AudioPrompt $prompt): bool => $prompt->text === 'Hello world'
+        && $prompt->speed === 1.75
+        && $prompt->format === 'aac');
 });
 
 test('audio is stored under a random name derived from its mime type', function (): void {
@@ -285,6 +299,16 @@ test('queued audio voice and instructions are recorded', function (): void {
     Audio::assertQueued(fn (QueuedAudioPrompt $prompt): bool => $prompt->text === 'Hello world'
         && $prompt->voice === 'default-male'
         && $prompt->instructions === 'Speak quickly');
+});
+
+test('queued audio speed and format are recorded', function (): void {
+    Audio::fake();
+
+    Audio::of('Hello world')->speed(1.25)->format('wav')->queue();
+
+    Audio::assertQueued(fn (QueuedAudioPrompt $prompt): bool => $prompt->text === 'Hello world'
+        && $prompt->speed === 1.25
+        && $prompt->format === 'wav');
 });
 
 test('queued audio timeout is recorded', function (): void {

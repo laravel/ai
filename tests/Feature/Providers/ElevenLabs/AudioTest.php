@@ -44,6 +44,26 @@ test('audio request passes custom voice id through unchanged', function (): void
     Http::assertSent(fn (Request $request): bool => $request->url() === 'https://api.elevenlabs.io/v1/text-to-speech/my-custom-voice-id');
 });
 
+test('audio request includes output_format query parameter when format is provided', function (): void {
+    Http::fake(['*' => fakeElevenAudioResponse()]);
+
+    Audio::of('Hello')->format('mp3_44100_128')->generate(provider: 'eleven', model: 'eleven_multilingual_v2');
+
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://api.elevenlabs.io/v1/text-to-speech/XrExE9yKIg1WjnnlVkGX?output_format=mp3_44100_128');
+});
+
+test('audio request includes voice_settings speed when speed is provided', function (): void {
+    Http::fake(['*' => fakeElevenAudioResponse()]);
+
+    Audio::of('Hello')->speed(1.2)->generate(provider: 'eleven', model: 'eleven_multilingual_v2');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+
+        return isset($body['voice_settings']['speed']) && $body['voice_settings']['speed'] == 1.2;
+    });
+});
+
 test('audio request sends xi-api-key header', function (): void {
     Http::fake(['*' => fakeElevenAudioResponse()]);
 

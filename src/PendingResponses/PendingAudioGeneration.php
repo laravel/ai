@@ -23,6 +23,10 @@ class PendingAudioGeneration
 
     protected ?string $instructions = null;
 
+    protected ?float $speed = null;
+
+    protected ?string $format = null;
+
     protected int $timeout = 30;
 
     public function __construct(
@@ -74,6 +78,26 @@ class PendingAudioGeneration
     }
 
     /**
+     * Specify the playback speed of the generated audio.
+     */
+    public function speed(float $speed): self
+    {
+        $this->speed = $speed;
+
+        return $this;
+    }
+
+    /**
+     * Specify the audio format of the generated audio.
+     */
+    public function format(string $format): self
+    {
+        $this->format = $format;
+
+        return $this;
+    }
+
+    /**
      * Specify the timeout (in seconds) for the audio generation.
      */
     public function timeout(int $seconds = 30): self
@@ -103,7 +127,13 @@ class PendingAudioGeneration
 
             try {
                 return $provider->audio(
-                    $this->text, $this->voice, $this->instructions, $model, $this->timeout
+                    $this->text,
+                    $this->voice,
+                    $this->instructions,
+                    $this->speed,
+                    $this->format,
+                    $model,
+                    $this->timeout
                 );
             } catch (FailoverableException $e) {
                 $lastException = $e;
@@ -128,6 +158,8 @@ class PendingAudioGeneration
                     $this->text,
                     $this->voice,
                     $this->instructions,
+                    $this->speed,
+                    $this->format,
                     $provider,
                     $model,
                     $this->timeout,

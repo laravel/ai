@@ -18,6 +18,7 @@ use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Files\Image;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
+use Laravel\Ai\Gateway\Concerns\ResolvesAudioMimeTypes;
 use Laravel\Ai\Gateway\Concerns\WrapsPcmAudio;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionMessages;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionTools;
@@ -48,6 +49,7 @@ class OpenRouterGateway implements Gateway, StepTextGateway
     use MapsChatCompletionTools;
     use ParsesServerSentEvents;
     use PerformsChatCompletionSteps;
+    use ResolvesAudioMimeTypes;
     use WrapsPcmAudio;
 
     public function __construct(protected Dispatcher $events)
@@ -176,9 +178,11 @@ class OpenRouterGateway implements Gateway, StepTextGateway
         string $text,
         string $voice,
         ?string $instructions = null,
+        ?float $speed = null,
+        ?string $format = null,
         int $timeout = 30,
     ): AudioResponse {
-        $format = $this->audioResponseFormat($model);
+        $format ??= $this->audioResponseFormat($model);
 
         $response = $this->withErrorHandling(
             $provider->name(),
@@ -187,7 +191,7 @@ class OpenRouterGateway implements Gateway, StepTextGateway
                 'input' => $text,
                 'voice' => $this->resolveVoice($model, $voice),
                 'response_format' => $format,
-                'speed' => 1.0,
+                'speed' => $speed ?? 1.0,
                 'instructions' => $instructions,
             ])),
         );
@@ -225,22 +229,6 @@ class OpenRouterGateway implements Gateway, StepTextGateway
     protected function audioResponseFormat(string $model): string
     {
         return $this->isGeminiTtsModel($model) ? 'pcm' : 'mp3';
-    }
-
-    /**
-     * Map a response_format value to the HTTP audio MIME type.
-     */
-    protected function audioResponseMimeType(string $format): string
-    {
-        return match ($format) {
-            'mp3' => 'audio/mpeg',
-            'pcm' => 'audio/pcm',
-            'wav' => 'audio/wav',
-            'opus' => 'audio/opus',
-            'aac' => 'audio/aac',
-            'flac' => 'audio/flac',
-            default => 'audio/mpeg',
-        };
     }
 
     protected function isGeminiTtsModel(string $model): bool
