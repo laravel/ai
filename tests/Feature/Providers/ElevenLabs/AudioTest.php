@@ -52,6 +52,20 @@ test('audio request includes output_format query parameter when format is provid
     Http::assertSent(fn (Request $request): bool => $request->url() === 'https://api.elevenlabs.io/v1/text-to-speech/XrExE9yKIg1WjnnlVkGX?output_format=mp3_44100_128');
 });
 
+test('audio request resolves format aliases for elevenlabs', function (string $format, string $expectedOutputFormat): void {
+    Http::fake(['*' => fakeElevenAudioResponse()]);
+
+    Audio::of('Hello')->format($format)->generate(provider: 'eleven', model: 'eleven_multilingual_v2');
+
+    Http::assertSent(fn (Request $request): bool => $request->url() === "https://api.elevenlabs.io/v1/text-to-speech/XrExE9yKIg1WjnnlVkGX?output_format={$expectedOutputFormat}");
+})->with([
+    ['mp3', 'mp3_44100_128'],
+    ['wav', 'pcm_44100'],
+    ['pcm', 'pcm_44100'],
+    ['opus', 'opus_16000'],
+    ['aac', 'aac_16000'],
+]);
+
 test('audio request includes voice_settings speed when speed is provided', function (): void {
     Http::fake(['*' => fakeElevenAudioResponse()]);
 

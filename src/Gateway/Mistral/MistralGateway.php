@@ -15,6 +15,7 @@ use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\Concerns\ResolvesAudioFilenames;
+use Laravel\Ai\Gateway\Concerns\ResolvesAudioMimeTypes;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionMessages;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionTools;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\PerformsChatCompletionSteps;
@@ -41,6 +42,7 @@ class MistralGateway implements AudioGateway, EmbeddingGateway, StepTextGateway,
     use ParsesServerSentEvents;
     use PerformsChatCompletionSteps;
     use ResolvesAudioFilenames;
+    use ResolvesAudioMimeTypes;
 
     public function __construct(protected Dispatcher $events)
     {
@@ -72,6 +74,8 @@ class MistralGateway implements AudioGateway, EmbeddingGateway, StepTextGateway,
         string $text,
         string $voice,
         ?string $instructions = null,
+        ?float $speed = null,
+        ?string $format = null,
         int $timeout = 30,
     ): AudioResponse {
         $voice = match ($voice) {
@@ -80,14 +84,16 @@ class MistralGateway implements AudioGateway, EmbeddingGateway, StepTextGateway,
             default => $voice,
         };
 
+        $format ??= 'mp3';
+
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('audio/speech', [
+            fn () => $this->client($provider, $timeout)->post('audio/speech', array_filter([
                 'model' => $model,
                 'input' => $text,
                 'voice_id' => $voice,
-                'response_format' => 'mp3',
-            ]),
+                'response_format' => $format,
+            ])),
         );
 
         $encodedAudio = $response->json('audio_data');
@@ -99,7 +105,7 @@ class MistralGateway implements AudioGateway, EmbeddingGateway, StepTextGateway,
         return new AudioResponse(
             $encodedAudio,
             new Meta($provider->name(), $model),
-            'audio/mpeg',
+            $this->audioResponseMimeType($format),
         );
     }
 

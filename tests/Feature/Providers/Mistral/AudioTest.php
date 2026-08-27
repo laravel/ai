@@ -47,6 +47,15 @@ test('audio request passes custom voice id through unchanged', function (): void
     Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['voice_id'] === 'my-custom-voice-id');
 });
 
+test('audio request includes format when provided', function (): void {
+    Http::fake(['*' => fakeMistralAudioResponse()]);
+
+    $response = Audio::of('Hello')->format('wav')->generate(provider: 'mistral', model: 'voxtral-mini-tts-2603');
+
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['response_format'] === 'wav');
+    expect($response->mimeType())->toBe('audio/wav');
+});
+
 test('audio request omits instructions since the Mistral API does not accept them', function (): void {
     Http::fake(['*' => fakeMistralAudioResponse()]);
 

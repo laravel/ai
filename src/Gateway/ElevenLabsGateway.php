@@ -41,7 +41,9 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
             default => $voice,
         };
 
-        $url = 'text-to-speech/'.$voice.($format ? '?output_format='.$format : '');
+        $outputFormat = $format ? $this->resolveOutputFormat($format) : null;
+
+        $url = 'text-to-speech/'.$voice.($outputFormat ? '?output_format='.$outputFormat : '');
 
         $payload = array_filter([
             'model_id' => $model,
@@ -57,6 +59,20 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
             new Meta($provider->name(), $model),
             $format ? $this->audioResponseMimeType($format) : 'audio/mpeg'
         );
+    }
+
+    /**
+     * Resolve the output format for ElevenLabs API.
+     */
+    protected function resolveOutputFormat(string $format): string
+    {
+        return match ($format) {
+            'mp3' => 'mp3_44100_128',
+            'wav', 'pcm' => 'pcm_44100',
+            'opus' => 'opus_16000',
+            'aac' => 'aac_16000',
+            default => $format,
+        };
     }
 
     /**
