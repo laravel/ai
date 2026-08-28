@@ -30,6 +30,14 @@ function agent(
 }
 
 /**
+ * Render agent instructions from the "resources/agents/instructions" directory.
+ */
+function instructions(string $instructions, array $data = []): string
+{
+    return view("instructions::{$instructions}", $data)->render();
+}
+
+/**
  * Get a new pipeline instance.
  */
 function pipeline(): Pipeline

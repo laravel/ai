@@ -7,8 +7,9 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Illuminate\Support\Stringable;
+use Illuminate\View\Compilers\BladeCompiler;
+use Illuminate\View\Engines\CompilerEngine;
 use Laravel\Ai\Agents\SummarizeAgent;
-use Laravel\Ai\Console\Commands\ChatCommand;
 use Laravel\Ai\Console\Commands\MakeAgentCommand;
 use Laravel\Ai\Console\Commands\MakeAgentMiddlewareCommand;
 use Laravel\Ai\Console\Commands\MakeToolCommand;
@@ -35,6 +36,23 @@ class AiServiceProvider extends ServiceProvider
     }
 
     /**
+     * Register the "instructions" view namespace and its Markdown templates.
+     */
+    protected function registerInstructionViews(): void
+    {
+        $this->callAfterResolving('view', function ($view, $app): void {
+            $view->addNamespace('instructions', resource_path('agents/instructions'));
+
+            $compiler = new BladeCompiler($app['files'], $app['config']['view.compiled']);
+
+            // Instructions are plain text, so echoed values must not be HTML escaped...
+            $compiler->setEchoFormat('%s');
+
+            $view->addExtension('blade.md', 'instructions', fn (): CompilerEngine => new CompilerEngine($compiler, $app['files']));
+        });
+    }
+
+    /**
      * Bootstrap the package's services.
      */
     public function boot(): void
@@ -43,6 +61,8 @@ class AiServiceProvider extends ServiceProvider
             $this->registerCommands();
             $this->registerPublishing();
         }
+
+        $this->registerInstructionViews();
 
         // Embeddings macro...
         Stringable::macro('toEmbeddings', function (
