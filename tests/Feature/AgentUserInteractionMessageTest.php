@@ -289,6 +289,16 @@ describe('resuming an interrupted run', function () {
             && $prompt->approvalDecisions?->get('call-1')->isApproved() === true);
     });
 
+    test('a trailing user message on a resume stays in history', function () {
+        $chat = AgentUserInteraction::chat(runAgentInput(['resume' => [
+            ['interruptId' => 'call-1', 'status' => 'resolved', 'payload' => ['approved' => true]],
+        ]]));
+
+        expect($chat->message())->toBeNull()
+            ->and($chat->history())->toHaveCount(3)
+            ->and($chat->history()[2]->content)->toBe('Who made it?');
+    });
+
     test('a replayed resume entry is idempotent', function () {
         $decisions = AgentUserInteraction::decisionsFrom([
             ['interruptId' => 'call-1', 'status' => 'resolved', 'payload' => ['approved' => true]],
@@ -330,7 +340,7 @@ describe('resuming an interrupted run', function () {
 
 describe('hydrating AG-UI from stored messages', function () {
     test('UI messages contain messages and pending interrupts', function () {
-        $state = AgentUserInteraction::toUiMessages((function () {
+        $state = AgentUserInteraction::toClientState((function () {
             yield new ConversationMessage([
                 'id' => 'msg-2',
                 'role' => 'assistant',
@@ -349,7 +359,7 @@ describe('hydrating AG-UI from stored messages', function () {
             new ConversationMessage(['id' => 'msg-2', 'role' => 'assistant', 'content' => 'A PHP framework.']),
         ];
 
-        expect(AgentUserInteraction::toUiMessages($stored))->toBe([
+        expect(AgentUserInteraction::toClientState($stored))->toBe([
             'messages' => [
                 ['id' => 'msg-1', 'role' => 'user', 'content' => 'What is Laravel?'],
                 ['id' => 'msg-2', 'role' => 'assistant', 'content' => 'A PHP framework.'],
@@ -359,7 +369,7 @@ describe('hydrating AG-UI from stored messages', function () {
     });
 
     test('a completed tool turn hydrates as tool calls and tool messages', function () {
-        $messages = AgentUserInteraction::toUiMessages([
+        $messages = AgentUserInteraction::toClientState([
             new ConversationMessage([
                 'id' => 'msg-2',
                 'role' => 'assistant',
@@ -384,7 +394,7 @@ describe('hydrating AG-UI from stored messages', function () {
     });
 
     test('tool results from an earlier turn hydrate before the resumed response', function () {
-        $messages = AgentUserInteraction::toUiMessages([
+        $messages = AgentUserInteraction::toClientState([
             new ConversationMessage([
                 'id' => 'msg-1',
                 'role' => 'assistant',
@@ -406,7 +416,7 @@ describe('hydrating AG-UI from stored messages', function () {
     });
 
     test('a non string tool result is encoded as json', function () {
-        $messages = AgentUserInteraction::toUiMessages([
+        $messages = AgentUserInteraction::toClientState([
             new ConversationMessage([
                 'id' => 'msg-2',
                 'role' => 'assistant',
@@ -420,7 +430,7 @@ describe('hydrating AG-UI from stored messages', function () {
     });
 
     test('a denied tool call hydrates as a tool error', function () {
-        $messages = AgentUserInteraction::toUiMessages([
+        $messages = AgentUserInteraction::toClientState([
             new ConversationMessage([
                 'id' => 'msg-2',
                 'role' => 'assistant',
@@ -451,7 +461,7 @@ describe('hydrating AG-UI from stored messages', function () {
         expect($interrupts)->toEqual([
             [
                 'id' => 'call-1',
-                'reason' => 'approval_required',
+                'reason' => 'tool_call',
                 'message' => 'Deletes a file.',
                 'toolCallId' => 'call-1',
                 'metadata' => [
@@ -467,7 +477,7 @@ describe('hydrating AG-UI from stored messages', function () {
             ],
             [
                 'id' => 'call-2',
-                'reason' => 'approval_required',
+                'reason' => 'tool_call',
                 'toolCallId' => 'call-2',
                 'metadata' => [
                     'kind' => 'approval',
@@ -488,7 +498,7 @@ describe('hydrating AG-UI from stored messages', function () {
     });
 
     test('message objects hydrate alongside conversation models', function () {
-        $messages = AgentUserInteraction::toUiMessages([
+        $messages = AgentUserInteraction::toClientState([
             new UserMessage('Weather?'),
             new AssistantMessage('', collect([new ToolCall('call-1', 'getWeather', ['city' => 'Lisbon'], reasoningEncryptedContent: 'encrypted-reasoning')])),
             new ToolResultMessage(collect([new ToolResult('call-1', 'getWeather', ['city' => 'Lisbon'], 'Sunny')])),
@@ -507,7 +517,7 @@ describe('hydrating AG-UI from stored messages', function () {
     });
 
     test('attachments hydrate as multimodal content parts', function () {
-        $messages = AgentUserInteraction::toUiMessages([
+        $messages = AgentUserInteraction::toClientState([
             new UserMessage('Look at these', [
                 new RemoteImage('https://example.com/a.jpg', 'image/jpeg'),
                 (new Base64Image(base64_encode('fake-png'), 'image/png'))->as('red.png'),
@@ -531,7 +541,7 @@ describe('hydrating AG-UI from stored messages', function () {
         Storage::fake('attachments');
         Storage::disk('attachments')->put('photo.png', 'fake-png');
 
-        $messages = AgentUserInteraction::toUiMessages([
+        $messages = AgentUserInteraction::toClientState([
             new UserMessage('Look at this', [
                 (new StoredImage('photo.png', 'attachments'))->withMimeType('image/png'),
                 (new StoredImage('missing.png', 'attachments'))->withMimeType('image/png'),
@@ -550,8 +560,16 @@ describe('hydrating AG-UI from stored messages', function () {
             ->and($messages[1]['content'][1]['source'])->toBe(['type' => 'url', 'value' => 'https://example.com/a.jpg', 'mimeType' => 'image/jpeg']);
     });
 
+    test('a data attachment without a mime type is skipped', function () {
+        $messages = AgentUserInteraction::toClientState([
+            new UserMessage('Look at this', [new Base64Image(base64_encode('fake-png'))]),
+        ])['messages'];
+
+        expect($messages[0]['content'])->toBe('Look at this');
+    });
+
     test('a hydrated conversation round trips back into messages', function () {
-        $uiMessages = AgentUserInteraction::toUiMessages([
+        $uiMessages = AgentUserInteraction::toClientState([
             new ConversationMessage(['id' => 'msg-1', 'role' => 'user', 'content' => 'Weather?']),
             new ConversationMessage([
                 'id' => 'msg-2',

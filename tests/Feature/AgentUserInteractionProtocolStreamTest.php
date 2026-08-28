@@ -360,7 +360,7 @@ test('a paused run finishes with an interrupt outcome for each pending approval'
             'type' => 'interrupt',
             'interrupts' => [[
                 'id' => 'call-1',
-                'reason' => 'approval_required',
+                'reason' => 'tool_call',
                 'message' => 'Destructive operation.',
                 'toolCallId' => 'call-1',
                 'metadata' => [

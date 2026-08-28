@@ -148,7 +148,7 @@ class AgentUserInteraction
      * @param  iterable<int, Message|ConversationMessage>  $messages
      * @return array{messages: list<array<string, mixed>>, interrupts: list<array<string, mixed>>}
      */
-    public static function toUiMessages(iterable $messages): array
+    public static function toClientState(iterable $messages): array
     {
         $messages = [...$messages];
 
@@ -265,7 +265,7 @@ class AgentUserInteraction
     {
         return [
             'id' => $id,
-            'reason' => 'approval_required',
+            'reason' => 'tool_call',
             ...(filled($reason) ? ['message' => $reason] : []),
             'toolCallId' => $id,
             'metadata' => [
@@ -365,7 +365,7 @@ class AgentUserInteraction
             default => null,
         }, report: false);
 
-        if ($source === null) {
+        if ($source === null || ($source['type'] === 'data' && blank($mime))) {
             return null;
         }
 
