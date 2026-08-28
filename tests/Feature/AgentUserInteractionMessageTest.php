@@ -329,8 +329,8 @@ describe('resuming an interrupted run', function () {
 });
 
 describe('hydrating AG-UI from stored messages', function () {
-    test('client state contains messages and pending interrupts', function () {
-        $state = AgentUserInteraction::toClientState((function () {
+    test('UI messages contain messages and pending interrupts', function () {
+        $state = AgentUserInteraction::toUiMessages((function () {
             yield new ConversationMessage([
                 'id' => 'msg-2',
                 'role' => 'assistant',
@@ -350,9 +350,12 @@ describe('hydrating AG-UI from stored messages', function () {
         ];
 
         expect(AgentUserInteraction::toUiMessages($stored))->toBe([
-            ['id' => 'msg-1', 'role' => 'user', 'content' => 'What is Laravel?'],
-            ['id' => 'msg-2', 'role' => 'assistant', 'content' => 'A PHP framework.'],
-        ])->and(AgentUserInteraction::toInterrupts($stored))->toBe([]);
+            'messages' => [
+                ['id' => 'msg-1', 'role' => 'user', 'content' => 'What is Laravel?'],
+                ['id' => 'msg-2', 'role' => 'assistant', 'content' => 'A PHP framework.'],
+            ],
+            'interrupts' => [],
+        ]);
     });
 
     test('a completed tool turn hydrates as tool calls and tool messages', function () {
@@ -364,7 +367,7 @@ describe('hydrating AG-UI from stored messages', function () {
                 'tool_calls' => [['id' => 'call-1', 'name' => 'getWeather', 'arguments' => ['city' => 'Lisbon']]],
                 'tool_results' => [['id' => 'call-1', 'name' => 'getWeather', 'arguments' => ['city' => 'Lisbon'], 'result' => 'Sunny', 'result_id' => 'result-1']],
             ]),
-        ]);
+        ])['messages'];
 
         expect($messages)->toBe([
             [
@@ -393,7 +396,7 @@ describe('hydrating AG-UI from stored messages', function () {
                 'content' => 'It is sunny.',
                 'tool_results' => [['id' => 'call-1', 'name' => 'getWeather', 'arguments' => ['city' => 'Lisbon'], 'result' => 'Sunny']],
             ]),
-        ]);
+        ])['messages'];
 
         expect($messages)->sequence(
             fn ($message) => $message->role->toBe('assistant'),
@@ -410,7 +413,7 @@ describe('hydrating AG-UI from stored messages', function () {
                 'tool_calls' => [['id' => 'call-1', 'name' => 'getWeather', 'arguments' => []]],
                 'tool_results' => [['id' => 'call-1', 'name' => 'getWeather', 'arguments' => [], 'result' => ['temp' => 21]]],
             ]),
-        ]);
+        ])['messages'];
 
         expect($messages[1]['content'])->toBe('{"temp":21}')
             ->and($messages[1]['id'])->toBe('msg-2-call-1');
@@ -425,7 +428,7 @@ describe('hydrating AG-UI from stored messages', function () {
                 'tool_results' => [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt'], 'result' => null, 'denied' => true]],
                 'approval_state' => ['pending' => []],
             ]),
-        ]);
+        ])['messages'];
 
         expect($messages[1]['content'])->toBe('The tool call was denied.')
             ->and($messages[1]['error'])->toBe('The tool call was denied.');
@@ -491,7 +494,7 @@ describe('hydrating AG-UI from stored messages', function () {
             new ToolResultMessage(collect([new ToolResult('call-1', 'getWeather', ['city' => 'Lisbon'], 'Sunny')])),
             new AssistantMessage('It is sunny.'),
             new Message('tool_result', 'ignored'),
-        ]);
+        ])['messages'];
 
         expect($messages)->toHaveCount(4)
             ->and($messages[0]['id'])->toBeString()->not->toBe('')
@@ -512,7 +515,7 @@ describe('hydrating AG-UI from stored messages', function () {
                 new RemoteVideo('https://example.com/a.mp4', 'video/mp4'),
                 new RemoteDocument('https://example.com/a.pdf', 'application/pdf'),
             ]),
-        ]);
+        ])['messages'];
 
         expect($messages[0]['content'])->toBe([
             ['type' => 'text', 'text' => 'Look at these'],
@@ -540,7 +543,7 @@ describe('hydrating AG-UI from stored messages', function () {
                 'content' => 'And this',
                 'attachments' => [['type' => 'remote-image', 'url' => 'https://example.com/a.jpg', 'mime' => 'image/jpeg']],
             ]),
-        ]);
+        ])['messages'];
 
         expect($messages[0]['content'])->toHaveCount(2)
             ->and($messages[0]['content'][1]['source']['value'])->toBe(base64_encode('fake-png'))
@@ -559,7 +562,7 @@ describe('hydrating AG-UI from stored messages', function () {
             ]),
         ]);
 
-        $messages = AgentUserInteraction::fromMessages($uiMessages);
+        $messages = AgentUserInteraction::fromMessages($uiMessages['messages']);
 
         expect($messages)->toHaveCount(3)
             ->and($messages[1])->toBeInstanceOf(AssistantMessage::class)

@@ -148,23 +148,21 @@ class AgentUserInteraction
      * @param  iterable<int, Message|ConversationMessage>  $messages
      * @return array{messages: list<array<string, mixed>>, interrupts: list<array<string, mixed>>}
      */
-    public static function toClientState(iterable $messages): array
+    public static function toUiMessages(iterable $messages): array
     {
         $messages = [...$messages];
 
         return [
-            'messages' => static::toUiMessages($messages),
+            'messages' => static::uiMessagesFrom($messages),
             'interrupts' => static::toInterrupts($messages),
         ];
     }
 
     /**
-     * Convert messages or conversation message models into AG-UI message arrays for hydrating a client.
-     *
      * @param  iterable<int, Message|ConversationMessage>  $messages
      * @return list<array<string, mixed>>
      */
-    public static function toUiMessages(iterable $messages): array
+    protected static function uiMessagesFrom(iterable $messages): array
     {
         $result = [];
 

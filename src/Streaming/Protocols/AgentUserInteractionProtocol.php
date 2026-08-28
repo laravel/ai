@@ -6,8 +6,6 @@ use Generator;
 use Illuminate\Support\Arr;
 use Laravel\Ai\AgentUserInteraction\AgentUserInteraction;
 use Laravel\Ai\Approvals\PendingApproval;
-use Laravel\Ai\Messages\Message;
-use Laravel\Ai\Models\ConversationMessage;
 use Laravel\Ai\Responses\Data;
 use Laravel\Ai\Responses\Data\UrlCitation;
 use Laravel\Ai\Responses\Data\Usage;
@@ -27,7 +25,6 @@ use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Laravel\Ai\Streaming\Events\ToolCall;
 use Laravel\Ai\Streaming\Events\ToolResult;
-use Symfony\Component\HttpFoundation\Response;
 
 use function Laravel\Ai\ulid;
 
@@ -49,38 +46,6 @@ class AgentUserInteractionProtocol extends StreamProtocol
         protected ?string $runId = null,
     ) {
         //
-    }
-
-    /**
-     * Create an HTTP response that hydrates a client from stored messages as a snapshot run.
-     *
-     * @param  iterable<int, Message|ConversationMessage>  $messages
-     */
-    public function snapshotResponse(iterable $messages): Response
-    {
-        $messages = [...$messages];
-
-        return response()->stream(function () use ($messages) {
-            $this->threadId ??= ulid();
-            $this->runId ??= ulid();
-
-            yield $this->encode([
-                'type' => 'RUN_STARTED',
-                'threadId' => $this->threadId,
-                'runId' => $this->runId,
-            ]);
-
-            yield $this->encode([
-                'type' => 'MESSAGES_SNAPSHOT',
-                'messages' => AgentUserInteraction::toUiMessages($messages),
-            ]);
-
-            $interrupts = AgentUserInteraction::toInterrupts($messages);
-
-            yield $this->encode($this->runFinishedPart($interrupts === [] ? [] : [
-                'outcome' => ['type' => 'interrupt', 'interrupts' => $interrupts],
-            ]));
-        }, headers: $this->headers());
     }
 
     /**
