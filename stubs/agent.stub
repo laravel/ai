@@ -8,6 +8,7 @@ use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Promptable;
+use Laravel\Ai\Providers\Tools\ProviderTool;
 use Stringable;
 
 class {{ class }} implements Agent, Conversational, HasTools
@@ -35,7 +36,7 @@ class {{ class }} implements Agent, Conversational, HasTools
     /**
      * Get the tools available to the agent.
      *
-     * @return Tool[]
+     * @return list<Tool|ProviderTool|Agent>
      */
     public function tools(): iterable
     {
