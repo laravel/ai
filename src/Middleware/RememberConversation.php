@@ -74,8 +74,10 @@ class RememberConversation
             }
 
             // Record user message...
+            $userMessageId = null;
+
             if (! $prompt->hasApprovalDecisions()) {
-                $this->store->storeUserMessage(
+                $userMessageId = $this->store->storeUserMessage(
                     $agent->currentConversation(),
                     $participantType,
                     $participantId,
@@ -84,7 +86,7 @@ class RememberConversation
             }
 
             // Record assistant message...
-            $this->store->storeAssistantMessage(
+            $assistantMessageId = $this->store->storeAssistantMessage(
                 $agent->currentConversation(),
                 $participantType,
                 $participantId,
@@ -95,7 +97,7 @@ class RememberConversation
             $completedResponse->withinConversation(
                 $agent->currentConversation(),
                 $participant,
-            );
+            )->withStoredMessages($userMessageId, $assistantMessageId);
         });
     }
 
