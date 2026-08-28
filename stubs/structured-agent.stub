@@ -38,7 +38,7 @@ class {{ class }} implements Agent, Conversational, HasStructuredOutput, HasTool
     /**
      * Get the tools available to the agent.
      *
-     * @return list<Tool|ProviderTool|Agent>
+     * @return list<Agent|Tool|ProviderTool>
      */
     public function tools(): iterable
     {
