@@ -3,9 +3,11 @@
 namespace Tests\Feature\Providers\Bedrock;
 
 use Aws\BedrockRuntime\BedrockRuntimeClient;
+use Aws\BedrockRuntime\Exception\BedrockRuntimeException;
 use Aws\MockHandler;
 use Aws\Result;
 use GuzzleHttp\Psr7\Utils;
+use Laravel\Ai\Gateway\Bedrock\BedrockRerankingGateway;
 use Laravel\Ai\Gateway\Bedrock\BedrockTextGateway;
 use Laravel\Ai\Gateway\TextGenerationLoop;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -88,6 +90,7 @@ trait BedrockHelpers
             'region' => 'us-east-1',
             'version' => '2023-09-30',
             'credentials' => false,
+            'retries' => 0,
             'handler' => $mock,
         ]);
     }
@@ -126,6 +129,19 @@ trait BedrockHelpers
         };
     }
 
+    protected function rerankingGatewayWithClient(BedrockRuntimeClient $client): BedrockRerankingGateway
+    {
+        return new class($client) extends BedrockRerankingGateway
+        {
+            public function __construct(private BedrockRuntimeClient $stub) {}
+
+            protected function createBedrockClient(Provider $provider, ?int $timeout = null): BedrockRuntimeClient
+            {
+                return $this->stub;
+            }
+        };
+    }
+
     protected function bedrockProvider(): BedrockProvider
     {
         return new BedrockProvider(
@@ -137,6 +153,30 @@ trait BedrockHelpers
             ],
             events: app('events'),
         );
+    }
+
+    protected function mockBedrockException(string $awsErrorCode, int $statusCode = 400, string $message = 'Bedrock error'): BedrockRuntimeException
+    {
+        return new class($awsErrorCode, $statusCode, $message) extends BedrockRuntimeException
+        {
+            public function __construct(
+                private string $awsErrorCode,
+                private int $httpStatus,
+                string $message,
+            ) {
+                \Exception::__construct($message, $httpStatus);
+            }
+
+            public function getAwsErrorCode(): string
+            {
+                return $this->awsErrorCode;
+            }
+
+            public function getStatusCode(): int
+            {
+                return $this->httpStatus;
+            }
+        };
     }
 
     protected function contentBlockStart(int $index, array $start = []): array

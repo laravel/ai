@@ -182,6 +182,28 @@ test('streaming captures usage from final chunk', function (): void {
         ->and($streamEnd[0]->usage->completionTokens)->toBe(3);
 });
 
+test('streaming excludes cached tokens from the prompt token count', function (): void {
+    Http::fake([
+        '*' => Http::response($this->ssePayload([
+            ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => ['role' => 'assistant', 'content' => 'Hi'], 'finish_reason' => null]]],
+            ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => [], 'finish_reason' => 'stop']]],
+            ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [], 'usage' => ['prompt_tokens' => 100, 'completion_tokens' => 5, 'prompt_tokens_details' => ['cached_tokens' => 20, 'cache_write_tokens' => 30]]],
+        ])),
+    ]);
+
+    $events = [];
+    foreach (agent()->stream('Hi', provider: 'openrouter') as $event) {
+        $events[] = $event;
+    }
+
+    $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd));
+    expect($streamEnd)->toHaveCount(1)
+        ->and($streamEnd[0]->usage->promptTokens)->toBe(50)
+        ->and($streamEnd[0]->usage->completionTokens)->toBe(5)
+        ->and($streamEnd[0]->usage->cacheReadInputTokens)->toBe(20)
+        ->and($streamEnd[0]->usage->cacheWriteInputTokens)->toBe(30);
+});
+
 test('streaming finish reason maps correctly', function (string $apiReason, $expected): void {
     Http::fake([
         '*' => Http::response($this->ssePayload([

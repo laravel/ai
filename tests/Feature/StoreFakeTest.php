@@ -1,9 +1,11 @@
 <?php
 
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\LocalDocument;
 use Laravel\Ai\Files\ProviderDocument;
 use Laravel\Ai\Stores;
 
@@ -147,6 +149,25 @@ describe('file operations', function (): void {
             fn (StorableFile $file): bool => $file->content() === 'Hello, world!'
         );
     });
+
+    test('can add an uploaded file to store from its path', function (): void {
+        Stores::fake();
+
+        Stores::create('My Store')
+            ->add(new UploadedFile(__DIR__.'/../Fixtures/report.txt', 'report.txt', 'text/plain'));
+
+        Files::assertStored(fn (StorableFile $file): bool => $file instanceof LocalDocument);
+        Files::assertStored(fn (StorableFile $file): bool => $file->name() === 'report.txt');
+        Files::assertStored(fn (StorableFile $file): bool => $file->mimeType() === 'text/plain');
+        Files::assertStored(fn (StorableFile $file): bool => trim((string) $file) === 'I am an expense report.');
+    });
+
+    test('cannot add an uploaded file that failed to upload to store', function (): void {
+        Stores::fake();
+
+        Stores::create('My Store')
+            ->add(new UploadedFile('', 'report.txt', 'text/plain', UPLOAD_ERR_NO_TMP_DIR));
+    })->throws(InvalidArgumentException::class);
 });
 
 describe('file assertions', function (): void {

@@ -168,6 +168,8 @@ test('streaming finish reason maps correctly', function (string $apiReason, $exp
     'stop maps to Stop' => ['stop', FinishReason::Stop],
     'tool_calls maps to ToolCalls' => ['tool_calls', FinishReason::ToolCalls],
     'length maps to Length' => ['length', FinishReason::Length],
+    'model_length maps to Length' => ['model_length', FinishReason::Length],
     'content_filter maps to ContentFilter' => ['content_filter', FinishReason::ContentFilter],
+    'error maps to Error' => ['error', FinishReason::Error],
     'unknown maps to Unknown' => ['unknown_reason', FinishReason::Unknown],
 ]);

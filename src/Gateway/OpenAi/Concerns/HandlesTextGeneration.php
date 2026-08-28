@@ -8,7 +8,9 @@ use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Responses\Data\UrlCitation;
 use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ProviderToolEvent;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
@@ -90,6 +92,26 @@ trait HandlesTextGeneration
                         $this->generateEventId(),
                         $messageId,
                         $textDelta,
+                        time(),
+                    ))->withInvocationId($invocationId);
+                }
+
+                continue;
+            }
+
+            if ($type === 'response.output_text.annotation.added') {
+                $annotation = $data['annotation'] ?? [];
+
+                if (($annotation['type'] ?? '') === 'url_citation') {
+                    yield (new CitationEvent(
+                        $this->generateEventId(),
+                        $messageId,
+                        new UrlCitation(
+                            $annotation['url'] ?? '',
+                            $annotation['title'] ?? null,
+                            isset($annotation['start_index']) ? (int) $annotation['start_index'] : null,
+                            isset($annotation['end_index']) ? (int) $annotation['end_index'] : null,
+                        ),
                         time(),
                     ))->withInvocationId($invocationId);
                 }

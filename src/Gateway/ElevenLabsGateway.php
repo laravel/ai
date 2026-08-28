@@ -72,7 +72,7 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
             ->attach('file', $audio->content(), 'file', array_filter(['Content-Type' => $audio->mimeType()]))
             ->post('speech-to-text', array_merge($providerOptions, array_filter([
                 'model_id' => $model,
-                'language' => $language,
+                'language_code' => $language,
                 'diarize' => $diarize ? 'true' : 'false',
             ])))->throw());
 

@@ -99,8 +99,9 @@ trait ParsesTextResponses
         return match ($choice['finish_reason'] ?? '') {
             'stop' => FinishReason::Stop,
             'tool_calls' => FinishReason::ToolCalls,
-            'length' => FinishReason::Length,
+            'length', 'model_length' => FinishReason::Length,
             'content_filter' => FinishReason::ContentFilter,
+            'error' => FinishReason::Error,
             default => FinishReason::Unknown,
         };
     }

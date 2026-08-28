@@ -7,6 +7,7 @@ use Illuminate\Http\UploadedFile;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\LocalDocument;
 use Laravel\Ai\Gateway\FakeFileGateway;
 use Laravel\Ai\Responses\FileResponse;
 use Laravel\Ai\Responses\StoredFileResponse;
@@ -32,7 +33,10 @@ class Files
     {
         $file = match (true) {
             is_string($file) => new Base64Document(base64_encode($file), $mimeType),
-            $file instanceof UploadedFile => Base64Document::fromUpload($file)->as($file->getClientOriginalName()),
+            $file instanceof UploadedFile => (new LocalDocument(
+                $file->getPathname(),
+                $file->getClientMimeType(),
+            ))->as($file->getClientOriginalName()),
             default => $file,
         };
 

@@ -263,7 +263,7 @@ test('response usage includes cache and reasoning tokens', function (): void {
             'completion_tokens' => 50,
             'prompt_tokens_details' => [
                 'cached_tokens' => 20,
-                'cache_write_tokens' => 80,
+                'cache_write_tokens' => 30,
             ],
             'completion_tokens_details' => [
                 'reasoning_tokens' => 10,
@@ -273,10 +273,10 @@ test('response usage includes cache and reasoning tokens', function (): void {
 
     $response = agent()->prompt('Hello', provider: 'openrouter');
 
-    expect($response->usage->promptTokens)->toBe(100)
+    expect($response->usage->promptTokens)->toBe(50)
         ->and($response->usage->completionTokens)->toBe(50)
         ->and($response->usage->cacheReadInputTokens)->toBe(20)
-        ->and($response->usage->cacheWriteInputTokens)->toBe(80)
+        ->and($response->usage->cacheWriteInputTokens)->toBe(30)
         ->and($response->usage->reasoningTokens)->toBe(10);
 });
 

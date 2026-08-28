@@ -89,7 +89,7 @@ class OpenRouterProvider extends Provider implements AudioProvider, EmbeddingPro
      */
     public function defaultTextModel(): string
     {
-        return $this->config['models']['text']['default'] ?? 'anthropic/claude-sonnet-4.6';
+        return $this->config['models']['text']['default'] ?? 'anthropic/claude-sonnet-5';
     }
 
     /**
@@ -105,7 +105,7 @@ class OpenRouterProvider extends Provider implements AudioProvider, EmbeddingPro
      */
     public function smartestTextModel(): string
     {
-        return $this->config['models']['text']['smartest'] ?? 'anthropic/claude-opus-4.6';
+        return $this->config['models']['text']['smartest'] ?? 'anthropic/claude-opus-5';
     }
 
     /**

@@ -2,6 +2,7 @@
 
 use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Gateway\Bedrock\BedrockImageGateway;
+use Laravel\Ai\Gateway\Bedrock\BedrockRerankingGateway;
 use Laravel\Ai\Gateway\Bedrock\BedrockTextGateway;
 use Laravel\Ai\Providers\BedrockProvider;
 
@@ -125,24 +126,6 @@ test('defaults to us east 1 region when not specified', function (): void {
         ->and($additionalConfig['region'])->toBe('us-east-1');
 });
 
-test('returns default text model', function (): void {
-    $provider = new BedrockProvider([], $this->dispatcher);
-
-    expect($provider->defaultTextModel())->toBe('us.anthropic.claude-sonnet-4-5-20250929-v1:0');
-});
-
-test('returns cheapest text model', function (): void {
-    $provider = new BedrockProvider([], $this->dispatcher);
-
-    expect($provider->cheapestTextModel())->toBe('us.anthropic.claude-haiku-4-5-20251001-v1:0');
-});
-
-test('returns smartest text model', function (): void {
-    $provider = new BedrockProvider([], $this->dispatcher);
-
-    expect($provider->smartestTextModel())->toBe('us.anthropic.claude-opus-4-6-v1');
-});
-
 test('allows custom text models in config', function (): void {
     $config = [
         'models' => [
@@ -243,11 +226,42 @@ test('creates image gateway', function (): void {
     expect($provider->imageGateway())->toBeInstanceOf(BedrockImageGateway::class);
 });
 
+test('creates reranking gateway', function (): void {
+    $provider = new BedrockProvider([], $this->dispatcher);
+
+    expect($provider->rerankingGateway())->toBeInstanceOf(BedrockRerankingGateway::class);
+});
+
+test('returns default reranking model', function (): void {
+    $provider = new BedrockProvider([], $this->dispatcher);
+
+    expect($provider->defaultRerankingModel())->toBe('cohere.rerank-v3-5:0');
+});
+
+test('returns configured reranking model', function (): void {
+    $provider = new BedrockProvider([
+        'models' => [
+            'reranking' => ['default' => 'amazon.rerank-v1:0'],
+        ],
+    ], $this->dispatcher);
+
+    expect($provider->defaultRerankingModel())->toBe('amazon.rerank-v1:0');
+});
+
 test('reuses gateway instances', function (): void {
     $provider = new BedrockProvider([], $this->dispatcher);
 
     $gateway1 = $provider->textGateway();
     $gateway2 = $provider->textGateway();
+
+    expect($gateway1)->toBe($gateway2);
+});
+
+test('reuses reranking gateway instance', function (): void {
+    $provider = new BedrockProvider([], $this->dispatcher);
+
+    $gateway1 = $provider->rerankingGateway();
+    $gateway2 = $provider->rerankingGateway();
 
     expect($gateway1)->toBe($gateway2);
 });

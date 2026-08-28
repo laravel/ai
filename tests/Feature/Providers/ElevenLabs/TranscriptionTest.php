@@ -12,7 +12,7 @@ beforeEach(function (): void {
     ]]);
 });
 
-test('transcription request posts to speech-to-text with model, language, and diarize flag', function (): void {
+test('transcription request posts to speech-to-text with model, language code, and diarize flag', function (): void {
     Http::fake(['*' => fakeElevenTranscriptionResponse()]);
 
     Transcription::of(base64_encode('fake-audio'))
@@ -22,7 +22,7 @@ test('transcription request posts to speech-to-text with model, language, and di
     Http::assertSent(fn (Request $request): bool => $request->url() === 'https://api.elevenlabs.io/v1/speech-to-text'
         && $request->isMultipart()
         && collect($request->data())->contains(fn ($part): bool => $part['name'] === 'model_id' && $part['contents'] === 'scribe_v2')
-        && collect($request->data())->contains(fn ($part): bool => $part['name'] === 'language' && $part['contents'] === 'en')
+        && collect($request->data())->contains(fn ($part): bool => $part['name'] === 'language_code' && $part['contents'] === 'en')
         && collect($request->data())->contains(fn ($part): bool => $part['name'] === 'diarize' && $part['contents'] === 'false'));
 });
 
