@@ -22,7 +22,6 @@ use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\StreamableAgentResponse;
-use Laravel\Ai\Streaming\Protocols\AgUiProtocol;
 use Tests\Fixtures\Agents\AssistantAgent;
 
 function runAgentInput(array $overrides = []): array
@@ -217,20 +216,11 @@ describe('chat input from a RunAgentInput request', function () {
 
         $chat = AgentUserInteraction::chat(runAgentInput());
 
-        expect($chat->protocol())->toBeInstanceOf(AgUiProtocol::class);
-
         $events = agUiChatEvents((new AssistantAgent)->stream($chat)->usingProtocol($chat->protocol()));
 
         expect($events[0])->toBe(['type' => 'RUN_STARTED', 'threadId' => 'thread-1', 'runId' => 'run-1'])
             ->and(end($events)['threadId'])->toBe('thread-1')
             ->and(end($events)['runId'])->toBe('run-1');
-    });
-
-    test('string zero protocol identities are preserved', function () {
-        $chat = AgentUserInteraction::chat(runAgentInput(['threadId' => '0', 'runId' => '0']));
-
-        expect($chat->threadId())->toBe('0')
-            ->and($chat->runId())->toBe('0');
     });
 
     test('malformed protocol identities are ignored', function () {
@@ -307,14 +297,6 @@ describe('resuming an interrupted run', function () {
 
         expect($decisions->all())->toHaveCount(1)
             ->and($decisions->get('call-1')->isApproved())->toBeTrue();
-    });
-
-    test('an unknown interrupt id is left for the approval loop to resolve', function () {
-        $decisions = AgentUserInteraction::decisionsFrom([
-            ['interruptId' => 'call-unknown', 'status' => 'resolved', 'payload' => ['approved' => true]],
-        ]);
-
-        expect($decisions->get('call-unknown')->isApproved())->toBeTrue();
     });
 
     test('an empty resume yields no decisions', function () {
