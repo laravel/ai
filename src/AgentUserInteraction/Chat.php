@@ -6,7 +6,7 @@ use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Contracts\AgentInput;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\UserMessage;
-use Laravel\Ai\Streaming\Protocols\AgUiProtocol;
+use Laravel\Ai\Streaming\Protocols\AgentUserInteractionProtocol;
 
 class Chat implements AgentInput
 {
@@ -54,9 +54,9 @@ class Chat implements AgentInput
     /**
      * Get the stream protocol that reports the input's thread and run identity.
      */
-    public function protocol(): AgUiProtocol
+    public function protocol(): AgentUserInteractionProtocol
     {
-        return new AgUiProtocol(
+        return new AgentUserInteractionProtocol(
             $this->threadId() ?: null,
             $this->runId() ?: null,
         );
