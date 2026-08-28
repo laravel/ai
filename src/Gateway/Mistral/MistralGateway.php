@@ -172,7 +172,7 @@ class MistralGateway implements AudioGateway, EmbeddingGateway, StepTextGateway,
             new AudioUsage(
                 $data['usage']['prompt_tokens'] ?? 0,
                 $data['usage']['completion_tokens'] ?? 0,
-                $data['usage']['prompt_audio_seconds'] ?? 0,
+                durationSeconds: $data['usage']['prompt_audio_seconds'] ?? 0,
             ),
             new Meta($provider->name(), $model),
         );

@@ -79,7 +79,7 @@ class GroqGateway implements StepTextGateway, TranscriptionGateway
             new AudioUsage(
                 $data['usage']['prompt_tokens'] ?? 0,
                 $data['usage']['completion_tokens'] ?? 0,
-                $data['duration'] ?? 0,
+                durationSeconds: $data['duration'] ?? 0,
             ),
             new Meta($provider->name(), $model),
         );

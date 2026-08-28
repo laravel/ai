@@ -236,7 +236,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
             new AudioUsage(
                 Arr::get($data, 'usage.input_tokens', 0),
                 Arr::get($data, 'usage.output_tokens', 0),
-                Arr::get($data, 'duration') ?? Arr::get($data, 'usage.seconds', 0),
+                durationSeconds: Arr::get($data, 'duration') ?? Arr::get($data, 'usage.seconds', 0),
             ),
             new Meta($provider->name(), $model),
         );

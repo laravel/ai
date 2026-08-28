@@ -137,7 +137,7 @@ class OpenAiCompatibleGateway implements EmbeddingGateway, StepTextGateway, Tran
             new AudioUsage(
                 Arr::get($data, 'usage.input_tokens') ?? Arr::get($data, 'usage.prompt_tokens', 0),
                 Arr::get($data, 'usage.output_tokens') ?? Arr::get($data, 'usage.completion_tokens', 0),
-                Arr::get($data, 'duration') ?? Arr::get($data, 'usage.seconds', 0),
+                durationSeconds: Arr::get($data, 'duration') ?? Arr::get($data, 'usage.seconds', 0),
             ),
             new Meta($provider->name(), $model),
         );
