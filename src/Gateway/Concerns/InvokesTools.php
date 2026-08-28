@@ -7,6 +7,7 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Gateway\ParentInvocation;
 use Laravel\Ai\Gateway\RunContext;
 use Laravel\Ai\Providers\Tools\ToolSearch;
+use Laravel\Ai\Tools\ModelBinder;
 use Laravel\Ai\Tools\Request;
 use Laravel\Ai\Tools\ToolNameResolver;
 use Throwable;
@@ -30,9 +31,19 @@ trait InvokesTools
 
             $startedAt = hrtime(true);
 
+            $binder = new ModelBinder($tool, $arguments);
+
+            if ($error = $binder->error()) {
+                $context?->toolInvoked($tool, $arguments, $error, $toolInvocationId, $this->elapsedMilliseconds($startedAt));
+
+                return $error;
+            }
+
+            $request = new Request($arguments, $toolCallId, $toolInvocationId, $binder->models());
+
             // Only the handler itself may fail the tool call, so a listener that throws is never reported as a tool failure...
             try {
-                $result = $tool->handle(new Request($arguments, $toolCallId, $toolInvocationId));
+                $result = $tool->handle(...$binder->parameters($request));
             } catch (Throwable $exception) {
                 $context?->toolFailed($tool, $arguments, $exception, $toolInvocationId, $this->elapsedMilliseconds($startedAt));
 

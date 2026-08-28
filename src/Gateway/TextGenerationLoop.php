@@ -38,6 +38,7 @@ use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
+use Laravel\Ai\Tools\ModelBinder;
 use Laravel\Ai\Tools\Request;
 use Laravel\Ai\Tools\ToolNameResolver;
 use LogicException;
@@ -599,9 +600,22 @@ class TextGenerationLoop
      */
     protected function approvalForTool(?Tool $tool, ToolCall $toolCall): ?Approval
     {
-        return $tool instanceof Approvable
-            ? $tool->shouldRequestApproval(new Request($toolCall->arguments, $toolCall->id))
-            : null;
+        if (! $tool instanceof Approvable) {
+            return null;
+        }
+
+        $binder = new ModelBinder($tool, $toolCall->arguments);
+
+        // A tool call that cannot resolve its models is never gated, so the miss is reported to the model instead...
+        if ($binder->error()) {
+            return null;
+        }
+
+        return $tool->shouldRequestApproval(new Request(
+            $toolCall->arguments,
+            $toolCall->id,
+            models: $binder->models(),
+        ));
     }
 
     /**

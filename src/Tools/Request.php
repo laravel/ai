@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Tools;
 
 use ArrayAccess;
+use Illuminate\Contracts\Routing\UrlRoutable;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Support\Traits\Conditionable;
 use Illuminate\Support\Traits\InteractsWithData;
@@ -18,8 +19,17 @@ class Request implements Arrayable, ArrayAccess
         protected array $arguments = [],
         protected ?string $toolCallId = null,
         protected ?string $toolInvocationId = null,
+        protected array $models = [],
     ) {
         //
+    }
+
+    /**
+     * Get the model bound to the given argument.
+     */
+    public function model(string $key): ?UrlRoutable
+    {
+        return $this->models[$key] ?? null;
     }
 
     /**
