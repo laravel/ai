@@ -27,7 +27,7 @@ class AgentPrompt extends Prompt
     /**
      * The tools available for this run, or null to use the tools the agent declares.
      *
-     * @var array<int, Tool|ProviderTool|Agent>|null
+     * @var array<int, Agent|Tool|ProviderTool>|null
      */
     public readonly ?array $tools;
 
