@@ -306,7 +306,7 @@ trait Promptable
     }
 
     /**
-     * Replace the agent's declared tools for this instance. Re-apply when resuming on a fresh instance; closures may only capture serializable values.
+     * Replace the agent's declared tools for this instance.
      *
      * @param  (Closure(array<int, Tool|ProviderTool|Agent>): iterable<int, Tool|ProviderTool|Agent>)|iterable<int, Tool|ProviderTool|Agent>  $tools
      */
