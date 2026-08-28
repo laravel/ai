@@ -80,7 +80,7 @@ trait GeneratesText
                         $prompt->model,
                         (string) $agent->instructions(),
                         $messages,
-                        $this->resolveTools($agent),
+                        $this->resolveTools($prompt),
                         $schema,
                         TextGenerationOptions::forAgent($agent),
                         $prompt->timeout,
@@ -163,17 +163,16 @@ trait GeneratesText
     }
 
     /**
-     * Resolve the tools for the given agent, wrapping any agent instances as tools.
+     * Resolve the tools for the given prompt, wrapping any agent instances as tools.
      */
-    protected function resolveTools(Agent $agent): array
+    protected function resolveTools(AgentPrompt $prompt): array
     {
-        if (! $agent instanceof HasTools) {
-            return [];
-        }
+        $tools = $prompt->tools
+            ?? ($prompt->agent instanceof HasTools ? [...$prompt->agent->tools()] : []);
 
         return array_map(
             fn ($tool) => $this->resolveTool($tool),
-            [...$agent->tools()],
+            $tools,
         );
     }
 

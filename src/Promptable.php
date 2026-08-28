@@ -17,10 +17,13 @@ use Laravel\Ai\Attributes\Timeout as TimeoutAttribute;
 use Laravel\Ai\Attributes\UseCheapestModel;
 use Laravel\Ai\Attributes\UseSmartestModel;
 use Laravel\Ai\Attributes\WithoutBroadcasting;
+use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\AgentInput;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasProviderOptions;
+use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
@@ -32,6 +35,7 @@ use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Providers\Tools\ProviderTool;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\QueuedAgentResponse;
@@ -39,6 +43,7 @@ use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Vercel\Vercel;
+use Laravel\SerializableClosure\SerializableClosure;
 use LogicException;
 use ReflectionClass;
 use RuntimeException;
@@ -53,6 +58,11 @@ trait Promptable
      * @var list<Message>|null
      */
     protected ?array $adHocMessages = null;
+
+    /**
+     * The runtime tool override, replacing the tools the agent declares.
+     */
+    protected ?SerializableClosure $runtimeTools = null;
 
     /**
      * Create a new instance of the agent.
@@ -80,6 +90,8 @@ trait Promptable
 
         $messages = $this->flushAdHocMessages();
 
+        $tools = $this->resolveAgentTools();
+
         $invocationId = (string) Str::uuid7();
 
         $providers = $approvalDecisions !== null
@@ -90,7 +102,7 @@ trait Promptable
 
         $run = function (TextProvider $provider, string $model, bool $isFinalAttempt = true) use (
             $text, $attachments, $timeout, $invocationId, $approvalDecisions,
-            $parentInvocationId, $parentToolInvocationId, $messages
+            $parentInvocationId, $parentToolInvocationId, $messages, $tools
         ): AgentResponse {
             return $provider->prompt(
                 new AgentPrompt(
@@ -101,6 +113,7 @@ trait Promptable
                     parentToolInvocationId: $parentToolInvocationId,
                     isFinalAttempt: $isFinalAttempt,
                     messages: $messages,
+                    tools: $tools,
                 )
             );
         };
@@ -147,6 +160,8 @@ trait Promptable
 
         $messages = $this->flushAdHocMessages();
 
+        $tools = $this->resolveAgentTools();
+
         $invocationId = (string) Str::uuid7();
 
         [$parentInvocationId, $parentToolInvocationId] = ParentInvocation::current();
@@ -162,6 +177,7 @@ trait Promptable
                     parentInvocationId: $parentInvocationId,
                     parentToolInvocationId: $parentToolInvocationId,
                     messages: $messages,
+                    tools: $tools,
                 )
             );
         }
@@ -171,7 +187,7 @@ trait Promptable
 
         $outer = new StreamableAgentResponse(
             $invocationId,
-            function () use ($providers, $prompt, $approvalDecisions, $attachments, $resolvedTimeout, $invocationId, $parentInvocationId, $parentToolInvocationId, $messages, &$outer) {
+            function () use ($providers, $prompt, $approvalDecisions, $attachments, $resolvedTimeout, $invocationId, $parentInvocationId, $parentToolInvocationId, $messages, $tools, &$outer) {
                 $lastException = null;
 
                 foreach ($this->iterateProvidersWithFailover($providers) as [$provider, $model, $isFinalAttempt]) {
@@ -187,6 +203,7 @@ trait Promptable
                                 parentToolInvocationId: $parentToolInvocationId,
                                 isFinalAttempt: $isFinalAttempt,
                                 messages: $messages,
+                                tools: $tools,
                             )
                         );
 
@@ -271,36 +288,6 @@ trait Promptable
     }
 
     /**
-     * Set the ad-hoc message history to send ahead of the next prompt.
-     *
-     * @param  iterable<int, mixed>  $messages
-     */
-    public function withMessages(iterable $messages): static
-    {
-        if ($this instanceof Conversational) {
-            throw new LogicException('Ad-hoc message history may not be combined with a conversational agent.');
-        }
-
-        $this->adHocMessages = Collection::make($messages)
-            ->flatMap(fn ($message) => is_array($message) && isset($message['parts'])
-                ? Vercel::fromUiMessages([$message])
-                : [Message::tryFrom($message)])
-            ->all();
-
-        return $this;
-    }
-
-    /**
-     * Get the ad-hoc history for the next prompt and reset it so it cannot leak into a later one.
-     *
-     * @return list<Message>|null
-     */
-    private function flushAdHocMessages(): ?array
-    {
-        return tap($this->adHocMessages, fn () => $this->adHocMessages = null);
-    }
-
-    /**
      * Invoke the agent with a given prompt and broadcast the streamed events.
      */
     public function broadcast(AgentInput|UserMessage|Decisions|string $prompt, Channel|array $channels, array $attachments = [], bool $now = false, Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
@@ -341,6 +328,76 @@ trait Promptable
         return new QueuedAgentResponse(
             BroadcastAgent::dispatch($this, $prompt, $channels, $attachments, $provider, $model)
         );
+    }
+
+    /**
+     * Set the ad-hoc message history to send ahead of the next prompt.
+     *
+     * @param  iterable<int, mixed>  $messages
+     */
+    public function withMessages(iterable $messages): static
+    {
+        if ($this instanceof Conversational) {
+            throw new LogicException('Ad-hoc message history may not be combined with a conversational agent.');
+        }
+
+        $this->adHocMessages = Collection::make($messages)
+            ->flatMap(fn ($message) => is_array($message) && isset($message['parts'])
+                ? Vercel::fromUiMessages([$message])
+                : [Message::tryFrom($message)])
+            ->all();
+
+        return $this;
+    }
+
+    /**
+     * Replace the agent's declared tools for this instance.
+     *
+     * @param  (Closure(array<int, Agent|Tool|ProviderTool>): iterable<int, Agent|Tool|ProviderTool>)|iterable<int, Agent|Tool|ProviderTool>  $tools
+     */
+    public function withTools(Closure|iterable $tools): static
+    {
+        if (! $tools instanceof Closure) {
+            $replacements = [...$tools];
+
+            $tools = fn (): array => $replacements;
+        }
+
+        $this->runtimeTools = new SerializableClosure($tools);
+
+        return $this;
+    }
+
+    /**
+     * Resolve the runtime tools for the next invocation, or null when the agent's declared tools apply.
+     *
+     * @return array<int, Agent|Tool|ProviderTool>|null
+     */
+    protected function resolveAgentTools(): ?array
+    {
+        return $this->runtimeTools !== null
+            ? [...($this->runtimeTools)($this->declaredTools())]
+            : null;
+    }
+
+    /**
+     * Get the tools the agent declares via its own tools method.
+     *
+     * @return array<int, Agent|Tool|ProviderTool>
+     */
+    private function declaredTools(): array
+    {
+        return $this instanceof HasTools ? [...$this->tools()] : [];
+    }
+
+    /**
+     * Get the ad-hoc history for the next prompt and reset it so it cannot leak into a later one.
+     *
+     * @return list<Message>|null
+     */
+    private function flushAdHocMessages(): ?array
+    {
+        return tap($this->adHocMessages, fn () => $this->adHocMessages = null);
     }
 
     /**
