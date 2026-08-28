@@ -6,6 +6,7 @@ use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Contracts\AgentInput;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\UserMessage;
+use Laravel\Ai\Streaming\Protocols\VercelDataProtocol;
 
 class Chat implements AgentInput
 {
@@ -44,6 +45,14 @@ class Chat implements AgentInput
     public function history(): array
     {
         return Vercel::fromUiMessages($this->precedingMessages());
+    }
+
+    /**
+     * Get the stream protocol for the chat.
+     */
+    public function protocol(): VercelDataProtocol
+    {
+        return new VercelDataProtocol;
     }
 
     /**

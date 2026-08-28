@@ -349,14 +349,14 @@ describe('hydrating AG-UI from stored messages', function () {
             new ConversationMessage(['id' => 'msg-2', 'role' => 'assistant', 'content' => 'A PHP framework.']),
         ];
 
-        expect(AgentUserInteraction::toMessages($stored))->toBe([
+        expect(AgentUserInteraction::toUiMessages($stored))->toBe([
             ['id' => 'msg-1', 'role' => 'user', 'content' => 'What is Laravel?'],
             ['id' => 'msg-2', 'role' => 'assistant', 'content' => 'A PHP framework.'],
         ])->and(AgentUserInteraction::toInterrupts($stored))->toBe([]);
     });
 
     test('a completed tool turn hydrates as tool calls and tool messages', function () {
-        $messages = AgentUserInteraction::toMessages([
+        $messages = AgentUserInteraction::toUiMessages([
             new ConversationMessage([
                 'id' => 'msg-2',
                 'role' => 'assistant',
@@ -381,7 +381,7 @@ describe('hydrating AG-UI from stored messages', function () {
     });
 
     test('tool results from an earlier turn hydrate before the resumed response', function () {
-        $messages = AgentUserInteraction::toMessages([
+        $messages = AgentUserInteraction::toUiMessages([
             new ConversationMessage([
                 'id' => 'msg-1',
                 'role' => 'assistant',
@@ -403,7 +403,7 @@ describe('hydrating AG-UI from stored messages', function () {
     });
 
     test('a non string tool result is encoded as json', function () {
-        $messages = AgentUserInteraction::toMessages([
+        $messages = AgentUserInteraction::toUiMessages([
             new ConversationMessage([
                 'id' => 'msg-2',
                 'role' => 'assistant',
@@ -417,7 +417,7 @@ describe('hydrating AG-UI from stored messages', function () {
     });
 
     test('a denied tool call hydrates as a tool error', function () {
-        $messages = AgentUserInteraction::toMessages([
+        $messages = AgentUserInteraction::toUiMessages([
             new ConversationMessage([
                 'id' => 'msg-2',
                 'role' => 'assistant',
@@ -445,12 +445,17 @@ describe('hydrating AG-UI from stored messages', function () {
             ]),
         ]);
 
-        expect($interrupts)->toBe([
+        expect($interrupts)->toEqual([
             [
                 'id' => 'call-1',
-                'reason' => 'tool_call',
+                'reason' => 'approval_required',
                 'message' => 'Deletes a file.',
                 'toolCallId' => 'call-1',
+                'metadata' => [
+                    'kind' => 'approval',
+                    'toolName' => 'DeleteFile',
+                    'input' => (object) ['path' => 'a.txt'],
+                ],
                 'responseSchema' => [
                     'type' => 'object',
                     'properties' => ['approved' => ['type' => 'boolean']],
@@ -459,8 +464,13 @@ describe('hydrating AG-UI from stored messages', function () {
             ],
             [
                 'id' => 'call-2',
-                'reason' => 'tool_call',
+                'reason' => 'approval_required',
                 'toolCallId' => 'call-2',
+                'metadata' => [
+                    'kind' => 'approval',
+                    'toolName' => 'DeleteFile',
+                    'input' => (object) ['path' => 'b.txt'],
+                ],
                 'responseSchema' => [
                     'type' => 'object',
                     'properties' => ['approved' => ['type' => 'boolean']],
@@ -475,7 +485,7 @@ describe('hydrating AG-UI from stored messages', function () {
     });
 
     test('message objects hydrate alongside conversation models', function () {
-        $messages = AgentUserInteraction::toMessages([
+        $messages = AgentUserInteraction::toUiMessages([
             new UserMessage('Weather?'),
             new AssistantMessage('', collect([new ToolCall('call-1', 'getWeather', ['city' => 'Lisbon'], reasoningEncryptedContent: 'encrypted-reasoning')])),
             new ToolResultMessage(collect([new ToolResult('call-1', 'getWeather', ['city' => 'Lisbon'], 'Sunny')])),
@@ -494,7 +504,7 @@ describe('hydrating AG-UI from stored messages', function () {
     });
 
     test('attachments hydrate as multimodal content parts', function () {
-        $messages = AgentUserInteraction::toMessages([
+        $messages = AgentUserInteraction::toUiMessages([
             new UserMessage('Look at these', [
                 new RemoteImage('https://example.com/a.jpg', 'image/jpeg'),
                 (new Base64Image(base64_encode('fake-png'), 'image/png'))->as('red.png'),
@@ -518,7 +528,7 @@ describe('hydrating AG-UI from stored messages', function () {
         Storage::fake('attachments');
         Storage::disk('attachments')->put('photo.png', 'fake-png');
 
-        $messages = AgentUserInteraction::toMessages([
+        $messages = AgentUserInteraction::toUiMessages([
             new UserMessage('Look at this', [
                 (new StoredImage('photo.png', 'attachments'))->withMimeType('image/png'),
                 (new StoredImage('missing.png', 'attachments'))->withMimeType('image/png'),
@@ -538,7 +548,7 @@ describe('hydrating AG-UI from stored messages', function () {
     });
 
     test('a hydrated conversation round trips back into messages', function () {
-        $uiMessages = AgentUserInteraction::toMessages([
+        $uiMessages = AgentUserInteraction::toUiMessages([
             new ConversationMessage(['id' => 'msg-1', 'role' => 'user', 'content' => 'Weather?']),
             new ConversationMessage([
                 'id' => 'msg-2',

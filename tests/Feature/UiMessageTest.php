@@ -18,6 +18,7 @@ use Laravel\Ai\Models\ConversationMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
+use Laravel\Ai\Streaming\Protocols\VercelDataProtocol;
 use Laravel\Ai\Vercel\Vercel;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
@@ -264,6 +265,11 @@ describe('chat input from a useChat request', function () {
         $request = Request::create('/chat', 'POST', ['messages' => useChatMessages()]);
 
         expect(Vercel::chat($request)->message()->content)->toBe('Who made it?');
+    });
+
+    test('a chat exposes its stream protocol', function () {
+        expect(Vercel::chat(useChatMessages())->protocol())
+            ->toBeInstanceOf(VercelDataProtocol::class);
     });
 
     test('approval responses on the trailing assistant message become decisions', function () {

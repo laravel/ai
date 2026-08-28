@@ -153,7 +153,7 @@ class AgentUserInteraction
         $messages = [...$messages];
 
         return [
-            'messages' => static::toMessages($messages),
+            'messages' => static::toUiMessages($messages),
             'interrupts' => static::toInterrupts($messages),
         ];
     }
@@ -164,7 +164,7 @@ class AgentUserInteraction
      * @param  iterable<int, Message|ConversationMessage>  $messages
      * @return list<array<string, mixed>>
      */
-    public static function toMessages(iterable $messages): array
+    public static function toUiMessages(iterable $messages): array
     {
         $result = [];
 
@@ -238,8 +238,19 @@ class AgentUserInteraction
                 continue;
             }
 
+            $calls = (new Collection($message->tool_calls ?? []))
+                ->filter(fn ($call) => is_array($call) && isset($call['id']))
+                ->keyBy('id');
+
             foreach (($message->approval_state ?? [])['pending'] ?? [] as $callId => $reason) {
-                $interrupts[] = static::interrupt((string) $callId, is_string($reason) ? $reason : null);
+                $call = $calls[(string) $callId] ?? null;
+
+                $interrupts[] = static::interrupt(
+                    (string) $callId,
+                    is_string($reason) ? $reason : null,
+                    is_string($call['name'] ?? null) ? $call['name'] : null,
+                    is_array($call['arguments'] ?? null) ? $call['arguments'] : [],
+                );
             }
         }
 
@@ -249,15 +260,21 @@ class AgentUserInteraction
     /**
      * Get the interrupt that represents a pending tool approval.
      *
+     * @param  array<string, mixed>  $arguments
      * @return array<string, mixed>
      */
-    public static function interrupt(string $id, ?string $reason = null): array
+    public static function interrupt(string $id, ?string $reason = null, ?string $tool = null, array $arguments = []): array
     {
         return [
             'id' => $id,
-            'reason' => 'tool_call',
+            'reason' => 'approval_required',
             ...(filled($reason) ? ['message' => $reason] : []),
             'toolCallId' => $id,
+            'metadata' => [
+                'kind' => 'approval',
+                ...(filled($tool) ? ['toolName' => $tool] : []),
+                'input' => (object) $arguments,
+            ],
             'responseSchema' => [
                 'type' => 'object',
                 'properties' => ['approved' => ['type' => 'boolean']],
