@@ -129,8 +129,7 @@ test('fake transcriptions include a duration', function (): void {
 
     $response = Transcription::of(base64_encode('audio'))->generate();
 
-    expect($response->duration)->toEqual($response->segments->last()->endSeconds)
-        ->and($response->usage->durationSeconds)->toEqual(ceil($response->duration));
+    expect($response->usage->durationSeconds)->toBe(1.0);
 });
 
 test('queued transcriptions can be faked', function (): void {

@@ -9,16 +9,7 @@ test('usage defaults all tokens to zero', function (): void {
         ->and($usage->completionTokens)->toBe(0)
         ->and($usage->cacheWriteInputTokens)->toBe(0)
         ->and($usage->cacheReadInputTokens)->toBe(0)
-        ->and($usage->reasoningTokens)->toBe(0)
-        ->and($usage->durationSeconds)->toBe(0.0);
-});
-
-test('usage accepts the billed audio duration', function (): void {
-    $usage = new Usage(100, 50, 25, 10, 5, 3.0);
-
-    expect($usage->durationSeconds)->toBe(3.0)
-        ->and($usage->add(new Usage(durationSeconds: 2.0))->durationSeconds)->toBe(5.0)
-        ->and($usage->toArray()['duration_seconds'])->toBe(3.0);
+        ->and($usage->reasoningTokens)->toBe(0);
 });
 
 test('usage accepts token values in constructor', function (): void {
