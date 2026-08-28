@@ -65,7 +65,7 @@ trait StreamsText
                         $messages[] = new UserMessage($prompt->prompt, $prompt->attachments->all());
                     }
 
-                    $tools = $this->resolveTools($agent);
+                    $tools = $this->resolveTools($prompt);
                     $approval = $this->resumableApprovalFor($prompt);
                     $recordApprovalResults = $this->approvalResultRecorderFor($prompt, $resolvedApprovalResults);
 
