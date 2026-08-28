@@ -1,34 +1,31 @@
 <?php
 
-use function Laravel\Ai\instructions;
-
-beforeEach(fn () => is_dir(resource_path('agents/instructions')) || mkdir(resource_path('agents/instructions'), recursive: true));
+beforeEach(fn () => is_dir(resource_path('instructions')) || mkdir(resource_path('instructions'), recursive: true));
 
 afterEach(function () {
-    array_map(unlink(...), glob(resource_path('agents/instructions/*')));
+    array_map(unlink(...), glob(resource_path('instructions/*')));
 
-    rmdir(resource_path('agents/instructions'));
-    rmdir(resource_path('agents'));
+    rmdir(resource_path('instructions'));
 });
 
-it('renders markdown instructions from the resources/agents/instructions directory', function () {
-    file_put_contents(resource_path('agents/instructions/greeting.blade.md'), '# Hello, {{ $name }}.');
+it('renders markdown instructions from the resources/instructions directory', function () {
+    file_put_contents(resource_path('instructions/greeting.blade.md'), '# Hello, {{ $name }}.');
 
-    expect(instructions('greeting', ['name' => 'Taylor']))->toBe('# Hello, Taylor.');
+    expect(view('instructions::greeting', ['name' => 'Taylor'])->render())->toBe('# Hello, Taylor.');
 });
 
 it('does not html escape instruction data', function () {
-    file_put_contents(resource_path('agents/instructions/summarize.blade.md'), 'Summarize: {{ $text }}');
+    file_put_contents(resource_path('instructions/summarize.blade.md'), 'Summarize: {{ $text }}');
 
-    expect(instructions('summarize', ['text' => 'Ben & Jerry\'s "best" <flavor>']))
+    expect(view('instructions::summarize', ['text' => 'Ben & Jerry\'s "best" <flavor>'])->render())
         ->toBe('Summarize: Ben & Jerry\'s "best" <flavor>');
 });
 
 it('renders blade directives in instructions', function () {
-    file_put_contents(resource_path('agents/instructions/tools.blade.md'), '@foreach ($tools as $tool)- {{ $tool }}
+    file_put_contents(resource_path('instructions/tools.blade.md'), '@foreach ($tools as $tool)- {{ $tool }}
 @endforeach');
 
-    expect(instructions('tools', ['tools' => ['search', 'fetch']]))->toContain('- search', '- fetch');
+    expect(view('instructions::tools', ['tools' => ['search', 'fetch']])->render())->toContain('- search', '- fetch');
 });
 
 it('does not affect html escaping in application views', function () {

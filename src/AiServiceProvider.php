@@ -41,7 +41,7 @@ class AiServiceProvider extends ServiceProvider
     protected function registerInstructionViews(): void
     {
         $this->callAfterResolving('view', function ($view, $app): void {
-            $view->addNamespace('instructions', resource_path('agents/instructions'));
+            $view->addNamespace('instructions', resource_path('instructions'));
 
             $compiler = new BladeCompiler($app['files'], $app['config']['view.compiled']);
 
