@@ -31,6 +31,10 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
 
     public ?object $conversationUser = null;
 
+    public ?string $userMessageId = null;
+
+    public ?string $assistantMessageId = null;
+
     protected array $thenCallbacks = [];
 
     protected ?StreamProtocol $protocol = null;
@@ -221,6 +225,8 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     {
         $this->conversationId = $this->streamedResponse->conversationId;
         $this->conversationUser = $this->streamedResponse->conversationUser;
+        $this->userMessageId = $this->streamedResponse->userMessageId;
+        $this->assistantMessageId = $this->streamedResponse->assistantMessageId;
     }
 
     /**
