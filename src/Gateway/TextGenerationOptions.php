@@ -37,13 +37,15 @@ class TextGenerationOptions
      */
     public function providerOptions(Lab|string $provider): ?array
     {
-        if ($this->agent instanceof HasProviderOptions) {
-            return Arr::except($this->agent->providerOptions(
-                $provider instanceof Lab ? $provider : (Lab::tryFrom($provider) ?? $provider)
-            ), HasProviderOptions::HEADERS);
+        if (! $this->agent instanceof HasProviderOptions) {
+            return null;
         }
 
-        return null;
+        $options = $this->agent->providerOptions(
+            $provider instanceof Lab ? $provider : (Lab::tryFrom($provider) ?? $provider)
+        );
+
+        return Arr::except($options, HasProviderOptions::HEADERS);
     }
 
     /**

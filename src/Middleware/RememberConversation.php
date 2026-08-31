@@ -4,6 +4,7 @@ namespace Laravel\Ai\Middleware;
 
 use Closure;
 use Illuminate\Support\Str;
+use Laravel\Ai\Concerns\RemembersConversations as RemembersConversationsTrait;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -26,6 +27,15 @@ class RememberConversation
     ) {}
 
     /**
+     * Determine whether the given agent remembers its conversations.
+     */
+    public static function appliesTo(Agent $agent): bool
+    {
+        return $agent instanceof RemembersConversations
+            || in_array(RemembersConversationsTrait::class, class_uses_recursive($agent), true);
+    }
+
+    /**
      * Handle the incoming prompt.
      */
     public function handle(AgentPrompt $prompt, Closure $next)
@@ -44,10 +54,7 @@ class RememberConversation
             $response->withinConversation($pendingConversationId, $agent->conversationParticipant());
         }
 
-        return $response->then(function (AgentResponse $completedResponse) use ($prompt, $pendingConversationId): void {
-            /** @var Agent&RemembersConversations $agent */
-            $agent = $prompt->agent;
-
+        return $response->then(function (AgentResponse $completedResponse) use ($prompt, $agent, $pendingConversationId): void {
             if (! $this->shouldRemember($agent, $prompt, $completedResponse)) {
                 if ($pendingConversationId !== null) {
                     $completedResponse->conversationId = null;

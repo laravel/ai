@@ -29,7 +29,13 @@ abstract class StreamProtocol
      *
      * @return array<string, string>
      */
-    abstract protected function headers(): array;
+    protected function headers(): array
+    {
+        return [
+            'Cache-Control' => 'no-cache, no-transform',
+            'Content-Type' => 'text/event-stream',
+        ];
+    }
 
     /**
      * Create an HTTP response that represents the given response using the protocol.
