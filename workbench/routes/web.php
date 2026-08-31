@@ -40,6 +40,7 @@ Route::post('/chat/message', function (Request $request) {
     ]);
 });
 
+// CopilotKit and TanStack AI both speak AG-UI, so this route serves either with no client specific code...
 Route::post('/ag-ui', function (Request $request) {
     $chat = AgentUserInteraction::chat($request);
 
