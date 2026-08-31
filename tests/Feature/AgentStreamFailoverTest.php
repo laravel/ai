@@ -295,7 +295,11 @@ test('stream conversation state survives failover', function (): void {
     }
 
     expect($thenResponse->conversationId)->toBe($existingConversationId)
-        ->and($thenResponse->conversationUser)->toBe($user);
+        ->and($thenResponse->conversationUser)->toBe($user)
+        ->and($response->userMessageId)->not->toBeNull()
+        ->and($response->assistantMessageId)->not->toBeNull()
+        ->and(collect($store->messages)->firstWhere('id', $response->userMessageId)['role'])->toBe('user')
+        ->and(collect($store->messages)->firstWhere('id', $response->assistantMessageId)['role'])->toBe('assistant');
 });
 
 test('first turn stream failover persists its reserved conversation', function (): void {

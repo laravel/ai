@@ -113,6 +113,9 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
             $this->withinConversation($response->conversationId, $response->conversationUser);
         }
 
+        $this->userMessageId = $response->userMessageId;
+        $this->assistantMessageId = $response->assistantMessageId;
+
         return $this;
     }
 
@@ -210,6 +213,11 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
                 $this->conversationUser
             );
         }
+
+        $this->streamedResponse->withStoredMessages(
+            $this->userMessageId,
+            $this->assistantMessageId,
+        );
 
         foreach ($this->thenCallbacks as $callback) {
             call_user_func($callback, $this->streamedResponse);
