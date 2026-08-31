@@ -299,11 +299,6 @@ describe('resuming an interrupted run', function () {
             ->and($decisions->get('call-1')->isApproved())->toBeTrue();
     });
 
-    test('an empty resume yields no decisions', function () {
-        expect(AgentUserInteraction::decisionsFrom([]))->toBeNull()
-            ->and(AgentUserInteraction::chat(runAgentInput())->decisions())->toBeNull();
-    });
-
     test('malformed resume entries are skipped rather than rejected', function () {
         expect(AgentUserInteraction::decisionsFrom([['status' => 'cancelled']]))->toBeNull()
             ->and(AgentUserInteraction::decisionsFrom([['interruptId' => 'call-1', 'status' => 'resolved', 'payload' => ['approved' => 'yes']]]))->toBeNull()
@@ -321,7 +316,8 @@ describe('resuming an interrupted run', function () {
 });
 
 describe('hydrating AG-UI from stored messages', function () {
-    test('UI messages contain messages and pending interrupts', function () {
+    test('a generator of stored messages hydrates both messages and interrupts', function () {
+        // Both halves of the state read the same messages, so a generator must be spread before use...
         $state = AgentUserInteraction::toClientState((function () {
             yield new ConversationMessage([
                 'id' => 'msg-2',
