@@ -4,9 +4,11 @@ namespace Laravel\Ai\Tools;
 
 use ArrayAccess;
 use Illuminate\Contracts\Support\Arrayable;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Traits\Conditionable;
 use Illuminate\Support\Traits\InteractsWithData;
 use Illuminate\Support\Traits\Macroable;
+use Illuminate\Validation\ValidationException;
 
 class Request implements Arrayable, ArrayAccess
 {
@@ -36,6 +38,19 @@ class Request implements Arrayable, ArrayAccess
     public function toolInvocationId(): ?string
     {
         return $this->toolInvocationId;
+    }
+
+    /**
+     * @param  array<string, mixed>  $rules
+     * @param  array<string, mixed>  $messages
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed>
+     *
+     * @throws ValidationException
+     */
+    public function validate(array $rules, array $messages = [], array $attributes = []): array
+    {
+        return Validator::validate($this->all(), $rules, $messages, $attributes);
     }
 
     /**
