@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ProviderOptionsAgent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
+use Tests\Fixtures\Agents\StructuredWithOutputConfigOptionsAgent;
 
 test('provider options are included in anthropic request body', function (): void {
     Http::fake([
@@ -35,6 +36,24 @@ test('request body does not contain provider options when agent does not impleme
     );
 
     Http::assertSent(fn ($request): bool => ! isset($request->data()['thinking']));
+});
+
+test('output_config provider options merge with structured output format instead of replacing it', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeStructuredResponse(['name' => 'Ada', 'age' => 36]),
+    ]);
+
+    (new StructuredWithOutputConfigOptionsAgent)->prompt(
+        'Give me a person',
+        provider: 'anthropic',
+    );
+
+    Http::assertSent(function ($request): bool {
+        $outputConfig = $request->data()['output_config'] ?? [];
+
+        return ($outputConfig['format']['type'] ?? null) === 'json_schema'
+            && ($outputConfig['effort'] ?? null) === 'medium';
+    });
 });
 
 test('provider options are persisted in tool call follow up requests', function (): void {

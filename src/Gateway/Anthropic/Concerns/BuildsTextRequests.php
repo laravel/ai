@@ -70,7 +70,38 @@ trait BuildsTextRequests
             'top_p' => $options?->topP,
         ]));
 
-        return $this->applyPromptCacheBreakpoints(array_merge($body, $providerOptions), $options);
+        return $this->applyPromptCacheBreakpoints(
+            $this->mergeProviderOptions($body, $providerOptions),
+            $options,
+        );
+    }
+
+    /**
+     * Merge provider options into the request body.
+     *
+     * Provider options are shallow-merged, except for the "output_config" key,
+     * which is merged one level deeper so that options sharing it (e.g. an
+     * "effort" level) do not discard the structured-output "format" the request
+     * builder places there.
+     *
+     * @param  array<string, mixed>  $body
+     * @param  array<string, mixed>  $providerOptions
+     * @return array<string, mixed>
+     */
+    protected function mergeProviderOptions(array $body, array $providerOptions): array
+    {
+        $merged = array_merge($body, $providerOptions);
+
+        if (isset($body['output_config'], $providerOptions['output_config'])
+            && is_array($body['output_config'])
+            && is_array($providerOptions['output_config'])) {
+            $merged['output_config'] = array_merge(
+                $body['output_config'],
+                $providerOptions['output_config'],
+            );
+        }
+
+        return $merged;
     }
 
     /**
