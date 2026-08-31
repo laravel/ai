@@ -42,6 +42,16 @@ trait RemembersConversations
     }
 
     /**
+     * Continue the given conversation for the participant, or start a new one when there is none.
+     */
+    public function continueOrStart(?string $conversationId, object $as): static
+    {
+        return $conversationId === null
+            ? $this->forParticipant($as)
+            : $this->continue($conversationId, as: $as);
+    }
+
+    /**
      * Continue an existing conversation as the given user.
      */
     public function continueLastConversation(object $as): static
