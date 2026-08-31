@@ -155,7 +155,12 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
             }
 
             yield "data: [DONE]\n\n";
-        }, headers: ['Content-Type' => 'text/event-stream']);
+        }, headers: [
+            // Without these a proxy may buffer or transcode the body, holding every event back until the run ends...
+            'Cache-Control' => 'no-cache, no-transform',
+            'Content-Type' => 'text/event-stream',
+            'X-Accel-Buffering' => 'no',
+        ]);
     }
 
     /**
