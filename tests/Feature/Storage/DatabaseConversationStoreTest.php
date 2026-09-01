@@ -148,6 +148,42 @@ test('it stores sparse keyed tool calls and results as JSON arrays', function ()
         ->and(array_is_list(json_decode((string) $record->tool_results, true)))->toBeTrue();
 });
 
+test('it scopes the latest conversation lookup to conversations the agent has participated in', function (): void {
+    $store = new DatabaseConversationStore;
+
+    $first = $store->storeConversation('user', 1, 'First');
+    $second = $store->storeConversation('user', 1, 'Second');
+
+    $insertMessage = fn (string $id, string $conversationId, string $agent) => DB::table('agent_conversation_messages')->insert([
+        'id' => $id,
+        'conversation_id' => $conversationId,
+        'participant_type' => 'user',
+        'participant_id' => 1,
+        'agent' => $agent,
+        'role' => 'user',
+        'content' => 'Hello',
+        'attachments' => '[]',
+        'tool_calls' => '[]',
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $insertMessage('message-1', $first, ToolUsingAgent::class);
+    $insertMessage('message-2', $second, RememberingToolUsingAgent::class);
+
+    expect($store->latestConversationId('user', 1, ToolUsingAgent::class))->toBe($first)
+        ->and($store->latestConversationId('user', 1, RememberingToolUsingAgent::class))->toBe($second)
+        ->and($store->latestConversationId('user', 2, ToolUsingAgent::class))->toBeNull();
+
+    // The agent later joins the second conversation, so it becomes that agent's latest too...
+    $insertMessage('message-3', $second, ToolUsingAgent::class);
+
+    expect($store->latestConversationId('user', 1, ToolUsingAgent::class))->toBe($second);
+});
+
 test('a bare rejection resume does not persist a blank assistant row', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Approval conversation');
@@ -1085,9 +1121,29 @@ test('it scopes conversations by participant type so shared ids no longer collid
     $userConversation = $store->storeConversation('user', $user->id, 'User chat');
     $adminConversation = $store->storeConversation('admin', $admin->id, 'Admin chat');
 
+    $insertMessage = fn (string $id, string $conversationId, string $participantType) => DB::table('agent_conversation_messages')->insert([
+        'id' => $id,
+        'conversation_id' => $conversationId,
+        'participant_type' => $participantType,
+        'participant_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'user',
+        'content' => 'Hello',
+        'attachments' => '[]',
+        'tool_calls' => '[]',
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $insertMessage('message-user', $userConversation, 'user');
+    $insertMessage('message-admin', $adminConversation, 'admin');
+
     // Despite sharing id 1, each participant only resolves its own conversation...
-    expect($store->latestConversationId('user', $user->id))->toBe($userConversation)
-        ->and($store->latestConversationId('admin', $admin->id))->toBe($adminConversation)
+    expect($store->latestConversationId('user', $user->id, ToolUsingAgent::class))->toBe($userConversation)
+        ->and($store->latestConversationId('admin', $admin->id, ToolUsingAgent::class))->toBe($adminConversation)
         ->and($userConversation)->not->toBe($adminConversation);
 });
 

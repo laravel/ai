@@ -12,9 +12,9 @@ use Laravel\Ai\Responses\Data\ToolResult;
 interface ConversationStore
 {
     /**
-     * Get the most recent conversation ID for a given participant.
+     * Get the participant's most recent conversation ID with the given agent.
      */
-    public function latestConversationId(string $participantType, string|int $participantId): ?string;
+    public function latestConversationId(string $participantType, string|int $participantId, string $agent): ?string;
 
     /**
      * Store a new conversation and return its ID.

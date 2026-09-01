@@ -41,6 +41,8 @@ class Request implements Arrayable, ArrayAccess
     }
 
     /**
+     * Validate the tool arguments against the given rules.
+     *
      * @param  array<string, mixed>  $rules
      * @param  array<string, mixed>  $messages
      * @param  array<string, mixed>  $attributes

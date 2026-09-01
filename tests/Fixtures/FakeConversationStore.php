@@ -9,7 +9,7 @@ use Laravel\Ai\Responses\AgentResponse;
 
 class FakeConversationStore implements ConversationStore
 {
-    public function latestConversationId(string $participantType, string|int $participantId): ?string
+    public function latestConversationId(string $participantType, string|int $participantId, string $agent): ?string
     {
         return null;
     }

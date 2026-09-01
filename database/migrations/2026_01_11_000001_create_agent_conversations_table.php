@@ -41,7 +41,7 @@ return new class extends AiMigration
             $table->timestamps();
 
             $table->index(['conversation_id', 'participant_type', 'participant_id', 'updated_at'], 'conversation_index');
-            $table->index(['participant_type', 'participant_id'], 'participant_index');
+            $table->index(['participant_type', 'participant_id', 'agent'], 'participant_index');
         });
     }
 

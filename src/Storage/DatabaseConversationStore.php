@@ -30,15 +30,16 @@ class DatabaseConversationStore implements ConversationStore
     }
 
     /**
-     * Get the most recent conversation ID for a given participant.
+     * Get the participant's most recent conversation ID with the given agent.
      */
-    public function latestConversationId(string $participantType, string|int $participantId): ?string
+    public function latestConversationId(string $participantType, string|int $participantId, string $agent): ?string
     {
-        return $this->table($this->conversationsTable())
+        return $this->table($this->messagesTable())
             ->where('participant_type', $participantType)
             ->where('participant_id', $participantId)
-            ->orderBy('updated_at', 'desc')
-            ->first()?->id;
+            ->where('agent', $agent)
+            ->orderByDesc('id')
+            ->value('conversation_id');
     }
 
     /**

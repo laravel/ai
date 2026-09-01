@@ -25,9 +25,12 @@ test('it threads the participant type into latestConversationId when continuing 
     {
         public ?string $receivedType = null;
 
-        public function latestConversationId(string $participantType, string|int $participantId): ?string
+        public ?string $receivedAgent = null;
+
+        public function latestConversationId(string $participantType, string|int $participantId, string $agent): ?string
         {
             $this->receivedType = $participantType;
+            $this->receivedAgent = $agent;
 
             return $participantType === 'admin' ? 'conversation-admin' : null;
         }
@@ -64,6 +67,7 @@ test('it threads the participant type into latestConversationId when continuing 
 
     // The participant's morph type reaches the store, so it resolves that participant's own conversation...
     expect($store->receivedType)->toBe('admin')
+        ->and($store->receivedAgent)->toBe(RememberingAssistantAgent::class)
         ->and($agent->currentConversation())->toBe('conversation-admin');
 });
 
@@ -75,7 +79,7 @@ test('it continues the last conversation through a store that ignores the partic
 
     $store = new class implements ConversationStore
     {
-        public function latestConversationId(string $participantType, string|int $participantId): ?string
+        public function latestConversationId(string $participantType, string|int $participantId, string $agent): ?string
         {
             return 'conversation-1';
         }
@@ -131,7 +135,7 @@ test('it resolves the participant id via getKey for models with custom primary k
     {
         public string|int|null $receivedId = null;
 
-        public function latestConversationId(string $participantType, string|int $participantId): ?string
+        public function latestConversationId(string $participantType, string|int $participantId, string $agent): ?string
         {
             $this->receivedId = $participantId;
 
