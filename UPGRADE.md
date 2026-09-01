@@ -1,5 +1,15 @@
 # Upgrade Guide
 
+## Upgrading To 0.12 From 0.11
+
+### Final OpenAI-Compatible Step Disables Tools
+
+**Likelihood Of Impact: Low**
+
+OpenAI-compatible text generation now sets `tool_choice` to `none` on the final configured model request. Tool definitions remain in the request so previous tool calls and results stay valid, but the model must produce a response instead of requesting a tool that the loop cannot run.
+
+`maxSteps` still sets the total number of model requests. For example, `maxSteps: 5` allows up to four tool-capable requests followed by one response request. With `maxSteps: 1`, tools cannot be called; configure at least two steps when an agent needs to call one.
+
 ## Upgrading To 0.11 From 0.10
 
 ### Connection Failures Throw `ProviderConnectionException`

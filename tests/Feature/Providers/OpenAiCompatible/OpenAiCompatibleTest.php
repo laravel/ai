@@ -10,8 +10,10 @@ use Laravel\Ai\Responses\AgentResponse;
 use Tests\Fixtures\Agents\AttributeAgent;
 use Tests\Fixtures\Agents\AttributeToolChoiceAgent;
 use Tests\Fixtures\Agents\NestedStructuredAgent;
+use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
 use Tests\Fixtures\Agents\ToolChoiceAgent;
+use Tests\Fixtures\Agents\ToolUsingAgent;
 
 use function Laravel\Ai\agent;
 
@@ -167,6 +169,33 @@ test('none tool choice prevents tool calls', function (): void {
     Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['tool_choice'] === 'none');
 });
 
+test('final tool loop request disables tools and returns structured output', function (): void {
+    Http::fake([
+        '*' => Http::sequence([
+            fakeOpenAiCompatibleToolCallResponse(),
+            fakeOpenAiCompatibleResponse('{"number":72019}'),
+        ]),
+    ]);
+
+    $response = (new ToolUsingAgent(fixed: true))->prompt(
+        'Generate a number',
+        provider: 'openai-compatible',
+    );
+
+    $recorded = Http::recorded();
+    $firstBody = json_decode((string) $recorded[0][0]->body(), true);
+    $finalBody = json_decode((string) $recorded[1][0]->body(), true);
+
+    expect($recorded)->toHaveCount(2)
+        ->and($firstBody['tool_choice'])->toBe('auto')
+        ->and($finalBody['tools'])->not->toBeEmpty()
+        ->and($finalBody['tool_choice'])->toBe('none')
+        ->and($finalBody)->toHaveKey('response_format')
+        ->and($response->structured['number'])->toBe(72019)
+        ->and($response->toolResults)->toHaveCount(1)
+        ->and($response->toolResults[0]->result)->toBe('72019');
+});
+
 test('max tokens uses the max_tokens field by default', function (): void {
     Http::fake(['*' => fakeOpenAiCompatibleResponse('Hello')]);
 
@@ -219,6 +248,29 @@ test('streaming omits stream_options by default', function (): void {
         return $body['stream'] === true
             && ! array_key_exists('stream_options', $body);
     });
+});
+
+test('final streamed tool loop request disables tools', function (): void {
+    Http::fake([
+        '*' => Http::sequence([
+            fakeOpenAiCompatibleToolCallStream(),
+            fakeOpenAiCompatibleStream('The number is 72019'),
+        ]),
+    ]);
+
+    foreach ((new ProviderOptionsWithToolsAgent)->stream('Generate a number', provider: 'openai-compatible') as $event) {
+        // drain the stream
+    }
+
+    $recorded = Http::recorded();
+    $firstBody = json_decode((string) $recorded[0][0]->body(), true);
+    $finalBody = json_decode((string) $recorded[1][0]->body(), true);
+
+    expect($recorded)->toHaveCount(2)
+        ->and($firstBody['tool_choice'])->toBe('auto')
+        ->and($finalBody['tools'])->not->toBeEmpty()
+        ->and($finalBody['tool_choice'])->toBe('none')
+        ->and($finalBody['stream'])->toBeTrue();
 });
 
 test('streaming sends stream_options when configured on the instance', function (): void {
@@ -352,7 +404,59 @@ function fakeOpenAiCompatibleResponse(string $content)
     ]);
 }
 
-function fakeOpenAiCompatibleStream()
+function fakeOpenAiCompatibleToolCallResponse()
+{
+    return Http::response([
+        'id' => 'chatcmpl-tool-123',
+        'object' => 'chat.completion',
+        'model' => 'local-model',
+        'choices' => [[
+            'index' => 0,
+            'message' => [
+                'role' => 'assistant',
+                'content' => null,
+                'tool_calls' => [[
+                    'id' => 'call_123',
+                    'type' => 'function',
+                    'function' => [
+                        'name' => 'FixedNumberGenerator',
+                        'arguments' => '{}',
+                    ],
+                ]],
+            ],
+            'finish_reason' => 'tool_calls',
+        ]],
+        'usage' => ['prompt_tokens' => 1, 'completion_tokens' => 1],
+    ]);
+}
+
+function fakeOpenAiCompatibleToolCallStream()
+{
+    $chunk = fn (array $delta, ?string $finish = null): string => 'data: '.json_encode([
+        'id' => 'chatcmpl-tool-123',
+        'object' => 'chat.completion.chunk',
+        'model' => 'local-model',
+        'choices' => [['index' => 0, 'delta' => $delta, 'finish_reason' => $finish]],
+    ]);
+
+    $body = implode("\n\n", [
+        $chunk([
+            'role' => 'assistant',
+            'tool_calls' => [[
+                'index' => 0,
+                'id' => 'call_123',
+                'type' => 'function',
+                'function' => ['name' => 'FixedNumberGenerator', 'arguments' => '{}'],
+            ]],
+        ]),
+        $chunk([], 'tool_calls'),
+        'data: [DONE]',
+    ])."\n\n";
+
+    return Http::response($body, 200, ['Content-Type' => 'text/event-stream']);
+}
+
+function fakeOpenAiCompatibleStream(string $content = 'Hello')
 {
     $chunk = fn (array $delta, ?string $finish = null): string => 'data: '.json_encode([
         'id' => 'chatcmpl-123',
@@ -362,7 +466,7 @@ function fakeOpenAiCompatibleStream()
     ]);
 
     $body = implode("\n\n", [
-        $chunk(['role' => 'assistant', 'content' => 'Hello']),
+        $chunk(['role' => 'assistant', 'content' => $content]),
         $chunk([], 'stop'),
         'data: [DONE]',
     ])."\n\n";

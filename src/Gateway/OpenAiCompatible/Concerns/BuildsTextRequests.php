@@ -56,7 +56,11 @@ trait BuildsTextRequests
         $providerOptions = $options?->providerOptions($provider->name());
 
         if (filled($providerOptions)) {
-            return array_merge($body, $providerOptions);
+            $body = array_merge($body, $providerOptions);
+        }
+
+        if ($stepContext->isFinalStep && isset($body['tools'])) {
+            $body['tool_choice'] = 'none';
         }
 
         return $body;
