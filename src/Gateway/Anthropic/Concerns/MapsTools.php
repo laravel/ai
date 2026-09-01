@@ -3,12 +3,14 @@
 namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Laravel\Ai\Contracts\Providers\SupportsCodeExecution;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Providers\Tools\CodeExecution;
 use Laravel\Ai\Providers\Tools\ProviderTool;
 use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Providers\Tools\WebFetch;
@@ -93,10 +95,27 @@ trait MapsTools
     protected function mapProviderTool(ProviderTool $tool, Provider $provider): array
     {
         return match (true) {
+            $tool instanceof CodeExecution => $this->mapCodeExecutionTool($tool, $provider),
             $tool instanceof WebFetch => $this->mapWebFetchTool($tool, $provider),
             $tool instanceof WebSearch => $this->mapWebSearchTool($tool, $provider),
             default => throw new LogicException('Provider tool ['.$tool::class.'] is not supported by Anthropic.'),
         };
+    }
+
+    /**
+     * Map a code execution tool to an Anthropic server-side tool definition.
+     */
+    protected function mapCodeExecutionTool(CodeExecution $tool, Provider $provider): array
+    {
+        if (! $provider instanceof SupportsCodeExecution) {
+            throw new RuntimeException('Provider ['.$provider->name().'] does not support code execution.');
+        }
+
+        return [
+            'type' => 'code_execution_20250825',
+            'name' => 'code_execution',
+            ...$provider->codeExecutionToolOptions($tool),
+        ];
     }
 
     /**

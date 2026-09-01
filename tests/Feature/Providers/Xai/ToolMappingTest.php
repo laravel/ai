@@ -4,6 +4,7 @@ use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Providers\Tools\CodeExecution;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
@@ -227,3 +228,15 @@ function fakeXaiToolMappingResponse(string $text): PromiseInterface
         ],
     ]);
 }
+
+test('code execution tool sends type code_interpreter', function (): void {
+    Http::fake(['*' => fakeXaiToolMappingResponse('result')]);
+
+    agent(tools: [new CodeExecution])->prompt('Run some code', provider: 'xai');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+
+        return collect(data_get($body, 'tools'))->firstWhere('type', 'code_interpreter') !== null;
+    });
+});

@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Providers\Tools\CodeExecution;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Tests\Fixtures\Agents\NamedToolAgent;
@@ -219,5 +220,31 @@ test('tools are wrapped in function declarations', function (): void {
         return isset($decl['name'])
             && isset($decl['description'])
             && is_string($decl['description']);
+    });
+});
+
+test('code execution tool sends code_execution definition', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [new CodeExecution])->prompt('Run some code', provider: 'gemini');
+
+    Http::assertSent(fn ($request): bool => str_contains($request->body(), '"code_execution":{}'));
+});
+
+test('code execution tool forwards gemini provider options into the tool payload', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [(new CodeExecution)->withProviderOptions(['environment' => 'python'])])
+        ->prompt('Run some code', provider: 'gemini');
+
+    Http::assertSent(function ($request): bool {
+        $tool = collect($request->data()['tools'] ?? [])
+            ->first(fn ($tool): bool => array_key_exists('code_execution', $tool));
+
+        return data_get($tool, 'code_execution.environment') === 'python';
     });
 });

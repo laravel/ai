@@ -3,6 +3,7 @@
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Providers\Tools\CodeExecution;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 use Tests\Fixtures\Tools\NamedTool;
@@ -239,5 +240,20 @@ test('web search tool omits user_location when no location set', function (): vo
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'web_search');
 
         return ! array_key_exists('user_location', $tool);
+    });
+});
+
+test('code execution tool sends type code_interpreter with auto container', function (): void {
+    Http::fake([
+        '*' => fakeAzureResponse('result'),
+    ]);
+
+    agent(tools: [new CodeExecution])->prompt('Run some code', provider: 'azure');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'code_interpreter');
+
+        return data_get($tool, 'container') === ['type' => 'auto'];
     });
 });
