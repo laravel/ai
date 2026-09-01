@@ -14,7 +14,7 @@ class ProviderToolEvent extends StreamEvent
         public array $data,
         public string $status,
         public int $timestamp,
-        public ?string $provider = null,
+        public string $provider,
     ) {}
 
     /**
@@ -30,26 +30,6 @@ class ProviderToolEvent extends StreamEvent
             'status' => $this->status,
             'timestamp' => $this->timestamp,
             'provider' => $this->provider,
-        ];
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function toVercelProtocolArray(): ?array
-    {
-        $provider = $this->provider ?? 'laravel';
-
-        return [
-            'type' => 'custom',
-            'kind' => $provider.'.'.$this->type,
-            'providerMetadata' => [
-                $provider => [
-                    'itemId' => $this->itemId,
-                    'status' => $this->status,
-                    'data' => $this->data,
-                ],
-            ],
         ];
     }
 }

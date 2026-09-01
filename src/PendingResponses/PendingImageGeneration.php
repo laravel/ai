@@ -2,9 +2,11 @@
 
 namespace Laravel\Ai\PendingResponses;
 
+use Illuminate\Support\Arr;
 use Illuminate\Support\Traits\Conditionable;
 use InvalidArgumentException;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
@@ -12,6 +14,7 @@ use Laravel\Ai\Files\Image;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\StoredImage;
 use Laravel\Ai\Jobs\GenerateImage;
+use Laravel\Ai\PendingResponses\Concerns\ResolvesProviderOptions;
 use Laravel\Ai\Prompts\QueuedImagePrompt;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\ImageResponse;
@@ -21,6 +24,7 @@ use LogicException;
 class PendingImageGeneration
 {
     use Conditionable;
+    use ResolvesProviderOptions;
 
     public array $attachments = [];
 
@@ -127,11 +131,15 @@ class PendingImageGeneration
         foreach ($providers as $provider => $model) {
             $provider = Ai::fakeableImageProvider($provider);
 
+            $providerOptions = $this->resolveProviderOptions($provider);
+
+            $headers = Arr::pull($providerOptions, HasProviderOptions::HEADERS) ?? [];
+
             $model ??= $provider->defaultImageModel();
 
             try {
-                return $provider->image(
-                    $this->prompt, $this->attachments, $this->size, $this->quality, $model, $this->timeout
+                return $provider->withHeaders($headers)->image(
+                    $this->prompt, $this->attachments, $this->size, $this->quality, $model, $this->timeout, $providerOptions
                 );
             } catch (FailoverableException $e) {
                 $lastException = $e;
@@ -162,7 +170,8 @@ class PendingImageGeneration
                     $this->size,
                     $this->quality,
                     $provider,
-                    $model
+                    $model,
+                    $this->queuedProviderOptions(),
                 )
             );
         }

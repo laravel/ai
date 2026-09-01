@@ -13,6 +13,7 @@ use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Contracts\RemembersConversations as RemembersConversationsContract;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\AgentPrompted;
@@ -79,7 +80,7 @@ trait GeneratesText
                         $prompt->model,
                         (string) $agent->instructions(),
                         $messages,
-                        $this->resolveTools($agent),
+                        $this->resolveTools($prompt),
                         $schema,
                         TextGenerationOptions::forAgent($agent),
                         $prompt->timeout,
@@ -152,7 +153,7 @@ trait GeneratesText
             return $next($prompt);
         }] : [];
 
-        if (in_array(RemembersConversations::class, class_uses_recursive($agent))) {
+        if ($agent instanceof RemembersConversationsContract || in_array(RemembersConversations::class, class_uses_recursive($agent), true)) {
             $middleware[] = new RememberConversation(resolve(ConversationStore::class), $this);
         }
 
@@ -162,17 +163,16 @@ trait GeneratesText
     }
 
     /**
-     * Resolve the tools for the given agent, wrapping any agent instances as tools.
+     * Resolve the tools for the given prompt, wrapping any agent instances as tools.
      */
-    protected function resolveTools(Agent $agent): array
+    protected function resolveTools(AgentPrompt $prompt): array
     {
-        if (! $agent instanceof HasTools) {
-            return [];
-        }
+        $tools = $prompt->tools
+            ?? ($prompt->agent instanceof HasTools ? [...$prompt->agent->tools()] : []);
 
         return array_map(
             fn ($tool) => $this->resolveTool($tool),
-            [...$agent->tools()],
+            $tools,
         );
     }
 

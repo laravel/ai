@@ -16,6 +16,10 @@ class AgentResponse extends TextResponse
 
     public ?object $conversationUser = null;
 
+    public ?string $userMessageId = null;
+
+    public ?string $assistantMessageId = null;
+
     public function __construct(string $invocationId, string $text, Usage $usage, Meta $meta)
     {
         $this->invocationId = $invocationId;
@@ -41,6 +45,17 @@ class AgentResponse extends TextResponse
     {
         $this->conversationId = $conversationId;
         $this->conversationUser = $conversationUser;
+
+        return $this;
+    }
+
+    /**
+     * Set the conversation message rows this turn wrote.
+     */
+    public function withStoredMessages(?string $userMessageId, ?string $assistantMessageId): self
+    {
+        $this->userMessageId = $userMessageId;
+        $this->assistantMessageId = $assistantMessageId;
 
         return $this;
     }

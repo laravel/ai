@@ -35,31 +35,4 @@ class ToolResult extends StreamEvent
             'timestamp' => $this->timestamp,
         ];
     }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function toVercelProtocolArray(): ?array
-    {
-        if ($this->denied) {
-            return [
-                'type' => 'tool-output-denied',
-                'toolCallId' => $this->toolResult->id,
-            ];
-        }
-
-        if (! $this->successful) {
-            return [
-                'type' => 'tool-output-error',
-                'toolCallId' => $this->toolResult->id,
-                'errorText' => $this->error ?? 'The tool call failed.',
-            ];
-        }
-
-        return [
-            'type' => 'tool-output-available',
-            'toolCallId' => $this->toolResult->id,
-            'output' => $this->toolResult->result,
-        ];
-    }
 }

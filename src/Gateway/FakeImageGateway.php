@@ -29,6 +29,7 @@ class FakeImageGateway implements ImageGateway
      *
      * @param  array<Image>  $attachments
      * @param  'low'|'medium'|'high'|null  $quality
+     * @param  array<string, mixed>  $providerOptions
      */
     public function generateImage(
         ImageProvider $provider,
@@ -38,8 +39,9 @@ class FakeImageGateway implements ImageGateway
         ?string $size = null,
         ?string $quality = null,
         ?int $timeout = null,
+        array $providerOptions = [],
     ): ImageResponse {
-        $imagePrompt = new ImagePrompt($prompt, $attachments, $size, $quality, $provider, $model);
+        $imagePrompt = new ImagePrompt($prompt, $attachments, $size, $quality, $provider, $model, $providerOptions);
 
         return $this->nextResponse($provider, $model, $imagePrompt);
     }

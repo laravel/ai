@@ -111,6 +111,24 @@ trait BedrockHelpers
         };
     }
 
+    protected function gatewayWithHandler(MockHandler $mock): BedrockTextGateway
+    {
+        return new class($mock) extends BedrockTextGateway
+        {
+            public function __construct(private MockHandler $mock)
+            {
+                parent::__construct();
+            }
+
+            protected function createBedrockClient(Provider $provider, ?int $timeout = null): BedrockRuntimeClient
+            {
+                return tap(parent::createBedrockClient($provider, $timeout), fn (BedrockRuntimeClient $client) => $client
+                    ->getHandlerList()
+                    ->setHandler($this->mock));
+            }
+        };
+    }
+
     protected function rerankingGatewayWithClient(BedrockRuntimeClient $client): BedrockRerankingGateway
     {
         return new class($client) extends BedrockRerankingGateway

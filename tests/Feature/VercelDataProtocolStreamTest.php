@@ -26,7 +26,7 @@ function vercelProtocolParts(array|Closure $events, ?string $messageId = null): 
     $stream = $events instanceof Closure ? $events : fn () => yield from $events;
 
     $response = (new StreamableAgentResponse('invocation-1', $stream, new Data\Meta('anthropic', 'claude-sonnet-4-6')))
-        ->usingVercelDataProtocol(messageId: $messageId)
+        ->usingVercelDataProtocol($messageId)
         ->toResponse(request());
 
     $output = '';

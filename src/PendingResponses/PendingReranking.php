@@ -2,18 +2,22 @@
 
 namespace Laravel\Ai\PendingResponses;
 
+use Illuminate\Support\Arr;
 use Illuminate\Support\Traits\Conditionable;
 use InvalidArgumentException;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
+use Laravel\Ai\PendingResponses\Concerns\ResolvesProviderOptions;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\RerankingResponse;
 
 class PendingReranking
 {
     use Conditionable;
+    use ResolvesProviderOptions;
 
     protected ?int $limit = null;
 
@@ -68,10 +72,14 @@ class PendingReranking
         foreach ($providers as $provider => $model) {
             $provider = Ai::fakeableRerankingProvider($provider);
 
+            $providerOptions = $this->resolveProviderOptions($provider);
+
+            $headers = Arr::pull($providerOptions, HasProviderOptions::HEADERS) ?? [];
+
             $model ??= $provider->defaultRerankingModel();
 
             try {
-                return $provider->rerank($this->documents, $query, $this->limit, $model);
+                return $provider->withHeaders($headers)->rerank($this->documents, $query, $this->limit, $model, $providerOptions);
             } catch (FailoverableException $e) {
                 $lastException = $e;
 

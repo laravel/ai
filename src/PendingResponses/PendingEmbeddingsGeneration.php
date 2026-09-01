@@ -3,12 +3,14 @@
 namespace Laravel\Ai\PendingResponses;
 
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Traits\Conditionable;
 use InvalidArgumentException;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Files\HasProviderId;
 use Laravel\Ai\Contracts\Files\StorableFile;
+use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
@@ -141,6 +143,8 @@ class PendingEmbeddingsGeneration
             $dimensions = $this->dimensions ?: $provider->defaultEmbeddingsDimensions();
 
             $providerOptions = $this->resolveProviderOptions($provider);
+
+            $provider = $provider->withHeaders(Arr::pull($providerOptions, HasProviderOptions::HEADERS) ?? []);
 
             try {
                 return $this->shouldCacheIndividually()
@@ -430,7 +434,7 @@ class PendingEmbeddingsGeneration
                     $provider,
                     $model,
                     $this->timeout,
-                    is_array($this->providerOptions) ? $this->providerOptions : [],
+                    $this->queuedProviderOptions(),
                 )
             );
         }

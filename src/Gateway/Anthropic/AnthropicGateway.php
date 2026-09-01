@@ -128,6 +128,7 @@ class AnthropicGateway implements Gateway, StepTextGateway
         ?string $size = null,
         ?string $quality = null,
         ?int $timeout = null,
+        array $providerOptions = [],
     ): ImageResponse {
         throw new LogicException('Anthropic does not support image generation.');
     }
@@ -144,6 +145,7 @@ class AnthropicGateway implements Gateway, StepTextGateway
         string $voice,
         ?string $instructions = null,
         int $timeout = 30,
+        array $providerOptions = [],
     ): AudioResponse {
         throw new LogicException('Anthropic does not support audio generation.');
     }

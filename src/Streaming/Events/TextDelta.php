@@ -49,16 +49,4 @@ class TextDelta extends StreamEvent
             'timestamp' => $this->timestamp,
         ];
     }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function toVercelProtocolArray(): ?array
-    {
-        return [
-            'type' => 'text-delta',
-            'id' => $this->messageId,
-            'delta' => $this->delta,
-        ];
-    }
 }

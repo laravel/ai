@@ -102,6 +102,30 @@ test('audio uses default model when none specified', function (): void {
     Http::assertSent(fn (Request $request): bool => str_contains($request->url(), 'models/gemini-3.1-flash-tts-preview:generateContent'));
 });
 
+test('nested generation config provider options are merged beneath the core config', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => fakeGeminiAudioResponse(),
+    ]);
+
+    Audio::of('Hello world')
+        ->voice('Kore')
+        ->withProviderOptions(['generationConfig' => [
+            'temperature' => 0.1,
+            'responseModalities' => ['TEXT', 'IMAGE'],
+            'speechConfig' => ['languageCode' => 'en-US'],
+        ]])
+        ->generate(provider: 'gemini', model: 'gemini-2.5-flash-preview-tts');
+
+    Http::assertSent(function (Request $request): bool {
+        $config = $request->data()['generationConfig'];
+
+        return $config['temperature'] === 0.1
+            && $config['responseModalities'] === ['AUDIO']
+            && $config['speechConfig']['languageCode'] === 'en-US'
+            && $config['speechConfig']['voiceConfig']['prebuiltVoiceConfig']['voiceName'] === 'Kore';
+    });
+});
+
 function fakeGeminiAudioResponse(string $pcm = "\x00\x00"): PromiseInterface
 {
     return Http::response([

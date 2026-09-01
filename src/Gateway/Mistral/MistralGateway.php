@@ -73,6 +73,7 @@ class MistralGateway implements AudioGateway, EmbeddingGateway, StepTextGateway,
         string $voice,
         ?string $instructions = null,
         int $timeout = 30,
+        array $providerOptions = [],
     ): AudioResponse {
         $voice = match ($voice) {
             'default-male' => 'en_paul_neutral',
@@ -82,12 +83,12 @@ class MistralGateway implements AudioGateway, EmbeddingGateway, StepTextGateway,
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('audio/speech', [
+            fn () => $this->client($provider, $timeout)->post('audio/speech', array_merge($providerOptions, [
                 'model' => $model,
                 'input' => $text,
                 'voice_id' => $voice,
                 'response_format' => 'mp3',
-            ]),
+            ])),
         );
 
         $encodedAudio = $response->json('audio_data');

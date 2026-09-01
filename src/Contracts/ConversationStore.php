@@ -19,7 +19,7 @@ interface ConversationStore
     /**
      * Store a new conversation and return its ID.
      */
-    public function storeConversation(?string $participantType, string|int|null $participantId, string $title): string;
+    public function storeConversation(?string $participantType, string|int|null $participantId, string $title, ?string $id = null): string;
 
     /**
      * Store a new user message for the given conversation and return its ID.

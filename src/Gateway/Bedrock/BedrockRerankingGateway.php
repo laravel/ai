@@ -21,13 +21,15 @@ class BedrockRerankingGateway implements RerankingGateway
      * Rerank the given documents based on their relevance to the query.
      *
      * @param  array<int, string>  $documents
+     * @param  array<string, mixed>  $providerOptions
      */
     public function rerank(
         RerankingProvider $provider,
         string $model,
         array $documents,
         string $query,
-        ?int $limit = null
+        ?int $limit = null,
+        array $providerOptions = []
     ): RerankingResponse {
         $client = $this->createBedrockClient($provider);
 
@@ -38,12 +40,12 @@ class BedrockRerankingGateway implements RerankingGateway
                     'modelId' => $model,
                     'contentType' => 'application/json',
                     'accept' => 'application/json',
-                    'body' => json_encode(array_filter([
+                    'body' => json_encode(array_merge($providerOptions, array_filter([
                         'query' => $query,
                         'documents' => array_values($documents),
                         'top_n' => $limit,
                         'api_version' => str_starts_with($model, 'cohere.') ? 2 : null,
-                    ])),
+                    ]))),
                 ]),
             );
 
