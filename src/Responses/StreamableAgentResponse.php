@@ -9,6 +9,7 @@ use Illuminate\Support\Collection;
 use IteratorAggregate;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Streaming\Events\TextDelta;
@@ -34,6 +35,8 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     public ?string $userMessageId = null;
 
     public ?string $assistantMessageId = null;
+
+    public string $reasoning = '';
 
     protected array $thenCallbacks = [];
 
@@ -199,6 +202,7 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
 
         $this->events = new Collection($events);
         $this->text = TextDelta::combine($events);
+        $this->reasoning = ReasoningDelta::combine($events);
         $this->usage = StreamEnd::combineUsage($events);
 
         $this->streamedResponse = new StreamedAgentResponse(

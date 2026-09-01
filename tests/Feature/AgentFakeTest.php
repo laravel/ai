@@ -18,6 +18,9 @@ use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
+use Laravel\Ai\Streaming\Events\ReasoningDelta;
+use Laravel\Ai\Streaming\Events\ReasoningEnd;
+use Laravel\Ai\Streaming\Events\ReasoningStart;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
@@ -191,6 +194,30 @@ describe('stream responses', function (): void {
         $response->each(fn (): true => true);
         expect($response->text)->toEqual('Third response')
             ->and($response->events)->toHaveCount(6);
+    });
+
+    test('faked agents can stream the reasoning that preceded an answer', function (): void {
+        AssistantAgent::fake([
+            AgentResponse::fakeWithReasoning('They want the temperature.', 'It is 12°C.'),
+        ]);
+
+        $response = (new AssistantAgent)->stream('How cold is it?');
+        $response->each(fn (): true => true);
+
+        expect($response->reasoning)->toBe('They want the temperature.')
+            ->and($response->text)->toBe('It is 12°C.')
+            ->and($response->events->whereInstanceOf(ReasoningStart::class))->toHaveCount(1)
+            ->and($response->events->whereInstanceOf(ReasoningEnd::class))->toHaveCount(1);
+    });
+
+    test('a faked stream reports no reasoning when the model did not reason', function (): void {
+        AssistantAgent::fake(['It is 12°C.']);
+
+        $response = (new AssistantAgent)->stream('How cold is it?');
+        $response->each(fn (): true => true);
+
+        expect($response->reasoning)->toBe('')
+            ->and($response->events->whereInstanceOf(ReasoningDelta::class))->toBeEmpty();
     });
 
     test('faked stream events share the response invocation id', function (): void {

@@ -20,11 +20,23 @@ class AgentResponse extends TextResponse
 
     public ?string $assistantMessageId = null;
 
+    public string $reasoning = '';
+
     public function __construct(string $invocationId, string $text, Usage $usage, Meta $meta)
     {
         $this->invocationId = $invocationId;
 
         parent::__construct($text, $usage, $meta);
+    }
+
+    /**
+     * Create a fake response that reasoned before answering.
+     */
+    public static function fakeWithReasoning(string $reasoning, string $text = ''): self
+    {
+        return tap(new self('fake-invocation', $text, new Usage, new Meta), function (self $response) use ($reasoning): void {
+            $response->reasoning = $reasoning;
+        });
     }
 
     /**

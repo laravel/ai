@@ -25,6 +25,10 @@ use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Storage\DatabaseConversationStore;
+use Laravel\Ai\Streaming\Events\ReasoningDelta;
+use Laravel\Ai\Streaming\Events\ReasoningEnd;
+use Laravel\Ai\Streaming\Events\ReasoningStart;
+use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Tests\Fixtures\Agents\RememberingToolUsingAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
@@ -1145,6 +1149,57 @@ test('it scopes conversations by participant type so shared ids no longer collid
     expect($store->latestConversationId('user', $user->id, ToolUsingAgent::class))->toBe($userConversation)
         ->and($store->latestConversationId('admin', $admin->id, ToolUsingAgent::class))->toBe($adminConversation)
         ->and($userConversation)->not->toBe($adminConversation);
+});
+
+test('it records the reasoning a streamed turn produced into the message meta', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Reasoning conversation');
+
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        'How cold is it?',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $response = new StreamedAgentResponse('invocation-id', collect([
+        new ReasoningStart(uniqid(), 'reasoning-1', time()),
+        new ReasoningDelta(uniqid(), 'reasoning-1', 'They want ', time()),
+        new ReasoningDelta(uniqid(), 'reasoning-1', 'the temperature.', time()),
+        new ReasoningEnd(uniqid(), 'reasoning-1', time()),
+        new TextDelta(uniqid(), 'message-1', 'It is 12°C.', time()),
+    ]), new Meta);
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
+
+    expect(json_decode((string) $record->meta, true))
+        ->toHaveKey('reasoning', 'They want the temperature.');
+});
+
+test('it omits reasoning from the message meta when the model did not reason', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Quiet conversation');
+
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        'How cold is it?',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $response = new StreamedAgentResponse('invocation-id', collect([
+        new TextDelta(uniqid(), 'message-1', 'It is 12°C.', time()),
+    ]), new Meta);
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
+
+    expect(json_decode((string) $record->meta, true))->not->toHaveKey('reasoning');
 });
 
 function createConversationSchema(?string $connection = null): void
