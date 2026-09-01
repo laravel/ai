@@ -316,6 +316,8 @@ class AgentUserInteractionProtocol extends StreamProtocol
                 'toolCallId' => $event->toolResult->id,
                 'content' => $this->toolResultContent($event),
                 'role' => 'tool',
+                ...(! $event->successful ? ['error' => $event->error ?? 'The tool call failed.'] : []),
+                ...($event->denied ? ['denied' => true] : []),
             ]],
             $event instanceof Error => [[
                 'type' => 'RUN_ERROR',

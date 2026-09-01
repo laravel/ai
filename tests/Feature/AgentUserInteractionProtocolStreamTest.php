@@ -447,6 +447,39 @@ test('a rejected approval streams the rejection as the tool result content', fun
         'toolCallId' => 'call-1',
         'content' => 'The user rejected this tool call.',
         'role' => 'tool',
+        'error' => 'The user rejected this tool call.',
+        'denied' => true,
+    ]);
+});
+
+test('a failed tool call streams an error without marking it denied', function () {
+    $events = agUiProtocolEvents([
+        new ToolResult('event-1', new Data\ToolResult('call-1', 'DeleteFile', ['path' => 'a.txt'], 'The tool call failed: disk unavailable.'), false, 'The tool call failed: disk unavailable.', time()),
+        new StreamEnd('event-2', 'stop', new Usage, time()),
+    ]);
+
+    expect($events[2])->toBe([
+        'type' => 'TOOL_CALL_RESULT',
+        'messageId' => 'event-1',
+        'toolCallId' => 'call-1',
+        'content' => 'The tool call failed: disk unavailable.',
+        'role' => 'tool',
+        'error' => 'The tool call failed: disk unavailable.',
+    ]);
+});
+
+test('a successful tool call streams neither an error nor a denial', function () {
+    $events = agUiProtocolEvents([
+        new ToolResult('event-1', new Data\ToolResult('call-1', 'ReadFile', ['path' => 'a.txt'], 'Hello.'), true, null, time()),
+        new StreamEnd('event-2', 'stop', new Usage, time()),
+    ]);
+
+    expect($events[2])->toBe([
+        'type' => 'TOOL_CALL_RESULT',
+        'messageId' => 'event-1',
+        'toolCallId' => 'call-1',
+        'content' => 'Hello.',
+        'role' => 'tool',
     ]);
 });
 
