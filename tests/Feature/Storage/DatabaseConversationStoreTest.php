@@ -1121,9 +1121,29 @@ test('it scopes conversations by participant type so shared ids no longer collid
     $userConversation = $store->storeConversation('user', $user->id, 'User chat');
     $adminConversation = $store->storeConversation('admin', $admin->id, 'Admin chat');
 
+    $insertMessage = fn (string $id, string $conversationId, string $participantType) => DB::table('agent_conversation_messages')->insert([
+        'id' => $id,
+        'conversation_id' => $conversationId,
+        'participant_type' => $participantType,
+        'participant_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'user',
+        'content' => 'Hello',
+        'attachments' => '[]',
+        'tool_calls' => '[]',
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $insertMessage('message-user', $userConversation, 'user');
+    $insertMessage('message-admin', $adminConversation, 'admin');
+
     // Despite sharing id 1, each participant only resolves its own conversation...
-    expect($store->latestConversationId('user', $user->id))->toBe($userConversation)
-        ->and($store->latestConversationId('admin', $admin->id))->toBe($adminConversation)
+    expect($store->latestConversationId('user', $user->id, ToolUsingAgent::class))->toBe($userConversation)
+        ->and($store->latestConversationId('admin', $admin->id, ToolUsingAgent::class))->toBe($adminConversation)
         ->and($userConversation)->not->toBe($adminConversation);
 });
 
