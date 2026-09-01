@@ -14,7 +14,7 @@ class InMemoryConversationStore implements ConversationStore
 
     public array $messages = [];
 
-    public function latestConversationId(string $participantType, string|int $participantId): ?string
+    public function latestConversationId(string $participantType, string|int $participantId, ?string $agent = null): ?string
     {
         return collect($this->conversations)
             ->filter(fn ($conversation): bool => $conversation['participant_type'] === $participantType

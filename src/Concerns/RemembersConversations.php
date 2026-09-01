@@ -42,14 +42,14 @@ trait RemembersConversations
     }
 
     /**
-     * Continue an existing conversation as the given user.
+     * Continue the given user's last conversation with this agent.
      */
     public function continueLastConversation(object $as): static
     {
         $this->conversationUser = $as;
 
         $this->conversationId = resolve(ConversationStore::class)
-            ->latestConversationId(Conversation::participantType($as), Conversation::participantKey($as));
+            ->latestConversationId(Conversation::participantType($as), Conversation::participantKey($as), static::class);
 
         return $this;
     }
