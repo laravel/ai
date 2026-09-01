@@ -347,7 +347,7 @@ Register the server once, then return its tools from `tools()`. The SDK automati
 use Laravel\Mcp\Client;
 use Laravel\Mcp\Facades\Mcp;
 
-// In a service provider or ai.php
+// In a service provider or routes/ai.php
 Mcp::registerClient('linear', fn () => Client::web('https://mcp.linear.app/mcp')
     ->withToken(config('services.linear.token')));
 
