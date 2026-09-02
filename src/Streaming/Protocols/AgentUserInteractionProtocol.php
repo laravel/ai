@@ -310,15 +310,7 @@ class AgentUserInteractionProtocol extends StreamProtocol
                 ['type' => 'REASONING_END', 'messageId' => $event->reasoningId],
             ],
             $event instanceof ToolCall => $this->toolCallParts($event->toolCall),
-            $event instanceof ToolResult => [[
-                'type' => 'TOOL_CALL_RESULT',
-                'messageId' => $event->toolResult->resultId ?? $event->id,
-                'toolCallId' => $event->toolResult->id,
-                'content' => $this->toolResultContent($event),
-                'role' => 'tool',
-                ...(! $event->successful ? ['error' => $event->error ?? 'The tool call failed.'] : []),
-                ...($event->denied ? ['denied' => true] : []),
-            ]],
+            $event instanceof ToolResult => [$this->toolResultPart($event)],
             $event instanceof Error => [[
                 'type' => 'RUN_ERROR',
                 'message' => $event->message,
@@ -338,6 +330,29 @@ class AgentUserInteractionProtocol extends StreamProtocol
             ]],
             default => [],
         };
+    }
+
+    /**
+     * Get the protocol part that represents the given tool result event.
+     *
+     * @return array<string, mixed>
+     */
+    protected function toolResultPart(ToolResult $event): array
+    {
+        $content = $this->toolResultContent($event);
+
+        return [
+            'type' => 'TOOL_CALL_RESULT',
+            'messageId' => $event->toolResult->resultId ?? $event->id,
+            'toolCallId' => $event->toolResult->id,
+            'content' => $content,
+            'role' => 'tool',
+            // Reported as metadata because the AG-UI tool result event has no outcome field of its own...
+            ...($event->successful ? [] : ['metadata' => Arr::whereNotNull([
+                'error' => $content,
+                'denied' => $event->denied ?: null,
+            ])]),
+        ];
     }
 
     /**
