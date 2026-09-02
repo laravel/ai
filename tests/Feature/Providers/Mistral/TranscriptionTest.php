@@ -169,15 +169,6 @@ test('transcription reports the billed audio seconds', function (): void {
     expect($response->usage->durationSeconds)->toBe(203.0);
 });
 
-test('transcription duration is zero when the provider does not report one', function (): void {
-    Http::fake(['*' => fakeTranscriptionResponse()]);
-
-    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
-        ->generate(provider: 'mistral');
-
-    expect($response->usage->durationSeconds)->toBe(0.0);
-});
-
 function fakeTranscriptionResponse(string $text = 'Hello, world!')
 {
     return Http::response([

@@ -106,10 +106,12 @@ test('transcription duration falls back to the billed seconds when no duration i
     expect($response->usage->durationSeconds)->toBe(3.0);
 });
 
-test('transcription duration is correctly parsed', function (): void {
+test('diarized transcription reports the duration', function (): void {
     Http::fake(['*' => Http::response([
+        'task' => 'transcribe',
         'text' => 'Hello',
         'duration' => 2.11,
+        'segments' => [],
         'usage' => [
             'type' => 'duration',
             'seconds' => 3,
@@ -117,7 +119,8 @@ test('transcription duration is correctly parsed', function (): void {
     ])]);
 
     $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
-        ->generate(provider: 'openai');
+        ->diarize()
+        ->generate(provider: 'openai', model: 'gpt-4o-transcribe-diarize');
 
     expect($response->usage->durationSeconds)->toBe(2.11);
 });

@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Responses;
 
 use Illuminate\Support\Collection;
+use Laravel\Ai\Responses\Data\AudioUsage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
 use Laravel\Ai\Responses\Data\Usage;
@@ -14,7 +15,7 @@ class TranscriptionResponse implements \Stringable
     /** @var Collection<int, TranscriptionSegment> */
     public Collection $segments;
 
-    public Usage $usage;
+    public AudioUsage $usage;
 
     public Meta $meta;
 
@@ -29,7 +30,7 @@ class TranscriptionResponse implements \Stringable
     ) {
         $this->text = $text;
         $this->segments = $segments;
-        $this->usage = $usage;
+        $this->usage = AudioUsage::from($usage);
         $this->meta = $meta;
     }
 

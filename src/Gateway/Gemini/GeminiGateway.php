@@ -352,6 +352,7 @@ class GeminiGateway implements Gateway, StepTextGateway
                 promptTokens: $usageMeta['promptTokenCount'] ?? 0,
                 completionTokens: $usageMeta['candidatesTokenCount'] ?? 0,
                 reasoningTokens: $usageMeta['thoughtsTokenCount'] ?? 0,
+                durationSeconds: $segments->last()?->endSeconds ?? 0,
             ),
             new Meta($provider->name(), $model),
         );

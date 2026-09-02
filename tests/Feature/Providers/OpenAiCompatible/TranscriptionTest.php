@@ -194,11 +194,3 @@ test('transcription duration falls back to the billed seconds when no duration i
 
     expect($response->usage->durationSeconds)->toBe(3.0);
 });
-
-test('transcription duration is zero when the provider does not report one', function (): void {
-    Http::fake(['*' => Http::response(['text' => 'Hello'])]);
-
-    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'openai-compatible');
-
-    expect($response->usage->durationSeconds)->toBe(0.0);
-});

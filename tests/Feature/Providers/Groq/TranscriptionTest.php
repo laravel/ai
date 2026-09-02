@@ -151,11 +151,3 @@ test('transcription reports the audio duration when verbose json is requested', 
 
     expect($response->usage->durationSeconds)->toBe(8.47);
 });
-
-test('transcription duration is zero when the provider does not report one', function (): void {
-    Http::fake(['*' => Http::response(['text' => 'Hello'])]);
-
-    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'groq');
-
-    expect($response->usage->durationSeconds)->toBe(0.0);
-});

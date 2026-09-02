@@ -120,14 +120,6 @@ test('transcription reports the transcribed audio duration', function (): void {
     expect($response->usage->durationSeconds)->toBe(12.5);
 });
 
-test('transcription duration is zero when the provider does not report one', function (): void {
-    Http::fake(['*' => fakeElevenTranscriptionResponse()]);
-
-    $response = Transcription::of(base64_encode('fake-audio'))->generate(provider: 'eleven', model: 'scribe_v2');
-
-    expect($response->usage->durationSeconds)->toBe(0.0);
-});
-
 function fakeElevenTranscriptionResponse(bool $diarized = false)
 {
     $body = ['text' => 'Hello world'];

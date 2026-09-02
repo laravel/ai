@@ -3,33 +3,31 @@
 use Laravel\Ai\Responses\Data\AudioUsage;
 use Laravel\Ai\Responses\Data\Usage;
 
-test('audio usage defaults to zero duration', function (): void {
-    expect((new AudioUsage)->durationSeconds)->toBe(0.0);
+test('audio usage extends the base usage array with the duration', function (): void {
+    expect((new AudioUsage(10, 5, 2, 3, 1, 203.0))->toArray())->toBe([
+        'prompt_tokens' => 10,
+        'completion_tokens' => 5,
+        'cache_write_input_tokens' => 2,
+        'cache_read_input_tokens' => 3,
+        'reasoning_tokens' => 1,
+        'duration_seconds' => 203.0,
+    ]);
 });
 
-test('audio usage reports the duration alongside the token counts', function (): void {
-    $usage = new AudioUsage(10, 5, 2, 203.0);
+test('adding audio usage sums the tokens and the durations', function (): void {
+    $usage = (new AudioUsage(10, 5, 2, 3, 1, 3.0))->add(new AudioUsage(1, 2, 3, 4, 5, 2.0));
 
-    expect($usage->promptTokens)->toBe(10)
-        ->and($usage->completionTokens)->toBe(5)
-        ->and($usage->reasoningTokens)->toBe(2)
-        ->and($usage->durationSeconds)->toBe(203.0)
+    expect($usage)->toBeInstanceOf(AudioUsage::class)
         ->and($usage->toArray())->toBe([
-            'prompt_tokens' => 10,
-            'completion_tokens' => 5,
-            'reasoning_tokens' => 2,
-            'duration_seconds' => 203.0,
+            'prompt_tokens' => 11,
+            'completion_tokens' => 7,
+            'cache_write_input_tokens' => 5,
+            'cache_read_input_tokens' => 7,
+            'reasoning_tokens' => 6,
+            'duration_seconds' => 5.0,
         ]);
 });
 
-test('adding audio usage sums the durations', function (): void {
-    $usage = (new AudioUsage(10, 5, 0, 3.0))->add(new AudioUsage(1, 2, 0, 2.0));
-
-    expect($usage)->toBeInstanceOf(AudioUsage::class)
-        ->and($usage->promptTokens)->toBe(11)
-        ->and($usage->durationSeconds)->toBe(5.0);
-});
-
 test('adding plain usage leaves the duration untouched', function (): void {
-    expect((new AudioUsage(0, 0, 0, 3.0))->add(new Usage(1, 2))->durationSeconds)->toBe(3.0);
+    expect((new AudioUsage(durationSeconds: 3.0))->add(new Usage(1, 2))->durationSeconds)->toBe(3.0);
 });

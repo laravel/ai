@@ -7,10 +7,26 @@ class AudioUsage extends Usage
     public function __construct(
         int $promptTokens = 0,
         int $completionTokens = 0,
+        int $cacheWriteInputTokens = 0,
+        int $cacheReadInputTokens = 0,
         int $reasoningTokens = 0,
         public float $durationSeconds = 0,
     ) {
-        parent::__construct($promptTokens, $completionTokens, reasoningTokens: $reasoningTokens);
+        parent::__construct($promptTokens, $completionTokens, $cacheWriteInputTokens, $cacheReadInputTokens, $reasoningTokens);
+    }
+
+    /**
+     * Create an audio usage instance from the given usage.
+     */
+    public static function from(Usage $usage): AudioUsage
+    {
+        return $usage instanceof AudioUsage ? $usage : new AudioUsage(
+            $usage->promptTokens,
+            $usage->completionTokens,
+            $usage->cacheWriteInputTokens,
+            $usage->cacheReadInputTokens,
+            $usage->reasoningTokens,
+        );
     }
 
     /**
@@ -23,6 +39,8 @@ class AudioUsage extends Usage
         return new AudioUsage(
             $tokens->promptTokens,
             $tokens->completionTokens,
+            $tokens->cacheWriteInputTokens,
+            $tokens->cacheReadInputTokens,
             $tokens->reasoningTokens,
             $this->durationSeconds + ($usage instanceof AudioUsage ? $usage->durationSeconds : 0),
         );
@@ -34,9 +52,7 @@ class AudioUsage extends Usage
     public function toArray(): array
     {
         return [
-            'prompt_tokens' => $this->promptTokens,
-            'completion_tokens' => $this->completionTokens,
-            'reasoning_tokens' => $this->reasoningTokens,
+            ...parent::toArray(),
             'duration_seconds' => $this->durationSeconds,
         ];
     }
