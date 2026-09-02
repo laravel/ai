@@ -30,7 +30,9 @@ class StreamedAgentResponse extends AgentResponse
 
         $this->withToolCallsAndResults(
             toolCalls: $events->whereInstanceOf(ToolCall::class)->map->toolCall,
-            toolResults: $events->whereInstanceOf(ToolResult::class)->map->toolResult,
+            toolResults: $events->whereInstanceOf(ToolResult::class)
+                ->reject(fn (ToolResult $event): bool => $event->preliminary())
+                ->map->toolResult,
         );
 
         $this->events = $events;

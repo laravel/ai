@@ -13,8 +13,17 @@ class ToolResult extends StreamEvent
         public ?string $error,
         public int $timestamp,
         public bool $denied = false,
+        public ?string $preliminaryOutput = null,
     ) {
         //
+    }
+
+    /**
+     * Determine if this is a preliminary result for a tool that is still running.
+     */
+    public function preliminary(): bool
+    {
+        return $this->preliminaryOutput !== null;
     }
 
     /**
@@ -32,6 +41,7 @@ class ToolResult extends StreamEvent
             'successful' => $this->successful,
             'error' => $this->error,
             'denied' => $this->denied,
+            ...($this->preliminary() ? ['preliminary' => true] : []),
             'timestamp' => $this->timestamp,
         ];
     }

@@ -20,7 +20,6 @@ use Laravel\Ai\Exceptions\NoSuchToolException;
 use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Gateway\Concerns\HandlesToolApprovals;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
-use Laravel\Ai\Gateway\Concerns\MeasuresDuration;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
@@ -36,8 +35,11 @@ use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
+use Laravel\Ai\Streaming\Events\StreamEvent;
+use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
+use Laravel\Ai\Tools\AgentTool;
 use Laravel\Ai\Tools\Request;
 use Laravel\Ai\Tools\ToolNameResolver;
 use LogicException;
@@ -45,7 +47,7 @@ use Throwable;
 
 class TextGenerationLoop
 {
-    use HandlesToolApprovals, InvokesTools, MeasuresDuration;
+    use HandlesToolApprovals, InvokesTools;
 
     private bool $repairsToolCalls = false;
 
@@ -284,7 +286,15 @@ class TextGenerationLoop
             $accumulatedUsage = $accumulatedUsage->add($result->usage);
             $finalReason = $result->finishReason;
 
-            [$toolResults, $pendingApprovals] = $this->stepToolResultsWithOptions($result, $stepContext->isFinalStep, $tools, $options, $context);
+            $toolStream = $this->streamedStepToolResults(
+                $result, $stepContext->isFinalStep, $tools, $invocationId, $options, $context,
+            );
+
+            foreach ($toolStream as $event) {
+                yield $event;
+            }
+
+            [$toolResults, $pendingApprovals] = $toolStream->getReturn();
 
             foreach ($toolResults as $toolResult) {
                 yield (new ToolResultEvent(
@@ -373,6 +383,17 @@ class TextGenerationLoop
      */
     protected function stepToolResults(StepResponse $result, bool $isFinalStep, array $tools, ?RunContext $context = null): array
     {
+        return $this->pausedOrEmptyStepToolResults($result)
+            ?? $this->approvalAwareToolResults($result->toolCalls, $tools, $isFinalStep, $context);
+    }
+
+    /**
+     * The early outcome for steps that pause or execute nothing, or null when tools should run.
+     *
+     * @return array{array<int, ToolResult>, Collection<int, PendingApproval>}|null
+     */
+    protected function pausedOrEmptyStepToolResults(StepResponse $result): ?array
+    {
         if (filled($result->pendingApprovals)) {
             return [[], collect($result->pendingApprovals)];
         }
@@ -381,7 +402,88 @@ class TextGenerationLoop
             return [[], collect()];
         }
 
-        return $this->approvalAwareToolResults($result->toolCalls, $tools, $isFinalStep, $context);
+        return null;
+    }
+
+    /**
+     * Get tool results while streaming sub-agent activity.
+     *
+     * @param  array<Tool|ProviderTool>  $tools
+     * @return Generator<int, ToolResultEvent, mixed, array{array<int, ToolResult>, Collection<int, PendingApproval>}>
+     */
+    protected function streamedStepToolResults(StepResponse $result, bool $isFinalStep, array $tools, string $invocationId, ?TextGenerationOptions $options = null, ?RunContext $context = null): Generator
+    {
+        if (($earlyOutcome = $this->pausedOrEmptyStepToolResults($result)) !== null) {
+            return $earlyOutcome;
+        }
+
+        $repairsToolCalls = $this->repairsToolCalls;
+
+        $this->repairsToolCalls = RepairToolCalls::isAppliedTo($options?->agent);
+
+        try {
+            [$resolved, $pendingApprovals] = $this->resolveToolCalls($result->toolCalls, $tools, $isFinalStep);
+
+            $toolResults = [];
+
+            foreach ($resolved as [$toolCall, $tool]) {
+                if (! $tool instanceof AgentTool || $isFinalStep) {
+                    $toolResults[] = $this->resolvedToolResult($toolCall, $tool, $isFinalStep, $tools, $context);
+
+                    continue;
+                }
+
+                $generator = $this->executeAgentToolStreaming($tool, $toolCall->arguments, $toolCall->id, $context);
+
+                $subAgentEvents = [];
+
+                foreach ($generator as $event) {
+                    $subAgentEvents[] = $event;
+
+                    yield (new ToolResultEvent(
+                        $this->generateEventId(),
+                        $this->toolResult($toolCall, $event->toArray()),
+                        true,
+                        null,
+                        time(),
+                        preliminaryOutput: TextDelta::combine($subAgentEvents),
+                    ))->withInvocationId($invocationId);
+                }
+
+                $toolResults[] = $this->toolResult($toolCall, $generator->getReturn());
+            }
+
+            return [$toolResults, $pendingApprovals];
+        } finally {
+            $this->repairsToolCalls = $repairsToolCalls;
+        }
+    }
+
+    /**
+     * Execute a sub-agent tool, streaming its activity while reporting through the run context.
+     *
+     * @return Generator<int, StreamEvent, mixed, string>
+     */
+    protected function executeAgentToolStreaming(AgentTool $tool, array $arguments, ?string $toolCallId = null, ?RunContext $context = null): Generator
+    {
+        $toolInvocationId = (string) Str::uuid7();
+
+        $context?->invokingTool($tool, $arguments, $toolInvocationId);
+
+        $startedAt = hrtime(true);
+
+        $generator = $tool->stream(new Request($arguments, $toolCallId, $toolInvocationId));
+
+        // The child run reads its parent linkage when it starts, so the first advance runs with the parent invocation set...
+        ParentInvocation::within($context?->invocationId, $toolInvocationId, fn (): bool => $generator->valid());
+
+        yield from $generator;
+
+        $result = (string) $generator->getReturn();
+
+        $context?->toolInvoked($tool, $arguments, $result, $toolInvocationId, $this->elapsedMilliseconds($startedAt));
+
+        return $result;
     }
 
     /**
@@ -390,6 +492,58 @@ class TextGenerationLoop
      * @return array{array<int, ToolResult>, Collection<int, PendingApproval>}
      */
     protected function approvalAwareToolResults(array $toolCalls, array $tools, bool $isFinalStep = false, ?RunContext $context = null): array
+    {
+        [$resolved, $pendingApprovals] = $this->resolveToolCalls($toolCalls, $tools, $isFinalStep);
+
+        $toolResults = array_map(
+            fn (array $pair): ToolResult => $this->resolvedToolResult($pair[0], $pair[1], $isFinalStep, $tools, $context),
+            $resolved,
+        );
+
+        return [$toolResults, $pendingApprovals];
+    }
+
+    /**
+     * Execute the resolved tool call, or mark it as repaired or exhausted when it can no longer run.
+     *
+     * @param  array<Tool|ProviderTool>  $tools
+     */
+    protected function resolvedToolResult(ToolCall $toolCall, ?Tool $tool, bool $isFinalStep, array $tools = [], ?RunContext $context = null): ToolResult
+    {
+        return $this->toolResult(
+            $toolCall,
+            match (true) {
+                ! $tool instanceof Tool && $this->repairsToolCalls => "Tool '{$toolCall->name}' does not exist. Available tools: {$this->availableToolNames($tools)}.",
+                $isFinalStep => 'The agent reached its maximum number of steps without running this tool call.',
+                default => $this->executeTool($tool, $toolCall->arguments, $toolCall->id, $context),
+            },
+            failed: ! $tool instanceof Tool || $isFinalStep,
+        );
+    }
+
+    /**
+     * Create a tool result for the given tool call.
+     */
+    protected function toolResult(ToolCall $toolCall, mixed $result, bool $failed = false): ToolResult
+    {
+        return new ToolResult(
+            $toolCall->id,
+            $toolCall->name,
+            $toolCall->arguments,
+            $result,
+            $toolCall->resultId,
+            failed: $failed,
+        );
+    }
+
+    /**
+     * Split the step's tool calls into executable [ToolCall, Tool] pairs and pending approvals.
+     *
+     * @param  ToolCall[]  $toolCalls
+     * @param  Tool[]  $tools
+     * @return array{array<int, array{ToolCall, ?Tool}>, Collection<int, PendingApproval>}
+     */
+    protected function resolveToolCalls(array $toolCalls, array $tools, bool $isFinalStep): array
     {
         $pendingApprovals = collect();
         $resolved = [];
@@ -417,26 +571,7 @@ class TextGenerationLoop
             $resolved[] = [$toolCall, $tool];
         }
 
-        $toolResults = array_map(function (array $pair) use ($tools, $isFinalStep, $context) {
-            [$toolCall, $tool] = $pair;
-
-            $result = match (true) {
-                ! $tool instanceof Tool && $this->repairsToolCalls => "Tool '{$toolCall->name}' does not exist. Available tools: {$this->availableToolNames($tools)}.",
-                $isFinalStep => 'The agent reached its maximum number of steps without running this tool call.',
-                default => $this->executeTool($tool, $toolCall->arguments, $toolCall->id, $context),
-            };
-
-            return new ToolResult(
-                $toolCall->id,
-                $toolCall->name,
-                $toolCall->arguments,
-                $result,
-                $toolCall->resultId,
-                failed: ! $tool instanceof Tool || $isFinalStep,
-            );
-        }, $resolved);
-
-        return [$toolResults, $pendingApprovals];
+        return [$resolved, $pendingApprovals];
     }
 
     /**

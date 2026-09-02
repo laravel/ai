@@ -1,16 +1,20 @@
 <?php
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Events\Dispatcher;
 use Laravel\Ai\Approvals\Approval;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Attributes\RepairToolCalls;
 use Laravel\Ai\Concerns\InteractsWithApprovals;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Approvable;
+use Laravel\Ai\Contracts\CanActAsTool;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Events\InvokingTool;
+use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Exceptions\NoSuchToolException;
 use Laravel\Ai\Exceptions\StreamErrorException;
@@ -25,17 +29,20 @@ use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Providers\Tools\WebSearch;
+use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult as ToolResultData;
 use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
+use Laravel\Ai\Tools\AgentTool;
 use Laravel\Ai\Tools\Request;
 
 test('it pauses gated tool calls without executing them while running ungated calls immediately', function (): void {
@@ -1310,4 +1317,280 @@ test('a pre-validated streamed resume executes the approved tool exactly once', 
     ));
 
     expect($tool->calls)->toBe(1);
+});
+
+function textGenerationLoopAgentTool(string $text = 'sub-agent result'): AgentTool
+{
+    $response = new StreamableAgentResponse('sub-invocation', fn (): Generator => yield from [
+        (new TextDelta('sub-delta', 'sub-message', $text, time()))->withInvocationId('sub-invocation'),
+        (new StreamEnd('sub-end', FinishReason::Stop->value, new Usage(3, 4), time()))->withInvocationId('sub-invocation'),
+    ], new Meta('fake', 'sub-model'));
+
+    $agent = Mockery::mock(Agent::class.','.CanActAsTool::class);
+    $agent->shouldReceive('name')->andReturn('research_agent');
+    $agent->shouldReceive('stream')->once()->andReturn($response);
+    $agent->shouldNotReceive('prompt');
+
+    return new AgentTool($agent);
+}
+
+test('a sub-agent streams preliminary tool results and returns its response during the streamed tool loop', function (): void {
+    $tool = textGenerationLoopAgentTool();
+    $toolCall = new ToolCall('call-sub-agent', 'research_agent', ['task' => 'Research'], 'call-sub-agent');
+    $gateway = new TextGenerationLoopFakeGateway(streams: [
+        textGenerationLoopStreamStep(
+            events: [new ToolCallEvent('event-1', $toolCall, time())],
+            returns: new StepResponse('', [$toolCall], FinishReason::ToolCalls, new Usage, new Meta('fake', 'model')),
+        ),
+        textGenerationLoopStreamStep(
+            events: [new TextDelta('text-delta', 'message-2', 'done', time())],
+            returns: new StepResponse('done', [], FinishReason::Stop, new Usage, new Meta('fake', 'model')),
+        ),
+    ]);
+
+    $events = iterator_to_array((new TextGenerationLoop($gateway))->stream(
+        'invocation-1',
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [],
+        [$tool],
+        null,
+        new TextGenerationOptions(maxSteps: 2),
+        null,
+    ));
+
+    $activity = array_values(array_filter(
+        $events,
+        fn (object $event): bool => $event instanceof ToolResultEvent && $event->preliminary(),
+    ));
+    $firstActivityIndex = null;
+    $toolResultIndex = null;
+
+    foreach ($events as $index => $event) {
+        if ($firstActivityIndex === null && $event instanceof ToolResultEvent && $event->preliminary()) {
+            $firstActivityIndex = $index;
+        }
+
+        if ($toolResultIndex === null && $event instanceof ToolResultEvent && ! $event->preliminary()) {
+            $toolResultIndex = $index;
+        }
+    }
+
+    $toolResultEvents = array_values(array_filter(
+        $events,
+        fn (object $event): bool => $event instanceof ToolResultEvent && ! $event->preliminary(),
+    ));
+
+    expect($activity)->toHaveCount(2)
+        ->and($activity[0]->invocationId)->toBe('invocation-1')
+        ->and($activity[0]->toolResult->id)->toBe('call-sub-agent')
+        ->and($activity[0]->toolResult->result['type'])->toBe('text_delta')
+        ->and($activity[0]->toolResult->result['invocation_id'])->toBe('sub-invocation')
+        ->and($activity[1]->toolResult->result['type'])->toBe('stream_end')
+        ->and($firstActivityIndex)->toBeLessThan($toolResultIndex)
+        ->and($toolResultEvents[0]->toolResult->result)->toBe('sub-agent result');
+
+    expect($activity[0]->preliminaryOutput)->toBe('sub-agent result')
+        ->and($activity[1]->preliminaryOutput)->toBe($toolResultEvents[0]->toolResult->result);
+});
+
+test('a sub-agent runs synchronously through the non-streaming loop', function (): void {
+    $agent = Mockery::mock(Agent::class.','.CanActAsTool::class);
+    $agent->shouldReceive('name')->andReturn('research_agent');
+    $agent->shouldReceive('prompt')->once()->andReturn(new AgentResponse(
+        'sub-invocation', 'synchronous result', new Usage(3, 4), new Meta('fake', 'sub-model')
+    ));
+    $agent->shouldNotReceive('stream');
+
+    $tool = new AgentTool($agent);
+    $toolCall = new ToolCall('call-sub-agent', 'research_agent', ['task' => 'Research'], 'call-sub-agent');
+    $gateway = new TextGenerationLoopFakeGateway([
+        new StepResponse('', [$toolCall], FinishReason::ToolCalls, new Usage, new Meta('fake', 'model')),
+        new StepResponse('done', [], FinishReason::Stop, new Usage, new Meta('fake', 'model')),
+    ]);
+
+    $response = (new TextGenerationLoop($gateway))->generate(
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [],
+        [$tool],
+        null,
+        new TextGenerationOptions(maxSteps: 2),
+        null,
+    );
+
+    expect($response->text)->toBe('done')
+        ->and($response->toolResults[0]->result)->toBe('synchronous result');
+});
+
+test('a sub-agent is not executed on the final streamed step', function (): void {
+    $agent = Mockery::mock(Agent::class.','.CanActAsTool::class);
+    $agent->shouldReceive('name')->andReturn('research_agent');
+    $agent->shouldNotReceive('prompt');
+    $agent->shouldNotReceive('stream');
+
+    $tool = new AgentTool($agent);
+    $toolCall = new ToolCall('call-sub-agent', 'research_agent', ['task' => 'Research'], 'call-sub-agent');
+    $gateway = new TextGenerationLoopFakeGateway(streams: [
+        textGenerationLoopStreamStep(
+            events: [],
+            returns: new StepResponse('', [$toolCall], FinishReason::ToolCalls, new Usage, new Meta('fake', 'model')),
+        ),
+    ]);
+
+    $events = iterator_to_array((new TextGenerationLoop($gateway))->stream(
+        'invocation-1',
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [],
+        [$tool],
+        null,
+        new TextGenerationOptions(maxSteps: 1),
+        null,
+    ));
+
+    $activity = array_filter(
+        $events,
+        fn (object $event): bool => $event instanceof ToolResultEvent && $event->preliminary(),
+    );
+    $toolResultEvents = array_values(array_filter(
+        $events,
+        fn (object $event): bool => $event instanceof ToolResultEvent && ! $event->preliminary(),
+    ));
+
+    expect($activity)->toHaveCount(0)
+        ->and($toolResultEvents[0]->toolResult->result)->toContain('maximum number of steps');
+});
+
+test('multiple sub-agent calls stream activity with their own tool call ids', function (): void {
+    $responses = collect(['first result', 'second result']);
+    $agent = Mockery::mock(Agent::class.','.CanActAsTool::class);
+    $agent->shouldReceive('name')->andReturn('research_agent');
+    $agent->shouldReceive('stream')->twice()->andReturnUsing(function () use ($responses): StreamableAgentResponse {
+        $text = $responses->shift();
+
+        return new StreamableAgentResponse('sub-invocation', fn (): Generator => yield new TextDelta(
+            'sub-delta', 'sub-message', $text, time()
+        ), new Meta('fake', 'sub-model'));
+    });
+
+    $tool = new AgentTool($agent);
+    $firstCall = new ToolCall('call-first', 'research_agent', ['task' => 'First'], 'call-first');
+    $secondCall = new ToolCall('call-second', 'research_agent', ['task' => 'Second'], 'call-second');
+    $gateway = new TextGenerationLoopFakeGateway(streams: [
+        textGenerationLoopStreamStep(
+            events: [],
+            returns: new StepResponse('', [$firstCall, $secondCall], FinishReason::ToolCalls, new Usage, new Meta('fake', 'model')),
+        ),
+        textGenerationLoopStreamStep(
+            events: [],
+            returns: new StepResponse('done', [], FinishReason::Stop, new Usage, new Meta('fake', 'model')),
+        ),
+    ]);
+
+    $events = iterator_to_array((new TextGenerationLoop($gateway))->stream(
+        'invocation-1',
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [],
+        [$tool],
+        null,
+        new TextGenerationOptions(maxSteps: 2),
+        null,
+    ));
+
+    $toolCallIds = collect($events)
+        ->whereInstanceOf(ToolResultEvent::class)
+        ->filter(fn (ToolResultEvent $event): bool => $event->preliminary())
+        ->map(fn (ToolResultEvent $event): string => $event->toolResult->id)
+        ->values()
+        ->all();
+
+    expect($toolCallIds)->toBe(['call-first', 'call-second']);
+});
+
+test('tool invocation events fire around a sub-agent in the streamed loop', function (): void {
+    $tool = textGenerationLoopAgentTool();
+    $toolCall = new ToolCall('call-sub-agent', 'research_agent', ['task' => 'Research'], 'call-sub-agent');
+    $gateway = new TextGenerationLoopFakeGateway(streams: [
+        textGenerationLoopStreamStep(
+            events: [],
+            returns: new StepResponse('', [$toolCall], FinishReason::ToolCalls, new Usage, new Meta('fake', 'model')),
+        ),
+        textGenerationLoopStreamStep(
+            events: [],
+            returns: new StepResponse('done', [], FinishReason::Stop, new Usage, new Meta('fake', 'model')),
+        ),
+    ]);
+
+    $invoking = [];
+    $invoked = [];
+
+    $events = new Dispatcher;
+
+    $events->listen(InvokingTool::class, function (InvokingTool $event) use (&$invoking): void {
+        $invoking[] = $event->tool::class;
+    });
+
+    $events->listen(ToolInvoked::class, function (ToolInvoked $event) use (&$invoked): void {
+        $invoked[] = $event->result;
+    });
+
+    $provider = textGenerationLoopProvider();
+
+    iterator_to_array((new TextGenerationLoop($gateway))->stream(
+        'invocation-1',
+        $provider,
+        'model',
+        null,
+        [],
+        [$tool],
+        null,
+        new TextGenerationOptions(maxSteps: 2),
+        null,
+        context: new RunContext('invocation-1', Mockery::mock(Agent::class), $provider, 'model', $events),
+    ));
+
+    expect($invoking)->toBe([AgentTool::class])
+        ->and($invoked)->toBe(['sub-agent result']);
+});
+
+test('a gated tool pauses the streamed loop while a sub-agent still streams its activity', function (): void {
+    $gated = new TextGenerationLoopApprovableTool;
+    $subAgent = textGenerationLoopAgentTool();
+    $gatedCall = new ToolCall('call-gated', TextGenerationLoopApprovableTool::class, ['value' => 'danger'], 'call-gated');
+    $subAgentCall = new ToolCall('call-sub-agent', 'research_agent', ['task' => 'Research'], 'call-sub-agent');
+    $gateway = new TextGenerationLoopFakeGateway(streams: [
+        textGenerationLoopStreamStep(
+            events: [],
+            returns: new StepResponse('', [$gatedCall, $subAgentCall], FinishReason::ToolCalls, new Usage, new Meta('fake', 'model')),
+        ),
+    ]);
+
+    $events = iterator_to_array((new TextGenerationLoop($gateway))->stream(
+        'invocation-1',
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [],
+        [$gated, $subAgent],
+        null,
+        new TextGenerationOptions(maxSteps: 2),
+        null,
+    ));
+
+    $activity = array_values(array_filter(
+        $events,
+        fn (object $event): bool => $event instanceof ToolResultEvent && $event->preliminary(),
+    ));
+    $approvalRequests = array_values(array_filter($events, fn (object $event): bool => $event instanceof ToolApprovalRequest));
+
+    expect($gated->calls)->toBe(0)
+        ->and($activity)->toHaveCount(2)
+        ->and($approvalRequests)->toHaveCount(1)
+        ->and($approvalRequests[0]->pendingApprovals->first()->id)->toBe('call-gated');
 });

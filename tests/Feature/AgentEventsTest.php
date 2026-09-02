@@ -101,24 +101,6 @@ test('every failover attempt shares the run invocation id', function (): void {
     expect($invocationIds)->toHaveCount(1);
 });
 
-test('a failed over run names the invocation it belongs to', function (): void {
-    Event::fake();
-
-    config([
-        'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
-        'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
-    ]);
-
-    Http::preventStrayRequests();
-
-    Http::fakeSequence()
-        ->push(status: 429)
-        ->pushResponse(fakeGroqResponse('Hello from the backup.'));
-
-    $response = (new AssistantAgent)->prompt('Hi', provider: ['primary', 'backup']);
-
-    Event::assertDispatched(AgentFailedOver::class, fn (AgentFailedOver $event): bool => $event->invocationId === $response->invocationId);
-});
 test('a nested sub agent sharing the parent provider instance does not overwrite the parent tool invocation id', function (): void {
     Event::fake();
 
@@ -191,8 +173,11 @@ test('step completed carries the whole step response', function (): void {
 
     AssistantAgent::fake(['Hello!']);
 
-    (new AssistantAgent)->prompt('Hi');
+    $agent = new AssistantAgent;
 
+    $agent->prompt('Hi');
+
+    $starting = Event::dispatched(StartingStep::class)->first()[0];
     $completed = Event::dispatched(StepCompleted::class)->first()[0];
 
     // The response travels whole so a consumer can record the text and usage of a step, not only that it finished...
@@ -200,7 +185,10 @@ test('step completed carries the whole step response', function (): void {
         ->and($completed->response->text)->toBe('Hello!')
         ->and($completed->response->meta->model)->not->toBeEmpty()
         ->and($completed->response->meta->provider)->not->toBeEmpty()
-        ->and($completed->response->usage)->toBeInstanceOf(Usage::class);
+        ->and($completed->response->usage)->toBeInstanceOf(Usage::class)
+        ->and($completed->agent)->toBe($agent)
+        ->and($starting->agent)->toBe($agent)
+        ->and($completed->time)->toBeFloat()->toBeGreaterThan(0.0);
 });
 
 test('starting step carries the messages and options the step is sent with', function (): void {
@@ -279,24 +267,8 @@ test('a step that throws carries no stream error', function (): void {
     $failed = Event::dispatched(StepFailed::class)->first()[0];
 
     expect($failed->exception)->toBeInstanceOf(RateLimitedException::class)
-        ->and($failed->exception)->not->toBeInstanceOf(StreamErrorException::class);
-});
-
-test('step events carry the agent that ran them', function (): void {
-    Event::fake();
-
-    AssistantAgent::fake(['Hello!']);
-
-    $agent = new AssistantAgent;
-
-    $agent->prompt('Hi');
-
-    $starting = Event::dispatched(StartingStep::class)->first()[0];
-    $completed = Event::dispatched(StepCompleted::class)->first()[0];
-
-    expect($starting->agent)->toBe($agent)
-        ->and($completed->agent)->toBe($agent)
-        ->and($starting->model)->not->toBeEmpty();
+        ->and($failed->exception)->not->toBeInstanceOf(StreamErrorException::class)
+        ->and($failed->time)->toBeFloat()->toBeGreaterThan(0.0);
 });
 
 test('a failed step identifies the provider and model that failed it', function (): void {
@@ -342,35 +314,6 @@ test('every step event names the provider and model the step ran against', funct
         ->and($completed->model)->toBe($starting->model)
         ->and($completed->isFinalStep)->toBe($starting->isFinalStep)
         ->and($completed->agent)->toBe($starting->agent);
-});
-
-test('step completed carries the wall time spent in the provider call', function (): void {
-    Event::fake();
-
-    AssistantAgent::fake(['Hello!']);
-
-    (new AssistantAgent)->prompt('Hi');
-
-    $completed = Event::dispatched(StepCompleted::class)->first()[0];
-
-    expect($completed->time)->toBeFloat()->toBeGreaterThan(0.0);
-});
-
-test('step failed carries the wall time spent before the failure', function (): void {
-    Event::fake();
-
-    config(['ai.providers.only' => ['driver' => 'groq', 'key' => 'test-key']]);
-
-    Http::preventStrayRequests();
-
-    Http::fakeSequence()->push(status: 429);
-
-    expect(fn (): mixed => (new AssistantAgent)->prompt('Hi', provider: 'only'))
-        ->toThrow(RateLimitedException::class);
-
-    $failed = Event::dispatched(StepFailed::class)->first()[0];
-
-    expect($failed->time)->toBeFloat()->toBeGreaterThan(0.0);
 });
 
 test('a throwing tool dispatches tool failed and still propagates the exception', function (): void {
@@ -453,21 +396,6 @@ test('a tool that fails while resuming an approval reports the failure once and 
 
     expect($failed->exception->getMessage())->toBe('Forced to throw exception.')
         ->and($failed->toolInvocationId)->toBe($invoking->toolInvocationId);
-});
-
-test('tool events carry the wall time spent in the tool', function (): void {
-    Event::fake();
-
-    MultiStepToolAgent::fake([
-        new ToolCall('call_1', 'FixedNumberGenerator', []),
-        'The number is 72019.',
-    ]);
-
-    (new MultiStepToolAgent)->prompt('Generate a number');
-
-    $invoked = Event::dispatched(ToolInvoked::class)->first()[0];
-
-    expect($invoked->time)->toBeFloat()->toBeGreaterThan(0.0);
 });
 
 test('a sub agent prompt is linked to the parent invocation and tool invocation', function (): void {

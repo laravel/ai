@@ -2,10 +2,12 @@
 
 namespace Laravel\Ai\Tools;
 
+use Generator;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\CanActAsTool;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Streaming\Events\StreamEvent;
 use Stringable;
 use Throwable;
 
@@ -48,8 +50,34 @@ class AgentTool implements Tool
             return $this->agent->prompt((string) $request['task'])->text;
         } catch (Throwable $throwable) {
             // Degraded to a result so the parent run survives; the failure surfaces as the sub-agent's own AgentFailed...
-            return 'Agent failed: '.$throwable->getMessage();
+            return $this->failureResult($throwable);
         }
+    }
+
+    /**
+     * Execute the sub-agent and stream its activity.
+     *
+     * @return Generator<int, StreamEvent, mixed, string>
+     */
+    public function stream(Request $request): Generator
+    {
+        try {
+            $stream = $this->agent->stream((string) $request['task']);
+
+            yield from $stream;
+
+            return (string) $stream->text;
+        } catch (Throwable $throwable) {
+            return $this->failureResult($throwable);
+        }
+    }
+
+    /**
+     * Get the tool result describing the sub-agent's failure.
+     */
+    protected function failureResult(Throwable $throwable): string
+    {
+        return 'Agent failed: '.$throwable->getMessage();
     }
 
     /**
