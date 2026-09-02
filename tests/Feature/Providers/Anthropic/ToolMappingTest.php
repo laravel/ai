@@ -295,6 +295,6 @@ test('code execution tool sends dated type and name', function (): void {
     Http::assertSent(function ($request): bool {
         $tool = collect($request->data()['tools'] ?? [])->firstWhere('name', 'code_execution');
 
-        return data_get($tool, 'type') === 'code_execution_20250825';
+        return data_get($tool, 'type') === 'code_execution_20260120';
     });
 });

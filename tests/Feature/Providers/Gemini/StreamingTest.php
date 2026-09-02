@@ -37,7 +37,7 @@ describe('text streaming', function (): void {
 
         $providerEvents = array_values(array_filter($this->collectStreamEvents(), fn ($e): bool => $e instanceof ProviderToolEvent));
 
-        expect(array_map(fn (ProviderToolEvent $e): string => $e->status, $providerEvents))->toBe(['code_generated', 'result_received'])
+        expect(array_map(fn (ProviderToolEvent $e): string => $e->status, $providerEvents))->toBe(['completed', 'result_received'])
             ->and($providerEvents[0])->type->toBe('code_execution')->provider->toBe('gemini')
             ->and($providerEvents[0]->data['executableCode']['code'])->toBe('print(1)')
             ->and($providerEvents[1]->data['codeExecutionResult']['output'])->toBe('1');

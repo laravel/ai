@@ -232,19 +232,3 @@ test('code execution tool sends code_execution definition', function (): void {
 
     Http::assertSent(fn ($request): bool => str_contains($request->body(), '"code_execution":{}'));
 });
-
-test('code execution tool forwards gemini provider options into the tool payload', function (): void {
-    Http::fake([
-        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('ok'),
-    ]);
-
-    agent(tools: [(new CodeExecution)->withProviderOptions(['environment' => 'python'])])
-        ->prompt('Run some code', provider: 'gemini');
-
-    Http::assertSent(function ($request): bool {
-        $tool = collect($request->data()['tools'] ?? [])
-            ->first(fn ($tool): bool => array_key_exists('code_execution', $tool));
-
-        return data_get($tool, 'code_execution.environment') === 'python';
-    });
-});

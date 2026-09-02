@@ -112,7 +112,7 @@ trait MapsTools
         }
 
         return [
-            'type' => 'code_execution_20250825',
+            'type' => 'code_execution_20260120',
             'name' => 'code_execution',
             ...$provider->codeExecutionToolOptions($tool),
         ];

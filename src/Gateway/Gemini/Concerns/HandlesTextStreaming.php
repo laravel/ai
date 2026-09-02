@@ -162,7 +162,7 @@ trait HandlesTextStreaming
                         '',
                         'code_execution',
                         $part,
-                        isset($part['executableCode']) ? 'code_generated' : 'result_received',
+                        isset($part['executableCode']) ? 'completed' : 'result_received',
                         time(),
                         provider: $provider->name(),
                     ))->withInvocationId($invocationId);
