@@ -179,6 +179,39 @@ test('a first turn stream emits the thread id the conversation is stored under',
         ->and(end($events)['threadId'])->toBe($agent->currentConversation());
 });
 
+test('a remembered stream reports the assistant row it wrote', function () {
+    app()->instance(ConversationStore::class, new FakeConversationStore);
+
+    RememberingAssistantAgent::fake(['Fake response']);
+
+    $user = new class
+    {
+        public int $id = 1;
+    };
+
+    $response = (new RememberingAssistantAgent)->forUser($user)->stream('Hello');
+
+    $events = agUiEvents($response->usingProtocol(new AgentUserInteractionProtocol)->toResponse(request()));
+    $finished = end($events);
+
+    expect($response->assistantMessageId)->not->toBeNull()
+        ->and(array_keys($finished))->toBe(['type', 'threadId', 'runId', 'messageId', 'usage', 'metadata'])
+        ->and($finished['threadId'])->toBe($response->conversationId)
+        ->and($finished['runId'])->toBe($response->invocationId)
+        ->and($finished['messageId'])->toBe($response->assistantMessageId);
+});
+
+test('a stream that persists nothing omits the message id', function () {
+    $events = agUiProtocolEvents([
+        new TextStart('event-1', 'msg-1', time()),
+        new TextDelta('event-2', 'msg-1', 'Hello', time()),
+        new TextEnd('event-3', 'msg-1', time()),
+        new StreamEnd('event-4', 'stop', new Usage, time()),
+    ]);
+
+    expect(end($events))->not->toHaveKey('messageId');
+});
+
 test('an ownerless approval stream persists the thread id it emits', function () {
     app()->instance(ConversationStore::class, new FakeConversationStore);
 
