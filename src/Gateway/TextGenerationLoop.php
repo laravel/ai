@@ -93,6 +93,7 @@ class TextGenerationLoop
         $steps = new Collection;
         $maxSteps = $this->resolveMaxSteps($options, $tools);
         $continuationToken = null;
+        $accumulatedUsage = new Usage;
         $lastResult = null;
 
         if ($approval !== null) {
@@ -115,16 +116,16 @@ class TextGenerationLoop
         }
 
         for ($step = 0; $step < $maxSteps; $step++) {
-            $pending = $this->pendingStep($step, $maxSteps, $model, $instructions, $allMessages, $tools, $schema, $options, $steps, $timeout, $context);
+            $pending = $this->pendingStep($step, $maxSteps, $model, $instructions, $allMessages, $tools, $schema, $options, $steps, $accumulatedUsage, $timeout, $context);
 
             $prepared = null;
             $stepContext = null;
             $startedAt = null;
 
             try {
-                $lastResult = $this->runStep($pending, $middleware, function (PendingStep $step) use ($provider, $context, $allMessages, $continuationToken, &$prepared, &$stepContext, &$startedAt): StepResult {
+                $lastResult = $this->runStep($pending, $middleware, function (PendingStep $step) use ($provider, $model, $context, $allMessages, $continuationToken, &$prepared, &$stepContext, &$startedAt): StepResult {
                     $prepared = $step;
-                    $stepContext = $this->stepContextFor($step, $allMessages, $continuationToken);
+                    $stepContext = $this->stepContextFor($step, $model, $allMessages, $continuationToken);
 
                     $context?->startingStep($stepContext, $step->messages, $step->options, $step->model);
 
@@ -155,6 +156,8 @@ class TextGenerationLoop
             if ($stepContext !== null) {
                 $context?->stepCompleted($stepContext, $lastResult, $this->elapsedMilliseconds($startedAt), $prepared->model);
             }
+
+            $accumulatedUsage = $accumulatedUsage->add($lastResult->usage);
 
             [$toolResults, $pendingApprovals] = $this->stepToolResultsWithOptions($lastResult, $prepared->isFinalStep, $prepared->tools, $prepared->options, $context);
 
@@ -252,7 +255,7 @@ class TextGenerationLoop
         }
 
         for ($step = 0; $step < $maxSteps; $step++) {
-            $pending = $this->pendingStep($step, $maxSteps, $model, $instructions, $allMessages, $tools, $schema, $options, $steps, $timeout, $context, $accumulatedUsage);
+            $pending = $this->pendingStep($step, $maxSteps, $model, $instructions, $allMessages, $tools, $schema, $options, $steps, $accumulatedUsage, $timeout, $context);
 
             $prepared = null;
             $stepContext = null;
@@ -260,9 +263,9 @@ class TextGenerationLoop
             $lastError = null;
 
             try {
-                $stepResult = $this->runStep($pending, $middleware, function (PendingStep $step) use ($invocationId, $provider, $context, $allMessages, $continuationToken, &$prepared, &$stepContext, &$startedAt): StepResult {
+                $stepResult = $this->runStep($pending, $middleware, function (PendingStep $step) use ($invocationId, $provider, $model, $context, $allMessages, $continuationToken, &$prepared, &$stepContext, &$startedAt): StepResult {
                     $prepared = $step;
-                    $stepContext = $this->stepContextFor($step, $allMessages, $continuationToken);
+                    $stepContext = $this->stepContextFor($step, $model, $allMessages, $continuationToken);
 
                     $context?->startingStep($stepContext, $step->messages, $step->options, $step->model);
 
@@ -399,9 +402,9 @@ class TextGenerationLoop
         ?array $schema,
         ?TextGenerationOptions $options,
         Collection $steps,
+        Usage $usage,
         ?int $timeout,
         ?RunContext $context,
-        ?Usage $usage = null,
     ): PendingStep {
         return new PendingStep(
             number: $step,
@@ -413,7 +416,7 @@ class TextGenerationLoop
             schema: $schema,
             options: $options?->forStep($step),
             steps: $steps->all(),
-            usage: $usage ?? $steps->reduce(fn (Usage $carry, Step $completed): Usage => $carry->add($completed->usage), new Usage),
+            usage: $usage,
             timeout: $timeout,
             invocationId: $context?->invocationId,
         );
@@ -432,21 +435,23 @@ class TextGenerationLoop
         return match (true) {
             $result instanceof StepResult => $result,
             $result instanceof StepResponse => new StepResult($result),
-            default => throw new LogicException('Agent middleware must return the result of $next or a StepResponse.'),
+            default => throw new LogicException('Agent middleware must return the next step result or a StepResponse.'),
         };
     }
 
     /**
-     * Middleware that replaces the history invalidates a provider-side continuation, so the step replays its messages in full instead.
+     * Middleware that replaces the history or the model invalidates a provider-side continuation, so the step replays its messages in full instead.
      *
      * @param  Message[]  $history
      */
-    protected function stepContextFor(PendingStep $step, array $history, ?string $continuationToken): StepContext
+    protected function stepContextFor(PendingStep $step, string $model, array $history, ?string $continuationToken): StepContext
     {
+        $unchanged = $step->messages === $history && $step->model === $model;
+
         return new StepContext(
             stepNumber: $step->number,
             isFinalStep: $step->isFinalStep,
-            continuationToken: $step->messages === $history ? $continuationToken : null,
+            continuationToken: $unchanged ? $continuationToken : null,
         );
     }
 

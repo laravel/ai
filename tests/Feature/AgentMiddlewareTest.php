@@ -5,15 +5,17 @@ use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\StartingStep;
 use Laravel\Ai\Events\StepCompleted;
-use Laravel\Ai\Exceptions\NoSuchToolException;
+use Laravel\Ai\Events\StepFailed;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationLoop;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\PendingStep;
+use Laravel\Ai\Providers\Tools\WebSearch;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -147,18 +149,6 @@ test('agent middleware may short-circuit a streamed step', function (): void {
         ->and($response->text)->toBe('Short-circuited response');
 });
 
-test('agent middleware may narrow the tools for a step', function (): void {
-    AssistantAgent::fake([
-        new ToolCall('call_1', 'custom_named_tool', []),
-        'Fake response',
-    ]);
-
-    (new AssistantAgent)
-        ->withTools([new FixedNumberGenerator, new NamedTool])
-        ->withMiddleware([fn (PendingStep $step, Closure $next) => $next($step->withoutTools('custom_named_tool'))])
-        ->prompt('Test prompt');
-})->throws(NoSuchToolException::class);
-
 test('agent middleware may change the model and options for a step', function (): void {
     Event::fake([StartingStep::class, StepCompleted::class]);
 
@@ -198,43 +188,58 @@ test('a streamed response reports the model the middleware chose', function (): 
     Event::assertDispatched(StepCompleted::class, fn (StepCompleted $event): bool => $event->model === 'other-model');
 });
 
-test('agent middleware that replaces the history drops the provider continuation token', function (): void {
-    $gateway = new class implements StepTextGateway
-    {
-        public array $contexts = [];
-
-        public function generateTextStep(TextProvider $provider, string $model, ?string $instructions, array $messages, array $tools, ?array $schema, ?TextGenerationOptions $options, ?int $timeout, StepContext $stepContext): StepResponse
-        {
-            $this->contexts[] = $stepContext;
-
-            return count($this->contexts) === 1
-                ? new StepResponse('', [new ToolCall('call_1', 'FixedNumberGenerator', [])], FinishReason::ToolCalls, new Usage, new Meta, continuationToken: 'resp_1')
-                : new StepResponse('Done.', [], FinishReason::Stop, new Usage, new Meta);
-        }
-
-        public function generateStreamStep(string $invocationId, TextProvider $provider, string $model, ?string $instructions, array $messages, array $tools, ?array $schema, ?TextGenerationOptions $options, ?int $timeout, StepContext $stepContext): Generator
-        {
-            yield from [];
-        }
-    };
+test('agent middleware that replaces the history or the model drops the provider continuation token', function (): void {
+    $gateway = capturingGateway();
 
     $run = function (Closure $middleware) use ($gateway): array {
-        $gateway->contexts = [];
+        runThroughGateway($gateway, [$middleware]);
 
-        (new TextGenerationLoop($gateway))->generate(
-            Ai::textProviderFor(new AssistantAgent, 'openai'),
-            'gpt-test',
-            null,
-            [new UserMessage('Hi')],
-            [new FixedNumberGenerator],
-            options: TextGenerationOptions::forAgent((new AssistantAgent)->withMiddleware([$middleware])),
-        );
-
-        return array_map(fn (StepContext $context): ?string => $context->continuationToken, $gateway->contexts);
+        return array_map(fn (array $call): ?string => $call['context']->continuationToken, $gateway->calls);
     };
 
     expect($run(fn (PendingStep $step, Closure $next) => $next($step)))->toBe([null, 'resp_1'])
-        ->and($run(fn (PendingStep $step, Closure $next) => $next($step->withMessages(array_slice($step->messages, -1)))))->toBe([null, null]);
+        ->and($run(fn (PendingStep $step, Closure $next) => $next($step->withMessages(array_slice($step->messages, -1)))))->toBe([null, null])
+        ->and($run(fn (PendingStep $step, Closure $next) => $next($step->isFirstStep() ? $step : $step->withModel('cheaper-model'))))->toBe([null, null]);
+});
+
+test('agent middleware may narrow the tools, instructions and schema for a step', function (): void {
+    $gateway = capturingGateway();
+
+    runThroughGateway($gateway, [
+        fn (PendingStep $step, Closure $next) => $next($step->isFirstStep()
+            ? $step->withoutTools('custom_named_tool', 'WebSearch')->withInstructions('Plan first.')
+            : $step->onlyTools('custom_named_tool')->withSchema(['type' => 'object'])),
+    ], tools: [new FixedNumberGenerator, new NamedTool, new WebSearch]);
+
+    expect($gateway->calls[0]['tools'])->toHaveCount(1)
+        ->and($gateway->calls[0]['tools'][0])->toBeInstanceOf(FixedNumberGenerator::class)
+        ->and($gateway->calls[0]['instructions'])->toBe('Plan first.')
+        ->and($gateway->calls[0]['schema'])->toBeNull()
+        ->and($gateway->calls[1]['tools'])->toHaveCount(1)
+        ->and($gateway->calls[1]['tools'][0])->toBeInstanceOf(NamedTool::class)
+        ->and($gateway->calls[1]['instructions'])->toBe('Be helpful.')
+        ->and($gateway->calls[1]['schema'])->toBe(['type' => 'object']);
+});
+
+test('agent middleware must return the next step result or a step response', function (): void {
+    AssistantAgent::fake(['Fake response']);
+
+    (new AssistantAgent)
+        ->withMiddleware([fn (PendingStep $step, Closure $next) => 'nope'])
+        ->prompt('Test prompt');
+})->throws(LogicException::class, 'Agent middleware must return the next step result or a StepResponse.');
+
+test('agent middleware that fails before the model is called fails the run without a step failure', function (): void {
+    Event::fake([StepFailed::class, AgentFailed::class]);
+
+    AssistantAgent::fake(['Fake response']);
+
+    expect(fn (): mixed => (new AssistantAgent)
+        ->withMiddleware([fn (PendingStep $step, Closure $next) => throw new RuntimeException('Blocked by middleware.')])
+        ->prompt('Test prompt'))->toThrow(RuntimeException::class, 'Blocked by middleware.');
+
+    Event::assertNotDispatched(StepFailed::class);
+    Event::assertDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->exception->getMessage() === 'Blocked by middleware.');
 });
 
 test('stream response conversation id is available after remembered conversations stream completes', function (): void {
@@ -342,6 +347,42 @@ test('an ownerless successful stream does not retain an unpersisted conversation
         ->and($response->conversationId)->toBeNull()
         ->and($response->conversationUser)->toBeNull();
 });
+
+function capturingGateway(): StepTextGateway
+{
+    return new class implements StepTextGateway
+    {
+        public array $calls = [];
+
+        public function generateTextStep(TextProvider $provider, string $model, ?string $instructions, array $messages, array $tools, ?array $schema, ?TextGenerationOptions $options, ?int $timeout, StepContext $stepContext): StepResponse
+        {
+            $this->calls[] = ['model' => $model, 'instructions' => $instructions, 'tools' => $tools, 'schema' => $schema, 'context' => $stepContext];
+
+            return count($this->calls) === 1
+                ? new StepResponse('', [new ToolCall('call_1', 'FixedNumberGenerator', [])], FinishReason::ToolCalls, new Usage, new Meta, continuationToken: 'resp_1')
+                : new StepResponse('Done.', [], FinishReason::Stop, new Usage, new Meta);
+        }
+
+        public function generateStreamStep(string $invocationId, TextProvider $provider, string $model, ?string $instructions, array $messages, array $tools, ?array $schema, ?TextGenerationOptions $options, ?int $timeout, StepContext $stepContext): Generator
+        {
+            yield from [];
+        }
+    };
+}
+
+function runThroughGateway(StepTextGateway $gateway, array $middleware, array $tools = [new FixedNumberGenerator]): void
+{
+    $gateway->calls = [];
+
+    (new TextGenerationLoop($gateway))->generate(
+        Ai::textProviderFor(new AssistantAgent, 'openai'),
+        'gpt-test',
+        'Be helpful.',
+        [new UserMessage('Hi')],
+        $tools,
+        options: TextGenerationOptions::forAgent((new AssistantAgent)->withMiddleware($middleware)),
+    );
+}
 
 function shortCircuitingMiddleware(): object
 {

@@ -33,10 +33,10 @@ class StepResult implements IteratorAggregate
      */
     public function then(Closure $callback): static
     {
-        if ($this->resolved) {
-            $this->response === null ?: $callback($this->response);
-        } else {
+        if (! $this->resolved) {
             $this->callbacks[] = $callback;
+        } elseif ($this->response instanceof StepResponse) {
+            $callback($this->response);
         }
 
         return $this;
