@@ -32,11 +32,27 @@ class Decision
     }
 
     /**
+     * Approve the pending tool call with its arguments replaced wholesale.
+     *
      * @param  array<string, mixed>  $arguments
      */
     public static function edit(array $arguments): self
     {
         return new self('edit', arguments: $arguments);
+    }
+
+    /**
+     * Approve the pending tool call with the given arguments merged into its own.
+     *
+     * Where edit() replaces the call's arguments wholesale, this changes only
+     * the keys given. The caller never re-supplies what the model already
+     * provided, since the resume reads it back from the paused turn.
+     *
+     * @param  array<string, mixed>  $arguments
+     */
+    public static function merge(array $arguments): self
+    {
+        return new self('merge', arguments: $arguments);
     }
 
     /**
@@ -81,6 +97,10 @@ class Decision
                 throw new InvalidArgumentException('The wildcard decision may not use the edit action.');
             }
 
+            if ($id === '*' && $decision->isMerged()) {
+                throw new InvalidArgumentException('The wildcard decision may not use the merge action.');
+            }
+
             $normalized[$id] = $decision;
         }
 
@@ -109,5 +129,13 @@ class Decision
     public function isEdited(): bool
     {
         return $this->action === 'edit';
+    }
+
+    /**
+     * Determine whether the tool call's arguments were merged into.
+     */
+    public function isMerged(): bool
+    {
+        return $this->action === 'merge';
     }
 }
