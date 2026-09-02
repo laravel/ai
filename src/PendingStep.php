@@ -1,0 +1,169 @@
+<?php
+
+namespace Laravel\Ai;
+
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Messages\Message;
+use Laravel\Ai\Providers\Tools\ProviderTool;
+use Laravel\Ai\Responses\Data\Step;
+use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Tools\ToolNameResolver;
+
+class PendingStep
+{
+    /**
+     * @param  Message[]  $messages
+     * @param  array<Tool|ProviderTool>  $tools
+     * @param  array<string, mixed>|null  $schema
+     * @param  Step[]  $steps  The steps completed so far in this run.
+     * @param  Usage  $usage  The usage accumulated by the completed steps.
+     */
+    public function __construct(
+        public readonly int $number,
+        public readonly bool $isFinalStep,
+        public readonly string $model,
+        public readonly ?string $instructions,
+        public readonly array $messages,
+        public readonly array $tools,
+        public readonly ?array $schema,
+        public readonly ?TextGenerationOptions $options,
+        public readonly array $steps = [],
+        public readonly Usage $usage = new Usage,
+        public readonly ?int $timeout = null,
+        public readonly ?string $invocationId = null,
+    ) {}
+
+    public function agent(): ?Agent
+    {
+        return $this->options?->agent;
+    }
+
+    public function isFirstStep(): bool
+    {
+        return $this->number === 0;
+    }
+
+    public function previousStep(): ?Step
+    {
+        return $this->steps === [] ? null : $this->steps[array_key_last($this->steps)];
+    }
+
+    /**
+     * @return string[]
+     */
+    public function toolNames(): array
+    {
+        return array_values(array_map(self::toolName(...), $this->tools));
+    }
+
+    public function withModel(string $model): static
+    {
+        return $this->with(['model' => $model]);
+    }
+
+    public function withInstructions(?string $instructions): static
+    {
+        return $this->with(['instructions' => $instructions]);
+    }
+
+    /**
+     * @param  iterable<Message>  $messages
+     */
+    public function withMessages(iterable $messages): static
+    {
+        return $this->with(['messages' => array_values([...$messages])]);
+    }
+
+    /**
+     * @param  iterable<Tool|ProviderTool>  $tools
+     */
+    public function withTools(iterable $tools): static
+    {
+        return $this->with(['tools' => array_values([...$tools])]);
+    }
+
+    public function onlyTools(string ...$names): static
+    {
+        return $this->withTools(array_filter($this->tools, fn ($tool): bool => in_array(self::toolName($tool), $names, true)));
+    }
+
+    public function withoutTools(string ...$names): static
+    {
+        return $this->withTools(array_filter($this->tools, fn ($tool): bool => ! in_array(self::toolName($tool), $names, true)));
+    }
+
+    /**
+     * @param  ToolChoice|string|array<string, mixed>|null  $toolChoice
+     */
+    public function withToolChoice(ToolChoice|string|array|null $toolChoice): static
+    {
+        return $this->withOptions($this->resolvedOptions()->withToolChoice(
+            $toolChoice === null ? null : ToolChoice::from($toolChoice),
+        ));
+    }
+
+    public function withMaxTokens(?int $maxTokens): static
+    {
+        return $this->withOptions($this->resolvedOptions()->withMaxTokens($maxTokens));
+    }
+
+    public function withTemperature(?float $temperature): static
+    {
+        return $this->withOptions($this->resolvedOptions()->withTemperature($temperature));
+    }
+
+    public function withTopP(?float $topP): static
+    {
+        return $this->withOptions($this->resolvedOptions()->withTopP($topP));
+    }
+
+    /**
+     * Merge provider-specific options over the agent's own for this step.
+     *
+     * @param  array<string, mixed>  $providerOptions
+     */
+    public function withProviderOptions(array $providerOptions): static
+    {
+        return $this->withOptions($this->resolvedOptions()->withProviderOptions(
+            [...($this->options?->providerOptions ?? []), ...$providerOptions],
+        ));
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $schema
+     */
+    public function withSchema(?array $schema): static
+    {
+        return $this->with(['schema' => $schema]);
+    }
+
+    public function withTimeout(?int $timeout): static
+    {
+        return $this->with(['timeout' => $timeout]);
+    }
+
+    public function withOptions(TextGenerationOptions $options): static
+    {
+        return $this->with(['options' => $options]);
+    }
+
+    protected function resolvedOptions(): TextGenerationOptions
+    {
+        return $this->options ?? new TextGenerationOptions;
+    }
+
+    /**
+     * @param  array<string, mixed>  $overrides
+     */
+    protected function with(array $overrides): static
+    {
+        return new static(...[...get_object_vars($this), ...$overrides]);
+    }
+
+    protected static function toolName(Tool|ProviderTool $tool): string
+    {
+        return $tool instanceof Tool ? ToolNameResolver::resolve($tool) : class_basename($tool);
+    }
+}

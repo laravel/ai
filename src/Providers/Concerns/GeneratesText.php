@@ -10,7 +10,6 @@ use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\ConversationStore;
-use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\RemembersConversations as RemembersConversationsContract;
@@ -50,16 +49,13 @@ trait GeneratesText
     {
         $invocationId = $prompt->invocationId ?? (string) Str::uuid7();
 
-        $processedPrompt = null;
         $resolvedApprovalResults = null;
 
         try {
             $response = pipeline()
                 ->send($prompt)
                 ->through($this->gatherMiddlewareFor($prompt->agent))
-                ->then(function (AgentPrompt $prompt) use ($invocationId, &$processedPrompt, &$resolvedApprovalResults): TextResponse {
-                    $processedPrompt = $prompt;
-
+                ->then(function (AgentPrompt $prompt) use ($invocationId, &$resolvedApprovalResults): TextResponse {
                     $this->events->dispatch(new PromptingAgent($invocationId, $prompt));
 
                     $agent = $prompt->agent;
@@ -110,13 +106,13 @@ trait GeneratesText
                     return $agentResponse;
                 });
         } catch (Throwable $exception) {
-            $this->recordAgentFailure($invocationId, $prompt, $exception, $processedPrompt);
+            $this->recordAgentFailure($invocationId, $prompt, $exception);
 
             throw $exception;
         }
 
         $this->events->dispatch(
-            new AgentPrompted($invocationId, $processedPrompt ?? $prompt, $response)
+            new AgentPrompted($invocationId, $prompt, $response)
         );
 
         if ($response->hasPendingApprovals()) {
@@ -143,7 +139,7 @@ trait GeneratesText
     }
 
     /**
-     * Gather the middleware for the given agent.
+     * Gather the internal run middleware for the given agent.
      */
     protected function gatherMiddlewareFor(Agent $agent): array
     {
@@ -157,9 +153,7 @@ trait GeneratesText
             $middleware[] = new RememberConversation(resolve(ConversationStore::class), $this);
         }
 
-        return $agent instanceof HasMiddleware
-            ? [...$middleware, ...$agent->middleware()]
-            : $middleware;
+        return $middleware;
     }
 
     /**
@@ -204,7 +198,7 @@ trait GeneratesText
     /**
      * Dispatch the terminal failure event for a run, unless the caller may still retry it against another provider.
      */
-    protected function recordAgentFailure(string $invocationId, AgentPrompt $prompt, Throwable $exception, ?AgentPrompt $processedPrompt = null, bool $retryable = true): void
+    protected function recordAgentFailure(string $invocationId, AgentPrompt $prompt, Throwable $exception, bool $retryable = true): void
     {
         // A failoverable exception is only terminal once the caller has run out of providers to try...
         if ($retryable &&
@@ -214,7 +208,7 @@ trait GeneratesText
         }
 
         $this->events->dispatch(
-            new AgentFailed($invocationId, $processedPrompt ?? $prompt, $exception)
+            new AgentFailed($invocationId, $prompt, $exception)
         );
     }
 

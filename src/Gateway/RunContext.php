@@ -30,10 +30,10 @@ class RunContext
      *
      * @param  Message[]  $messages
      */
-    public function startingStep(StepContext $step, array $messages, ?TextGenerationOptions $options): void
+    public function startingStep(StepContext $step, array $messages, ?TextGenerationOptions $options, ?string $model = null): void
     {
         $this->events->dispatch(new StartingStep(
-            $this->invocationId, $step->stepNumber, $this->agent, $this->provider, $this->model, $step->isFinalStep,
+            $this->invocationId, $step->stepNumber, $this->agent, $this->provider, $model ?? $this->model, $step->isFinalStep,
             $messages, $options,
         ));
     }

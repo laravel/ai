@@ -5,7 +5,7 @@ namespace Laravel\Ai\Contracts;
 interface HasMiddleware
 {
     /**
-     * Get the agent's prompt middleware.
+     * Get the middleware wrapping each generation step of the agent.
      */
     public function middleware(): array;
 }

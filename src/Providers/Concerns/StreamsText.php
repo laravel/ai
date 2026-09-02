@@ -35,19 +35,13 @@ trait StreamsText
     {
         $invocationId = $prompt->invocationId ?? (string) Str::uuid7();
 
-        // Held under its own name because the pipeline hands the middleware's prompt to the callback as $prompt...
-        $originalPrompt = $prompt;
-
-        $processedPrompt = null;
         $resolvedApprovalResults = null;
 
         try {
             $response = pipeline()
                 ->send($prompt)
                 ->through($this->gatherMiddlewareFor($prompt->agent))
-                ->then(function (AgentPrompt $prompt) use ($invocationId, $originalPrompt, &$processedPrompt, &$resolvedApprovalResults): StreamableAgentResponse {
-                    $processedPrompt = $prompt;
-
+                ->then(function (AgentPrompt $prompt) use ($invocationId, &$resolvedApprovalResults): StreamableAgentResponse {
                     $agent = $prompt->agent;
 
                     if ($agent instanceof HasStructuredOutput) {
@@ -79,7 +73,7 @@ trait StreamsText
                     // The response owns the "has anything reached the consumer" flag so this failure check and the caller's failover decision can never drift apart...
                     $streamable = new StreamableAgentResponse(
                         $invocationId,
-                        function () use ($invocationId, $prompt, $originalPrompt, $agent, $messages, $tools, $approval, $recordApprovalResults, $validatedApproval, &$streamable) {
+                        function () use ($invocationId, $prompt, $agent, $messages, $tools, $approval, $recordApprovalResults, $validatedApproval, &$streamable) {
                             $this->events->dispatch(new StreamingAgent($invocationId, $prompt));
 
                             try {
@@ -105,7 +99,7 @@ trait StreamsText
                                     yield $event;
                                 }
                             } catch (Throwable $exception) {
-                                $this->recordAgentFailure($invocationId, $originalPrompt, $exception, $prompt, retryable: ! $streamable->hasYielded());
+                                $this->recordAgentFailure($invocationId, $prompt, $exception, retryable: ! $streamable->hasYielded());
 
                                 throw $exception;
                             }
@@ -127,14 +121,14 @@ trait StreamsText
                     return $streamable;
                 });
         } catch (Throwable $exception) {
-            $this->recordAgentFailure($invocationId, $prompt, $exception, $processedPrompt);
+            $this->recordAgentFailure($invocationId, $prompt, $exception);
 
             throw $exception;
         }
 
-        return $response->then(function (StreamedAgentResponse $response) use ($invocationId, $prompt, &$processedPrompt, &$resolvedApprovalResults): void {
+        return $response->then(function (StreamedAgentResponse $response) use ($invocationId, $prompt, &$resolvedApprovalResults): void {
             $this->events->dispatch(
-                new AgentStreamed($invocationId, $processedPrompt ?? $prompt, $response)
+                new AgentStreamed($invocationId, $prompt, $response)
             );
 
             if ($response->hasPendingApprovals()) {

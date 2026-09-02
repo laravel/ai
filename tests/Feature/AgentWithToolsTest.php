@@ -7,6 +7,7 @@ use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Exceptions\NoSuchToolException;
+use Laravel\Ai\PendingStep;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -92,44 +93,6 @@ test('with tools is chainable and the last call wins', function (): void {
     expect($response->toolResults->first()->result)->toBe('ok');
 });
 
-test('a prompt rebuilt by middleware without tools falls back to the declared tools', function (): void {
-    $agent = new class implements Agent, HasMiddleware, HasTools
-    {
-        use Promptable;
-
-        public function instructions(): string
-        {
-            return 'You are a helpful assistant.';
-        }
-
-        public function tools(): iterable
-        {
-            return [new NamedTool];
-        }
-
-        public function middleware(): array
-        {
-            return [
-                fn (AgentPrompt $prompt, Closure $next) => $next(new AgentPrompt(
-                    $prompt->agent,
-                    'Rebuilt by middleware.',
-                    $prompt->attachments,
-                    $prompt->provider,
-                    $prompt->model,
-                    invocationId: $prompt->invocationId,
-                )),
-            ];
-        }
-    };
-
-    Ai::fakeAgent($agent::class, [
-        new ToolCall('call_1', 'custom_named_tool', []),
-        'Done.',
-    ]);
-
-    expect($agent->prompt('Use the tool')->toolResults->first()->result)->toBe('ok');
-});
-
 test('a paused approval resumes only when the runtime tools are re-applied', function (): void {
     ApprovableNumberGenerator::$invocations = 0;
 
@@ -165,7 +128,7 @@ test('a paused approval resumes only when the runtime tools are re-applied', fun
         ->and($response->text)->toBe('The number is 72019.');
 });
 
-test('middleware may swap the tools for a run', function (): void {
+test('middleware may swap the tools for a step', function (): void {
     $agent = new class implements Agent, HasMiddleware, HasTools
     {
         use Promptable;
@@ -183,7 +146,7 @@ test('middleware may swap the tools for a run', function (): void {
         public function middleware(): array
         {
             return [
-                fn (AgentPrompt $prompt, Closure $next) => $next($prompt->withTools([new FixedNumberGenerator])),
+                fn (PendingStep $step, Closure $next) => $next($step->withTools([new FixedNumberGenerator])),
             ];
         }
     };
