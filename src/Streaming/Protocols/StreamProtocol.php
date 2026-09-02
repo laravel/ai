@@ -3,7 +3,6 @@
 namespace Laravel\Ai\Streaming\Protocols;
 
 use Generator;
-use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -23,7 +22,7 @@ abstract class StreamProtocol
     /**
      * Get the protocol parts that terminate a stream interrupted by an exception.
      */
-    abstract protected function maskedErrorParts(Throwable $exception): Generator;
+    abstract protected function maskedErrorParts(): Generator;
 
     /**
      * Get the response headers for the protocol.
@@ -43,14 +42,14 @@ abstract class StreamProtocol
                     yield $this->encode($part);
                 }
             } catch (Throwable $e) {
-                // Stream errors were already surfaced, and a resumable mismatch is a race, so only report anything else...
-                if (! $e instanceof StreamErrorException && ! ($e instanceof ApprovalMismatchException && $e->isRecoverable())) {
+                // A stream error exception carries a provider error the stream already surfaced, so only report anything else...
+                if (! $e instanceof StreamErrorException) {
                     report($e);
                 }
 
                 // The response is already streaming, so surface a masked terminal error part instead of re-throwing, unless an error part was already sent...
                 if (! $this->errored) {
-                    foreach ($this->maskedErrorParts($e) as $part) {
+                    foreach ($this->maskedErrorParts() as $part) {
                         yield $this->encode($part);
                     }
                 }

@@ -4,9 +4,7 @@ namespace Laravel\Ai\Streaming\Protocols;
 
 use Generator;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Collection;
 use Laravel\Ai\Approvals\PendingApproval;
-use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Responses\Data;
 use Laravel\Ai\Responses\Data\UrlCitation;
 use Laravel\Ai\Responses\Data\Usage;
@@ -26,7 +24,6 @@ use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Laravel\Ai\Streaming\Events\ToolCall;
 use Laravel\Ai\Streaming\Events\ToolResult;
-use Throwable;
 
 use function Laravel\Ai\ulid;
 
@@ -102,7 +99,7 @@ class AgentUserInteractionProtocol extends StreamProtocol
                 yield $this->stepFinishedPart();
 
                 yield $this->runFinishedPart([
-                    'outcome' => ['type' => 'interrupt', 'interrupts' => $this->interrupts($event->pendingApprovals)],
+                    'outcome' => ['type' => 'interrupt', 'interrupts' => $this->interrupts($event)],
                 ]);
 
                 $this->finished = true;
@@ -132,23 +129,10 @@ class AgentUserInteractionProtocol extends StreamProtocol
     /**
      * {@inheritdoc}
      */
-    protected function maskedErrorParts(Throwable $exception): Generator
+    protected function maskedErrorParts(): Generator
     {
         // The interrupt outcome already ended the run, so a trailing error would follow a terminal event...
         if ($this->finished) {
-            return;
-        }
-
-        // A mismatched resume resolved nothing, so finish the still-paused run as interrupted...
-        if ($exception instanceof ApprovalMismatchException && $exception->isRecoverable()) {
-            yield from $this->yieldPart($this->stepFinishedPart());
-
-            yield $this->runFinishedPart([
-                'outcome' => ['type' => 'interrupt', 'interrupts' => $this->interrupts($exception->pendingApprovals)],
-            ]);
-
-            $this->finished = true;
-
             return;
         }
 
@@ -260,14 +244,13 @@ class AgentUserInteractionProtocol extends StreamProtocol
     }
 
     /**
-     * Get the interrupts representing the approvals a run is waiting on.
+     * Get the interrupts that represent the given approval request's pending approvals.
      *
-     * @param  Collection<int, PendingApproval>  $pendingApprovals
      * @return array<int, array<string, mixed>>
      */
-    protected function interrupts(Collection $pendingApprovals): array
+    protected function interrupts(ToolApprovalRequest $event): array
     {
-        return $pendingApprovals->map(fn (PendingApproval $approval) => Arr::whereNotNull([
+        return $event->pendingApprovals->map(fn (PendingApproval $approval) => Arr::whereNotNull([
             'id' => $approval->id,
             'reason' => 'tool_call',
             'message' => $approval->reason,

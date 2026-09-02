@@ -22,7 +22,6 @@ use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Laravel\Ai\Streaming\Events\ToolCall;
 use Laravel\Ai\Streaming\Events\ToolResult;
-use Throwable;
 
 /**
  * The Vercel AI SDK data stream protocol.
@@ -115,7 +114,7 @@ class VercelDataProtocol extends StreamProtocol
     /**
      * {@inheritdoc}
      */
-    protected function maskedErrorParts(Throwable $exception): Generator
+    protected function maskedErrorParts(): Generator
     {
         yield from $this->yieldPart(['type' => 'error', 'errorText' => 'An error occurred.']);
     }
