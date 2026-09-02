@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Exceptions;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data;
@@ -421,6 +422,62 @@ test('a paused run reports its interrupt outcome even when the stream later thro
     expect(collect($events)->pluck('type')->all())->toBe([
         'RUN_STARTED', 'STEP_STARTED', 'STEP_FINISHED', 'RUN_FINISHED',
     ])->and($events[3]['outcome']['interrupts'][0]['id'])->toBe('call-1');
+
+    Exceptions::assertReported(RuntimeException::class);
+});
+
+test('a rejected resume names itself so the client can hydrate the thread again', function () {
+    Exceptions::fake();
+
+    $events = agUiProtocolEvents(function () {
+        yield new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time());
+
+        throw new ApprovalMismatchException('Approval decisions do not match the pending tool calls.', collect([
+            new PendingApproval('call-1', 'DeleteFile', ['path' => 'a.txt'], 'Destructive operation.'),
+        ]));
+    });
+
+    expect(collect($events)->pluck('type')->all())->toBe([
+        'RUN_STARTED', 'STEP_STARTED', 'RUN_ERROR',
+    ])->and($events[2])->toBe([
+        'type' => 'RUN_ERROR',
+        'message' => 'Approval decisions do not match the pending tool calls.',
+        'code' => 'approval_mismatch',
+    ]);
+
+    Exceptions::assertNotReported(ApprovalMismatchException::class);
+});
+
+test('a mismatch with nothing left to approve is still reported', function () {
+    Exceptions::fake();
+
+    $events = agUiProtocolEvents(function () {
+        yield new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time());
+
+        throw new ApprovalMismatchException('There are no tool calls pending approval.', collect());
+    });
+
+    expect($events[2])->toBe([
+        'type' => 'RUN_ERROR',
+        'message' => 'There are no tool calls pending approval.',
+        'code' => 'approval_mismatch',
+    ]);
+
+    Exceptions::assertReported(ApprovalMismatchException::class);
+});
+
+test('any other failure still ends the run with an error', function () {
+    Exceptions::fake();
+
+    $events = agUiProtocolEvents(function () {
+        yield new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time());
+
+        throw new RuntimeException('The provider fell over.');
+    });
+
+    expect(collect($events)->pluck('type')->all())->toBe([
+        'RUN_STARTED', 'STEP_STARTED', 'RUN_ERROR',
+    ]);
 
     Exceptions::assertReported(RuntimeException::class);
 });
