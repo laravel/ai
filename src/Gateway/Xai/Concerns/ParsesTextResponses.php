@@ -69,6 +69,7 @@ trait ParsesTextResponses
             meta: new Meta($provider->name(), $model, $citations),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
             continuationToken: $data['id'] ?? null,
+            providerContentBlocks: $this->extractStandaloneReasoningBlocks($output, $mappedToolCalls),
         );
     }
 
@@ -186,5 +187,22 @@ trait ParsesTextResponses
         }
 
         return $toolCalls;
+    }
+
+    /**
+     * Extract reasoning blocks that should be replayable on later turns.
+     */
+    protected function extractStandaloneReasoningBlocks(array $output, array $toolCalls): array
+    {
+        $mappedReasoningIds = collect($toolCalls)
+            ->pluck('reasoningId')
+            ->filter()
+            ->all();
+
+        return collect($output)
+            ->filter(fn (array $item) => ($item['type'] ?? '') === 'reasoning')
+            ->reject(fn (array $item) => in_array($item['id'] ?? null, $mappedReasoningIds, true))
+            ->values()
+            ->all();
     }
 }

@@ -300,7 +300,24 @@ trait HandlesTextStreaming
             usage: $usage ?? new Usage(0, 0),
             meta: new Meta($provider->name(), $responseData['model'] ?? $model),
             continuationToken: $responseId,
+            providerContentBlocks: $this->standaloneReasoningItems($reasoningItems, $toolCalls),
         );
+    }
+
+    /**
+     * Keep only reasoning items that are not already stored on tool calls.
+     */
+    protected function standaloneReasoningItems(array $reasoningItems, array $toolCalls): array
+    {
+        $mappedReasoningIds = collect($toolCalls)
+            ->pluck('reasoningId')
+            ->filter()
+            ->all();
+
+        return collect($reasoningItems)
+            ->reject(fn (array $item) => in_array($item['id'] ?? null, $mappedReasoningIds, true))
+            ->values()
+            ->all();
     }
 
     /**

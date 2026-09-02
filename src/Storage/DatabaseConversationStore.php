@@ -205,7 +205,11 @@ class DatabaseConversationStore implements ConversationStore
     {
         $meta = (array) json_decode(json_encode($response->meta), true);
 
-        if (filled($blocks = $response->pausedProviderContentBlocks())) {
+        $blocks = $response->hasPendingApprovals()
+            ? $response->pausedProviderContentBlocks()
+            : $this->providerContentBlocks($response);
+
+        if (filled($blocks)) {
             $meta['provider_content_blocks'] = $blocks;
         }
 
@@ -237,6 +241,9 @@ class DatabaseConversationStore implements ConversationStore
             ->flatMap(function ($record) use ($resolvedCallIds): array {
                 $toolCalls = collect(json_decode((string) $record->tool_calls, true))->values();
                 $toolResults = collect(json_decode((string) $record->tool_results, true))->values();
+                $meta = (array) json_decode($record->meta ?? '[]', true);
+                $providerContentBlocks = $meta['provider_content_blocks'] ?? [];
+                $provider = $meta['provider'] ?? null;
 
                 if ($record->role === 'user') {
                     $attachments = $this->rehydrateAttachments($record->attachments);
@@ -256,13 +263,13 @@ class DatabaseConversationStore implements ConversationStore
                     $messages = [new ToolResultMessage($toolResults->map(ToolResult::fromArray(...)))];
 
                     if (filled($record->content)) {
-                        $messages[] = new AssistantMessage($record->content);
+                        $messages[] = new AssistantMessage($record->content, providerContentBlocks: $providerContentBlocks, providerContentBlocksProvider: $provider);
                     }
 
                     return $messages;
                 }
 
-                return [new AssistantMessage($record->content)];
+                return [new AssistantMessage($record->content, providerContentBlocks: $providerContentBlocks, providerContentBlocksProvider: $provider)];
             })
             ->skipWhile(fn (Message $message) => $message instanceof ToolResultMessage)
             ->values();
@@ -308,9 +315,10 @@ class DatabaseConversationStore implements ConversationStore
         $meta = (array) json_decode($record->meta ?? '[]', true);
 
         $providerContentBlocks = $meta['provider_content_blocks'] ?? [];
+        $provider = $meta['provider'] ?? null;
 
         if ($isPause && filled($providerContentBlocks)) {
-            $messages[] = new AssistantMessage($record->content, $toolCalls->map(ToolCall::fromArray(...))->values(), $providerContentBlocks, $meta['provider'] ?? null);
+            $messages[] = new AssistantMessage($record->content, $toolCalls->map(ToolCall::fromArray(...))->values(), $providerContentBlocks, $provider);
 
             if ($ownResults->isNotEmpty()) {
                 $messages[] = new ToolResultMessage($ownResults->map(ToolResult::fromArray(...))->values());
@@ -321,7 +329,7 @@ class DatabaseConversationStore implements ConversationStore
 
         // Calls already answered this turn are replayed with their results...
         if ($resolvedCalls->isNotEmpty()) {
-            $messages[] = new AssistantMessage('', $resolvedCalls->map(ToolCall::fromArray(...))->values());
+            $messages[] = new AssistantMessage('', $resolvedCalls->map(ToolCall::fromArray(...))->values(), $providerContentBlocks, $provider);
             $messages[] = new ToolResultMessage($ownResults->map(ToolResult::fromArray(...))->values());
         }
 
@@ -331,12 +339,38 @@ class DatabaseConversationStore implements ConversationStore
         )->values();
 
         if ($keptCalls->isNotEmpty()) {
-            $messages[] = new AssistantMessage($record->content, $keptCalls->map(ToolCall::fromArray(...))->values());
+            $messages[] = new AssistantMessage($record->content, $keptCalls->map(ToolCall::fromArray(...))->values(), $providerContentBlocks, $provider);
         } elseif (filled($record->content)) {
-            $messages[] = new AssistantMessage($record->content);
+            $messages[] = new AssistantMessage($record->content, providerContentBlocks: $providerContentBlocks, providerContentBlocksProvider: $provider);
         }
 
         return $messages;
+    }
+
+    /**
+     * Extract provider replay state from generated assistant messages.
+     */
+    protected function providerContentBlocks(AgentResponse $response): array
+    {
+        $providerContentBlocks = [];
+
+        $response->messages
+            ->whereInstanceOf(AssistantMessage::class)
+            ->each(function (AssistantMessage $message) use (&$providerContentBlocks) {
+                if (blank($message->providerContentBlocks)) {
+                    return;
+                }
+
+                if (array_is_list($message->providerContentBlocks)) {
+                    array_push($providerContentBlocks, ...$message->providerContentBlocks);
+
+                    return;
+                }
+
+                $providerContentBlocks = array_merge($providerContentBlocks, $message->providerContentBlocks);
+            });
+
+        return $providerContentBlocks;
     }
 
     /**

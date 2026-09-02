@@ -14,7 +14,8 @@ test('step stores text tool calls and other properties', function (): void {
         toolResults: [],
         finishReason: FinishReason::Stop,
         usage: $usage,
-        meta: $meta
+        meta: $meta,
+        providerContentBlocks: [['type' => 'reasoning', 'summary' => [['text' => 'Checked constraints.']]]],
     );
 
     expect($step->text)->toBe('Hello')
@@ -22,7 +23,8 @@ test('step stores text tool calls and other properties', function (): void {
         ->and($step->toolResults)->toBeEmpty()
         ->and($step->finishReason)->toBe(FinishReason::Stop)
         ->and($step->usage)->toBe($usage)
-        ->and($step->meta)->toBe($meta);
+        ->and($step->meta)->toBe($meta)
+        ->and($step->providerContentBlocks)->toBe([['type' => 'reasoning', 'summary' => [['text' => 'Checked constraints.']]]]);
 });
 
 test('step to array returns all properties including serialized usage and meta', function (): void {
@@ -37,7 +39,8 @@ test('step to array returns all properties including serialized usage and meta',
         ->and($array['tool_results'])->toBe([])
         ->and($array['finish_reason'])->toBe('stop')
         ->and($array['usage'])->toBe($usage)
-        ->and($array['meta'])->toBe($meta);
+        ->and($array['meta'])->toBe($meta)
+        ->and($array['provider_content_blocks'])->toBe([]);
 });
 
 test('step json serialize returns to array', function (): void {
