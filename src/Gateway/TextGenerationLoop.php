@@ -38,7 +38,13 @@ use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
+use Laravel\Ai\Streaming\Events\StreamEvent;
+use Laravel\Ai\Streaming\Events\StreamStart;
+use Laravel\Ai\Streaming\Events\TextDelta;
+use Laravel\Ai\Streaming\Events\TextEnd;
+use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
+use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Laravel\Ai\Tools\Request;
 use Laravel\Ai\Tools\ToolNameResolver;
@@ -138,7 +144,7 @@ class TextGenerationLoop
                 })->response();
             } catch (Throwable $exception) {
                 if ($stepContext !== null) {
-                    $context?->stepFailed($stepContext, $exception, $this->elapsedMilliseconds($startedAt));
+                    $context?->stepFailed($stepContext, $exception, $this->elapsedMilliseconds($startedAt), $prepared->model);
                 }
 
                 throw $exception;
@@ -147,7 +153,7 @@ class TextGenerationLoop
             $prepared ??= $pending;
 
             if ($stepContext !== null) {
-                $context?->stepCompleted($stepContext, $lastResult, $this->elapsedMilliseconds($startedAt));
+                $context?->stepCompleted($stepContext, $lastResult, $this->elapsedMilliseconds($startedAt), $prepared->model);
             }
 
             [$toolResults, $pendingApprovals] = $this->stepToolResultsWithOptions($lastResult, $prepared->isFinalStep, $prepared->tools, $prepared->options, $context);
@@ -285,9 +291,14 @@ class TextGenerationLoop
                 }
 
                 $result = $stepResult->response();
+
+                // A short-circuiting middleware answers without a model call, so its response is narrated as the stream events a gateway would have produced...
+                if ($stepContext === null && $result instanceof StepResponse) {
+                    yield from $this->eventsFor($invocationId, $provider, $pending->model, $result);
+                }
             } catch (Throwable $exception) {
                 if ($stepContext !== null) {
-                    $context?->stepFailed($stepContext, $exception, $this->elapsedMilliseconds($startedAt));
+                    $context?->stepFailed($stepContext, $exception, $this->elapsedMilliseconds($startedAt), $prepared->model);
                 }
 
                 throw $exception;
@@ -300,14 +311,14 @@ class TextGenerationLoop
                 $exception = new StreamErrorException($lastError);
 
                 if ($stepContext !== null) {
-                    $context?->stepFailed($stepContext, $exception, $this->elapsedMilliseconds($startedAt));
+                    $context?->stepFailed($stepContext, $exception, $this->elapsedMilliseconds($startedAt), $prepared->model);
                 }
 
                 throw $exception;
             }
 
             if ($stepContext !== null) {
-                $context?->stepCompleted($stepContext, $result, $this->elapsedMilliseconds($startedAt));
+                $context?->stepCompleted($stepContext, $result, $this->elapsedMilliseconds($startedAt), $prepared->model);
             }
 
             $accumulatedUsage = $accumulatedUsage->add($result->usage);
@@ -437,6 +448,28 @@ class TextGenerationLoop
             isFinalStep: $step->isFinalStep,
             continuationToken: $step->messages === $history ? $continuationToken : null,
         );
+    }
+
+    /**
+     * The stream events describing a step response that was produced without streaming.
+     *
+     * @return Generator<int, StreamEvent>
+     */
+    protected function eventsFor(string $invocationId, TextProvider $provider, string $model, StepResponse $response): Generator
+    {
+        yield (new StreamStart($this->generateEventId(), $provider->name(), $model, time()))->withInvocationId($invocationId);
+
+        if (filled($response->text)) {
+            $messageId = $this->generateEventId();
+
+            yield (new TextStart($this->generateEventId(), $messageId, time()))->withInvocationId($invocationId);
+            yield (new TextDelta($this->generateEventId(), $messageId, $response->text, time()))->withInvocationId($invocationId);
+            yield (new TextEnd($this->generateEventId(), $messageId, time()))->withInvocationId($invocationId);
+        }
+
+        foreach ($response->toolCalls as $toolCall) {
+            yield (new ToolCallEvent($this->generateEventId(), $toolCall, time()))->withInvocationId($invocationId);
+        }
     }
 
     /**

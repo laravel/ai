@@ -6,6 +6,7 @@ use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Events\StartingStep;
+use Laravel\Ai\Events\StepCompleted;
 use Laravel\Ai\Exceptions\NoSuchToolException;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
@@ -19,6 +20,10 @@ use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Streaming\Events\StreamEnd;
+use Laravel\Ai\Streaming\Events\StreamStart;
+use Laravel\Ai\Streaming\Events\TextDelta;
+use Laravel\Ai\Streaming\Events\TextEnd;
+use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\ToolChoice;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
@@ -138,8 +143,8 @@ test('agent middleware may short-circuit a streamed step', function (): void {
 
     $events = iterator_to_array($response, false);
 
-    expect($events)->toHaveCount(1)
-        ->and($events[0])->toBeInstanceOf(StreamEnd::class);
+    expect(array_map(fn (object $event): string => $event::class, $events))->toBe([StreamStart::class, TextStart::class, TextDelta::class, TextEnd::class, StreamEnd::class])
+        ->and($response->text)->toBe('Short-circuited response');
 });
 
 test('agent middleware may narrow the tools for a step', function (): void {
@@ -155,7 +160,7 @@ test('agent middleware may narrow the tools for a step', function (): void {
 })->throws(NoSuchToolException::class);
 
 test('agent middleware may change the model and options for a step', function (): void {
-    Event::fake([StartingStep::class]);
+    Event::fake([StartingStep::class, StepCompleted::class]);
 
     AssistantAgent::fake(['Fake response']);
 
@@ -171,6 +176,26 @@ test('agent middleware may change the model and options for a step', function ()
         && $event->options->temperature === 0.2
         && $event->options->toolChoice->mode === ToolChoice::none
         && $event->options->providerOptions('openai') === ['reasoning' => 'low']);
+
+    Event::assertDispatched(StepCompleted::class, fn (StepCompleted $event): bool => $event->model === 'other-model');
+});
+
+test('a streamed response reports the model the middleware chose', function (): void {
+    Event::fake([StepCompleted::class]);
+
+    AssistantAgent::fake(['Fake response']);
+
+    $response = (new AssistantAgent)
+        ->withMiddleware([fn (PendingStep $step, Closure $next) => $next($step->withModel('other-model'))])
+        ->stream('Test prompt');
+
+    $response
+        ->each(fn (): true => true)
+        ->then(function (StreamedAgentResponse $response): void {
+            expect($response->meta->model)->toBe('other-model');
+        });
+
+    Event::assertDispatched(StepCompleted::class, fn (StepCompleted $event): bool => $event->model === 'other-model');
 });
 
 test('agent middleware that replaces the history drops the provider continuation token', function (): void {

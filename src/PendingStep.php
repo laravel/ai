@@ -11,6 +11,9 @@ use Laravel\Ai\Responses\Data\Step;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Tools\ToolNameResolver;
 
+/**
+ * A generation step as handed to agent middleware before the model is called; every mutator returns a new instance.
+ */
 class PendingStep
 {
     /**
