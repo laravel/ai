@@ -58,12 +58,12 @@ class PendingStep
         return array_values(array_map(self::toolName(...), $this->tools));
     }
 
-    public function withModel(string $model): static
+    public function withModel(string $model): self
     {
         return $this->with(['model' => $model]);
     }
 
-    public function withInstructions(?string $instructions): static
+    public function withInstructions(?string $instructions): self
     {
         return $this->with(['instructions' => $instructions]);
     }
@@ -71,7 +71,7 @@ class PendingStep
     /**
      * @param  iterable<Message>  $messages
      */
-    public function withMessages(iterable $messages): static
+    public function withMessages(iterable $messages): self
     {
         return $this->with(['messages' => array_values([...$messages])]);
     }
@@ -79,17 +79,17 @@ class PendingStep
     /**
      * @param  iterable<Tool|ProviderTool>  $tools
      */
-    public function withTools(iterable $tools): static
+    public function withTools(iterable $tools): self
     {
         return $this->with(['tools' => array_values([...$tools])]);
     }
 
-    public function onlyTools(string ...$names): static
+    public function onlyTools(string ...$names): self
     {
         return $this->withTools(array_filter($this->tools, fn ($tool): bool => in_array(self::toolName($tool), $names, true)));
     }
 
-    public function withoutTools(string ...$names): static
+    public function withoutTools(string ...$names): self
     {
         return $this->withTools(array_filter($this->tools, fn ($tool): bool => ! in_array(self::toolName($tool), $names, true)));
     }
@@ -97,24 +97,24 @@ class PendingStep
     /**
      * @param  ToolChoice|string|array<string, mixed>|null  $toolChoice
      */
-    public function withToolChoice(ToolChoice|string|array|null $toolChoice): static
+    public function withToolChoice(ToolChoice|string|array|null $toolChoice): self
     {
         return $this->withOptions($this->resolvedOptions()->withToolChoice(
             $toolChoice === null ? null : ToolChoice::from($toolChoice),
         ));
     }
 
-    public function withMaxTokens(?int $maxTokens): static
+    public function withMaxTokens(?int $maxTokens): self
     {
         return $this->withOptions($this->resolvedOptions()->withMaxTokens($maxTokens));
     }
 
-    public function withTemperature(?float $temperature): static
+    public function withTemperature(?float $temperature): self
     {
         return $this->withOptions($this->resolvedOptions()->withTemperature($temperature));
     }
 
-    public function withTopP(?float $topP): static
+    public function withTopP(?float $topP): self
     {
         return $this->withOptions($this->resolvedOptions()->withTopP($topP));
     }
@@ -124,7 +124,7 @@ class PendingStep
      *
      * @param  array<string, mixed>  $providerOptions
      */
-    public function withProviderOptions(array $providerOptions): static
+    public function withProviderOptions(array $providerOptions): self
     {
         return $this->withOptions($this->resolvedOptions()->withProviderOptions(
             [...($this->options?->providerOptions ?? []), ...$providerOptions],
@@ -134,17 +134,17 @@ class PendingStep
     /**
      * @param  array<string, mixed>|null  $schema
      */
-    public function withSchema(?array $schema): static
+    public function withSchema(?array $schema): self
     {
         return $this->with(['schema' => $schema]);
     }
 
-    public function withTimeout(?int $timeout): static
+    public function withTimeout(?int $timeout): self
     {
         return $this->with(['timeout' => $timeout]);
     }
 
-    public function withOptions(TextGenerationOptions $options): static
+    public function withOptions(TextGenerationOptions $options): self
     {
         return $this->with(['options' => $options]);
     }
@@ -157,9 +157,9 @@ class PendingStep
     /**
      * @param  array<string, mixed>  $overrides
      */
-    protected function with(array $overrides): static
+    protected function with(array $overrides): self
     {
-        return new static(...[...get_object_vars($this), ...$overrides]);
+        return new self(...[...get_object_vars($this), ...$overrides]);
     }
 
     protected static function toolName(Tool|ProviderTool $tool): string
