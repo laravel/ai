@@ -2,12 +2,15 @@
 
 namespace Laravel\Ai\Storage;
 
+use Illuminate\Contracts\Pagination\CursorPaginator;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Pagination\Cursor;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Contracts\PaginatesConversations;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -19,7 +22,7 @@ use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 
-class DatabaseConversationStore implements ConversationStore
+class DatabaseConversationStore implements ConversationStore, PaginatesConversations
 {
     /**
      * Create a new conversation store instance.
@@ -266,6 +269,20 @@ class DatabaseConversationStore implements ConversationStore
             })
             ->skipWhile(fn (Message $message) => $message instanceof ToolResultMessage)
             ->values();
+    }
+
+    /**
+     * Paginate the given conversation's messages, newest first.
+     *
+     * @return CursorPaginator<int, StoredMessage>
+     */
+    public function paginateConversationMessages(string $conversationId, int $perPage = 15, string $cursorName = 'cursor', Cursor|string|null $cursor = null): CursorPaginator
+    {
+        return $this->table($this->messagesTable())
+            ->where('conversation_id', $conversationId)
+            ->orderByDesc('id')
+            ->cursorPaginate($perPage, ['*'], $cursorName, $cursor)
+            ->through(fn (object $record): StoredMessage => StoredMessage::fromArray((array) $record));
     }
 
     /**
