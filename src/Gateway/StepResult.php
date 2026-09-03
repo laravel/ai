@@ -8,8 +8,6 @@ use IteratorAggregate;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 
 /**
- * The outcome of a generation step as seen by middleware: iterable while streaming, resolved to a StepResponse once the model has answered.
- *
  * @implements IteratorAggregate<int, StreamEvent>
  */
 class StepResult implements IteratorAggregate
@@ -21,7 +19,7 @@ class StepResult implements IteratorAggregate
 
     protected bool $resolved = false;
 
-    /** @var StreamEvent[] Events drained by response() before the stream was iterated, replayed by getIterator(). */
+    /** @var StreamEvent[] */
     protected array $buffered = [];
 
     /**
@@ -67,6 +65,11 @@ class StepResult implements IteratorAggregate
         yield from $this->source;
 
         $this->resolve($this->source->getReturn());
+    }
+
+    public function streamed(): bool
+    {
+        return $this->source instanceof Generator;
     }
 
     /**

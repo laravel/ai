@@ -3,15 +3,12 @@
 use Illuminate\Support\Facades\Event;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\ConversationStore;
-use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\HasProviderOptions;
-use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\StartingStep;
 use Laravel\Ai\Events\StepCompleted;
 use Laravel\Ai\Events\StepFailed;
-use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationLoop;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -31,6 +28,7 @@ use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\ToolChoice;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
+use Tests\Fixtures\CapturingStepGateway;
 use Tests\Fixtures\FakeConversationStore;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 use Tests\Fixtures\Tools\NamedTool;
@@ -155,6 +153,23 @@ test('agent middleware that reads the response of a streamed step still yields i
         ->and($response->text)->toBe('Fake response');
 });
 
+test('agent middleware that replaces a streamed step response narrates the replacement', function (): void {
+    AssistantAgent::fake(['Fake response']);
+
+    $response = (new AssistantAgent)
+        ->withMiddleware([function (PendingStep $step, Closure $next) {
+            $result = $next($step);
+
+            return $result->response()->text === 'Fake response' ? new StepResponse('Replaced', [], FinishReason::Stop, new Usage, new Meta) : $result;
+        }])
+        ->stream('Test prompt');
+
+    $deltas = array_values(array_filter(iterator_to_array($response, false), fn (object $event): bool => $event instanceof TextDelta));
+
+    expect(array_map(fn (TextDelta $event): string => $event->delta, $deltas))->toBe(['Replaced'])
+        ->and($response->text)->toBe('Replaced');
+});
+
 test('step provider options override the agent\'s own and never carry headers', function (): void {
     Event::fake([StartingStep::class]);
 
@@ -228,7 +243,7 @@ test('a streamed response reports the model the middleware chose', function (): 
 });
 
 test('agent middleware that replaces the history or the model drops the provider continuation token', function (): void {
-    $gateway = capturingGateway();
+    $gateway = new CapturingStepGateway;
 
     $run = function (Closure $middleware) use ($gateway): array {
         runThroughGateway($gateway, [$middleware]);
@@ -238,11 +253,12 @@ test('agent middleware that replaces the history or the model drops the provider
 
     expect($run(fn (PendingStep $step, Closure $next) => $next($step)))->toBe([null, 'resp_1'])
         ->and($run(fn (PendingStep $step, Closure $next) => $next($step->withMessages(array_slice($step->messages, -1)))))->toBe([null, null])
-        ->and($run(fn (PendingStep $step, Closure $next) => $next($step->isFirstStep() ? $step : $step->withModel('cheaper-model'))))->toBe([null, null]);
+        ->and($run(fn (PendingStep $step, Closure $next) => $next($step->isFirstStep() ? $step : $step->withModel('cheaper-model'))))->toBe([null, null])
+        ->and($run(fn (PendingStep $step, Closure $next) => $next($step->isFirstStep() ? $step : $step->withInstructions('Wrap up.'))))->toBe([null, null]);
 });
 
 test('agent middleware may narrow the tools, instructions and schema for a step', function (): void {
-    $gateway = capturingGateway();
+    $gateway = new CapturingStepGateway;
 
     runThroughGateway($gateway, [
         fn (PendingStep $step, Closure $next) => $next($step->isFirstStep()
@@ -387,29 +403,7 @@ test('an ownerless successful stream does not retain an unpersisted conversation
         ->and($response->conversationUser)->toBeNull();
 });
 
-function capturingGateway(): StepTextGateway
-{
-    return new class implements StepTextGateway
-    {
-        public array $calls = [];
-
-        public function generateTextStep(TextProvider $provider, string $model, ?string $instructions, array $messages, array $tools, ?array $schema, ?TextGenerationOptions $options, ?int $timeout, StepContext $stepContext): StepResponse
-        {
-            $this->calls[] = ['model' => $model, 'instructions' => $instructions, 'tools' => $tools, 'schema' => $schema, 'context' => $stepContext];
-
-            return count($this->calls) === 1
-                ? new StepResponse('', [new ToolCall('call_1', 'FixedNumberGenerator', [])], FinishReason::ToolCalls, new Usage, new Meta, continuationToken: 'resp_1')
-                : new StepResponse('Done.', [], FinishReason::Stop, new Usage, new Meta);
-        }
-
-        public function generateStreamStep(string $invocationId, TextProvider $provider, string $model, ?string $instructions, array $messages, array $tools, ?array $schema, ?TextGenerationOptions $options, ?int $timeout, StepContext $stepContext): Generator
-        {
-            yield from [];
-        }
-    };
-}
-
-function runThroughGateway(StepTextGateway $gateway, array $middleware, array $tools = [new FixedNumberGenerator]): void
+function runThroughGateway(CapturingStepGateway $gateway, array $middleware, array $tools = [new FixedNumberGenerator]): void
 {
     $gateway->calls = [];
 

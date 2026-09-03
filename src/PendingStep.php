@@ -58,7 +58,7 @@ class PendingStep
      */
     public function toolNames(): array
     {
-        return array_values(array_map(self::toolName(...), $this->tools));
+        return array_values(array_map(ToolNameResolver::resolve(...), $this->tools));
     }
 
     public function withModel(string $model): self
@@ -72,6 +72,8 @@ class PendingStep
     }
 
     /**
+     * Replaces the history sent for this step only; the run's history still grows from the original.
+     *
      * @param  iterable<Message>  $messages
      */
     public function withMessages(iterable $messages): self
@@ -89,12 +91,12 @@ class PendingStep
 
     public function onlyTools(string ...$names): self
     {
-        return $this->withTools(array_filter($this->tools, fn ($tool): bool => in_array(self::toolName($tool), $names, true)));
+        return $this->withTools(array_filter($this->tools, fn ($tool): bool => in_array(ToolNameResolver::resolve($tool), $names, true)));
     }
 
     public function withoutTools(string ...$names): self
     {
-        return $this->withTools(array_filter($this->tools, fn ($tool): bool => ! in_array(self::toolName($tool), $names, true)));
+        return $this->withTools(array_filter($this->tools, fn ($tool): bool => ! in_array(ToolNameResolver::resolve($tool), $names, true)));
     }
 
     /**
@@ -161,10 +163,5 @@ class PendingStep
     protected function with(array $overrides): self
     {
         return new self(...[...get_object_vars($this), ...$overrides]);
-    }
-
-    protected static function toolName(Tool|ProviderTool $tool): string
-    {
-        return $tool instanceof Tool ? ToolNameResolver::resolve($tool) : class_basename($tool);
     }
 }

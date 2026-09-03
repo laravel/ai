@@ -116,16 +116,29 @@ class TextGenerationLoop
         }
 
         for ($step = 0; $step < $maxSteps; $step++) {
-            $pending = $this->pendingStep($step, $maxSteps, $model, $instructions, $allMessages, $tools, $schema, $options, $steps, $accumulatedUsage, $timeout, $context);
+            $pending = new PendingStep(
+                number: $step,
+                isFinalStep: $step + 1 >= $maxSteps,
+                model: $model,
+                instructions: $instructions,
+                messages: $allMessages,
+                tools: $tools,
+                schema: $schema,
+                options: $options?->forStep($step),
+                steps: $steps->all(),
+                usage: $accumulatedUsage,
+                timeout: $timeout,
+                invocationId: $context?->invocationId,
+            );
 
             $prepared = null;
             $stepContext = null;
             $startedAt = null;
 
             try {
-                $lastResult = $this->runStep($pending, $middleware, function (PendingStep $step) use ($provider, $model, $context, $allMessages, $continuationToken, &$prepared, &$stepContext, &$startedAt): StepResult {
+                $lastResult = $this->runStep($pending, $middleware, function (PendingStep $step) use ($provider, $model, $instructions, $context, $allMessages, $continuationToken, &$prepared, &$stepContext, &$startedAt): StepResult {
                     $prepared = $step;
-                    $stepContext = $this->stepContextFor($step, $model, $allMessages, $continuationToken);
+                    $stepContext = $this->stepContextFor($step, $model, $instructions, $allMessages, $continuationToken);
 
                     $context?->startingStep($stepContext, $step->messages, $step->options, $step->model);
 
@@ -255,7 +268,20 @@ class TextGenerationLoop
         }
 
         for ($step = 0; $step < $maxSteps; $step++) {
-            $pending = $this->pendingStep($step, $maxSteps, $model, $instructions, $allMessages, $tools, $schema, $options, $steps, $accumulatedUsage, $timeout, $context);
+            $pending = new PendingStep(
+                number: $step,
+                isFinalStep: $step + 1 >= $maxSteps,
+                model: $model,
+                instructions: $instructions,
+                messages: $allMessages,
+                tools: $tools,
+                schema: $schema,
+                options: $options?->forStep($step),
+                steps: $steps->all(),
+                usage: $accumulatedUsage,
+                timeout: $timeout,
+                invocationId: $context?->invocationId,
+            );
 
             $prepared = null;
             $stepContext = null;
@@ -263,9 +289,9 @@ class TextGenerationLoop
             $lastError = null;
 
             try {
-                $stepResult = $this->runStep($pending, $middleware, function (PendingStep $step) use ($invocationId, $provider, $model, $context, $allMessages, $continuationToken, &$prepared, &$stepContext, &$startedAt): StepResult {
+                $stepResult = $this->runStep($pending, $middleware, function (PendingStep $step) use ($invocationId, $provider, $model, $instructions, $context, $allMessages, $continuationToken, &$prepared, &$stepContext, &$startedAt): StepResult {
                     $prepared = $step;
-                    $stepContext = $this->stepContextFor($step, $model, $allMessages, $continuationToken);
+                    $stepContext = $this->stepContextFor($step, $model, $instructions, $allMessages, $continuationToken);
 
                     $context?->startingStep($stepContext, $step->messages, $step->options, $step->model);
 
@@ -295,8 +321,7 @@ class TextGenerationLoop
 
                 $result = $stepResult->response();
 
-                // A short-circuiting middleware answers without a model call, so its response is narrated as the stream events a gateway would have produced...
-                if ($stepContext === null && $result instanceof StepResponse) {
+                if (! $stepResult->streamed() && $result instanceof StepResponse) {
                     yield from $this->eventsFor($invocationId, $provider, $pending->model, $result);
                 }
             } catch (Throwable $exception) {
@@ -387,42 +412,6 @@ class TextGenerationLoop
     }
 
     /**
-     * @param  Message[]  $messages
-     * @param  array<Tool|ProviderTool>  $tools
-     * @param  array<string, mixed>|null  $schema
-     * @param  Collection<int, Step>  $steps
-     */
-    protected function pendingStep(
-        int $step,
-        int $maxSteps,
-        string $model,
-        ?string $instructions,
-        array $messages,
-        array $tools,
-        ?array $schema,
-        ?TextGenerationOptions $options,
-        Collection $steps,
-        Usage $usage,
-        ?int $timeout,
-        ?RunContext $context,
-    ): PendingStep {
-        return new PendingStep(
-            number: $step,
-            isFinalStep: $step + 1 >= $maxSteps,
-            model: $model,
-            instructions: $instructions,
-            messages: $messages,
-            tools: $tools,
-            schema: $schema,
-            options: $options?->forStep($step),
-            steps: $steps->all(),
-            usage: $usage,
-            timeout: $timeout,
-            invocationId: $context?->invocationId,
-        );
-    }
-
-    /**
      * Send the step through the agent's middleware to the gateway, accepting a bare StepResponse from a short-circuiting middleware.
      *
      * @param  array<int, mixed>  $middleware
@@ -440,13 +429,13 @@ class TextGenerationLoop
     }
 
     /**
-     * Middleware that replaces the history or the model invalidates a provider-side continuation, so the step replays its messages in full instead.
+     * A provider-side continuation carries the previous step's history, model and instructions, so a step that changes any of them replays in full instead.
      *
      * @param  Message[]  $history
      */
-    protected function stepContextFor(PendingStep $step, string $model, array $history, ?string $continuationToken): StepContext
+    protected function stepContextFor(PendingStep $step, string $model, ?string $instructions, array $history, ?string $continuationToken): StepContext
     {
-        $unchanged = $step->messages === $history && $step->model === $model;
+        $unchanged = $step->messages === $history && $step->model === $model && $step->instructions === $instructions;
 
         return new StepContext(
             stepNumber: $step->number,
