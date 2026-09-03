@@ -4,9 +4,12 @@ namespace Laravel\Ai\Gateway\Gemini;
 
 use DateInterval;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Sleep;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
+use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\CreatesClient;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Providers\Provider;
@@ -17,6 +20,10 @@ class GeminiStoreGateway implements StoreGateway
 {
     use CreatesClient;
     use HandlesFailoverErrors;
+
+    protected const IMPORT_OPERATION_MAX_ATTEMPTS = 60;
+
+    protected const IMPORT_OPERATION_POLL_INTERVAL_SECONDS = 5;
 
     /**
      * Get a vector store by its ID.
@@ -83,7 +90,53 @@ class GeminiStoreGateway implements StoreGateway
             'customMetadata' => $metadata === [] ? null : $this->formatMetadata($metadata),
         ]))->throw());
 
-        return basename((string) $response->json('name'));
+        $operation = $this->waitForImportOperation($provider, $response);
+
+        if ($operation->json('error') !== null) {
+            throw new AiException(sprintf(
+                'Gemini file import failed: [%s] %s',
+                $operation->json('error.code', 'unknown'),
+                $operation->json('error.message', 'Unknown Gemini error.'),
+            ));
+        }
+
+        $documentName = $operation->json('response.documentName');
+
+        if (! is_string($documentName) || $documentName === '') {
+            throw new AiException('Gemini file import completed without a document name.');
+        }
+
+        return basename($documentName);
+    }
+
+    /**
+     * Wait for a Gemini file import operation to complete.
+     */
+    protected function waitForImportOperation(StoreProvider $provider, Response $operation): Response
+    {
+        $operationName = $operation->json('name');
+
+        if (! is_string($operationName) || $operationName === '') {
+            throw new AiException('Gemini file import did not return an operation name.');
+        }
+
+        $attempts = 0;
+
+        while (! $operation->json('done', false)) {
+            if ($attempts >= self::IMPORT_OPERATION_MAX_ATTEMPTS) {
+                throw new AiException('Gemini file import operation timed out.');
+            }
+
+            $attempts++;
+            Sleep::for(self::IMPORT_OPERATION_POLL_INTERVAL_SECONDS)->seconds();
+
+            $operation = $this->withErrorHandling(
+                $provider->name(),
+                fn () => $this->client($provider)->get($this->baseUrl($provider)."/{$operationName}")->throw(),
+            );
+        }
+
+        return $operation;
     }
 
     /**
