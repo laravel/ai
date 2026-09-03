@@ -22,9 +22,12 @@ use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
+use Laravel\Ai\Responses\Data\UrlCitation;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Storage\DatabaseConversationStore;
+use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
+use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Tests\Fixtures\Agents\RememberingToolUsingAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
@@ -1154,6 +1157,58 @@ test('it scopes conversations by participant type so shared ids no longer collid
     expect($store->latestConversationId('user', $user->id))->toBe($userConversation)
         ->and($store->latestConversationId('admin', $admin->id))->toBe($adminConversation)
         ->and($userConversation)->not->toBe($adminConversation);
+});
+
+test('it records the sources a streamed turn cited into the message meta', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Researched conversation');
+
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        'What does Laravel MCP do?',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $response = new StreamedAgentResponse('invocation-id', collect([
+        new TextDelta(uniqid(), 'message-1', 'Laravel MCP ships an MCP server.', time()),
+        new CitationEvent(uniqid(), 'message-1', new UrlCitation('https://laravel.com/docs/mcp', 'Laravel MCP'), time()),
+        new CitationEvent(uniqid(), 'message-1', new UrlCitation('https://laravel.com/docs/mcp', 'Laravel MCP'), time()),
+    ]), new Meta);
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
+
+    // Every mention is stored, matching what a generated turn records for the same answer...
+    expect(json_decode((string) $record->meta, true)['citations'])->toBe([
+        ['url' => 'https://laravel.com/docs/mcp', 'title' => 'Laravel MCP', 'start_index' => null, 'end_index' => null],
+        ['url' => 'https://laravel.com/docs/mcp', 'title' => 'Laravel MCP', 'start_index' => null, 'end_index' => null],
+    ]);
+});
+
+test('it stores no sources when a streamed turn cited nothing', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Unresearched conversation');
+
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        'How cold is it?',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $response = new StreamedAgentResponse('invocation-id', collect([
+        new TextDelta(uniqid(), 'message-1', 'It is 12°C.', time()),
+    ]), new Meta);
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
+
+    expect(json_decode((string) $record->meta, true)['citations'])->toBe([]);
 });
 
 function createConversationSchema(?string $connection = null): void
