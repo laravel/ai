@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Exceptions;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Exceptions\StreamErrorException;
+use Laravel\Ai\Models\ConversationMessage;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data;
 use Laravel\Ai\Responses\Data\Usage;
@@ -98,15 +99,6 @@ test('a text stream emits run, step, and text message events', function () {
         ['type' => 'STEP_FINISHED', 'stepName' => '1'],
         agUiRunFinished(),
     ]);
-});
-
-test('the stream is not terminated by a done frame', function () {
-    $events = agUiProtocolEvents([
-        new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
-        new StreamEnd('event-1', 'stop', new Usage, time()),
-    ]);
-
-    expect(end($events))->toBe(agUiRunFinished());
 });
 
 test('the run finished event carries the combined usage and finish reason', function () {
@@ -393,9 +385,14 @@ test('a paused run finishes with an interrupt outcome for each pending approval'
             'type' => 'interrupt',
             'interrupts' => [[
                 'id' => 'call-1',
-                'reason' => 'tool_call',
+                'reason' => 'approval_required',
                 'message' => 'Destructive operation.',
                 'toolCallId' => 'call-1',
+                'metadata' => [
+                    'kind' => 'approval',
+                    'toolName' => 'DeleteFile',
+                    'input' => ['path' => 'a.txt'],
+                ],
                 'responseSchema' => [
                     'type' => 'object',
                     'properties' => ['approved' => ['type' => 'boolean']],
@@ -423,6 +420,59 @@ test('a paused run reports its interrupt outcome even when the stream later thro
     ])->and($events[3]['outcome']['interrupts'][0]['id'])->toBe('call-1');
 
     Exceptions::assertReported(RuntimeException::class);
+});
+
+test('a snapshot response hydrates stored messages and pending interrupts as a run', function () {
+    $events = agUiEvents((new AgentUserInteractionProtocol('thread-1', 'run-1'))->snapshotResponse([
+        new ConversationMessage(['id' => 'msg-1', 'role' => 'user', 'content' => 'Delete a.txt']),
+        new ConversationMessage([
+            'id' => 'msg-2',
+            'role' => 'assistant',
+            'tool_calls' => [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt']]],
+            'approval_state' => ['pending' => ['call-1' => 'Deletes a file.']],
+        ]),
+    ]));
+
+    expect($events)->toBe([
+        ['type' => 'RUN_STARTED', 'threadId' => 'thread-1', 'runId' => 'run-1'],
+        ['type' => 'MESSAGES_SNAPSHOT', 'messages' => [
+            ['id' => 'msg-1', 'role' => 'user', 'content' => 'Delete a.txt'],
+            ['id' => 'msg-2', 'role' => 'assistant', 'toolCalls' => [[
+                'id' => 'call-1',
+                'type' => 'function',
+                'function' => ['name' => 'DeleteFile', 'arguments' => '{"path":"a.txt"}'],
+            ]]],
+        ]],
+        ['type' => 'RUN_FINISHED', 'threadId' => 'thread-1', 'runId' => 'run-1', 'outcome' => [
+            'type' => 'interrupt',
+            'interrupts' => [[
+                'id' => 'call-1',
+                'reason' => 'approval_required',
+                'message' => 'Deletes a file.',
+                'toolCallId' => 'call-1',
+                'metadata' => [
+                    'kind' => 'approval',
+                    'toolName' => 'DeleteFile',
+                    'input' => ['path' => 'a.txt'],
+                ],
+                'responseSchema' => [
+                    'type' => 'object',
+                    'properties' => ['approved' => ['type' => 'boolean']],
+                    'required' => ['approved'],
+                ],
+            ]],
+        ]],
+    ]);
+});
+
+test('a snapshot response without pending approvals finishes without an interrupt outcome', function () {
+    $events = agUiEvents((new AgentUserInteractionProtocol)->snapshotResponse([
+        new ConversationMessage(['id' => 'msg-1', 'role' => 'user', 'content' => 'Hello']),
+    ]));
+
+    expect(collect($events)->pluck('type')->all())->toBe(['RUN_STARTED', 'MESSAGES_SNAPSHOT', 'RUN_FINISHED'])
+        ->and($events[0]['threadId'])->not->toBeEmpty()
+        ->and($events[2])->not->toHaveKey('outcome');
 });
 
 test('a pending approval without a reason omits the interrupt message', function () {
