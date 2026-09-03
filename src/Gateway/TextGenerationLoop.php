@@ -131,6 +131,7 @@ class TextGenerationLoop
                 invocationId: $context?->invocationId,
             );
 
+            // Held by reference because a short-circuiting middleware returns a result that is not the attempt...
             $attempt = null;
 
             try {
@@ -148,14 +149,14 @@ class TextGenerationLoop
                     ));
                 })->response();
             } catch (Throwable $exception) {
-                $context?->stepFailed($attempt?->context, $exception, $this->elapsedMilliseconds($attempt?->startedAt), $attempt?->step->model);
+                $this->stepFailed($context, $attempt, $exception);
 
                 throw $exception;
             }
 
             $prepared = $attempt?->step ?? $pending;
 
-            $context?->stepCompleted($attempt?->context, $lastResult, $this->elapsedMilliseconds($attempt?->startedAt), $prepared->model);
+            $this->stepCompleted($context, $attempt, $lastResult);
 
             $accumulatedUsage = $accumulatedUsage->add($lastResult->usage);
 
@@ -273,6 +274,7 @@ class TextGenerationLoop
                 invocationId: $context?->invocationId,
             );
 
+            // Held by reference because a short-circuiting middleware returns a result that is not the attempt...
             $attempt = null;
             $lastError = null;
 
@@ -307,7 +309,7 @@ class TextGenerationLoop
                     yield from $this->eventsFor($invocationId, $provider, $prepared->model, $result);
                 }
             } catch (Throwable $exception) {
-                $context?->stepFailed($attempt?->context, $exception, $this->elapsedMilliseconds($attempt?->startedAt), $attempt?->step->model);
+                $this->stepFailed($context, $attempt, $exception);
 
                 throw $exception;
             }
@@ -316,12 +318,12 @@ class TextGenerationLoop
             if (! $result instanceof StepResponse) {
                 $exception = new StreamErrorException($lastError);
 
-                $context?->stepFailed($attempt?->context, $exception, $this->elapsedMilliseconds($attempt?->startedAt), $prepared->model);
+                $this->stepFailed($context, $attempt, $exception);
 
                 throw $exception;
             }
 
-            $context?->stepCompleted($attempt?->context, $result, $this->elapsedMilliseconds($attempt?->startedAt), $prepared->model);
+            $this->stepCompleted($context, $attempt, $result);
 
             $accumulatedUsage = $accumulatedUsage->add($result->usage);
             $finalReason = $result->finishReason;
@@ -437,6 +439,23 @@ class TextGenerationLoop
         }
 
         return new StepResult($source, $step, $stepContext, $startedAt);
+    }
+
+    /**
+     * A step that middleware answered itself was never attempted and reports nothing.
+     */
+    protected function stepCompleted(?RunContext $context, ?StepResult $attempt, StepResponse $response): void
+    {
+        if ($attempt !== null) {
+            $context?->stepCompleted($attempt->context, $response, $this->elapsedMilliseconds($attempt->startedAt), $attempt->step->model);
+        }
+    }
+
+    protected function stepFailed(?RunContext $context, ?StepResult $attempt, Throwable $exception): void
+    {
+        if ($attempt !== null) {
+            $context?->stepFailed($attempt->context, $exception, $this->elapsedMilliseconds($attempt->startedAt), $attempt->step->model);
+        }
     }
 
     /**

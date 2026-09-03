@@ -7,8 +7,8 @@ trait MeasuresDuration
     /**
      * Get the milliseconds elapsed since the given monotonic nanosecond reading.
      */
-    protected function elapsedMilliseconds(?int $startedAt): float
+    protected function elapsedMilliseconds(int $startedAt): float
     {
-        return $startedAt === null ? 0.0 : (hrtime(true) - $startedAt) / 1e6;
+        return (hrtime(true) - $startedAt) / 1e6;
     }
 }

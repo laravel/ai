@@ -6,7 +6,6 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Providers\Tools\ProviderTool;
-use Laravel\Ai\Responses\Data\Step;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Tools\ToolNameResolver;
 
@@ -41,11 +40,6 @@ class PendingStep
     public function isFirstStep(): bool
     {
         return $this->number === 0;
-    }
-
-    public function previousStep(): ?Step
-    {
-        return $this->steps === [] ? null : $this->steps[array_key_last($this->steps)];
     }
 
     public function withModel(string $model): self
@@ -101,16 +95,6 @@ class PendingStep
         return $this->withOptions($this->resolvedOptions()->withMaxTokens($maxTokens));
     }
 
-    public function withTemperature(?float $temperature): self
-    {
-        return $this->withOptions($this->resolvedOptions()->withTemperature($temperature));
-    }
-
-    public function withTopP(?float $topP): self
-    {
-        return $this->withOptions($this->resolvedOptions()->withTopP($topP));
-    }
-
     /**
      * @param  array<string, mixed>  $providerOptions
      */
@@ -119,14 +103,6 @@ class PendingStep
         return $this->withOptions($this->resolvedOptions()->withProviderOptions(
             [...($this->options?->providerOptions ?? []), ...$providerOptions],
         ));
-    }
-
-    /**
-     * @param  array<string, mixed>|null  $schema
-     */
-    public function withSchema(?array $schema): self
-    {
-        return $this->with(['schema' => $schema]);
     }
 
     protected function withOptions(TextGenerationOptions $options): self

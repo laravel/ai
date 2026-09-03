@@ -1,5 +1,7 @@
 <?php
 
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\ConversationStore;
@@ -13,6 +15,9 @@ use Laravel\Ai\Events\StepFailed;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationLoop;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Messages\AssistantMessage;
+use Laravel\Ai\Messages\Message;
+use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\PendingStep;
 use Laravel\Ai\Providers\Tools\WebSearch;
@@ -21,6 +26,7 @@ use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StreamedAgentResponse;
+use Laravel\Ai\Storage\DatabaseConversationStore;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
@@ -45,7 +51,7 @@ test('agent middleware wraps every generation step', function (): void {
     $response = (new AssistantAgent)
         ->withTools([new FixedNumberGenerator])
         ->withMiddleware([function (PendingStep $step, Closure $next) use (&$seen) {
-            $seen[] = [$step->number, count($step->messages), count($step->steps), $step->previousStep()?->toolCalls[0]->id];
+            $seen[] = [$step->number, count($step->messages), count($step->steps), Arr::last($step->steps)?->toolCalls[0]->id];
 
             return $next($step);
         }])
@@ -154,29 +160,6 @@ test('an outer middleware receives a step result when an inner middleware short-
 
     expect($streamed->text)->toBe('Short-circuited response')
         ->and($seen)->toBe(['Short-circuited response', 'Short-circuited response']);
-});
-
-test('agent middleware that abandons a streamed step midway still yields every event', function (): void {
-    AssistantAgent::fake(['Fake response here']);
-
-    $response = (new AssistantAgent)
-        ->withMiddleware([function (PendingStep $step, Closure $next) {
-            $result = $next($step);
-
-            foreach ($result as $event) {
-                if ($event instanceof TextStart) {
-                    break;
-                }
-            }
-
-            return $result;
-        }])
-        ->stream('Test prompt');
-
-    $deltas = array_values(array_filter(iterator_to_array($response, false), fn (object $event): bool => $event instanceof TextDelta));
-
-    expect(array_map(fn (TextDelta $event): string => $event->delta, $deltas))->toBe(['Fake', ' response', ' here'])
-        ->and($response->text)->toBe('Fake response here');
 });
 
 test('a failed step reports the model the middleware chose', function (): void {
@@ -317,14 +300,13 @@ test('agent middleware may change the model and options for a step', function ()
 
     $response = (new AssistantAgent)
         ->withMiddleware([fn (PendingStep $step, Closure $next) => $next(
-            $step->withModel('other-model')->withTemperature(0.2)->withMaxTokens(1000)->withToolChoice('none')->withProviderOptions(['reasoning' => 'low']),
+            $step->withModel('other-model')->withMaxTokens(1000)->withToolChoice('none')->withProviderOptions(['reasoning' => 'low']),
         )])
         ->prompt('Test prompt');
 
     expect($response->meta->model)->toBe('other-model');
 
     Event::assertDispatched(StartingStep::class, fn (StartingStep $event): bool => $event->model === 'other-model'
-        && $event->options->temperature === 0.2
         && $event->options->maxTokens === 1000
         && $event->options->toolChoice->mode === ToolChoice::none
         && $event->options->providerOptions('openai') === ['reasoning' => 'low']);
@@ -367,23 +349,21 @@ test('agent middleware that replaces the history or the model drops the provider
         ->and($run(fn (PendingStep $step, Closure $next) => $next($step->isFirstStep() ? $step : $step->withInstructions('Wrap up.'))))->toBe([null, null]);
 });
 
-test('agent middleware may narrow the tools, instructions and schema for a step', function (): void {
+test('agent middleware may narrow the tools and instructions for a step', function (): void {
     $gateway = new CapturingStepGateway;
 
     runThroughGateway($gateway, [
         fn (PendingStep $step, Closure $next) => $next($step->isFirstStep()
             ? $step->withoutTools('custom_named_tool', 'WebSearch')->withInstructions('Plan first.')
-            : $step->onlyTools('custom_named_tool')->withSchema(['type' => 'object'])),
+            : $step->onlyTools('custom_named_tool')),
     ], tools: [new FixedNumberGenerator, new NamedTool, new WebSearch]);
 
     expect($gateway->calls[0]['tools'])->toHaveCount(1)
         ->and($gateway->calls[0]['tools'][0])->toBeInstanceOf(FixedNumberGenerator::class)
         ->and($gateway->calls[0]['instructions'])->toBe('Plan first.')
-        ->and($gateway->calls[0]['schema'])->toBeNull()
         ->and($gateway->calls[1]['tools'])->toHaveCount(1)
         ->and($gateway->calls[1]['tools'][0])->toBeInstanceOf(NamedTool::class)
-        ->and($gateway->calls[1]['instructions'])->toBe('Be helpful.')
-        ->and($gateway->calls[1]['schema'])->toBe(['type' => 'object']);
+        ->and($gateway->calls[1]['instructions'])->toBe('Be helpful.');
 });
 
 test('agent middleware must return the next step result or a step response', function (): void {
@@ -511,6 +491,44 @@ test('an ownerless successful stream does not retain an unpersisted conversation
     expect($agent->currentConversation())->toBeNull()
         ->and($response->conversationId)->toBeNull()
         ->and($response->conversationUser)->toBeNull();
+});
+
+test('step middleware that compacts the history does not change what the conversation remembers', function (): void {
+    RememberingAssistantAgent::fake([
+        new ToolCall('call_1', 'FixedNumberGenerator', []),
+        'Fake response',
+    ]);
+
+    $user = (object) ['id' => 1];
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', $user->id, 'Compacted conversation');
+
+    $sent = [];
+
+    $response = (new RememberingAssistantAgent)
+        ->withTools([new FixedNumberGenerator])
+        ->withMiddleware([
+            fn (PendingStep $step, Closure $next) => $next($step->isFirstStep() ? $step : $step->withMessages(array_slice($step->messages, -1))),
+            function (PendingStep $step, Closure $next) use (&$sent) {
+                $sent[] = count($step->messages);
+
+                return $next($step);
+            },
+        ])
+        ->continue($conversationId, $user)
+        ->prompt('Test prompt');
+
+    $assistant = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
+    $remembered = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($sent)->toBe([1, 1])
+        ->and($response->text)->toBe('Fake response')
+        ->and($assistant->content)->toBe('Fake response')
+        ->and(json_decode((string) $assistant->tool_calls, true))->toHaveCount(1)
+        ->and(json_decode((string) $assistant->tool_results, true)[0]['result'])->toBe('72019')
+        ->and($remembered->map(fn ($message): string => $message::class)->all())->toBe([
+            Message::class, AssistantMessage::class, ToolResultMessage::class, AssistantMessage::class,
+        ]);
 });
 
 function runThroughGateway(CapturingStepGateway $gateway, array $middleware, array $tools = [new FixedNumberGenerator]): void

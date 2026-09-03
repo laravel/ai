@@ -61,16 +61,6 @@ class TextGenerationOptions
         return $this->with(['maxTokens' => $maxTokens]);
     }
 
-    public function withTemperature(?float $temperature): self
-    {
-        return $this->with(['temperature' => $temperature]);
-    }
-
-    public function withTopP(?float $topP): self
-    {
-        return $this->with(['topP' => $topP]);
-    }
-
     /**
      * @param  array<string, mixed>|null  $providerOptions
      */

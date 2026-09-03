@@ -19,10 +19,12 @@ use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Messages\UserMessage;
+use Laravel\Ai\PendingStep;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Streaming\Events\TextDelta;
+use Laravel\Ai\ToolChoice;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ConversationalAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
@@ -241,6 +243,26 @@ test('agents can use tools', function (string $provider, string $apiKey, string 
     );
 
     expect($response['number'])->toBe(72019);
+})->with('agent-providers');
+
+test('agent middleware can steer each generation step', function (string $provider, string $apiKey, string $model): void {
+    requiresApiKey($apiKey);
+
+    $steps = [];
+
+    $response = (new AssistantAgent)
+        ->withTools([new FixedNumberGenerator])
+        ->withMiddleware([function (PendingStep $step, Closure $next) use (&$steps) {
+            $steps[] = $step->number;
+
+            return $next($step->withToolChoice($step->isFirstStep() ? ToolChoice::tool('FixedNumberGenerator') : ToolChoice::none));
+        }])
+        ->prompt('Fetch a number with the tool, then reply with it.', provider: $provider, model: $model);
+
+    expect($steps)->toBe([0, 1])
+        ->and($response->toolCalls)->toHaveCount(1)
+        ->and($response->toolResults->first()->result)->toBe('72019')
+        ->and($response->text)->not->toBe('');
 })->with('agent-providers');
 
 test('agents can replay empty tool arguments', function (string $provider, string $apiKey, string $model): void {

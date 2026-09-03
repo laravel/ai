@@ -51,6 +51,8 @@ class StepResult implements IteratorAggregate
     }
 
     /**
+     * Iterate the stream to its end or call response(); a partial iteration cannot be resumed.
+     *
      * @return Generator<int, StreamEvent>
      */
     public function getIterator(): Generator
@@ -67,11 +69,6 @@ class StepResult implements IteratorAggregate
             $this->buffered = [];
 
             return;
-        }
-
-        // An abandoned iteration leaves the source parked on the event it last yielded...
-        if ($this->buffered !== [] && $this->source->current() === end($this->buffered)) {
-            $this->source->next();
         }
 
         while ($this->source->valid()) {
