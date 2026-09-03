@@ -655,3 +655,87 @@ test('a resume that fails after the tool runs does not re-execute the tool on re
 
     expect(ApprovableNumberGenerator::$invocations)->toBe(1);
 });
+
+test('a resume as a different user is rejected before the approved tool runs', function () {
+    Config::set('ai.conversations.generate_title', false);
+
+    ApprovableNumberGenerator::$invocations = 0;
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence()
+            ->push([
+                'id' => 'msg_tool_1',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'ApprovableNumberGenerator', 'input' => (object) []]],
+                'stop_reason' => 'tool_use',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ], 200)
+            ->push([
+                'id' => 'msg_2',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [['type' => 'text', 'text' => 'The number is 72019.']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ], 200),
+    ]);
+
+    $owner = (object) ['id' => 1];
+    $otherUser = (object) ['id' => 2];
+
+    $paused = (new RememberingApprovableAgent)->forUser($owner)->prompt('Generate a number', provider: 'anthropic');
+
+    expect(fn () => (new RememberingApprovableAgent)
+        ->continue($paused->conversationId, $otherUser)
+        ->prompt(Decisions::from(['toolu_1' => true]), provider: 'anthropic')
+    )->toThrow(ApprovalMismatchException::class);
+
+    expect(ApprovableNumberGenerator::$invocations)->toBe(0);
+
+    $pending = json_decode(DB::table('agent_conversation_messages')
+        ->where('conversation_id', $paused->conversationId)
+        ->where('role', 'assistant')
+        ->value('approval_state'), true)['pending'] ?? [];
+
+    expect($pending)->toHaveKey('toolu_1');
+
+    $resumed = (new RememberingApprovableAgent)
+        ->continue($paused->conversationId, $owner)
+        ->prompt(Decisions::from(['toolu_1' => true]), provider: 'anthropic');
+
+    expect($resumed->text)->toBe('The number is 72019.')
+        ->and(ApprovableNumberGenerator::$invocations)->toBe(1);
+});
+
+test('a resume without a user is rejected before the approved tool runs when the pause belongs to one', function () {
+    Config::set('ai.conversations.generate_title', false);
+
+    ApprovableNumberGenerator::$invocations = 0;
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence()
+            ->push([
+                'id' => 'msg_tool_1',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'ApprovableNumberGenerator', 'input' => (object) []]],
+                'stop_reason' => 'tool_use',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ], 200),
+    ]);
+
+    $user = (object) ['id' => 1];
+
+    $paused = (new RememberingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
+
+    expect(fn () => (new RememberingApprovableAgent)
+        ->continue($paused->conversationId)
+        ->prompt(Decisions::from(['toolu_1' => true]), provider: 'anthropic')
+    )->toThrow(ApprovalMismatchException::class);
+
+    expect(ApprovableNumberGenerator::$invocations)->toBe(0);
+});

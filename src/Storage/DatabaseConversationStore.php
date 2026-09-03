@@ -157,6 +157,14 @@ class DatabaseConversationStore implements ConversationStore
     }
 
     /**
+     * Get the "type:id" participant a stored row belongs to.
+     */
+    protected function participantKey(object $record): string
+    {
+        return $record->participant_id === null ? ':' : $record->participant_type.':'.$record->participant_id;
+    }
+
+    /**
      * Get the tool-call IDs a stored row recorded as pending a decision.
      *
      * @return array<int, string>
@@ -309,8 +317,10 @@ class DatabaseConversationStore implements ConversationStore
 
         $providerContentBlocks = $meta['provider_content_blocks'] ?? [];
 
+        $participant = $isPause ? $this->participantKey($record) : null;
+
         if ($isPause && filled($providerContentBlocks)) {
-            $messages[] = new AssistantMessage($record->content, $toolCalls->map(ToolCall::fromArray(...))->values(), $providerContentBlocks, $meta['provider'] ?? null);
+            $messages[] = new AssistantMessage($record->content, $toolCalls->map(ToolCall::fromArray(...))->values(), $providerContentBlocks, $meta['provider'] ?? null, $participant);
 
             if ($ownResults->isNotEmpty()) {
                 $messages[] = new ToolResultMessage($ownResults->map(ToolResult::fromArray(...))->values());
@@ -331,7 +341,7 @@ class DatabaseConversationStore implements ConversationStore
         )->values();
 
         if ($keptCalls->isNotEmpty()) {
-            $messages[] = new AssistantMessage($record->content, $keptCalls->map(ToolCall::fromArray(...))->values());
+            $messages[] = new AssistantMessage($record->content, $keptCalls->map(ToolCall::fromArray(...))->values(), participant: $participant);
         } elseif (filled($record->content)) {
             $messages[] = new AssistantMessage($record->content);
         }
