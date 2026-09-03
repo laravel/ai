@@ -24,27 +24,17 @@ trait PreparesStorableFiles
     }
 
     /**
-     * Resolve the provider-specific upload options for the given file.
+     * Resolve the upload body options and HTTP headers for the given file.
      *
      * @return array{array<string, mixed>, array<string, string>}
      */
     protected function resolveProviderOptionsAndHeaders(StorableFile $file, Lab|string $provider): array
     {
-        $options = $this->fileProviderOptions($file, $provider);
+        $options = $file instanceof HasProviderOptions ? $file->providerOptions($provider) : [];
 
         return [
             Arr::except($options, HasProviderOptions::HEADERS),
             $options[HasProviderOptions::HEADERS] ?? [],
         ];
-    }
-
-    /**
-     * Resolve every provider option declared for the given file.
-     *
-     * @return array<string, mixed>
-     */
-    private function fileProviderOptions(StorableFile $file, Lab|string $provider): array
-    {
-        return $file instanceof HasProviderOptions ? $file->providerOptions($provider) : [];
     }
 }
