@@ -91,6 +91,49 @@ test('transcription usage is correctly parsed', function (): void {
         ->and($response->usage->completionTokens)->toBe(50);
 });
 
+test('transcription duration falls back to the billed seconds when no duration is reported', function (): void {
+    Http::fake(['*' => Http::response([
+        'text' => 'Hello',
+        'usage' => [
+            'type' => 'duration',
+            'seconds' => 3,
+        ],
+    ])]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->generate(provider: 'openai');
+
+    expect($response->usage->durationSeconds)->toBe(3.0);
+});
+
+test('diarized transcription reports the duration', function (): void {
+    Http::fake(['*' => Http::response([
+        'task' => 'transcribe',
+        'text' => 'Hello',
+        'duration' => 2.11,
+        'segments' => [],
+        'usage' => [
+            'type' => 'duration',
+            'seconds' => 3,
+        ],
+    ])]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->diarize()
+        ->generate(provider: 'openai', model: 'gpt-4o-transcribe-diarize');
+
+    expect($response->usage->durationSeconds)->toBe(2.11);
+});
+
+test('transcription duration is zero when the provider does not report one', function (): void {
+    Http::fake(['*' => fakeOpenAiTranscriptionResponse()]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->generate(provider: 'openai');
+
+    expect($response->usage->durationSeconds)->toBe(0.0);
+});
+
 test('transcription sends language when provided', function (): void {
     Http::fake(['*' => fakeOpenAiTranscriptionResponse()]);
 

@@ -141,3 +141,13 @@ test('transcription can be faked for the groq provider', function (): void {
 
     expect($response->text)->toBe('Faked transcript');
 });
+
+test('transcription reports the audio duration when verbose json is requested', function (): void {
+    Http::fake(['*' => Http::response(['text' => 'Hello', 'duration' => 8.47])]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->withProviderOptions(['response_format' => 'verbose_json'])
+        ->generate(provider: 'groq');
+
+    expect($response->usage->durationSeconds)->toBe(8.47);
+});

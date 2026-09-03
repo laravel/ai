@@ -22,10 +22,10 @@ use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Responses\AudioResponse;
+use Laravel\Ai\Responses\Data\AudioUsage;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
-use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
@@ -348,10 +348,11 @@ class GeminiGateway implements Gateway, StepTextGateway
         return new TranscriptionResponse(
             trim((string) $text),
             $segments,
-            new Usage(
+            new AudioUsage(
                 promptTokens: $usageMeta['promptTokenCount'] ?? 0,
                 completionTokens: $usageMeta['candidatesTokenCount'] ?? 0,
                 reasoningTokens: $usageMeta['thoughtsTokenCount'] ?? 0,
+                durationSeconds: $segments->last()?->endSeconds ?? 0,
             ),
             new Meta($provider->name(), $model),
         );

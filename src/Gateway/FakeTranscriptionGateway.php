@@ -8,9 +8,9 @@ use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Prompts\TranscriptionPrompt;
+use Laravel\Ai\Responses\Data\AudioUsage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
-use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\TranscriptionResponse;
 use RuntimeException;
 
@@ -79,12 +79,12 @@ class FakeTranscriptionGateway implements TranscriptionGateway
         }
 
         if (is_string($response)) {
+            $segment = new TranscriptionSegment($response, 'Speaker 1', 0.0, 1.0);
+
             return new TranscriptionResponse(
                 $response,
-                new Collection([
-                    new TranscriptionSegment($response, 'Speaker 1', 0.0, 1.0),
-                ]),
-                new Usage,
+                new Collection([$segment]),
+                new AudioUsage(durationSeconds: $segment->endSeconds),
                 new Meta($provider->name(), $model),
             );
         }

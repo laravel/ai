@@ -27,6 +27,7 @@ use Laravel\Ai\Providers\Tools\ProviderTool;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Laravel\Ai\Responses\AudioResponse;
+use Laravel\Ai\Responses\Data\AudioUsage;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
@@ -295,9 +296,10 @@ class OpenRouterGateway implements Gateway, StepTextGateway
         return new TranscriptionResponse(
             $data['text'] ?? '',
             collect(),
-            new Usage(
+            new AudioUsage(
                 Arr::get($data, 'usage.input_tokens', 0),
                 Arr::get($data, 'usage.output_tokens', 0),
+                durationSeconds: Arr::get($data, 'duration') ?? Arr::get($data, 'usage.seconds', 0),
             ),
             new Meta($provider->name(), $model),
         );

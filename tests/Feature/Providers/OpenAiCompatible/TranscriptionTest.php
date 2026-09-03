@@ -186,3 +186,11 @@ test('transcription can be faked for the openai-compatible provider', function (
 
     expect($response->text)->toBe('Faked transcript');
 });
+
+test('transcription duration falls back to the billed seconds when no duration is reported', function (): void {
+    Http::fake(['*' => Http::response(['text' => 'Hello', 'usage' => ['type' => 'duration', 'seconds' => 3]])]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'openai-compatible');
+
+    expect($response->usage->durationSeconds)->toBe(3.0);
+});
