@@ -16,6 +16,7 @@ use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Responses\Data\Step;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 
@@ -209,6 +210,24 @@ class DatabaseConversationStore implements ConversationStore
             $meta['provider_content_blocks'] = $blocks;
         }
 
+        if (! $response->hasPendingApprovals()) {
+            $toolCallRounds = $response->steps
+                ->filter(fn ($step): bool => $step instanceof Step && filled($step->toolCalls))
+                ->map(fn (Step $step): array => [
+                    'text' => $step->text,
+                    'tool_call_ids' => array_values(array_map(
+                        fn (ToolCall $toolCall): string => $toolCall->id,
+                        $step->toolCalls,
+                    )),
+                ])
+                ->values();
+
+            if ($toolCallRounds->count() > 1
+                || $toolCallRounds->contains(fn (array $round): bool => filled($round['text']))) {
+                $meta['tool_call_rounds'] = $toolCallRounds->all();
+            }
+        }
+
         return $meta;
     }
 
@@ -319,6 +338,19 @@ class DatabaseConversationStore implements ConversationStore
             return $messages;
         }
 
+        if (! $isPause && $priorResults->isEmpty() && is_array($meta['tool_call_rounds'] ?? null)) {
+            $roundMessages = $this->reconstructToolCallRounds(
+                $meta['tool_call_rounds'],
+                $toolCalls,
+                $toolResults,
+                $record->content,
+            );
+
+            if ($roundMessages !== null) {
+                return $roundMessages;
+            }
+        }
+
         // Calls already answered this turn are replayed with their results...
         if ($resolvedCalls->isNotEmpty()) {
             $messages[] = new AssistantMessage('', $resolvedCalls->map(ToolCall::fromArray(...))->values());
@@ -334,6 +366,74 @@ class DatabaseConversationStore implements ConversationStore
             $messages[] = new AssistantMessage($record->content, $keptCalls->map(ToolCall::fromArray(...))->values());
         } elseif (filled($record->content)) {
             $messages[] = new AssistantMessage($record->content);
+        }
+
+        return $messages;
+    }
+
+    /**
+     * Rebuild a completed tool turn from its persisted call ID grouping.
+     *
+     * @param  array<mixed>  $rounds
+     * @param  Collection<int, array<string, mixed>>  $toolCalls
+     * @param  Collection<int, array<string, mixed>>  $toolResults
+     * @return array<int, Message>|null
+     */
+    protected function reconstructToolCallRounds(array $rounds, Collection $toolCalls, Collection $toolResults, string $content): ?array
+    {
+        if (! array_is_list($rounds) || $rounds === []) {
+            return null;
+        }
+
+        if ($toolCalls->contains(fn ($toolCall): bool => ! is_array($toolCall) || ! is_string($toolCall['id'] ?? null))
+            || $toolResults->contains(fn ($toolResult): bool => ! is_array($toolResult) || ! is_string($toolResult['id'] ?? null))) {
+            return null;
+        }
+
+        $callsById = $toolCalls->keyBy('id');
+        $resultsById = $toolResults->keyBy('id');
+
+        if ($callsById->count() !== $toolCalls->count() || $resultsById->count() !== $toolResults->count()) {
+            return null;
+        }
+
+        $groupedIds = [];
+        $messages = [];
+
+        foreach ($rounds as $round) {
+            if (! is_array($round)
+                || ! is_string($round['text'] ?? null)
+                || ! is_array($round['tool_call_ids'] ?? null)
+                || ! array_is_list($round['tool_call_ids'])
+                || $round['tool_call_ids'] === []) {
+                return null;
+            }
+
+            $roundIds = [];
+
+            foreach ($round['tool_call_ids'] as $id) {
+                if (! is_string($id) || $id === '' || isset($groupedIds[$id]) || ! $callsById->has($id) || ! $resultsById->has($id)) {
+                    return null;
+                }
+
+                $groupedIds[$id] = true;
+                $roundIds[] = $id;
+            }
+
+            $messages[] = new AssistantMessage($round['text'], collect($roundIds)->map(
+                fn (string $id): ToolCall => ToolCall::fromArray($callsById->get($id)),
+            ));
+            $messages[] = new ToolResultMessage(collect($roundIds)->map(
+                fn (string $id): ToolResult => ToolResult::fromArray($resultsById->get($id)),
+            ));
+        }
+
+        if (count($groupedIds) !== $toolCalls->count() || count($groupedIds) !== $toolResults->count()) {
+            return null;
+        }
+
+        if (filled($content)) {
+            $messages[] = new AssistantMessage($content);
         }
 
         return $messages;
