@@ -21,6 +21,9 @@ class StepResult implements IteratorAggregate
 
     protected bool $resolved = false;
 
+    /** @var StreamEvent[] Events drained by response() before the stream was iterated, replayed by getIterator(). */
+    protected array $buffered = [];
+
     /**
      * @param  Generator<int, StreamEvent, mixed, StepResponse|null>|StepResponse  $source
      */
@@ -48,6 +51,10 @@ class StepResult implements IteratorAggregate
     public function getIterator(): Generator
     {
         if ($this->resolved) {
+            yield from $this->buffered;
+
+            $this->buffered = [];
+
             return;
         }
 
@@ -68,7 +75,7 @@ class StepResult implements IteratorAggregate
     public function response(): ?StepResponse
     {
         if (! $this->resolved) {
-            iterator_to_array($this, false);
+            $this->buffered = iterator_to_array($this, false);
         }
 
         return $this->response;

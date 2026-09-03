@@ -4,7 +4,9 @@ use Illuminate\Support\Facades\Event;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
+use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\StartingStep;
 use Laravel\Ai\Events\StepCompleted;
@@ -134,6 +136,43 @@ test('agent middleware may short-circuit a step', function (): void {
 
     expect($response->text)->toBe('Short-circuited response')
         ->and($response->steps)->toHaveCount(1);
+});
+
+test('agent middleware that reads the response of a streamed step still yields its events', function (): void {
+    AssistantAgent::fake(['Fake response']);
+
+    $response = (new AssistantAgent)
+        ->withMiddleware([function (PendingStep $step, Closure $next) {
+            $result = $next($step);
+
+            return $result->response()->text === '' ? new StepResponse('Fallback', [], FinishReason::Stop, new Usage, new Meta) : $result;
+        }])
+        ->stream('Test prompt');
+
+    $events = iterator_to_array($response, false);
+
+    expect(array_filter($events, fn (object $event): bool => $event instanceof TextDelta))->not->toBeEmpty()
+        ->and($response->text)->toBe('Fake response');
+});
+
+test('step provider options override the agent\'s own and never carry headers', function (): void {
+    Event::fake([StartingStep::class]);
+
+    $agent = new class extends AssistantAgent implements HasProviderOptions
+    {
+        public function providerOptions(Lab|string $provider): array
+        {
+            return ['reasoning' => 'high', 'store' => false, 'ai_sdk_extra_headers' => ['X-Test' => '1']];
+        }
+    };
+
+    $agent::fake(['Fake response']);
+
+    $agent
+        ->withMiddleware([fn (PendingStep $step, Closure $next) => $next($step->withProviderOptions(['reasoning' => 'low', 'ai_sdk_extra_headers' => ['X-Test' => '2']]))])
+        ->prompt('Test prompt');
+
+    Event::assertDispatched(StartingStep::class, fn (StartingStep $event): bool => $event->options->providerOptions('openai') === ['reasoning' => 'low', 'store' => false]);
 });
 
 test('agent middleware may short-circuit a streamed step', function (): void {

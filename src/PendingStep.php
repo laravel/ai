@@ -123,8 +123,6 @@ class PendingStep
     }
 
     /**
-     * Merge provider-specific options for this step; step options win over the agent's own.
-     *
      * @param  array<string, mixed>  $providerOptions
      */
     public function withProviderOptions(array $providerOptions): self
