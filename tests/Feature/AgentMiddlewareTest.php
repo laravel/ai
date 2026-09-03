@@ -153,6 +153,26 @@ test('agent middleware that reads the response of a streamed step still yields i
         ->and($response->text)->toBe('Fake response');
 });
 
+test('agent middleware that iterates a streamed step itself still yields its events', function (): void {
+    AssistantAgent::fake(['Fake response']);
+
+    $response = (new AssistantAgent)
+        ->withMiddleware([function (PendingStep $step, Closure $next) {
+            $result = $next($step);
+
+            foreach ($result as $event) {
+                //
+            }
+
+            return $result;
+        }])
+        ->stream('Test prompt');
+
+    iterator_to_array($response, false);
+
+    expect($response->text)->toBe('Fake response');
+});
+
 test('agent middleware that replaces a streamed step response narrates the replacement', function (): void {
     AssistantAgent::fake(['Fake response']);
 
@@ -166,8 +186,7 @@ test('agent middleware that replaces a streamed step response narrates the repla
 
     $deltas = array_values(array_filter(iterator_to_array($response, false), fn (object $event): bool => $event instanceof TextDelta));
 
-    expect(array_map(fn (TextDelta $event): string => $event->delta, $deltas))->toBe(['Replaced'])
-        ->and($response->text)->toBe('Replaced');
+    expect(array_map(fn (TextDelta $event): string => $event->delta, $deltas))->toBe(['Replaced']);
 });
 
 test('step provider options override the agent\'s own and never carry headers', function (): void {
@@ -254,6 +273,8 @@ test('agent middleware that replaces the history or the model drops the provider
     expect($run(fn (PendingStep $step, Closure $next) => $next($step)))->toBe([null, 'resp_1'])
         ->and($run(fn (PendingStep $step, Closure $next) => $next($step->withMessages(array_slice($step->messages, -1)))))->toBe([null, null])
         ->and($run(fn (PendingStep $step, Closure $next) => $next($step->isFirstStep() ? $step : $step->withModel('cheaper-model'))))->toBe([null, null])
+        ->and($run(fn (PendingStep $step, Closure $next) => $next($step->isFirstStep() ? $step->withModel('cheaper-model') : $step)))->toBe([null, null])
+        ->and($run(fn (PendingStep $step, Closure $next) => $next($step->withModel('cheaper-model'))))->toBe([null, 'resp_1'])
         ->and($run(fn (PendingStep $step, Closure $next) => $next($step->isFirstStep() ? $step : $step->withInstructions('Wrap up.'))))->toBe([null, null]);
 });
 

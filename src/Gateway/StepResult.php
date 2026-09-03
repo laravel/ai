@@ -62,7 +62,11 @@ class StepResult implements IteratorAggregate
             return;
         }
 
-        yield from $this->source;
+        foreach ($this->source as $event) {
+            $this->buffered[] = $event;
+
+            yield $event;
+        }
 
         $this->resolve($this->source->getReturn());
     }
@@ -78,7 +82,7 @@ class StepResult implements IteratorAggregate
     public function response(): ?StepResponse
     {
         if (! $this->resolved) {
-            $this->buffered = iterator_to_array($this, false);
+            iterator_to_array($this, false);
         }
 
         return $this->response;

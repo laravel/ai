@@ -9,6 +9,6 @@ class ToolNameResolver
 {
     public static function resolve(Tool|ProviderTool $tool): string
     {
-        return $tool instanceof Tool && is_callable([$tool, 'name']) ? $tool->name() : class_basename($tool);
+        return is_callable([$tool, 'name']) ? $tool->name() : class_basename($tool);
     }
 }

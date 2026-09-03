@@ -93,6 +93,7 @@ class TextGenerationLoop
         $steps = new Collection;
         $maxSteps = $this->resolveMaxSteps($options, $tools);
         $continuationToken = null;
+        $previous = null;
         $accumulatedUsage = new Usage;
         $lastResult = null;
 
@@ -131,14 +132,14 @@ class TextGenerationLoop
                 invocationId: $context?->invocationId,
             );
 
-            $prepared = null;
+            $prepared = $pending;
             $stepContext = null;
             $startedAt = null;
 
             try {
-                $lastResult = $this->runStep($pending, $middleware, function (PendingStep $step) use ($provider, $model, $instructions, $context, $allMessages, $continuationToken, &$prepared, &$stepContext, &$startedAt): StepResult {
+                $lastResult = $this->runStep($pending, $middleware, function (PendingStep $step) use ($provider, $previous, $context, $allMessages, $continuationToken, &$prepared, &$stepContext, &$startedAt): StepResult {
                     $prepared = $step;
-                    $stepContext = $this->stepContextFor($step, $model, $instructions, $allMessages, $continuationToken);
+                    $stepContext = $this->stepContextFor($step, $previous, $allMessages, $continuationToken);
 
                     $context?->startingStep($stepContext, $step->messages, $step->options, $step->model);
 
@@ -163,8 +164,6 @@ class TextGenerationLoop
 
                 throw $exception;
             }
-
-            $prepared ??= $pending;
 
             if ($stepContext !== null) {
                 $context?->stepCompleted($stepContext, $lastResult, $this->elapsedMilliseconds($startedAt), $prepared->model);
@@ -196,6 +195,7 @@ class TextGenerationLoop
             }
 
             $continuationToken = $lastResult->continuationToken;
+            $previous = $prepared;
         }
 
         return $this->buildFinalResponse($steps, $newMessages, $lastResult);
@@ -228,6 +228,7 @@ class TextGenerationLoop
         $steps = new Collection;
         $maxSteps = $this->resolveMaxSteps($options, $tools);
         $continuationToken = null;
+        $previous = null;
         $accumulatedUsage = new Usage;
         $finalReason = null;
 
@@ -283,15 +284,15 @@ class TextGenerationLoop
                 invocationId: $context?->invocationId,
             );
 
-            $prepared = null;
+            $prepared = $pending;
             $stepContext = null;
             $startedAt = null;
             $lastError = null;
 
             try {
-                $stepResult = $this->runStep($pending, $middleware, function (PendingStep $step) use ($invocationId, $provider, $model, $instructions, $context, $allMessages, $continuationToken, &$prepared, &$stepContext, &$startedAt): StepResult {
+                $stepResult = $this->runStep($pending, $middleware, function (PendingStep $step) use ($invocationId, $provider, $previous, $context, $allMessages, $continuationToken, &$prepared, &$stepContext, &$startedAt): StepResult {
                     $prepared = $step;
-                    $stepContext = $this->stepContextFor($step, $model, $instructions, $allMessages, $continuationToken);
+                    $stepContext = $this->stepContextFor($step, $previous, $allMessages, $continuationToken);
 
                     $context?->startingStep($stepContext, $step->messages, $step->options, $step->model);
 
@@ -322,7 +323,7 @@ class TextGenerationLoop
                 $result = $stepResult->response();
 
                 if (! $stepResult->streamed() && $result instanceof StepResponse) {
-                    yield from $this->eventsFor($invocationId, $provider, $pending->model, $result);
+                    yield from $this->eventsFor($invocationId, $provider, $prepared->model, $result);
                 }
             } catch (Throwable $exception) {
                 if ($stepContext !== null) {
@@ -331,8 +332,6 @@ class TextGenerationLoop
 
                 throw $exception;
             }
-
-            $prepared ??= $pending;
 
             // A provider may report an error in the stream itself rather than throwing, which still ends the step. The error event travels on the exception so its type and metadata are not lost...
             if (! $result instanceof StepResponse) {
@@ -390,6 +389,7 @@ class TextGenerationLoop
             }
 
             $continuationToken = $result->continuationToken;
+            $previous = $prepared;
         }
 
         // A step that never produced a response has already thrown, so the loop only reaches here having set a reason...
@@ -412,8 +412,6 @@ class TextGenerationLoop
     }
 
     /**
-     * Send the step through the agent's middleware to the gateway, accepting a bare StepResponse from a short-circuiting middleware.
-     *
      * @param  array<int, mixed>  $middleware
      * @param  Closure(PendingStep): StepResult  $run
      */
@@ -433,9 +431,9 @@ class TextGenerationLoop
      *
      * @param  Message[]  $history
      */
-    protected function stepContextFor(PendingStep $step, string $model, ?string $instructions, array $history, ?string $continuationToken): StepContext
+    protected function stepContextFor(PendingStep $step, ?PendingStep $previous, array $history, ?string $continuationToken): StepContext
     {
-        $unchanged = $step->messages === $history && $step->model === $model && $step->instructions === $instructions;
+        $unchanged = $step->messages === $history && $step->model === $previous?->model && $step->instructions === $previous?->instructions;
 
         return new StepContext(
             stepNumber: $step->number,
