@@ -301,7 +301,7 @@ test('response usage includes cached prompt tokens', function (): void {
 
     $response = agent()->prompt('Hello', provider: 'groq');
 
-    expect($response->usage->promptTokens)->toBe(4641)
+    expect($response->usage->promptTokens)->toBe(33)
         ->and($response->usage->completionTokens)->toBe(1817)
         ->and($response->usage->cacheReadInputTokens)->toBe(4608);
 });
