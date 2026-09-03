@@ -15,6 +15,7 @@ class ToolCall implements Arrayable, JsonSerializable
         public ?string $reasoningId = null,
         public ?array $reasoningSummary = null,
         public ?string $reasoningEncryptedContent = null,
+        public ?string $thoughtSignature = null,
     ) {}
 
     /**
@@ -30,6 +31,7 @@ class ToolCall implements Arrayable, JsonSerializable
             reasoningId: $data['reasoning_id'] ?? null,
             reasoningSummary: $data['reasoning_summary'] ?? null,
             reasoningEncryptedContent: $data['reasoning_encrypted_content'] ?? null,
+            thoughtSignature: $data['thought_signature'] ?? null,
         );
     }
 
@@ -46,6 +48,7 @@ class ToolCall implements Arrayable, JsonSerializable
             'reasoning_id' => $this->reasoningId,
             'reasoning_summary' => $this->reasoningSummary,
             'reasoning_encrypted_content' => $this->reasoningEncryptedContent,
+            'thought_signature' => $this->thoughtSignature,
         ];
     }
 

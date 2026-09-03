@@ -147,7 +147,7 @@ trait HandlesTextStreaming
                 }
 
                 if (isset($part['functionCall'])) {
-                    $pendingToolCalls[] = $part['functionCall'];
+                    $pendingToolCalls[] = $part;
                     $modelParts[] = $part;
 
                     continue;
