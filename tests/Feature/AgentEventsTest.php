@@ -15,7 +15,6 @@ use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\StartingStep;
 use Laravel\Ai\Events\StepCompleted;
 use Laravel\Ai\Events\StepFailed;
-use Laravel\Ai\Events\StreamingAgent;
 use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Exceptions\RateLimitedException;
@@ -25,7 +24,7 @@ use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
-use Laravel\Ai\Prompts\AgentPrompt;
+use Laravel\Ai\PendingStep;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
@@ -58,16 +57,16 @@ test('a synchronous prompt threads one invocation id through the prompt and its 
     Event::assertDispatched(AgentPrompted::class, fn (AgentPrompted $event): bool => $event->invocationId === $response->invocationId);
 });
 
-test('synchronous middleware receives the invocation id the run reports', function (): void {
+test('step middleware receives the invocation id the run reports', function (): void {
     AssistantAgent::fake(['Hello!']);
 
     $seen = null;
 
     $response = (new AssistantAgent)->withMiddleware([
-        function (AgentPrompt $prompt, Closure $next) use (&$seen) {
-            $seen = $prompt->invocationId;
+        function (PendingStep $step, Closure $next) use (&$seen) {
+            $seen = $step->invocationId;
 
-            return $next($prompt);
+            return $next($step);
         },
     ])->prompt('Hi');
 
@@ -774,67 +773,6 @@ test('a provider error inside the stream closes the step it opened', function ()
         ->and($failed->exception->error->type)->toBe('server_error');
 });
 
-test('a failure after failover reports the prompt the middleware produced', function (): void {
-    Event::fake();
-
-    config([
-        'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
-        'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
-    ]);
-
-    Http::preventStrayRequests();
-
-    Http::fakeSequence()
-        ->push(status: 429)
-        ->push(status: 429);
-
-    $agent = (new AssistantAgent)->withMiddleware([
-        fn (AgentPrompt $prompt, Closure $next) => $next($prompt->revise('Revised by middleware.')),
-    ]);
-
-    expect(fn (): mixed => $agent->prompt('Hi', provider: ['primary', 'backup']))
-        ->toThrow(RateLimitedException::class);
-
-    $prompted = Event::dispatched(PromptingAgent::class)->first()[0];
-
-    Event::assertDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->prompt->prompt === $prompted->prompt->prompt
-        && $event->prompt->prompt === 'Revised by middleware.');
-});
-
-test('middleware that builds its own prompt does not turn a recoverable failover into a failure', function (): void {
-    Event::fake();
-
-    config([
-        'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
-        'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
-    ]);
-
-    Http::preventStrayRequests();
-
-    Http::fakeSequence()
-        ->push(status: 429)
-        ->pushResponse(fakeGroqResponse('Hello from the backup.'));
-
-    // A hand built prompt cannot carry the attempt bookkeeping forward, so terminality must be read from ours...
-    $agent = (new AssistantAgent)->withMiddleware([
-        fn (AgentPrompt $prompt, Closure $next) => $next(new AgentPrompt(
-            $prompt->agent,
-            'Rebuilt by middleware.',
-            $prompt->attachments,
-            $prompt->provider,
-            $prompt->model,
-            invocationId: $prompt->invocationId,
-        )),
-    ]);
-
-    $response = $agent->prompt('Hi', provider: ['primary', 'backup']);
-
-    expect($response->text)->toBe('Hello from the backup.');
-
-    Event::assertDispatched(AgentFailedOver::class);
-    Event::assertNotDispatched(AgentFailed::class);
-});
-
 test('a streamed failure after the stream started reports the run as failed', function (): void {
     Event::fake();
 
@@ -862,81 +800,4 @@ test('a streamed failure after the stream started reports the run as failed', fu
 
     Event::assertDispatchedTimes(AgentFailed::class, 1);
     Event::assertNotDispatched(AgentFailedOver::class);
-});
-
-test('a streamed failure after failover reports the prompt the middleware produced', function (): void {
-    Event::fake();
-
-    config([
-        'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
-        'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
-    ]);
-
-    Http::preventStrayRequests();
-
-    Http::fakeSequence()
-        ->push(status: 429)
-        ->push(status: 429);
-
-    $agent = (new AssistantAgent)->withMiddleware([
-        fn (AgentPrompt $prompt, Closure $next) => $next($prompt->revise('Revised by middleware.')),
-    ]);
-
-    expect(function () use ($agent): void {
-        foreach ($agent->stream('Hi', provider: ['primary', 'backup']) as $event) {
-            //
-        }
-    })->toThrow(RateLimitedException::class);
-
-    $streaming = Event::dispatched(StreamingAgent::class)->first()[0];
-
-    Event::assertDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->prompt->prompt === $streaming->prompt->prompt
-        && $event->prompt->prompt === 'Revised by middleware.');
-});
-
-test('a single provider streamed failure reports the prompt the middleware produced', function (): void {
-    Event::fake();
-
-    config(['ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key']]);
-
-    Http::preventStrayRequests();
-
-    Http::fakeSequence()->push(status: 429);
-
-    $agent = (new AssistantAgent)->withMiddleware([
-        fn (AgentPrompt $prompt, Closure $next) => $next($prompt->revise('Revised by middleware.')),
-    ]);
-
-    expect(function () use ($agent): void {
-        foreach ($agent->stream('Hi', provider: 'primary') as $event) {
-            //
-        }
-    })->toThrow(RateLimitedException::class);
-
-    $streaming = Event::dispatched(StreamingAgent::class)->first()[0];
-
-    Event::assertDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->prompt->prompt === $streaming->prompt->prompt
-        && $event->prompt->prompt === 'Revised by middleware.');
-});
-
-test('a single provider synchronous failure reports the prompt the middleware produced', function (): void {
-    Event::fake();
-
-    config(['ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key']]);
-
-    Http::preventStrayRequests();
-
-    Http::fakeSequence()->push(status: 429);
-
-    $agent = (new AssistantAgent)->withMiddleware([
-        fn (AgentPrompt $prompt, Closure $next) => $next($prompt->revise('Revised by middleware.')),
-    ]);
-
-    expect(fn (): mixed => $agent->prompt('Hi', provider: 'primary'))
-        ->toThrow(RateLimitedException::class);
-
-    $prompted = Event::dispatched(PromptingAgent::class)->first()[0];
-
-    Event::assertDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->prompt->prompt === $prompted->prompt->prompt
-        && $event->prompt->prompt === 'Revised by middleware.');
 });

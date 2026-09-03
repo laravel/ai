@@ -26,6 +26,7 @@ class TextGenerationOptions
         public readonly ?ToolChoice $toolChoice = null,
         public readonly ?CacheInstructions $cacheInstructions = null,
         public readonly ?CacheToolDefinitions $cacheToolDefinitions = null,
+        public readonly ?array $providerOptions = null,
     ) {
         //
     }
@@ -37,13 +38,43 @@ class TextGenerationOptions
      */
     public function providerOptions(Lab|string $provider): ?array
     {
-        if ($this->agent instanceof HasProviderOptions) {
-            return Arr::except($this->agent->providerOptions(
+        $agentOptions = $this->agent instanceof HasProviderOptions
+            ? Arr::except($this->agent->providerOptions(
                 $provider instanceof Lab ? $provider : (Lab::tryFrom($provider) ?? $provider)
-            ), HasProviderOptions::HEADERS);
+            ), HasProviderOptions::HEADERS)
+            : null;
+
+        if ($this->providerOptions === null) {
+            return $agentOptions;
         }
 
-        return null;
+        return [...($agentOptions ?? []), ...Arr::except($this->providerOptions, HasProviderOptions::HEADERS)];
+    }
+
+    public function withToolChoice(?ToolChoice $toolChoice): self
+    {
+        return $this->with(['toolChoice' => $toolChoice]);
+    }
+
+    public function withMaxTokens(?int $maxTokens): self
+    {
+        return $this->with(['maxTokens' => $maxTokens]);
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $providerOptions
+     */
+    public function withProviderOptions(?array $providerOptions): self
+    {
+        return $this->with(['providerOptions' => $providerOptions]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $overrides
+     */
+    protected function with(array $overrides): self
+    {
+        return new self(...[...get_object_vars($this), ...$overrides]);
     }
 
     /**
@@ -59,15 +90,7 @@ class TextGenerationOptions
             return $this;
         }
 
-        return new self(
-            maxSteps: $this->maxSteps,
-            maxTokens: $this->maxTokens,
-            temperature: $this->temperature,
-            agent: $this->agent,
-            topP: $this->topP,
-            cacheInstructions: $this->cacheInstructions,
-            cacheToolDefinitions: $this->cacheToolDefinitions,
-        );
+        return $this->withToolChoice(null);
     }
 
     /**

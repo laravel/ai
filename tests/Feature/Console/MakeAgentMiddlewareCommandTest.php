@@ -7,7 +7,8 @@ test('can create an agent middleware class', function (): void {
 
     $response->assertExitCode(0)->run();
 
-    expect(app_path('Ai/Middleware/TestMiddleware.php'))->toBeFile();
+    expect(app_path('Ai/Middleware/TestMiddleware.php'))->toBeFile()
+        ->and(file_get_contents(app_path('Ai/Middleware/TestMiddleware.php')))->toContain('handle(PendingStep $step, Closure $next)');
 });
 
 test('may publish custom middleware stub', function (): void {
