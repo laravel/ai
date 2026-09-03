@@ -41,8 +41,12 @@ class RunContext
     /**
      * Report that a generation step returned a response.
      */
-    public function stepCompleted(StepContext $step, StepResponse $response, float $time, ?string $model = null): void
+    public function stepCompleted(?StepContext $step, StepResponse $response, float $time, ?string $model = null): void
     {
+        if ($step === null) {
+            return;
+        }
+
         $this->events->dispatch(new StepCompleted(
             $this->invocationId, $step->stepNumber, $this->agent, $this->provider, $model ?? $this->model, $step->isFinalStep,
             $response, $time,
@@ -52,8 +56,12 @@ class RunContext
     /**
      * Report that a generation step ended without producing a response.
      */
-    public function stepFailed(StepContext $step, Throwable $exception, float $time, ?string $model = null): void
+    public function stepFailed(?StepContext $step, Throwable $exception, float $time, ?string $model = null): void
     {
+        if ($step === null) {
+            return;
+        }
+
         $this->events->dispatch(new StepFailed(
             $this->invocationId, $step->stepNumber, $this->agent, $this->provider, $model ?? $this->model, $step->isFinalStep,
             $exception, $time,

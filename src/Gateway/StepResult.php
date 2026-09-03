@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway;
 use Closure;
 use Generator;
 use IteratorAggregate;
+use Laravel\Ai\PendingStep;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 
 /**
@@ -24,8 +25,14 @@ class StepResult implements IteratorAggregate
 
     /**
      * @param  Generator<int, StreamEvent, mixed, StepResponse|null>|StepResponse  $source
+     * @param  PendingStep|null  $step  The step as sent to the model; null when middleware supplied the response itself.
      */
-    public function __construct(protected Generator|StepResponse $source) {}
+    public function __construct(
+        protected Generator|StepResponse $source,
+        public readonly ?PendingStep $step = null,
+        public readonly ?StepContext $context = null,
+        public readonly ?int $startedAt = null,
+    ) {}
 
     /**
      * Register a callback to run once the step's response is available.
@@ -48,24 +55,31 @@ class StepResult implements IteratorAggregate
      */
     public function getIterator(): Generator
     {
-        if ($this->resolved) {
-            yield from $this->buffered;
+        if ($this->source instanceof StepResponse) {
+            $this->resolved || $this->resolve($this->source);
 
+            return;
+        }
+
+        yield from $this->buffered;
+
+        if ($this->resolved) {
             $this->buffered = [];
 
             return;
         }
 
-        if ($this->source instanceof StepResponse) {
-            $this->resolve($this->source);
-
-            return;
+        // An abandoned iteration leaves the source parked on the event it last yielded...
+        if ($this->buffered !== [] && $this->source->current() === end($this->buffered)) {
+            $this->source->next();
         }
 
-        foreach ($this->source as $event) {
-            $this->buffered[] = $event;
+        while ($this->source->valid()) {
+            $this->buffered[] = $event = $this->source->current();
 
             yield $event;
+
+            $this->source->next();
         }
 
         $this->resolve($this->source->getReturn());

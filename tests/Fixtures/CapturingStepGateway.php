@@ -23,7 +23,7 @@ class CapturingStepGateway implements StepTextGateway
         $this->calls[] = ['model' => $model, 'instructions' => $instructions, 'tools' => $tools, 'schema' => $schema, 'context' => $stepContext];
 
         return count($this->calls) === 1
-            ? new StepResponse('', [new ToolCall('call_1', 'FixedNumberGenerator', [])], FinishReason::ToolCalls, new Usage, new Meta, continuationToken: 'resp_1')
+            ? new StepResponse('', [new ToolCall('call_1', 'FixedNumberGenerator', [])], FinishReason::ToolCalls, new Usage(10, 5), new Meta, continuationToken: 'resp_1')
             : new StepResponse('Done.', [], FinishReason::Stop, new Usage, new Meta);
     }
 

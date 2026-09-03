@@ -51,8 +51,6 @@ use Laravel\Ai\Tools\ToolNameResolver;
 use LogicException;
 use Throwable;
 
-use function Laravel\Ai\pipeline;
-
 class TextGenerationLoop
 {
     use HandlesToolApprovals, InvokesTools, MeasuresDuration;
@@ -120,6 +118,7 @@ class TextGenerationLoop
             $pending = new PendingStep(
                 number: $step,
                 isFinalStep: $step + 1 >= $maxSteps,
+                provider: $provider->name(),
                 model: $model,
                 instructions: $instructions,
                 messages: $allMessages,
@@ -132,20 +131,11 @@ class TextGenerationLoop
                 invocationId: $context?->invocationId,
             );
 
-            $prepared = $pending;
-            $stepContext = null;
-            $startedAt = null;
+            $attempt = null;
 
             try {
-                $lastResult = $this->runStep($pending, $middleware, function (PendingStep $step) use ($provider, $previous, $context, $allMessages, $continuationToken, &$prepared, &$stepContext, &$startedAt): StepResult {
-                    $prepared = $step;
-                    $stepContext = $this->stepContextFor($step, $previous, $allMessages, $continuationToken);
-
-                    $context?->startingStep($stepContext, $step->messages, $step->options, $step->model);
-
-                    $startedAt = hrtime(true);
-
-                    return new StepResult($this->gateway->generateTextStep(
+                $lastResult = $this->runStep($pending, $middleware, function (PendingStep $step) use ($provider, $previous, $context, $allMessages, $continuationToken, &$attempt): StepResult {
+                    return $attempt = $this->attempt($step, $previous, $allMessages, $continuationToken, $context, fn (StepContext $stepContext): StepResponse => $this->gateway->generateTextStep(
                         $provider,
                         $step->model,
                         $step->instructions,
@@ -158,16 +148,14 @@ class TextGenerationLoop
                     ));
                 })->response();
             } catch (Throwable $exception) {
-                if ($stepContext !== null) {
-                    $context?->stepFailed($stepContext, $exception, $this->elapsedMilliseconds($startedAt), $prepared->model);
-                }
+                $context?->stepFailed($attempt?->context, $exception, $this->elapsedMilliseconds($attempt?->startedAt), $attempt?->step->model);
 
                 throw $exception;
             }
 
-            if ($stepContext !== null) {
-                $context?->stepCompleted($stepContext, $lastResult, $this->elapsedMilliseconds($startedAt), $prepared->model);
-            }
+            $prepared = $attempt?->step ?? $pending;
+
+            $context?->stepCompleted($attempt?->context, $lastResult, $this->elapsedMilliseconds($attempt?->startedAt), $prepared->model);
 
             $accumulatedUsage = $accumulatedUsage->add($lastResult->usage);
 
@@ -272,6 +260,7 @@ class TextGenerationLoop
             $pending = new PendingStep(
                 number: $step,
                 isFinalStep: $step + 1 >= $maxSteps,
+                provider: $provider->name(),
                 model: $model,
                 instructions: $instructions,
                 messages: $allMessages,
@@ -284,21 +273,12 @@ class TextGenerationLoop
                 invocationId: $context?->invocationId,
             );
 
-            $prepared = $pending;
-            $stepContext = null;
-            $startedAt = null;
+            $attempt = null;
             $lastError = null;
 
             try {
-                $stepResult = $this->runStep($pending, $middleware, function (PendingStep $step) use ($invocationId, $provider, $previous, $context, $allMessages, $continuationToken, &$prepared, &$stepContext, &$startedAt): StepResult {
-                    $prepared = $step;
-                    $stepContext = $this->stepContextFor($step, $previous, $allMessages, $continuationToken);
-
-                    $context?->startingStep($stepContext, $step->messages, $step->options, $step->model);
-
-                    $startedAt = hrtime(true);
-
-                    return new StepResult($this->gateway->generateStreamStep(
+                $stepResult = $this->runStep($pending, $middleware, function (PendingStep $step) use ($invocationId, $provider, $previous, $context, $allMessages, $continuationToken, &$attempt): StepResult {
+                    return $attempt = $this->attempt($step, $previous, $allMessages, $continuationToken, $context, fn (StepContext $stepContext): Generator => $this->gateway->generateStreamStep(
                         $invocationId,
                         $provider,
                         $step->model,
@@ -320,15 +300,14 @@ class TextGenerationLoop
                     }
                 }
 
+                $prepared = $attempt?->step ?? $pending;
                 $result = $stepResult->response();
 
                 if (! $stepResult->streamed() && $result instanceof StepResponse) {
                     yield from $this->eventsFor($invocationId, $provider, $prepared->model, $result);
                 }
             } catch (Throwable $exception) {
-                if ($stepContext !== null) {
-                    $context?->stepFailed($stepContext, $exception, $this->elapsedMilliseconds($startedAt), $prepared->model);
-                }
+                $context?->stepFailed($attempt?->context, $exception, $this->elapsedMilliseconds($attempt?->startedAt), $attempt?->step->model);
 
                 throw $exception;
             }
@@ -337,16 +316,12 @@ class TextGenerationLoop
             if (! $result instanceof StepResponse) {
                 $exception = new StreamErrorException($lastError);
 
-                if ($stepContext !== null) {
-                    $context?->stepFailed($stepContext, $exception, $this->elapsedMilliseconds($startedAt), $prepared->model);
-                }
+                $context?->stepFailed($attempt?->context, $exception, $this->elapsedMilliseconds($attempt?->startedAt), $prepared->model);
 
                 throw $exception;
             }
 
-            if ($stepContext !== null) {
-                $context?->stepCompleted($stepContext, $result, $this->elapsedMilliseconds($startedAt), $prepared->model);
-            }
+            $context?->stepCompleted($attempt?->context, $result, $this->elapsedMilliseconds($attempt?->startedAt), $prepared->model);
 
             $accumulatedUsage = $accumulatedUsage->add($result->usage);
             $finalReason = $result->finishReason;
@@ -412,13 +387,26 @@ class TextGenerationLoop
     }
 
     /**
+     * Each middleware receives a StepResult from $next, whether the inner layer streamed, short-circuited or replaced the step.
+     *
      * @param  array<int, mixed>  $middleware
      * @param  Closure(PendingStep): StepResult  $run
      */
     protected function runStep(PendingStep $step, array $middleware, Closure $run): StepResult
     {
-        $result = $middleware === [] ? $run($step) : pipeline()->send($step)->through($middleware)->then($run);
+        $next = $run;
 
+        foreach (array_reverse($middleware) as $pipe) {
+            $next = fn (PendingStep $step): StepResult => $this->toStepResult(
+                $pipe instanceof Closure ? $pipe($step, $next) : (is_string($pipe) ? resolve($pipe) : $pipe)->handle($step, $next),
+            );
+        }
+
+        return $next($step);
+    }
+
+    protected function toStepResult(mixed $result): StepResult
+    {
         return match (true) {
             $result instanceof StepResult => $result,
             $result instanceof StepResponse => new StepResult($result),
@@ -427,7 +415,32 @@ class TextGenerationLoop
     }
 
     /**
-     * A provider-side continuation carries the previous step's history, model and instructions, so a step that changes any of them replays in full instead.
+     * Send the prepared step to the model, reporting its start and any synchronous failure.
+     *
+     * @param  Message[]  $history
+     * @param  Closure(StepContext): (Generator<int, StreamEvent, mixed, StepResponse|null>|StepResponse)  $call
+     */
+    protected function attempt(PendingStep $step, ?PendingStep $previous, array $history, ?string $continuationToken, ?RunContext $context, Closure $call): StepResult
+    {
+        $stepContext = $this->stepContextFor($step, $previous, $history, $continuationToken);
+
+        $context?->startingStep($stepContext, $step->messages, $step->options, $step->model);
+
+        $startedAt = hrtime(true);
+
+        try {
+            $source = $call($stepContext);
+        } catch (Throwable $exception) {
+            $context?->stepFailed($stepContext, $exception, $this->elapsedMilliseconds($startedAt), $step->model);
+
+            throw $exception;
+        }
+
+        return new StepResult($source, $step, $stepContext, $startedAt);
+    }
+
+    /**
+     * A continuation replays only unchanged history, model and instructions.
      *
      * @param  Message[]  $history
      */

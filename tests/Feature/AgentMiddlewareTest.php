@@ -6,6 +6,7 @@ use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\AgentFailed;
+use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\StartingStep;
 use Laravel\Ai\Events\StepCompleted;
 use Laravel\Ai\Events\StepFailed;
@@ -71,16 +72,36 @@ test('agent middleware wraps every generation step when streaming', function ():
         }])
         ->stream('Test prompt');
 
+    $text = null;
+
     $response
         ->each(fn (): true => true)
-        ->then(function (StreamedAgentResponse $response): void {
-            $_SERVER['__testing.text'] = $response->text;
+        ->then(function (StreamedAgentResponse $response) use (&$text): void {
+            $text = $response->text;
         });
 
-    expect($_SERVER['__testing.text'])->toEqual('Fake response')
+    expect($text)->toEqual('Fake response')
         ->and($seen)->toBe([0, 1]);
+});
 
-    unset($_SERVER['__testing.text']);
+test('agent middleware sees the provider, accumulated usage and final step flag', function (): void {
+    $gateway = new CapturingStepGateway;
+    $seen = [];
+
+    (new TextGenerationLoop($gateway))->generate(
+        Ai::textProviderFor(new AssistantAgent, 'openai'),
+        'gpt-test',
+        'Be helpful.',
+        [new UserMessage('Hi')],
+        [new FixedNumberGenerator],
+        options: new TextGenerationOptions(maxSteps: 2, agent: (new AssistantAgent)->withMiddleware([function (PendingStep $step, Closure $next) use (&$seen) {
+            $seen[] = [$step->provider, $step->isFinalStep, $step->usage->promptTokens, $step->usage->completionTokens];
+
+            return $next($step);
+        }])),
+    );
+
+    expect($seen)->toBe([['openai', false, 0, 0], ['openai', true, 10, 5]]);
 });
 
 test('agent middleware then callback receives the step response before its tools run', function (): void {
@@ -91,16 +112,83 @@ test('agent middleware then callback receives the step response before its tools
 
     $seen = [];
 
+    Event::listen(InvokingTool::class, function () use (&$seen): void {
+        $seen[] = 'tool';
+    });
+
     (new AssistantAgent)
         ->withTools([new FixedNumberGenerator])
         ->withMiddleware([function (PendingStep $step, Closure $next) use (&$seen) {
             return $next($step)->then(function (StepResponse $response) use (&$seen): void {
-                $seen[] = $response->finishReason;
+                $seen[] = $response->finishReason->value;
             });
         }])
         ->prompt('Test prompt');
 
-    expect($seen)->toBe([FinishReason::ToolCalls, FinishReason::Stop]);
+    expect($seen)->toBe(['tool_calls', 'tool', 'stop']);
+});
+
+test('an outer middleware receives a step result when an inner middleware short-circuits', function (): void {
+    AssistantAgent::fake(['Fake response']);
+
+    $seen = [];
+
+    $observer = function (PendingStep $step, Closure $next) use (&$seen) {
+        return $next($step)->then(function (StepResponse $response) use (&$seen): void {
+            $seen[] = $response->text;
+        });
+    };
+
+    $response = (new AssistantAgent)
+        ->withMiddleware([$observer, shortCircuitingMiddleware()])
+        ->prompt('Test prompt');
+
+    expect($response->text)->toBe('Short-circuited response')
+        ->and($seen)->toBe(['Short-circuited response']);
+
+    $streamed = (new AssistantAgent)
+        ->withMiddleware([$observer, shortCircuitingMiddleware()])
+        ->stream('Test prompt');
+
+    iterator_to_array($streamed, false);
+
+    expect($streamed->text)->toBe('Short-circuited response')
+        ->and($seen)->toBe(['Short-circuited response', 'Short-circuited response']);
+});
+
+test('agent middleware that abandons a streamed step midway still yields every event', function (): void {
+    AssistantAgent::fake(['Fake response here']);
+
+    $response = (new AssistantAgent)
+        ->withMiddleware([function (PendingStep $step, Closure $next) {
+            $result = $next($step);
+
+            foreach ($result as $event) {
+                if ($event instanceof TextStart) {
+                    break;
+                }
+            }
+
+            return $result;
+        }])
+        ->stream('Test prompt');
+
+    $deltas = array_values(array_filter(iterator_to_array($response, false), fn (object $event): bool => $event instanceof TextDelta));
+
+    expect(array_map(fn (TextDelta $event): string => $event->delta, $deltas))->toBe(['Fake', ' response', ' here'])
+        ->and($response->text)->toBe('Fake response here');
+});
+
+test('a failed step reports the model the middleware chose', function (): void {
+    Event::fake([StepFailed::class]);
+
+    AssistantAgent::fake([fn () => throw new RuntimeException('Provider down.')]);
+
+    expect(fn (): mixed => (new AssistantAgent)
+        ->withMiddleware([fn (PendingStep $step, Closure $next) => $next($step->withModel('other-model'))])
+        ->prompt('Test prompt'))->toThrow(RuntimeException::class, 'Provider down.');
+
+    Event::assertDispatched(StepFailed::class, fn (StepFailed $event): bool => $event->model === 'other-model');
 });
 
 test('agent middleware then callback runs once a streamed step has drained', function (): void {
@@ -229,7 +317,7 @@ test('agent middleware may change the model and options for a step', function ()
 
     $response = (new AssistantAgent)
         ->withMiddleware([fn (PendingStep $step, Closure $next) => $next(
-            $step->withModel('other-model')->withTemperature(0.2)->withToolChoice('none')->withProviderOptions(['reasoning' => 'low']),
+            $step->withModel('other-model')->withTemperature(0.2)->withMaxTokens(1000)->withToolChoice('none')->withProviderOptions(['reasoning' => 'low']),
         )])
         ->prompt('Test prompt');
 
@@ -237,6 +325,7 @@ test('agent middleware may change the model and options for a step', function ()
 
     Event::assertDispatched(StartingStep::class, fn (StartingStep $event): bool => $event->model === 'other-model'
         && $event->options->temperature === 0.2
+        && $event->options->maxTokens === 1000
         && $event->options->toolChoice->mode === ToolChoice::none
         && $event->options->providerOptions('openai') === ['reasoning' => 'low']);
 

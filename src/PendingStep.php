@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai;
 
-use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\Message;
@@ -12,7 +11,7 @@ use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Tools\ToolNameResolver;
 
 /**
- * A generation step as handed to agent middleware before the model is called; every mutator returns a new instance.
+ * A generation step handed to agent middleware before the model is called.
  */
 class PendingStep
 {
@@ -26,6 +25,7 @@ class PendingStep
     public function __construct(
         public readonly int $number,
         public readonly bool $isFinalStep,
+        public readonly string $provider,
         public readonly string $model,
         public readonly ?string $instructions,
         public readonly array $messages,
@@ -38,11 +38,6 @@ class PendingStep
         public readonly ?string $invocationId = null,
     ) {}
 
-    public function agent(): ?Agent
-    {
-        return $this->options?->agent;
-    }
-
     public function isFirstStep(): bool
     {
         return $this->number === 0;
@@ -51,14 +46,6 @@ class PendingStep
     public function previousStep(): ?Step
     {
         return $this->steps === [] ? null : $this->steps[array_key_last($this->steps)];
-    }
-
-    /**
-     * @return string[]
-     */
-    public function toolNames(): array
-    {
-        return array_values(array_map(ToolNameResolver::resolve(...), $this->tools));
     }
 
     public function withModel(string $model): self
@@ -142,12 +129,7 @@ class PendingStep
         return $this->with(['schema' => $schema]);
     }
 
-    public function withTimeout(?int $timeout): self
-    {
-        return $this->with(['timeout' => $timeout]);
-    }
-
-    public function withOptions(TextGenerationOptions $options): self
+    protected function withOptions(TextGenerationOptions $options): self
     {
         return $this->with(['options' => $options]);
     }

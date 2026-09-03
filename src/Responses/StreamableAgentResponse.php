@@ -202,7 +202,6 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
         $this->text = TextDelta::combine($events);
         $this->usage = StreamEnd::combineUsage($events);
 
-        // Middleware may have sent the final step with a different model than the prompt named...
         $start = $this->events->last(fn (StreamEvent $event): bool => $event instanceof StreamStart);
 
         if ($start instanceof StreamStart && $this->meta instanceof Meta) {
