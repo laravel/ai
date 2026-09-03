@@ -11,12 +11,16 @@ use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Messages\UserMessage;
+use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
+use Laravel\Ai\Streaming\Events\ReasoningDelta;
+use Laravel\Ai\Streaming\Events\ReasoningEnd;
+use Laravel\Ai\Streaming\Events\ReasoningStart;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
@@ -79,6 +83,23 @@ class FakeTextGateway implements StepTextGateway
         $messageId = ulid();
 
         yield (new StreamStart(ulid(), $provider->name(), $model, time()))->withInvocationId($invocationId);
+
+        if (filled($step->reasoning)) {
+            $reasoningId = ulid();
+
+            yield (new ReasoningStart(ulid(), $reasoningId, time()))->withInvocationId($invocationId);
+
+            foreach (Str::of($step->reasoning)->explode(' ') as $index => $word) {
+                yield (new ReasoningDelta(
+                    ulid(),
+                    $reasoningId,
+                    $index > 0 ? ' '.$word : $word,
+                    time(),
+                ))->withInvocationId($invocationId);
+            }
+
+            yield (new ReasoningEnd(ulid(), $reasoningId, time()))->withInvocationId($invocationId);
+        }
 
         if (filled($step->text)) {
             yield (new TextStart(ulid(), $messageId, time()))->withInvocationId($invocationId);
@@ -145,7 +166,8 @@ class FakeTextGateway implements StepTextGateway
         }
 
         return new StepResponse(
-            $response->text, [], FinishReason::Stop, $response->usage, $response->meta
+            $response->text, [], FinishReason::Stop, $response->usage, $response->meta,
+            reasoning: $response instanceof AgentResponse ? $response->reasoning : '',
         );
     }
 

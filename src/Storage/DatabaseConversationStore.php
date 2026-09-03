@@ -210,6 +210,10 @@ class DatabaseConversationStore implements ConversationStore
             $meta['provider_content_blocks'] = $blocks;
         }
 
+        if (filled($response->reasoning)) {
+            $meta['reasoning'] = $response->reasoning;
+        }
+
         return $meta;
     }
 
