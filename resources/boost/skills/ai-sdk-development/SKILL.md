@@ -199,6 +199,11 @@ $audio = Audio::of('Hello from Laravel.')
     ->generate();
 
 $path = $audio->store();
+
+// List the voices available for audio generation (ElevenLabs, Mistral)
+$voices = Audio::voices(provider: 'eleven');
+
+$voices->first()->id; // Pass directly to ->voice(...)
 ```
 
 ### Transcription
@@ -409,6 +414,11 @@ Image::assertNothingGenerated();
 // Audio
 Audio::fake();
 Audio::assertGenerated(fn ($prompt) => $prompt->contains('Hello'));
+
+// Voices
+Audio::fakeVoices();
+Audio::assertVoicesListed('eleven');
+Audio::assertNoVoicesListed();
 
 // Transcription
 Transcription::fake(['Transcribed text.']);

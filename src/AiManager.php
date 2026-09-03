@@ -14,6 +14,7 @@ use Laravel\Ai\Contracts\Providers\RerankingProvider;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Contracts\Providers\VoiceProvider;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Anthropic\AnthropicGateway;
 use Laravel\Ai\Gateway\Gemini\GeminiGateway;
@@ -47,6 +48,7 @@ class AiManager extends MultipleInstanceManager
     use Concerns\InteractsWithFakeReranking;
     use Concerns\InteractsWithFakeStores;
     use Concerns\InteractsWithFakeTranscriptions;
+    use Concerns\InteractsWithFakeVoices;
 
     /**
      * The key name of the "driver" equivalent configuration option.
@@ -80,6 +82,34 @@ class AiManager extends MultipleInstanceManager
 
         return $this->audioIsFaked()
             ? (clone $provider)->useAudioGateway($this->fakeAudioGateway())
+            : $provider;
+    }
+
+    /**
+     * Get a voice provider instance by name.
+     *
+     * @throws LogicException
+     */
+    public function voiceProvider(?string $name = null): VoiceProvider
+    {
+        return tap($this->instance($name), function ($instance): void {
+            if (! $instance instanceof VoiceProvider) {
+                throw new LogicException('Provider ['.$instance::class.'] does not support voice listing.');
+            }
+        });
+    }
+
+    /**
+     * Get a voice provider instance, using a fake gateway if voices are faked.
+     *
+     * @throws LogicException
+     */
+    public function fakeableVoiceProvider(?string $name = null): VoiceProvider
+    {
+        $provider = $this->voiceProvider($name);
+
+        return $this->voicesAreFaked()
+            ? (clone $provider)->useVoiceGateway($this->fakeVoiceGateway())
             : $provider;
     }
 

@@ -7,13 +7,15 @@ use Laravel\Ai\Contracts\Gateway\AudioGateway;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
+use Laravel\Ai\Contracts\Gateway\VoiceGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Contracts\Providers\VoiceProvider;
 use Laravel\Ai\Gateway\Mistral\MistralGateway;
 
-class MistralProvider extends Provider implements AudioProvider, EmbeddingProvider, TextProvider, TranscriptionProvider
+class MistralProvider extends Provider implements AudioProvider, EmbeddingProvider, TextProvider, TranscriptionProvider, VoiceProvider
 {
     use Concerns\GeneratesAudio;
     use Concerns\GeneratesEmbeddings;
@@ -23,6 +25,8 @@ class MistralProvider extends Provider implements AudioProvider, EmbeddingProvid
     use Concerns\HasEmbeddingGateway;
     use Concerns\HasTextGateway;
     use Concerns\HasTranscriptionGateway;
+    use Concerns\HasVoiceGateway;
+    use Concerns\ListsVoices;
     use Concerns\StreamsText;
 
     protected ?MistralGateway $mistralGateway = null;
@@ -70,6 +74,14 @@ class MistralProvider extends Provider implements AudioProvider, EmbeddingProvid
     public function transcriptionGateway(): TranscriptionGateway
     {
         return $this->transcriptionGateway ??= $this->mistralGateway();
+    }
+
+    /**
+     * Get the provider's voice gateway.
+     */
+    public function voiceGateway(): VoiceGateway
+    {
+        return $this->voiceGateway ??= $this->mistralGateway();
     }
 
     /**
