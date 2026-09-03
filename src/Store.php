@@ -31,10 +31,7 @@ class Store
         array $metadata = [],
     ): AddedDocumentResponse {
         if ($file instanceof UploadedFile) {
-            $file = (new LocalDocument(
-                $file->getPathname(),
-                $file->getClientMimeType(),
-            ))->as($file->getClientOriginalName());
+            $file = LocalDocument::fromUploadedFile($file);
         }
 
         $originalFile = $file;

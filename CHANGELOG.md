@@ -1,6 +1,49 @@
 # Release Notes
 
-## [Unreleased](https://github.com/laravel/ai/compare/v0.11.0...0.x)
+## [Unreleased](https://github.com/laravel/ai/compare/v0.11.2...0.x)
+
+## [v0.11.2](https://github.com/laravel/ai/compare/v0.11.1...v0.11.2) - 2026-09-03
+
+### What's Changed
+
+* Copy uploaded files to a managed temp path so their contents survive the request by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/959
+* Preserve tool result failure status across conversations by [@drewmt](https://github.com/drewmt) in https://github.com/laravel/ai/pull/812
+* Fix invalid Mistral cheapest text model default by [@kachelle](https://github.com/kachelle) in https://github.com/laravel/ai/pull/980
+
+### New Contributors
+
+* [@drewmt](https://github.com/drewmt) made their first contribution in https://github.com/laravel/ai/pull/812
+
+**Full Changelog**: https://github.com/laravel/ai/compare/v0.11.1...v0.11.2
+
+## [v0.11.1](https://github.com/laravel/ai/compare/v0.11.0...v0.11.1) - 2026-09-02
+
+### What's Changed
+
+* Align the Vercel UI message stream with the data stream protocol by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/906
+* Allow caching embeddings individually by [@timacdonald](https://github.com/timacdonald) in https://github.com/laravel/ai/pull/905
+* Add v0.11 upgrade guide by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/897
+* Fix Vercel provider tool events and finish reasons by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/921
+* Emit citation events for Gemini grounding results while streaming by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/912
+* Emit citation events for xAI web search results while streaming by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/911
+* Add audio (TTS) support to the Mistral provider by [@SanderMuller](https://github.com/SanderMuller) in https://github.com/laravel/ai/pull/926
+* Fail over on Groq's flex tier capacity exceeded status code by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/925
+* Honor the Strict attribute for structured output on the Groq, Mistral, OpenAI-compatible, and OpenRouter providers by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/923
+* Add explicit prompt cache breakpoints for Anthropic and Bedrock by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/869
+* Exclude cached tokens from the reported prompt token count on the OpenRouter provider by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/924
+* Update default provider models by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/951
+* Store uploaded files from their path instead of base64 encoding them by [@lazerg](https://github.com/lazerg) in https://github.com/laravel/ai/pull/945
+* Fetch and inline remote image, document, and audio attachments for the Gemini provider by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/927
+* Return null for a remote file mime type when the response declares no content type by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/953
+* Send the ElevenLabs transcription language hint as the documented language_code field by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/954
+* Map the Mistral model_length and error finish reasons to Length and Error by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/955
+* Added Bedrock Reranking Gateway by [@F1nnG](https://github.com/F1nnG) in https://github.com/laravel/ai/pull/949
+* Emit citation events for OpenAI web search results while streaming by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/910
+* Document agents and provider tools in tools method docblocks by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/958
+* Support validating tool request arguments by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/968
+* Document attaching MCP servers to agents by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/971
+
+**Full Changelog**: https://github.com/laravel/ai/compare/v0.11.0...v0.11.1
 
 ## [v0.11.0](https://github.com/laravel/ai/compare/v0.10.3...v0.11.0) - 2026-08-19
 

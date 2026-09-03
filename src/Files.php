@@ -33,10 +33,7 @@ class Files
     {
         $file = match (true) {
             is_string($file) => new Base64Document(base64_encode($file), $mimeType),
-            $file instanceof UploadedFile => (new LocalDocument(
-                $file->getPathname(),
-                $file->getClientMimeType(),
-            ))->as($file->getClientOriginalName()),
+            $file instanceof UploadedFile => LocalDocument::fromUploadedFile($file),
             default => $file,
         };
 

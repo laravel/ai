@@ -47,3 +47,23 @@ test('tool result from array hydrates the denied flag from its key', function ()
     expect(ToolResult::fromArray(['id' => 'id', 'name' => 'name', 'arguments' => [], 'result' => 'val'])->denied)->toBeFalse()
         ->and(ToolResult::fromArray(['id' => 'id', 'name' => 'name', 'arguments' => [], 'result' => 'val', 'denied' => true])->denied)->toBeTrue();
 });
+
+test('tool result to array includes the failed key only when failed', function (): void {
+    expect((new ToolResult('id', 'name', [], 'val'))->toArray())->not->toHaveKey('failed')
+        ->and((new ToolResult('id', 'name', [], 'Tool not found', failed: true))->toArray())->toHaveKey('failed', true);
+});
+
+test('tool result from array hydrates the failed flag from its key', function (): void {
+    expect(ToolResult::fromArray(['id' => 'id', 'name' => 'name', 'arguments' => [], 'result' => 'val'])->failed)->toBeFalse()
+        ->and(ToolResult::fromArray(['id' => 'id', 'name' => 'name', 'arguments' => [], 'result' => 'val', 'failed' => true])->failed)->toBeTrue();
+});
+
+test('tool result reports its error only when the call did not succeed', function (): void {
+    expect((new ToolResult('id', 'name', [], 'Berlin'))->successful())->toBeTrue()
+        ->and((new ToolResult('id', 'name', [], 'Berlin'))->error())->toBeNull()
+        ->and((new ToolResult('id', 'name', [], 'Tool not found', failed: true))->successful())->toBeFalse()
+        ->and((new ToolResult('id', 'name', [], 'Tool not found', failed: true))->error())->toBe('Tool not found')
+        ->and((new ToolResult('id', 'name', [], 'Rejected', denied: true))->successful())->toBeFalse()
+        ->and((new ToolResult('id', 'name', [], 'Rejected', denied: true))->error())->toBe('Rejected')
+        ->and((new ToolResult('id', 'name', [], ['code' => 500], failed: true))->error())->toBeNull();
+});

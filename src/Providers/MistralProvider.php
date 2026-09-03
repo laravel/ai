@@ -85,7 +85,7 @@ class MistralProvider extends Provider implements AudioProvider, EmbeddingProvid
      */
     public function cheapestTextModel(): string
     {
-        return $this->config['models']['text']['cheapest'] ?? 'mistral-small-4';
+        return $this->config['models']['text']['cheapest'] ?? 'mistral-small-2603';
     }
 
     /**
