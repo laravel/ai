@@ -313,7 +313,7 @@ class AgentUserInteractionProtocol extends StreamProtocol
                 ['type' => 'REASONING_END', 'messageId' => $event->reasoningId],
             ],
             $event instanceof ToolCall => $this->toolCallParts($event->toolCall),
-            $event instanceof ToolResult => [$this->toolResultPart($event)],
+            $event instanceof ToolResult => $event->preliminary() ? [] : [$this->toolResultPart($event)],
             $event instanceof Error => [[
                 'type' => 'RUN_ERROR',
                 'message' => $event->message,

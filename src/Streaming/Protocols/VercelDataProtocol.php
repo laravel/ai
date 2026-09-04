@@ -244,7 +244,8 @@ class VercelDataProtocol extends StreamProtocol
         return [
             'type' => 'tool-output-available',
             'toolCallId' => $event->toolResult->id,
-            'output' => $event->toolResult->result,
+            'output' => $event->preliminaryOutput ?? $event->toolResult->result,
+            ...($event->preliminary() ? ['preliminary' => true] : []),
         ];
     }
 
