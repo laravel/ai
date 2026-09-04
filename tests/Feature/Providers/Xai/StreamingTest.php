@@ -5,6 +5,7 @@ use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
+use Laravel\Ai\Streaming\Events\ProviderToolEvent;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
@@ -258,3 +259,25 @@ test('streaming finish reason maps correctly', function (string $status, string 
     'unknown status maps to Unknown' => ['mystery_status', 'message', FinishReason::Unknown],
     'completed unknown type maps to Unknown' => ['completed', 'mystery_output', FinishReason::Unknown],
 ]);
+
+test('streaming emits provider tool events for code interpreter code deltas', function (): void {
+    Http::fake([
+        '*' => Http::response(
+            body: $this->ssePayload([
+                ['type' => 'response.created', 'response' => ['id' => 'resp_123', 'model' => 'grok-4-1-fast-reasoning']],
+                ['type' => 'response.code_interpreter_call_code.delta', 'item_id' => 'ci_1', 'output_index' => 0, 'delta' => 'print(1)'],
+                ['type' => 'response.code_interpreter_call_code.done', 'item_id' => 'ci_1', 'output_index' => 0, 'code' => 'print(1)'],
+                ['type' => 'response.output_text.delta', 'delta' => '1'],
+                ['type' => 'response.output_text.done'],
+                ['type' => 'response.completed', 'response' => ['id' => 'resp_123', 'status' => 'completed', 'output' => [['type' => 'message', 'status' => 'completed', 'role' => 'assistant', 'content' => [['type' => 'output_text', 'text' => '1']]]], 'usage' => ['input_tokens' => 10, 'output_tokens' => 5, 'input_tokens_details' => ['cached_tokens' => 0], 'output_tokens_details' => ['reasoning_tokens' => 0]]]],
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $providerEvents = array_values(array_filter($this->collectStreamEvents(), fn ($e): bool => $e instanceof ProviderToolEvent));
+
+    expect(array_map(fn (ProviderToolEvent $e): string => $e->status, $providerEvents))->toBe(['code_delta', 'code_done'])
+        ->and($providerEvents[0])->type->toBe('code_interpreter_call')->itemId->toBe('ci_1');
+});

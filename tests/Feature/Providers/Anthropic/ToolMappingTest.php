@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Providers\Tools\CodeExecution;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
@@ -281,5 +282,19 @@ test('empty schema still includes input schema with type object', function (): v
         }
 
         return false;
+    });
+});
+
+test('code execution tool sends dated type and name', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [new CodeExecution])->prompt('Run some code', provider: 'anthropic');
+
+    Http::assertSent(function ($request): bool {
+        $tool = collect($request->data()['tools'] ?? [])->firstWhere('name', 'code_execution');
+
+        return data_get($tool, 'type') === 'code_execution_20260120';
     });
 });

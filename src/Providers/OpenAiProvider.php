@@ -10,6 +10,7 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
+use Laravel\Ai\Contracts\Providers\SupportsCodeExecution;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
@@ -18,10 +19,11 @@ use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\OpenAi\OpenAiFileGateway;
 use Laravel\Ai\Gateway\OpenAi\OpenAiStoreGateway;
+use Laravel\Ai\Providers\Tools\CodeExecution;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 
-class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvider, FileProvider, ImageProvider, StoreProvider, SupportsFileSearch, SupportsToolSearch, SupportsWebSearch, TextProvider, TranscriptionProvider
+class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvider, FileProvider, ImageProvider, StoreProvider, SupportsCodeExecution, SupportsFileSearch, SupportsToolSearch, SupportsWebSearch, TextProvider, TranscriptionProvider
 {
     use Concerns\GeneratesAudio;
     use Concerns\GeneratesEmbeddings;
@@ -38,6 +40,16 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     use Concerns\ManagesFiles;
     use Concerns\ManagesStores;
     use Concerns\StreamsText;
+
+    /**
+     * Get the code execution tool options for the provider.
+     */
+    public function codeExecutionToolOptions(CodeExecution $codeExecution): array
+    {
+        return $codeExecution->providerOptions(Lab::OpenAI) + [
+            'container' => ['type' => 'auto'],
+        ];
+    }
 
     /**
      * Get the file search tool options for the provider.
