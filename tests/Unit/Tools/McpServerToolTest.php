@@ -119,3 +119,129 @@ test('the mcp request binding is cleared after the call', function (): void {
 
     expect(Container::getInstance()->bound(Laravel\Mcp\Request::class))->toBeFalse();
 });
+
+test('it includes app resource uri when tool returns text and ui resource link', function (): void {
+    $tool = new McpServerTool(new class extends Tool
+    {
+        public function handle(Laravel\Mcp\Request $request): mixed
+        {
+            return Response::make([
+                Response::text('dashboard loaded.'),
+                Response::resourceLink('ui://resources/weather-dashboard-app', 'weather-app'),
+            ]);
+        }
+
+        public function schema(JsonSchema $schema): array
+        {
+            return [];
+        }
+    });
+
+    $result = $tool->handle(new Request);
+
+    expect($result)
+        ->toBeJson()
+        ->json()
+        ->toBe([
+            'text' => 'dashboard loaded.',
+            'appResourceUri' => 'ui://resources/weather-dashboard-app',
+        ]);
+});
+
+test('it resolves app resource uri regardless of content order', function (): void {
+    $tool = new McpServerTool(new class extends Tool
+    {
+        /**
+         * @return array<int, Response>
+         */
+        public function handle(Laravel\Mcp\Request $request): array
+        {
+            return [
+                Response::resourceLink('ui://resources/weather-dashboard-app', 'weather-app'),
+                Response::text('dashboard loaded.'),
+            ];
+        }
+
+        public function schema(JsonSchema $schema): array
+        {
+            return [];
+        }
+    });
+
+    expect($tool->handle(new Request))->json()->toBe([
+        'text' => 'dashboard loaded.',
+        'appResourceUri' => 'ui://resources/weather-dashboard-app',
+    ]);
+});
+
+test('it ignores notifications when resolving app resource uri', function (): void {
+    $tool = new McpServerTool(new class extends Tool
+    {
+        public function handle(Laravel\Mcp\Request $request): Generator
+        {
+            yield Response::notification('processing/progress', ['step' => 1]);
+            yield Response::text('dashboard loaded.');
+            yield Response::resourceLink('ui://resources/weather-dashboard-app', 'weather-app');
+            yield Response::notification('processing/progress', ['step' => 2]);
+        }
+
+        public function schema(JsonSchema $schema): array
+        {
+            return [];
+        }
+    });
+
+    expect($tool->handle(new Request))->json()->toBe([
+        'text' => 'dashboard loaded.',
+        'appResourceUri' => 'ui://resources/weather-dashboard-app',
+    ]);
+});
+
+test('it ignores non-ui resource links for app rendering', function (): void {
+    $tool = new McpServerTool(new class extends Tool
+    {
+        /**
+         * @return array<int, Response>
+         */
+        public function handle(Laravel\Mcp\Request $request): array
+        {
+            return [
+                Response::text('dashboard loaded.'),
+                Response::resourceLink('https://example.com/other', 'other'),
+            ];
+        }
+
+        public function schema(JsonSchema $schema): array
+        {
+            return [];
+        }
+    });
+
+    expect($tool->handle(new Request))->toBe('https://example.com/other');
+});
+
+test('it preserves error prefix when app resource is present', function (): void {
+    $tool = new McpServerTool(new class extends Tool
+    {
+        /**
+         * @return array<int, Response>
+         */
+        public function handle(Laravel\Mcp\Request $request): array
+        {
+            return [
+                Response::error('Something went wrong.'),
+                Response::resourceLink('ui://resources/weather-dashboard-app', 'weather-app'),
+            ];
+        }
+
+        public function schema(JsonSchema $schema): array
+        {
+            return [];
+        }
+    });
+
+    expect($tool->handle(new Request))->json()->toBe([
+        'text' => 'MCP tool error: Something went wrong.',
+        'appResourceUri' => 'ui://resources/weather-dashboard-app',
+    ]);
+});

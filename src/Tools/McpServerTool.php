@@ -10,6 +10,7 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Concerns\NormalizesMcpResult;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
+use Laravel\Mcp\Server\Content\ResourceLink;
 
 class McpServerTool implements Tool
 {
@@ -136,22 +137,60 @@ class McpServerTool implements Tool
     }
 
     /**
-     * Reduce a list of responses to the last non-notification response's text.
+     * Reduce a list of responses to tool output, preserving MCP App resource links.
+     *
+     * When an MCP tool returns a `ResourceLink` with a `ui://` URI alongside
+     * text, the URI is included as `appResourceUri` in a JSON payload so the
+     * host can fetch the HTML via `resources/read` and render it in an iframe.
+     * Without a `ResourceLink`, returns plain text as before.
      *
      * @param  array<int, object>  $responses
      */
     protected function finalResponse(array $responses): string
     {
-        $final = collect($responses)->last(fn (object $response): bool => ! $response->isNotification());
+        $text = '';
+        $appUri = null;
+        $isError = false;
 
-        if ($final === null) {
+        foreach (array_reverse($responses) as $response) {
+            if ($response->isNotification()) {
+                continue;
+            }
+
+            $content = $response->content();
+
+            if ($content instanceof ResourceLink && str_starts_with((string) $content, 'ui://')) {
+                $appUri ??= (string) $content;
+                $isError = $isError || $response->isError();
+
+                continue;
+            }
+
+            if ($text === '') {
+                $text = (string) $content;
+                $isError = $response->isError();
+            }
+
+            if ($text !== '' && $appUri !== null) {
+                break;
+            }
+        }
+
+        if ($text === '' && $appUri === null) {
             return '';
         }
 
-        $text = (string) $final->content();
+        if ($isError) {
+            $text = $this->errorMessage($text);
+        }
 
-        return $final->isError()
-            ? $this->errorMessage($text)
-            : $text;
+        if ($appUri !== null) {
+            return json_encode([
+                'text' => $text,
+                'appResourceUri' => $appUri,
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '';
+        }
+
+        return $text;
     }
 }
