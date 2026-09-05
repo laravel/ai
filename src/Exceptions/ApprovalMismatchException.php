@@ -26,6 +26,7 @@ class ApprovalMismatchException extends AiException
     {
         return response()->json([
             'message' => $this->getMessage(),
+            'code' => 'approval_mismatch',
             'approvals' => $this->pendingApprovals->values()->toArray(),
         ], 409);
     }

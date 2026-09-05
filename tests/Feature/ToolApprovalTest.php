@@ -21,7 +21,7 @@ use Tests\Fixtures\Agents\ConversationalAgent;
 use Tests\Fixtures\Agents\RememberingApprovableAgent;
 use Tests\Fixtures\Tools\ApprovableNumberGenerator;
 
-test('an approval mismatch renders as a 409 carrying the pending approvals', function () {
+test('an approval mismatch renders as a coded 409 carrying the pending approvals', function () {
     $exception = new ApprovalMismatchException('Approval decisions do not match the pending tool calls.', collect([
         new PendingApproval('call-1', 'DeleteFile', ['path' => 'config/app.php'], 'Deletes a tracked project file'),
     ]));
@@ -31,6 +31,7 @@ test('an approval mismatch renders as a 409 carrying the pending approvals', fun
     expect($response->getStatusCode())->toBe(409)
         ->and(json_decode($response->getContent(), true))->toBe([
             'message' => 'Approval decisions do not match the pending tool calls.',
+            'code' => 'approval_mismatch',
             'approvals' => [[
                 'id' => 'call-1',
                 'tool' => 'DeleteFile',
