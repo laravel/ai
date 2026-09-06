@@ -31,6 +31,24 @@ trait RemembersConversations
     }
 
     /**
+     * Create a new conversation for the current participant without prompting.
+     */
+    public function startConversation(string $title = 'New conversation'): static
+    {
+        $participant = $this->conversationUser;
+        $participantType = $participant === null ? null : Conversation::participantType($participant);
+        $participantId = $participant === null ? null : Conversation::participantKey($participant);
+
+        $this->conversationId = resolve(ConversationStore::class)->storeConversation(
+            $participantType,
+            $participantId,
+            $title,
+        );
+
+        return $this;
+    }
+
+    /**
      * Continue an existing conversation, optionally as the given user.
      */
     public function continue(string $conversationId, ?object $as = null): static
