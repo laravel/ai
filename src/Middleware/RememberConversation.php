@@ -47,6 +47,7 @@ class RememberConversation
                     $participantType,
                     $participantId,
                     $this->generateTitle($prompt->prompt),
+                    $agent->conversationAttributes(),
                 );
 
                 $agent->continue($conversationId, $participant);

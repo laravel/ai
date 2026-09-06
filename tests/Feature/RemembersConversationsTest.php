@@ -6,6 +6,7 @@ use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
+use Tests\Fixtures\ConversationStores\InMemoryConversationStore;
 
 test('it threads the participant type into latestConversationId when continuing the last conversation', function () {
     $participant = new class extends Model
@@ -31,7 +32,7 @@ test('it threads the participant type into latestConversationId when continuing 
             return $participantType === 'admin' ? 'conversation-admin' : null;
         }
 
-        public function storeConversation(?string $participantType, string|int|null $participantId, string $title): string
+        public function storeConversation(?string $participantType, string|int|null $participantId, string $title, array $attributes = []): string
         {
             return 'conversation-1';
         }
@@ -79,7 +80,7 @@ test('it continues the last conversation through a store that ignores the partic
             return 'conversation-1';
         }
 
-        public function storeConversation(?string $participantType, string|int|null $participantId, string $title): string
+        public function storeConversation(?string $participantType, string|int|null $participantId, string $title, array $attributes = []): string
         {
             return 'conversation-1';
         }
@@ -137,7 +138,7 @@ test('it resolves the participant id via getKey for models with custom primary k
             return 'conversation-1';
         }
 
-        public function storeConversation(?string $participantType, string|int|null $participantId, string $title): string
+        public function storeConversation(?string $participantType, string|int|null $participantId, string $title, array $attributes = []): string
         {
             return 'conversation-1';
         }
@@ -169,4 +170,37 @@ test('it resolves the participant id via getKey for models with custom primary k
 
     // The participant's real primary key reaches the store, even when it is not named "id"...
     expect($store->receivedId)->toBe('uuid-123');
+});
+
+test('it accumulates conversation attributes to persist on the next conversation', function (): void {
+    $agent = (new RememberingAssistantAgent)->withConversationAttributes(['organization_id' => 1, 'source' => 'web']);
+
+    expect($agent->conversationAttributes())->toBe(['organization_id' => 1, 'source' => 'web']);
+
+    // Later calls merge into the attributes, with the later value winning...
+    $agent->withConversationAttributes(['source' => 'dashboard']);
+
+    expect($agent->conversationAttributes())->toBe(['organization_id' => 1, 'source' => 'dashboard']);
+});
+
+test('conversation attributes reach the store when the first prompt creates the conversation', function (): void {
+    $store = new InMemoryConversationStore;
+
+    app()->instance(ConversationStore::class, $store);
+
+    RememberingAssistantAgent::fake(['Fake response', 'A Nice Title']);
+
+    $user = new class
+    {
+        public int $id = 1;
+    };
+
+    $response = (new RememberingAssistantAgent)
+        ->withConversationAttributes(['organization_id' => 5, 'source' => 'web'])
+        ->forUser($user)
+        ->prompt('Test prompt');
+
+    $conversation = $store->conversations[$response->conversationId];
+
+    expect($conversation['attributes'])->toBe(['organization_id' => 5, 'source' => 'web']);
 });

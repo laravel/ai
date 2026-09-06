@@ -23,11 +23,16 @@ class InMemoryConversationStore implements ConversationStore
             ->last();
     }
 
-    public function storeConversation(?string $participantType, string|int|null $participantId, string $title): string
+    public function storeConversation(?string $participantType, string|int|null $participantId, string $title, array $attributes = []): string
     {
         $id = (string) Str::uuid7();
 
-        $this->conversations[$id] = ['participant_type' => $participantType, 'participant_id' => $participantId, 'title' => $title];
+        $this->conversations[$id] = [
+            'participant_type' => $participantType,
+            'participant_id' => $participantId,
+            'title' => $title,
+            'attributes' => $attributes,
+        ];
 
         return $id;
     }

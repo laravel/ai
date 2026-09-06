@@ -38,4 +38,18 @@ interface RemembersConversations extends Conversational
      * Get the user having the current conversation.
      */
     public function conversationParticipant(): ?object;
+
+    /**
+     * Set the extra columns to persist when a new conversation is created.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    public function withConversationAttributes(array $attributes): static;
+
+    /**
+     * Get the extra columns to persist when a new conversation is created.
+     *
+     * @return array<string, mixed>
+     */
+    public function conversationAttributes(): array;
 }

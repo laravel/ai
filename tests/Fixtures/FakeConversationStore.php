@@ -14,7 +14,7 @@ class FakeConversationStore implements ConversationStore
         return null;
     }
 
-    public function storeConversation(?string $participantType, string|int|null $participantId, string $title): string
+    public function storeConversation(?string $participantType, string|int|null $participantId, string $title, array $attributes = []): string
     {
         return 'conversation-123';
     }

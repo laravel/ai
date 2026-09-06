@@ -12,6 +12,11 @@ trait RemembersConversations
     protected ?object $conversationUser = null;
 
     /**
+     * @var array<string, mixed>
+     */
+    protected array $conversationAttributes = [];
+
+    /**
      * Start a new conversation for the given participant.
      */
     public function forParticipant(object $participant): static
@@ -52,6 +57,28 @@ trait RemembersConversations
             ->latestConversationId(Conversation::participantType($as), Conversation::participantKey($as));
 
         return $this;
+    }
+
+    /**
+     * Set the extra columns to persist when a new conversation is created.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    public function withConversationAttributes(array $attributes): static
+    {
+        $this->conversationAttributes = array_merge($this->conversationAttributes, $attributes);
+
+        return $this;
+    }
+
+    /**
+     * Get the extra columns to persist when a new conversation is created.
+     *
+     * @return array<string, mixed>
+     */
+    public function conversationAttributes(): array
+    {
+        return $this->conversationAttributes;
     }
 
     /**

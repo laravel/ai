@@ -43,19 +43,21 @@ class DatabaseConversationStore implements ConversationStore
 
     /**
      * Store a new conversation and return its ID.
+     *
+     * @param  array<string, mixed>  $attributes  Additional conversation columns to persist.
      */
-    public function storeConversation(?string $participantType, string|int|null $participantId, string $title): string
+    public function storeConversation(?string $participantType, string|int|null $participantId, string $title, array $attributes = []): string
     {
         $conversationId = (string) Str::uuid7();
 
-        $this->table($this->conversationsTable())->insert([
+        $this->table($this->conversationsTable())->insert(array_merge([
             'id' => $conversationId,
             'participant_type' => $participantType,
             'participant_id' => $participantId,
             'title' => $title,
             'created_at' => now(),
             'updated_at' => now(),
-        ]);
+        ], $attributes));
 
         return $conversationId;
     }

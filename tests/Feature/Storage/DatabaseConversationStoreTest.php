@@ -50,6 +50,18 @@ test('it writes to overridden table names from config', function (): void {
         ->and(DB::table('agent_conversations')->where('id', $conversationId)->exists())->toBeFalse();
 });
 
+test('it persists additional conversation attributes on the conversation row', function (): void {
+    Config::set('ai.conversations.tables.conversations', 'custom_conversations');
+    Config::set('ai.conversations.tables.messages', 'custom_conversation_messages');
+
+    createConversationSchema();
+
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Hello', ['custom_attribute' => 'team-42']);
+
+    expect(DB::table('custom_conversations')->where('id', $conversationId)->value('custom_attribute'))->toBe('team-42');
+});
+
 test('it routes queries through the configured connection', function (): void {
     Config::set('database.connections.secondary', [
         'driver' => 'sqlite',
@@ -1168,6 +1180,7 @@ function createConversationSchema(?string $connection = null): void
         $table->string('participant_type');
         $table->string('participant_id');
         $table->string('title');
+        $table->string('custom_attribute')->nullable();
         $table->timestamps();
     });
 

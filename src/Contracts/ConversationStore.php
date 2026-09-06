@@ -18,8 +18,10 @@ interface ConversationStore
 
     /**
      * Store a new conversation and return its ID.
+     *
+     * @param  array<string, mixed>  $attributes  Additional conversation columns to persist.
      */
-    public function storeConversation(?string $participantType, string|int|null $participantId, string $title): string;
+    public function storeConversation(?string $participantType, string|int|null $participantId, string $title, array $attributes = []): string;
 
     /**
      * Store a new user message for the given conversation and return its ID.
