@@ -4,6 +4,9 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Streaming\Events\Error;
+use Laravel\Ai\Streaming\Events\ReasoningDelta;
+use Laravel\Ai\Streaming\Events\ReasoningEnd;
+use Laravel\Ai\Streaming\Events\ReasoningStart;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
@@ -44,6 +47,38 @@ test('streaming emits text events', function (): void {
         ->and($events[3])->toBeInstanceOf(TextDelta::class)->delta->toBe(' world')
         ->and($events[4])->toBeInstanceOf(TextEnd::class)
         ->and($events[count($events) - 1])->toBeInstanceOf(StreamEnd::class);
+});
+
+test('streaming handles reasoning text events', function (): void {
+    Http::fake([
+        'my-resource.cognitiveservices.azure.com/*' => Http::response(
+            body: $this->ssePayload([
+                $this->responseCreated(),
+                ['type' => 'response.reasoning_text.delta', 'delta' => 'Let me think...', 'item_id' => 'rs_1'],
+                [
+                    'type' => 'response.output_item.done',
+                    'item' => ['type' => 'reasoning', 'id' => 'rs_1', 'summary' => []],
+                ],
+                $this->outputTextDelta('Answer'),
+                $this->outputTextDone('Answer'),
+                $this->responseCompleted(10, 15),
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents();
+
+    $types = array_map(fn ($event) => $event::class, $events);
+
+    expect($types)->toContain(ReasoningStart::class)
+        ->toContain(ReasoningDelta::class)
+        ->toContain(ReasoningEnd::class);
+
+    $reasoningDelta = collect($events)->first(fn ($event): bool => $event instanceof ReasoningDelta);
+
+    expect($reasoningDelta->delta)->toBe('Let me think...');
 });
 
 test('streaming handles tool calls', function (): void {
