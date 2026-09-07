@@ -98,6 +98,10 @@ class Vercel
     {
         $parts = [];
 
+        if ($message instanceof ConversationMessage && filled($reasoning = $message->meta['reasoning'] ?? null)) {
+            $parts[] = ['type' => 'reasoning', 'text' => $reasoning];
+        }
+
         if (filled($message->content)) {
             $parts[] = ['type' => 'text', 'text' => $message->content];
         }
