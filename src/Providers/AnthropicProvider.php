@@ -4,22 +4,32 @@ namespace Laravel\Ai\Providers;
 
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Providers\FileProvider;
+use Laravel\Ai\Contracts\Providers\SupportsCodeExecution;
 use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Anthropic\AnthropicFileGateway;
+use Laravel\Ai\Providers\Tools\CodeExecution;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 
-class AnthropicProvider extends Provider implements FileProvider, SupportsToolSearch, SupportsWebFetch, SupportsWebSearch, TextProvider
+class AnthropicProvider extends Provider implements FileProvider, SupportsCodeExecution, SupportsToolSearch, SupportsWebFetch, SupportsWebSearch, TextProvider
 {
     use Concerns\GeneratesText;
     use Concerns\HasFileGateway;
     use Concerns\HasTextGateway;
     use Concerns\ManagesFiles;
     use Concerns\StreamsText;
+
+    /**
+     * Get the code execution tool options for the provider.
+     */
+    public function codeExecutionToolOptions(CodeExecution $codeExecution): array
+    {
+        return $codeExecution->providerOptions(Lab::Anthropic);
+    }
 
     /**
      * Get the web fetch tool options for the provider.

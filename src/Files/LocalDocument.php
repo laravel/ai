@@ -4,6 +4,7 @@ namespace Laravel\Ai\Files;
 
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Filesystem\Filesystem;
+use Illuminate\Http\UploadedFile;
 use InvalidArgumentException;
 use JsonSerializable;
 use Laravel\Ai\Contracts\Files\StorableFile;
@@ -14,13 +15,25 @@ class LocalDocument extends Document implements Arrayable, JsonSerializable, Sto
 {
     use CanBeUploadedToProvider;
 
-    public function __construct(public string $path, ?string $mimeType = null)
+    public function __construct(public string $path, ?string $mimeType = null, protected ?UploadedFile $upload = null)
     {
         if (blank($path)) {
             throw new InvalidArgumentException('Document file path cannot be empty.');
         }
 
         $this->mime = $mimeType;
+    }
+
+    /**
+     * Create a document from an uploaded file, holding the upload so its temporary file is not discarded.
+     */
+    public static function fromUploadedFile(UploadedFile $file): self
+    {
+        return (new self(
+            $file->getPathname(),
+            $file->getClientMimeType(),
+            $file,
+        ))->as($file->getClientOriginalName());
     }
 
     /**
@@ -81,5 +94,27 @@ class LocalDocument extends Document implements Arrayable, JsonSerializable, Sto
     public function __toString(): string
     {
         return $this->content();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function __serialize(): array
+    {
+        $data = get_object_vars($this);
+
+        unset($data['upload']);
+
+        return $data;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    public function __unserialize(array $data): void
+    {
+        foreach ($data as $key => $value) {
+            $this->{$key} = $value;
+        }
     }
 }

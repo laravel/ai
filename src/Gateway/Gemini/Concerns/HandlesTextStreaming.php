@@ -10,6 +10,7 @@ use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
+use Laravel\Ai\Streaming\Events\ProviderToolEvent;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
 use Laravel\Ai\Streaming\Events\ReasoningStart;
@@ -151,6 +152,20 @@ trait HandlesTextStreaming
                     $modelParts[] = $part;
 
                     continue;
+                }
+
+                if (isset($part['executableCode']) || isset($part['codeExecutionResult'])) {
+                    $modelParts[] = $part;
+
+                    yield (new ProviderToolEvent(
+                        $this->generateEventId(),
+                        '',
+                        'code_execution',
+                        $part,
+                        isset($part['executableCode']) ? 'completed' : 'result_received',
+                        time(),
+                        provider: $provider->name(),
+                    ))->withInvocationId($invocationId);
                 }
             }
 

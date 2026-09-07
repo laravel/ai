@@ -96,3 +96,10 @@ dataset('tool-replay-providers', [
     // Non-reasoning model (backward compatibility)
     'openai-gpt-4-1' => ['openai', 'OPENAI_API_KEY', 'gpt-4.1', false],
 ]);
+
+dataset('code-execution-providers', [
+    'anthropic' => ['anthropic', 'ANTHROPIC_API_KEY', 'claude-haiku-4-5-20251001'],
+    'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4'],
+    'gemini' => ['gemini', 'GEMINI_API_KEY', 'gemini-3.1-flash-lite'],
+    'xai' => ['xai', 'XAI_API_KEY', 'grok-4.6'],
+]);

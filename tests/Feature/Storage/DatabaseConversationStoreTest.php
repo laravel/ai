@@ -184,6 +184,71 @@ test('it scopes the latest conversation lookup to conversations the agent has pa
     expect($store->latestConversationId('user', 1, ToolUsingAgent::class))->toBe($second);
 });
 
+test('it round trips tool result failure status through storage', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        'Where is Berlin?',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $response = new AgentResponse('invocation-id', '', new Usage, new Meta);
+    $response->toolCalls = collect([new ToolCall('call-1', 'query-resources', [])]);
+    $response->toolResults = collect([
+        new ToolResult('call-1', 'query-resources', [], 'Tool not found', failed: true),
+    ]);
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $result = $store->getLatestConversationMessages($conversationId, 10)
+        ->first(fn (Message $message): bool => $message instanceof ToolResultMessage)
+        ?->toolResults
+        ->first();
+
+    expect($result)->not->toBeNull()
+        ->and($result->successful())->toBeFalse()
+        ->and($result->error())->toBe('Tool not found');
+});
+
+test('it treats tool results stored before the failed flag as successful', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'participant_type' => 'user',
+        'participant_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => '',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call-1', 'name' => 'query-resources', 'arguments' => []],
+        ]),
+        'tool_results' => json_encode([
+            ['id' => 'call-1', 'name' => 'query-resources', 'arguments' => [], 'result' => 'Berlin', 'result_id' => null],
+        ]),
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $result = $store->getLatestConversationMessages($conversationId, 10)
+        ->first(fn (Message $message): bool => $message instanceof ToolResultMessage)
+        ?->toolResults
+        ->first();
+
+    expect($result)->not->toBeNull()
+        ->and($result->successful())->toBeTrue()
+        ->and($result->error())->toBeNull();
+});
+
 test('a bare rejection resume does not persist a blank assistant row', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Approval conversation');

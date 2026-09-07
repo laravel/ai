@@ -5,6 +5,7 @@ use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
+use Laravel\Ai\Streaming\Events\ProviderToolEvent;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
 use Laravel\Ai\Streaming\Events\ReasoningStart;
@@ -291,4 +292,30 @@ test('streaming captures cache write tokens from response completed', function (
         ->and($streamEnd->usage->cacheReadInputTokens)->toBe(0)
         ->and($streamEnd->usage->promptTokens)->toBe(3)
         ->and($streamEnd->usage->completionTokens)->toBe(120);
+});
+
+test('streaming emits provider tool events for code interpreter code deltas', function (): void {
+    Http::fake([
+        'api.openai.com/*' => Http::response(
+            body: $this->ssePayload([
+                $this->responseCreated(),
+                ['type' => 'response.code_interpreter_call.in_progress', 'item_id' => 'ci_1', 'output_index' => 0],
+                ['type' => 'response.code_interpreter_call_code.delta', 'item_id' => 'ci_1', 'output_index' => 0, 'delta' => 'print(1)'],
+                ['type' => 'response.code_interpreter_call_code.done', 'item_id' => 'ci_1', 'output_index' => 0, 'code' => 'print(1)'],
+                ['type' => 'response.code_interpreter_call.completed', 'item_id' => 'ci_1', 'output_index' => 0],
+                $this->outputTextDelta('1'),
+                $this->outputTextDone('1'),
+                $this->responseCompleted(10, 5),
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $providerEvents = array_values(array_filter($this->collectStreamEvents(), fn ($e): bool => $e instanceof ProviderToolEvent));
+
+    expect(array_map(fn (ProviderToolEvent $e): string => $e->status, $providerEvents))
+        ->toBe(['in_progress', 'code_delta', 'code_done', 'completed'])
+        ->and($providerEvents[1])->type->toBe('code_interpreter_call')->itemId->toBe('ci_1')
+        ->and($providerEvents[1]->data['delta'])->toBe('print(1)');
 });

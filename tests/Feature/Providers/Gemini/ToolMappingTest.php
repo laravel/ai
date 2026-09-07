@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Providers\Tools\CodeExecution;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Tests\Fixtures\Agents\NamedToolAgent;
@@ -220,4 +221,14 @@ test('tools are wrapped in function declarations', function (): void {
             && isset($decl['description'])
             && is_string($decl['description']);
     });
+});
+
+test('code execution tool sends code_execution definition', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [new CodeExecution])->prompt('Run some code', provider: 'gemini');
+
+    Http::assertSent(fn ($request): bool => str_contains($request->body(), '"code_execution":{}'));
 });

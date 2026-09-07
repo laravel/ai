@@ -13,6 +13,7 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
+use Laravel\Ai\Contracts\Providers\SupportsCodeExecution;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -20,10 +21,11 @@ use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\AzureOpenAi\AzureOpenAiFileGateway;
 use Laravel\Ai\Gateway\AzureOpenAi\AzureOpenAiGateway;
 use Laravel\Ai\Gateway\AzureOpenAi\AzureOpenAiStoreGateway;
+use Laravel\Ai\Providers\Tools\CodeExecution;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 
-class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FileProvider, ImageProvider, StoreProvider, SupportsFileSearch, SupportsWebSearch, TextProvider
+class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FileProvider, ImageProvider, StoreProvider, SupportsCodeExecution, SupportsFileSearch, SupportsWebSearch, TextProvider
 {
     use Concerns\GeneratesEmbeddings;
     use Concerns\GeneratesImages;
@@ -165,6 +167,16 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FilePro
         return array_filter([
             'vector_store_ids' => $search->ids(),
         ]);
+    }
+
+    /**
+     * Get the code execution tool options for the provider.
+     */
+    public function codeExecutionToolOptions(CodeExecution $codeExecution): array
+    {
+        return $codeExecution->providerOptions(Lab::Azure) + [
+            'container' => ['type' => 'auto'],
+        ];
     }
 
     /**
