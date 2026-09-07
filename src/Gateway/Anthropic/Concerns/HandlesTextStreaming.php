@@ -55,7 +55,7 @@ trait HandlesTextStreaming
         $usage = null;
         $stopReason = '';
 
-        $emitTextStart = function () use (&$textStartEmitted, &$messageId, $invocationId): ?\Laravel\Ai\Streaming\Events\StreamEvent {
+        $emitTextStart = function () use (&$textStartEmitted, &$messageId, $invocationId): ?StreamEvent {
             if ($textStartEmitted) {
                 return null;
             }
@@ -69,7 +69,7 @@ trait HandlesTextStreaming
             ))->withInvocationId($invocationId);
         };
 
-        $emitReasoningStart = function () use (&$reasoningStartEmitted, &$reasoningId, $invocationId): ?\Laravel\Ai\Streaming\Events\StreamEvent {
+        $emitReasoningStart = function () use (&$reasoningStartEmitted, &$reasoningId, $invocationId): ?StreamEvent {
             if ($reasoningStartEmitted) {
                 return null;
             }
