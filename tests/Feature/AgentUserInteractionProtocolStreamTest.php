@@ -1,6 +1,9 @@
 <?php
 
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Exceptions;
+use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
@@ -426,60 +429,41 @@ test('a paused run reports its interrupt outcome even when the stream later thro
     Exceptions::assertReported(RuntimeException::class);
 });
 
-test('a rejected resume names itself so the client can hydrate the thread again', function () {
+test('a resume the store cannot match ends the real stream with the mismatch code', function () {
+    Config::set('ai.conversations.generate_title', false);
+
     Exceptions::fake();
 
-    $events = agUiProtocolEvents(function () {
-        yield new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time());
-
-        throw new ApprovalMismatchException('Approval decisions do not match the pending tool calls.', collect([
-            new PendingApproval('call-1', 'DeleteFile', ['path' => 'a.txt'], 'Destructive operation.'),
-        ]));
-    });
-
-    expect(collect($events)->pluck('type')->all())->toBe([
-        'RUN_STARTED', 'STEP_STARTED', 'RUN_ERROR',
-    ])->and($events[2])->toBe([
-        'type' => 'RUN_ERROR',
-        'message' => 'Approval decisions do not match the pending tool calls.',
-        'code' => 'approval_mismatch',
+    Http::fake(['api.anthropic.com/*' => Http::sequence()
+        ->push([
+            'id' => 'msg_tool_1', 'type' => 'message', 'role' => 'assistant', 'model' => 'claude-sonnet-4-6',
+            'content' => [['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'ApprovableNumberGenerator', 'input' => (object) []]],
+            'stop_reason' => 'tool_use', 'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+        ])
+        ->push([
+            'id' => 'msg_2', 'type' => 'message', 'role' => 'assistant', 'model' => 'claude-sonnet-4-6',
+            'content' => [['type' => 'text', 'text' => 'The number is 72019.']],
+            'stop_reason' => 'end_turn', 'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+        ]),
     ]);
 
-    Exceptions::assertNotReported(ApprovalMismatchException::class);
-});
+    $paused = (new RememberingApprovableAgent)->forUser((object) ['id' => 1])->prompt('Generate a number', provider: 'anthropic');
 
-test('a mismatch with nothing left to approve is still reported', function () {
-    Exceptions::fake();
+    // The paused row belongs to user 1, but history loads by conversation alone, so the resume validates and then finds no row to write to...
+    $events = agUiEvents((new RememberingApprovableAgent)
+        ->continue($paused->conversationId, (object) ['id' => 2])
+        ->stream(Decisions::from(['toolu_1' => true]), provider: 'anthropic')
+        ->usingAgentUserInteractionProtocol('thread-1', 'run-1')
+        ->toResponse(request()));
 
-    $events = agUiProtocolEvents(function () {
-        yield new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time());
-
-        throw new ApprovalMismatchException('There are no tool calls pending approval.', collect());
-    });
-
-    expect($events[2])->toBe([
-        'type' => 'RUN_ERROR',
-        'message' => 'There are no tool calls pending approval.',
-        'code' => 'approval_mismatch',
-    ]);
+    expect(collect($events)->pluck('type')->all())->toBe(['RUN_STARTED', 'STEP_STARTED', 'RUN_ERROR'])
+        ->and($events[2])->toBe([
+            'type' => 'RUN_ERROR',
+            'message' => 'The approval results do not match a paused conversation turn.',
+            'code' => 'approval_mismatch',
+        ]);
 
     Exceptions::assertReported(ApprovalMismatchException::class);
-});
-
-test('any other failure still ends the run with an error', function () {
-    Exceptions::fake();
-
-    $events = agUiProtocolEvents(function () {
-        yield new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time());
-
-        throw new RuntimeException('The provider fell over.');
-    });
-
-    expect(collect($events)->pluck('type')->all())->toBe([
-        'RUN_STARTED', 'STEP_STARTED', 'RUN_ERROR',
-    ]);
-
-    Exceptions::assertReported(RuntimeException::class);
 });
 
 test('a pending approval without a reason omits the interrupt message', function () {

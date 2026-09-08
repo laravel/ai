@@ -25,7 +25,6 @@ use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Laravel\Ai\Streaming\Events\ToolCall;
 use Laravel\Ai\Streaming\Events\ToolResult;
-use Throwable;
 
 use function Laravel\Ai\ulid;
 
@@ -131,18 +130,18 @@ class AgentUserInteractionProtocol extends StreamProtocol
     /**
      * {@inheritdoc}
      */
-    protected function maskedErrorParts(Throwable $exception): Generator
+    protected function maskedErrorParts(): Generator
     {
         // The interrupt outcome already ended the run, so a trailing error would follow a terminal event...
         if ($this->finished) {
             return;
         }
 
-        // The mismatch message is the one the 409 already returns, so it names itself rather than being masked...
-        if ($exception instanceof ApprovalMismatchException) {
+        // The mismatch message is the one the 409 already returns, so it is safe to surface unmasked...
+        if ($this->exception instanceof ApprovalMismatchException) {
             yield from $this->yieldPart([
                 'type' => 'RUN_ERROR',
-                'message' => $exception->getMessage(),
+                'message' => $this->exception->getMessage(),
                 'code' => 'approval_mismatch',
             ]);
 

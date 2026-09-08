@@ -534,6 +534,44 @@ test('storing approval results for a conversation with no paused row throws', fu
     ]);
 })->throws(ApprovalMismatchException::class, 'The approval results do not match a paused conversation turn.');
 
+test('a mismatch against a paused row carries the approvals that are actually pending', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'participant_type' => 'user',
+        'participant_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => '',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'x']],
+            ['id' => 'call-2', 'name' => 'read_file', 'arguments' => ['path' => 'y']],
+        ]),
+        'tool_results' => '[]',
+        'approval_state' => json_encode(['pending' => ['call-1' => 'Destructive operation.']]),
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    try {
+        $store->storeApprovalResults($conversationId, 'user', 1, [
+            new ToolResult('call-9', 'delete_file', ['path' => 'x'], 'Deleted x'),
+        ]);
+
+        $this->fail('Expected an approval mismatch.');
+    } catch (ApprovalMismatchException $e) {
+        expect($e->pendingApprovals->map->toArray()->all())->toBe([
+            ['id' => 'call-1', 'tool' => 'delete_file', 'arguments' => ['path' => 'x'], 'reason' => 'Destructive operation.'],
+        ]);
+    }
+});
+
 test('resolving approval results progressively empties the pause marker while outcomes land on the tool results', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');

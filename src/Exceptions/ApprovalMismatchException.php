@@ -20,14 +20,6 @@ class ApprovalMismatchException extends AiException
     }
 
     /**
-     * Determine if the run is still paused on approvals that may be decided again.
-     */
-    public function isRecoverable(): bool
-    {
-        return $this->pendingApprovals->isNotEmpty();
-    }
-
-    /**
      * Render the exception as an HTTP response.
      */
     public function render(Request $request): Response
