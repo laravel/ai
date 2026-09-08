@@ -49,6 +49,7 @@ class VercelDataProtocol extends StreamProtocol
         $toolCalls = [];
         $reason = null;
         $usage = new Usage;
+        $sessionId = null;
 
         foreach ($response as $event) {
             // Send one stream start event, wrapping each subsequent provider step in step parts...
@@ -78,7 +79,7 @@ class VercelDataProtocol extends StreamProtocol
                 foreach ($event->pendingApprovals as $pendingApproval) {
                     yield from $this->yieldPart([
                         'type' => 'tool-approval-request',
-                        'toolCallId' => $pendingApproval->id,
+                        'toolCallId' => $pendingApproval->toolCallId ?? $pendingApproval->id,
                         'approvalId' => $pendingApproval->id,
                         'reason' => $pendingApproval->reason,
                     ]);
@@ -89,6 +90,7 @@ class VercelDataProtocol extends StreamProtocol
 
             // Hold the finish reason and combined usage of every step for the terminal finish part...
             if ($event instanceof StreamEnd) {
+                $sessionId = $event->meta?->sessionId ?? $sessionId;
                 $reason = $event->reason;
                 $usage = $usage->add($event->usage);
 
@@ -106,7 +108,7 @@ class VercelDataProtocol extends StreamProtocol
             yield ['type' => 'finish-step'];
 
             if ($reason !== null) {
-                yield $this->finishPart($reason, $usage);
+                yield $this->finishPart($reason, $usage, $sessionId);
             }
         }
     }
@@ -291,7 +293,7 @@ class VercelDataProtocol extends StreamProtocol
      *
      * @return array<string, mixed>
      */
-    protected function finishPart(string $reason, Usage $usage): array
+    protected function finishPart(string $reason, Usage $usage, ?string $sessionId = null): array
     {
         return [
             'type' => 'finish',
@@ -304,6 +306,7 @@ class VercelDataProtocol extends StreamProtocol
                 default => 'other',
             },
             'messageMetadata' => [
+                ...($sessionId !== null ? ['sessionId' => $sessionId] : []),
                 'usage' => [
                     'inputTokens' => $usage->promptTokens,
                     'outputTokens' => $usage->completionTokens,

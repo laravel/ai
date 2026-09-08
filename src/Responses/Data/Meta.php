@@ -18,6 +18,7 @@ class Meta implements Arrayable, JsonSerializable
         public ?string $provider = null,
         public ?string $model = null,
         ?Collection $citations = null,
+        public ?string $sessionId = null,
     ) {
         $this->citations = $citations ?? new Collection;
     }
@@ -29,6 +30,7 @@ class Meta implements Arrayable, JsonSerializable
     {
         return [
             'provider' => $this->provider,
+            ...($this->sessionId !== null ? ['session_id' => $this->sessionId] : []),
             'model' => $this->model,
             'citations' => $this->citations
                 ? $this->citations->all()

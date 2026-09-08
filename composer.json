@@ -20,6 +20,7 @@
         "illuminate/database": "^12.0|^13.0",
         "illuminate/filesystem": "^12.0|^13.0",
         "illuminate/json-schema": "^12.62|^13.15",
+        "illuminate/process": "^12.0|^13.0",
         "illuminate/support": "^12.0|^13.0",
         "laravel/prompts": "^0.3.6",
         "laravel/serializable-closure": "^2.0"
@@ -36,7 +37,7 @@
         "rector/rector": "^2.5"
     },
     "suggest": {
-        "laravel/mcp": "Required to use MCP client tools or MCP server tools with Laravel AI agents."
+        "laravel/mcp": "Required to use MCP client tools or MCP server tools with Laravel AI agents, or harness host tools and approvals."
     },
     "minimum-stability": "dev",
     "prefer-stable": true,

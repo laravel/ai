@@ -43,6 +43,7 @@ class AiManager extends MultipleInstanceManager
     use Concerns\InteractsWithFakeAudio;
     use Concerns\InteractsWithFakeEmbeddings;
     use Concerns\InteractsWithFakeFiles;
+    use Concerns\InteractsWithFakeHarnesses;
     use Concerns\InteractsWithFakeImages;
     use Concerns\InteractsWithFakeReranking;
     use Concerns\InteractsWithFakeStores;

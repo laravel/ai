@@ -1,0 +1,70 @@
+#!/usr/bin/env php
+<?php
+
+$mode = getenv('HARNESS_TEST_MODE') ?: 'success';
+$prompt = stream_get_contents(STDIN);
+$session = $argv[array_search(in_array('--resume', $argv) ? '--resume' : '--session-id', $argv) + 1];
+
+if ($mode === 'timeout') {
+    file_put_contents(getenv('HARNESS_TEST_PID'), getmypid());
+    sleep(30);
+    exit;
+}
+
+if ($mode === 'exit') {
+    fwrite(STDERR, 'fixture failure');
+    exit(7);
+}
+
+if ($mode === 'missing') {
+    exit;
+}
+
+$emit = function (array $data) {
+    echo json_encode($data)."\n";
+    flush();
+};
+
+$emit(['type' => 'system', 'subtype' => 'init', 'session_id' => $session, 'model' => 'sonnet']);
+
+if ($mode === 'error') {
+    $emit(['type' => 'result', 'is_error' => true, 'errors' => ['fixture API failure']]);
+    exit;
+}
+
+if ($mode === 'mcp') {
+    $config = json_decode($argv[array_search('--mcp-config', $argv) + 1], true)['mcpServers']['laravel'];
+    $process = proc_open([$config['command'], ...$config['args']], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+    $call = function ($id, $name, $arguments) use ($pipes) {
+        fwrite($pipes[0], json_encode(['jsonrpc' => '2.0', 'id' => $id, 'method' => 'tools/call', 'params' => ['name' => $name, 'arguments' => $arguments]])."\n");
+        fflush($pipes[0]);
+        return json_decode(fgets($pipes[1]), true);
+    };
+    $permission = $call(1, 'approve', ['tool_name' => 'mcp__laravel__WriteNote', 'input' => ['text' => 'original']]);
+    $decision = json_decode($permission['result']['content'][0]['text'] ?? '{}', true);
+    $arguments = $decision['updatedInput'] ?? ['text' => 'original'];
+    $emit(['type' => 'assistant', 'message' => ['id' => 'tool-message', 'content' => [['type' => 'tool_use', 'id' => 'call-1', 'name' => 'mcp__laravel__WriteNote', 'input' => $arguments]]]]);
+    if (($decision['behavior'] ?? '') === 'allow') {
+        $response = $call(2, 'WriteNote', $arguments);
+        $prompt = $response['result']['content'][0]['text'] ?? json_encode($response);
+    } else {
+        $prompt = $decision['message'] ?? json_encode($permission);
+    }
+    fclose($pipes[0]);
+    $errors = stream_get_contents($pipes[2]);
+    fclose($pipes[1]);
+    fclose($pipes[2]);
+    $exit = proc_close($process);
+    if ($exit !== 0) {
+        fwrite(STDERR, $errors);
+        exit($exit);
+    }
+    $emit(['type' => 'user', 'message' => ['content' => [['type' => 'tool_result', 'tool_use_id' => 'call-1', 'content' => $prompt, 'is_error' => ($decision['behavior'] ?? '') !== 'allow']]]]);
+}
+
+$emit(['type' => 'assistant', 'message' => ['id' => 'message', 'content' => [['type' => 'text', 'text' => $prompt]]]]);
+$result = json_encode(['type' => 'result', 'subtype' => 'success', 'session_id' => $session, 'result' => $prompt, 'usage' => ['input_tokens' => 7, 'output_tokens' => 3]]);
+echo substr($result, 0, 15);
+flush();
+usleep(20000);
+echo substr($result, 15);

@@ -155,4 +155,19 @@ return [
         ],
     ],
 
+    'harnesses' => [
+        'claude-code' => [
+            'driver' => 'claude-code',
+            'binary' => env('CLAUDE_CODE_BINARY', 'claude'),
+            'key' => env('ANTHROPIC_API_KEY'),
+            'cwd' => env('CLAUDE_CODE_CWD', base_path()),
+            'model' => 'sonnet',
+            'permission_mode' => 'bypassPermissions',
+            'max_turns' => 50,
+            'env' => [],
+            'approval_ttl' => 3600,
+            'cache_store' => env('AI_HARNESS_CACHE_STORE'),
+        ],
+    ],
+
 ];

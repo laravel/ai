@@ -14,6 +14,8 @@ The Laravel AI SDK provides a unified, expressive API for interacting with AI pr
 
 Documentation for the Laravel AI SDK can be found on the [Laravel website](https://laravel.com/docs/ai-sdk).
 
+See [Harness agents](docs/harness-agents.md) for running Claude Code with application tools and resumable sessions.
+
 ## Contributing
 
 Thank you for considering contributing to Laravel! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).

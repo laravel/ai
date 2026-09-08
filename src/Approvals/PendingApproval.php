@@ -14,6 +14,7 @@ class PendingApproval implements Arrayable
         public readonly string $tool,
         public readonly array $arguments,
         public readonly ?string $reason = null,
+        public readonly ?string $toolCallId = null,
     ) {}
 
     /**
@@ -26,6 +27,7 @@ class PendingApproval implements Arrayable
             'tool' => $this->tool,
             'arguments' => $this->arguments,
             'reason' => $this->reason,
+            ...($this->toolCallId !== null ? ['tool_call_id' => $this->toolCallId] : []),
         ];
     }
 }

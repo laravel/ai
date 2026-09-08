@@ -4,6 +4,7 @@ namespace Laravel\Ai\Events;
 
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Harness\HarnessAgent;
 
 class ToolInvoked
 {
@@ -14,7 +15,7 @@ class ToolInvoked
     public function __construct(
         public string $invocationId,
         public string $toolInvocationId,
-        public Agent $agent,
+        public Agent|HarnessAgent $agent,
         public Tool $tool,
         public array $arguments,
         public mixed $result,

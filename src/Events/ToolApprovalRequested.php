@@ -5,6 +5,7 @@ namespace Laravel\Ai\Events;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Harness\HarnessAgent;
 
 class ToolApprovalRequested
 {
@@ -13,7 +14,7 @@ class ToolApprovalRequested
      */
     public function __construct(
         public string $invocationId,
-        public Agent $agent,
+        public Agent|HarnessAgent $agent,
         public Collection $pendingApprovals,
         public ?string $conversationId = null,
         public ?object $conversationUser = null,

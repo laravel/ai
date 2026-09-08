@@ -2,6 +2,8 @@
 
 ## [Unreleased](https://github.com/laravel/ai/compare/v0.11.2...0.x)
 
+* Add harness agents with Claude Code streaming, session resumption, MCP host tools, approvals, and a fake runtime.
+
 ## [v0.11.2](https://github.com/laravel/ai/compare/v0.11.1...v0.11.2) - 2026-09-03
 
 ### What's Changed

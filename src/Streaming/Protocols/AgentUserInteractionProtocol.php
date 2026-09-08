@@ -36,6 +36,8 @@ class AgentUserInteractionProtocol extends StreamProtocol
 {
     protected int $step = 0;
 
+    protected ?string $sessionId = null;
+
     protected bool $finished = false;
 
     protected ?StreamableAgentResponse $response = null;
@@ -56,6 +58,7 @@ class AgentUserInteractionProtocol extends StreamProtocol
         $this->errored = false;
         $this->finished = false;
         $this->step = 0;
+        $this->sessionId = null;
         $this->response = $response;
 
         $this->runId ??= $response->invocationId;
@@ -71,6 +74,7 @@ class AgentUserInteractionProtocol extends StreamProtocol
             }
 
             if ($event instanceof StreamStart) {
+                $this->sessionId = $event->metadata['session_id'] ?? $this->sessionId;
                 $provider = $event->provider;
                 $model = $event->model;
 
@@ -110,6 +114,7 @@ class AgentUserInteractionProtocol extends StreamProtocol
             // Hold each step's usage and reason for the terminal run finished event...
             if ($event instanceof StreamEnd) {
                 $usage = ($usage ?? new Usage)->add($event->usage);
+                $this->sessionId = $event->meta?->sessionId ?? $this->sessionId;
                 $reason = $event->reason;
 
                 continue;
@@ -219,6 +224,7 @@ class AgentUserInteractionProtocol extends StreamProtocol
             'runId' => $this->runId,
             ...($assistantMessageId ? ['messageId' => $assistantMessageId] : []),
             ...$attributes,
+            ...($this->sessionId !== null ? ['metadata' => [...($attributes['metadata'] ?? []), 'sessionId' => $this->sessionId]] : []),
         ];
     }
 

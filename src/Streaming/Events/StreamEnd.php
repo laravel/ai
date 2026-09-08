@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Streaming\Events;
 
 use Illuminate\Support\Collection;
+use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
 
 class StreamEnd extends StreamEvent
@@ -12,6 +13,7 @@ class StreamEnd extends StreamEvent
         public string $reason,
         public Usage $usage,
         public int $timestamp,
+        public ?Meta $meta = null,
     ) {
         //
     }
@@ -43,6 +45,7 @@ class StreamEnd extends StreamEvent
                 ? $this->usage->toArray()
                 : null,
             'timestamp' => $this->timestamp,
+            ...($this->meta !== null ? ['meta' => $this->meta->toArray()] : []),
         ];
     }
 }

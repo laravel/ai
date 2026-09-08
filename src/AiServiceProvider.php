@@ -9,8 +9,10 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Stringable;
 use Laravel\Ai\Agents\SummarizeAgent;
 use Laravel\Ai\Console\Commands\ChatCommand;
+use Laravel\Ai\Console\Commands\HarnessMcpCommand;
 use Laravel\Ai\Console\Commands\MakeAgentCommand;
 use Laravel\Ai\Console\Commands\MakeAgentMiddlewareCommand;
+use Laravel\Ai\Console\Commands\MakeHarnessAgentCommand;
 use Laravel\Ai\Console\Commands\MakeToolCommand;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Enums\Lab;
@@ -155,6 +157,8 @@ class AiServiceProvider extends ServiceProvider
             MakeAgentCommand::class,
             MakeAgentMiddlewareCommand::class,
             MakeToolCommand::class,
+            HarnessMcpCommand::class,
+            MakeHarnessAgentCommand::class,
         ]);
     }
 
@@ -170,6 +174,7 @@ class AiServiceProvider extends ServiceProvider
         $this->publishes([
             __DIR__.'/../stubs/agent.stub' => base_path('stubs/agent.stub'),
             __DIR__.'/../stubs/structured-agent.stub' => base_path('stubs/structured-agent.stub'),
+            __DIR__.'/../stubs/harness-agent.stub' => base_path('stubs/harness-agent.stub'),
             __DIR__.'/../stubs/tool.stub' => base_path('stubs/tool.stub'),
             __DIR__.'/../stubs/agent-middleware.stub' => base_path('stubs/agent-middleware.stub'),
         ], 'ai-stubs');

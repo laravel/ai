@@ -1,0 +1,13 @@
+<?php
+
+namespace {{ namespace }};
+
+use Laravel\Ai\Harness\HarnessAgent;
+
+class {{ class }} extends HarnessAgent
+{
+    public function instructions(): string
+    {
+        return 'You are a helpful coding assistant.';
+    }
+}
