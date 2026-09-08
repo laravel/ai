@@ -162,6 +162,15 @@ describe('file operations', function (): void {
         Files::assertStored(fn (StorableFile $file): bool => trim((string) $file) === 'I am an expense report.');
     });
 
+    test('an added fake upload can still be read after the upload object is gone', function (): void {
+        Stores::fake();
+
+        Stores::create('My Store')
+            ->add(UploadedFile::fake()->createWithContent('report.txt', 'I am an expense report.'));
+
+        Files::assertStored(fn (StorableFile $file): bool => trim((string) $file) === 'I am an expense report.');
+    });
+
     test('cannot add an uploaded file that failed to upload to store', function (): void {
         Stores::fake();
 

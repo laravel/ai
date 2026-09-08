@@ -179,6 +179,57 @@ test('a first turn stream emits the thread id the conversation is stored under',
         ->and(end($events)['threadId'])->toBe($agent->currentConversation());
 });
 
+test('a remembered stream reports the assistant row it wrote', function () {
+    app()->instance(ConversationStore::class, new FakeConversationStore);
+
+    RememberingAssistantAgent::fake(['Fake response']);
+
+    $user = new class
+    {
+        public int $id = 1;
+    };
+
+    $response = (new RememberingAssistantAgent)->forUser($user)->stream('Hello');
+
+    $events = agUiEvents($response->usingProtocol(new AgentUserInteractionProtocol)->toResponse(request()));
+    $finished = end($events);
+
+    expect($response->assistantMessageId)->not->toBeNull()
+        ->and(array_keys($finished))->toBe(['type', 'threadId', 'runId', 'messageId', 'userMessageId', 'usage', 'metadata'])
+        ->and($finished['threadId'])->toBe($response->conversationId)
+        ->and($finished['runId'])->toBe($response->invocationId)
+        ->and($finished['messageId'])->toBe($response->assistantMessageId);
+});
+
+test('a stored run reports the row it wrote for the prompt', function () {
+    RememberingAssistantAgent::fake(['Fake response']);
+
+    $user = new class
+    {
+        public int $id = 1;
+    };
+
+    $response = (new RememberingAssistantAgent)->forUser($user)->stream('Hello');
+
+    $events = agUiEvents($response->usingProtocol(new AgentUserInteractionProtocol)->toResponse(request()));
+
+    expect($response->userMessageId)->not->toBeNull()
+        ->and(end($events)['userMessageId'])->toBe($response->userMessageId)
+        ->and($response->userMessageId)->not->toBe($response->assistantMessageId);
+});
+
+test('a stream that persists nothing omits the message id', function () {
+    $events = agUiProtocolEvents([
+        new TextStart('event-1', 'msg-1', time()),
+        new TextDelta('event-2', 'msg-1', 'Hello', time()),
+        new TextEnd('event-3', 'msg-1', time()),
+        new StreamEnd('event-4', 'stop', new Usage, time()),
+    ]);
+
+    expect(end($events))->not->toHaveKey('messageId')
+        ->and(end($events))->not->toHaveKey('userMessageId');
+});
+
 test('an ownerless approval stream persists the thread id it emits', function () {
     app()->instance(ConversationStore::class, new FakeConversationStore);
 
@@ -447,6 +498,23 @@ test('a rejected approval streams the rejection as the tool result content', fun
         'toolCallId' => 'call-1',
         'content' => 'The user rejected this tool call.',
         'role' => 'tool',
+        'metadata' => ['error' => 'The user rejected this tool call.', 'denied' => true],
+    ]);
+});
+
+test('a failed tool call reports an error without marking it denied', function () {
+    $events = agUiProtocolEvents([
+        new ToolResult('event-1', new Data\ToolResult('call-1', 'DeleteFile', ['path' => 'a.txt'], 'The tool call failed: disk unavailable.'), false, 'The tool call failed: disk unavailable.', time()),
+        new StreamEnd('event-2', 'stop', new Usage, time()),
+    ]);
+
+    expect($events[2])->toBe([
+        'type' => 'TOOL_CALL_RESULT',
+        'messageId' => 'event-1',
+        'toolCallId' => 'call-1',
+        'content' => 'The tool call failed: disk unavailable.',
+        'role' => 'tool',
+        'metadata' => ['error' => 'The tool call failed: disk unavailable.'],
     ]);
 });
 

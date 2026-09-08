@@ -96,6 +96,24 @@ test('can store an uploaded file from its path', function (): void {
     Files::assertStored(fn (StorableFile $file): bool => trim((string) $file) === 'I am an expense report.');
 });
 
+test('a stored fake upload can still be read after the upload object is gone', function (): void {
+    Files::fake();
+
+    Files::put(UploadedFile::fake()->createWithContent('report.txt', 'I am an expense report.'));
+
+    Files::assertStored(fn (StorableFile $file): bool => trim((string) $file) === 'I am an expense report.');
+});
+
+test('storing an uploaded file does not copy it to another temporary path', function (): void {
+    Files::fake();
+
+    $upload = UploadedFile::fake()->createWithContent('report.txt', 'I am an expense report.');
+
+    Files::put($upload);
+
+    Files::assertStored(fn (StorableFile $file): bool => $file->path === $upload->getPathname());
+});
+
 test('cannot store an uploaded file that failed to upload', function (): void {
     Files::fake();
 

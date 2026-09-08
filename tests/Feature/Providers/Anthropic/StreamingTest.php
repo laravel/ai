@@ -44,7 +44,7 @@ describe('text streaming', function (): void {
             ->and($events[5])->toBeInstanceOf(StreamEnd::class);
     });
 
-    test('streaming starts a new text part after each text block', function (): void {
+    test('streaming reports the text blocks of one step as a single message', function (): void {
         Http::fake([
             'api.anthropic.com/*' => Http::response(
                 body: $this->ssePayload([
@@ -70,14 +70,59 @@ describe('text streaming', function (): void {
         $textEnds = array_values(array_filter($events, fn ($e): bool => $e instanceof TextEnd));
         $textDeltas = array_values(array_filter($events, fn ($e): bool => $e instanceof TextDelta));
 
-        expect($textStarts)->toHaveCount(2)
-            ->and($textEnds)->toHaveCount(2)
+        // A web search closes the text block and reopens it mid-answer. Reporting each block as
+        // its own message made an AG-UI client draw one answer as several, so the step opens and
+        // closes exactly one message, and closes it only once the last block has been sent...
+        expect($textStarts)->toHaveCount(1)
+            ->and($textEnds)->toHaveCount(1)
             ->and($textDeltas)->toHaveCount(2)
-            ->and($textStarts[0]->messageId)->not->toBe($textStarts[1]->messageId)
             ->and($textEnds[0]->messageId)->toBe($textStarts[0]->messageId)
-            ->and($textEnds[1]->messageId)->toBe($textStarts[1]->messageId)
             ->and($textDeltas[0]->messageId)->toBe($textStarts[0]->messageId)
-            ->and($textDeltas[1]->messageId)->toBe($textStarts[1]->messageId);
+            ->and($textDeltas[1]->messageId)->toBe($textStarts[0]->messageId)
+            ->and(array_search($textEnds[0], $events, true))->toBeGreaterThan(array_search($textDeltas[1], $events, true));
+    });
+
+    test('streaming keeps a thinking block out of the message the step\'s text belongs to', function (): void {
+        Http::fake([
+            'api.anthropic.com/*' => Http::response(
+                body: $this->ssePayload([
+                    $this->messageStart(),
+                    $this->contentBlockStart(0, ['type' => 'text', 'text' => '']),
+                    $this->contentBlockDelta(0, ['type' => 'text_delta', 'text' => 'First']),
+                    $this->contentBlockStop(0),
+                    $this->contentBlockStart(1, ['type' => 'thinking', 'thinking' => '']),
+                    $this->contentBlockDelta(1, ['type' => 'thinking_delta', 'thinking' => 'Pondering']),
+                    $this->contentBlockStop(1),
+                    $this->contentBlockStart(2, ['type' => 'text', 'text' => '']),
+                    $this->contentBlockDelta(2, ['type' => 'text_delta', 'text' => 'Second']),
+                    $this->contentBlockStop(2),
+                    $this->messageDelta('end_turn', 10),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $events = $this->collectStreamEvents();
+
+        $textStarts = array_values(array_filter($events, fn ($e): bool => $e instanceof TextStart));
+        $textEnds = array_values(array_filter($events, fn ($e): bool => $e instanceof TextEnd));
+        $textDeltas = array_values(array_filter($events, fn ($e): bool => $e instanceof TextDelta));
+        $reasoningStarts = array_values(array_filter($events, fn ($e): bool => $e instanceof ReasoningStart));
+        $reasoningEnds = array_values(array_filter($events, fn ($e): bool => $e instanceof ReasoningEnd));
+        $reasoningDeltas = array_values(array_filter($events, fn ($e): bool => $e instanceof ReasoningDelta));
+
+        // Text spans that a thinking block interrupts still belong to one message, and the
+        // thinking carries its own ID so the two never merge into each other...
+        expect($textStarts)->toHaveCount(1)
+            ->and($textEnds)->toHaveCount(1)
+            ->and($reasoningStarts)->toHaveCount(1)
+            ->and($reasoningEnds)->toHaveCount(1)
+            ->and($textDeltas[0]->messageId)->toBe($textStarts[0]->messageId)
+            ->and($textDeltas[1]->messageId)->toBe($textStarts[0]->messageId)
+            ->and($reasoningDeltas[0]->reasoningId)->not->toBe($textStarts[0]->messageId)
+            ->and(TextDelta::combine($events))->toBe('FirstSecond')
+            ->and($reasoningDeltas[0]->delta)->toBe('Pondering');
     });
 });
 

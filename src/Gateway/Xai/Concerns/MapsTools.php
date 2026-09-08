@@ -4,11 +4,13 @@ namespace Laravel\Ai\Gateway\Xai\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Attributes\Strict;
+use Laravel\Ai\Contracts\Providers\SupportsCodeExecution;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Providers\Tools\CodeExecution;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\ProviderTool;
 use Laravel\Ai\Providers\Tools\WebSearch;
@@ -43,10 +45,26 @@ trait MapsTools
     protected function mapProviderTool(ProviderTool $tool, Provider $provider): array
     {
         return match (true) {
+            $tool instanceof CodeExecution => $this->mapCodeExecutionTool($tool, $provider),
             $tool instanceof FileSearch => $this->mapFileSearchTool($tool, $provider),
             $tool instanceof WebSearch => $this->mapWebSearchTool($tool, $provider),
             default => [],
         };
+    }
+
+    /**
+     * Map a code execution tool to an xAI code interpreter definition.
+     */
+    protected function mapCodeExecutionTool(CodeExecution $tool, Provider $provider): array
+    {
+        if (! $provider instanceof SupportsCodeExecution) {
+            throw new RuntimeException('Provider ['.$provider->name().'] does not support code execution.');
+        }
+
+        return [
+            'type' => 'code_interpreter',
+            ...$provider->codeExecutionToolOptions($tool),
+        ];
     }
 
     /**

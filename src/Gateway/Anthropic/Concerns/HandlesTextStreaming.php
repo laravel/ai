@@ -55,7 +55,7 @@ trait HandlesTextStreaming
         $usage = null;
         $stopReason = '';
 
-        $emitTextStart = function () use (&$textStartEmitted, &$messageId, $invocationId): ?\Laravel\Ai\Streaming\Events\StreamEvent {
+        $emitTextStart = function () use (&$textStartEmitted, $messageId, $invocationId): ?StreamEvent {
             if ($textStartEmitted) {
                 return null;
             }
@@ -69,7 +69,7 @@ trait HandlesTextStreaming
             ))->withInvocationId($invocationId);
         };
 
-        $emitReasoningStart = function () use (&$reasoningStartEmitted, &$reasoningId, $invocationId): ?\Laravel\Ai\Streaming\Events\StreamEvent {
+        $emitReasoningStart = function () use (&$reasoningStartEmitted, &$reasoningId, $invocationId): ?StreamEvent {
             if ($reasoningStartEmitted) {
                 return null;
             }
@@ -251,19 +251,13 @@ trait HandlesTextStreaming
             }
 
             if ($type === 'content_block_stop') {
-                if ($currentBlockType === 'text' && $textStartEmitted) {
+                if ($currentBlockType === 'text') {
+                    // The block closes, the message does not. Anthropic opens a text block per
+                    // citable span, so one answer arrives as several; the replay content keeps
+                    // them apart while the stream reports the step as a single message...
                     if (isset($responseContent[$currentBlockIndex])) {
                         $responseContent[$currentBlockIndex]['text'] = $currentBlockText;
                     }
-
-                    yield (new TextEnd(
-                        $this->generateEventId(),
-                        $messageId,
-                        time(),
-                    ))->withInvocationId($invocationId);
-
-                    $textStartEmitted = false;
-                    $messageId = $this->generateEventId();
                 } elseif ($currentBlockType === 'thinking' && $reasoningStartEmitted) {
                     if (isset($responseContent[$currentBlockIndex])) {
                         $responseContent[$currentBlockIndex]['thinking'] = $currentThinkingText;
@@ -332,6 +326,15 @@ trait HandlesTextStreaming
                     $cacheReadTokens,
                 );
             }
+        }
+
+        // Closed once the step is over rather than once per block, so the step is one message...
+        if ($textStartEmitted) {
+            yield (new TextEnd(
+                $this->generateEventId(),
+                $messageId,
+                time(),
+            ))->withInvocationId($invocationId);
         }
 
         return $this->buildStepResponse(

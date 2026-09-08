@@ -203,13 +203,11 @@ class TextGenerationLoop
             }
 
             foreach ($resumption->results as $toolResult) {
-                $failed = in_array($toolResult->id, $resumption->failedToolCallIds, true);
-
                 yield (new ToolResultEvent(
                     $this->generateEventId(),
                     $toolResult,
-                    ! $toolResult->denied && ! $failed,
-                    $toolResult->denied || $failed ? $toolResult->result : null,
+                    $toolResult->successful(),
+                    $toolResult->error(),
                     time(),
                     denied: $toolResult->denied,
                 ))->withInvocationId($invocationId);
@@ -289,13 +287,11 @@ class TextGenerationLoop
             [$toolResults, $pendingApprovals] = $this->stepToolResultsWithOptions($result, $stepContext->isFinalStep, $tools, $options, $context);
 
             foreach ($toolResults as $toolResult) {
-                $successful = ! $stepContext->isFinalStep && $this->findTool($toolResult->name, $tools) instanceof Tool;
-
                 yield (new ToolResultEvent(
                     $this->generateEventId(),
                     $toolResult,
-                    $successful,
-                    $successful ? null : $toolResult->result,
+                    $toolResult->successful(),
+                    $toolResult->error(),
                     time(),
                 ))->withInvocationId($invocationId);
             }
@@ -424,16 +420,19 @@ class TextGenerationLoop
         $toolResults = array_map(function (array $pair) use ($tools, $isFinalStep, $context) {
             [$toolCall, $tool] = $pair;
 
+            $result = match (true) {
+                ! $tool instanceof Tool && $this->repairsToolCalls => "Tool '{$toolCall->name}' does not exist. Available tools: {$this->availableToolNames($tools)}.",
+                $isFinalStep => 'The agent reached its maximum number of steps without running this tool call.',
+                default => $this->executeTool($tool, $toolCall->arguments, $toolCall->id, $context),
+            };
+
             return new ToolResult(
                 $toolCall->id,
                 $toolCall->name,
                 $toolCall->arguments,
-                match (true) {
-                    ! $tool instanceof Tool && $this->repairsToolCalls => "Tool '{$toolCall->name}' does not exist. Available tools: {$this->availableToolNames($tools)}.",
-                    $isFinalStep => 'The agent reached its maximum number of steps without running this tool call.',
-                    default => $this->executeTool($tool, $toolCall->arguments, $toolCall->id, $context),
-                },
+                $result,
                 $toolCall->resultId,
+                failed: ! $tool instanceof Tool || $isFinalStep,
             );
         }, $resolved);
 
@@ -465,7 +464,7 @@ class TextGenerationLoop
     {
         $messages = $this->settleAbandonedToolCalls($messages, exceptLatestAssistantTurn: true);
 
-        [$approvalResults, $shouldContinue, $failedToolCallIds] = $this->resolveApprovalResults($approval, $messages, $tools, $validatedApproval, $context);
+        [$approvalResults, $shouldContinue] = $this->resolveApprovalResults($approval, $messages, $tools, $validatedApproval, $context);
 
         $newMessages = [];
 
@@ -477,7 +476,6 @@ class TextGenerationLoop
             messages: $messages,
             newMessages: $newMessages,
             results: $approvalResults,
-            failedToolCallIds: $failedToolCallIds,
             shouldContinue: $shouldContinue,
         );
     }
@@ -487,14 +485,13 @@ class TextGenerationLoop
      * @param  Message[]  $messages
      * @param  array<Tool|ProviderTool>  $tools
      * @param  array{Collection<int, ToolCall>, Collection<string, ?Tool>}|null  $validatedApproval  a caller's own eager validateApproval() result, reused instead of re-validating
-     * @return array{array<int, ToolResult>, bool, array<int, string>}
+     * @return array{array<int, ToolResult>, bool}
      */
     protected function resolveApprovalResults(array $approval, array $messages, array $tools, ?array $validatedApproval = null, ?RunContext $context = null): array
     {
         [$pendingToolCalls, $resolvedTools] = $validatedApproval ?? $this->validateApproval($approval, $messages, $tools);
 
         $toolResults = [];
-        $failedToolCallIds = [];
         $hasBareRejection = false;
 
         foreach ($pendingToolCalls as $toolCall) {
@@ -524,10 +521,12 @@ class TextGenerationLoop
                 throw new NoSuchToolException($toolCall->name);
             }
 
+            $failed = false;
+
             try {
                 $result = $this->executeTool($tool, $arguments, $toolCall->id, $context);
             } catch (Throwable $exception) {
-                $failedToolCallIds[] = $toolCall->id;
+                $failed = true;
                 $result = 'The tool call failed: '.$exception->getMessage();
             }
 
@@ -537,10 +536,11 @@ class TextGenerationLoop
                 $arguments,
                 $result,
                 $toolCall->resultId,
+                failed: $failed,
             );
         }
 
-        return [$toolResults, ! $hasBareRejection, $failedToolCallIds];
+        return [$toolResults, ! $hasBareRejection];
     }
 
     /**
