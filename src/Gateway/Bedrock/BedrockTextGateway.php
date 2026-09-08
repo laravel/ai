@@ -255,7 +255,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
         $hasReasoningBlocks = false;
         $stopReason = 'stop';
 
-        $emitTextStart = function () use (&$textId, $invocationId, $timestamp): ?\Laravel\Ai\Streaming\Events\StreamEvent {
+        $emitTextStart = function () use (&$textId, $invocationId, $timestamp): ?StreamEvent {
             if ($textId !== '') {
                 return null;
             }
@@ -269,7 +269,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             ))->withInvocationId($invocationId);
         };
 
-        $emitReasoningStart = function () use (&$reasoningId, $invocationId, $timestamp): ?\Laravel\Ai\Streaming\Events\StreamEvent {
+        $emitReasoningStart = function () use (&$reasoningId, $invocationId, $timestamp): ?StreamEvent {
             if ($reasoningId !== '') {
                 return null;
             }
