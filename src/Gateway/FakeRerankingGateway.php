@@ -34,9 +34,10 @@ class FakeRerankingGateway implements RerankingGateway
         array $documents,
         string $query,
         ?int $limit = null,
+        int $timeout = 30,
         array $providerOptions = [],
     ): RerankingResponse {
-        $prompt = new RerankingPrompt($documents, $query, $limit, $provider, $model, $providerOptions);
+        $prompt = new RerankingPrompt($documents, $query, $limit, $provider, $model, $timeout, $providerOptions);
 
         return $this->nextResponse($provider, $model, $prompt);
     }

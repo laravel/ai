@@ -20,6 +20,7 @@ class RerankingPrompt implements Countable
         public readonly ?int $limit,
         public readonly RerankingProvider $provider,
         public readonly string $model,
+        public readonly int $timeout = 30,
         public readonly array $providerOptions = [],
     ) {}
 

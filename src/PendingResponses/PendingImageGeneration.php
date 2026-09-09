@@ -171,6 +171,7 @@ class PendingImageGeneration
                     $this->quality,
                     $provider,
                     $model,
+                    $this->timeout,
                     $this->queuedProviderOptions(),
                 )
             );

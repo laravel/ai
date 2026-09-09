@@ -21,6 +21,8 @@ class PendingReranking
 
     protected ?int $limit = null;
 
+    protected int $timeout = 30;
+
     /**
      * Create a new pending reranking instance.
      *
@@ -57,6 +59,16 @@ class PendingReranking
     }
 
     /**
+     * Specify the timeout (in seconds) for the reranking request.
+     */
+    public function timeout(int $seconds = 30): self
+    {
+        $this->timeout = $seconds;
+
+        return $this;
+    }
+
+    /**
      * Rerank the documents based on their relevance to the query.
      *
      * @throws FailoverableException if every configured provider fails to rerank the documents.
@@ -79,7 +91,7 @@ class PendingReranking
             $model ??= $provider->defaultRerankingModel();
 
             try {
-                return $provider->withHeaders($headers)->rerank($this->documents, $query, $this->limit, $model, $providerOptions);
+                return $provider->withHeaders($headers)->rerank($this->documents, $query, $this->limit, $model, $this->timeout, $providerOptions);
             } catch (FailoverableException $e) {
                 $lastException = $e;
 

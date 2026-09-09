@@ -29,9 +29,10 @@ class BedrockRerankingGateway implements RerankingGateway
         array $documents,
         string $query,
         ?int $limit = null,
+        int $timeout = 30,
         array $providerOptions = []
     ): RerankingResponse {
-        $client = $this->createBedrockClient($provider);
+        $client = $this->createBedrockClient($provider, $timeout);
 
         try {
             $response = $this->withErrorHandling(

@@ -20,6 +20,7 @@ class QueuedImagePrompt
         public readonly ?string $quality,
         public readonly Lab|array|string|null $provider,
         public readonly ?string $model,
+        public readonly ?int $timeout = null,
         public readonly array $providerOptions = [],
     ) {
         $this->attachments = Collection::make($attachments);

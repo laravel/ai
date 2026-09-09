@@ -216,3 +216,11 @@ test('transcription can have timeouts', function (): void {
 
     Transcription::assertGenerated(fn (TranscriptionPrompt $prompt): bool => $prompt->timeout === 60);
 });
+
+test('queued transcription timeout is recorded', function (): void {
+    Transcription::fake();
+
+    Transcription::fromPath('/path/to/audio.mp3')->timeout(90)->queue();
+
+    Transcription::assertQueued(fn (QueuedTranscriptionPrompt $prompt): bool => $prompt->timeout === 90);
+});

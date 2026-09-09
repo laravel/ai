@@ -69,11 +69,12 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
         array $documents,
         string $query,
         ?int $limit = null,
+        int $timeout = 30,
         array $providerOptions = [],
     ): RerankingResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider)->post('/rerank', array_merge($providerOptions, array_filter([
+            fn () => $this->client($provider, $timeout)->post('/rerank', array_merge($providerOptions, array_filter([
                 'model' => $model,
                 'query' => $query,
                 'documents' => $documents,

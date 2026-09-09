@@ -1,7 +1,12 @@
 <?php
 
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Ai;
+use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
+use Laravel\Ai\Contracts\Providers\RerankingProvider;
+use Laravel\Ai\Gateway\CohereGateway;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Reranking;
 
@@ -86,4 +91,26 @@ test('the limit still wins over a voyage top_k provider option', function (): vo
 
         return $body['top_k'] === 1 && $body['truncation'] === false;
     });
+});
+
+test('rerank timeout is passed to the http client', function (): void {
+    Http::fake(['*' => Http::response(fakeRerankingResponse())]);
+
+    $spy = new class extends CohereGateway
+    {
+        public array $timeouts = [];
+
+        protected function client(EmbeddingProvider|RerankingProvider $provider, int $timeout = 30): PendingRequest
+        {
+            $this->timeouts[] = $timeout;
+
+            return parent::client($provider, $timeout);
+        }
+    };
+
+    Ai::instance('cohere')->useRerankingGateway($spy);
+
+    Reranking::of(['Doc A'])->timeout(45)->rerank('query', provider: 'cohere', model: 'rerank-v3.5');
+
+    expect($spy->timeouts)->toBe([45]);
 });

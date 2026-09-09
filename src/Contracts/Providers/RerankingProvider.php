@@ -13,7 +13,7 @@ interface RerankingProvider extends Provider
      * @param  array<int, string>  $documents
      * @param  array<string, mixed>  $providerOptions
      */
-    public function rerank(array $documents, string $query, ?int $limit = null, ?string $model = null, array $providerOptions = []): RerankingResponse;
+    public function rerank(array $documents, string $query, ?int $limit = null, ?string $model = null, int $timeout = 30, array $providerOptions = []): RerankingResponse;
 
     /**
      * Get the provider's reranking gateway.

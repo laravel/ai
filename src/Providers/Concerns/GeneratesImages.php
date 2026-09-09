@@ -32,7 +32,7 @@ trait GeneratesImages
 
         $model ??= $this->defaultImageModel();
 
-        $prompt = new ImagePrompt($prompt, $attachments, $size, $quality, $this, $model, $providerOptions);
+        $prompt = new ImagePrompt($prompt, $attachments, $size, $quality, $this, $model, $timeout, $providerOptions);
 
         if (Ai::imagesAreFaked()) {
             Ai::recordImageGeneration($prompt);

@@ -41,7 +41,7 @@ class FakeImageGateway implements ImageGateway
         ?int $timeout = null,
         array $providerOptions = [],
     ): ImageResponse {
-        $imagePrompt = new ImagePrompt($prompt, $attachments, $size, $quality, $provider, $model, $providerOptions);
+        $imagePrompt = new ImagePrompt($prompt, $attachments, $size, $quality, $provider, $model, $timeout, $providerOptions);
 
         return $this->nextResponse($provider, $model, $imagePrompt);
     }

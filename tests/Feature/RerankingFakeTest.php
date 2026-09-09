@@ -181,3 +181,11 @@ test('prompt records limit', function (): void {
 
     Reranking::assertReranked(fn (RerankingPrompt $prompt): bool => $prompt->limit === 2 && $prompt->count() === 3);
 });
+
+test('prompt records timeout', function (): void {
+    Reranking::fake();
+
+    Reranking::of(['Doc A'])->timeout(45)->rerank('query');
+
+    Reranking::assertReranked(fn (RerankingPrompt $prompt): bool => $prompt->timeout === 45);
+});

@@ -19,6 +19,7 @@ interface RerankingGateway
         array $documents,
         string $query,
         ?int $limit = null,
+        int $timeout = 30,
         array $providerOptions = [],
     ): RerankingResponse;
 }
