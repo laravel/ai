@@ -13,6 +13,7 @@ use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Contracts\PaginatesConversations;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Contracts\ResolvesPendingApprovals;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\StoredDocument;
@@ -158,6 +159,54 @@ test('it accepts a cursor passed directly, without a request', function (): void
     $secondPage = $store->paginateConversationMessages($conversationId, 2, cursor: $firstPage->nextCursor());
 
     expect(collect($secondPage->items())->pluck('id')->all())->toBe(['message-003', 'message-002']);
+});
+
+test('it reports the tool calls a paused turn is waiting on', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Paused');
+
+    insertPausedConversationTurn($conversationId, 'message-001', [
+        ['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt']],
+        ['id' => 'call-2', 'name' => 'SendEmail', 'arguments' => ['to' => 'a@b.test']],
+    ], ['call-1' => 'Deletes a file.', 'call-2' => null]);
+
+    $pending = $store->pendingApprovalsFor($conversationId);
+
+    expect($store)->toBeInstanceOf(ResolvesPendingApprovals::class)
+        ->and($pending)->toHaveCount(2)
+        ->and($pending[0])->toBeInstanceOf(PendingApproval::class)
+        ->and($pending[0]->id)->toBe('call-1')
+        ->and($pending[0]->tool)->toBe('DeleteFile')
+        ->and($pending[0]->arguments)->toBe(['path' => 'a.txt'])
+        ->and($pending[0]->reason)->toBe('Deletes a file.')
+        ->and($pending[1]->reason)->toBeNull();
+});
+
+test('it drops a call that already has a result', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Resumed');
+
+    insertPausedConversationTurn($conversationId, 'message-001', [
+        ['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => []],
+        ['id' => 'call-2', 'name' => 'SendEmail', 'arguments' => []],
+    ], ['call-1' => null, 'call-2' => null]);
+
+    // A resolved call keeps its entry in the pending map until the resume records the decision, so the result is what says the pause is over for it...
+    DB::table('agent_conversation_messages')
+        ->where('id', 'message-001')
+        ->update(['tool_results' => json_encode([['id' => 'call-1', 'name' => 'DeleteFile', 'result' => 'Deleted.']])]);
+
+    expect(collect($store->pendingApprovalsFor($conversationId))->pluck('id')->all())->toBe(['call-2']);
+});
+
+test('it reports nothing when the newest turn is not paused', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Answered');
+
+    insertStoredConversationMessages($conversationId, ['message-001']);
+
+    expect($store->pendingApprovalsFor($conversationId))->toBe([])
+        ->and($store->pendingApprovalsFor('missing-conversation'))->toBe([]);
 });
 
 test('it persists tool calls and results from a remembered agent prompt', function (): void {
@@ -1361,4 +1410,15 @@ function insertStoredConversationMessages(string $conversationId, array $ids): v
     DB::table('agent_conversation_messages')->insert(
         collect($ids)->map(fn (string $id): array => storedConversationMessageAttributes($id, $conversationId, "Content for {$id}"))->all()
     );
+}
+
+/** @param  list<array<string, mixed>>  $toolCalls */
+function insertPausedConversationTurn(string $conversationId, string $id, array $toolCalls, array $pending): void
+{
+    DB::table('agent_conversation_messages')->insert([
+        ...storedConversationMessageAttributes($id, $conversationId, 'Waiting on you.'),
+        'role' => 'assistant',
+        'tool_calls' => json_encode($toolCalls),
+        'approval_state' => json_encode(['pending' => $pending]),
+    ]);
 }
