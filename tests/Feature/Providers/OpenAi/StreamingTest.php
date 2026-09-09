@@ -162,12 +162,12 @@ test('streaming handles tool calls', function (): void {
         ->and($streamEnd->usage->completionTokens)->toBe(15);
 });
 
-test('streaming handles reasoning events', function (): void {
+test('streaming handles reasoning events', function (string $eventType): void {
     Http::fake([
         'api.openai.com/*' => Http::response(
             body: $this->ssePayload([
                 $this->responseCreated(),
-                ['type' => 'response.reasoning_summary_text.delta', 'delta' => 'Let me think...', 'item_id' => 'rs_1'],
+                ['type' => $eventType, 'delta' => 'Let me think...', 'item_id' => 'rs_1'],
                 [
                     'type' => 'response.output_item.done',
                     'item' => ['type' => 'reasoning', 'id' => 'rs_1', 'summary' => [['type' => 'summary_text', 'text' => 'Let me think...']]],
@@ -191,7 +191,10 @@ test('streaming handles reasoning events', function (): void {
 
     $reasoningDelta = array_values(array_filter($events, fn ($e): bool => $e instanceof ReasoningDelta))[0];
     expect($reasoningDelta->delta)->toBe('Let me think...');
-});
+})->with([
+    'reasoning summary' => 'response.reasoning_summary_text.delta',
+    'reasoning text' => 'response.reasoning_text.delta',
+]);
 
 test('streaming error event stops stream', function (): void {
     Http::fake([

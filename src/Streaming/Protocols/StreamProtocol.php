@@ -14,6 +14,8 @@ abstract class StreamProtocol
 
     protected bool $errored = false;
 
+    protected ?Throwable $exception = null;
+
     /**
      * Get the protocol parts that represent the given response's events.
      */
@@ -42,6 +44,8 @@ abstract class StreamProtocol
                     yield $this->encode($part);
                 }
             } catch (Throwable $e) {
+                $this->exception = $e;
+
                 // A stream error exception carries a provider error the stream already surfaced, so only report anything else...
                 if (! $e instanceof StreamErrorException) {
                     report($e);

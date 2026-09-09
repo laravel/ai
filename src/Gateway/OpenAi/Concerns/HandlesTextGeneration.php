@@ -132,7 +132,7 @@ trait HandlesTextGeneration
                 continue;
             }
 
-            if ($type === 'response.reasoning_summary_text.delta') {
+            if (in_array($type, ['response.reasoning_summary_text.delta', 'response.reasoning_text.delta'], true)) {
                 $delta = (string) ($data['delta'] ?? '');
 
                 if ($delta !== '') {

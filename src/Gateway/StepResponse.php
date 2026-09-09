@@ -31,6 +31,7 @@ class StepResponse implements Arrayable, JsonSerializable
         public ?string $continuationToken = null,
         public array $providerContentBlocks = [],
         public array $pendingApprovals = [],
+        public string $reasoning = '',
     ) {}
 
     /**

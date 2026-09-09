@@ -375,6 +375,22 @@ describe('hydrating useChat from stored messages', function () {
         ]);
     });
 
+    test('conversation message models hydrate stored reasoning before text', function () {
+        $ui = Vercel::toUiMessages([
+            new ConversationMessage([
+                'id' => 'msg-2',
+                'role' => 'assistant',
+                'content' => 'It is 12°C.',
+                'meta' => ['reasoning' => 'They want the temperature.'],
+            ]),
+        ]);
+
+        expect($ui[0]['parts'])->toBe([
+            ['type' => 'reasoning', 'text' => 'They want the temperature.'],
+            ['type' => 'text', 'text' => 'It is 12°C.'],
+        ]);
+    });
+
     test('a completed tool turn hydrates as a settled tool part instead of a blank bubble', function () {
         $ui = Vercel::toUiMessages([
             new ConversationMessage([

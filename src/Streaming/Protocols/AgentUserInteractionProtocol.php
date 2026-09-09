@@ -5,6 +5,7 @@ namespace Laravel\Ai\Streaming\Protocols;
 use Generator;
 use Illuminate\Support\Arr;
 use Laravel\Ai\Approvals\PendingApproval;
+use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Responses\Data;
 use Laravel\Ai\Responses\Data\UrlCitation;
 use Laravel\Ai\Responses\Data\Usage;
@@ -136,6 +137,17 @@ class AgentUserInteractionProtocol extends StreamProtocol
             return;
         }
 
+        // The mismatch message is the one the 409 already returns, so it is safe to surface unmasked...
+        if ($this->exception instanceof ApprovalMismatchException) {
+            yield from $this->yieldPart([
+                'type' => 'RUN_ERROR',
+                'message' => $this->exception->getMessage(),
+                'code' => 'approval_mismatch',
+            ]);
+
+            return;
+        }
+
         yield from $this->yieldPart(['type' => 'RUN_ERROR', 'message' => 'An error occurred.']);
     }
 
@@ -212,12 +224,14 @@ class AgentUserInteractionProtocol extends StreamProtocol
     protected function runFinishedPart(array $attributes = []): array
     {
         $assistantMessageId = $this->response?->assistantMessageId;
+        $userMessageId = $this->response?->userMessageId;
 
         return [
             'type' => 'RUN_FINISHED',
             'threadId' => $this->threadId,
             'runId' => $this->runId,
             ...($assistantMessageId ? ['messageId' => $assistantMessageId] : []),
+            ...($userMessageId ? ['userMessageId' => $userMessageId] : []),
             ...$attributes,
         ];
     }

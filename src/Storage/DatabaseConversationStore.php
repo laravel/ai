@@ -7,6 +7,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Files\File;
@@ -170,6 +171,25 @@ class DatabaseConversationStore implements ConversationStore
     }
 
     /**
+     * Rebuild the approvals a stored row is still awaiting a decision on.
+     *
+     * @return Collection<int, PendingApproval>
+     */
+    protected function pendingApprovalsIn(object $record): Collection
+    {
+        $reasons = collect(((array) json_decode($record->approval_state ?? 'null', true))['pending'] ?? []);
+
+        return collect(json_decode($record->tool_calls ?? '[]', true) ?: [])
+            ->filter(fn (array $toolCall) => $reasons->has($toolCall['id'] ?? ''))
+            ->map(fn (array $toolCall) => new PendingApproval(
+                $toolCall['id'],
+                $toolCall['name'],
+                $toolCall['arguments'],
+                $reasons[$toolCall['id']],
+            ))->values();
+    }
+
+    /**
      * Update the conversation's activity timestamp.
      */
     protected function touchConversation(string $conversationId, mixed $timestamp): void
@@ -208,6 +228,10 @@ class DatabaseConversationStore implements ConversationStore
 
         if (filled($blocks = $response->pausedProviderContentBlocks())) {
             $meta['provider_content_blocks'] = $blocks;
+        }
+
+        if (filled($response->reasoning)) {
+            $meta['reasoning'] = $response->reasoning;
         }
 
         return $meta;
@@ -385,7 +409,7 @@ class DatabaseConversationStore implements ConversationStore
         $resultIds = array_map(fn (ToolResult $result) => $result->id, $toolResults);
 
         DB::connection($this->connection)->transaction(function () use ($conversationId, $participantType, $participantId, $toolResults, $resultIds) {
-            $row = $this->table($this->messagesTable())
+            $paused = $this->table($this->messagesTable())
                 ->where('conversation_id', $conversationId)
                 ->when($participantId === null,
                     fn ($query) => $query->whereNull('participant_type')->whereNull('participant_id'),
@@ -394,11 +418,15 @@ class DatabaseConversationStore implements ConversationStore
                 ->whereNotNull('approval_state')
                 ->orderByDesc('id')
                 ->lockForUpdate()
-                ->get()
-                ->first(fn ($record) => array_intersect($this->pausedCallIds($record), $resultIds) !== []);
+                ->get();
+
+            $row = $paused->first(fn ($record) => array_intersect($this->pausedCallIds($record), $resultIds) !== []);
 
             if ($row === null) {
-                throw new ApprovalMismatchException('The approval results do not match a paused conversation turn.', collect());
+                throw new ApprovalMismatchException(
+                    'The approval results do not match a paused conversation turn.',
+                    $paused->first() === null ? collect() : $this->pendingApprovalsIn($paused->first()),
+                );
             }
 
             $existing = collect(json_decode($row->tool_results, true) ?: []);

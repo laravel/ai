@@ -4,6 +4,7 @@ namespace Laravel\Ai\Responses;
 
 use Illuminate\Support\Collection;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Streaming\Events\TextDelta;
@@ -34,6 +35,8 @@ class StreamedAgentResponse extends AgentResponse
         );
 
         $this->events = $events;
+
+        $this->reasoning = ReasoningDelta::combine($events);
 
         $this->withPendingApprovals(
             $events->whereInstanceOf(ToolApprovalRequest::class)
