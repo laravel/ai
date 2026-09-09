@@ -13,6 +13,7 @@ use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Contracts\PaginatesConversations;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Contracts\VerifiesConversationOwnership;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\StoredDocument;
@@ -88,6 +89,49 @@ test('it paginates conversation messages newest first, scoped to the conversatio
         ->and($page)->toBeInstanceOf(CursorPaginator::class)
         ->and($page->items())->toContainOnlyInstancesOf(StoredMessage::class)
         ->and(collect($page->items())->pluck('id')->all())->toBe(['message-005', 'message-003', 'message-001']);
+});
+
+test('it verifies which participant a conversation was stored for', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Mine');
+
+    expect($store)->toBeInstanceOf(VerifiesConversationOwnership::class)
+        ->and($store->conversationBelongsTo($conversationId, 'user', 1))->toBeTrue()
+        ->and($store->conversationBelongsTo($conversationId, 'user', 2))->toBeFalse()
+        ->and($store->conversationBelongsTo($conversationId, 'team', 1))->toBeFalse();
+});
+
+test('it compares a participant key stored as a string against an integer', function (): void {
+    $store = new DatabaseConversationStore;
+
+    // The key comes from another table, so the column it was written to and the value a caller holds need not agree on type...
+    expect($store->conversationBelongsTo($store->storeConversation('user', '7', 'Mine'), 'user', 7))->toBeTrue()
+        ->and($store->conversationBelongsTo($store->storeConversation('user', 7, 'Mine'), 'user', '7'))->toBeTrue();
+});
+
+test('it refuses a half-matching participant', function (): void {
+    $store = new DatabaseConversationStore;
+    $ownerless = $store->storeConversation(null, null, 'Ownerless');
+    $owned = $store->storeConversation('user', 1, 'Owned');
+
+    // Filtering the pair in the query instead would answer this first one yes, since a null id nulls both columns and drops the type that was asked about...
+    expect($store->conversationBelongsTo($ownerless, 'user', null))->toBeFalse()
+        ->and($store->conversationBelongsTo($ownerless, null, 1))->toBeFalse()
+        ->and($store->conversationBelongsTo($owned, 'user', null))->toBeFalse()
+        ->and($store->conversationBelongsTo($owned, null, 1))->toBeFalse();
+});
+
+test('it refuses a conversation that does not exist', function (): void {
+    expect((new DatabaseConversationStore)->conversationBelongsTo('missing-conversation', 'user', 1))->toBeFalse();
+});
+
+test('it matches an ownerless conversation only to a null participant', function (): void {
+    $store = new DatabaseConversationStore;
+    $ownerless = $store->storeConversation(null, null, 'Ownerless');
+
+    // A turn that pauses for approval is remembered whether or not the agent was given a participant, so a conversation belonging to nobody is a stored state rather than an edge case...
+    expect($store->conversationBelongsTo($ownerless, null, null))->toBeTrue()
+        ->and($store->conversationBelongsTo($ownerless, 'user', 1))->toBeFalse();
 });
 
 test('it decodes the stored JSON columns', function (): void {
