@@ -189,3 +189,11 @@ test('prompt records timeout', function (): void {
 
     Reranking::assertReranked(fn (RerankingPrompt $prompt): bool => $prompt->timeout === 45);
 });
+
+test('collection rerank macro records timeout', function (): void {
+    Reranking::fake();
+
+    collect([['body' => 'Doc A']])->rerank(by: 'body', query: 'query', timeout: 45);
+
+    Reranking::assertReranked(fn (RerankingPrompt $prompt): bool => $prompt->timeout === 45);
+});

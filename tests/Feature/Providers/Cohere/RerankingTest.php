@@ -1,10 +1,15 @@
 <?php
 
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Ai;
+use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
+use Laravel\Ai\Contracts\Providers\RerankingProvider;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
+use Laravel\Ai\Gateway\CohereGateway;
 use Laravel\Ai\Reranking;
 use Laravel\Ai\Responses\Data\RankedDocument;
 
@@ -121,3 +126,25 @@ function fakeCohereRerankingResponse()
         ],
     ]);
 }
+
+test('reranking request uses the configured timeout', function (): void {
+    Http::fake(['*' => fakeCohereRerankingResponse()]);
+
+    $spy = new class extends CohereGateway
+    {
+        public array $timeouts = [];
+
+        protected function client(EmbeddingProvider|RerankingProvider $provider, int $timeout = 30): PendingRequest
+        {
+            $this->timeouts[] = $timeout;
+
+            return parent::client($provider, $timeout);
+        }
+    };
+
+    Ai::instance('cohere')->useRerankingGateway($spy);
+
+    Reranking::of(['Doc A', 'Doc B'])->timeout(45)->rerank('query', provider: 'cohere', model: 'rerank-v3.5');
+
+    expect($spy->timeouts)->toBe([45]);
+});
