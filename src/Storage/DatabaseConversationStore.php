@@ -226,9 +226,8 @@ class DatabaseConversationStore implements ConversationStore
     {
         $meta = (array) json_decode(json_encode($response->meta), true);
 
-        if (filled($blocks = $response->pausedProviderContentBlocks())) {
-            $meta['provider_content_blocks'] = $blocks;
-            $meta['paused_step_tool_call_ids'] = $response->pausedToolCallIds();
+        if (filled($response->pausedProviderContentBlocks())) {
+            $meta['provider_steps'] = $response->pausedSteps();
         }
 
         if (filled($response->reasoning)) {
@@ -333,31 +332,18 @@ class DatabaseConversationStore implements ConversationStore
 
         $meta = (array) json_decode($record->meta ?? '[]', true);
 
-        $providerContentBlocks = $meta['provider_content_blocks'] ?? [];
+        $provider = $meta['provider'] ?? null;
 
-        if ($isPause && filled($providerContentBlocks)) {
-            // The blocks only cover the step that paused, so calls answered in earlier steps replay ahead of them...
-            $pausedStepCallIds = ($meta['paused_step_tool_call_ids'] ?? []) ?: $callIds;
+        if ($isPause && filled($providerSteps = $meta['provider_steps'] ?? [])) {
+            return array_merge($messages, $this->replayPausedSteps($record, $providerSteps, $toolCalls, $ownResults, $provider));
+        }
 
-            [$pausedStepResults, $earlierStepResults] = $ownResults->partition(
-                fn (array $toolResult) => in_array($toolResult['id'], $pausedStepCallIds, true)
-            );
+        // Rows written before per-step replay state carry only the paused step's blocks, so the whole turn replays as one message...
+        if ($isPause && filled($providerContentBlocks = $meta['provider_content_blocks'] ?? [])) {
+            $messages[] = new AssistantMessage($record->content, $toolCalls->map(ToolCall::fromArray(...))->values(), $providerContentBlocks, $provider);
 
-            $earlierStepCallIds = $earlierStepResults->pluck('id');
-
-            if ($earlierStepResults->isNotEmpty()) {
-                $earlierCalls = $toolCalls->whereIn('id', $earlierStepCallIds)->values();
-
-                $messages[] = new AssistantMessage('', $earlierCalls->map(ToolCall::fromArray(...))->values());
-                $messages[] = new ToolResultMessage($earlierStepResults->map(ToolResult::fromArray(...))->values());
-            }
-
-            $pausedStepCalls = $toolCalls->whereNotIn('id', $earlierStepCallIds)->values();
-
-            $messages[] = new AssistantMessage($record->content, $pausedStepCalls->map(ToolCall::fromArray(...))->values(), $providerContentBlocks, $meta['provider'] ?? null);
-
-            if ($pausedStepResults->isNotEmpty()) {
-                $messages[] = new ToolResultMessage($pausedStepResults->map(ToolResult::fromArray(...))->values());
+            if ($ownResults->isNotEmpty()) {
+                $messages[] = new ToolResultMessage($ownResults->map(ToolResult::fromArray(...))->values());
             }
 
             return $messages;
@@ -378,6 +364,42 @@ class DatabaseConversationStore implements ConversationStore
             $messages[] = new AssistantMessage($record->content, $keptCalls->map(ToolCall::fromArray(...))->values());
         } elseif (filled($record->content)) {
             $messages[] = new AssistantMessage($record->content);
+        }
+
+        return $messages;
+    }
+
+    /**
+     * Replay a paused turn one assistant step at a time, each carrying the raw provider blocks it produced.
+     *
+     * @param  array<int, array{blocks?: array<int, array<string, mixed>>, tool_call_ids?: array<int, string>}>  $providerSteps
+     * @param  Collection<int, array<string, mixed>>  $toolCalls
+     * @param  Collection<int, array<string, mixed>>  $ownResults
+     * @return array<int, Message>
+     */
+    protected function replayPausedSteps(object $record, array $providerSteps, Collection $toolCalls, Collection $ownResults, ?string $provider): array
+    {
+        $callsById = $toolCalls->keyBy('id');
+        $resultsById = $ownResults->keyBy('id');
+        $lastStep = array_key_last($providerSteps);
+
+        $messages = [];
+
+        foreach ($providerSteps as $index => $step) {
+            $stepCallIds = collect($step['tool_call_ids'] ?? []);
+
+            $messages[] = new AssistantMessage(
+                $index === $lastStep ? $record->content : '',
+                $stepCallIds->map(fn (string $id) => $callsById[$id] ?? null)->filter()->map(ToolCall::fromArray(...))->values(),
+                $step['blocks'] ?? [],
+                $provider,
+            );
+
+            $stepResults = $stepCallIds->map(fn (string $id) => $resultsById[$id] ?? null)->filter()->values();
+
+            if ($stepResults->isNotEmpty()) {
+                $messages[] = new ToolResultMessage($stepResults->map(ToolResult::fromArray(...))->values());
+            }
         }
 
         return $messages;

@@ -781,7 +781,7 @@ test('it splits a mid-run pause row so an executed call is answered before the s
         ->and($messages[2]->toolCalls[0]->id)->toBe('call-2');
 });
 
-test('it records provider content blocks into the message meta when a turn pauses', function (): void {
+test('it records every step of a paused turn into the message meta', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
 
@@ -795,7 +795,7 @@ test('it records provider content blocks into the message meta when a turn pause
 
     $response = (new AgentResponse('invocation-id', '', new Usage, new Meta))
         ->withMessages(collect([
-            new AssistantMessage('', collect([new ToolCall('call-0', 'ReadFile', ['path' => 'config/app.php'])])),
+            new AssistantMessage('', collect([new ToolCall('call-0', 'ReadFile', ['path' => 'config/app.php'])]), [['type' => 'thinking', 'signature' => 'sig-0']]),
             new ToolResultMessage(collect([new ToolResult('call-0', 'ReadFile', ['path' => 'config/app.php'], 'contents')])),
             new AssistantMessage('Let me think about that', collect([new ToolCall('call-1', 'DeleteFile', ['path' => 'config/app.php'])]), [['type' => 'thinking', 'signature' => 'sig-1']]),
         ]));
@@ -809,8 +809,10 @@ test('it records provider content blocks into the message meta when a turn pause
     $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
 
     expect(json_decode((string) $record->meta, true))
-        ->toHaveKey('provider_content_blocks', [['type' => 'thinking', 'signature' => 'sig-1']])
-        ->toHaveKey('paused_step_tool_call_ids', ['call-1']);
+        ->toHaveKey('provider_steps', [
+            ['blocks' => [['type' => 'thinking', 'signature' => 'sig-0']], 'tool_call_ids' => ['call-0']],
+            ['blocks' => [['type' => 'thinking', 'signature' => 'sig-1']], 'tool_call_ids' => ['call-1']],
+        ]);
 });
 
 test('it omits provider content blocks when the assistant turn is not paused', function (): void {
@@ -834,10 +836,10 @@ test('it omits provider content blocks when the assistant turn is not paused', f
 
     $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
 
-    expect(json_decode((string) $record->meta, true))->not->toHaveKey('provider_content_blocks');
+    expect(json_decode((string) $record->meta, true))->not->toHaveKey('provider_steps');
 });
 
-test('it records provider content blocks into the message meta when a stream pauses', function (): void {
+test('it records every step of a paused stream into the message meta', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
 
@@ -852,7 +854,10 @@ test('it records provider content blocks into the message meta when a stream pau
     $response = new StreamedAgentResponse('invocation-id', collect([
         new ToolApprovalRequest('event-1', collect([
             new PendingApproval('call-1', 'DeleteFile', ['path' => 'config/app.php'], 'Deletes a file'),
-        ]), 0, [['type' => 'thinking', 'signature' => 'sig-1']], ['call-1']),
+        ]), 0, [['type' => 'thinking', 'signature' => 'sig-1']], [
+            ['blocks' => [['type' => 'thinking', 'signature' => 'sig-0']], 'tool_call_ids' => ['call-0']],
+            ['blocks' => [['type' => 'thinking', 'signature' => 'sig-1']], 'tool_call_ids' => ['call-1']],
+        ]),
     ]), new Meta);
 
     $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
@@ -860,11 +865,13 @@ test('it records provider content blocks into the message meta when a stream pau
     $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
 
     expect(json_decode((string) $record->meta, true))
-        ->toHaveKey('provider_content_blocks', [['type' => 'thinking', 'signature' => 'sig-1']])
-        ->toHaveKey('paused_step_tool_call_ids', ['call-1']);
+        ->toHaveKey('provider_steps', [
+            ['blocks' => [['type' => 'thinking', 'signature' => 'sig-0']], 'tool_call_ids' => ['call-0']],
+            ['blocks' => [['type' => 'thinking', 'signature' => 'sig-1']], 'tool_call_ids' => ['call-1']],
+        ]);
 });
 
-test('it replays a legacy pause row written before paused step tool call ids as one message', function (): void {
+test('it replays a legacy pause row written before per-step replay state as one message', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
 
@@ -901,7 +908,7 @@ test('it replays a legacy pause row written before paused step tool call ids as 
         ->and($messages[1]->toolResults[0]->id)->toBe('call-1');
 });
 
-test('it replays earlier-step results ahead of the paused step blocks', function (): void {
+test('it replays each step of a paused turn with the blocks that step produced', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
 
@@ -926,12 +933,23 @@ test('it replays earlier-step results ahead of the paused step blocks', function
         'usage' => '[]',
         'meta' => json_encode([
             'provider' => 'anthropic',
-            'provider_content_blocks' => [
-                ['type' => 'thinking', 'thinking' => '', 'signature' => 'sig-1'],
-                ['type' => 'tool_use', 'id' => 'call-2', 'name' => 'read_file', 'input' => ['path' => 'b']],
-                ['type' => 'tool_use', 'id' => 'call-3', 'name' => 'delete_file', 'input' => ['path' => 'b']],
+            'provider_steps' => [
+                [
+                    'blocks' => [
+                        ['type' => 'thinking', 'thinking' => '', 'signature' => 'sig-1'],
+                        ['type' => 'tool_use', 'id' => 'call-1', 'name' => 'read_file', 'input' => ['path' => 'a']],
+                    ],
+                    'tool_call_ids' => ['call-1'],
+                ],
+                [
+                    'blocks' => [
+                        ['type' => 'thinking', 'thinking' => '', 'signature' => 'sig-2'],
+                        ['type' => 'tool_use', 'id' => 'call-2', 'name' => 'read_file', 'input' => ['path' => 'b']],
+                        ['type' => 'tool_use', 'id' => 'call-3', 'name' => 'delete_file', 'input' => ['path' => 'b']],
+                    ],
+                    'tool_call_ids' => ['call-2', 'call-3'],
+                ],
             ],
-            'paused_step_tool_call_ids' => ['call-2', 'call-3'],
         ]),
         'approval_state' => json_encode(['pending' => ['call-3' => null]]),
         'created_at' => now(),
@@ -943,13 +961,14 @@ test('it replays earlier-step results ahead of the paused step blocks', function
     expect($messages)->toHaveCount(4)
         ->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
         ->and($messages[0]->toolCalls->pluck('id')->all())->toBe(['call-1'])
-        ->and($messages[0]->providerContentBlocks)->toBe([])
+        ->and($messages[0]->providerContentBlocks[0]['signature'])->toBe('sig-1')
+        ->and($messages[0]->providerContentBlocksProvider)->toBe('anthropic')
         ->and($messages[1])->toBeInstanceOf(ToolResultMessage::class)
         ->and($messages[1]->toolResults->pluck('id')->all())->toBe(['call-1'])
         ->and($messages[2])->toBeInstanceOf(AssistantMessage::class)
         ->and($messages[2]->content)->toBe('Read a, now deleting b')
         ->and($messages[2]->toolCalls->pluck('id')->all())->toBe(['call-2', 'call-3'])
-        ->and($messages[2]->providerContentBlocks[0]['signature'])->toBe('sig-1')
+        ->and($messages[2]->providerContentBlocks[0]['signature'])->toBe('sig-2')
         ->and($messages[3])->toBeInstanceOf(ToolResultMessage::class)
         ->and($messages[3]->toolResults->pluck('id')->all())->toBe(['call-2']);
 });
