@@ -2,11 +2,9 @@
 
 namespace Laravel\Ai\PendingResponses;
 
-use Illuminate\Support\Arr;
 use Illuminate\Support\Traits\Conditionable;
 use InvalidArgumentException;
 use Laravel\Ai\Ai;
-use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
@@ -72,9 +70,7 @@ class PendingReranking
         foreach ($providers as $provider => $model) {
             $provider = Ai::fakeableRerankingProvider($provider);
 
-            $providerOptions = $this->resolveProviderOptions($provider);
-
-            $headers = Arr::pull($providerOptions, HasProviderOptions::HEADERS) ?? [];
+            [$providerOptions, $headers] = $this->resolveProviderOptionsAndHeaders($provider);
 
             $model ??= $provider->defaultRerankingModel();
 

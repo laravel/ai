@@ -6,13 +6,11 @@ use Closure;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
-use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\HasTools;
-use Laravel\Ai\Contracts\RemembersConversations as RemembersConversationsContract;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\AgentPrompted;
@@ -149,7 +147,7 @@ trait GeneratesText
             return $next($prompt);
         }] : [];
 
-        if ($agent instanceof RemembersConversationsContract || in_array(RemembersConversations::class, class_uses_recursive($agent), true)) {
+        if (RememberConversation::appliesTo($agent)) {
             $middleware[] = new RememberConversation(resolve(ConversationStore::class), $this);
         }
 

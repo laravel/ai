@@ -4,7 +4,6 @@ namespace Laravel\Ai\Providers\Concerns;
 
 use Illuminate\Support\Str;
 use InvalidArgumentException;
-use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasStructuredOutput;
@@ -15,6 +14,7 @@ use Laravel\Ai\Events\ToolApprovalRequested;
 use Laravel\Ai\Events\ToolApprovalResolved;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\UserMessage;
+use Laravel\Ai\Middleware\RememberConversation;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\StreamableAgentResponse;
@@ -108,7 +108,7 @@ trait StreamsText
                     );
 
                     // Surfaced before iteration because the remembering middleware only records it once the stream has drained...
-                    if ($agent instanceof RemembersConversationsContract || in_array(RemembersConversations::class, class_uses_recursive($agent), true)) {
+                    if (RememberConversation::appliesTo($agent)) {
                         /** @var Agent&RemembersConversationsContract $agent */
                         if ($agent->currentConversation() !== null) {
                             $streamable->withinConversation(

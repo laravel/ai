@@ -3,6 +3,7 @@
 namespace Laravel\Ai\PendingResponses\Concerns;
 
 use Closure;
+use Illuminate\Support\Arr;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Providers\Provider;
 use Laravel\SerializableClosure\SerializableClosure;
@@ -44,20 +45,21 @@ trait ResolvesProviderOptions
     }
 
     /**
-     * Resolve provider options for the given provider.
+     * Resolve the request body options and HTTP headers for the given provider.
      *
-     * @return array<string, mixed>
+     * @return array{array<string, mixed>, array<string, string>}
      */
-    protected function resolveProviderOptions(Provider $provider): array
+    protected function resolveProviderOptionsAndHeaders(Provider $provider): array
     {
-        return $this->mergeHeadersIntoProviderOptions(
-            $this->providerOptions instanceof SerializableClosure
-                ? ($this->providerOptions)($provider) ?: []
-                : $this->providerOptions,
-            $this->headers instanceof SerializableClosure
-                ? ($this->headers)($provider) ?: []
-                : $this->headers,
-        );
+        $options = $this->resolveFor($this->providerOptions, $provider);
+
+        return [
+            Arr::except($options, HasProviderOptions::HEADERS),
+            array_merge(
+                $options[HasProviderOptions::HEADERS] ?? [],
+                $this->resolveFor($this->headers, $provider),
+            ),
+        ];
     }
 
     /**
@@ -67,21 +69,10 @@ trait ResolvesProviderOptions
      */
     protected function queuedProviderOptions(): array
     {
-        return $this->mergeHeadersIntoProviderOptions(
-            is_array($this->providerOptions) ? $this->providerOptions : [],
-            is_array($this->headers) ? $this->headers : [],
-        );
-    }
+        $options = is_array($this->providerOptions) ? $this->providerOptions : [];
 
-    /**
-     * Merge explicit request headers into the reserved provider option.
-     *
-     * @param  array<string, mixed>  $options
-     * @param  array<string, string>  $headers
-     * @return array<string, mixed>
-     */
-    private function mergeHeadersIntoProviderOptions(array $options, array $headers): array
-    {
+        $headers = is_array($this->headers) ? $this->headers : [];
+
         if ($headers === []) {
             return $options;
         }
@@ -91,5 +82,16 @@ trait ResolvesProviderOptions
         );
 
         return $options;
+    }
+
+    /**
+     * Resolve the given value against the provider, invoking it when it is a closure.
+     *
+     * @param  array<string, mixed>|SerializableClosure  $value
+     * @return array<string, mixed>
+     */
+    private function resolveFor(array|SerializableClosure $value, Provider $provider): array
+    {
+        return $value instanceof SerializableClosure ? ($value)($provider) ?: [] : $value;
     }
 }

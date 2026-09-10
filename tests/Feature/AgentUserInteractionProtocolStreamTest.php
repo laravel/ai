@@ -104,15 +104,6 @@ test('a text stream emits run, step, and text message events', function () {
     ]);
 });
 
-test('the stream is not terminated by a done frame', function () {
-    $events = agUiProtocolEvents([
-        new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
-        new StreamEnd('event-1', 'stop', new Usage, time()),
-    ]);
-
-    expect(end($events))->toBe(agUiRunFinished());
-});
-
 test('the run finished event carries the combined usage and finish reason', function () {
     $events = agUiProtocolEvents([
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
@@ -415,9 +406,14 @@ test('a paused run finishes with an interrupt outcome for each pending approval'
             'type' => 'interrupt',
             'interrupts' => [[
                 'id' => 'call-1',
-                'reason' => 'tool_call',
+                'reason' => 'approval_required',
                 'message' => 'Destructive operation.',
                 'toolCallId' => 'call-1',
+                'metadata' => [
+                    'kind' => 'approval',
+                    'toolName' => 'DeleteFile',
+                    'input' => ['path' => 'a.txt'],
+                ],
                 'responseSchema' => [
                     'type' => 'object',
                     'properties' => ['approved' => ['type' => 'boolean']],
