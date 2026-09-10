@@ -54,4 +54,14 @@ class StreamedAgentResponse extends AgentResponse
     {
         return $this->events->whereInstanceOf(ToolApprovalRequest::class)->last()?->providerContentBlocks ?? [];
     }
+
+    /**
+     * Get the IDs of the tool calls made by the paused assistant step, if any.
+     *
+     * @return array<int, string>
+     */
+    public function pausedToolCallIds(): array
+    {
+        return $this->events->whereInstanceOf(ToolApprovalRequest::class)->last()?->toolCallIds ?? [];
+    }
 }

@@ -795,7 +795,9 @@ test('it records provider content blocks into the message meta when a turn pause
 
     $response = (new AgentResponse('invocation-id', '', new Usage, new Meta))
         ->withMessages(collect([
-            new AssistantMessage('Let me think about that', null, [['type' => 'thinking', 'signature' => 'sig-1']]),
+            new AssistantMessage('', collect([new ToolCall('call-0', 'ReadFile', ['path' => 'config/app.php'])])),
+            new ToolResultMessage(collect([new ToolResult('call-0', 'ReadFile', ['path' => 'config/app.php'], 'contents')])),
+            new AssistantMessage('Let me think about that', collect([new ToolCall('call-1', 'DeleteFile', ['path' => 'config/app.php'])]), [['type' => 'thinking', 'signature' => 'sig-1']]),
         ]));
 
     $response->withPendingApprovals(collect([
@@ -807,7 +809,8 @@ test('it records provider content blocks into the message meta when a turn pause
     $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
 
     expect(json_decode((string) $record->meta, true))
-        ->toHaveKey('provider_content_blocks', [['type' => 'thinking', 'signature' => 'sig-1']]);
+        ->toHaveKey('provider_content_blocks', [['type' => 'thinking', 'signature' => 'sig-1']])
+        ->toHaveKey('provider_content_block_call_ids', ['call-1']);
 });
 
 test('it omits provider content blocks when the assistant turn is not paused', function (): void {
@@ -849,7 +852,7 @@ test('it records provider content blocks into the message meta when a stream pau
     $response = new StreamedAgentResponse('invocation-id', collect([
         new ToolApprovalRequest('event-1', collect([
             new PendingApproval('call-1', 'DeleteFile', ['path' => 'config/app.php'], 'Deletes a file'),
-        ]), 0, [['type' => 'thinking', 'signature' => 'sig-1']]),
+        ]), 0, [['type' => 'thinking', 'signature' => 'sig-1']], ['call-1']),
     ]), new Meta);
 
     $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
@@ -857,7 +860,8 @@ test('it records provider content blocks into the message meta when a stream pau
     $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
 
     expect(json_decode((string) $record->meta, true))
-        ->toHaveKey('provider_content_blocks', [['type' => 'thinking', 'signature' => 'sig-1']]);
+        ->toHaveKey('provider_content_blocks', [['type' => 'thinking', 'signature' => 'sig-1']])
+        ->toHaveKey('provider_content_block_call_ids', ['call-1']);
 });
 
 test('it preserves provider content blocks when a mixed pause carries an executed and a gated call', function (): void {
@@ -895,6 +899,59 @@ test('it preserves provider content blocks when a mixed pause carries an execute
         ->and($messages[0]->providerContentBlocks)->toBe([['type' => 'thinking', 'signature' => 'sig-1']])
         ->and($messages[1])->toBeInstanceOf(ToolResultMessage::class)
         ->and($messages[1]->toolResults[0]->id)->toBe('call-1');
+});
+
+test('it replays earlier-step results ahead of the paused step blocks', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'participant_type' => 'user',
+        'participant_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => 'Read a, now deleting b',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call-1', 'name' => 'read_file', 'arguments' => ['path' => 'a']],
+            ['id' => 'call-2', 'name' => 'read_file', 'arguments' => ['path' => 'b']],
+            ['id' => 'call-3', 'name' => 'delete_file', 'arguments' => ['path' => 'b']],
+        ]),
+        'tool_results' => json_encode([
+            ['id' => 'call-1', 'name' => 'read_file', 'arguments' => ['path' => 'a'], 'result' => 'contents of a'],
+            ['id' => 'call-2', 'name' => 'read_file', 'arguments' => ['path' => 'b'], 'result' => 'contents of b'],
+        ]),
+        'usage' => '[]',
+        'meta' => json_encode([
+            'provider' => 'anthropic',
+            'provider_content_blocks' => [
+                ['type' => 'thinking', 'thinking' => '', 'signature' => 'sig-1'],
+                ['type' => 'tool_use', 'id' => 'call-2', 'name' => 'read_file', 'input' => ['path' => 'b']],
+                ['type' => 'tool_use', 'id' => 'call-3', 'name' => 'delete_file', 'input' => ['path' => 'b']],
+            ],
+            'provider_content_block_call_ids' => ['call-2', 'call-3'],
+        ]),
+        'approval_state' => json_encode(['pending' => ['call-3' => null]]),
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toHaveCount(4)
+        ->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[0]->toolCalls->pluck('id')->all())->toBe(['call-1'])
+        ->and($messages[0]->providerContentBlocks)->toBe([])
+        ->and($messages[1])->toBeInstanceOf(ToolResultMessage::class)
+        ->and($messages[1]->toolResults->pluck('id')->all())->toBe(['call-1'])
+        ->and($messages[2])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[2]->content)->toBe('Read a, now deleting b')
+        ->and($messages[2]->toolCalls->pluck('id')->all())->toBe(['call-2', 'call-3'])
+        ->and($messages[2]->providerContentBlocks[0]['signature'])->toBe('sig-1')
+        ->and($messages[3])->toBeInstanceOf(ToolResultMessage::class)
+        ->and($messages[3]->toolResults->pluck('id')->all())->toBe(['call-2']);
 });
 
 test('it drops a leading orphaned tool_result when the row window splits a pause from its resume', function (): void {

@@ -308,6 +308,7 @@ class TextGenerationLoop
                     $pendingApprovals,
                     time(),
                     $result->providerContentBlocks,
+                    array_map(fn ($toolCall): string => $toolCall->id, $result->toolCalls),
                 ))->withInvocationId($invocationId);
 
                 break;

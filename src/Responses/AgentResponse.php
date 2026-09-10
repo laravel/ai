@@ -95,4 +95,18 @@ class AgentResponse extends TextResponse
 
         return $this->messages->whereInstanceOf(AssistantMessage::class)->last()?->providerContentBlocks ?? [];
     }
+
+    /**
+     * Get the IDs of the tool calls made by the paused assistant step, if any.
+     *
+     * @return array<int, string>
+     */
+    public function pausedToolCallIds(): array
+    {
+        if (! $this->hasPendingApprovals()) {
+            return [];
+        }
+
+        return $this->messages->whereInstanceOf(AssistantMessage::class)->last()?->toolCalls->pluck('id')->all() ?? [];
+    }
 }

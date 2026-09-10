@@ -9,6 +9,7 @@ use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Storage\DatabaseConversationStore;
 use Tests\Fixtures\Agents\RememberingApprovableAgent;
+use Tests\Fixtures\Agents\RememberingMultiStepApprovableAgent;
 use Tests\Fixtures\Tools\ApprovableNumberGenerator;
 
 test('a remembered agent pauses for approval, persists the tool_use, and resumes from history when approved', function () {
@@ -186,6 +187,57 @@ test('a resumed approval replays the paused turn provider content blocks', funct
     expect($assistantTurn['content'][0]['type'])->toBe('thinking')
         ->and($assistantTurn['content'][0]['signature'])->toBe('signature-1')
         ->and(collect($assistantTurn['content'])->firstWhere('type', 'tool_use')['id'])->toBe('toolu_1');
+});
+
+test('a resume after a multi-step pause answers every replayed tool_use in the preceding message', function () {
+    Config::set('ai.conversations.generate_title', false);
+
+    $message = fn (array $content, string $stopReason) => Http::response([
+        'id' => 'msg',
+        'type' => 'message',
+        'role' => 'assistant',
+        'model' => 'claude-sonnet-4-6',
+        'content' => $content,
+        'stop_reason' => $stopReason,
+        'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+    ]);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            $message([['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'FixedNumberGenerator', 'input' => (object) []]], 'tool_use'),
+            $message([
+                ['type' => 'thinking', 'thinking' => 'Now the gated number.', 'signature' => 'signature-2'],
+                ['type' => 'tool_use', 'id' => 'toolu_2', 'name' => 'ApprovableNumberGenerator', 'input' => (object) []],
+            ], 'tool_use'),
+            $message([['type' => 'text', 'text' => 'Both numbers are 72019.']], 'end_turn'),
+        ]),
+    ]);
+
+    $user = (object) ['id' => 1];
+
+    $paused = (new RememberingMultiStepApprovableAgent)->forUser($user)->prompt('Generate both numbers', provider: 'anthropic');
+
+    expect($paused->pendingApprovals->pluck('id')->all())->toBe(['toolu_2']);
+
+    $resumed = (new RememberingMultiStepApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->prompt(Decisions::from(['toolu_2' => true]), provider: 'anthropic');
+
+    $resumeMessages = collect(Http::recorded())->last()[0]->data()['messages'];
+
+    $turns = collect($resumeMessages)->map(fn (array $message) => [
+        $message['role'],
+        collect($message['content'])->map(fn (array $block) => $block['tool_use_id'] ?? $block['id'] ?? $block['type'])->all(),
+    ])->all();
+
+    expect($resumed->text)->toBe('Both numbers are 72019.')
+        ->and($turns)->toBe([
+            ['user', ['text']],
+            ['assistant', ['toolu_1']],
+            ['user', ['toolu_1']],
+            ['assistant', ['thinking', 'toolu_2']],
+            ['user', ['toolu_2']],
+        ]);
 });
 
 test('a resume on a different provider falls back to the generic mapping instead of replaying foreign blocks', function () {

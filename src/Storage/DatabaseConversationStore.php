@@ -228,6 +228,7 @@ class DatabaseConversationStore implements ConversationStore
 
         if (filled($blocks = $response->pausedProviderContentBlocks())) {
             $meta['provider_content_blocks'] = $blocks;
+            $meta['provider_content_block_call_ids'] = $response->pausedToolCallIds();
         }
 
         if (filled($response->reasoning)) {
@@ -335,10 +336,28 @@ class DatabaseConversationStore implements ConversationStore
         $providerContentBlocks = $meta['provider_content_blocks'] ?? [];
 
         if ($isPause && filled($providerContentBlocks)) {
-            $messages[] = new AssistantMessage($record->content, $toolCalls->map(ToolCall::fromArray(...))->values(), $providerContentBlocks, $meta['provider'] ?? null);
+            // The blocks only cover the step that paused, so calls answered in earlier steps replay ahead of them...
+            $pausedStepCallIds = ($meta['provider_content_block_call_ids'] ?? []) ?: $callIds;
 
-            if ($ownResults->isNotEmpty()) {
-                $messages[] = new ToolResultMessage($ownResults->map(ToolResult::fromArray(...))->values());
+            [$pausedStepResults, $earlierStepResults] = $ownResults->partition(
+                fn (array $toolResult) => in_array($toolResult['id'], $pausedStepCallIds, true)
+            );
+
+            $earlierStepCallIds = $earlierStepResults->pluck('id');
+
+            if ($earlierStepResults->isNotEmpty()) {
+                $earlierCalls = $toolCalls->whereIn('id', $earlierStepCallIds)->values();
+
+                $messages[] = new AssistantMessage('', $earlierCalls->map(ToolCall::fromArray(...))->values());
+                $messages[] = new ToolResultMessage($earlierStepResults->map(ToolResult::fromArray(...))->values());
+            }
+
+            $pausedStepCalls = $toolCalls->whereNotIn('id', $earlierStepCallIds)->values();
+
+            $messages[] = new AssistantMessage($record->content, $pausedStepCalls->map(ToolCall::fromArray(...))->values(), $providerContentBlocks, $meta['provider'] ?? null);
+
+            if ($pausedStepResults->isNotEmpty()) {
+                $messages[] = new ToolResultMessage($pausedStepResults->map(ToolResult::fromArray(...))->values());
             }
 
             return $messages;
