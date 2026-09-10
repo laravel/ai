@@ -450,3 +450,33 @@ test('a tool executed within the stream emits its input and output parts', funct
         ['type' => 'done'],
     ]);
 });
+
+test('a tool still producing its output emits preliminary parts without changing the run lifecycle', function () {
+    $parts = vercelProtocolParts([
+        new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
+        new TextDelta('event-1', 'msg-1', 'Working on it.', time()),
+        new ToolCall('event-2', new Data\ToolCall('call-1', 'document_specialist', ['task' => 'Report']), time()),
+        new ToolResult('event-3', new Data\ToolResult('call-1', 'document_specialist', ['task' => 'Report'], 'internal monologue'), true, null, 200, preliminary: true),
+        new ToolResult('event-4', new Data\ToolResult('call-1', 'document_specialist', ['task' => 'Report'], 'done'), true, null, time()),
+        new TextDelta('event-5', 'msg-1', ' Done.', time()),
+        new StreamEnd('event-6', 'stop', new Usage, time()),
+    ]);
+
+    expect($parts)->toBe([
+        ['type' => 'start', 'messageId' => 'msg-1'],
+        ['type' => 'start-step'],
+        ['type' => 'text-delta', 'id' => 'msg-1', 'delta' => 'Working on it.'],
+        ['type' => 'tool-input-available', 'toolCallId' => 'call-1', 'toolName' => 'document_specialist', 'input' => ['task' => 'Report']],
+        [
+            'type' => 'tool-output-available',
+            'toolCallId' => 'call-1',
+            'output' => 'internal monologue',
+            'preliminary' => true,
+        ],
+        ['type' => 'tool-output-available', 'toolCallId' => 'call-1', 'output' => 'done'],
+        ['type' => 'text-delta', 'id' => 'msg-1', 'delta' => ' Done.'],
+        ['type' => 'finish-step'],
+        vercelFinishPart(),
+        ['type' => 'done'],
+    ]);
+});

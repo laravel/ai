@@ -311,7 +311,9 @@ class AgentUserInteractionProtocol extends StreamProtocol
                 ['type' => 'REASONING_END', 'messageId' => $event->reasoningId],
             ],
             $event instanceof ToolCall => $this->toolCallParts($event->toolCall),
-            $event instanceof ToolResult => [$this->toolResultPart($event)],
+            $event instanceof ToolResult => [$event->preliminary
+                ? $this->preliminaryToolResultPart($event)
+                : $this->toolResultPart($event)],
             $event instanceof Error => [[
                 'type' => 'RUN_ERROR',
                 'message' => $event->message,
@@ -331,6 +333,24 @@ class AgentUserInteractionProtocol extends StreamProtocol
             ]],
             default => [],
         };
+    }
+
+    /**
+     * Get the protocol part for a tool still producing its output, which AG-UI has no tool result for.
+     *
+     * @return array<string, mixed>
+     */
+    protected function preliminaryToolResultPart(ToolResult $event): array
+    {
+        return [
+            'type' => 'ACTIVITY_SNAPSHOT',
+            'messageId' => $event->toolResult->id,
+            'activityType' => 'TOOL_OUTPUT',
+            'content' => [
+                'toolName' => $event->toolResult->name,
+                'output' => $event->toolResult->result,
+            ],
+        ];
     }
 
     /**

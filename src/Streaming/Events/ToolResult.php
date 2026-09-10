@@ -13,6 +13,7 @@ class ToolResult extends StreamEvent
         public ?string $error,
         public int $timestamp,
         public bool $denied = false,
+        public bool $preliminary = false,
     ) {
         //
     }
@@ -32,6 +33,7 @@ class ToolResult extends StreamEvent
             'successful' => $this->successful,
             'error' => $this->error,
             'denied' => $this->denied,
+            ...($this->preliminary ? ['preliminary' => true] : []),
             'timestamp' => $this->timestamp,
         ];
     }

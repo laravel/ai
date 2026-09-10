@@ -318,6 +318,36 @@ test('a tool executed within the run emits its call and result events', function
     ]);
 });
 
+test('preliminary tool output streams as an activity snapshot beside the terminal tool result', function () {
+    $events = agUiProtocolEvents([
+        new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
+        new ToolCall('event-1', new Data\ToolCall('call-1', 'document_specialist', ['task' => 'Report']), time()),
+        new ToolResult('event-2', new Data\ToolResult('call-1', 'document_specialist', ['task' => 'Report'], 'internal monologue'), true, null, 200, preliminary: true),
+        new ToolResult('event-3', new Data\ToolResult('call-1', 'document_specialist', ['task' => 'Report'], 'done'), true, null, time()),
+        new StreamEnd('event-4', 'stop', new Usage, time()),
+    ]);
+
+    expect($events)->toBe([
+        ['type' => 'RUN_STARTED', 'threadId' => 'thread-1', 'runId' => 'run-1'],
+        ['type' => 'STEP_STARTED', 'stepName' => '1'],
+        ['type' => 'TOOL_CALL_START', 'toolCallId' => 'call-1', 'toolCallName' => 'document_specialist'],
+        ['type' => 'TOOL_CALL_ARGS', 'toolCallId' => 'call-1', 'delta' => '{"task":"Report"}'],
+        ['type' => 'TOOL_CALL_END', 'toolCallId' => 'call-1'],
+        [
+            'type' => 'ACTIVITY_SNAPSHOT',
+            'messageId' => 'call-1',
+            'activityType' => 'TOOL_OUTPUT',
+            'content' => [
+                'toolName' => 'document_specialist',
+                'output' => 'internal monologue',
+            ],
+        ],
+        ['type' => 'TOOL_CALL_RESULT', 'messageId' => 'event-3', 'toolCallId' => 'call-1', 'content' => 'done', 'role' => 'tool'],
+        ['type' => 'STEP_FINISHED', 'stepName' => '1'],
+        agUiRunFinished(),
+    ]);
+});
+
 test('a tool call without arguments streams an empty json object', function () {
     $events = agUiProtocolEvents([
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
