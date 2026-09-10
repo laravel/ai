@@ -9,8 +9,10 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\PaginatesConversations;
+use Laravel\Ai\Contracts\ResolvesPendingApprovals;
 use Laravel\Ai\Contracts\VerifiesConversationOwnership;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Files\File;
@@ -23,7 +25,7 @@ use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 
-class DatabaseConversationStore implements ConversationStore, PaginatesConversations, VerifiesConversationOwnership
+class DatabaseConversationStore implements ConversationStore, PaginatesConversations, ResolvesPendingApprovals, VerifiesConversationOwnership
 {
     /**
      * Create a new conversation store instance.
@@ -298,6 +300,44 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             ->orderByDesc('id')
             ->cursorPaginate($perPage, ['*'], $cursorName, $cursor)
             ->through(fn (object $record): StoredMessage => StoredMessage::fromArray((array) $record));
+    }
+
+    /**
+     * Get the tool calls the given conversation's newest turn is still waiting on.
+     *
+     * @return list<PendingApproval>
+     */
+    public function pendingApprovalsFor(string $conversationId): array
+    {
+        /** @var object{tool_calls: string, tool_results: string, approval_state: ?string}|null $newest */
+        $newest = $this->table($this->messagesTable())
+            ->where('conversation_id', $conversationId)
+            ->orderByDesc('id')
+            ->first(['tool_calls', 'tool_results', 'approval_state']);
+
+        if ($newest === null) {
+            return [];
+        }
+
+        $reasons = collect(data_get(json_decode($newest->approval_state ?? '{}', true), 'pending'));
+
+        if ($reasons->isEmpty()) {
+            return [];
+        }
+
+        $answered = Collection::fromJson($newest->tool_results)->pluck('id');
+
+        return Collection::fromJson($newest->tool_calls)
+            ->map(ToolCall::fromArray(...))
+            ->filter(fn (ToolCall $toolCall) => $reasons->has($toolCall->id) && $answered->doesntContain($toolCall->id))
+            ->map(fn (ToolCall $toolCall) => new PendingApproval(
+                $toolCall->id,
+                $toolCall->name,
+                $toolCall->arguments,
+                $reasons->get($toolCall->id),
+            ))
+            ->values()
+            ->all();
     }
 
     /**
