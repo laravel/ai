@@ -82,6 +82,9 @@ class StepResult implements IteratorAggregate
         $this->resolve($this->source->getReturn());
     }
 
+    /**
+     * Determine whether the step response is backed by a stream.
+     */
     public function streamed(): bool
     {
         return $this->source instanceof Generator;
@@ -99,6 +102,9 @@ class StepResult implements IteratorAggregate
         return $this->response;
     }
 
+    /**
+     * Resolve the step response and invoke registered callbacks.
+     */
     protected function resolve(mixed $response): void
     {
         $this->resolved = true;

@@ -51,17 +51,25 @@ class TextGenerationOptions
         return [...($agentOptions ?? []), ...Arr::except($this->providerOptions, HasProviderOptions::HEADERS)];
     }
 
+    /**
+     * Create a copy using a different tool choice.
+     */
     public function withToolChoice(?ToolChoice $toolChoice): self
     {
         return $this->with(['toolChoice' => $toolChoice]);
     }
 
+    /**
+     * Create a copy using a different maximum token count.
+     */
     public function withMaxTokens(?int $maxTokens): self
     {
         return $this->with(['maxTokens' => $maxTokens]);
     }
 
     /**
+     * Create a copy using different provider options.
+     *
      * @param  array<string, mixed>|null  $providerOptions
      */
     public function withProviderOptions(?array $providerOptions): self
@@ -70,6 +78,8 @@ class TextGenerationOptions
     }
 
     /**
+     * Create a copy with the given property overrides.
+     *
      * @param  array<string, mixed>  $overrides
      */
     protected function with(array $overrides): self

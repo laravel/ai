@@ -403,6 +403,9 @@ class TextGenerationLoop
         return $next($step);
     }
 
+    /**
+     * Normalize a middleware result to a step result.
+     */
     protected function toStepResult(mixed $result): StepResult
     {
         return match (true) {
@@ -447,6 +450,9 @@ class TextGenerationLoop
         }
     }
 
+    /**
+     * Report a failed generation attempt when one was made.
+     */
     protected function stepFailed(?RunContext $context, ?StepResult $attempt, Throwable $exception): void
     {
         if ($attempt !== null) {
