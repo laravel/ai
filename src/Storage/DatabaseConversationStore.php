@@ -228,7 +228,7 @@ class DatabaseConversationStore implements ConversationStore
 
         if (filled($blocks = $response->pausedProviderContentBlocks())) {
             $meta['provider_content_blocks'] = $blocks;
-            $meta['provider_content_block_call_ids'] = $response->pausedToolCallIds();
+            $meta['paused_step_tool_call_ids'] = $response->pausedToolCallIds();
         }
 
         if (filled($response->reasoning)) {
@@ -337,7 +337,7 @@ class DatabaseConversationStore implements ConversationStore
 
         if ($isPause && filled($providerContentBlocks)) {
             // The blocks only cover the step that paused, so calls answered in earlier steps replay ahead of them...
-            $pausedStepCallIds = ($meta['provider_content_block_call_ids'] ?? []) ?: $callIds;
+            $pausedStepCallIds = ($meta['paused_step_tool_call_ids'] ?? []) ?: $callIds;
 
             [$pausedStepResults, $earlierStepResults] = $ownResults->partition(
                 fn (array $toolResult) => in_array($toolResult['id'], $pausedStepCallIds, true)

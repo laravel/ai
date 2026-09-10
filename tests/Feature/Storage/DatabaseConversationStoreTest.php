@@ -810,7 +810,7 @@ test('it records provider content blocks into the message meta when a turn pause
 
     expect(json_decode((string) $record->meta, true))
         ->toHaveKey('provider_content_blocks', [['type' => 'thinking', 'signature' => 'sig-1']])
-        ->toHaveKey('provider_content_block_call_ids', ['call-1']);
+        ->toHaveKey('paused_step_tool_call_ids', ['call-1']);
 });
 
 test('it omits provider content blocks when the assistant turn is not paused', function (): void {
@@ -861,10 +861,10 @@ test('it records provider content blocks into the message meta when a stream pau
 
     expect(json_decode((string) $record->meta, true))
         ->toHaveKey('provider_content_blocks', [['type' => 'thinking', 'signature' => 'sig-1']])
-        ->toHaveKey('provider_content_block_call_ids', ['call-1']);
+        ->toHaveKey('paused_step_tool_call_ids', ['call-1']);
 });
 
-test('it preserves provider content blocks when a mixed pause carries an executed and a gated call', function (): void {
+test('it replays a legacy pause row written before paused step tool call ids as one message', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
 
@@ -931,7 +931,7 @@ test('it replays earlier-step results ahead of the paused step blocks', function
                 ['type' => 'tool_use', 'id' => 'call-2', 'name' => 'read_file', 'input' => ['path' => 'b']],
                 ['type' => 'tool_use', 'id' => 'call-3', 'name' => 'delete_file', 'input' => ['path' => 'b']],
             ],
-            'provider_content_block_call_ids' => ['call-2', 'call-3'],
+            'paused_step_tool_call_ids' => ['call-2', 'call-3'],
         ]),
         'approval_state' => json_encode(['pending' => ['call-3' => null]]),
         'created_at' => now(),
