@@ -32,11 +32,23 @@ class Decision
     }
 
     /**
+     * Approve the pending tool call with its arguments replaced wholesale.
+     *
      * @param  array<string, mixed>  $arguments
      */
     public static function edit(array $arguments): self
     {
         return new self('edit', arguments: $arguments);
+    }
+
+    /**
+     * Approve the pending tool call with the given arguments merged into its own.
+     *
+     * @param  array<string, mixed>  $arguments
+     */
+    public static function submit(array $arguments): self
+    {
+        return new self('submit', arguments: $arguments);
     }
 
     /**
@@ -81,6 +93,10 @@ class Decision
                 throw new InvalidArgumentException('The wildcard decision may not use the edit action.');
             }
 
+            if ($id === '*' && $decision->isSubmitted()) {
+                throw new InvalidArgumentException('The wildcard decision may not use the submit action.');
+            }
+
             $normalized[$id] = $decision;
         }
 
@@ -109,5 +125,13 @@ class Decision
     public function isEdited(): bool
     {
         return $this->action === 'edit';
+    }
+
+    /**
+     * Determine whether the tool call was answered with a client submission.
+     */
+    public function isSubmitted(): bool
+    {
+        return $this->action === 'submit';
     }
 }

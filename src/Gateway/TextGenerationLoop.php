@@ -12,6 +12,7 @@ use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Attributes\RepairToolCalls;
 use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
+use Laravel\Ai\Contracts\Interactive;
 use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
@@ -39,6 +40,7 @@ use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Laravel\Ai\Tools\Request;
+use Laravel\Ai\Tools\Response;
 use Laravel\Ai\Tools\ToolNameResolver;
 use LogicException;
 use Throwable;
@@ -405,6 +407,7 @@ class TextGenerationLoop
                     $toolCall->name,
                     $toolCall->arguments,
                     $approval->reason,
+                    $approval->ui,
                 ));
 
                 continue;
@@ -421,8 +424,8 @@ class TextGenerationLoop
             [$toolCall, $tool] = $pair;
 
             $result = match (true) {
-                ! $tool instanceof Tool && $this->repairsToolCalls => "Tool '{$toolCall->name}' does not exist. Available tools: {$this->availableToolNames($tools)}.",
-                $isFinalStep => 'The agent reached its maximum number of steps without running this tool call.',
+                ! $tool instanceof Tool && $this->repairsToolCalls => new Response("Tool '{$toolCall->name}' does not exist. Available tools: {$this->availableToolNames($tools)}."),
+                $isFinalStep => new Response('The agent reached its maximum number of steps without running this tool call.'),
                 default => $this->executeTool($tool, $toolCall->arguments, $toolCall->id, $context),
             };
 
@@ -430,9 +433,10 @@ class TextGenerationLoop
                 $toolCall->id,
                 $toolCall->name,
                 $toolCall->arguments,
-                $result,
+                (string) $result->text,
                 $toolCall->resultId,
                 failed: ! $tool instanceof Tool || $isFinalStep,
+                ui: $result->ui,
             );
         }, $resolved);
 
@@ -514,33 +518,46 @@ class TextGenerationLoop
                 continue;
             }
 
-            $arguments = $decision->arguments ?? $toolCall->arguments;
             $tool = $resolvedTools[$toolCall->id];
 
             if (! $tool instanceof Tool) {
                 throw new NoSuchToolException($toolCall->name);
             }
 
+            $arguments = $this->argumentsForDecision($decision, $toolCall);
             $failed = false;
 
             try {
                 $result = $this->executeTool($tool, $arguments, $toolCall->id, $context);
             } catch (Throwable $exception) {
                 $failed = true;
-                $result = 'The tool call failed: '.$exception->getMessage();
+                $result = new Response('The tool call failed: '.$exception->getMessage());
             }
 
             $toolResults[] = new ToolResult(
                 $toolCall->id,
                 $toolCall->name,
                 $arguments,
-                $result,
+                (string) $result->text,
                 $toolCall->resultId,
                 failed: $failed,
+                ui: $result->ui,
             );
         }
 
         return [$toolResults, ! $hasBareRejection];
+    }
+
+    /**
+     * Resolve the arguments a decision executes the tool with.
+     *
+     * @return array<string, mixed>
+     */
+    protected function argumentsForDecision(Decision $decision, ToolCall $toolCall): array
+    {
+        return $decision->isSubmitted()
+            ? [...$toolCall->arguments, ...($decision->arguments ?? [])]
+            : $decision->arguments ?? $toolCall->arguments;
     }
 
     /**
@@ -591,6 +608,18 @@ class TextGenerationLoop
             throw new ApprovalMismatchException('There are no tool calls pending approval.', collect());
         }
 
+        $approved = $gated->filter(
+            fn (ToolCall $toolCall) => $approvals[$toolCall->id]->isInteractive()
+                && (($approval[$toolCall->id] ?? $approval['*'] ?? null)?->isApproved() ?? false)
+        );
+
+        if ($approved->isNotEmpty()) {
+            throw new ApprovalMismatchException(
+                'Interactive tool calls must be answered with a submission.',
+                $this->pendingApprovalsFor($approved, $approvals),
+            );
+        }
+
         return [$pendingToolCalls, $resolvedTools];
     }
 
@@ -599,8 +628,16 @@ class TextGenerationLoop
      */
     protected function approvalForTool(?Tool $tool, ToolCall $toolCall): ?Approval
     {
+        $request = new Request($toolCall->arguments, $toolCall->id);
+
+        if ($tool instanceof Interactive) {
+            $ui = $tool->ask($request);
+
+            return $ui === null ? null : Approval::input($ui);
+        }
+
         return $tool instanceof Approvable
-            ? $tool->shouldRequestApproval(new Request($toolCall->arguments, $toolCall->id))
+            ? $tool->shouldRequestApproval($request)
             : null;
     }
 

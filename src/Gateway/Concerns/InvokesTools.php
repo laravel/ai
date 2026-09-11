@@ -9,6 +9,7 @@ use Laravel\Ai\Gateway\ParentInvocation;
 use Laravel\Ai\Gateway\RunContext;
 use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Tools\Request;
+use Laravel\Ai\Tools\Response;
 use Laravel\Ai\Tools\ToolNameResolver;
 use Throwable;
 
@@ -21,12 +22,12 @@ trait InvokesTools
      *
      * @param  array<string, mixed>  $arguments
      */
-    protected function executeTool(Tool $tool, array $arguments, ?string $toolCallId = null, ?RunContext $context = null): string
+    protected function executeTool(Tool $tool, array $arguments, ?string $toolCallId = null, ?RunContext $context = null): Response
     {
         $toolInvocationId = (string) Str::uuid7();
 
         // Any agent prompted while this tool runs, however it was reached, is a child of this tool call...
-        return ParentInvocation::within($context?->invocationId, $toolInvocationId, function () use ($tool, $arguments, $toolCallId, $toolInvocationId, $context): string {
+        return ParentInvocation::within($context?->invocationId, $toolInvocationId, function () use ($tool, $arguments, $toolCallId, $toolInvocationId, $context): Response {
             $context?->invokingTool($tool, $arguments, $toolInvocationId);
 
             $startedAt = hrtime(true);
@@ -45,7 +46,9 @@ trait InvokesTools
 
             $context?->toolInvoked($tool, $arguments, $result, $toolInvocationId, $this->elapsedMilliseconds($startedAt));
 
-            return (string) $result;
+            return $result instanceof Response
+                ? new Response((string) $result->text, $result->ui)
+                : new Response((string) $result);
         });
     }
 

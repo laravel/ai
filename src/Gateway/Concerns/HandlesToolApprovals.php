@@ -158,6 +158,7 @@ trait HandlesToolApprovals
             $toolCall->name,
             $toolCall->arguments,
             $approvals[$toolCall->id]?->reason,
+            $approvals[$toolCall->id]?->ui,
         ))->values();
     }
 }

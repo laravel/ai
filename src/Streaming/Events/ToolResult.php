@@ -29,6 +29,7 @@ class ToolResult extends StreamEvent
             'tool_id' => $this->toolResult->id,
             'tool_name' => $this->toolResult->name,
             'result' => $this->toolResult->result,
+            ...($this->toolResult->ui === null ? [] : ['ui' => $this->toolResult->ui]),
             'successful' => $this->successful,
             'error' => $this->error,
             'denied' => $this->denied,
@@ -59,7 +60,7 @@ class ToolResult extends StreamEvent
         return [
             'type' => 'tool-output-available',
             'toolCallId' => $this->toolResult->id,
-            'output' => $this->toolResult->result,
+            'output' => $this->toolResult->ui ?? $this->toolResult->result,
         ];
     }
 }
