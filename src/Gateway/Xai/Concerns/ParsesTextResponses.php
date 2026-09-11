@@ -69,6 +69,7 @@ trait ParsesTextResponses
             meta: new Meta($provider->name(), $model, $citations),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
             continuationToken: $data['id'] ?? null,
+            providerContentBlocks: $this->isStateless($provider) ? $this->extractReplayBlocks($output) : [],
         );
     }
 
@@ -186,5 +187,16 @@ trait ParsesTextResponses
         }
 
         return $toolCalls;
+    }
+
+    /**
+     * Keep every output item so a stateless turn replays untouched, as the Responses API requires.
+     *
+     * @param  array<int, mixed>  $output
+     * @return array<int, array<string, mixed>>
+     */
+    protected function extractReplayBlocks(array $output): array
+    {
+        return array_values(array_filter($output, 'is_array'));
     }
 }

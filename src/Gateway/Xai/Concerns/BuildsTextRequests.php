@@ -45,7 +45,7 @@ trait BuildsTextRequests
         ?TextGenerationOptions $options,
         StepContext $stepContext,
     ): array {
-        return $stepContext->continuationToken
+        return $stepContext->continuationToken && ! $this->isStateless($provider)
             ? $this->buildContinuationBody($stepContext->continuationToken, $model, $messages, $tools, $provider, $schema, $options)
             : $this->buildTextRequestBody($provider, $model, $instructions, $messages, $tools, $schema, $options);
     }
@@ -106,10 +106,41 @@ trait BuildsTextRequests
         $providerOptions = $options?->providerOptions($provider->driver());
 
         if (filled($providerOptions)) {
-            return array_merge($body, $providerOptions);
+            $body = array_merge($body, $providerOptions);
+        }
+
+        if ($this->isStateless($provider)) {
+            $body['store'] = false;
+
+            if ($this->isReasoningModel($body['model'] ?? '')) {
+                $body['include'] = array_values(array_unique([
+                    ...($body['include'] ?? []),
+                    'reasoning.encrypted_content',
+                ]));
+            }
         }
 
         return $body;
+    }
+
+    /**
+     * Determine if xAI should receive full stateless conversation history.
+     */
+    protected function isStateless(Provider $provider): bool
+    {
+        return filter_var(
+            $provider->additionalConfiguration()['store'] ?? true,
+            FILTER_VALIDATE_BOOL,
+            FILTER_NULL_ON_FAILURE,
+        ) === false;
+    }
+
+    /**
+     * Determine if the model supports encrypted reasoning content, which xAI marks by omitting the non-reasoning suffix.
+     */
+    protected function isReasoningModel(string $model): bool
+    {
+        return ! str_ends_with($model, '-non-reasoning');
     }
 
     /**

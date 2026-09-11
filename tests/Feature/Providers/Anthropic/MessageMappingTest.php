@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Ai\Files;
@@ -9,6 +10,7 @@ use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Gateway\Anthropic\AnthropicGateway;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Storage\DatabaseConversationStore;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
@@ -669,4 +671,62 @@ test('system instructions are not in messages array', function (): void {
 
         return isset($body['system']) && is_string($body['system']);
     });
+});
+
+test('a rehydrated turn whose unresolved calls were dropped replays no orphan tool_use', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'participant_type' => 'user',
+        'participant_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => 'Working on it.',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'toolu_answered', 'name' => 'write_file', 'arguments' => [], 'result_id' => 'toolu_answered'],
+            ['id' => 'toolu_dropped', 'name' => 'write_file', 'arguments' => [], 'result_id' => 'toolu_dropped'],
+        ]),
+        'tool_results' => json_encode([
+            ['id' => 'toolu_answered', 'name' => 'write_file', 'arguments' => [], 'result' => 'Written', 'result_id' => 'toolu_answered'],
+        ]),
+        'usage' => '[]',
+        'meta' => json_encode([
+            'provider' => 'anthropic',
+            'provider_content_blocks' => [
+                ['type' => 'thinking', 'signature' => 'sig-1', 'thinking' => 'Plan the writes.'],
+                ['type' => 'tool_use', 'id' => 'toolu_answered', 'name' => 'write_file', 'input' => []],
+                ['type' => 'tool_use', 'id' => 'toolu_dropped', 'name' => 'write_file', 'input' => []],
+            ],
+        ]),
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10)->all();
+
+    $gateway = app(AnthropicGateway::class);
+    $method = (new ReflectionClass($gateway))->getMethod('mapMessages');
+
+    $mapped = $method->invoke($gateway, $messages);
+
+    $toolUseIds = collect($mapped)
+        ->where('role', 'assistant')
+        ->flatMap(fn (array $message): array => is_array($message['content']) ? $message['content'] : [])
+        ->where('type', 'tool_use')
+        ->pluck('id')
+        ->all();
+
+    $toolResultIds = collect($mapped)
+        ->where('role', 'user')
+        ->flatMap(fn (array $message): array => is_array($message['content']) ? $message['content'] : [])
+        ->where('type', 'tool_result')
+        ->pluck('tool_use_id')
+        ->all();
+
+    expect($toolUseIds)->toBe(['toolu_answered'])
+        ->and($toolResultIds)->toBe(['toolu_answered']);
 });

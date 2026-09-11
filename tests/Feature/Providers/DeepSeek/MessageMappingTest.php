@@ -118,3 +118,29 @@ test('document attachments throw exception', function (): void {
         provider: 'deepseek',
     );
 })->throws(InvalidArgumentException::class);
+
+test('reasoning content parses into a typed replay block', function (): void {
+    Http::fake([
+        'api.deepseek.com/*' => Http::response([
+            'id' => 'chatcmpl-deepseek-123',
+            'object' => 'chat.completion',
+            'model' => 'deepseek-reasoner',
+            'choices' => [[
+                'index' => 0,
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => 'Four.',
+                    'reasoning_content' => 'Let me think... 2+2 = 4',
+                ],
+                'finish_reason' => 'stop',
+            ]],
+            'usage' => ['prompt_tokens' => 1, 'completion_tokens' => 1],
+        ]),
+    ]);
+
+    $response = (new AssistantAgent)->prompt('What is 2+2?', provider: 'deepseek');
+
+    expect($response->steps->first()->providerContentBlocks)->toBe([
+        ['type' => 'reasoning_content', 'text' => 'Let me think... 2+2 = 4'],
+    ]);
+});

@@ -230,3 +230,55 @@ test('system instructions are in input array', function (): void {
             && str_contains((string) $systemMsg['content'], 'helpful assistant');
     });
 });
+
+test('stateless tool follow up replays the full output array in order', function (): void {
+    config(['ai.providers.xai' => [
+        ...config('ai.providers.xai'),
+        'key' => 'test-key',
+        'store' => false,
+    ]]);
+
+    Http::fake([
+        '*' => Http::sequence([
+            $this->fakeReasoningToolCallResponse(),
+            $this->fakeTextResponse('The number is 72019'),
+        ]),
+    ]);
+
+    (new ToolUsingAgent(fixed: true))->prompt('Generate a number', provider: 'xai');
+
+    $followUp = json_decode((string) Http::recorded()[1][0]->body(), true);
+
+    $input = collect($followUp['input']);
+
+    $reasoningIndex = $input->search(fn ($item): bool => ($item['type'] ?? '') === 'reasoning');
+    $callIndex = $input->search(fn ($item): bool => ($item['type'] ?? '') === 'function_call');
+
+    expect($followUp)->not->toHaveKey('previous_response_id')
+        ->and($input[$reasoningIndex])->toBe([
+            'type' => 'reasoning',
+            'id' => 'rs_1',
+            'summary' => [['type' => 'summary_text', 'text' => 'Checked constraints.']],
+            'encrypted_content' => 'enc-blob-1',
+        ])
+        ->and($callIndex)->toBe($reasoningIndex + 1)
+        ->and($input->contains(fn ($item): bool => ($item['type'] ?? '') === 'function_call_output'
+            && ($item['call_id'] ?? '') === 'call_1'))->toBeTrue();
+});
+
+test('a stateful tool follow up sends no replayed reasoning', function (): void {
+    Http::fake([
+        '*' => Http::sequence([
+            $this->fakeReasoningToolCallResponse(),
+            $this->fakeTextResponse('The number is 72019'),
+        ]),
+    ]);
+
+    (new ToolUsingAgent(fixed: true))->prompt('Generate a number', provider: 'xai');
+
+    $followUp = json_decode((string) Http::recorded()[1][0]->body(), true);
+
+    expect($followUp)->toHaveKey('previous_response_id')
+        ->and(collect($followUp['input'])->contains(fn ($item): bool => ($item['type'] ?? '') === 'reasoning'))
+        ->toBeFalse();
+});

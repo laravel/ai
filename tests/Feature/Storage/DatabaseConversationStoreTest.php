@@ -399,6 +399,73 @@ test('it treats tool results stored before the failed flag as successful', funct
         ->and($result->error())->toBeNull();
 });
 
+test('it persists provider content blocks in message meta', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Reasoning conversation');
+
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        'Think this through.',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $response = new AgentResponse('invocation-id', 'Here is the answer.', new Usage, new Meta('openai', 'test-model'));
+    $response->withMessages(collect([
+        new AssistantMessage('Here is the answer.', providerContentBlocks: [
+            ['type' => 'reasoning', 'id' => 'rs_1', 'summary' => [['text' => 'Checked constraints.']]],
+        ]),
+    ]));
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $record = DB::table('agent_conversation_messages')
+        ->where('role', 'assistant')
+        ->first();
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    $meta = json_decode((string) $record->meta, true);
+
+    expect($meta['provider_content_blocks'])->toBe([
+        ['type' => 'reasoning', 'id' => 'rs_1', 'summary' => [['text' => 'Checked constraints.']]],
+    ])->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[0]->providerContentBlocks)->toBe([
+            ['type' => 'reasoning', 'id' => 'rs_1', 'summary' => [['text' => 'Checked constraints.']]],
+        ])
+        ->and($messages[0]->providerContentBlocksProvider)->toBe('openai');
+});
+
+test('it omits provider content blocks from a completed turn that made tool calls', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        'Delete the file.',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $response = new AgentResponse('invocation-id', 'Deleted the file.', new Usage, new Meta('anthropic', 'test-model'));
+    $response->toolCalls = collect([new ToolCall('call-1', 'delete-file', [])]);
+    $response->toolResults = collect([new ToolResult('call-1', 'delete-file', [], 'Deleted')]);
+    $response->withMessages(collect([
+        new AssistantMessage('Deleted the file.', collect([new ToolCall('call-1', 'delete-file', [])]), [
+            ['type' => 'thinking', 'signature' => 'sig-1'],
+            ['type' => 'tool_use', 'id' => 'call-1', 'name' => 'delete-file', 'input' => []],
+        ]),
+    ]));
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
+
+    expect(json_decode((string) $record->meta, true))->not->toHaveKey('provider_content_blocks');
+});
+
 test('a bare rejection resume does not persist a blank assistant row', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Approval conversation');
@@ -916,30 +983,6 @@ test('it records provider content blocks into the message meta when a turn pause
 
     expect(json_decode((string) $record->meta, true))
         ->toHaveKey('provider_content_blocks', [['type' => 'thinking', 'signature' => 'sig-1']]);
-});
-
-test('it omits provider content blocks when the assistant turn is not paused', function (): void {
-    $store = new DatabaseConversationStore;
-    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
-
-    $prompt = new AgentPrompt(
-        new ToolUsingAgent,
-        'Delete config/app.php.',
-        [],
-        Mockery::mock(TextProvider::class),
-        'test-model',
-    );
-
-    $response = (new AgentResponse('invocation-id', 'Deleted the file.', new Usage, new Meta))
-        ->withMessages(collect([
-            new AssistantMessage('Deleted the file.', null, [['type' => 'thinking', 'signature' => 'sig-1']]),
-        ]));
-
-    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
-
-    $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
-
-    expect(json_decode((string) $record->meta, true))->not->toHaveKey('provider_content_blocks');
 });
 
 test('it records provider content blocks into the message meta when a stream pauses', function (): void {

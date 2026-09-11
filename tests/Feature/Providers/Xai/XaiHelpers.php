@@ -62,6 +62,38 @@ trait XaiHelpers
         ]);
     }
 
+    protected function fakeReasoningToolCallResponse(string $reasoningId = 'rs_1', string $encrypted = 'enc-blob-1', string $callId = 'call_1'): PromiseInterface
+    {
+        return Http::response([
+            'id' => 'resp_tool_'.uniqid(),
+            'object' => 'response',
+            'status' => 'completed',
+            'model' => 'grok-4-1-fast-reasoning',
+            'output' => [
+                [
+                    'type' => 'reasoning',
+                    'id' => $reasoningId,
+                    'summary' => [['type' => 'summary_text', 'text' => 'Checked constraints.']],
+                    'encrypted_content' => $encrypted,
+                ],
+                [
+                    'type' => 'function_call',
+                    'id' => 'fc_1',
+                    'call_id' => $callId,
+                    'name' => 'FixedNumberGenerator',
+                    'arguments' => '{}',
+                    'status' => 'completed',
+                ],
+            ],
+            'usage' => [
+                'input_tokens' => 10,
+                'output_tokens' => 5,
+                'input_tokens_details' => ['cached_tokens' => 0],
+                'output_tokens_details' => ['reasoning_tokens' => 4],
+            ],
+        ]);
+    }
+
     protected function fakeStructuredResponse(string $json = '{"symbol": "Au"}'): PromiseInterface
     {
         return $this->fakeTextResponse($json);

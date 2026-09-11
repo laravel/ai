@@ -83,7 +83,8 @@ trait MapsMessages
                 fn (ToolCall $toolCall) => $this->serializeToolCallToChat($toolCall)
             )->all();
 
-            $msg['reasoning_content'] = $message->providerContentBlocks['reasoning_content'] ?? '';
+            $msg['reasoning_content'] = collect($message->providerContentBlocks)
+                ->firstWhere('type', 'reasoning_content')['text'] ?? '';
         }
 
         $chatMessages[] = $msg;

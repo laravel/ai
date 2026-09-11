@@ -636,6 +636,7 @@ class TextGenerationLoop
             $result->finishReason,
             $result->usage,
             $result->meta,
+            $result->providerContentBlocks,
         ))->withRawResponse($result->raw);
     }
 

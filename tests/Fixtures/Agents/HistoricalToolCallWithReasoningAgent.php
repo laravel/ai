@@ -34,7 +34,7 @@ class HistoricalToolCallWithReasoningAgent implements Agent, Conversational
                 collect([
                     new ToolCall('call_1', 'SearchProducts', ['keyword' => 'lampu'], 'call_1'),
                 ]),
-                ['reasoning_content' => 'I need to search for lampu products.']
+                [['type' => 'reasoning_content', 'text' => 'I need to search for lampu products.']]
             ),
             new ToolResultMessage(collect([
                 new ToolResult('call_1', 'SearchProducts', ['keyword' => 'lampu'], '[{"name":"Lampu LED"}]', 'call_1'),

@@ -28,7 +28,8 @@ test('step stores text tool calls and other properties', function (): void {
 test('step to array returns all properties including serialized usage and meta', function (): void {
     $usage = new Usage(10, 5);
     $meta = new Meta('openai', 'gpt-4o');
-    $step = new Step('test', [], [], FinishReason::Stop, $usage, $meta);
+    $blocks = [['type' => 'reasoning', 'id' => 'rs_1']];
+    $step = new Step('test', [], [], FinishReason::Stop, $usage, $meta, $blocks);
 
     $array = $step->toArray();
 
@@ -37,7 +38,8 @@ test('step to array returns all properties including serialized usage and meta',
         ->and($array['tool_results'])->toBe([])
         ->and($array['finish_reason'])->toBe('stop')
         ->and($array['usage'])->toBe($usage)
-        ->and($array['meta'])->toBe($meta);
+        ->and($array['meta'])->toBe($meta)
+        ->and($array['provider_content_blocks'])->toBe($blocks);
 });
 
 test('step json serialize returns to array', function (): void {

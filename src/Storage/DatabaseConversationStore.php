@@ -217,7 +217,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     }
 
     /**
-     * Build the message meta payload, tucking a paused turn's raw provider blocks alongside the response meta.
+     * Build the message meta payload, tucking a turn's raw provider blocks alongside the response meta.
      *
      * @return array<string, mixed>
      */
@@ -225,7 +225,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     {
         $meta = (array) json_decode(json_encode($response->meta), true);
 
-        if (filled($blocks = $response->pausedProviderContentBlocks())) {
+        if (filled($blocks = $this->replayableProviderContentBlocks($response))) {
             $meta['provider_content_blocks'] = $blocks;
         }
 
@@ -257,6 +257,9 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             ->flatMap(function ($record) use ($resolvedCallIds): array {
                 $toolCalls = collect(json_decode((string) $record->tool_calls, true))->values();
                 $toolResults = collect(json_decode((string) $record->tool_results, true))->values();
+                $meta = (array) json_decode($record->meta ?? '[]', true);
+                $providerContentBlocks = $meta['provider_content_blocks'] ?? [];
+                $provider = $meta['provider'] ?? null;
 
                 if ($record->role === 'user') {
                     $attachments = $this->rehydrateAttachments($record->attachments);
@@ -282,7 +285,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
                     return $messages;
                 }
 
-                return [new AssistantMessage($record->content)];
+                return [new AssistantMessage($record->content, providerContentBlocks: $providerContentBlocks, providerContentBlocksProvider: $provider)];
             })
             ->skipWhile(fn (Message $message) => $message instanceof ToolResultMessage)
             ->values();
@@ -409,6 +412,30 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
         }
 
         return $messages;
+    }
+
+    /**
+     * Get the raw provider blocks that are safe to replay verbatim on a later turn.
+     *
+     * A turn that made tool calls is rebuilt call by call on read, so its raw blocks would replay tool calls the reconstruction deliberately dropped.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function replayableProviderContentBlocks(AgentResponse $response): array
+    {
+        if ($response->hasPendingApprovals()) {
+            return $response->pausedProviderContentBlocks();
+        }
+
+        if ($response->toolCalls->isNotEmpty()) {
+            return [];
+        }
+
+        return $response->messages
+            ->whereInstanceOf(AssistantMessage::class)
+            ->flatMap(fn (AssistantMessage $message) => $message->providerContentBlocks)
+            ->values()
+            ->all();
     }
 
     /**

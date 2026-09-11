@@ -194,11 +194,7 @@ trait HandlesTextStreaming
             }
         }
 
-        $providerContentBlocks = [];
-
-        if (filled($currentReasoning)) {
-            $providerContentBlocks['reasoning_content'] = $currentReasoning;
-        }
+        $providerContentBlocks = $this->reasoningContentBlocks($currentReasoning);
 
         return new StepResponse(
             text: $currentText,

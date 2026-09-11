@@ -367,3 +367,52 @@ function fakeXaiRequestMappingResponse(string $text): PromiseInterface
         ],
     ]);
 }
+
+test('a stateless request asks for encrypted reasoning content', function (): void {
+    config(['ai.providers.xai' => [
+        ...config('ai.providers.xai'),
+        'key' => 'test-key',
+        'store' => false,
+    ]]);
+
+    Http::fake(['*' => $this->fakeTextResponse()]);
+
+    (new AssistantAgent)->prompt('Hello', provider: 'xai', model: 'grok-4-1-fast-reasoning');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode((string) $request->body(), true);
+
+        return ($body['store'] ?? null) === false
+            && in_array('reasoning.encrypted_content', $body['include'] ?? [], true);
+    });
+});
+
+test('a stateless request omits the encrypted reasoning include for a non reasoning model', function (): void {
+    config(['ai.providers.xai' => [
+        ...config('ai.providers.xai'),
+        'key' => 'test-key',
+        'store' => false,
+    ]]);
+
+    Http::fake(['*' => $this->fakeTextResponse()]);
+
+    (new AssistantAgent)->prompt('Hello', provider: 'xai', model: 'grok-4.20-non-reasoning');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode((string) $request->body(), true);
+
+        return ($body['store'] ?? null) === false && ! isset($body['include']);
+    });
+});
+
+test('a stateful request omits store and the encrypted reasoning include', function (): void {
+    Http::fake(['*' => $this->fakeTextResponse()]);
+
+    (new AssistantAgent)->prompt('Hello', provider: 'xai');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode((string) $request->body(), true);
+
+        return ! isset($body['store']) && ! isset($body['include']);
+    });
+});
