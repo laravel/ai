@@ -14,10 +14,12 @@ use Laravel\Ai\QueuedAgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Responses\Data\UrlCitation;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
+use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
 use Laravel\Ai\Streaming\Events\ReasoningStart;
@@ -218,6 +220,30 @@ describe('stream responses', function (): void {
 
         expect($response->reasoning)->toBe('')
             ->and($response->events->whereInstanceOf(ReasoningDelta::class))->toBeEmpty();
+    });
+
+    test('faked agents can stream the sources an answer cited', function (): void {
+        AssistantAgent::fake([
+            new TextResponse('Laravel MCP ships an MCP server.', new Usage, new Meta('anthropic', 'test-model', collect([
+                new UrlCitation('https://laravel.com/docs/mcp', 'Laravel MCP'),
+            ]))),
+        ]);
+
+        $response = (new AssistantAgent)->stream('What does Laravel MCP do?');
+        $response->each(fn (): true => true);
+
+        expect($response->events->whereInstanceOf(CitationEvent::class))->toHaveCount(1)
+            ->and($response->citations->pluck('url')->all())->toBe(['https://laravel.com/docs/mcp']);
+    });
+
+    test('a faked stream reports no sources when the answer cited nothing', function (): void {
+        AssistantAgent::fake(['It is 12°C.']);
+
+        $response = (new AssistantAgent)->stream('How cold is it?');
+        $response->each(fn (): true => true);
+
+        expect($response->events->whereInstanceOf(CitationEvent::class))->toBeEmpty()
+            ->and($response->citations)->toBeEmpty();
     });
 
     test('faked stream events share the response invocation id', function (): void {

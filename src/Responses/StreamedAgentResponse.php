@@ -4,6 +4,7 @@ namespace Laravel\Ai\Responses;
 
 use Illuminate\Support\Collection;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Streaming\Events\Citation;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamEvent;
@@ -39,6 +40,9 @@ class StreamedAgentResponse extends AgentResponse
         $this->events = $events;
 
         $this->reasoning = ReasoningDelta::combine($events);
+
+        // A streamed run only ever sees its citations as events, not on the parsed body...
+        $this->meta->citations = Citation::combine($events);
 
         $this->withPendingApprovals(
             $events->whereInstanceOf(ToolApprovalRequest::class)

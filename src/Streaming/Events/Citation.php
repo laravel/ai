@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Streaming\Events;
 
+use Illuminate\Support\Collection;
 use Laravel\Ai\Responses\Data\Citation as CitationData;
 use Laravel\Ai\Responses\Data\UrlCitation;
 
@@ -14,6 +15,19 @@ class Citation extends StreamEvent
         public int $timestamp,
     ) {
         //
+    }
+
+    /**
+     * Combine citation events into the sources the run cited, in the order it cited them.
+     *
+     * @return Collection<int, CitationData>
+     */
+    public static function combine(Collection|array $events): Collection
+    {
+        return Collection::wrap($events)
+            ->whereInstanceOf(Citation::class)
+            ->map(fn (Citation $event) => $event->citation)
+            ->values();
     }
 
     /**

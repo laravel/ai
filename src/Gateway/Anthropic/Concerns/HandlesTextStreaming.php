@@ -319,6 +319,11 @@ trait HandlesTextStreaming
                 $stopReason = $data['delta']['stop_reason'] ?? '';
                 $deltaUsage = $data['usage'] ?? [];
 
+                // Usage on message_delta is cumulative for the whole message...
+                $inputTokens = $deltaUsage['input_tokens'] ?? $inputTokens;
+                $cacheCreationTokens = $deltaUsage['cache_creation_input_tokens'] ?? $cacheCreationTokens;
+                $cacheReadTokens = $deltaUsage['cache_read_input_tokens'] ?? $cacheReadTokens;
+
                 $usage = new Usage(
                     $inputTokens,
                     $deltaUsage['output_tokens'] ?? 0,

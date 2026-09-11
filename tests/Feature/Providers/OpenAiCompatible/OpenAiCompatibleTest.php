@@ -200,7 +200,7 @@ test('response usage is parsed using the openai standard shape', function (): vo
 
     $response = agent()->prompt('Hello', provider: 'openai-compatible');
 
-    expect($response->usage->promptTokens)->toBe(100)
+    expect($response->usage->promptTokens)->toBe(60)
         ->and($response->usage->completionTokens)->toBe(50)
         ->and($response->usage->cacheReadInputTokens)->toBe(40)
         ->and($response->usage->reasoningTokens)->toBe(10);

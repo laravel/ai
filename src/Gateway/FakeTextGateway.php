@@ -18,6 +18,7 @@ use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
+use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
 use Laravel\Ai\Streaming\Events\ReasoningStart;
@@ -114,6 +115,10 @@ class FakeTextGateway implements StepTextGateway
             }
 
             yield (new TextEnd(ulid(), $messageId, time()))->withInvocationId($invocationId);
+        }
+
+        foreach ($step->meta->citations as $citation) {
+            yield (new CitationEvent(ulid(), $messageId, $citation, time()))->withInvocationId($invocationId);
         }
 
         foreach ($step->toolCalls as $toolCall) {

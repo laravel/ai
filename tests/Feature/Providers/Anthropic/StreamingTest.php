@@ -360,6 +360,55 @@ describe('usage tracking', function (): void {
             ->cacheReadInputTokens->toBe(50);
     });
 
+    test('streaming prefers the cumulative usage reported on message delta', function (): void {
+        Http::fake([
+            'api.anthropic.com/*' => Http::response(
+                body: $this->ssePayload([
+                    [
+                        'type' => 'message_start',
+                        'message' => [
+                            'id' => 'msg_1',
+                            'model' => 'claude-sonnet-4-6',
+                            'role' => 'assistant',
+                            'content' => [],
+                            'usage' => [
+                                'input_tokens' => 2679,
+                                'output_tokens' => 3,
+                                'cache_creation_input_tokens' => 0,
+                                'cache_read_input_tokens' => 0,
+                            ],
+                        ],
+                    ],
+                    $this->contentBlockStart(0, ['type' => 'text', 'text' => '']),
+                    $this->contentBlockDelta(0, ['type' => 'text_delta', 'text' => 'Hello']),
+                    $this->contentBlockStop(0),
+                    [
+                        'type' => 'message_delta',
+                        'delta' => ['stop_reason' => 'end_turn'],
+                        'usage' => [
+                            'input_tokens' => 10682,
+                            'output_tokens' => 510,
+                            'cache_creation_input_tokens' => 25,
+                            'cache_read_input_tokens' => 75,
+                        ],
+                    ],
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $events = $this->collectStreamEvents();
+
+        $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
+
+        expect($streamEnd->usage)
+            ->promptTokens->toBe(10682)
+            ->completionTokens->toBe(510)
+            ->cacheWriteInputTokens->toBe(25)
+            ->cacheReadInputTokens->toBe(75);
+    });
+
     test('streaming tool loop emits a single stream end with accumulated usage', function (): void {
         Http::fake([
             'api.anthropic.com/*' => Http::sequence([

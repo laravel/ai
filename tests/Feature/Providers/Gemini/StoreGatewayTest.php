@@ -1,7 +1,9 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Sleep;
 use Laravel\Ai\AiManager;
+use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Stores;
 
 beforeEach(function (): void {
@@ -77,8 +79,16 @@ test('create store with file ids adds files', function (): void {
         'generativelanguage.googleapis.com/*' => Http::sequence([
             Http::response(['name' => 'fileSearchStores/store123']),
             Http::response(fakeStoreResponse()),
-            Http::response(['name' => 'fileSearchStores/store123/documents/doc1']),
-            Http::response(['name' => 'fileSearchStores/store123/documents/doc2']),
+            Http::response([
+                'name' => 'fileSearchStores/store123/operations/import1',
+                'done' => true,
+                'response' => ['documentName' => 'fileSearchStores/store123/documents/doc1'],
+            ]),
+            Http::response([
+                'name' => 'fileSearchStores/store123/operations/import2',
+                'done' => true,
+                'response' => ['documentName' => 'fileSearchStores/store123/documents/doc2'],
+            ]),
         ]),
     ]);
 
@@ -90,7 +100,11 @@ test('create store with file ids adds files', function (): void {
 test('add file sends correct request', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::response([
-            'name' => 'fileSearchStores/store123/documents/doc456',
+            'name' => 'fileSearchStores/store123/operations/import456',
+            'done' => true,
+            'response' => [
+                'documentName' => 'fileSearchStores/store123/documents/doc456',
+            ],
         ]),
     ]);
 
@@ -104,10 +118,95 @@ test('add file sends correct request', function (): void {
         && ($request->data()['fileName'] ?? null) === 'files/file789');
 });
 
+test('add file waits for the import operation and returns the document id', function (): void {
+    Sleep::fake();
+
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::sequence([
+            Http::response([
+                'name' => 'fileSearchStores/store123/operations/import456',
+                'done' => false,
+            ]),
+            Http::response([
+                'name' => 'fileSearchStores/store123/operations/import456',
+                'done' => true,
+                'response' => [
+                    'documentName' => 'fileSearchStores/store123/documents/doc456',
+                ],
+            ]),
+        ]),
+    ]);
+
+    $provider = geminiProvider();
+    $documentId = $provider->storeGateway()->addFile($provider, 'store123', 'file789');
+
+    expect($documentId)->toBe('doc456');
+
+    Http::assertSentCount(2);
+    Http::assertSent(fn ($request): bool => $request->method() === 'GET'
+        && str_contains((string) $request->url(), 'fileSearchStores/store123/operations/import456'));
+    Sleep::assertSequence([Sleep::for(5)->seconds()]);
+});
+
+test('add file reports an import operation error', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'name' => 'fileSearchStores/store123/operations/import456',
+            'done' => true,
+            'error' => [
+                'code' => 13,
+                'message' => 'Indexing failed.',
+            ],
+        ]),
+    ]);
+
+    $provider = geminiProvider();
+
+    expect(fn (): string => $provider->storeGateway()->addFile($provider, 'store123', 'file789'))
+        ->toThrow(AiException::class, 'Gemini Error: [13] Indexing failed.');
+});
+
+test('add file rejects a completed import without a document name', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'name' => 'fileSearchStores/store123/operations/import456',
+            'done' => true,
+            'response' => [],
+        ]),
+    ]);
+
+    $provider = geminiProvider();
+
+    expect(fn (): string => $provider->storeGateway()->addFile($provider, 'store123', 'file789'))
+        ->toThrow(AiException::class, 'Gemini Error: [invalid_response] File import completed without a document name.');
+});
+
+test('add file times out when the import operation never completes', function (): void {
+    Sleep::fake();
+
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'name' => 'fileSearchStores/store123/operations/import456',
+            'done' => false,
+        ]),
+    ]);
+
+    $provider = geminiProvider();
+
+    expect(fn (): string => $provider->storeGateway()->addFile($provider, 'store123', 'file789'))
+        ->toThrow(AiException::class, 'Gemini Error: [timeout] File import operation did not complete.');
+
+    Http::assertSentCount(61);
+});
+
 test('add file with metadata formats correctly', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::response([
-            'name' => 'fileSearchStores/store123/documents/doc456',
+            'name' => 'fileSearchStores/store123/operations/import456',
+            'done' => true,
+            'response' => [
+                'documentName' => 'fileSearchStores/store123/documents/doc456',
+            ],
         ]),
     ]);
 
