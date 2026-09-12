@@ -10,6 +10,7 @@ use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\RemembersConversations as RemembersConversationsContract;
+use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Models\Conversation;
@@ -40,7 +41,7 @@ trait ResumesToolApprovals
                 && filled($message->providerContentBlocks)
                 && $message->providerContentBlocksProvider !== null
                 && $message->providerContentBlocksProvider !== $this->name()) {
-                return new AssistantMessage($message->content, $message->toolCalls);
+                return new AssistantMessage($message->content, $message->toolCalls, participant: $message->participant);
             }
 
             return $message;
@@ -80,14 +81,9 @@ trait ResumesToolApprovals
      */
     protected function storeApprovalResultRecorderFor(AgentPrompt $prompt): ?Closure
     {
-        $agent = $prompt->agent;
+        $agent = $this->rememberingAgentFor($prompt);
 
-        if (! in_array(RemembersConversations::class, class_uses_recursive($agent), true)) {
-            return null;
-        }
-
-        /** @var Agent&RemembersConversationsContract $agent */
-        if ($agent->currentConversation() === null) {
+        if ($agent === null) {
             return null;
         }
 
@@ -99,5 +95,48 @@ trait ResumesToolApprovals
         $participantId = $participant === null ? null : Conversation::participantKey($participant);
 
         return fn (array $toolResults) => $store->storeApprovalResults($conversationId, $participantType, $participantId, $toolResults);
+    }
+
+    /**
+     * Ensure the resuming participant owns the paused turn before any approved tool runs.
+     *
+     * @param  array<int, Message>  $messages
+     *
+     * @throws ApprovalMismatchException when the resuming participant does not own the paused turn
+     */
+    protected function ensureApprovalResumptionIsAuthorized(array $messages, AgentPrompt $prompt): void
+    {
+        $paused = collect($messages)->last(fn (Message $message) => $message instanceof AssistantMessage);
+
+        if (! $paused instanceof AssistantMessage || $paused->participant === null) {
+            return;
+        }
+
+        $participant = $this->rememberingAgentFor($prompt)?->conversationParticipant();
+
+        $resuming = $participant === null
+            ? ':'
+            : Conversation::participantType($participant).':'.Conversation::participantKey($participant);
+
+        if ($paused->participant !== $resuming) {
+            throw new ApprovalMismatchException('The approval decisions do not match a paused conversation turn for this participant.', collect());
+        }
+    }
+
+    /**
+     * Get the prompt's agent when it remembers an existing conversation, or null when it does not.
+     *
+     * @return (Agent&RemembersConversationsContract)|null
+     */
+    protected function rememberingAgentFor(AgentPrompt $prompt): ?object
+    {
+        $agent = $prompt->agent;
+
+        if (! in_array(RemembersConversations::class, class_uses_recursive($agent), true)) {
+            return null;
+        }
+
+        /** @var Agent&RemembersConversationsContract $agent */
+        return $agent->currentConversation() === null ? null : $agent;
     }
 }
