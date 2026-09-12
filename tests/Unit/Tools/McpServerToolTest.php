@@ -7,6 +7,7 @@ use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Tools\McpServerTool;
 use Laravel\Ai\Tools\Request;
 use Laravel\Mcp\Response;
+use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Tool;
 use Tests\Fixtures\Mcp\FakeArrayMcpServerTool;
 use Tests\Fixtures\Mcp\FakeErroringMcpServerTool;
@@ -74,6 +75,25 @@ test('it serializes structured tool responses as json', function (): void {
             'temperature' => 72,
             'conditions' => 'Sunny',
         ]);
+});
+
+test('it does not escape slashes in structured content json', function (): void {
+    $tool = new McpServerTool(new class extends Tool
+    {
+        public function handle(Laravel\Mcp\Request $request): ResponseFactory
+        {
+            return Response::structured([
+                'url' => 'https://example.com/report',
+            ]);
+        }
+
+        public function schema(JsonSchema $schema): array
+        {
+            return [];
+        }
+    });
+
+    expect($tool->handle(new Request))->toBe('{"url":"https://example.com/report"}');
 });
 
 test('it surfaces tool errors with the standard prefix', function (): void {
