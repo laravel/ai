@@ -153,6 +153,22 @@ test('transcription throws when the API returns an error', function (): void {
         ->generate(provider: 'mistral');
 })->throws(RequestException::class);
 
+test('transcription reports the billed audio seconds', function (): void {
+    Http::fake(['*' => Http::response([
+        'text' => 'Hello, world!',
+        'usage' => [
+            'prompt_audio_seconds' => 203,
+            'prompt_tokens' => 4,
+            'completion_tokens' => 635,
+        ],
+    ])]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->generate(provider: 'mistral');
+
+    expect($response->usage->durationSeconds)->toBe(203.0);
+});
+
 function fakeTranscriptionResponse(string $text = 'Hello, world!')
 {
     return Http::response([

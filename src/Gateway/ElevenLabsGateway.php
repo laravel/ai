@@ -11,9 +11,9 @@ use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Files\Audio;
 use Laravel\Ai\Responses\AudioResponse;
+use Laravel\Ai\Responses\Data\AudioUsage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
-use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\TranscriptionResponse;
 
 class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
@@ -93,7 +93,7 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
                     $segment['end'],
                 );
             })->filter()->values(),
-            new Usage,
+            new AudioUsage(durationSeconds: $response['audio_duration_secs'] ?? 0),
             new Meta($provider->name(), $model),
         );
     }

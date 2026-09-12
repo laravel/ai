@@ -218,3 +218,11 @@ test('transcription http error response throws request exception', function (): 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
         ->generate(provider: 'openrouter', model: 'openai/whisper-1');
 })->throws(RequestException::class);
+
+test('transcription reports the billed audio seconds', function (): void {
+    Http::fake(['*' => fakeOpenRouterTranscriptionResponse()]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'openrouter');
+
+    expect($response->usage->durationSeconds)->toBe(1.5);
+});

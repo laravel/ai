@@ -109,6 +109,17 @@ test('transcription throws when the API returns an error', function (): void {
     Transcription::of(base64_encode('fake-audio'))->generate(provider: 'eleven', model: 'scribe_v2');
 })->throws(RequestException::class);
 
+test('transcription reports the transcribed audio duration', function (): void {
+    Http::fake(['*' => Http::response([
+        'text' => 'Hello world',
+        'audio_duration_secs' => 12.5,
+    ])]);
+
+    $response = Transcription::of(base64_encode('fake-audio'))->generate(provider: 'eleven', model: 'scribe_v2');
+
+    expect($response->usage->durationSeconds)->toBe(12.5);
+});
+
 function fakeElevenTranscriptionResponse(bool $diarized = false)
 {
     $body = ['text' => 'Hello world'];

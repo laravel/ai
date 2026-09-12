@@ -111,6 +111,18 @@ test('diarized transcription response returns text and segments', function (): v
         ->and($response->usage->completionTokens)->toBe(20);
 });
 
+test('diarized transcription reports the duration from the segment timings', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => fakeGeminiDiarizedTranscriptionResponse(),
+    ]);
+
+    $response = Transcription::of(base64_encode('fake-audio'))
+        ->diarize()
+        ->generate(provider: 'gemini', model: 'gemini-3.7-flash');
+
+    expect($response->usage->durationSeconds)->toBe(4.0);
+});
+
 test('diarized transcription parses srt and hour timestamp formats', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => fakeGeminiDiarizedTranscriptionResponse([
