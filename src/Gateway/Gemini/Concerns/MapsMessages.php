@@ -75,7 +75,13 @@ trait MapsMessages
                     $functionCall['args'] = $toolCall->arguments;
                 }
 
-                $parts[] = ['functionCall' => $functionCall];
+                $part = ['functionCall' => $functionCall];
+
+                if (filled($toolCall->thoughtSignature)) {
+                    $part['thoughtSignature'] = $toolCall->thoughtSignature;
+                }
+
+                $parts[] = $part;
             }
         }
 

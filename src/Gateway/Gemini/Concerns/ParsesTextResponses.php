@@ -47,12 +47,12 @@ trait ParsesTextResponses
         $parts = $candidate['content']['parts'] ?? [];
 
         $text = $this->extractText($parts);
-        $rawToolCalls = $this->extractRawToolCalls($parts);
+        $functionCallParts = $this->extractFunctionCallParts($parts);
 
         return new StepResponse(
             text: $text,
-            toolCalls: $this->mapToolCalls($rawToolCalls),
-            finishReason: $this->extractFinishReason($data, $rawToolCalls),
+            toolCalls: $this->mapToolCalls($functionCallParts),
+            finishReason: $this->extractFinishReason($data, $functionCallParts),
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model, $this->extractCitations($data)),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
@@ -119,36 +119,31 @@ trait ParsesTextResponses
         return implode('', $textParts);
     }
 
-    /**
-     * Extract raw tool calls from the response parts.
-     */
-    protected function extractRawToolCalls(array $parts): array
+    protected function extractFunctionCallParts(array $parts): array
     {
         return array_values(
-            array_map(
-                fn (array $part) => $part['functionCall'],
-                array_filter($parts, fn (array $part): bool => isset($part['functionCall']))
-            )
+            array_filter($parts, fn (array $part): bool => isset($part['functionCall']))
         );
     }
 
     /**
-     * Map raw function call data to ToolCall DTOs.
-     *
      * @return array<ToolCall>
      */
-    protected function mapToolCalls(array $rawToolCalls): array
+    protected function mapToolCalls(array $functionCallParts): array
     {
-        return array_map(function (array $fc): ToolCall {
-            $id = $fc['id'] ?? (string) Str::uuid7();
+        return array_map(function (array $part): ToolCall {
+            $functionCall = $part['functionCall'];
+
+            $id = $functionCall['id'] ?? (string) Str::uuid7();
 
             return new ToolCall(
                 $id,
-                $fc['name'] ?? '',
-                $fc['args'] ?? [],
+                $functionCall['name'] ?? '',
+                $functionCall['args'] ?? [],
                 $id,
+                thoughtSignature: $part['thoughtSignature'] ?? null,
             );
-        }, $rawToolCalls);
+        }, $functionCallParts);
     }
 
     /**
@@ -220,9 +215,9 @@ trait ParsesTextResponses
     /**
      * Extract and map the finish reason from the Gemini response.
      */
-    protected function extractFinishReason(array $data, array $rawToolCalls): FinishReason
+    protected function extractFinishReason(array $data, array $functionCallParts): FinishReason
     {
-        if (filled($rawToolCalls)) {
+        if (filled($functionCallParts)) {
             return FinishReason::ToolCalls;
         }
 
