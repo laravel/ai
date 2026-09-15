@@ -1,5 +1,279 @@
 # Upgrade Guide
 
+## Upgrading To 1.0 From 0.11
+
+### Agent Middleware Wraps Each Generation Step
+
+**Likelihood Of Impact: High**
+
+Agent middleware now wraps each generation step instead of the whole run, and receives a `Laravel\Ai\PendingStep` instead of an `AgentPrompt`. A run that takes three steps invokes your middleware three times.
+
+Update the `handle()` method of each middleware:
+
+```php
+// Before...
+use Closure;
+use Laravel\Ai\Prompts\AgentPrompt;
+use Laravel\Ai\Responses\AgentResponse;
+
+class LogTheRun
+{
+    public function handle(AgentPrompt $prompt, Closure $next)
+    {
+        return $next($prompt)->then(function (AgentResponse $response) {
+            // ...
+        });
+    }
+}
+
+// After...
+use Closure;
+use Laravel\Ai\Gateway\StepResponse;
+use Laravel\Ai\PendingStep;
+
+class LogTheRun
+{
+    public function handle(PendingStep $step, Closure $next)
+    {
+        return $next($step)->then(function (StepResponse $response) {
+            // ...
+        });
+    }
+}
+```
+
+A `PendingStep` may be copied with changes before it is passed on:
+
+```php
+public function handle(PendingStep $step, Closure $next)
+{
+    if (! $step->isFirstStep()) {
+        $step = $step->withoutTools('SearchDocumentation');
+    }
+
+    return $next($step);
+}
+```
+
+The `withModel()`, `withInstructions()`, `withMessages()`, `withTools()`, `onlyTools()`, `withoutTools()`, `withToolChoice()`, `withMaxTokens()`, and `withProviderOptions()` methods are available, along with `isFirstStep()` and the `isFinalStep` property.
+
+Return the `Laravel\Ai\Gateway\StepResult` given by `$next`, or a `StepResponse` to answer the step without calling the model. Anything else throws a `LogicException`.
+
+The `AgentPrompted`, `AgentStreamed`, and `AgentFailed` events now always carry the prompt as it was given.
+
+### Gemini Vector Store Imports Wait For Completion
+
+**Likelihood Of Impact: High**
+
+Adding a file to a Gemini vector store now waits for the import to finish instead of returning as soon as it is requested:
+
+```php
+$store->addFile($fileId);
+```
+
+The returned ID is the document name rather than the import operation name, so IDs stored by an earlier version no longer match. The call also throws a `Laravel\Ai\Exceptions\AiException` when the import fails or does not finish within five minutes.
+
+### The AWS SDK Is No Longer Installed By Default
+
+**Likelihood Of Impact: High**
+
+The `aws/aws-sdk-php` package is no longer a required dependency. Applications using the Bedrock provider must install it:
+
+```bash
+composer require aws/aws-sdk-php
+```
+
+Resolving the Bedrock provider without the SDK installed throws a `RuntimeException`.
+
+### Token Usage Is Reported Inclusively
+
+**Likelihood Of Impact: High**
+
+`Usage::$promptTokens` and `Usage::$completionTokens` have been renamed to `Usage::$inputTokens` and `Usage::$outputTokens`, and now carry the provider's full counts. Cached, cache-written, and reasoning tokens are subsets of them rather than separate additions:
+
+```php
+// Before...
+$response->usage->promptTokens;     // excluded cached tokens
+$response->usage->completionTokens;
+
+// After...
+$response->usage->inputTokens;      // includes cached and cache-written tokens
+$response->usage->outputTokens;     // includes reasoning tokens
+$response->usage->uncachedInputTokens();
+$response->usage->totalTokens();
+```
+
+`cacheReadInputTokens`, `cacheWriteInputTokens`, and `reasoningTokens` are now `?int` and are `null` when the provider reports nothing, which is distinct from a reported `0`. The constructor argument order is now `inputTokens, outputTokens, cacheReadInputTokens, cacheWriteInputTokens, reasoningTokens`, swapping the cache read and cache write positions.
+
+Code that priced `promptTokens` at a single rate now needs three: `uncachedInputTokens()` at the base rate, `cacheReadInputTokens` at the cache read rate, and `cacheWriteInputTokens` at the cache write rate.
+
+`toArray()` and the JSON stored in the `usage` column of `agent_conversation_messages` use the `input_tokens` and `output_tokens` keys. Rows written before the upgrade keep the old keys.
+
+Reported values also changed in three places:
+
+- Anthropic streams read the cumulative usage reported on `message_delta`, so a run using a server tool such as web search reports a higher input token count than before.
+- Anthropic populates `reasoningTokens` from the thinking token breakdown rather than always reporting `0`.
+- Cohere embeddings on Bedrock report the input token count returned by the API rather than always reporting `0`.
+
+### Stream Protocols
+
+**Likelihood Of Impact: Medium**
+
+Stream protocols are now objects implementing `Laravel\Ai\Streaming\Protocols\StreamProtocol` rather than a flag on the response. The `Laravel\Ai\Responses\Concerns\CanStreamUsingVercelProtocol` trait and the `toVercelProtocolArray()` method on stream events have been removed.
+
+`usingVercelDataProtocol()` no longer accepts a boolean:
+
+```php
+// Before...
+$agent->stream('...')->usingVercelDataProtocol(true, 'msg_1');
+
+// After...
+$agent->stream('...')->usingVercelDataProtocol('msg_1');
+```
+
+Calls without arguments are unaffected. To render a custom event, pass your own protocol to `usingProtocol()`.
+
+### Sub-Agent Activity Is Streamed
+
+**Likelihood Of Impact: Medium**
+
+When a streamed run calls an `AgentTool`, the sub-agent now streams instead of running to completion behind the tool call. Its events are emitted into the parent stream, and the parent emits `ToolResult` events carrying the output produced so far. These have `preliminary` set to `true` and are followed by the final `ToolResult` for the call.
+
+Skip them when counting events or reading results:
+
+```php
+foreach ($agent->stream('...') as $event) {
+    if ($event instanceof ToolResult && $event->preliminary) {
+        continue;
+    }
+}
+```
+
+The completed response's `text`, `reasoning`, `citations`, and `usage` now include the sub-agent's. Review any cost calculation or text assertion made on a run that uses `AgentTool`.
+
+### Streamed Text Is Reported Per Step
+
+**Likelihood Of Impact: Medium**
+
+A streamed step now emits a single `TextStart` / `TextEnd` pair rather than one pair per content block, each with its own message ID. `TextDelta::combine()` separates text by step rather than by message ID to match, so an answer spanning several blocks is no longer split mid-sentence.
+
+Update any consumer that opens a UI block on `TextStart` and closes it on `TextEnd`, or that keys off a changing message ID.
+
+### Reasoning Events On OpenAI And xAI
+
+**Likelihood Of Impact: Low**
+
+OpenAI and xAI models that stream raw reasoning text rather than a summary now emit `ReasoningStart`, `ReasoningDelta`, and `ReasoningEnd` events. Handle the new events in any stream consumer that renders reasoning.
+
+`$response->reasoning` moved from `AgentResponse` to `TextResponse` and is populated on non-streamed prompts as well, joining the reasoning of every step. It is also carried per step on `Laravel\Ai\Responses\Data\Step`.
+
+### Protected Provider Hooks
+
+**Likelihood Of Impact: Low**
+
+Several protected methods changed on the classes a custom provider or gateway extends:
+
+- `Providers\Concerns\GeneratesText::resolveTools()` and `throwIfNotResumable()` receive an `AgentPrompt` instead of an `Agent`.
+- `Providers\Concerns\GeneratesText::recordAgentFailure()` dropped its `?AgentPrompt $processedPrompt` argument, so `bool $retryable` moved from the fifth position to the fourth.
+- `Providers\Concerns\GeneratesText::agentCanResumeApprovals()` was removed.
+- `PendingResponses\Concerns\ResolvesProviderOptions::resolveProviderOptions()` and `Gateway\Concerns\PreparesStorableFiles::resolveProviderOptions()` are now `resolveProviderOptionsAndHeaders()`, returning the options and the headers as a tuple.
+- `Gateway\RunContext::startingStep()`, `stepCompleted()`, and `stepFailed()` accept a trailing `?string $model`, and the latter two accept a nullable `StepContext`.
+
+### The `ConversationStore` Contract
+
+**Likelihood Of Impact: Low**
+
+`latestConversationId()` receives the agent class name, and `storeConversation()` accepts the ID the conversation should be stored under:
+
+```php
+public function latestConversationId(
+    string $participantType,
+    string|int $participantId,
+    string $agent,
+): ?string;
+
+public function storeConversation(
+    ?string $participantType,
+    string|int|null $participantId,
+    string $title,
+    ?string $id = null,
+): string;
+```
+
+`storeUserMessage()` receives the agent class name and a `UserMessage` in place of an `AgentPrompt`, so a message may be stored before a provider has been resolved:
+
+```php
+public function storeUserMessage(
+    string $conversationId,
+    ?string $participantType,
+    string|int|null $participantId,
+    string $agent,
+    UserMessage $message,
+): string;
+```
+
+No changes are needed if you use the included database store. If you bind a custom `ConversationStore`, update all three signatures, scope `latestConversationId()` to the given agent, use the given ID when one is passed, and read `$message->content` and `$message->attachments` in place of `$prompt->prompt` and `$prompt->attachments`. `storeAssistantMessage()` is unchanged.
+
+### The `RemembersConversations` Contract Adds `continueOrStart()`
+
+**Likelihood Of Impact: Low**
+
+The `Laravel\Ai\Contracts\RemembersConversations` interface now includes a `continueOrStart()` method, which continues the given conversation or starts a new one when the ID is `null`:
+
+```php
+public function continueOrStart(?string $conversationId, object $as): static;
+```
+
+No changes are needed if your agents use the `Concerns\RemembersConversations` trait, which provides the method. Add it to any agent that implements the contract by hand.
+
+### The `Agent` Contract Accepts More Input Types
+
+**Likelihood Of Impact: Low**
+
+`Agent::prompt()`, `stream()`, `queue()`, `broadcast()`, `broadcastNow()`, and `broadcastOnQueue()` now accept `AgentInput|UserMessage|Decisions|string` instead of `Decisions|string`, so a chat request may be handed to the agent directly:
+
+```php
+$chat = Vercel::chat($request);
+
+$agent->withMessages($chat->history())->stream($chat);
+```
+
+No changes are needed if your agents use the `Promptable` trait. If you implement `Laravel\Ai\Contracts\Agent` directly, widen the type of each `$prompt` parameter to match the contract.
+
+### Provider And Gateway Signatures
+
+**Likelihood Of Impact: Low**
+
+The image, audio, and reranking methods accept provider options, and reranking also accepts a timeout:
+
+```php
+public function image(string $prompt, array $attachments = [], ?string $size = null, ?string $quality = null, ?string $model = null, ?int $timeout = null, array $providerOptions = []): ImageResponse;
+
+public function audio(string $text, ?string $voice = null, ?string $instructions = null, ?string $model = null, int $timeout = 30, array $providerOptions = []): AudioResponse;
+
+public function rerank(array $documents, string $query, ?int $limit = null, ?string $model = null, int $timeout = 30, array $providerOptions = []): RerankingResponse;
+```
+
+The matching `ImageGateway`, `AudioGateway`, and `RerankingGateway` methods gained the same arguments, and `Laravel\Ai\Contracts\Providers\Provider` gained a `withHeaders()` method used to send custom HTTP headers. Anything extending the base `Laravel\Ai\Providers\Provider` gets `withHeaders()` for free.
+
+Reranking requests now use a 30 second timeout by default. Bedrock previously used the AWS SDK default, so a long reranking call may now time out. Raise it with the new `timeout()` method:
+
+```php
+Reranking::of($documents)->timeout(60)->rerank('...');
+```
+
+Most applications are unaffected. Update any custom provider or gateway to match the new signatures.
+
+### Stream Event Constructor Signatures
+
+**Likelihood Of Impact: Low**
+
+The `$provider` argument of `Laravel\Ai\Streaming\Events\ProviderToolEvent` is now a required `string` rather than an optional `?string`.
+
+`Laravel\Ai\Streaming\Events\ToolApprovalRequest` takes a `$steps` array of every assistant step in the paused turn as its fourth argument, moving `$providerContentBlocks` to fifth. The same steps are available from `pausedSteps()` on the response.
+
+No changes are needed unless you construct these events directly.
+
 ## Upgrading To 0.11 From 0.10
 
 ### Connection Failures Throw `ProviderConnectionException`
