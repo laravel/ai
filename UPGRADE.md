@@ -1,5 +1,19 @@
 # Upgrade Guide
 
+## Upgrading To 1.0 From 0.11
+
+### The AWS SDK Is No Longer Installed By Default
+
+**Likelihood Of Impact: High**
+
+The `aws/aws-sdk-php` package is no longer a required dependency. Applications using the Bedrock provider must install it:
+
+```bash
+composer require aws/aws-sdk-php
+```
+
+Resolving the Bedrock provider without the SDK installed throws a `RuntimeException`.
+
 ## Upgrading To 0.11 From 0.10
 
 ### Connection Failures Throw `ProviderConnectionException`
