@@ -367,6 +367,8 @@ describe('response parsing', function (): void {
         expect($response->usage)
             ->promptTokens->toBe(25)
             ->completionTokens->toBe(15)
+            ->cacheWriteInputTokens->toBe(5)
+            ->cacheReadInputTokens->toBe(3)
             ->reasoningTokens->toBe(9);
     });
 
