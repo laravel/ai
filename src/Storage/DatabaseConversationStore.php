@@ -84,17 +84,17 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     /**
      * Store a new user message for the given conversation and return its ID.
      */
-    public function storeUserMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt): string
+    public function storeUserMessage(string $conversationId, ?string $participantType, string|int|null $participantId, string $agent, UserMessage $message): string
     {
         $messageId = (string) Str::uuid7();
 
         $now = now();
 
         $this->table($this->messagesTable())->insert($this->messageAttributes($messageId, $conversationId, $participantType, $participantId, $now, [
-            'agent' => $prompt->agent::class,
+            'agent' => $agent,
             'role' => 'user',
-            'content' => $prompt->prompt,
-            'attachments' => $prompt->attachments->toJson(),
+            'content' => $message->content,
+            'attachments' => $message->attachments->toJson(),
             'tool_calls' => '[]',
             'tool_results' => '[]',
             'usage' => '[]',

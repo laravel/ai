@@ -88,7 +88,8 @@ class RememberConversation
                     $agent->currentConversation(),
                     $participantType,
                     $participantId,
-                    $prompt,
+                    $agent::class,
+                    new UserMessage($prompt->prompt, $prompt->attachments),
                 );
             }
 

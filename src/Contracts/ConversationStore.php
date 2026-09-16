@@ -5,6 +5,7 @@ namespace Laravel\Ai\Contracts;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Messages\Message;
+use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\ToolResult;
@@ -23,8 +24,10 @@ interface ConversationStore
 
     /**
      * Store a new user message for the given conversation and return its ID.
+     *
+     * @param  class-string<Agent>  $agent
      */
-    public function storeUserMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt): string;
+    public function storeUserMessage(string $conversationId, ?string $participantType, string|int|null $participantId, string $agent, UserMessage $message): string;
 
     /**
      * Store a new assistant message for the given conversation, or null when nothing was stored.

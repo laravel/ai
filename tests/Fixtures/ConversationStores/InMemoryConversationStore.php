@@ -5,6 +5,7 @@ namespace Tests\Fixtures\ConversationStores;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 
@@ -32,7 +33,7 @@ class InMemoryConversationStore implements ConversationStore
         return $id;
     }
 
-    public function storeUserMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt): string
+    public function storeUserMessage(string $conversationId, ?string $participantType, string|int|null $participantId, string $agent, UserMessage $message): string
     {
         $id = (string) Str::uuid7();
 
@@ -40,7 +41,7 @@ class InMemoryConversationStore implements ConversationStore
             'id' => $id,
             'conversation_id' => $conversationId,
             'role' => 'user',
-            'content' => $prompt->prompt,
+            'content' => $message->content,
         ];
 
         return $id;

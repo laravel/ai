@@ -1542,6 +1542,50 @@ test('it stores no sources when a streamed turn cited nothing', function (): voi
     expect(json_decode((string) $record->meta, true)['citations'])->toBe([]);
 });
 
+test('it stores a user message without an agent prompt', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Prompt conversation');
+
+    $messageId = $store->storeUserMessage($conversationId, 'user', 1, ToolUsingAgent::class, new UserMessage('Check my order status.'));
+
+    $record = DB::table('agent_conversation_messages')->where('id', $messageId)->first();
+
+    expect($record->conversation_id)->toBe($conversationId)
+        ->and($record->agent)->toBe(ToolUsingAgent::class)
+        ->and($record->role)->toBe('user')
+        ->and($record->content)->toBe('Check my order status.')
+        ->and($record->attachments)->toBe('[]');
+});
+
+test('it stores the attachments a user message carries', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Prompt conversation');
+
+    $messageId = $store->storeUserMessage($conversationId, 'user', 1, ToolUsingAgent::class, new UserMessage(
+        'What is in this?',
+        [new RemoteImage('https://example.com/order.png')],
+    ));
+
+    $attachments = json_decode((string) DB::table('agent_conversation_messages')->where('id', $messageId)->value('attachments'), true);
+
+    expect($attachments)->toHaveCount(1)
+        ->and($attachments[0]['url'])->toBe('https://example.com/order.png');
+});
+
+test('it touches the conversation when a user message is stored', function (): void {
+    $this->freezeTime();
+
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Prompt conversation');
+
+    DB::table('agent_conversations')->where('id', $conversationId)->update(['updated_at' => now()->subDay()]);
+
+    $store->storeUserMessage($conversationId, 'user', 1, ToolUsingAgent::class, new UserMessage('Check my order status.'));
+
+    expect(DB::table('agent_conversations')->where('id', $conversationId)->value('updated_at'))
+        ->toBe(now()->toDateTimeString());
+});
+
 function createConversationSchema(?string $connection = null): void
 {
     $schema = Schema::connection($connection);
