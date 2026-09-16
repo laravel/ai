@@ -854,10 +854,10 @@ test('it records every step of a paused stream into the message meta', function 
     $response = new StreamedAgentResponse('invocation-id', collect([
         new ToolApprovalRequest('event-1', collect([
             new PendingApproval('call-1', 'DeleteFile', ['path' => 'config/app.php'], 'Deletes a file'),
-        ]), 0, [['type' => 'thinking', 'signature' => 'sig-1']], [
+        ]), 0, [
             ['blocks' => [['type' => 'thinking', 'signature' => 'sig-0']], 'tool_call_ids' => ['call-0']],
             ['blocks' => [['type' => 'thinking', 'signature' => 'sig-1']], 'tool_call_ids' => ['call-1']],
-        ]),
+        ], [['type' => 'thinking', 'signature' => 'sig-1']]),
     ]), new Meta);
 
     $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);

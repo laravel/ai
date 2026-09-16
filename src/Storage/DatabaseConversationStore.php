@@ -335,7 +335,7 @@ class DatabaseConversationStore implements ConversationStore
         $provider = $meta['provider'] ?? null;
 
         if ($isPause && filled($providerSteps = $meta['provider_steps'] ?? [])) {
-            return array_merge($messages, $this->replayPausedSteps($record, $providerSteps, $toolCalls, $ownResults, $provider));
+            return array_merge($messages, $this->reconstructPausedTurn($record, $providerSteps, $toolCalls, $ownResults, $provider));
         }
 
         // Rows written before per-step replay state carry only the paused step's blocks, so the whole turn replays as one message...
@@ -377,7 +377,7 @@ class DatabaseConversationStore implements ConversationStore
      * @param  Collection<int, array<string, mixed>>  $ownResults
      * @return array<int, Message>
      */
-    protected function replayPausedSteps(object $record, array $providerSteps, Collection $toolCalls, Collection $ownResults, ?string $provider): array
+    protected function reconstructPausedTurn(object $record, array $providerSteps, Collection $toolCalls, Collection $ownResults, ?string $provider): array
     {
         $callsById = $toolCalls->keyBy('id');
         $resultsById = $ownResults->keyBy('id');

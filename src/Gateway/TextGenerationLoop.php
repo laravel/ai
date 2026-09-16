@@ -314,8 +314,8 @@ class TextGenerationLoop
                     $this->generateEventId(),
                     $pendingApprovals,
                     time(),
-                    $result->providerContentBlocks,
                     $providerSteps,
+                    $result->providerContentBlocks,
                 ))->withInvocationId($invocationId);
 
                 break;

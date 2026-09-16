@@ -46,16 +46,6 @@ class StreamedAgentResponse extends AgentResponse
     }
 
     /**
-     * Get the raw provider replay state for the paused assistant turn, if any.
-     *
-     * @return array<int, array<string, mixed>>
-     */
-    public function pausedProviderContentBlocks(): array
-    {
-        return $this->events->whereInstanceOf(ToolApprovalRequest::class)->last()?->providerContentBlocks ?? [];
-    }
-
-    /**
      * Get every assistant step of a paused turn with the raw provider state needed to replay it.
      *
      * @return array<int, array{blocks: array<int, array<string, mixed>>, tool_call_ids: array<int, string>}>
@@ -63,5 +53,15 @@ class StreamedAgentResponse extends AgentResponse
     public function pausedSteps(): array
     {
         return $this->events->whereInstanceOf(ToolApprovalRequest::class)->last()?->steps ?? [];
+    }
+
+    /**
+     * Get the raw provider replay state for the paused assistant turn, if any.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function pausedProviderContentBlocks(): array
+    {
+        return $this->events->whereInstanceOf(ToolApprovalRequest::class)->last()?->providerContentBlocks ?? [];
     }
 }
