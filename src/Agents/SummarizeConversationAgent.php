@@ -6,11 +6,8 @@ use Laravel\Ai\Attributes\UseCheapestModel;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Promptable;
 
-/**
- * @phpstan-consistent-constructor
- */
 #[UseCheapestModel]
-class SummarizeConversationAgent implements Agent
+final class SummarizeConversationAgent implements Agent
 {
     use Promptable;
 
