@@ -73,6 +73,10 @@ trait GeneratesText
 
                     $schema = $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null;
 
+                    if ($this->resumesAgainstRealGateway($prompt)) {
+                        $this->ensureApprovalResumptionIsAuthorized($messages, $prompt);
+                    }
+
                     $response = $this->textGenerationLoop()->generate(
                         $this,
                         $prompt->model,
