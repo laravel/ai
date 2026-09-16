@@ -244,6 +244,38 @@ test('response usage is correctly parsed', function (): void {
         ->and($response->usage->completionTokens)->toBe(5);
 });
 
+test('response usage excludes cached tokens and captures reasoning tokens', function (): void {
+    Http::fake(['*' => Http::response([
+        'id' => 'resp_123',
+        'object' => 'response',
+        'status' => 'completed',
+        'model' => 'grok-4-1-fast-reasoning',
+        'output' => [
+            [
+                'type' => 'message',
+                'status' => 'completed',
+                'role' => 'assistant',
+                'content' => [
+                    ['type' => 'output_text', 'text' => 'Hello'],
+                ],
+            ],
+        ],
+        'usage' => [
+            'input_tokens' => 10,
+            'output_tokens' => 5,
+            'input_tokens_details' => ['cached_tokens' => 2],
+            'output_tokens_details' => ['reasoning_tokens' => 3],
+        ],
+    ])]);
+
+    $response = agent()->prompt('Hello', provider: 'xai');
+
+    expect($response->usage->promptTokens)->toBe(8) // 10 - 2 cached
+        ->and($response->usage->completionTokens)->toBe(5)
+        ->and($response->usage->cacheReadInputTokens)->toBe(2)
+        ->and($response->usage->reasoningTokens)->toBe(3);
+});
+
 test('structured response is correctly parsed', function (): void {
     Http::fake(['*' => fakeXaiRequestMappingResponse('{"symbol": "Au"}')]);
 
