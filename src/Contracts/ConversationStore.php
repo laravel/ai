@@ -14,6 +14,8 @@ interface ConversationStore
 {
     /**
      * Get the participant's most recent conversation ID with the given agent.
+     *
+     * @param  class-string<Agent>  $agent
      */
     public function latestConversationId(string $participantType, string|int $participantId, string $agent): ?string;
 

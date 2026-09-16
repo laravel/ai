@@ -1542,7 +1542,7 @@ test('it stores no sources when a streamed turn cited nothing', function (): voi
     expect(json_decode((string) $record->meta, true)['citations'])->toBe([]);
 });
 
-test('it stores a user message without an agent prompt', function (): void {
+test('it stores a user message from an agent class and a user message', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Prompt conversation');
 
