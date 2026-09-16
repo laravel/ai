@@ -11,7 +11,10 @@ final class SummarizeConversationAgent implements Agent
 {
     use Promptable;
 
-    public function __construct() {}
+    public function __construct()
+    {
+        //
+    }
 
     /**
      * Get the instructions that the agent should follow.
