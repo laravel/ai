@@ -8,12 +8,14 @@ class PendingApproval implements Arrayable
 {
     /**
      * @param  array<string, mixed>  $arguments
+     * @param  array<string, mixed>|null  $meta
      */
     public function __construct(
         public readonly string $id,
         public readonly string $tool,
         public readonly array $arguments,
         public readonly ?string $reason = null,
+        public readonly ?array $meta = null,
     ) {}
 
     /**
@@ -26,6 +28,7 @@ class PendingApproval implements Arrayable
             'tool' => $this->tool,
             'arguments' => $this->arguments,
             'reason' => $this->reason,
+            ...($this->meta === null ? [] : ['meta' => $this->meta]),
         ];
     }
 }

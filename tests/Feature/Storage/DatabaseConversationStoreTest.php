@@ -35,6 +35,7 @@ use Laravel\Ai\Storage\StoredMessage;
 use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
+use Tests\Fixtures\Agents\RememberingInteractiveAgent;
 use Tests\Fixtures\Agents\RememberingToolUsingAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
@@ -224,6 +225,61 @@ test('it reports the tool calls a paused turn is waiting on', function (): void 
         ->and($pending[0]->arguments)->toBe(['path' => 'a.txt'])
         ->and($pending[0]->reason)->toBe('Deletes a file.')
         ->and($pending[1]->reason)->toBeNull();
+});
+
+test('it reports the payload a paused interactive turn is waiting on', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Paused');
+
+    insertPausedConversationTurn($conversationId, 'message-001', [
+        ['id' => 'call-1', 'name' => 'PickPlan', 'arguments' => []],
+        ['id' => 'call-2', 'name' => 'SendEmail', 'arguments' => []],
+    ], ['call-1' => null, 'call-2' => null], ['call-1' => ['options' => ['Basic', 'Pro']]]);
+
+    $pending = $store->pendingApprovalsFor($conversationId);
+
+    expect($pending[0]->meta)->toBe(['options' => ['Basic', 'Pro']])
+        ->and($pending[1]->meta)->toBeNull();
+});
+
+test('it keeps the payload of the calls still pending after another is resolved', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Paused');
+
+    insertPausedConversationTurn($conversationId, 'message-001', [
+        ['id' => 'call-1', 'name' => 'PickPlan', 'arguments' => []],
+        ['id' => 'call-2', 'name' => 'PickAddress', 'arguments' => []],
+    ], ['call-1' => null, 'call-2' => null], ['call-1' => ['options' => ['Basic']], 'call-2' => ['options' => ['Home']]]);
+
+    $store->storeApprovalResults($conversationId, 'user', 1, [
+        new ToolResult('call-1', 'PickPlan', [], 'chose: Basic'),
+    ]);
+
+    $pending = $store->pendingApprovalsFor($conversationId);
+    $state = json_decode(DB::table('agent_conversation_messages')->where('id', 'message-001')->value('approval_state'), true);
+
+    expect(collect($pending)->pluck('id')->all())->toBe(['call-2'])
+        ->and($pending[0]->meta)->toBe(['options' => ['Home']])
+        ->and($state['meta'])->toBe(['call-2' => ['options' => ['Home']]]);
+});
+
+test('it persists the payload of a paused interactive turn from a remembered agent prompt', function (): void {
+    Config::set('ai.conversations.generate_title', false);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::response([
+            'id' => 'msg_1', 'type' => 'message', 'role' => 'assistant', 'model' => 'claude-sonnet-4-6',
+            'content' => [['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'InteractiveChoiceTool', 'input' => ['question' => 'Which plan?', 'options' => ['Basic', 'Pro']]]],
+            'stop_reason' => 'tool_use', 'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+        ]),
+    ]);
+
+    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
+
+    $pending = (new DatabaseConversationStore)->pendingApprovalsFor($paused->conversationId);
+
+    expect($pending)->toHaveCount(1)
+        ->and($pending[0]->meta)->toBe(['question' => 'Which plan?', 'options' => ['Basic', 'Pro']]);
 });
 
 test('it drops a call that already has a result', function (): void {
@@ -1457,12 +1513,12 @@ function insertStoredConversationMessages(string $conversationId, array $ids): v
 }
 
 /** @param  list<array<string, mixed>>  $toolCalls */
-function insertPausedConversationTurn(string $conversationId, string $id, array $toolCalls, array $pending): void
+function insertPausedConversationTurn(string $conversationId, string $id, array $toolCalls, array $pending, array $meta = []): void
 {
     DB::table('agent_conversation_messages')->insert([
         ...storedConversationMessageAttributes($id, $conversationId, 'Waiting on you.'),
         'role' => 'assistant',
         'tool_calls' => json_encode($toolCalls),
-        'approval_state' => json_encode(['pending' => $pending]),
+        'approval_state' => json_encode(['pending' => $pending, 'meta' => $meta]),
     ]);
 }

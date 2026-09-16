@@ -198,6 +198,36 @@ test('a paused stream emits an approval request part for each pending approval',
     ]);
 });
 
+test('an interactive pause emits its payload as the approval descriptor', function () {
+    $parts = vercelProtocolParts([
+        new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
+        new ToolCall('event-1', new Data\ToolCall('call-1', 'PickPlan', []), time()),
+        new ToolApprovalRequest('event-2', collect([
+            new PendingApproval('call-1', 'PickPlan', [], meta: ['options' => ['Basic', 'Pro']]),
+        ]), time()),
+        new StreamEnd('event-3', 'tool_calls', new Usage, time()),
+    ]);
+
+    expect($parts[3])->toBe([
+        'type' => 'tool-approval-request',
+        'toolCallId' => 'call-1',
+        'approvalId' => 'call-1',
+        'reason' => null,
+        'approvalDescriptor' => ['options' => ['Basic', 'Pro']],
+    ]);
+});
+
+test('a tool result carrying a meta streams the meta as the tool output', function () {
+    $parts = vercelProtocolParts([
+        new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
+        new ToolCall('event-1', new Data\ToolCall('call-1', 'Receipt', []), time()),
+        new ToolResult('event-2', new Data\ToolResult('call-1', 'Receipt', [], 'Total: $41.00', meta: ['total' => '$41.00']), true, null, time()),
+        new StreamEnd('event-3', 'stop', new Usage, time()),
+    ]);
+
+    expect($parts[3])->toBe(['type' => 'tool-output-available', 'toolCallId' => 'call-1', 'output' => ['total' => '$41.00']]);
+});
+
 test('a resumed stream emits the approved tool output for the prior turn tool call', function () {
     $parts = vercelProtocolParts([
         new ToolResult('event-1', new Data\ToolResult('call-1', 'DeleteFile', ['path' => 'a.txt'], 'deleted'), true, null, time()),
