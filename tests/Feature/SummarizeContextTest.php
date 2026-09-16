@@ -180,7 +180,7 @@ test('the summarizing provider, model and timeout can be chosen like the summari
 });
 
 test('a cached summary is reused so only the newly displaced messages are summarized', function (): void {
-    Config::set('ai.conversations.generate_title', false);
+    Config::set(['ai.conversations.generate_title' => false, 'ai.caching.summaries.store' => 'array']);
 
     $prompts = [];
 
@@ -205,7 +205,7 @@ test('a cached summary is reused so only the newly displaced messages are summar
 });
 
 test('a cached summary survives the history window sliding past its first message', function (): void {
-    Config::set('ai.conversations.generate_title', false);
+    Config::set(['ai.conversations.generate_title' => false, 'ai.caching.summaries.store' => 'array']);
 
     $prompts = [];
 
@@ -237,7 +237,7 @@ test('a cached summary survives the history window sliding past its first messag
 });
 
 test('a cached summary that no longer matches the history is rebuilt', function (): void {
-    Config::set('ai.conversations.generate_title', false);
+    Config::set(['ai.conversations.generate_title' => false, 'ai.caching.summaries.store' => 'array']);
 
     $prompts = [];
 
@@ -254,7 +254,7 @@ test('a cached summary that no longer matches the history is rebuilt', function 
     $agent->withMiddleware([$summarize])->prompt('Turn one');
     $agent->withMiddleware([$summarize])->prompt('Turn two');
 
-    Cache::put('laravel-ai:summary:'.$agent->currentConversation(), ['summary' => 'STALE', 'tail' => 'no-longer-matching'], 60);
+    Cache::store('array')->put('laravel-ai:summary:'.$agent->currentConversation(), ['summary' => 'STALE', 'tail' => 'no-longer-matching'], 60);
 
     $agent->withMiddleware([$summarize])->prompt('Turn three');
 

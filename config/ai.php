@@ -26,8 +26,8 @@ return [
     |--------------------------------------------------------------------------
     |
     | Below you may configure caching strategies for AI related operations
-    | such as embedding generation. You are free to adjust these values
-    | based on your application's available caching stores and needs.
+    | such as embedding generation and conversation summaries. Feel free
+    | to adjust these to suit the cache stores your application has.
     |
     */
 
@@ -36,6 +36,10 @@ return [
             'cache' => false,
             'store' => env('CACHE_STORE', 'database'),
             'individually' => true,
+        ],
+
+        'summaries' => [
+            'store' => env('CACHE_STORE', 'database'),
         ],
     ],
 

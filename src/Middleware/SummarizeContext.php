@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Middleware;
 
 use Closure;
+use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Laravel\Ai\Agents\SummarizeConversationAgent;
@@ -82,7 +83,7 @@ class SummarizeContext
     {
         $key = $this->cacheKey($step);
 
-        $cached = $key === null ? null : Cache::get($key);
+        $cached = $key === null ? null : $this->cache()->get($key);
 
         if (! is_array($cached)) {
             return [null, 0];
@@ -99,8 +100,16 @@ class SummarizeContext
     protected function remember(PendingStep $step, Message $tail): void
     {
         if (($key = $this->cacheKey($step)) !== null) {
-            Cache::put($key, ['summary' => $this->summary, 'tail' => $this->fingerprint($tail)], $this->ttl);
+            $this->cache()->put($key, ['summary' => $this->summary, 'tail' => $this->fingerprint($tail)], $this->ttl);
         }
+    }
+
+    /**
+     * Get the cache store summaries are kept in.
+     */
+    protected function cache(): Repository
+    {
+        return Cache::store(config('ai.caching.summaries.store'));
     }
 
     /**
