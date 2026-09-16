@@ -141,6 +141,17 @@ trait ParsesTextResponses
                 }
             }
 
+            if ($blockType === 'web_fetch_tool_result') {
+                $result = $block['content'] ?? [];
+
+                if (($result['type'] ?? '') === 'web_fetch_result' && filled($result['url'] ?? null)) {
+                    $citations->push(new UrlCitation(
+                        $result['url'],
+                        $result['content']['title'] ?? null,
+                    ));
+                }
+            }
+
             if ($blockType === 'text') {
                 foreach ($block['citations'] ?? [] as $citation) {
                     if (($citation['type'] ?? '') === 'web_search_result_location') {
@@ -180,7 +191,8 @@ trait ParsesTextResponses
             'end_turn', 'stop_sequence' => FinishReason::Stop,
             'tool_use' => FinishReason::ToolCalls,
             'pause_turn' => FinishReason::Continue,
-            'max_tokens' => FinishReason::Length,
+            'max_tokens', 'model_context_window_exceeded' => FinishReason::Length,
+            'refusal' => FinishReason::ContentFilter,
             default => FinishReason::Unknown,
         };
     }

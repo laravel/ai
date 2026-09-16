@@ -63,6 +63,7 @@ test('insufficient credit response throws insufficient credits exception', funct
     'quota exceeded' => ['Your monthly quota exceeded the configured limit.'],
     'exceeded your current quota' => ['You have exceeded your current quota, please check your plan.'],
     'billing' => ['There is a billing issue with your account; please update your payment method.'],
+    'usage limit' => ['You have reached your specified API usage limits. To continue, please adjust your limits.'],
 ])->throws(InsufficientCreditsException::class);
 
 test('error in 200 response throws ai exception', function (): void {
@@ -98,3 +99,20 @@ test('529 overloaded response throws provider overloaded exception', function ()
         provider: 'anthropic',
     );
 })->throws(ProviderOverloadedException::class);
+
+test('transient upstream errors fail over as overloaded', function (int $status): void {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response([
+            'type' => 'error',
+            'error' => [
+                'type' => 'api_error',
+                'message' => 'The service is temporarily unavailable.',
+            ],
+        ], $status),
+    ]);
+
+    (new AssistantAgent)->prompt(
+        'Hi',
+        provider: 'anthropic',
+    );
+})->with([502, 503, 504, 520, 522, 524])->throws(ProviderOverloadedException::class);

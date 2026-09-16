@@ -30,15 +30,4 @@ class Error extends StreamEvent
             'metadata' => $this->metadata,
         ];
     }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function toVercelProtocolArray(): ?array
-    {
-        return [
-            'type' => 'error',
-            'errorText' => $this->message,
-        ];
-    }
 }

@@ -68,7 +68,7 @@ trait BuildsTextRequests
             ->map(fn ($toolResult): array => [
                 'type' => 'function_call_output',
                 'call_id' => $toolResult->resultId,
-                'output' => $this->serializeToolResultOutput($toolResult->result),
+                'output' => $toolResult->text(),
             ])
             ->all();
     }
@@ -84,10 +84,14 @@ trait BuildsTextRequests
         Provider $provider,
     ): array {
         if (filled($tools)) {
-            $body['tool_choice'] = $options?->toolChoice instanceof ToolChoice
-                ? $this->mapToolChoice($options->toolChoice)
-                : 'auto';
-            $body['tools'] = $this->mapTools($tools, $provider);
+            $mappedTools = $this->mapTools($tools, $provider, $this->isStateless($provider));
+
+            if (filled($mappedTools)) {
+                $body['tool_choice'] = $options?->toolChoice instanceof ToolChoice
+                    ? $this->mapToolChoice($options->toolChoice)
+                    : 'auto';
+                $body['tools'] = $mappedTools;
+            }
         }
 
         if (filled($schema)) {

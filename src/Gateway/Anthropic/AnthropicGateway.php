@@ -70,7 +70,7 @@ class AnthropicGateway implements Gateway, StepTextGateway
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, filled($schema));
+        return $this->parseTextResponse($data, $provider, filled($schema))->withRawResponse($response);
     }
 
     /**
@@ -128,6 +128,7 @@ class AnthropicGateway implements Gateway, StepTextGateway
         ?string $size = null,
         ?string $quality = null,
         ?int $timeout = null,
+        array $providerOptions = [],
     ): ImageResponse {
         throw new LogicException('Anthropic does not support image generation.');
     }
@@ -144,6 +145,7 @@ class AnthropicGateway implements Gateway, StepTextGateway
         string $voice,
         ?string $instructions = null,
         int $timeout = 30,
+        array $providerOptions = [],
     ): AudioResponse {
         throw new LogicException('Anthropic does not support audio generation.');
     }
@@ -186,7 +188,8 @@ class AnthropicGateway implements Gateway, StepTextGateway
      */
     protected function overloadedStatusCodes(): array
     {
-        return [529];
+        // 529 is Anthropic's own "overloaded" status, plus the shared transient gateway and Cloudflare codes.
+        return [529, 502, 503, 504, 520, 522, 524];
     }
 
     /**
@@ -200,6 +203,7 @@ class AnthropicGateway implements Gateway, StepTextGateway
             'quota exceeded',
             'exceeded your current quota',
             'billing',
+            'usage limit',
         ];
     }
 }

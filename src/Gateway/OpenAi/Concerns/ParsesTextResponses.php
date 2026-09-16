@@ -62,19 +62,8 @@ trait ParsesTextResponses
             meta: new Meta($provider->name(), $data['model'] ?? '', $this->extractCitations($output)),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
             continuationToken: $data['id'] ?? '',
+            providerContentBlocks: $this->isStateless($provider) ? $this->extractReplayBlocks($output) : [],
         );
-    }
-
-    /**
-     * Serialize a tool result output value to a string.
-     */
-    protected function serializeToolResultOutput(mixed $output): string
-    {
-        return match (true) {
-            is_string($output) => $output,
-            is_array($output) => (string) json_encode($output),
-            default => (string) $output,
-        };
     }
 
     /**
@@ -125,6 +114,16 @@ trait ParsesTextResponses
     }
 
     /**
+     * Extract the ordered response output for stateless (store=false) replay.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function extractReplayBlocks(array $output): array
+    {
+        return array_values(array_filter($output, 'is_array'));
+    }
+
+    /**
      * Extract usage data from the response.
      */
     protected function extractUsage(array $data): Usage
@@ -132,11 +131,12 @@ trait ParsesTextResponses
         $usage = $data['usage'] ?? [];
         $inputTokens = $usage['input_tokens'] ?? 0;
         $cachedTokens = $usage['input_tokens_details']['cached_tokens'] ?? 0;
+        $cacheWriteTokens = $usage['input_tokens_details']['cache_write_tokens'] ?? 0;
 
         return new Usage(
-            $inputTokens - $cachedTokens,
+            $inputTokens - $cachedTokens - $cacheWriteTokens,
             $usage['output_tokens'] ?? 0,
-            0,
+            $cacheWriteTokens,
             $cachedTokens,
             $usage['output_tokens_details']['reasoning_tokens'] ?? 0,
         );

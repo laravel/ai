@@ -1,8 +1,14 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Responses\Data\FinishReason;
+use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
+use Laravel\Ai\Streaming\Events\ProviderToolEvent;
+use Laravel\Ai\Streaming\Events\ReasoningDelta;
+use Laravel\Ai\Streaming\Events\ReasoningEnd;
+use Laravel\Ai\Streaming\Events\ReasoningStart;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
@@ -44,6 +50,97 @@ test('streaming emits text events', function (): void {
         ->and($events[5])->toBeInstanceOf(StreamEnd::class);
 });
 
+test('streaming emits reasoning events', function (string $eventType): void {
+    Http::fake([
+        '*' => Http::response(
+            body: $this->ssePayload([
+                ['type' => 'response.created', 'response' => ['id' => 'resp_123', 'model' => 'grok-4-1-fast-reasoning']],
+                ['type' => $eventType, 'delta' => 'Let me think...', 'item_id' => 'rs_1'],
+                ['type' => 'response.output_item.done', 'item' => ['type' => 'reasoning', 'id' => 'rs_1', 'summary' => []]],
+                ['type' => 'response.output_text.delta', 'delta' => 'Answer'],
+                ['type' => 'response.output_text.done'],
+                ['type' => 'response.completed', 'response' => ['id' => 'resp_123', 'status' => 'completed', 'output' => [['type' => 'message', 'status' => 'completed', 'role' => 'assistant', 'content' => [['type' => 'output_text', 'text' => 'Answer']]]], 'usage' => ['input_tokens' => 10, 'output_tokens' => 5, 'input_tokens_details' => ['cached_tokens' => 0], 'output_tokens_details' => ['reasoning_tokens' => 3]]]],
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents();
+
+    expect(collect($events)->contains(fn ($event): bool => $event instanceof ReasoningStart))->toBeTrue()
+        ->and(collect($events)->contains(fn ($event): bool => $event instanceof ReasoningEnd))->toBeTrue();
+
+    $reasoningDelta = collect($events)->first(fn ($event): bool => $event instanceof ReasoningDelta);
+
+    expect($reasoningDelta->delta)->toBe('Let me think...');
+})->with([
+    'reasoning summary' => 'response.reasoning_summary_text.delta',
+    'reasoning text' => 'response.reasoning_text.delta',
+]);
+
+test('streaming emits citation events from the completed response', function (): void {
+    Http::fake([
+        '*' => Http::response(
+            body: $this->ssePayload([
+                ['type' => 'response.created', 'response' => ['id' => 'resp_123', 'model' => 'grok-4-1-fast-reasoning']],
+                ['type' => 'response.output_text.delta', 'delta' => 'Here are sources'],
+                ['type' => 'response.output_text.done'],
+                ['type' => 'response.completed', 'response' => ['id' => 'resp_123', 'status' => 'completed', 'output' => [['type' => 'message', 'status' => 'completed', 'role' => 'assistant', 'content' => [['type' => 'output_text', 'text' => 'Here are sources', 'annotations' => [
+                    ['type' => 'url_citation', 'url' => 'https://example.com/one', 'title' => 'Example One', 'start_index' => 0, 'end_index' => 10],
+                    ['type' => 'url_citation', 'url' => 'https://example.com/two', 'title' => 'Example Two', 'start_index' => 11, 'end_index' => 25],
+                ]]]]], 'usage' => ['input_tokens' => 10, 'output_tokens' => 5, 'input_tokens_details' => ['cached_tokens' => 0], 'output_tokens_details' => ['reasoning_tokens' => 0]]]],
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents();
+    $textStart = collect($events)->first(fn ($event): bool => $event instanceof TextStart);
+    $citations = array_values(array_filter($events, fn ($event): bool => $event instanceof CitationEvent));
+
+    expect($citations)->toHaveCount(2)
+        ->and($citations[0]->messageId)->toBe($textStart->messageId)
+        ->and($citations[1]->messageId)->toBe($textStart->messageId)
+        ->and($citations[0]->citation->url)->toBe('https://example.com/one')
+        ->and($citations[0]->citation->title)->toBe('Example One')
+        ->and($citations[0]->citation->startIndex)->toBe(0)
+        ->and($citations[1]->citation->url)->toBe('https://example.com/two');
+});
+
+test('streaming starts a new text part after each text end in the same step', function (): void {
+    Http::fake([
+        '*' => Http::response(
+            body: $this->ssePayload([
+                ['type' => 'response.created', 'response' => ['id' => 'resp_123', 'model' => 'grok-4-1-fast-reasoning']],
+                ['type' => 'response.output_text.delta', 'delta' => 'First'],
+                ['type' => 'response.output_text.done'],
+                ['type' => 'response.output_text.delta', 'delta' => 'Second'],
+                ['type' => 'response.output_text.done'],
+                ['type' => 'response.completed', 'response' => ['id' => 'resp_123', 'status' => 'completed', 'output' => [['type' => 'message', 'status' => 'completed', 'role' => 'assistant', 'content' => [['type' => 'output_text', 'text' => 'FirstSecond']]]], 'usage' => ['input_tokens' => 10, 'output_tokens' => 5, 'input_tokens_details' => ['cached_tokens' => 0], 'output_tokens_details' => ['reasoning_tokens' => 0]]]],
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents();
+
+    $textStarts = array_values(array_filter($events, fn ($e): bool => $e instanceof TextStart));
+    $textEnds = array_values(array_filter($events, fn ($e): bool => $e instanceof TextEnd));
+    $textDeltas = array_values(array_filter($events, fn ($e): bool => $e instanceof TextDelta));
+
+    expect($textStarts)->toHaveCount(2)
+        ->and($textEnds)->toHaveCount(2)
+        ->and($textDeltas)->toHaveCount(2)
+        ->and($textStarts[0]->messageId)->not->toBe($textStarts[1]->messageId)
+        ->and($textEnds[0]->messageId)->toBe($textStarts[0]->messageId)
+        ->and($textEnds[1]->messageId)->toBe($textStarts[1]->messageId)
+        ->and($textDeltas[0]->messageId)->toBe($textStarts[0]->messageId)
+        ->and($textDeltas[1]->messageId)->toBe($textStarts[1]->messageId);
+});
+
 test('streaming handles tool calls', function (): void {
     Http::fake([
         '*' => Http::sequence([
@@ -81,6 +178,44 @@ test('streaming handles tool calls', function (): void {
         ->and($toolResultEvents)->not->toBeEmpty();
 });
 
+test('streaming tool loop emits a single stream end with accumulated usage', function (): void {
+    Http::fake([
+        '*' => Http::sequence([
+            Http::response(
+                body: $this->ssePayload([
+                    ['type' => 'response.created', 'response' => ['id' => 'resp_123', 'model' => 'grok-4-1-fast-reasoning']],
+                    ['type' => 'response.output_item.added', 'output_index' => 0, 'item' => ['type' => 'function_call', 'id' => 'fc_1', 'call_id' => 'call_1', 'name' => 'FixedNumberGenerator']],
+                    ['type' => 'response.function_call_arguments.delta', 'item_id' => 'fc_1', 'delta' => '{}'],
+                    ['type' => 'response.function_call_arguments.done', 'item_id' => 'fc_1', 'arguments' => '{}'],
+                    ['type' => 'response.completed', 'response' => ['id' => 'resp_123', 'status' => 'completed', 'output' => [['type' => 'function_call', 'status' => 'completed', 'id' => 'fc_1', 'call_id' => 'call_1', 'name' => 'FixedNumberGenerator', 'arguments' => '{}']], 'usage' => ['input_tokens' => 10, 'output_tokens' => 5, 'input_tokens_details' => ['cached_tokens' => 2], 'output_tokens_details' => ['reasoning_tokens' => 0]]]],
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+            Http::response(
+                body: $this->ssePayload([
+                    ['type' => 'response.created', 'response' => ['id' => 'resp_456', 'model' => 'grok-4-1-fast-reasoning']],
+                    ['type' => 'response.output_text.delta', 'delta' => 'The number is 72019'],
+                    ['type' => 'response.output_text.done'],
+                    ['type' => 'response.completed', 'response' => ['id' => 'resp_456', 'status' => 'completed', 'output' => [['type' => 'message', 'status' => 'completed', 'role' => 'assistant', 'content' => [['type' => 'output_text', 'text' => '']]]], 'usage' => ['input_tokens' => 20, 'output_tokens' => 10, 'input_tokens_details' => ['cached_tokens' => 8], 'output_tokens_details' => ['reasoning_tokens' => 0]]]],
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]),
+    ]);
+
+    $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+    $streamEnds = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd));
+
+    expect($streamEnds)->toHaveCount(1)
+        ->and($streamEnds[0]->reason)->toBe(FinishReason::Stop->value)
+        ->and($streamEnds[0]->usage->promptTokens)->toBe(20)
+        ->and($streamEnds[0]->usage->completionTokens)->toBe(15)
+        ->and($streamEnds[0]->usage->cacheReadInputTokens)->toBe(10);
+});
+
 test('streaming captures usage', function (): void {
     Http::fake([
         '*' => Http::response(
@@ -116,12 +251,17 @@ test('streaming error event stops stream', function (): void {
         ),
     ]);
 
-    $events = $this->collectStreamEvents();
+    $error = null;
 
-    expect($events)->toHaveCount(1)
-        ->and($events[0])->toBeInstanceOf(Error::class)
-        ->and($events[0]->type)->toBe('server_error')
-        ->and($events[0]->message)->toBe('Internal server error');
+    try {
+        $this->collectStreamEvents();
+    } catch (StreamErrorException $exception) {
+        $error = $exception->error;
+    }
+
+    expect($error)->toBeInstanceOf(Error::class)
+        ->and($error->type)->toBe('server_error')
+        ->and($error->message)->toBe('Internal server error');
 });
 
 test('streaming finish reason maps correctly', function (string $status, string $type, $expected): void {
@@ -151,3 +291,25 @@ test('streaming finish reason maps correctly', function (string $status, string 
     'unknown status maps to Unknown' => ['mystery_status', 'message', FinishReason::Unknown],
     'completed unknown type maps to Unknown' => ['completed', 'mystery_output', FinishReason::Unknown],
 ]);
+
+test('streaming emits provider tool events for code interpreter code deltas', function (): void {
+    Http::fake([
+        '*' => Http::response(
+            body: $this->ssePayload([
+                ['type' => 'response.created', 'response' => ['id' => 'resp_123', 'model' => 'grok-4-1-fast-reasoning']],
+                ['type' => 'response.code_interpreter_call_code.delta', 'item_id' => 'ci_1', 'output_index' => 0, 'delta' => 'print(1)'],
+                ['type' => 'response.code_interpreter_call_code.done', 'item_id' => 'ci_1', 'output_index' => 0, 'code' => 'print(1)'],
+                ['type' => 'response.output_text.delta', 'delta' => '1'],
+                ['type' => 'response.output_text.done'],
+                ['type' => 'response.completed', 'response' => ['id' => 'resp_123', 'status' => 'completed', 'output' => [['type' => 'message', 'status' => 'completed', 'role' => 'assistant', 'content' => [['type' => 'output_text', 'text' => '1']]]], 'usage' => ['input_tokens' => 10, 'output_tokens' => 5, 'input_tokens_details' => ['cached_tokens' => 0], 'output_tokens_details' => ['reasoning_tokens' => 0]]]],
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $providerEvents = array_values(array_filter($this->collectStreamEvents(), fn ($e): bool => $e instanceof ProviderToolEvent));
+
+    expect(array_map(fn (ProviderToolEvent $e): string => $e->status, $providerEvents))->toBe(['code_delta', 'code_done'])
+        ->and($providerEvents[0])->type->toBe('code_interpreter_call')->itemId->toBe('ci_1');
+});

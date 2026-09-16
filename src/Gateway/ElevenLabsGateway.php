@@ -4,7 +4,6 @@ namespace Laravel\Ai\Gateway;
 
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\AudioGateway;
 use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
@@ -19,10 +18,13 @@ use Laravel\Ai\Responses\TranscriptionResponse;
 
 class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
 {
+    use Concerns\CreatesClient;
     use Concerns\HandlesFailoverErrors;
 
     /**
      * Generate audio from the given text.
+     *
+     * @param  array<string, mixed>  $providerOptions
      */
     public function generateAudio(
         AudioProvider $provider,
@@ -31,6 +33,7 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
         string $voice,
         ?string $instructions = null,
         int $timeout = 30,
+        array $providerOptions = [],
     ): AudioResponse {
         $voice = match ($voice) {
             'default-male' => 'onwK4e9ZLuTAKqWW03F9',
@@ -39,10 +42,10 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
         };
 
         $response = $this->withErrorHandling($provider->name(), fn () => $this->client($provider, $timeout)
-            ->post('text-to-speech/'.$voice, [
+            ->post('text-to-speech/'.$voice, array_merge($providerOptions, [
                 'model_id' => $model,
                 'text' => $text,
-            ])->throw());
+            ]))->throw());
 
         return new AudioResponse(
             base64_encode((string) $response),
@@ -69,7 +72,7 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
             ->attach('file', $audio->content(), 'file', array_filter(['Content-Type' => $audio->mimeType()]))
             ->post('speech-to-text', array_merge($providerOptions, array_filter([
                 'model_id' => $model,
-                'language' => $language,
+                'language_code' => $language,
                 'diarize' => $diarize ? 'true' : 'false',
             ])))->throw());
 
@@ -103,9 +106,13 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
      */
     protected function client(AudioProvider|TranscriptionProvider $provider, int $timeout = 30): PendingRequest
     {
-        return Http::baseUrl($this->baseUrl($provider))
-            ->withHeaders(array_filter(['xi-api-key' => $provider->providerCredentials()['key']]))
-            ->timeout($timeout);
+        return $this->createClient(
+            $this->baseUrl($provider),
+            array_filter(['xi-api-key' => $provider->providerCredentials()['key']]),
+            $provider->additionalConfiguration()['headers'] ?? [],
+            $timeout,
+            false,
+        );
     }
 
     /**

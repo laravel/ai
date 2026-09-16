@@ -8,7 +8,7 @@ use Tests\Fixtures\Agents\AssistantAgent;
 
 trait MistralHelpers
 {
-    protected function fakeTextResponse(string $text = 'Hello'): PromiseInterface
+    protected function fakeTextResponse(string|array $text = 'Hello'): PromiseInterface
     {
         return Http::response([
             'id' => 'chatcmpl-123',

@@ -178,6 +178,28 @@ test('stored text document maps to text source block', function (): void {
     });
 });
 
+test('base64 text document that is not plain text is sent as plain text', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse(),
+    ]);
+
+    $document = Files\Document::fromString("email,state\na@b.it,ongoing\n", 'text/csv');
+
+    agent('You are helpful.')->prompt(
+        'Read this.',
+        attachments: [$document],
+        provider: 'anthropic',
+    );
+
+    Http::assertSent(function ($request): bool {
+        $docBlock = $request->data()['messages'][0]['content'][0];
+
+        return $docBlock['source']['type'] === 'text'
+            && $docBlock['source']['media_type'] === 'text/plain'
+            && $docBlock['source']['data'] === "email,state\na@b.it,ongoing\n";
+    });
+});
+
 test('local text document maps to text source block', function (): void {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse(),
@@ -225,6 +247,165 @@ test('uploaded text file maps to text source block', function (): void {
         return $docBlock['type'] === 'document'
             && $docBlock['source']['type'] === 'text'
             && $docBlock['source']['data'] === 'uploaded text contents';
+    });
+});
+
+test('uploaded text file that is not plain text is sent as plain text', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse(),
+    ]);
+
+    $upload = UploadedFile::fake()->createWithContent('leads.csv', "email,state\na@b.it,ongoing\n");
+
+    agent('You are helpful.')->prompt(
+        'Read this.',
+        attachments: [$upload],
+        provider: 'anthropic',
+    );
+
+    Http::assertSent(function ($request): bool {
+        $docBlock = $request->data()['messages'][0]['content'][0];
+
+        return $docBlock['source']['type'] === 'text'
+            && $docBlock['source']['media_type'] === 'text/plain'
+            && $docBlock['source']['data'] === "email,state\na@b.it,ongoing\n";
+    });
+});
+
+test('json document is sent as plain text', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse(),
+    ]);
+
+    agent('You are helpful.')->prompt(
+        'Read this.',
+        attachments: [Files\Document::fromString('{"state":"ongoing"}', 'application/json')],
+        provider: 'anthropic',
+    );
+
+    Http::assertSent(function ($request): bool {
+        $docBlock = $request->data()['messages'][0]['content'][0];
+
+        return $docBlock['source']['type'] === 'text'
+            && $docBlock['source']['media_type'] === 'text/plain'
+            && $docBlock['source']['data'] === '{"state":"ongoing"}';
+    });
+});
+
+test('document that is neither pdf nor plain text is rejected before sending', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse(),
+    ]);
+
+    $document = Files\Document::fromString("PK\x03\x04\x14\x00\x00\x00\x08\x00", 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+
+    expect(fn () => agent('You are helpful.')->prompt('Read this.', attachments: [$document], provider: 'anthropic'))
+        ->toThrow(InvalidArgumentException::class, 'must be converted first');
+
+    Http::assertNothingSent();
+});
+
+test('yaml document is sent as plain text', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse(),
+    ]);
+
+    agent('You are helpful.')->prompt(
+        'Read this.',
+        attachments: [Files\Document::fromString("state: ongoing\n", 'application/x-yaml')],
+        provider: 'anthropic',
+    );
+
+    Http::assertSent(function ($request): bool {
+        $docBlock = $request->data()['messages'][0]['content'][0];
+
+        return $docBlock['source']['type'] === 'text'
+            && $docBlock['source']['media_type'] === 'text/plain'
+            && $docBlock['source']['data'] === "state: ongoing\n";
+    });
+});
+
+test('pdf document without a mime type is detected from its bytes', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse(),
+    ]);
+
+    $pdf = "%PDF-1.4\n\x00binary";
+
+    agent('You are helpful.')->prompt(
+        'Read this.',
+        attachments: [Files\Document::fromString($pdf)],
+        provider: 'anthropic',
+    );
+
+    Http::assertSent(function ($request) use ($pdf): bool {
+        $docBlock = $request->data()['messages'][0]['content'][0];
+
+        return $docBlock['source']['type'] === 'base64'
+            && $docBlock['source']['media_type'] === 'application/pdf'
+            && $docBlock['source']['data'] === base64_encode($pdf);
+    });
+});
+
+test('remote pdf document is sent as a url source', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse(),
+    ]);
+
+    agent('You are helpful.')->prompt(
+        'Read this.',
+        attachments: [Files\Document::fromUrl('https://example.com/report.pdf')],
+        provider: 'anthropic',
+    );
+
+    Http::assertSent(function ($request): bool {
+        $docBlock = $request->data()['messages'][0]['content'][0];
+
+        return $docBlock['source'] === ['type' => 'url', 'url' => 'https://example.com/report.pdf'];
+    });
+});
+
+test('remote text document is fetched and inlined because a url source is pdf only', function (): void {
+    Http::fake([
+        'example.com/*' => Http::response("email,state\na@b.it,ongoing\n", headers: ['Content-Type' => 'text/csv']),
+        'api.anthropic.com/*' => $this->fakeTextResponse(),
+    ]);
+
+    agent('You are helpful.')->prompt(
+        'Read this.',
+        attachments: [Files\Document::fromUrl('https://example.com/leads.csv')],
+        provider: 'anthropic',
+    );
+
+    Http::assertSent(function ($request): bool {
+        if ($request->url() !== 'https://api.anthropic.com/v1/messages') {
+            return false;
+        }
+
+        $docBlock = $request->data()['messages'][0]['content'][0];
+
+        return $docBlock['source']['type'] === 'text'
+            && $docBlock['source']['media_type'] === 'text/plain'
+            && $docBlock['source']['data'] === "email,state\na@b.it,ongoing\n";
+    });
+});
+
+test('stored document carries its filename as the document title', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse(),
+    ]);
+
+    Storage::fake('docs');
+    Storage::disk('docs')->put('leads.csv', "email,state\na@b.it,ongoing\n");
+
+    agent('You are helpful.')->prompt(
+        'Read this.',
+        attachments: [Files\Document::fromStorage('leads.csv', 'docs')],
+        provider: 'anthropic',
+    );
+
+    Http::assertSent(function ($request): bool {
+        return ($request->data()['messages'][0]['content'][0]['title'] ?? null) === 'leads.csv';
     });
 });
 

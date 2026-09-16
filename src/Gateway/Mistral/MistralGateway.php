@@ -3,28 +3,32 @@
 namespace Laravel\Ai\Gateway\Mistral;
 
 use Illuminate\Contracts\Events\Dispatcher;
-use Laravel\Ai\Contracts\Files\HasName;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
+use Laravel\Ai\Contracts\Gateway\AudioGateway;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
+use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
+use Laravel\Ai\Gateway\Concerns\ResolvesAudioFilenames;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionMessages;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionTools;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\PerformsChatCompletionSteps;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
+use RuntimeException;
 
-class MistralGateway implements EmbeddingGateway, StepTextGateway, TranscriptionGateway
+class MistralGateway implements AudioGateway, EmbeddingGateway, StepTextGateway, TranscriptionGateway
 {
     use Concerns\BuildsTextRequests;
     use Concerns\CreatesMistralClient;
@@ -36,6 +40,7 @@ class MistralGateway implements EmbeddingGateway, StepTextGateway, Transcription
     use MapsChatCompletionTools;
     use ParsesServerSentEvents;
     use PerformsChatCompletionSteps;
+    use ResolvesAudioFilenames;
 
     public function __construct(protected Dispatcher $events)
     {
@@ -56,6 +61,47 @@ class MistralGateway implements EmbeddingGateway, StepTextGateway, Transcription
         StepContext $stepContext,
     ): array {
         return $this->buildTextRequestBody($provider, $model, $instructions, $messages, $tools, $schema, $options);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function generateAudio(
+        AudioProvider $provider,
+        string $model,
+        string $text,
+        string $voice,
+        ?string $instructions = null,
+        int $timeout = 30,
+        array $providerOptions = [],
+    ): AudioResponse {
+        $voice = match ($voice) {
+            'default-male' => 'en_paul_neutral',
+            'default-female' => 'gb_jane_neutral',
+            default => $voice,
+        };
+
+        $response = $this->withErrorHandling(
+            $provider->name(),
+            fn () => $this->client($provider, $timeout)->post('audio/speech', array_merge($providerOptions, [
+                'model' => $model,
+                'input' => $text,
+                'voice_id' => $voice,
+                'response_format' => 'mp3',
+            ])),
+        );
+
+        $encodedAudio = $response->json('audio_data');
+
+        if (! is_string($encodedAudio) || $encodedAudio === '') {
+            throw new RuntimeException('No audio data received from Mistral API.');
+        }
+
+        return new AudioResponse(
+            $encodedAudio,
+            new Meta($provider->name(), $model),
+            'audio/mpeg',
+        );
     }
 
     /**
@@ -149,28 +195,5 @@ class MistralGateway implements EmbeddingGateway, StepTextGateway, Transcription
         }
 
         return $parts;
-    }
-
-    /**
-     * Determine the appropriate filename for the audio file based on its MIME type.
-     */
-    protected function audioFilename(TranscribableAudio $audio): string
-    {
-        if ($audio instanceof HasName && $audio->name()) {
-            return $audio->name();
-        }
-
-        $extension = match ($audio->mimeType()) {
-            'audio/webm' => 'webm',
-            'audio/ogg', 'audio/ogg; codecs=opus' => 'ogg',
-            'audio/wav', 'audio/x-wav' => 'wav',
-            'audio/mp4', 'audio/m4a', 'audio/x-m4a' => 'm4a',
-            'audio/flac', 'audio/x-flac' => 'flac',
-            'audio/mpeg', 'audio/mp3' => 'mp3',
-            'audio/mpga' => 'mpga',
-            default => 'mp3',
-        };
-
-        return "audio.{$extension}";
     }
 }

@@ -2,6 +2,7 @@
 
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Messages\AssistantMessage;
 use Tests\Fixtures\Agents\MultiStepToolAgent;
 use Tests\Fixtures\Agents\OpenAiAgent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
@@ -236,6 +237,62 @@ test('default store true preserves previous response id behaviour', function ():
         ->and($input->first()['call_id'] ?? null)->toBe('call_1')
         ->and($input->contains(fn ($i): bool => ($i['role'] ?? null) === 'user'))->toBeFalse()
         ->and($input->contains(fn ($i): bool => ($i['type'] ?? null) === 'reasoning'))->toBeFalse();
+});
+
+test('stateless replay preserves the original order of reasoning, hosted tool, and function call items', function () {
+    Http::fake([
+        'api.openai.com/*' => Http::sequence([
+            Http::response([
+                'id' => 'resp_tool_1',
+                'status' => 'completed',
+                'model' => 'gpt-5.4',
+                'output' => [
+                    ['type' => 'reasoning', 'id' => 'rs_1', 'summary' => [], 'encrypted_content' => 'enc-blob-1'],
+                    ['type' => 'web_search_call', 'id' => 'ws_1', 'status' => 'completed'],
+                    ['type' => 'function_call', 'id' => 'fc_1', 'call_id' => 'call_1', 'name' => 'FixedNumberGenerator', 'arguments' => '{}', 'status' => 'completed'],
+                ],
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+            fakeOpenAiResponse('Done'),
+        ]),
+    ]);
+
+    (new ToolUsingAgent(fixed: true))->prompt('Generate a number', provider: 'openai');
+
+    $input = collect(json_decode(Http::recorded()[1][0]->body(), true)['input']);
+
+    $reasoningAt = $input->search(fn ($i) => ($i['type'] ?? null) === 'reasoning');
+    $hostedAt = $input->search(fn ($i) => ($i['type'] ?? null) === 'web_search_call');
+    $functionAt = $input->search(fn ($i) => ($i['type'] ?? null) === 'function_call');
+
+    expect($reasoningAt)->not->toBeFalse()
+        ->and($hostedAt)->not->toBeFalse()
+        ->and($functionAt)->not->toBeFalse()
+        ->and($reasoningAt)->toBeLessThan($hostedAt)
+        ->and($hostedAt)->toBeLessThan($functionAt)
+        ->and($input->firstWhere('type', 'reasoning')['encrypted_content'] ?? null)->toBe('enc-blob-1')
+        ->and($input->contains(fn ($i) => ($i['type'] ?? null) === 'function_call_output'
+            && ($i['call_id'] ?? null) === 'call_1'))->toBeTrue();
+});
+
+test('stateless (store=false) responses capture replay blocks', function () {
+    Http::fake(['api.openai.com/*' => fakeOpenAiResponse('Hi')]);
+
+    $response = (new OpenAiAgent)->prompt('Hello', provider: 'openai');
+
+    expect($response->messages->whereInstanceOf(AssistantMessage::class)->last()->providerContentBlocks)
+        ->not->toBeEmpty();
+});
+
+test('stateful (store=true) responses do not capture replay blocks', function () {
+    config(['ai.providers.openai' => [...config('ai.providers.openai'), 'store' => true]]);
+
+    Http::fake(['api.openai.com/*' => fakeOpenAiResponse('Hi')]);
+
+    $response = (new OpenAiAgent)->prompt('Hello', provider: 'openai');
+
+    expect($response->messages->whereInstanceOf(AssistantMessage::class)->last()->providerContentBlocks)
+        ->toBeEmpty();
 });
 
 function fakeOpenAiToolCallResponseWithEncryptedReasoning(string $reasoningId, string $encryptedContent, string $functionCallId, string $callId): PromiseInterface

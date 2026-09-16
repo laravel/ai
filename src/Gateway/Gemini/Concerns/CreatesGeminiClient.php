@@ -3,20 +3,24 @@
 namespace Laravel\Ai\Gateway\Gemini\Concerns;
 
 use Illuminate\Http\Client\PendingRequest;
-use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Gateway\Concerns\CreatesClient;
 use Laravel\Ai\Providers\Provider;
 
 trait CreatesGeminiClient
 {
+    use CreatesClient;
+
     /**
      * Get an HTTP client for the Gemini API.
      */
     protected function client(Provider $provider, ?int $timeout = null): PendingRequest
     {
-        return Http::baseUrl($this->baseUrl($provider))
-            ->withHeaders(array_filter(['x-goog-api-key' => $provider->providerCredentials()['key']]))
-            ->timeout($timeout ?? 60)
-            ->throw();
+        return $this->createClient(
+            $this->baseUrl($provider),
+            array_filter(['x-goog-api-key' => $provider->providerCredentials()['key']]),
+            $provider->additionalConfiguration()['headers'] ?? [],
+            $timeout ?? 60,
+        );
     }
 
     /**

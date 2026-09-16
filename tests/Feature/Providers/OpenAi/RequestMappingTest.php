@@ -316,3 +316,65 @@ test('none tool choice prevents tool calls', function (): void {
 
     Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['tool_choice'] === 'none');
 });
+
+test('response usage captures cache write tokens', function (): void {
+    Http::fake(['*' => Http::response([
+        'id' => 'resp_123',
+        'status' => 'completed',
+        'model' => 'gpt-5.6-luna',
+        'output' => [[
+            'type' => 'message',
+            'status' => 'completed',
+            'content' => [['type' => 'output_text', 'text' => 'Hello']],
+        ]],
+        'usage' => [
+            'input_tokens' => 8817,
+            'output_tokens' => 120,
+            'input_tokens_details' => [
+                'cache_write_tokens' => 8814,
+                'cached_tokens' => 0,
+            ],
+            'output_tokens_details' => [
+                'reasoning_tokens' => 64,
+            ],
+        ],
+    ])]);
+
+    $response = agent()->prompt('Hello', provider: 'openai');
+
+    expect($response->usage->cacheWriteInputTokens)->toBe(8814)
+        ->and($response->usage->cacheReadInputTokens)->toBe(0)
+        ->and($response->usage->promptTokens)->toBe(3)
+        ->and($response->usage->completionTokens)->toBe(120)
+        ->and($response->usage->reasoningTokens)->toBe(64);
+});
+
+test('response usage separates cache reads from cache writes', function (): void {
+    Http::fake(['*' => Http::response([
+        'id' => 'resp_123',
+        'status' => 'completed',
+        'model' => 'gpt-5.6-luna',
+        'output' => [[
+            'type' => 'message',
+            'status' => 'completed',
+            'content' => [['type' => 'output_text', 'text' => 'Hello']],
+        ]],
+        'usage' => [
+            'input_tokens' => 8817,
+            'output_tokens' => 120,
+            'input_tokens_details' => [
+                'cache_write_tokens' => 0,
+                'cached_tokens' => 8814,
+            ],
+            'output_tokens_details' => [
+                'reasoning_tokens' => 64,
+            ],
+        ],
+    ])]);
+
+    $response = agent()->prompt('Hello', provider: 'openai');
+
+    expect($response->usage->cacheWriteInputTokens)->toBe(0)
+        ->and($response->usage->cacheReadInputTokens)->toBe(8814)
+        ->and($response->usage->promptTokens)->toBe(3);
+});

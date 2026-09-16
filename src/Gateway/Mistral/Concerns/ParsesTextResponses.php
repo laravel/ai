@@ -43,7 +43,7 @@ trait ParsesTextResponses
         $message = $choice['message'] ?? [];
         $model = $data['model'] ?? '';
 
-        $text = $message['content'] ?? '';
+        $text = $this->extractContentText($message['content'] ?? '');
         $rawToolCalls = $message['tool_calls'] ?? [];
 
         $toolCalls = array_map(fn (array $toolCall): ToolCall => new ToolCall(
@@ -61,6 +61,21 @@ trait ParsesTextResponses
             meta: new Meta($provider->name(), $model),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
         );
+    }
+
+    /**
+     * Extract the text from a message content value, which may be a list of content chunks.
+     */
+    protected function extractContentText(mixed $content): string
+    {
+        if (! is_array($content)) {
+            return (string) $content;
+        }
+
+        return implode('', array_map(
+            fn (mixed $chunk): string => is_array($chunk) ? (string) ($chunk['text'] ?? '') : (string) $chunk,
+            $content,
+        ));
     }
 
     /**
@@ -84,8 +99,9 @@ trait ParsesTextResponses
         return match ($choice['finish_reason'] ?? '') {
             'stop' => FinishReason::Stop,
             'tool_calls' => FinishReason::ToolCalls,
-            'length' => FinishReason::Length,
+            'length', 'model_length' => FinishReason::Length,
             'content_filter' => FinishReason::ContentFilter,
+            'error' => FinishReason::Error,
             default => FinishReason::Unknown,
         };
     }

@@ -655,3 +655,70 @@ test('a resume that fails after the tool runs does not re-execute the tool on re
 
     expect(ApprovableNumberGenerator::$invocations)->toBe(1);
 });
+
+test('a resume settles the paused row before the run writes a newer one', function () {
+    Config::set('ai.conversations.generate_title', false);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            Http::response([
+                'id' => 'msg_tool_1',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [[
+                    'type' => 'tool_use',
+                    'id' => 'toolu_1',
+                    'name' => 'ApprovableNumberGenerator',
+                    'input' => (object) [],
+                ], [
+                    'type' => 'tool_use',
+                    'id' => 'toolu_2',
+                    'name' => 'ApprovableNumberGenerator',
+                    'input' => (object) [],
+                ]],
+                'stop_reason' => 'tool_use',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+            Http::response([
+                'id' => 'msg_2',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [['type' => 'text', 'text' => 'The number is 72019.']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+        ]),
+    ]);
+
+    $user = (object) ['id' => 1];
+    $store = new DatabaseConversationStore;
+
+    $paused = (new RememberingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
+
+    expect(collect($store->pendingApprovalsFor($paused->conversationId))->pluck('id')->all())
+        ->toBe(['toolu_1', 'toolu_2']);
+
+    $pausedRowId = DB::table('agent_conversation_messages')
+        ->where('conversation_id', $paused->conversationId)
+        ->where('role', 'assistant')
+        ->latest('id')
+        ->value('id');
+
+    (new RememberingApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->prompt(Decisions::from(['toolu_1' => true, 'toolu_2' => true]), provider: 'anthropic');
+
+    // Only the newest row is read for pending approvals, so a resume that settled some calls and left others behind on an older row would report a finished turn while the user still owed a decision...
+    $pausedRow = DB::table('agent_conversation_messages')->where('id', $pausedRowId)->first();
+
+    $newerRows = DB::table('agent_conversation_messages')
+        ->where('conversation_id', $paused->conversationId)
+        ->where('id', '>', $pausedRowId)
+        ->count();
+
+    expect($newerRows)->toBeGreaterThan(0)
+        ->and(json_decode($pausedRow->approval_state, true)['pending'])->toBe([])
+        ->and($store->pendingApprovalsFor($paused->conversationId))->toBe([]);
+});

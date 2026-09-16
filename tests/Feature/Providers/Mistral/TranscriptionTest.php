@@ -38,7 +38,7 @@ test('transcription includes model in request', function (): void {
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
         ->generate(provider: 'mistral');
 
-    Http::assertSent(fn (Request $request): bool => str_contains($request->body(), 'voxtral-mini-latest'));
+    Http::assertSent(fn (Request $request): bool => str_contains($request->body(), 'voxtral-mini-2602'));
 });
 
 test('transcription sends language when provided', function (): void {

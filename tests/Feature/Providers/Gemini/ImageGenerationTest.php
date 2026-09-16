@@ -322,3 +322,17 @@ test('image response is empty when candidate is blocked with no content parts', 
 
     expect($response->images)->toHaveCount(0);
 });
+
+test('nested generation config provider options are merged beneath the core config', function (): void {
+    Http::fake(['generativelanguage.googleapis.com/*' => fakeGeminiImageResponse()]);
+
+    Image::of('A red apple')
+        ->withProviderOptions(['generationConfig' => ['temperature' => 0.1, 'responseModalities' => ['TEXT']]])
+        ->generate(provider: 'gemini', model: 'gemini-3.1-flash-image-preview');
+
+    Http::assertSent(function (Request $request): bool {
+        $config = json_decode($request->body(), true)['generationConfig'];
+
+        return $config['temperature'] === 0.1 && $config['responseModalities'] === ['IMAGE', 'TEXT'];
+    });
+});

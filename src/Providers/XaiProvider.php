@@ -3,14 +3,22 @@
 namespace Laravel\Ai\Providers;
 
 use Illuminate\Contracts\Events\Dispatcher;
+use InvalidArgumentException;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
+use Laravel\Ai\Contracts\Providers\SupportsCodeExecution;
+use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
+use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Xai\XaiGateway;
 use Laravel\Ai\Gateway\Xai\XaiImageGateway;
+use Laravel\Ai\Providers\Tools\CodeExecution;
+use Laravel\Ai\Providers\Tools\FileSearch;
+use Laravel\Ai\Providers\Tools\WebSearch;
 
-class XaiProvider extends Provider implements ImageProvider, TextProvider
+class XaiProvider extends Provider implements ImageProvider, SupportsCodeExecution, SupportsFileSearch, SupportsWebSearch, TextProvider
 {
     use Concerns\GeneratesImages;
     use Concerns\GeneratesText;
@@ -22,6 +30,40 @@ class XaiProvider extends Provider implements ImageProvider, TextProvider
         protected array $config,
         protected Dispatcher $events,
     ) {}
+
+    /**
+     * Get the code execution tool options for the provider.
+     */
+    public function codeExecutionToolOptions(CodeExecution $codeExecution): array
+    {
+        return $codeExecution->providerOptions(Lab::xAI);
+    }
+
+    /**
+     * Get the file search tool options for the provider.
+     */
+    public function fileSearchToolOptions(FileSearch $search): array
+    {
+        if (filled($search->filters)) {
+            throw new InvalidArgumentException('xAI does not support file search metadata filters.');
+        }
+
+        return array_filter([
+            'vector_store_ids' => $search->ids(),
+        ]) + $search->providerOptions(Lab::xAI);
+    }
+
+    /**
+     * Get the web search tool options for the provider.
+     */
+    public function webSearchToolOptions(WebSearch $search): array
+    {
+        $options = $search->providerOptions(Lab::xAI);
+
+        return array_filter([
+            'allowed_domains' => filled($search->allowedDomains) ? $search->allowedDomains : null,
+        ]) + $options;
+    }
 
     /**
      * Get the provider's text gateway.

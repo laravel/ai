@@ -9,6 +9,9 @@ use Laravel\Ai\Files;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Base64Video;
 use Laravel\Ai\Files\LocalImage;
+use Laravel\Ai\Files\RemoteAudio;
+use Laravel\Ai\Files\RemoteDocument;
+use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
@@ -214,6 +217,84 @@ test('base64 video attachment maps to inline data', function (): void {
             if (isset($part['inlineData'])) {
                 return $part['inlineData']['mimeType'] === 'video/mp4'
                     && $part['inlineData']['data'] === base64_encode('fake-video-content');
+            }
+        }
+
+        return false;
+    });
+});
+
+test('remote image url is fetched and mapped to inline data', function (): void {
+    Http::fake([
+        'example.com/*' => Http::response('fake-image-bytes', 200, ['Content-Type' => 'image/png']),
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('I see an image'),
+    ]);
+
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [new RemoteImage('https://example.com/photo.png', 'image/png')],
+        provider: 'gemini',
+    );
+
+    Http::assertSent(function ($request): bool {
+        $parts = data_get($request->data(), 'contents.0.parts', []);
+
+        foreach ($parts as $part) {
+            if (isset($part['inlineData'])) {
+                return $part['inlineData']['mimeType'] === 'image/png'
+                    && $part['inlineData']['data'] === base64_encode('fake-image-bytes');
+            }
+        }
+
+        return false;
+    });
+});
+
+test('remote pdf url is fetched and mapped to inline data', function (): void {
+    Http::fake([
+        'example.com/*' => Http::response('fake-pdf-bytes', 200, ['Content-Type' => 'application/pdf']),
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('I see a PDF'),
+    ]);
+
+    agent('You are helpful.')->prompt(
+        'What is in this PDF?',
+        attachments: [new RemoteDocument('https://example.com/report.pdf', 'application/pdf')],
+        provider: 'gemini',
+    );
+
+    Http::assertSent(function ($request): bool {
+        $parts = data_get($request->data(), 'contents.0.parts', []);
+
+        foreach ($parts as $part) {
+            if (isset($part['inlineData'])) {
+                return $part['inlineData']['mimeType'] === 'application/pdf'
+                    && $part['inlineData']['data'] === base64_encode('fake-pdf-bytes');
+            }
+        }
+
+        return false;
+    });
+});
+
+test('remote audio url is fetched and mapped to inline data', function (): void {
+    Http::fake([
+        'example.com/*' => Http::response('fake-audio-bytes', 200, ['Content-Type' => 'audio/mp3']),
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('I hear audio'),
+    ]);
+
+    agent('You are helpful.')->prompt(
+        'What is in this audio?',
+        attachments: [new RemoteAudio('https://example.com/clip.mp3', 'audio/mp3')],
+        provider: 'gemini',
+    );
+
+    Http::assertSent(function ($request): bool {
+        $parts = data_get($request->data(), 'contents.0.parts', []);
+
+        foreach ($parts as $part) {
+            if (isset($part['inlineData'])) {
+                return $part['inlineData']['mimeType'] === 'audio/mp3'
+                    && $part['inlineData']['data'] === base64_encode('fake-audio-bytes');
             }
         }
 

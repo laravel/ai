@@ -16,9 +16,12 @@ use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\StoredDocument;
 use Laravel\Ai\Files\StoredImage;
+use Laravel\Ai\Gateway\Concerns\ResolvesDocumentFilenames;
 
 trait MapsAttachments
 {
+    use ResolvesDocumentFilenames;
+
     /**
      * Map the given Laravel attachments to xAI content parts.
      */
@@ -55,28 +58,28 @@ trait MapsAttachments
                     'file_id' => $attachment->id,
                     'filename' => $attachment->name(),
                 ]),
-                $attachment instanceof Base64Document => array_filter([
+                $attachment instanceof Base64Document => [
                     'type' => 'input_file',
                     'file_data' => 'data:'.$attachment->mime.';base64,'.$attachment->base64,
-                    'filename' => $attachment->name(),
-                ]),
-                $attachment instanceof LocalDocument => array_filter([
+                    'filename' => $attachment->name() ?? $this->fallbackFilename($attachment->mime),
+                ],
+                $attachment instanceof LocalDocument => [
                     'type' => 'input_file',
                     'file_data' => 'data:'.($attachment->mimeType() ?? 'application/octet-stream').';base64,'.base64_encode(file_get_contents($attachment->path)),
                     'filename' => $attachment->name(),
-                ]),
+                ],
                 $attachment instanceof RemoteDocument => array_filter([
                     'type' => 'input_file',
                     'file_url' => $attachment->url,
                     'filename' => $attachment->name(),
                 ]),
-                $attachment instanceof StoredDocument => array_filter([
+                $attachment instanceof StoredDocument => [
                     'type' => 'input_file',
                     'file_data' => 'data:'.($attachment->mimeType() ?? 'application/octet-stream').';base64,'.base64_encode(
                         (string) Storage::disk($attachment->disk)->get($attachment->path)
                     ),
                     'filename' => $attachment->name(),
-                ]),
+                ],
                 $attachment instanceof UploadedFile && $this->isImage($attachment) => [
                     'type' => 'input_image',
                     'image_url' => 'data:'.$attachment->getClientMimeType().';base64,'.base64_encode($attachment->get()),

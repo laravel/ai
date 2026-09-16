@@ -234,3 +234,13 @@ test('image http error response throws request exception', function (): void {
 
     Image::of('A blue circle')->generate(provider: 'openrouter', model: 'google/gemini-2.5-flash-image');
 })->throws(RequestException::class);
+
+test('falsy provider options are not filtered out of the image request', function (): void {
+    Http::fake(['openrouter.ai/*' => fakeOpenRouterImageResponse()]);
+
+    Image::of('A blue circle')
+        ->withProviderOptions(['stream' => false])
+        ->generate(provider: 'openrouter', model: 'google/gemini-2.5-flash-image');
+
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['stream'] === false);
+});

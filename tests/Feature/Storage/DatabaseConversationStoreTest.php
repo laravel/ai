@@ -1,5 +1,7 @@
 <?php
 
+use Carbon\CarbonInterface;
+use Illuminate\Contracts\Pagination\CursorPaginator;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Config;
@@ -8,7 +10,11 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\Decisions;
+use Laravel\Ai\Approvals\PendingApproval;
+use Laravel\Ai\Contracts\PaginatesConversations;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Contracts\ResolvesPendingApprovals;
+use Laravel\Ai\Contracts\VerifiesConversationOwnership;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\StoredDocument;
@@ -21,8 +27,17 @@ use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
+use Laravel\Ai\Responses\Data\UrlCitation;
 use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Storage\DatabaseConversationStore;
+use Laravel\Ai\Storage\StoredMessage;
+use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
+use Laravel\Ai\Streaming\Events\ReasoningDelta;
+use Laravel\Ai\Streaming\Events\ReasoningEnd;
+use Laravel\Ai\Streaming\Events\ReasoningStart;
+use Laravel\Ai\Streaming\Events\TextDelta;
+use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Tests\Fixtures\Agents\RememberingToolUsingAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
@@ -62,6 +77,183 @@ test('it routes queries through the configured connection', function (): void {
 
     expect(DB::connection('secondary')->table('agent_conversations')->where('id', $conversationId)->exists())->toBeTrue()
         ->and(DB::table('agent_conversations')->where('id', $conversationId)->exists())->toBeFalse();
+});
+
+test('it paginates conversation messages newest first, scoped to the conversation', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Target transcript');
+    $otherConversationId = $store->storeConversation('user', 1, 'Other transcript');
+
+    insertStoredConversationMessages($conversationId, ['message-001', 'message-003', 'message-005']);
+    insertStoredConversationMessages($otherConversationId, ['message-002', 'message-004']);
+
+    $page = $store->paginateConversationMessages($conversationId, 10);
+
+    expect($store)->toBeInstanceOf(PaginatesConversations::class)
+        ->and($page)->toBeInstanceOf(CursorPaginator::class)
+        ->and($page->items())->toContainOnlyInstancesOf(StoredMessage::class)
+        ->and(collect($page->items())->pluck('id')->all())->toBe(['message-005', 'message-003', 'message-001']);
+});
+
+test('it verifies which participant a conversation was stored for', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Mine');
+
+    expect($store)->toBeInstanceOf(VerifiesConversationOwnership::class)
+        ->and($store->conversationBelongsTo($conversationId, 'user', 1))->toBeTrue()
+        ->and($store->conversationBelongsTo($conversationId, 'user', 2))->toBeFalse()
+        ->and($store->conversationBelongsTo($conversationId, 'team', 1))->toBeFalse();
+});
+
+test('it compares a participant key stored as a string against an integer', function (): void {
+    $store = new DatabaseConversationStore;
+
+    // The key comes from another table, so the column it was written to and the value a caller holds need not agree on type...
+    expect($store->conversationBelongsTo($store->storeConversation('user', '7', 'Mine'), 'user', 7))->toBeTrue()
+        ->and($store->conversationBelongsTo($store->storeConversation('user', 7, 'Mine'), 'user', '7'))->toBeTrue();
+});
+
+test('it refuses a half-matching participant', function (): void {
+    $store = new DatabaseConversationStore;
+    $ownerless = $store->storeConversation(null, null, 'Ownerless');
+    $owned = $store->storeConversation('user', 1, 'Owned');
+
+    // Filtering the pair in the query instead would answer this first one yes, since a null id nulls both columns and drops the type that was asked about...
+    expect($store->conversationBelongsTo($ownerless, 'user', null))->toBeFalse()
+        ->and($store->conversationBelongsTo($ownerless, null, 1))->toBeFalse()
+        ->and($store->conversationBelongsTo($owned, 'user', null))->toBeFalse()
+        ->and($store->conversationBelongsTo($owned, null, 1))->toBeFalse();
+});
+
+test('it refuses a conversation that does not exist', function (): void {
+    expect((new DatabaseConversationStore)->conversationBelongsTo('missing-conversation', 'user', 1))->toBeFalse();
+});
+
+test('it matches an ownerless conversation only to a null participant', function (): void {
+    $store = new DatabaseConversationStore;
+    $ownerless = $store->storeConversation(null, null, 'Ownerless');
+
+    // A turn that pauses for approval is remembered whether or not the agent was given a participant, so a conversation belonging to nobody is a stored state rather than an edge case...
+    expect($store->conversationBelongsTo($ownerless, null, null))->toBeTrue()
+        ->and($store->conversationBelongsTo($ownerless, 'user', 1))->toBeFalse();
+});
+
+test('it decodes the stored JSON columns', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Transcript');
+
+    // The JSON columns are why this returns a value object: a caller rendering a transcript should not be decoding storage...
+    DB::table('agent_conversation_messages')->insert([
+        ...storedConversationMessageAttributes('message-001', $conversationId, 'Saved the note.'),
+        'role' => 'assistant',
+        'meta' => json_encode(['provider' => 'openai', 'citations' => [['url' => 'https://laravel.com']]]),
+        'tool_calls' => json_encode([['id' => 'call-1', 'name' => 'save_note', 'arguments' => ['a' => 1]]]),
+        'usage' => json_encode(['input_tokens' => 12]),
+    ]);
+
+    $message = $store->paginateConversationMessages($conversationId, 1)->items()[0];
+
+    expect($message->meta['provider'])->toBe('openai')
+        ->and($message->meta['citations'][0]['url'])->toBe('https://laravel.com')
+        ->and($message->toolCalls[0]['name'])->toBe('save_note')
+        ->and($message->usage['input_tokens'])->toBe(12)
+        ->and($message->toolResults)->toBe([])
+        ->and($message->approvalState)->toBeNull()
+        ->and($message->createdAt)->toBeInstanceOf(CarbonInterface::class);
+});
+
+test('it advances to the next cursor page', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Transcript');
+
+    insertStoredConversationMessages($conversationId, ['message-001', 'message-002', 'message-003', 'message-004', 'message-005']);
+
+    $firstPage = $store->paginateConversationMessages($conversationId, 2);
+
+    request()->query->set('cursor', $firstPage->nextCursor()?->encode());
+
+    $secondPage = $store->paginateConversationMessages($conversationId, 2);
+
+    expect(collect($firstPage->items())->pluck('id')->all())->toBe(['message-005', 'message-004'])
+        ->and(collect($secondPage->items())->pluck('id')->all())->toBe(['message-003', 'message-002']);
+});
+
+test('it reads the cursor from the given query parameter name', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Transcript');
+
+    insertStoredConversationMessages($conversationId, ['message-001', 'message-002', 'message-003', 'message-004', 'message-005']);
+
+    $firstPage = $store->paginateConversationMessages($conversationId, 2, 'support');
+
+    // Two transcripts on one page would otherwise page in lockstep, both reading `?cursor=`...
+    request()->query->set('support', $firstPage->nextCursor()?->encode());
+    request()->query->set('cursor', 'ignored');
+
+    $secondPage = $store->paginateConversationMessages($conversationId, 2, 'support');
+
+    expect(collect($secondPage->items())->pluck('id')->all())->toBe(['message-003', 'message-002']);
+});
+
+test('it accepts a cursor passed directly, without a request', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Transcript');
+
+    insertStoredConversationMessages($conversationId, ['message-001', 'message-002', 'message-003', 'message-004', 'message-005']);
+
+    $firstPage = $store->paginateConversationMessages($conversationId, 2);
+
+    $secondPage = $store->paginateConversationMessages($conversationId, 2, cursor: $firstPage->nextCursor());
+
+    expect(collect($secondPage->items())->pluck('id')->all())->toBe(['message-003', 'message-002']);
+});
+
+test('it reports the tool calls a paused turn is waiting on', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Paused');
+
+    insertPausedConversationTurn($conversationId, 'message-001', [
+        ['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt']],
+        ['id' => 'call-2', 'name' => 'SendEmail', 'arguments' => ['to' => 'a@b.test']],
+    ], ['call-1' => 'Deletes a file.', 'call-2' => null]);
+
+    $pending = $store->pendingApprovalsFor($conversationId);
+
+    expect($store)->toBeInstanceOf(ResolvesPendingApprovals::class)
+        ->and($pending)->toHaveCount(2)
+        ->and($pending[0])->toBeInstanceOf(PendingApproval::class)
+        ->and($pending[0]->id)->toBe('call-1')
+        ->and($pending[0]->tool)->toBe('DeleteFile')
+        ->and($pending[0]->arguments)->toBe(['path' => 'a.txt'])
+        ->and($pending[0]->reason)->toBe('Deletes a file.')
+        ->and($pending[1]->reason)->toBeNull();
+});
+
+test('it drops a call that already has a result', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Resumed');
+
+    insertPausedConversationTurn($conversationId, 'message-001', [
+        ['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => []],
+        ['id' => 'call-2', 'name' => 'SendEmail', 'arguments' => []],
+    ], ['call-1' => null, 'call-2' => null]);
+
+    // A resolved call keeps its entry in the pending map until the resume records the decision, so the result is what says the pause is over for it...
+    DB::table('agent_conversation_messages')
+        ->where('id', 'message-001')
+        ->update(['tool_results' => json_encode([['id' => 'call-1', 'name' => 'DeleteFile', 'result' => 'Deleted.']])]);
+
+    expect(collect($store->pendingApprovalsFor($conversationId))->pluck('id')->all())->toBe(['call-2']);
+});
+
+test('it reports nothing when the newest turn is not paused', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Answered');
+
+    insertStoredConversationMessages($conversationId, ['message-001']);
+
+    expect($store->pendingApprovalsFor($conversationId))->toBe([])
+        ->and($store->pendingApprovalsFor('missing-conversation'))->toBe([]);
 });
 
 test('it persists tool calls and results from a remembered agent prompt', function (): void {
@@ -143,6 +335,107 @@ test('it stores sparse keyed tool calls and results as JSON arrays', function ()
 
     expect(array_is_list(json_decode((string) $record->tool_calls, true)))->toBeTrue()
         ->and(array_is_list(json_decode((string) $record->tool_results, true)))->toBeTrue();
+});
+
+test('it scopes the latest conversation lookup to conversations the agent has participated in', function (): void {
+    $store = new DatabaseConversationStore;
+
+    $first = $store->storeConversation('user', 1, 'First');
+    $second = $store->storeConversation('user', 1, 'Second');
+
+    $insertMessage = fn (string $id, string $conversationId, string $agent) => DB::table('agent_conversation_messages')->insert([
+        'id' => $id,
+        'conversation_id' => $conversationId,
+        'participant_type' => 'user',
+        'participant_id' => 1,
+        'agent' => $agent,
+        'role' => 'user',
+        'content' => 'Hello',
+        'attachments' => '[]',
+        'tool_calls' => '[]',
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $insertMessage('message-1', $first, ToolUsingAgent::class);
+    $insertMessage('message-2', $second, RememberingToolUsingAgent::class);
+
+    expect($store->latestConversationId('user', 1, ToolUsingAgent::class))->toBe($first)
+        ->and($store->latestConversationId('user', 1, RememberingToolUsingAgent::class))->toBe($second)
+        ->and($store->latestConversationId('user', 2, ToolUsingAgent::class))->toBeNull();
+
+    // The agent later joins the second conversation, so it becomes that agent's latest too...
+    $insertMessage('message-3', $second, ToolUsingAgent::class);
+
+    expect($store->latestConversationId('user', 1, ToolUsingAgent::class))->toBe($second);
+});
+
+test('it round trips tool result failure status through storage', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        'Where is Berlin?',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $response = new AgentResponse('invocation-id', '', new Usage, new Meta);
+    $response->toolCalls = collect([new ToolCall('call-1', 'query-resources', [])]);
+    $response->toolResults = collect([
+        new ToolResult('call-1', 'query-resources', [], 'Tool not found', failed: true),
+    ]);
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $result = $store->getLatestConversationMessages($conversationId, 10)
+        ->first(fn (Message $message): bool => $message instanceof ToolResultMessage)
+        ?->toolResults
+        ->first();
+
+    expect($result)->not->toBeNull()
+        ->and($result->successful())->toBeFalse()
+        ->and($result->error())->toBe('Tool not found');
+});
+
+test('it treats tool results stored before the failed flag as successful', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'participant_type' => 'user',
+        'participant_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => '',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call-1', 'name' => 'query-resources', 'arguments' => []],
+        ]),
+        'tool_results' => json_encode([
+            ['id' => 'call-1', 'name' => 'query-resources', 'arguments' => [], 'result' => 'Berlin', 'result_id' => null],
+        ]),
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $result = $store->getLatestConversationMessages($conversationId, 10)
+        ->first(fn (Message $message): bool => $message instanceof ToolResultMessage)
+        ?->toolResults
+        ->first();
+
+    expect($result)->not->toBeNull()
+        ->and($result->successful())->toBeTrue()
+        ->and($result->error())->toBeNull();
 });
 
 test('a bare rejection resume does not persist a blank assistant row', function (): void {
@@ -324,6 +617,114 @@ test('it drops unresolved tool calls on an unmarked legacy row with no final tex
     expect($messages)->toBeEmpty();
 });
 
+test('it drops unresolved tool calls on an unmarked legacy row that only some results answered', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'participant_type' => 'user',
+        'participant_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => 'The order has shipped.',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call-1', 'name' => 'lookup_order', 'arguments' => ['id' => 1], 'result_id' => 'result-1'],
+            ['id' => 'call-2', 'name' => 'lookup_customer', 'arguments' => ['id' => 2], 'result_id' => 'result-2'],
+        ]),
+        'tool_results' => json_encode([
+            ['id' => 'call-1', 'name' => 'lookup_order', 'arguments' => ['id' => 1], 'result' => ['status' => 'shipped'], 'result_id' => 'result-1'],
+        ]),
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toHaveCount(3)
+        ->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[0]->toolCalls)->toHaveCount(1)
+        ->and($messages[0]->toolCalls[0]->id)->toBe('call-1')
+        ->and($messages[1])->toBeInstanceOf(ToolResultMessage::class)
+        ->and($messages[1]->toolResults)->toHaveCount(1)
+        ->and($messages[1]->toolResults[0]->id)->toBe('call-1')
+        ->and($messages[2])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[2]->content)->toBe('The order has shipped.');
+});
+
+test('it replays a duplicated tool result only once against the call it answers', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'participant_type' => 'user',
+        'participant_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => 'The order has shipped.',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call-1', 'name' => 'lookup_order', 'arguments' => ['id' => 1], 'result_id' => 'result-1'],
+        ]),
+        'tool_results' => json_encode([
+            ['id' => 'call-1', 'name' => 'lookup_order', 'arguments' => ['id' => 1], 'result' => ['status' => 'shipped'], 'result_id' => 'result-1'],
+            ['id' => 'call-1', 'name' => 'lookup_order', 'arguments' => ['id' => 1], 'result' => ['status' => 'shipped'], 'result_id' => 'result-1'],
+        ]),
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toHaveCount(3)
+        ->and($messages[0]->toolCalls)->toHaveCount(1)
+        ->and($messages[1])->toBeInstanceOf(ToolResultMessage::class)
+        ->and($messages[1]->toolResults)->toHaveCount(1)
+        ->and($messages[2]->content)->toBe('The order has shipped.');
+});
+
+test('it drops tool calls when the provider omitted the tool call ids', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'participant_type' => 'user',
+        'participant_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => 'The order has shipped.',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => '', 'name' => 'lookup_order', 'arguments' => ['id' => 1], 'result_id' => 'result-1'],
+            ['id' => '', 'name' => 'lookup_customer', 'arguments' => ['id' => 2], 'result_id' => 'result-2'],
+        ]),
+        'tool_results' => json_encode([
+            ['id' => '', 'name' => 'lookup_order', 'arguments' => ['id' => 1], 'result' => ['status' => 'shipped'], 'result_id' => 'result-1'],
+        ]),
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toHaveCount(1)
+        ->and($messages[0])->toBeInstanceOf(AssistantMessage::class)
+        ->and($messages[0]->toolCalls)->toBeEmpty()
+        ->and($messages[0]->content)->toBe('The order has shipped.');
+});
+
 test('it replays a resumed approval so the paused tool_use is answered', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
@@ -386,6 +787,44 @@ test('storing approval results for a conversation with no paused row throws', fu
         new ToolResult('call-1', 'delete_file', ['path' => 'x'], 'Deleted x'),
     ]);
 })->throws(ApprovalMismatchException::class, 'The approval results do not match a paused conversation turn.');
+
+test('a mismatch against a paused row carries the approvals that are actually pending', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversationId,
+        'participant_type' => 'user',
+        'participant_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'assistant',
+        'content' => '',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            ['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'x']],
+            ['id' => 'call-2', 'name' => 'read_file', 'arguments' => ['path' => 'y']],
+        ]),
+        'tool_results' => '[]',
+        'approval_state' => json_encode(['pending' => ['call-1' => 'Destructive operation.']]),
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    try {
+        $store->storeApprovalResults($conversationId, 'user', 1, [
+            new ToolResult('call-9', 'delete_file', ['path' => 'x'], 'Deleted x'),
+        ]);
+
+        $this->fail('Expected an approval mismatch.');
+    } catch (ApprovalMismatchException $e) {
+        expect($e->pendingApprovals->map->toArray()->all())->toBe([
+            ['id' => 'call-1', 'tool' => 'delete_file', 'arguments' => ['path' => 'x'], 'reason' => 'Destructive operation.'],
+        ]);
+    }
+});
 
 test('resolving approval results progressively empties the pause marker while outcomes land on the tool results', function (): void {
     $store = new DatabaseConversationStore;
@@ -525,6 +964,85 @@ test('it splits a mid-run pause row so an executed call is answered before the s
         ->and($messages[2]->content)->toBe('Let me delete b too')
         ->and($messages[2]->toolCalls)->toHaveCount(1)
         ->and($messages[2]->toolCalls[0]->id)->toBe('call-2');
+});
+
+test('it records provider content blocks into the message meta when a turn pauses', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        'Delete config/app.php.',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $response = (new AgentResponse('invocation-id', '', new Usage, new Meta))
+        ->withMessages(collect([
+            new AssistantMessage('Let me think about that', null, [['type' => 'thinking', 'signature' => 'sig-1']]),
+        ]));
+
+    $response->withPendingApprovals(collect([
+        new PendingApproval('call-1', 'DeleteFile', ['path' => 'config/app.php'], 'Deletes a file'),
+    ]));
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
+
+    expect(json_decode((string) $record->meta, true))
+        ->toHaveKey('provider_content_blocks', [['type' => 'thinking', 'signature' => 'sig-1']]);
+});
+
+test('it omits provider content blocks when the assistant turn is not paused', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        'Delete config/app.php.',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $response = (new AgentResponse('invocation-id', 'Deleted the file.', new Usage, new Meta))
+        ->withMessages(collect([
+            new AssistantMessage('Deleted the file.', null, [['type' => 'thinking', 'signature' => 'sig-1']]),
+        ]));
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
+
+    expect(json_decode((string) $record->meta, true))->not->toHaveKey('provider_content_blocks');
+});
+
+test('it records provider content blocks into the message meta when a stream pauses', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        'Delete config/app.php.',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $response = new StreamedAgentResponse('invocation-id', collect([
+        new ToolApprovalRequest('event-1', collect([
+            new PendingApproval('call-1', 'DeleteFile', ['path' => 'config/app.php'], 'Deletes a file'),
+        ]), 0, [['type' => 'thinking', 'signature' => 'sig-1']]),
+    ]), new Meta);
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
+
+    expect(json_decode((string) $record->meta, true))
+        ->toHaveKey('provider_content_blocks', [['type' => 'thinking', 'signature' => 'sig-1']]);
 });
 
 test('it preserves provider content blocks when a mixed pause carries an executed and a gated call', function (): void {
@@ -895,10 +1413,133 @@ test('it scopes conversations by participant type so shared ids no longer collid
     $userConversation = $store->storeConversation('user', $user->id, 'User chat');
     $adminConversation = $store->storeConversation('admin', $admin->id, 'Admin chat');
 
+    $insertMessage = fn (string $id, string $conversationId, string $participantType) => DB::table('agent_conversation_messages')->insert([
+        'id' => $id,
+        'conversation_id' => $conversationId,
+        'participant_type' => $participantType,
+        'participant_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'user',
+        'content' => 'Hello',
+        'attachments' => '[]',
+        'tool_calls' => '[]',
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $insertMessage('message-user', $userConversation, 'user');
+    $insertMessage('message-admin', $adminConversation, 'admin');
+
     // Despite sharing id 1, each participant only resolves its own conversation...
-    expect($store->latestConversationId('user', $user->id))->toBe($userConversation)
-        ->and($store->latestConversationId('admin', $admin->id))->toBe($adminConversation)
+    expect($store->latestConversationId('user', $user->id, ToolUsingAgent::class))->toBe($userConversation)
+        ->and($store->latestConversationId('admin', $admin->id, ToolUsingAgent::class))->toBe($adminConversation)
         ->and($userConversation)->not->toBe($adminConversation);
+});
+
+test('it records the reasoning a streamed turn produced into the message meta', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Reasoning conversation');
+
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        'How cold is it?',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $response = new StreamedAgentResponse('invocation-id', collect([
+        new ReasoningStart(uniqid(), 'reasoning-1', time()),
+        new ReasoningDelta(uniqid(), 'reasoning-1', 'They want ', time()),
+        new ReasoningDelta(uniqid(), 'reasoning-1', 'the temperature.', time()),
+        new ReasoningEnd(uniqid(), 'reasoning-1', time()),
+        new TextDelta(uniqid(), 'message-1', 'It is 12°C.', time()),
+    ]), new Meta);
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
+
+    expect(json_decode((string) $record->meta, true))
+        ->toHaveKey('reasoning', 'They want the temperature.');
+});
+
+test('it omits reasoning from the message meta when the model did not reason', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Quiet conversation');
+
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        'How cold is it?',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $response = new StreamedAgentResponse('invocation-id', collect([
+        new TextDelta(uniqid(), 'message-1', 'It is 12°C.', time()),
+    ]), new Meta);
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
+
+    expect(json_decode((string) $record->meta, true))->not->toHaveKey('reasoning');
+});
+
+test('it records the sources a streamed turn cited into the message meta', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Researched conversation');
+
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        'What does Laravel MCP do?',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $response = new StreamedAgentResponse('invocation-id', collect([
+        new TextDelta(uniqid(), 'message-1', 'Laravel MCP ships an MCP server.', time()),
+        new CitationEvent(uniqid(), 'message-1', new UrlCitation('https://laravel.com/docs/mcp', 'Laravel MCP'), time()),
+        new CitationEvent(uniqid(), 'message-1', new UrlCitation('https://laravel.com/docs/mcp', 'Laravel MCP'), time()),
+    ]), new Meta);
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
+
+    // Every mention is stored, matching what a generated turn records for the same answer...
+    expect(json_decode((string) $record->meta, true)['citations'])->toBe([
+        ['url' => 'https://laravel.com/docs/mcp', 'title' => 'Laravel MCP', 'start_index' => null, 'end_index' => null, 'ranges' => []],
+        ['url' => 'https://laravel.com/docs/mcp', 'title' => 'Laravel MCP', 'start_index' => null, 'end_index' => null, 'ranges' => []],
+    ]);
+});
+
+test('it stores no sources when a streamed turn cited nothing', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Unresearched conversation');
+
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        'How cold is it?',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $response = new StreamedAgentResponse('invocation-id', collect([
+        new TextDelta(uniqid(), 'message-1', 'It is 12°C.', time()),
+    ]), new Meta);
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
+
+    expect(json_decode((string) $record->meta, true)['citations'])->toBe([]);
 });
 
 function createConversationSchema(?string $connection = null): void
@@ -932,4 +1573,44 @@ function createConversationSchema(?string $connection = null): void
         $table->text('approval_state')->nullable();
         $table->timestamps();
     });
+}
+
+/** @return array<string, mixed> */
+function storedConversationMessageAttributes(string $id, string $conversationId, string $content): array
+{
+    return [
+        'id' => $id,
+        'conversation_id' => $conversationId,
+        'participant_type' => 'user',
+        'participant_id' => 1,
+        'agent' => ToolUsingAgent::class,
+        'role' => 'user',
+        'content' => $content,
+        'attachments' => '[]',
+        'tool_calls' => '[]',
+        'tool_results' => '[]',
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ];
+}
+
+/** @param  list<string>  $ids */
+function insertStoredConversationMessages(string $conversationId, array $ids): void
+{
+    DB::table('agent_conversation_messages')->insert(
+        collect($ids)->map(fn (string $id): array => storedConversationMessageAttributes($id, $conversationId, "Content for {$id}"))->all()
+    );
+}
+
+/** @param  list<array<string, mixed>>  $toolCalls */
+function insertPausedConversationTurn(string $conversationId, string $id, array $toolCalls, array $pending): void
+{
+    DB::table('agent_conversation_messages')->insert([
+        ...storedConversationMessageAttributes($id, $conversationId, 'Waiting on you.'),
+        'role' => 'assistant',
+        'tool_calls' => json_encode($toolCalls),
+        'approval_state' => json_encode(['pending' => $pending]),
+    ]);
 }

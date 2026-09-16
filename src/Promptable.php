@@ -7,6 +7,7 @@ use Generator;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Container\Container;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Approvals\Decisions;
@@ -16,27 +17,52 @@ use Laravel\Ai\Attributes\Timeout as TimeoutAttribute;
 use Laravel\Ai\Attributes\UseCheapestModel;
 use Laravel\Ai\Attributes\UseSmartestModel;
 use Laravel\Ai\Attributes\WithoutBroadcasting;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\AgentInput;
+use Laravel\Ai\Contracts\Conversational;
+use Laravel\Ai\Contracts\HasProviderOptions;
+use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Gateway\FakeTextGateway;
+use Laravel\Ai\Gateway\ParentInvocation;
 use Laravel\Ai\Jobs\BroadcastAgent;
 use Laravel\Ai\Jobs\InvokeAgent;
+use Laravel\Ai\Messages\Message;
+use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Providers\Tools\ProviderTool;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\QueuedAgentResponse;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Streaming\Events\StreamEvent;
+use Laravel\Ai\Vercel\Vercel;
+use Laravel\SerializableClosure\SerializableClosure;
+use LogicException;
 use ReflectionClass;
 use RuntimeException;
 
 trait Promptable
 {
     use SerializesModels;
+
+    /**
+     * The ad-hoc message history to send ahead of the next prompt.
+     *
+     * @var list<Message>|null
+     */
+    protected ?array $adHocMessages = null;
+
+    /**
+     * The runtime tool override, replacing the tools the agent declares.
+     */
+    protected ?SerializableClosure $runtimeTools = null;
 
     /**
      * Create a new instance of the agent.
@@ -54,40 +80,64 @@ trait Promptable
      * Invoke the agent with a given prompt, or resume a paused run with tool approval decisions.
      */
     public function prompt(
-        Decisions|string $prompt,
+        AgentInput|UserMessage|Decisions|string $prompt,
         array $attachments = [],
         Lab|array|string|null $provider = null,
         ?string $model = null,
         ?int $timeout = null): AgentResponse
     {
-        [$text, $approvalDecisions] = $this->extractPromptInput($prompt);
+        [$text, $approvalDecisions, $attachments] = $this->extractPromptInput($prompt, $attachments);
 
-        $run = fn (TextProvider $provider, string $model): AgentResponse => $provider->prompt(
-            new AgentPrompt($this, $text, $attachments, $provider, $model, $this->getTimeout($timeout), approvalDecisions: $approvalDecisions)
-        );
+        $messages = $this->flushAdHocMessages();
+
+        $tools = $this->resolveAgentTools();
+
+        $invocationId = (string) Str::uuid7();
+
+        $providers = $approvalDecisions !== null
+            ? $this->providersForApprovalContinuation($provider, $model)
+            : $this->getProvidersAndModelsForFailover($provider, $model);
+
+        [$parentInvocationId, $parentToolInvocationId] = ParentInvocation::current();
+
+        $run = function (TextProvider $provider, string $model, bool $isFinalAttempt = true) use (
+            $text, $attachments, $timeout, $invocationId, $approvalDecisions,
+            $parentInvocationId, $parentToolInvocationId, $messages, $tools
+        ): AgentResponse {
+            return $provider->prompt(
+                new AgentPrompt(
+                    $this, $text, $attachments, $provider, $model, $this->getTimeout($timeout),
+                    invocationId: $invocationId,
+                    approvalDecisions: $approvalDecisions,
+                    parentInvocationId: $parentInvocationId,
+                    parentToolInvocationId: $parentToolInvocationId,
+                    isFinalAttempt: $isFinalAttempt,
+                    messages: $messages,
+                    tools: $tools,
+                )
+            );
+        };
 
         if ($approvalDecisions !== null) {
-            [$provider, $model] = $this->iterateProvidersWithFailover(
-                $this->providersForApprovalContinuation($provider, $model)
-            )->current();
+            [$provider, $model] = $this->iterateProvidersWithFailover($providers)->current();
 
             return $run($provider, $model);
         }
 
-        return $this->withModelFailover($run, $provider, $model);
+        return $this->withModelFailover($run, $providers, $invocationId);
     }
 
     /**
      * Invoke the agent with a given prompt and return a streamable response.
      */
     public function stream(
-        Decisions|string $prompt,
+        AgentInput|UserMessage|Decisions|string $prompt,
         array $attachments = [],
         Lab|array|string|null $provider = null,
         ?string $model = null,
         ?int $timeout = null): StreamableAgentResponse
     {
-        [$text, $approvalDecisions] = $this->extractPromptInput($prompt);
+        [$text, $approvalDecisions, $attachments] = $this->extractPromptInput($prompt, $attachments);
 
         return $this->streamPrompt($text, $approvalDecisions, $attachments, $provider, $model, $timeout);
     }
@@ -108,13 +158,27 @@ trait Promptable
             : $this->getProvidersAndModelsForFailover($provider, $model);
         $resolvedTimeout = $this->getTimeout($timeout);
 
+        $messages = $this->flushAdHocMessages();
+
+        $tools = $this->resolveAgentTools();
+
         $invocationId = (string) Str::uuid7();
+
+        [$parentInvocationId, $parentToolInvocationId] = ParentInvocation::current();
 
         if (count($providers) === 1) {
             [$resolved, $resolvedModel] = $this->iterateProvidersWithFailover($providers)->current();
 
             return $resolved->stream(
-                new AgentPrompt($this, $prompt, $attachments, $resolved, $resolvedModel, $resolvedTimeout, $invocationId, $approvalDecisions)
+                new AgentPrompt(
+                    $this, $prompt, $attachments, $resolved, $resolvedModel, $resolvedTimeout,
+                    invocationId: $invocationId,
+                    approvalDecisions: $approvalDecisions,
+                    parentInvocationId: $parentInvocationId,
+                    parentToolInvocationId: $parentToolInvocationId,
+                    messages: $messages,
+                    tools: $tools,
+                )
             );
         }
 
@@ -123,32 +187,45 @@ trait Promptable
 
         $outer = new StreamableAgentResponse(
             $invocationId,
-            function () use ($providers, $prompt, $approvalDecisions, $attachments, $resolvedTimeout, $invocationId, &$outer) {
+            function () use ($providers, $prompt, $approvalDecisions, $attachments, $resolvedTimeout, $invocationId, $parentInvocationId, $parentToolInvocationId, $messages, $tools, &$outer) {
                 $lastException = null;
 
-                foreach ($this->iterateProvidersWithFailover($providers) as [$provider, $model]) {
-                    $started = false;
+                foreach ($this->iterateProvidersWithFailover($providers) as [$provider, $model, $isFinalAttempt]) {
+                    $innerResponse = null;
 
                     try {
                         $innerResponse = $provider->stream(
-                            new AgentPrompt($this, $prompt, $attachments, $provider, $model, $resolvedTimeout, $invocationId, $approvalDecisions)
+                            new AgentPrompt(
+                                $this, $prompt, $attachments, $provider, $model, $resolvedTimeout,
+                                invocationId: $invocationId,
+                                approvalDecisions: $approvalDecisions,
+                                parentInvocationId: $parentInvocationId,
+                                parentToolInvocationId: $parentToolInvocationId,
+                                isFinalAttempt: $isFinalAttempt,
+                                messages: $messages,
+                                tools: $tools,
+                            )
                         );
 
                         $innerResponse->then(fn (StreamedAgentResponse $response): StreamableAgentResponse => $outer->adoptStateFrom($response));
 
-                        foreach ($innerResponse as $event) {
-                            $started = true;
+                        if ($innerResponse->conversationId !== null) {
+                            $outer->withinConversation($innerResponse->conversationId, $innerResponse->conversationUser);
+                        }
 
+                        foreach ($innerResponse as $event) {
                             yield $event;
                         }
 
                         return;
                     } catch (FailoverableException $e) {
-                        if ($started) {
+                        if ($innerResponse?->hasYielded()) {
                             throw $e;
                         }
 
-                        $lastException = $this->recordAgentFailover($provider, $model, $e);
+                        $lastException = $isFinalAttempt
+                            ? $e
+                            : $this->recordAgentFailover($invocationId, $provider, $model, $e);
                     }
                 }
 
@@ -163,14 +240,14 @@ trait Promptable
     /**
      * Invoke the agent in a queued job.
      */
-    public function queue(Decisions|string $prompt, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
+    public function queue(AgentInput|UserMessage|Decisions|string $prompt, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
     {
+        [$prompt, $attachments] = $this->queueablePrompt($prompt, $attachments);
+
         if (static::isFaked()) {
             Ai::recordPrompt(
                 new QueuedAgentPrompt($this, $prompt, $attachments, $provider, $model),
             );
-
-            return new QueuedAgentResponse(new FakePendingDispatch);
         }
 
         return new QueuedAgentResponse(
@@ -179,23 +256,41 @@ trait Promptable
     }
 
     /**
-     * Split a prompt input into its text and tool approval decisions.
+     * Resolve a prompt input into its queueable prompt value and attachments.
      *
-     * @return array{string, ?Decisions}
+     * @return array{Decisions|string, list<mixed>}
      */
-    private function extractPromptInput(Decisions|string $prompt): array
+    private function queueablePrompt(AgentInput|UserMessage|Decisions|string $prompt, array $attachments): array
     {
-        if (is_string($prompt)) {
-            return [$prompt, null];
+        [$text, $approvalDecisions, $attachments] = $this->extractPromptInput($prompt, $attachments);
+
+        return [$approvalDecisions ?? $text, $attachments];
+    }
+
+    /**
+     * Split a prompt input into its text, tool approval decisions, and attachments.
+     *
+     * @return array{string, ?Decisions, list<mixed>}
+     */
+    private function extractPromptInput(AgentInput|UserMessage|Decisions|string $prompt, array $attachments = []): array
+    {
+        if ($prompt instanceof AgentInput) {
+            $prompt = $prompt->decisions()
+                ?? $prompt->message()
+                ?? throw new InvalidArgumentException('The agent input contains no user message or approval decisions.');
         }
 
-        return ['', $prompt];
+        return match (true) {
+            $prompt instanceof UserMessage => [$prompt->content ?? '', null, [...$prompt->attachments->all(), ...$attachments]],
+            $prompt instanceof Decisions => ['', $prompt, $attachments],
+            default => [$prompt, null, $attachments],
+        };
     }
 
     /**
      * Invoke the agent with a given prompt and broadcast the streamed events.
      */
-    public function broadcast(Decisions|string $prompt, Channel|array $channels, array $attachments = [], bool $now = false, Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
+    public function broadcast(AgentInput|UserMessage|Decisions|string $prompt, Channel|array $channels, array $attachments = [], bool $now = false, Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
     {
         $without = WithoutBroadcasting::eventsFor($this);
 
@@ -212,7 +307,7 @@ trait Promptable
     /**
      * Invoke the agent with a given prompt and broadcast the streamed events immediately.
      */
-    public function broadcastNow(Decisions|string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
+    public function broadcastNow(AgentInput|UserMessage|Decisions|string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
     {
         return $this->broadcast($prompt, $channels, $attachments, now: true, provider: $provider, model: $model);
     }
@@ -220,14 +315,14 @@ trait Promptable
     /**
      * Invoke the agent with a given prompt and broadcast the streamed events.
      */
-    public function broadcastOnQueue(Decisions|string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
+    public function broadcastOnQueue(AgentInput|UserMessage|Decisions|string $prompt, Channel|array $channels, array $attachments = [], Lab|array|string|null $provider = null, ?string $model = null): QueuedAgentResponse
     {
+        [$prompt, $attachments] = $this->queueablePrompt($prompt, $attachments);
+
         if (static::isFaked()) {
             Ai::recordPrompt(
                 new QueuedAgentPrompt($this, $prompt, $attachments, $provider, $model),
             );
-
-            return new QueuedAgentResponse(new FakePendingDispatch);
         }
 
         return new QueuedAgentResponse(
@@ -236,17 +331,91 @@ trait Promptable
     }
 
     /**
-     * Invoke the given Closure with provider / model failover.
+     * Set the ad-hoc message history to send ahead of the next prompt.
+     *
+     * @param  iterable<int, mixed>  $messages
      */
-    private function withModelFailover(Closure $callback, Lab|array|string|null $provider, ?string $model): mixed
+    public function withMessages(iterable $messages): static
+    {
+        if ($this instanceof Conversational) {
+            throw new LogicException('Ad-hoc message history may not be combined with a conversational agent.');
+        }
+
+        $this->adHocMessages = Collection::make($messages)
+            ->flatMap(fn ($message) => is_array($message) && isset($message['parts'])
+                ? Vercel::fromUiMessages([$message])
+                : [Message::tryFrom($message)])
+            ->all();
+
+        return $this;
+    }
+
+    /**
+     * Replace the agent's declared tools for this instance.
+     *
+     * @param  (Closure(array<int, Agent|Tool|ProviderTool>): iterable<int, Agent|Tool|ProviderTool>)|iterable<int, Agent|Tool|ProviderTool>  $tools
+     */
+    public function withTools(Closure|iterable $tools): static
+    {
+        if (! $tools instanceof Closure) {
+            $replacements = [...$tools];
+
+            $tools = fn (): array => $replacements;
+        }
+
+        $this->runtimeTools = new SerializableClosure($tools);
+
+        return $this;
+    }
+
+    /**
+     * Resolve the runtime tools for the next invocation, or null when the agent's declared tools apply.
+     *
+     * @return array<int, Agent|Tool|ProviderTool>|null
+     */
+    protected function resolveAgentTools(): ?array
+    {
+        return $this->runtimeTools !== null
+            ? [...($this->runtimeTools)($this->declaredTools())]
+            : null;
+    }
+
+    /**
+     * Get the tools the agent declares via its own tools method.
+     *
+     * @return array<int, Agent|Tool|ProviderTool>
+     */
+    private function declaredTools(): array
+    {
+        return $this instanceof HasTools ? [...$this->tools()] : [];
+    }
+
+    /**
+     * Get the ad-hoc history for the next prompt and reset it so it cannot leak into a later one.
+     *
+     * @return list<Message>|null
+     */
+    private function flushAdHocMessages(): ?array
+    {
+        return tap($this->adHocMessages, fn () => $this->adHocMessages = null);
+    }
+
+    /**
+     * Invoke the given Closure with provider / model failover.
+     *
+     * @param  array<string, string|null>  $providers
+     */
+    private function withModelFailover(Closure $callback, array $providers, string $invocationId): mixed
     {
         $lastException = null;
 
-        foreach ($this->iterateProvidersWithFailover($this->getProvidersAndModelsForFailover($provider, $model)) as [$provider, $model]) {
+        foreach ($this->iterateProvidersWithFailover($providers) as [$provider, $model, $isFinalAttempt]) {
             try {
-                return $callback($provider, $model);
+                return $callback($provider, $model, $isFinalAttempt);
             } catch (FailoverableException $e) {
-                $lastException = $this->recordAgentFailover($provider, $model, $e);
+                $lastException = $isFinalAttempt
+                    ? $e
+                    : $this->recordAgentFailover($invocationId, $provider, $model, $e);
             }
         }
 
@@ -276,26 +445,34 @@ trait Promptable
     }
 
     /**
-     * Iterate the configured provider / model pairs.
+     * Iterate the configured provider / model pairs, flagging the attempt that has no provider left to fall back to.
      *
      * @param  array<string, string|null>  $providers
-     * @return Generator<int, array{TextProvider, string}>
+     * @return Generator<int, array{TextProvider, string, bool}>
      */
     private function iterateProvidersWithFailover(array $providers): Generator
     {
+        $remaining = count($providers);
+
         foreach ($providers as $provider => $model) {
             $provider = Ai::textProviderFor($this, $provider);
 
-            yield [$provider, $model ?? $this->getDefaultModelFor($provider)];
+            if ($this instanceof HasProviderOptions) {
+                $provider = $provider->withHeaders($this->providerOptions(
+                    Lab::tryFrom($provider->driver()) ?? $provider->driver()
+                )[HasProviderOptions::HEADERS] ?? []);
+            }
+
+            yield [$provider, $model ?? $this->getDefaultModelFor($provider), --$remaining === 0];
         }
     }
 
     /**
      * Record that an agent failed over to the next configured provider.
      */
-    private function recordAgentFailover(Provider $provider, string $model, FailoverableException $exception): FailoverableException
+    private function recordAgentFailover(string $invocationId, Provider $provider, string $model, FailoverableException $exception): FailoverableException
     {
-        event(new AgentFailedOver($this, $provider, $model, $exception));
+        event(new AgentFailedOver($invocationId, $this, $provider, $model, $exception));
 
         return $exception;
     }
@@ -388,6 +565,14 @@ trait Promptable
     public static function assertPrompted(Closure|string $callback): void
     {
         Ai::assertAgentWasPrompted(static::class, $callback);
+    }
+
+    /**
+     * Assert that a certain number of prompts were received.
+     */
+    public static function assertPromptedTimes(int $times = 1): void
+    {
+        Ai::assertAgentWasPromptedTimes(static::class, $times);
     }
 
     /**

@@ -57,6 +57,7 @@ dataset('file-search-providers', [
 
 dataset('reranking-providers', [
     'cohere' => ['cohere', 'COHERE_API_KEY'],
+    'openrouter' => ['openrouter', 'OPENROUTER_API_KEY'],
     'voyageai' => ['voyageai', 'VOYAGEAI_API_KEY'],
 ]);
 
@@ -71,6 +72,11 @@ dataset('agent-providers', [
     'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4-nano'],
     'openrouter' => ['openrouter', 'OPENROUTER_API_KEY', 'anthropic/claude-haiku-4.5'],
     'xai' => ['xai', 'XAI_API_KEY', 'grok-4.20-non-reasoning'],
+]);
+
+dataset('tool-search-providers', [
+    'anthropic' => ['anthropic', 'ANTHROPIC_API_KEY', 'claude-haiku-4-5-20251001'],
+    'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4'],
 ]);
 
 dataset('agent-document-providers', [
@@ -90,4 +96,11 @@ dataset('tool-replay-providers', [
     'openai-gpt-5-4-nano' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4-nano', true],
     // Non-reasoning model (backward compatibility)
     'openai-gpt-4-1' => ['openai', 'OPENAI_API_KEY', 'gpt-4.1', false],
+]);
+
+dataset('code-execution-providers', [
+    'anthropic' => ['anthropic', 'ANTHROPIC_API_KEY', 'claude-haiku-4-5-20251001'],
+    'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4'],
+    'gemini' => ['gemini', 'GEMINI_API_KEY', 'gemini-3.1-flash-lite'],
+    'xai' => ['xai', 'XAI_API_KEY', 'grok-4.6'],
 ]);

@@ -8,7 +8,6 @@ use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
-use Laravel\Ai\FakePendingDispatch;
 use Laravel\Ai\Files\LocalAudio;
 use Laravel\Ai\Files\StoredAudio;
 use Laravel\Ai\Jobs\GenerateTranscription;
@@ -82,7 +81,9 @@ class PendingTranscriptionGeneration
 
             $model ??= $provider->defaultTranscriptionModel();
 
-            $providerOptions = $this->resolveProviderOptions($provider);
+            [$providerOptions, $headers] = $this->resolveProviderOptionsAndHeaders($provider);
+
+            $provider = $provider->withHeaders($headers);
 
             try {
                 return $provider->transcribe($this->audio, $this->language, $this->diarize, $model, $this->timeout, $providerOptions);
@@ -118,11 +119,10 @@ class PendingTranscriptionGeneration
                     $this->diarize,
                     $provider,
                     $model,
-                    is_array($this->providerOptions) ? $this->providerOptions : [],
+                    $this->timeout,
+                    $this->queuedProviderOptions(),
                 )
             );
-
-            return new QueuedTranscriptionResponse(new FakePendingDispatch);
         }
 
         return new QueuedTranscriptionResponse(

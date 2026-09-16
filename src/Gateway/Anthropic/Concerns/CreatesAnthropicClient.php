@@ -3,11 +3,13 @@
 namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Illuminate\Http\Client\PendingRequest;
-use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Gateway\Concerns\CreatesClient;
 use Laravel\Ai\Providers\Provider;
 
 trait CreatesAnthropicClient
 {
+    use CreatesClient;
+
     /**
      * Get an HTTP client for the Anthropic API.
      */
@@ -21,10 +23,12 @@ trait CreatesAnthropicClient
             'anthropic-beta' => $config['anthropic_beta'] ?? 'web-fetch-2025-09-10',
         ]);
 
-        return Http::baseUrl($this->baseUrl($provider))
-            ->withHeaders($headers)
-            ->timeout($timeout ?? 60)
-            ->throw();
+        return $this->createClient(
+            $this->baseUrl($provider),
+            $headers,
+            $config['headers'] ?? [],
+            $timeout ?? 60,
+        );
     }
 
     /**

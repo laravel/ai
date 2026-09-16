@@ -3,10 +3,14 @@
 namespace Laravel\Ai\Gateway\Gemini;
 
 use DateInterval;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Sleep;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
+use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Gateway\Concerns\CreatesClient;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\StoreFileCounts;
@@ -14,6 +18,7 @@ use Laravel\Ai\Store;
 
 class GeminiStoreGateway implements StoreGateway
 {
+    use CreatesClient;
     use HandlesFailoverErrors;
 
     /**
@@ -23,9 +28,10 @@ class GeminiStoreGateway implements StoreGateway
     {
         $storeId = $this->normalizeStoreId($storeId);
 
-        $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders(array_filter([
-            'x-goog-api-key' => $provider->providerCredentials()['key'],
-        ]))->get($this->baseUrl($provider)."/{$storeId}")->throw());
+        $response = $this->withErrorHandling(
+            $provider->name(),
+            fn () => $this->client($provider)->get($this->baseUrl($provider)."/{$storeId}")->throw(),
+        );
 
         return new Store(
             provider: $provider,
@@ -52,9 +58,7 @@ class GeminiStoreGateway implements StoreGateway
     ): Store {
         $fileIds ??= new Collection;
 
-        $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders(array_filter([
-            'x-goog-api-key' => $provider->providerCredentials()['key'],
-        ]))->post($this->baseUrl($provider).'/fileSearchStores', [
+        $response = $this->withErrorHandling($provider->name(), fn () => $this->client($provider)->post($this->baseUrl($provider).'/fileSearchStores', [
             'displayName' => $name,
         ])->throw());
 
@@ -77,14 +81,51 @@ class GeminiStoreGateway implements StoreGateway
         $storeId = $this->normalizeStoreId($storeId);
         $fileId = $this->normalizeFileId($fileId);
 
-        $response = $this->withErrorHandling($provider->name(), fn () => Http::withHeaders(array_filter([
-            'x-goog-api-key' => $provider->providerCredentials()['key'],
-        ]))->post($this->baseUrl($provider)."/{$storeId}:importFile", array_filter([
+        $response = $this->withErrorHandling($provider->name(), fn () => $this->client($provider)->post($this->baseUrl($provider)."/{$storeId}:importFile", array_filter([
             'fileName' => $fileId,
             'customMetadata' => $metadata === [] ? null : $this->formatMetadata($metadata),
         ]))->throw());
 
-        return basename((string) $response->json('name'));
+        $operation = $this->waitForImportOperation($provider, $response);
+
+        if ($operation->json('error') !== null) {
+            throw new AiException(sprintf(
+                'Gemini Error: [%s] %s',
+                $operation->json('error.code', 'unknown'),
+                $operation->json('error.message', 'Unknown Gemini error.'),
+            ));
+        }
+
+        $documentName = $operation->json('response.documentName');
+
+        if (! is_string($documentName) || $documentName === '') {
+            throw new AiException('Gemini Error: [invalid_response] File import completed without a document name.');
+        }
+
+        return basename($documentName);
+    }
+
+    /**
+     * Wait for a Gemini file import operation to complete.
+     */
+    protected function waitForImportOperation(StoreProvider $provider, Response $operation): Response
+    {
+        $operationName = $operation->json('name');
+
+        for ($attempt = 0; ! $operation->json('done', false); $attempt++) {
+            if ($attempt >= 60) {
+                throw new AiException('Gemini Error: [timeout] File import operation did not complete.');
+            }
+
+            Sleep::for(5)->seconds();
+
+            $operation = $this->withErrorHandling(
+                $provider->name(),
+                fn () => $this->client($provider)->get($this->baseUrl($provider)."/{$operationName}")->throw(),
+            );
+        }
+
+        return $operation;
     }
 
     /**
@@ -107,9 +148,7 @@ class GeminiStoreGateway implements StoreGateway
         $storeId = $this->normalizeStoreId($storeId);
         $documentId = $this->normalizeDocumentId($storeId, $documentId);
 
-        $this->withErrorHandling($provider->name(), fn () => Http::withHeaders(array_filter([
-            'x-goog-api-key' => $provider->providerCredentials()['key'],
-        ]))->delete($this->baseUrl($provider)."/{$documentId}", [
+        $this->withErrorHandling($provider->name(), fn () => $this->client($provider)->delete($this->baseUrl($provider)."/{$documentId}", [
             'force' => true,
         ])->throw());
 
@@ -123,11 +162,23 @@ class GeminiStoreGateway implements StoreGateway
     {
         $storeId = $this->normalizeStoreId($storeId);
 
-        $this->withErrorHandling($provider->name(), fn () => Http::withHeaders(array_filter([
-            'x-goog-api-key' => $provider->providerCredentials()['key'],
-        ]))->delete($this->baseUrl($provider)."/{$storeId}")->throw());
+        $this->withErrorHandling(
+            $provider->name(),
+            fn () => $this->client($provider)->delete($this->baseUrl($provider)."/{$storeId}")->throw(),
+        );
 
         return true;
+    }
+
+    protected function client(Provider $provider): PendingRequest
+    {
+        return $this->createClient(
+            $this->baseUrl($provider),
+            array_filter(['x-goog-api-key' => $provider->providerCredentials()['key']]),
+            $provider->additionalConfiguration()['headers'] ?? [],
+            timeout: null,
+            throw: false,
+        );
     }
 
     /**

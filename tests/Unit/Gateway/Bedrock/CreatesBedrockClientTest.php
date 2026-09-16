@@ -1,9 +1,13 @@
 <?php
 
+use Aws\BedrockRuntime\BedrockRuntimeClient;
 use Aws\MockHandler;
 use Aws\Result;
 use Aws\Sts\StsClient;
+use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Gateway\Bedrock\Concerns\CreatesBedrockClient;
+use Laravel\Ai\Providers\BedrockProvider;
+use Laravel\Ai\Providers\Provider;
 
 function bedrockClientTrait(?MockHandler $handler = null): object
 {
@@ -19,6 +23,11 @@ function bedrockClientTrait(?MockHandler $handler = null): object
         public function resolve(array $credentials, array $config): array
         {
             return $this->resolveAuthConfig($credentials, $config);
+        }
+
+        public function create(Provider $provider): BedrockRuntimeClient
+        {
+            return $this->createBedrockClient($provider);
         }
 
         protected function createStsClient(array $credentials, array $config): StsClient
@@ -66,6 +75,30 @@ test('bearer token credentials use http bearer auth scheme', function (): void {
         'token' => ['token' => 'bedrock-token'],
         'auth_scheme_preference' => ['smithy.api#httpBearerAuth'],
     ]);
+});
+
+test('configured headers are added before request signing', function (): void {
+    $provider = new BedrockProvider([
+        'access_key_id' => 'test-key',
+        'secret_access_key' => 'test-secret',
+        'region' => 'us-east-1',
+        'headers' => ['X-Session-Affinity' => 'abc-123'],
+    ], Mockery::mock(Dispatcher::class));
+
+    $client = bedrockClientTrait()->create($provider);
+    $handler = new MockHandler([new Result]);
+    $client->getHandlerList()->setHandler($handler);
+
+    $client->invokeModel([
+        'modelId' => 'amazon.titan-embed-text-v2:0',
+        'body' => '{}',
+        'contentType' => 'application/json',
+    ]);
+
+    $request = $handler->getLastRequest();
+
+    expect($request->getHeaderLine('X-Session-Affinity'))->toBe('abc-123')
+        ->and($request->getHeaderLine('Authorization'))->toContain('x-session-affinity');
 });
 
 test('bearer token takes priority over iam credentials', function (): void {

@@ -9,6 +9,7 @@ use Laravel\Ai\Promptable;
 use Laravel\Ai\Responses\AgentResponse;
 use Tests\Fixtures\Agents\AttributeAgent;
 use Tests\Fixtures\Agents\AttributeToolChoiceAgent;
+use Tests\Fixtures\Agents\NestedStructuredAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
 use Tests\Fixtures\Agents\ToolChoiceAgent;
 
@@ -102,6 +103,35 @@ test('structured output defaults to json schema response format', function (): v
     });
 });
 
+test('structured output without Strict attribute sends strict false in response format', function (): void {
+    Http::fake(['*' => fakeOpenAiCompatibleResponse('{"elements": []}')]);
+
+    (new NestedStructuredAgent)->prompt('List elements.', provider: 'openai-compatible');
+
+    Http::assertSent(function (Request $request): bool {
+        $format = data_get(json_decode($request->body(), true), 'response_format');
+
+        return $format['type'] === 'json_schema'
+            && $format['json_schema']['strict'] === false;
+    });
+});
+
+test('structured response is correctly parsed', function (): void {
+    Http::fake(['*' => fakeOpenAiCompatibleResponse('{"symbol": "Au"}')]);
+
+    $response = (new StructuredAgent)->prompt('What is the symbol for Gold?', provider: 'openai-compatible');
+
+    expect($response->structured['symbol'])->toBe('Au');
+});
+
+test('structured response tolerates a markdown code fence', function (): void {
+    Http::fake(['*' => fakeOpenAiCompatibleResponse("```json\n".'{"symbol": "Au"}'."\n```")]);
+
+    $response = (new StructuredAgent)->prompt('What is the symbol for Gold?', provider: 'openai-compatible');
+
+    expect($response->structured['symbol'])->toBe('Au');
+});
+
 test('required tool choice forces the model to call a tool', function (): void {
     Http::fake(['*' => fakeOpenAiCompatibleResponse('42')]);
 
@@ -170,7 +200,7 @@ test('response usage is parsed using the openai standard shape', function (): vo
 
     $response = agent()->prompt('Hello', provider: 'openai-compatible');
 
-    expect($response->usage->promptTokens)->toBe(100)
+    expect($response->usage->promptTokens)->toBe(60)
         ->and($response->usage->completionTokens)->toBe(50)
         ->and($response->usage->cacheReadInputTokens)->toBe(40)
         ->and($response->usage->reasoningTokens)->toBe(10);

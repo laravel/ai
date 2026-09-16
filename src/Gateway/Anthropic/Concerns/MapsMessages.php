@@ -123,7 +123,7 @@ trait MapsMessages
             $content[] = [
                 'type' => 'tool_result',
                 'tool_use_id' => $toolResult->id,
-                'content' => $this->serializeToolResultOutput($toolResult->result),
+                'content' => $toolResult->text(),
             ];
         }
 
@@ -145,17 +145,5 @@ trait MapsMessages
 
             return $block;
         }, $content);
-    }
-
-    /**
-     * Serialize a tool result output value to a string.
-     */
-    protected function serializeToolResultOutput(mixed $output): string
-    {
-        return match (true) {
-            is_string($output) => $output,
-            is_array($output) => json_encode($output),
-            default => strval($output),
-        };
     }
 }

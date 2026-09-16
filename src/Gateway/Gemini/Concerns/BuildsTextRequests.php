@@ -130,7 +130,7 @@ trait BuildsTextRequests
                 'name' => $result->name,
                 'response' => [
                     'name' => $result->name,
-                    'content' => $this->serializeToolResultOutput($result->result),
+                    'content' => $result->text(),
                 ],
             ];
 

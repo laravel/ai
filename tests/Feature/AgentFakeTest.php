@@ -1,19 +1,28 @@
 <?php
 
+use GuzzleHttp\Psr7\Response as Psr7Response;
+use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Queue;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Jobs\InvokeAgent;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\QueuedAgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Responses\Data\UrlCitation;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
+use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
+use Laravel\Ai\Streaming\Events\ReasoningDelta;
+use Laravel\Ai\Streaming\Events\ReasoningEnd;
+use Laravel\Ai\Streaming\Events\ReasoningStart;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
@@ -43,6 +52,7 @@ describe('prompt responses', function (): void {
 
         // Assertion tests...
         AssistantAgent::assertPrompted('First prompt');
+        AssistantAgent::assertPromptedTimes(3);
         AssistantAgent::assertNotPrompted('Missing prompt');
 
         AssistantAgent::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->prompt === 'First prompt');
@@ -52,6 +62,19 @@ describe('prompt responses', function (): void {
         AssistantAgent::fake();
 
         AssistantAgent::assertNeverPrompted();
+    });
+
+    test('fake responses may expose a raw http response', function (): void {
+        AssistantAgent::fake([
+            (new TextResponse('Hello', new Usage, new Meta))->withRawResponse(new Response(
+                new Psr7Response(200, ['x-ratelimit-remaining-requests' => '99'], '{}')
+            )),
+        ]);
+
+        $response = (new AssistantAgent)->prompt('Hi');
+
+        expect($response->raw)->toBeInstanceOf(Response::class)
+            ->and($response->raw->header('x-ratelimit-remaining-requests'))->toBe('99');
     });
 
     test('agents can be faked with no predefined responses', function (): void {
@@ -175,6 +198,54 @@ describe('stream responses', function (): void {
             ->and($response->events)->toHaveCount(6);
     });
 
+    test('faked agents can stream the reasoning that preceded an answer', function (): void {
+        AssistantAgent::fake([
+            AgentResponse::fakeWithReasoning('They want the temperature.', 'It is 12°C.'),
+        ]);
+
+        $response = (new AssistantAgent)->stream('How cold is it?');
+        $response->each(fn (): true => true);
+
+        expect($response->reasoning)->toBe('They want the temperature.')
+            ->and($response->text)->toBe('It is 12°C.')
+            ->and($response->events->whereInstanceOf(ReasoningStart::class))->toHaveCount(1)
+            ->and($response->events->whereInstanceOf(ReasoningEnd::class))->toHaveCount(1);
+    });
+
+    test('a faked stream reports no reasoning when the model did not reason', function (): void {
+        AssistantAgent::fake(['It is 12°C.']);
+
+        $response = (new AssistantAgent)->stream('How cold is it?');
+        $response->each(fn (): true => true);
+
+        expect($response->reasoning)->toBe('')
+            ->and($response->events->whereInstanceOf(ReasoningDelta::class))->toBeEmpty();
+    });
+
+    test('faked agents can stream the sources an answer cited', function (): void {
+        AssistantAgent::fake([
+            new TextResponse('Laravel MCP ships an MCP server.', new Usage, new Meta('anthropic', 'test-model', collect([
+                new UrlCitation('https://laravel.com/docs/mcp', 'Laravel MCP'),
+            ]))),
+        ]);
+
+        $response = (new AssistantAgent)->stream('What does Laravel MCP do?');
+        $response->each(fn (): true => true);
+
+        expect($response->events->whereInstanceOf(CitationEvent::class))->toHaveCount(1)
+            ->and($response->citations->pluck('url')->all())->toBe(['https://laravel.com/docs/mcp']);
+    });
+
+    test('a faked stream reports no sources when the answer cited nothing', function (): void {
+        AssistantAgent::fake(['It is 12°C.']);
+
+        $response = (new AssistantAgent)->stream('How cold is it?');
+        $response->each(fn (): true => true);
+
+        expect($response->events->whereInstanceOf(CitationEvent::class))->toBeEmpty()
+            ->and($response->citations)->toBeEmpty();
+    });
+
     test('faked stream events share the response invocation id', function (): void {
         AssistantAgent::fake(['Hello world']);
 
@@ -229,6 +300,38 @@ describe('queue responses', function (): void {
         AssistantAgent::assertQueued(fn (QueuedAgentPrompt $prompt): bool => $prompt->prompt === 'First prompt');
 
         AssistantAgent::assertNotQueued(fn (QueuedAgentPrompt $prompt): bool => $prompt->prompt === 'Second prompt');
+    });
+
+    test('queued agents can be faked and then callback is executed', function (): void {
+        AssistantAgent::fake(['First response']);
+
+        $GLOBALS['agentResponse'] = null;
+
+        (new AssistantAgent)->queue('First prompt')->then(function ($response): void {
+            $GLOBALS['agentResponse'] = $response;
+        });
+
+        AssistantAgent::assertQueued('First prompt');
+
+        expect($GLOBALS['agentResponse'])->toBeInstanceOf(AgentResponse::class);
+        expect($GLOBALS['agentResponse']->text)->toEqual('First response');
+    });
+
+    test('queued agents can be faked and then callback is not executed if queue is faked', function (): void {
+        AssistantAgent::fake(['First response']);
+        Queue::fake();
+
+        $GLOBALS['agentResponse'] = null;
+
+        (new AssistantAgent)->queue('First prompt')->then(function ($response): void {
+            $GLOBALS['agentResponse'] = $response;
+        });
+
+        AssistantAgent::assertQueued('First prompt');
+
+        expect($GLOBALS['agentResponse'])->toBeNull();
+
+        Queue::assertPushed(InvokeAgent::class);
     });
 
     test('can assert agent was never queued', function (): void {

@@ -1,10 +1,13 @@
 <?php
 
 use Illuminate\Container\Container;
+use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Tools\McpServerTool;
 use Laravel\Ai\Tools\Request;
+use Laravel\Mcp\Response;
+use Laravel\Mcp\Server\Tool;
 use Tests\Fixtures\Mcp\FakeArrayMcpServerTool;
 use Tests\Fixtures\Mcp\FakeErroringMcpServerTool;
 use Tests\Fixtures\Mcp\FakeMcpServerTool;
@@ -73,6 +76,13 @@ test('it serializes structured tool responses as json', function (): void {
         ]);
 });
 
+test('it does not escape slashes in structured content json', function (): void {
+    $tool = new McpServerTool(new FakeStructuredMcpServerTool);
+
+    expect($tool->handle(new Request(['city' => 'Paris'])))
+        ->toContain('"url":"https://example.com/report"');
+});
+
 test('it surfaces tool errors with the standard prefix', function (): void {
     $tool = new McpServerTool(new FakeErroringMcpServerTool);
 
@@ -89,6 +99,24 @@ test('it returns only the final item from an array response', function (): void 
     $tool = new McpServerTool(new FakeArrayMcpServerTool);
 
     expect($tool->handle(new Request))->toBe('Third.');
+});
+
+test('lazily yielded responses still resolve the scoped mcp request', function (): void {
+    $tool = new McpServerTool(new class extends Tool
+    {
+        public function handle(Laravel\Mcp\Request $request): Generator
+        {
+            yield Response::text('First. ');
+            yield Response::text(Container::getInstance()->make(Laravel\Mcp\Request::class)->get('city'));
+        }
+
+        public function schema(JsonSchema $schema): array
+        {
+            return [];
+        }
+    });
+
+    expect($tool->handle(new Request(['city' => 'Paris'])))->toBe('Paris');
 });
 
 test('the mcp request binding is cleared after the call', function (): void {

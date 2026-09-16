@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Laravel\Ai\Responses\AgentResponse;
@@ -73,8 +74,81 @@ test('tool parameters are not wrapped in schema definition', function (): void {
 test('unsupported provider tools throw runtime exception', function (): void {
     Http::fake(['*' => fakeOpenRouterResponse('done')]);
 
-    expect(fn (): AgentResponse => agent(tools: [new WebFetch])->prompt('Search', provider: 'openrouter'))
-        ->toThrow(RuntimeException::class, 'OpenRouter does not support [WebFetch] provider tools.');
+    expect(fn (): AgentResponse => agent(tools: [new FileSearch(['store'])])->prompt('Search', provider: 'openrouter'))
+        ->toThrow(RuntimeException::class, 'OpenRouter does not support [FileSearch] provider tools.');
+});
+
+test('web fetch tool is sent as openrouter:web_fetch type', function (): void {
+    Http::fake(['*' => fakeOpenRouterResponse('done')]);
+
+    agent(tools: [new WebFetch])->prompt('Read https://laravel.com', provider: 'openrouter');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'openrouter:web_fetch');
+
+        return $tool !== null && ! array_key_exists('parameters', $tool);
+    });
+});
+
+test('web fetch tool sends max_uses when maxSearches is set', function (): void {
+    Http::fake(['*' => fakeOpenRouterResponse('done')]);
+
+    agent(tools: [(new WebFetch)->max(5)])->prompt('Read https://laravel.com', provider: 'openrouter');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'openrouter:web_fetch');
+
+        return data_get($tool, 'parameters.max_uses') === 5;
+    });
+});
+
+test('web fetch tool sends allowed_domains', function (): void {
+    Http::fake(['*' => fakeOpenRouterResponse('done')]);
+
+    agent(tools: [(new WebFetch)->allow(['example.com', 'laravel.com'])])->prompt('Read the docs', provider: 'openrouter');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'openrouter:web_fetch');
+
+        return data_get($tool, 'parameters.allowed_domains') === ['example.com', 'laravel.com'];
+    });
+});
+
+test('web fetch tool forwards provider options into parameters', function (): void {
+    Http::fake(['*' => fakeOpenRouterResponse('done')]);
+
+    $fetch = (new WebFetch)->withProviderOptions([
+        'engine' => 'exa',
+        'max_content_tokens' => 50000,
+        'blocked_domains' => ['private.example.com'],
+    ]);
+
+    agent(tools: [$fetch])->prompt('Read the docs', provider: 'openrouter');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'openrouter:web_fetch');
+
+        return data_get($tool, 'parameters.engine') === 'exa'
+            && data_get($tool, 'parameters.max_content_tokens') === 50000
+            && data_get($tool, 'parameters.blocked_domains') === ['private.example.com'];
+    });
+});
+
+test('web fetch and web search can be used together', function (): void {
+    Http::fake(['*' => fakeOpenRouterResponse('done')]);
+
+    agent(tools: [new WebSearch, new WebFetch])->prompt('Research this', provider: 'openrouter');
+
+    Http::assertSent(function (Request $request): bool {
+        $types = collect(data_get(json_decode($request->body(), true), 'tools'))->pluck('type')->all();
+
+        return in_array('openrouter:web_search', $types, true)
+            && in_array('openrouter:web_fetch', $types, true);
+    });
 });
 
 test('web search tool is sent as openrouter:web_search type', function (): void {
@@ -90,7 +164,7 @@ test('web search tool is sent as openrouter:web_search type', function (): void 
     });
 });
 
-test('web search tool sends max_results when maxSearches is set', function (): void {
+test('web search tool sends max_uses when maxSearches is set', function (): void {
     Http::fake(['*' => fakeOpenRouterResponse('done')]);
 
     agent(tools: [(new WebSearch)->max(5)])->prompt('Search the web', provider: 'openrouter');
@@ -99,7 +173,23 @@ test('web search tool sends max_results when maxSearches is set', function (): v
         $body = json_decode($request->body(), true);
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'openrouter:web_search');
 
-        return data_get($tool, 'parameters.max_results') === 5;
+        return data_get($tool, 'parameters.max_uses') === 5;
+    });
+});
+
+test('web search tool forwards max_results through provider options', function (): void {
+    Http::fake(['*' => fakeOpenRouterResponse('done')]);
+
+    $search = (new WebSearch)->max(3)->withProviderOptions(['max_results' => 10]);
+
+    agent(tools: [$search])->prompt('Search the web', provider: 'openrouter');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'openrouter:web_search');
+
+        return data_get($tool, 'parameters.max_uses') === 3
+            && data_get($tool, 'parameters.max_results') === 10;
     });
 });
 

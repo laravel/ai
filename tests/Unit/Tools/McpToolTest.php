@@ -252,6 +252,20 @@ test('it prefers structured content from successful mcp calls', function (): voi
         ]);
 });
 
+test('it does not escape slashes in structured content json', function (): void {
+    $client = new FakeMcpClient;
+    $tool = new McpTool(mcpTool($client, name: 'lookup'));
+
+    $client->results['lookup'] = new FakeMcpToolResult([
+        ['type' => 'text', 'text' => 'ignored'],
+    ], false, [
+        'url' => 'https://example.com/report',
+    ]);
+
+    expect($tool->handle(new Request(['id' => 1])))
+        ->toBe('{"url":"https://example.com/report"}');
+});
+
 test('it surfaces application level mcp errors as tool output', function (): void {
     $client = new FakeMcpClient;
     $tool = new McpTool(mcpTool($client, name: 'lookup'));

@@ -11,18 +11,21 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
+use Laravel\Ai\Contracts\Providers\SupportsCodeExecution;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Gemini\GeminiFileGateway;
 use Laravel\Ai\Gateway\Gemini\GeminiStoreGateway;
+use Laravel\Ai\Providers\Tools\CodeExecution;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 
-class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvider, FileProvider, ImageProvider, StoreProvider, SupportsFileSearch, SupportsWebFetch, SupportsWebSearch, TextProvider, TranscriptionProvider
+class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvider, FileProvider, ImageProvider, StoreProvider, SupportsCodeExecution, SupportsFileSearch, SupportsWebFetch, SupportsWebSearch, TextProvider, TranscriptionProvider
 {
     use Concerns\GeneratesAudio;
     use Concerns\GeneratesEmbeddings;
@@ -73,6 +76,14 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
     }
 
     /**
+     * Get the code execution tool options for the provider.
+     */
+    public function codeExecutionToolOptions(CodeExecution $codeExecution): array
+    {
+        return $codeExecution->providerOptions(Lab::Gemini);
+    }
+
+    /**
      * Get the web fetch tool options for the provider.
      */
     public function webFetchToolOptions(WebFetch $fetch): array
@@ -101,7 +112,7 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function cheapestTextModel(): string
     {
-        return $this->config['models']['text']['cheapest'] ?? 'gemini-3.5-flash-lite';
+        return $this->config['models']['text']['cheapest'] ?? 'gemini-3.1-flash-lite';
     }
 
     /**
@@ -117,7 +128,7 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function defaultImageModel(): string
     {
-        return $this->config['models']['image']['default'] ?? 'gemini-3.1-flash-image-preview';
+        return $this->config['models']['image']['default'] ?? 'gemini-3.1-flash-image';
     }
 
     /**
@@ -147,7 +158,7 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function defaultAudioModel(): string
     {
-        return $this->config['models']['audio']['default'] ?? 'gemini-2.5-flash-preview-tts';
+        return $this->config['models']['audio']['default'] ?? 'gemini-3.1-flash-tts-preview';
     }
 
     /**

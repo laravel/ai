@@ -3,7 +3,6 @@
 namespace Laravel\Ai\Gateway\Anthropic;
 
 use Illuminate\Http\Client\PendingRequest;
-use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Providers\FileProvider;
@@ -45,7 +44,9 @@ class AnthropicFileGateway implements FileGateway
     ): StoredFileResponse {
         [$content, $mime, $name] = $this->prepareStorableFile($file);
 
-        $providerOptions = $this->resolveProviderOptions($file, Lab::Anthropic);
+        [$providerOptions, $headers] = $this->resolveProviderOptionsAndHeaders($file, Lab::Anthropic);
+
+        $provider = $provider->withHeaders($headers);
 
         $response = $this->withErrorHandling(
             $provider->name(),
@@ -73,14 +74,18 @@ class AnthropicFileGateway implements FileGateway
      */
     protected function client(Provider $provider, ?int $timeout = null): PendingRequest
     {
-        return Http::baseUrl($this->baseUrl($provider))
-            ->withHeaders(array_filter([
+        $config = $provider->additionalConfiguration();
+
+        return $this->createClient(
+            $this->baseUrl($provider),
+            array_filter([
                 'x-api-key' => $provider->providerCredentials()['key'],
-                'anthropic-version' => $provider->additionalConfiguration()['version'] ?? '2023-06-01',
+                'anthropic-version' => $config['version'] ?? '2023-06-01',
                 'anthropic-beta' => 'files-api-2025-04-14',
-            ]))
-            ->timeout($timeout ?? 60)
-            ->throw();
+            ]),
+            $config['headers'] ?? [],
+            $timeout ?? 60,
+        );
     }
 
     /**
@@ -88,6 +93,7 @@ class AnthropicFileGateway implements FileGateway
      */
     protected function overloadedStatusCodes(): array
     {
-        return [529];
+        // 529 is Anthropic's own "overloaded" status, plus the shared transient gateway and Cloudflare codes.
+        return [529, 502, 503, 504, 520, 522, 524];
     }
 }

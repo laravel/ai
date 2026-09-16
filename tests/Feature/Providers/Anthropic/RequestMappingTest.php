@@ -5,6 +5,7 @@ use Laravel\Ai\Responses\AgentResponse;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeAgent;
 use Tests\Fixtures\Agents\AttributeToolChoiceAgent;
+use Tests\Fixtures\Agents\ConstrainedStructuredAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
 use Tests\Fixtures\Agents\StructuredWithThinkingAgent;
 use Tests\Fixtures\Agents\ThinkingToolChoiceAgent;
@@ -201,6 +202,33 @@ describe('structured output', function (): void {
 
             return $body['output_config']['format']['type'] === 'json_schema'
                 && ! $hasStructuredTool;
+        });
+    });
+
+    test('native structured output strips unsupported constraints and folds them into descriptions', function (): void {
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeStructuredResponse(['score' => 5, 'tags' => ['a']]),
+        ]);
+
+        (new ConstrainedStructuredAgent)->prompt(
+            'Score this',
+            provider: 'anthropic',
+        );
+
+        Http::assertSent(function ($request): bool {
+            $properties = $request->data()['output_config']['format']['schema']['properties'];
+
+            expect($properties['score'])->not->toHaveKeys(['minimum', 'maximum'])
+                ->and($properties['score']['description'])->toBe('Must be at least 1. Must be at most 10.')
+                ->and($properties['summary'])->not->toHaveKeys(['minLength', 'maxLength'])
+                ->and($properties['summary']['description'])->toBe('Must be at least 1 character. Must be at most 280 characters.')
+                ->and($properties['tags'])->not->toHaveKey('maxItems')
+                ->and($properties['tags']['minItems'])->toBe(1)
+                ->and($properties['tags']['description'])->toBe('Must contain at most 5 items.')
+                ->and($properties['tags']['items'])->not->toHaveKey('maxLength')
+                ->and($properties['tags']['items']['description'])->toBe('Must be at most 20 characters.');
+
+            return true;
         });
     });
 

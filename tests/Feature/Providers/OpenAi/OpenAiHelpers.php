@@ -106,7 +106,7 @@ trait OpenAiHelpers
         ];
     }
 
-    protected function responseCompleted(int $inputTokens, int $outputTokens, int $cachedTokens = 0, int $reasoningTokens = 0, ?array $output = null): array
+    protected function responseCompleted(int $inputTokens, int $outputTokens, int $cachedTokens = 0, int $reasoningTokens = 0, int $cacheWriteTokens = 0, ?array $output = null): array
     {
         return [
             'type' => 'response.completed',
@@ -127,6 +127,7 @@ trait OpenAiHelpers
                     'output_tokens' => $outputTokens,
                     'input_tokens_details' => [
                         'cached_tokens' => $cachedTokens,
+                        'cache_write_tokens' => $cacheWriteTokens,
                     ],
                     'output_tokens_details' => [
                         'reasoning_tokens' => $reasoningTokens,

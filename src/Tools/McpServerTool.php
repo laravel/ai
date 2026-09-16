@@ -78,14 +78,12 @@ class McpServerTool implements Tool
         $container->instance(self::MCP_REQUEST, new (self::MCP_REQUEST)($request->toArray()));
 
         try {
-            $response = $container->call([$this->tool, 'handle']);
+            return $this->convertResponse($container->call([$this->tool, 'handle']));
         } finally {
             $previous !== null
                 ? $container->instance(self::MCP_REQUEST, $previous)
                 : $container->forgetInstance(self::MCP_REQUEST);
         }
-
-        return $this->convertResponse($response);
     }
 
     /**

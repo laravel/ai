@@ -4,7 +4,6 @@ namespace Laravel\Ai\Gateway;
 
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\RerankingGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
@@ -17,6 +16,7 @@ use Laravel\Ai\Responses\RerankingResponse;
 
 class JinaGateway implements EmbeddingGateway, RerankingGateway
 {
+    use Concerns\CreatesClient;
     use HandlesFailoverErrors;
 
     /**
@@ -61,22 +61,25 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
      * Rerank the given documents based on their relevance to the query.
      *
      * @param  array<int, string>  $documents
+     * @param  array<string, mixed>  $providerOptions
      */
     public function rerank(
         RerankingProvider $provider,
         string $model,
         array $documents,
         string $query,
-        ?int $limit = null
+        ?int $limit = null,
+        int $timeout = 30,
+        array $providerOptions = [],
     ): RerankingResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider)->post('/rerank', array_filter([
+            fn () => $this->client($provider, $timeout)->post('/rerank', array_merge($providerOptions, array_filter([
                 'model' => $model,
                 'query' => $query,
                 'documents' => $documents,
                 'top_n' => $limit,
-            ])),
+            ]))),
         );
 
         $data = $response->json();
@@ -98,13 +101,15 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
      */
     protected function client(EmbeddingProvider|RerankingProvider $provider, int $timeout = 30): PendingRequest
     {
-        return Http::baseUrl($this->baseUrl($provider))
-            ->withHeaders([
+        return $this->createClient(
+            $this->baseUrl($provider),
+            [
                 'Authorization' => 'Bearer '.$provider->providerCredentials()['key'],
                 'Content-Type' => 'application/json',
-            ])
-            ->timeout($timeout)
-            ->throw();
+            ],
+            $provider->additionalConfiguration()['headers'] ?? [],
+            $timeout,
+        );
     }
 
     /**

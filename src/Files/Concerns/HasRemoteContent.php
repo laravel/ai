@@ -33,7 +33,7 @@ trait HasRemoteContent
      */
     public function mimeType(): ?string
     {
-        return $this->mime ?? (new Stringable($this->response()->header('Content-Type')))->before(';')->trim()->toString();
+        return $this->mime ?? ((new Stringable($this->response()->header('Content-Type')))->before(';')->trim()->toString() ?: null);
     }
 
     /**
@@ -49,7 +49,7 @@ trait HasRemoteContent
      */
     protected function response(): Response
     {
-        return $this->response ??= Http::get($this->url);
+        return $this->response ??= Http::get($this->url)->throw();
     }
 
     public function __toString(): string

@@ -15,6 +15,9 @@ abstract class File implements HasName, HasProviderOptions
 
     public ?string $mime = null;
 
+    /** @var array<string, string>|SerializableClosure */
+    protected array|SerializableClosure $headers = [];
+
     /** @var array<string, mixed>|SerializableClosure */
     protected array|SerializableClosure $providerOptions = [];
 
@@ -40,6 +43,7 @@ abstract class File implements HasName, HasProviderOptions
             'stored-document' => new StoredDocument(self::value($data, 'path', $type), $data['disk'] ?? null),
             'remote-document' => new RemoteDocument(self::value($data, 'url', $type), $data['mime'] ?? null),
             'provider-document' => new ProviderDocument(self::value($data, 'id', $type)),
+            's3-document' => new S3Document(self::value($data, 'url', $type), $data['bucket_owner'] ?? null, $data['mime'] ?? null),
             'base64-audio' => new Base64Audio(self::value($data, 'base64', $type), $data['mime'] ?? null),
             'local-audio' => new LocalAudio(self::value($data, 'path', $type), $data['mime'] ?? null),
             'stored-audio' => new StoredAudio(self::value($data, 'path', $type), $data['disk'] ?? null),
@@ -86,6 +90,20 @@ abstract class File implements HasName, HasProviderOptions
     }
 
     /**
+     * Specify HTTP headers for the file upload. Closures may only capture serializable values.
+     *
+     * @param  array<string, string>|Closure(Lab|string): ?array<string, string>  $headers
+     */
+    public function withHeaders(array|Closure $headers): static
+    {
+        $this->headers = $headers instanceof Closure
+            ? new SerializableClosure($headers)
+            : $headers;
+
+        return $this;
+    }
+
+    /**
      * Specify provider-specific options for the file upload. Closures may only capture serializable values.
      *
      * @param  array<string, mixed>|Closure(Lab|string): ?array<string, mixed>  $options
@@ -106,11 +124,21 @@ abstract class File implements HasName, HasProviderOptions
      */
     public function providerOptions(Lab|string $provider): array
     {
-        if ($this->providerOptions instanceof SerializableClosure) {
-            return ($this->providerOptions)($provider) ?: [];
+        $options = $this->providerOptions instanceof SerializableClosure
+            ? ($this->providerOptions)($provider) ?: []
+            : $this->providerOptions;
+
+        $headers = $this->headers instanceof SerializableClosure
+            ? ($this->headers)($provider) ?: []
+            : $this->headers;
+
+        if ($headers !== []) {
+            $options[HasProviderOptions::HEADERS] = array_merge(
+                $options[HasProviderOptions::HEADERS] ?? [], $headers,
+            );
         }
 
-        return $this->providerOptions;
+        return $options;
     }
 
     /**

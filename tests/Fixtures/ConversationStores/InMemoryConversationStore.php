@@ -14,7 +14,7 @@ class InMemoryConversationStore implements ConversationStore
 
     public array $messages = [];
 
-    public function latestConversationId(string $participantType, string|int $participantId): ?string
+    public function latestConversationId(string $participantType, string|int $participantId, string $agent): ?string
     {
         return collect($this->conversations)
             ->filter(fn ($conversation): bool => $conversation['participant_type'] === $participantType
@@ -23,9 +23,9 @@ class InMemoryConversationStore implements ConversationStore
             ->last();
     }
 
-    public function storeConversation(?string $participantType, string|int|null $participantId, string $title): string
+    public function storeConversation(?string $participantType, string|int|null $participantId, string $title, ?string $id = null): string
     {
-        $id = (string) Str::uuid7();
+        $id ??= (string) Str::uuid7();
 
         $this->conversations[$id] = ['participant_type' => $participantType, 'participant_id' => $participantId, 'title' => $title];
 

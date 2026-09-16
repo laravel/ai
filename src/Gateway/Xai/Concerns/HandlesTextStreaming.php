@@ -9,6 +9,7 @@ use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ProviderToolEvent;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
@@ -40,6 +41,7 @@ trait HandlesTextStreaming
         $toolCalls = [];
         $pendingToolCalls = [];
         $reasoningItems = [];
+        $lastTextMessageId = null;
         $usage = null;
         $responseData = [];
 
@@ -106,10 +108,14 @@ trait HandlesTextStreaming
                     time(),
                 ))->withInvocationId($invocationId);
 
+                $lastTextMessageId = $messageId;
+                $textStartEmitted = false;
+                $messageId = $this->generateEventId();
+
                 continue;
             }
 
-            if ($type === 'response.reasoning_summary_text.delta') {
+            if (in_array($type, ['response.reasoning_summary_text.delta', 'response.reasoning_text.delta'], true)) {
                 $delta = (string) ($data['delta'] ?? '');
 
                 if ($delta !== '') {
@@ -164,27 +170,25 @@ trait HandlesTextStreaming
                         $data['item'] ?? [],
                         'completed',
                         time(),
+                        provider: $provider->name(),
                     ))->withInvocationId($invocationId);
 
                     continue;
                 }
             }
 
-            if (str_starts_with((string) $type, 'response.') && str_contains((string) $type, '_call.')) {
-                $parts = explode('.', (string) $type, 3);
+            if (preg_match('/^response\.([a-z_]+_call)(_code)?\.(.+)$/', (string) $type, $matches) === 1) {
+                yield (new ProviderToolEvent(
+                    $this->generateEventId(),
+                    $data['item_id'] ?? '',
+                    $matches[1],
+                    $data,
+                    $matches[2] === '' ? $matches[3] : 'code_'.$matches[3],
+                    time(),
+                    provider: $provider->name(),
+                ))->withInvocationId($invocationId);
 
-                if (count($parts) === 3 && str_ends_with($parts[1], '_call')) {
-                    yield (new ProviderToolEvent(
-                        $this->generateEventId(),
-                        $data['item_id'] ?? '',
-                        $parts[1],
-                        $data,
-                        $parts[2],
-                        time(),
-                    ))->withInvocationId($invocationId);
-
-                    continue;
-                }
+                continue;
             }
 
             if (($data['item']['type'] ?? '') === 'function_call' && $type === 'response.output_item.added') {
@@ -273,6 +277,15 @@ trait HandlesTextStreaming
                     $responseUsage['input_tokens_details']['cached_tokens'] ?? 0,
                     $responseUsage['output_tokens_details']['reasoning_tokens'] ?? 0,
                 );
+
+                foreach ($this->extractCitations($response['output'] ?? []) as $citation) {
+                    yield (new CitationEvent(
+                        $this->generateEventId(),
+                        $lastTextMessageId ?? $messageId,
+                        $citation,
+                        time(),
+                    ))->withInvocationId($invocationId);
+                }
             }
         }
 
