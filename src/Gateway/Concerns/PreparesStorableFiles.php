@@ -2,10 +2,10 @@
 
 namespace Laravel\Ai\Gateway\Concerns;
 
-use Illuminate\Support\Arr;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Files\File;
 
 trait PreparesStorableFiles
 {
@@ -30,11 +30,9 @@ trait PreparesStorableFiles
      */
     protected function resolveProviderOptionsAndHeaders(StorableFile $file, Lab|string $provider): array
     {
-        $options = $file instanceof HasProviderOptions ? $file->providerOptions($provider) : [];
-
         return [
-            Arr::except($options, HasProviderOptions::HEADERS),
-            $options[HasProviderOptions::HEADERS] ?? [],
+            $file instanceof HasProviderOptions ? $file->providerOptions($provider) : [],
+            $file instanceof File ? $file->headers($provider) : [],
         ];
     }
 }

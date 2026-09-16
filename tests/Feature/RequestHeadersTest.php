@@ -39,7 +39,6 @@ test('extra headers are sent with embeddings requests and never in the body', fu
         $body = json_decode($request->body(), true);
 
         return $request->hasHeader('X-Tenant', 'acme')
-            && ! array_key_exists('ai_sdk_extra_headers', $body)
             && ! array_key_exists('X-Tenant', $body)
             && $body['user'] === 'acme';
     });
@@ -53,7 +52,7 @@ test('extra headers are sent with transcription requests', function (): void {
         ->generate(provider: 'openai', model: 'gpt-4o-transcribe');
 
     Http::assertSent(fn (Request $request): bool => $request->hasHeader('X-Tenant', 'acme')
-        && multipartField($request, 'ai_sdk_extra_headers') === null);
+        && multipartField($request, 'X-Tenant') === null);
 });
 
 test('extra headers resolved from a closure survive serialization', function (): void {
@@ -110,7 +109,7 @@ test('extra headers are sent with image requests', function (): void {
         $body = json_decode($request->body(), true);
 
         return $request->hasHeader('X-Tenant', 'acme')
-            && ! array_key_exists('ai_sdk_extra_headers', $body);
+            && ! array_key_exists('X-Tenant', $body);
     });
 });
 
@@ -125,7 +124,7 @@ test('extra headers are sent with audio requests', function (): void {
         $body = json_decode($request->body(), true);
 
         return $request->hasHeader('X-Tenant', 'acme')
-            && ! array_key_exists('ai_sdk_extra_headers', $body);
+            && ! array_key_exists('X-Tenant', $body);
     });
 });
 
@@ -140,7 +139,7 @@ test('extra headers are sent with reranking requests', function (): void {
         $body = json_decode($request->body(), true);
 
         return $request->hasHeader('X-Tenant', 'acme')
-            && ! array_key_exists('ai_sdk_extra_headers', $body);
+            && ! array_key_exists('X-Tenant', $body);
     });
 });
 
@@ -153,7 +152,7 @@ test('extra headers are sent with file uploads', function (): void {
         ->put(provider: 'openai');
 
     Http::assertSent(fn (Request $request): bool => $request->hasHeader('X-Tenant', 'acme')
-        && multipartField($request, 'ai_sdk_extra_headers') === null);
+        && multipartField($request, 'X-Tenant') === null);
 });
 
 test('file upload provider options are resolved once', function (): void {

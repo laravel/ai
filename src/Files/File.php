@@ -124,21 +124,21 @@ abstract class File implements HasName, HasProviderOptions
      */
     public function providerOptions(Lab|string $provider): array
     {
-        $options = $this->providerOptions instanceof SerializableClosure
+        return $this->providerOptions instanceof SerializableClosure
             ? ($this->providerOptions)($provider) ?: []
             : $this->providerOptions;
+    }
 
-        $headers = $this->headers instanceof SerializableClosure
+    /**
+     * Get the HTTP headers for the file upload.
+     *
+     * @return array<string, string>
+     */
+    public function headers(Lab|string $provider): array
+    {
+        return $this->headers instanceof SerializableClosure
             ? ($this->headers)($provider) ?: []
             : $this->headers;
-
-        if ($headers !== []) {
-            $options[HasProviderOptions::HEADERS] = array_merge(
-                $options[HasProviderOptions::HEADERS] ?? [], $headers,
-            );
-        }
-
-        return $options;
     }
 
     /**

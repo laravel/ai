@@ -20,7 +20,6 @@ use Laravel\Ai\Attributes\WithoutBroadcasting;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\AgentInput;
 use Laravel\Ai\Contracts\Conversational;
-use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
@@ -456,12 +455,6 @@ trait Promptable
 
         foreach ($providers as $provider => $model) {
             $provider = Ai::textProviderFor($this, $provider);
-
-            if ($this instanceof HasProviderOptions) {
-                $provider = $provider->withHeaders($this->providerOptions(
-                    Lab::tryFrom($provider->driver()) ?? $provider->driver()
-                )[HasProviderOptions::HEADERS] ?? []);
-            }
 
             yield [$provider, $model ?? $this->getDefaultModelFor($provider), --$remaining === 0];
         }

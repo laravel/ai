@@ -260,21 +260,21 @@ test('agent middleware that replaces a streamed step response narrates the repla
     expect(array_map(fn (TextDelta $event): string => $event->delta, $deltas))->toBe(['Replaced']);
 });
 
-test('step provider options override the agent\'s own and never carry headers', function (): void {
+test('step provider options override the agent\'s own', function (): void {
     Event::fake([StartingStep::class]);
 
     $agent = new class extends AssistantAgent implements HasProviderOptions
     {
         public function providerOptions(Lab|string $provider): array
         {
-            return ['reasoning' => 'high', 'store' => false, 'ai_sdk_extra_headers' => ['X-Test' => '1']];
+            return ['reasoning' => 'high', 'store' => false];
         }
     };
 
     $agent::fake(['Fake response']);
 
     $agent
-        ->withMiddleware([fn (PendingStep $step, Closure $next) => $next($step->withProviderOptions(['reasoning' => 'low', 'ai_sdk_extra_headers' => ['X-Test' => '2']]))])
+        ->withMiddleware([fn (PendingStep $step, Closure $next) => $next($step->withProviderOptions(['reasoning' => 'low']))])
         ->prompt('Test prompt');
 
     Event::assertDispatched(StartingStep::class, fn (StartingStep $event): bool => $event->options->providerOptions('openai') === ['reasoning' => 'low', 'store' => false]);

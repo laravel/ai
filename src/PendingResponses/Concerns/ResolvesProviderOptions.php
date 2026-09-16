@@ -3,8 +3,6 @@
 namespace Laravel\Ai\PendingResponses\Concerns;
 
 use Closure;
-use Illuminate\Support\Arr;
-use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Providers\Provider;
 use Laravel\SerializableClosure\SerializableClosure;
 
@@ -51,14 +49,9 @@ trait ResolvesProviderOptions
      */
     protected function resolveProviderOptionsAndHeaders(Provider $provider): array
     {
-        $options = $this->resolveFor($this->providerOptions, $provider);
-
         return [
-            Arr::except($options, HasProviderOptions::HEADERS),
-            array_merge(
-                $options[HasProviderOptions::HEADERS] ?? [],
-                $this->resolveFor($this->headers, $provider),
-            ),
+            $this->resolveFor($this->providerOptions, $provider),
+            $this->resolveFor($this->headers, $provider),
         ];
     }
 
@@ -69,19 +62,7 @@ trait ResolvesProviderOptions
      */
     protected function queuedProviderOptions(): array
     {
-        $options = is_array($this->providerOptions) ? $this->providerOptions : [];
-
-        $headers = is_array($this->headers) ? $this->headers : [];
-
-        if ($headers === []) {
-            return $options;
-        }
-
-        $options[HasProviderOptions::HEADERS] = array_merge(
-            $options[HasProviderOptions::HEADERS] ?? [], $headers,
-        );
-
-        return $options;
+        return is_array($this->providerOptions) ? $this->providerOptions : [];
     }
 
     /**
