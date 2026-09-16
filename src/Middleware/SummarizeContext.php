@@ -161,13 +161,13 @@ class SummarizeContext
     }
 
     /**
-     * Summarize the given messages, folding in any previous summary.
+     * Summarize the given messages on top of any previous summary.
      *
      * @param  Message[]  $messages
      */
     protected function summarize(PendingStep $step, array $messages): string
     {
-        return (new SummarizeConversationAgent)->prompt(
+        return (new SummarizeConversationAgent($this->summary))->prompt(
             $this->transcript($messages),
             provider: $this->provider ?? $step->provider,
             model: $this->model,
@@ -184,16 +184,13 @@ class SummarizeContext
     }
 
     /**
-     * Render the given messages as plain text, led by the summary so far.
+     * Render the given messages as plain text.
      *
      * @param  Message[]  $messages
      */
     protected function transcript(array $messages): string
     {
-        return (new Collection($messages))
-            ->map($this->render(...))
-            ->when($this->summary, fn (Collection $lines): Collection => $lines->prepend('Summary so far: '.$this->summary))
-            ->implode(PHP_EOL);
+        return (new Collection($messages))->map($this->render(...))->implode(PHP_EOL);
     }
 
     /**

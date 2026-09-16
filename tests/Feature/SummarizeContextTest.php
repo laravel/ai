@@ -199,9 +199,14 @@ test('a cached summary is reused so only the newly displaced messages are summar
     }
 
     expect($prompts)->toHaveCount(2)
-        ->and($prompts[0])->toContain('Turn one')->not->toContain('Summary so far')
-        ->and($prompts[1])->toContain('Summary so far: SUMMARY-1')
+        ->and($prompts[0])->toContain('Turn one')
         ->and($prompts[1])->toContain('Turn two')->not->toContain('Turn one');
+
+    SummarizeConversationAgent::assertNotPrompted(fn (AgentPrompt $prompt): bool => str_contains($prompt->prompt, 'Turn one')
+        && str_contains($prompt->agent->instructions(), 'SUMMARY'));
+
+    SummarizeConversationAgent::assertPrompted(fn (AgentPrompt $prompt): bool => str_contains($prompt->prompt, 'Turn two')
+        && str_ends_with($prompt->agent->instructions(), 'Summary of the conversation so far:'.PHP_EOL.'SUMMARY-1'));
 });
 
 test('a cached summary survives the history window sliding past its first message', function (): void {
@@ -232,8 +237,10 @@ test('a cached summary survives the history window sliding past its first messag
     }
 
     expect($prompts)->toHaveCount(3)
-        ->and($prompts[2])->toContain('Summary so far: SUMMARY-2')
         ->and($prompts[2])->toContain('Turn three')->not->toContain('Turn two');
+
+    SummarizeConversationAgent::assertPrompted(fn (AgentPrompt $prompt): bool => str_contains($prompt->prompt, 'Turn three')
+        && str_ends_with($prompt->agent->instructions(), 'SUMMARY-2'));
 });
 
 test('a cached summary that no longer matches the history is rebuilt', function (): void {
@@ -259,5 +266,7 @@ test('a cached summary that no longer matches the history is rebuilt', function 
     $agent->withMiddleware([$summarize])->prompt('Turn three');
 
     expect($prompts)->toHaveCount(1)
-        ->and($prompts[0])->toContain('Turn one')->not->toContain('STALE');
+        ->and($prompts[0])->toContain('Turn one');
+
+    SummarizeConversationAgent::assertNotPrompted(fn (AgentPrompt $prompt): bool => str_contains($prompt->agent->instructions(), 'STALE'));
 });
