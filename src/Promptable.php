@@ -71,7 +71,7 @@ trait Promptable
     {
         return match (true) {
             $arguments !== [] && ! array_is_list($arguments) => Container::getInstance()->makeWith(static::class, $arguments),
-            $arguments !== [] => new static(...$arguments),
+            $arguments !== [] => new static(...$arguments), // @phpstan-ignore new.noConstructor
             default => Container::getInstance()->make(static::class),
         };
     }
