@@ -403,6 +403,59 @@ describe('citations', function (): void {
 
         expect($response->meta->citations)->toHaveCount(1);
     });
+
+    test('legacy citation source byte offsets are converted to character offsets', function (): void {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [[
+                    'content' => [
+                        'parts' => [['text' => 'Café Ärger won.']],
+                        'role' => 'model',
+                    ],
+                    'finishReason' => 'STOP',
+                    'citationMetadata' => [
+                        'citationSources' => [
+                            ['uri' => 'https://example.com/cafe', 'title' => 'Café', 'startIndex' => 0, 'endIndex' => 10],
+                            ['uri' => 'https://example.com/cafe', 'title' => 'Café', 'startIndex' => 11, 'endIndex' => 15],
+                        ],
+                    ],
+                ]],
+                'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5],
+            ]),
+        ]);
+
+        $response = (new AssistantAgent)->prompt('Query', provider: 'gemini');
+
+        expect($response->meta->citations)->toHaveCount(1)
+            ->and($response->meta->citations[0]->ranges->all())->toBe([['start' => 0, 'end' => 8], ['start' => 9, 'end' => 13]]);
+    });
+
+    test('grounding segment offsets are resolved against the part they were reported against', function (): void {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [[
+                    'content' => [
+                        'parts' => [['text' => 'Spain won. '], ['text' => 'France lost.']],
+                        'role' => 'model',
+                    ],
+                    'finishReason' => 'STOP',
+                    'groundingMetadata' => [
+                        'groundingChunks' => [
+                            ['web' => ['uri' => 'https://example.com/france', 'title' => 'France']],
+                        ],
+                        'groundingSupports' => [
+                            ['segment' => ['partIndex' => 1, 'startIndex' => 0, 'endIndex' => 12], 'groundingChunkIndices' => [0]],
+                        ],
+                    ],
+                ]],
+                'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5],
+            ]),
+        ]);
+
+        $response = (new AssistantAgent)->prompt('Query', provider: 'gemini');
+
+        expect($response->meta->citations[0]->ranges->all())->toBe([['start' => 11, 'end' => 23]]);
+    });
 });
 
 describe('tool choice', function (): void {

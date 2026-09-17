@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\OpenRouter\Concerns;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
+use Laravel\Ai\Gateway\Concerns\MergesCitations;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
@@ -15,7 +16,7 @@ use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
 {
-    use DecodesStructuredOutput;
+    use DecodesStructuredOutput, MergesCitations;
 
     /**
      * Validate the OpenRouter response data.
@@ -66,23 +67,25 @@ trait ParsesTextResponses
     }
 
     /**
-     * Extract URL citations from the message annotations array.
+     * Extract URL citations from the message annotations array, merging into the given citations.
+     *
+     * @param  Collection<int, UrlCitation>|null  $citations
      */
-    protected function extractCitations(array $message): Collection
+    protected function extractCitations(array $message, ?Collection $citations = null): Collection
     {
-        $citations = new Collection;
+        $citations ??= new Collection;
 
         foreach ($message['annotations'] ?? [] as $annotation) {
-            if (($annotation['type'] ?? '') === 'url_citation') {
-                $urlCitation = $annotation['url_citation'] ?? [];
+            $urlCitation = $annotation['url_citation'] ?? [];
 
-                $citations->push(new UrlCitation(
-                    $urlCitation['url'] ?? '',
-                    $urlCitation['title'] ?? null,
-                    isset($urlCitation['start_index']) ? (int) $urlCitation['start_index'] : null,
-                    isset($urlCitation['end_index']) ? (int) $urlCitation['end_index'] : null,
-                ));
+            if (($annotation['type'] ?? '') !== 'url_citation' || empty($urlCitation['url'])) {
+                continue;
             }
+
+            $this->mergeCitation($citations, $urlCitation['url'], $urlCitation['title'] ?? null)->addRange(
+                isset($urlCitation['start_index']) ? (int) $urlCitation['start_index'] : null,
+                isset($urlCitation['end_index']) ? (int) $urlCitation['end_index'] : null,
+            );
         }
 
         return $citations->values();

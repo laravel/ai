@@ -91,7 +91,7 @@ trait BuildsTextRequests
 
         $providerOptions = $options?->providerOptions($provider->driver()) ?? [];
 
-        if (isset($providerOptions['generationConfig'])) {
+        if (is_array($providerOptions['generationConfig'] ?? null)) {
             $providerOptions = array_merge(
                 Arr::except($providerOptions, 'generationConfig'),
                 $providerOptions['generationConfig'],
@@ -99,7 +99,7 @@ trait BuildsTextRequests
         }
 
         // Hoist keys that need to be passed at top level, as everything else is passed in generationConfig
-        $topLevelKeys = ['cachedContent', 'safetySettings'];
+        $topLevelKeys = ['cachedContent', 'safetySettings', 'toolConfig', 'serviceTier', 'store'];
         foreach ($topLevelKeys as $key) {
             if (array_key_exists($key, $providerOptions)) {
                 $body[$key] = $providerOptions[$key];

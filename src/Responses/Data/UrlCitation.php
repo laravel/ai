@@ -19,9 +19,9 @@ class UrlCitation extends Citation implements Arrayable, JsonSerializable
     ) {
         parent::__construct($title);
 
-        $this->ranges = new Collection;
-
-        $this->addRange($startIndex, $endIndex);
+        $this->ranges = new Collection(
+            $startIndex !== null && $endIndex !== null ? [['start' => $startIndex, 'end' => $endIndex]] : [],
+        );
     }
 
     /**

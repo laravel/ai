@@ -3,12 +3,12 @@
 namespace Laravel\Ai\Gateway\OpenRouter\Concerns;
 
 use Generator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
-use Laravel\Ai\Responses\Data\UrlCitation;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
@@ -37,6 +37,7 @@ trait HandlesTextStreaming
         $pendingToolCalls = [];
         $usage = null;
         $finishReason = null;
+        $citations = new Collection;
 
         foreach ($this->parseServerSentEvents($streamBody) as $data) {
             if (isset($data['error'])) {
@@ -130,23 +131,7 @@ trait HandlesTextStreaming
             }
 
             if (isset($delta['annotations'])) {
-                foreach ($delta['annotations'] as $annotation) {
-                    if (($annotation['type'] ?? '') === 'url_citation') {
-                        $urlCitation = $annotation['url_citation'] ?? [];
-
-                        yield (new CitationEvent(
-                            $this->generateEventId(),
-                            $messageId,
-                            new UrlCitation(
-                                $urlCitation['url'] ?? '',
-                                $urlCitation['title'] ?? null,
-                                isset($urlCitation['start_index']) ? (int) $urlCitation['start_index'] : null,
-                                isset($urlCitation['end_index']) ? (int) $urlCitation['end_index'] : null,
-                            ),
-                            time(),
-                        ))->withInvocationId($invocationId);
-                    }
-                }
+                $citations = $this->extractCitations($delta, $citations);
             }
 
             if (isset($choice['finish_reason']) && $choice['finish_reason'] !== null) {
@@ -185,12 +170,22 @@ trait HandlesTextStreaming
             }
         }
 
+        // Citations are emitted once the stream completes so each URL carries every range it supports...
+        foreach ($citations as $citation) {
+            yield (new CitationEvent(
+                $this->generateEventId(),
+                $messageId,
+                $citation,
+                time(),
+            ))->withInvocationId($invocationId);
+        }
+
         return new StepResponse(
             text: $currentText,
             toolCalls: $toolCalls,
             finishReason: $this->extractFinishReason(['finish_reason' => $finishReason ?? '']),
             usage: $usage ?? new Usage(0, 0),
-            meta: new Meta($provider->name(), $streamModel),
+            meta: new Meta($provider->name(), $streamModel, $citations),
         );
     }
 

@@ -208,7 +208,7 @@ trait HandlesTextStreaming
         }
 
         // Emit citations from the last chunk that carried citation metadata...
-        $citations = $this->extractCitations($citationData, $currentText);
+        $citations = $this->extractCitations($citationData, $modelParts);
 
         foreach ($citations as $citation) {
             yield (new CitationEvent(
