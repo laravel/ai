@@ -261,6 +261,36 @@ test('streaming emits citation events for web search annotations', function (): 
         ->and($citations[0]->citation->endIndex)->toBe(30);
 });
 
+test('streaming emits one citation per url carrying every range it supports', function (): void {
+    Http::fake([
+        '*' => Http::response($this->ssePayload([
+            $this->chatChunk(['role' => 'assistant', 'content' => 'Paris', 'annotations' => [
+                [
+                    'type' => 'url_citation',
+                    'url_citation' => ['url' => 'https://example.com/paris', 'title' => 'Paris', 'start_index' => 0, 'end_index' => 5],
+                ],
+            ]]),
+            $this->chatChunk(['content' => ' is the capital.', 'annotations' => [
+                [
+                    'type' => 'url_citation',
+                    'url_citation' => ['url' => 'https://example.com/paris', 'title' => 'Paris', 'start_index' => 6, 'end_index' => 21],
+                ],
+            ]]),
+            $this->chatChunkFinish('stop', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
+        ])),
+    ]);
+
+    $events = [];
+    foreach (agent()->stream('What is the capital of France?', provider: 'openrouter') as $event) {
+        $events[] = $event;
+    }
+
+    $citations = array_values(array_filter($events, fn ($e): bool => $e instanceof CitationEvent));
+
+    expect($citations)->toHaveCount(1)
+        ->and($citations[0]->citation->ranges->all())->toBe([['start' => 0, 'end' => 5], ['start' => 6, 'end' => 21]]);
+});
+
 test('streaming emits multiple citation events across chunks', function (): void {
     Http::fake([
         '*' => Http::response($this->ssePayload([
