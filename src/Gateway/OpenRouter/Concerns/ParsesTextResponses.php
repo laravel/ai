@@ -48,7 +48,6 @@ trait ParsesTextResponses
 
         $text = $message['content'] ?? '';
         $citations = $this->extractCitations($message);
-        $reasoningDetails = $message['reasoning_details'] ?? [];
 
         $toolCalls = array_map(fn (array $toolCall): ToolCall => new ToolCall(
             $toolCall['id'] ?? '',
@@ -64,7 +63,6 @@ trait ParsesTextResponses
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model, $citations),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
-            providerContentBlocks: $reasoningDetails ? ['reasoning_details' => $reasoningDetails] : [],
             reasoning: $this->extractReasoning($message),
         );
     }

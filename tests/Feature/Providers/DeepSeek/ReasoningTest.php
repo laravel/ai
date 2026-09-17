@@ -12,7 +12,6 @@ use Laravel\Ai\Streaming\Events\TextStart;
 use Tests\Feature\Providers\DeepSeek\DeepSeekHelpers;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\HistoricalReasoningWithoutToolCallsAgent;
-use Tests\Fixtures\Agents\HistoricalReasoningWithToolsAgent;
 use Tests\Fixtures\Agents\HistoricalToolCallWithEmptyReasoningAgent;
 use Tests\Fixtures\Agents\HistoricalToolCallWithoutReasoningAgent;
 use Tests\Fixtures\Agents\HistoricalToolCallWithReasoningAgent;
@@ -176,18 +175,6 @@ test('strips reasoning from deepseek-reasoner historical messages without tool c
 
     expect($assistantMsg['content'])->toBe('The answer is 8.')
         ->and($assistantMsg)->not->toHaveKey('reasoning_content')
-        ->and($assistantMsg)->not->toHaveKey('tool_calls');
-});
-
-test('replays reasoning from a historical turn that reasoned without calling a tool when the request carries tools', function (): void {
-    Http::fake(['api.deepseek.com/*' => fakeDeepSeekResponse('The answer is 6.')]);
-
-    (new HistoricalReasoningWithToolsAgent)->prompt('What is 3+3?', provider: 'deepseek', model: 'deepseek-reasoner');
-
-    $assistantMsg = $this->findMessage($this->requestMessages(0), role: 'assistant');
-
-    expect($assistantMsg['content'])->toBe('The answer is 8.')
-        ->and($assistantMsg['reasoning_content'])->toBe('Let me think... 4+4 = 8.')
         ->and($assistantMsg)->not->toHaveKey('tool_calls');
 });
 

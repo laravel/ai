@@ -31,7 +31,6 @@ trait HandlesTextStreaming
     ): Generator {
         $messageId = $this->generateEventId();
         $reasoningId = null;
-        $currentReasoning = '';
         $streamStartEmitted = false;
         $textStartEmitted = false;
         $currentText = '';
@@ -91,8 +90,6 @@ trait HandlesTextStreaming
                         time(),
                     ))->withInvocationId($invocationId);
                 }
-
-                $currentReasoning .= $thinking;
 
                 yield (new ReasoningDelta(
                     $this->generateEventId(),
@@ -201,7 +198,6 @@ trait HandlesTextStreaming
             finishReason: $this->extractFinishReason(['finish_reason' => $finishReason ?? '']),
             usage: $usage ?? new Usage(0, 0),
             meta: new Meta($provider->name(), $responseModel),
-            providerContentBlocks: $this->replayableContent($currentReasoning, $currentText),
         );
     }
 
@@ -218,23 +214,6 @@ trait HandlesTextStreaming
             fn (array $chunk): string => $this->extractContentText($chunk['thinking'] ?? []),
             array_filter($content, fn (mixed $chunk): bool => is_array($chunk) && ($chunk['type'] ?? '') === 'thinking'),
         ));
-    }
-
-    /**
-     * Rebuild the assistant content chunks Mistral requires replayed after a reasoned step.
-     *
-     * @return array<string, mixed>
-     */
-    protected function replayableContent(string $reasoning, string $text): array
-    {
-        if ($reasoning === '') {
-            return [];
-        }
-
-        return ['content' => [
-            ['type' => 'thinking', 'thinking' => [['type' => 'text', 'text' => $reasoning]]],
-            ...$text === '' ? [] : [['type' => 'text', 'text' => $text]],
-        ]];
     }
 
     /**

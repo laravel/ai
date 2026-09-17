@@ -62,7 +62,6 @@ trait ParsesTextResponses
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
-            providerContentBlocks: is_array($content) ? ['content' => $content] : [],
             reasoning: $this->extractReasoning($content),
         );
     }

@@ -41,22 +41,23 @@ trait BuildsTextRequests
         ?array $schema,
         ?TextGenerationOptions $options,
     ): array {
-        $mappedTools = filled($tools) ? $this->mapTools($tools, $provider) : [];
-
         $body = [
             'model' => $model,
             'messages' => $this->mapMessagesToChat(
                 $messages,
                 $this->composeInstructions($instructions, $schema),
-                filled($mappedTools),
             ),
         ];
 
-        if (filled($mappedTools)) {
-            $body['tool_choice'] = $options?->toolChoice instanceof ToolChoice
-                ? $this->mapToolChoice($options->toolChoice)
-                : 'auto';
-            $body['tools'] = $mappedTools;
+        if (filled($tools)) {
+            $mappedTools = $this->mapTools($tools, $provider);
+
+            if (filled($mappedTools)) {
+                $body['tool_choice'] = $options?->toolChoice instanceof ToolChoice
+                    ? $this->mapToolChoice($options->toolChoice)
+                    : 'auto';
+                $body['tools'] = $mappedTools;
+            }
         }
 
         if (filled($schema)) {

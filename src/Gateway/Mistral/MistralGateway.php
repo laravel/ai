@@ -15,6 +15,7 @@ use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\Concerns\ResolvesAudioFilenames;
+use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionMessages;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionTools;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\PerformsChatCompletionSteps;
 use Laravel\Ai\Gateway\StepContext;
@@ -33,9 +34,9 @@ class MistralGateway implements AudioGateway, EmbeddingGateway, StepTextGateway,
     use Concerns\CreatesMistralClient;
     use Concerns\HandlesTextStreaming;
     use Concerns\MapsAttachments;
-    use Concerns\MapsMessages;
     use Concerns\ParsesTextResponses;
     use HandlesFailoverErrors;
+    use MapsChatCompletionMessages;
     use MapsChatCompletionTools;
     use ParsesServerSentEvents;
     use PerformsChatCompletionSteps;

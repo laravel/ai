@@ -33,7 +33,6 @@ trait HandlesTextStreaming
     ): Generator {
         $messageId = $this->generateEventId();
         $reasoningId = null;
-        $reasoningDetails = [];
         $streamModel = $model;
         $streamStartEmitted = false;
         $textStartEmitted = false;
@@ -93,12 +92,6 @@ trait HandlesTextStreaming
                     $streamModel,
                     time(),
                 ))->withInvocationId($invocationId);
-            }
-
-            foreach ($delta['reasoning_details'] ?? [] as $position => $detail) {
-                $key = isset($detail['index']) ? 'i'.$detail['index'] : 'p'.$position;
-
-                $reasoningDetails[$key] = $this->mergeReasoningDetail($reasoningDetails[$key] ?? [], $detail);
             }
 
             $reasoning = $delta['reasoning'] ?? '';
@@ -245,7 +238,6 @@ trait HandlesTextStreaming
             finishReason: $this->extractFinishReason(['finish_reason' => $finishReason ?? '']),
             usage: $usage ?? new Usage(0, 0),
             meta: new Meta($provider->name(), $streamModel),
-            providerContentBlocks: $reasoningDetails ? ['reasoning_details' => array_values($reasoningDetails)] : [],
         );
     }
 
@@ -260,24 +252,6 @@ trait HandlesTextStreaming
             fn (array $detail): string => (string) ($detail['text'] ?? $detail['summary'] ?? ''),
             $details,
         ));
-    }
-
-    /**
-     * Merge a streamed reasoning detail chunk into the detail accumulated so far.
-     *
-     * @return array<string, mixed>
-     */
-    protected function mergeReasoningDetail(array $accumulated, array $detail): array
-    {
-        $merged = [...$accumulated, ...$detail];
-
-        foreach (['text', 'summary', 'data'] as $field) {
-            if (isset($detail[$field])) {
-                $merged[$field] = ($accumulated[$field] ?? '').$detail[$field];
-            }
-        }
-
-        return $merged;
     }
 
     /**

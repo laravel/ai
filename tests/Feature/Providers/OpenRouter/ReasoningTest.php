@@ -8,10 +8,6 @@ use Laravel\Ai\Streaming\Events\ReasoningStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Tests\Fixtures\Agents\AssistantAgent;
-use Tests\Fixtures\Agents\ToolUsingAgent;
-use Tests\Fixtures\Tools\FixedNumberGenerator;
-
-use function Laravel\Ai\agent;
 
 beforeEach(function (): void {
     config(['ai.providers.openrouter' => [
@@ -54,42 +50,6 @@ test('prompt falls back to the reasoning details when no plaintext reasoning is 
     expect((new AssistantAgent)->prompt('Hi', provider: 'openrouter')->reasoning)->toBe("First.\n\nSecond.");
 });
 
-test('a tool call follow up replays the reasoning details unchanged', function (): void {
-    $details = [
-        ['type' => 'reasoning.text', 'id' => 'rs_1', 'format' => 'anthropic-claude-v1', 'index' => 0, 'text' => 'I should call the tool.', 'signature' => 'sig'],
-    ];
-
-    Http::fake(['*' => Http::sequence([
-        Http::response([
-            'id' => 'chatcmpl-tool-123',
-            'object' => 'chat.completion',
-            'model' => 'anthropic/claude-sonnet-4.6',
-            'choices' => [[
-                'index' => 0,
-                'message' => [
-                    'role' => 'assistant',
-                    'content' => null,
-                    'reasoning_details' => $details,
-                    'tool_calls' => [[
-                        'id' => 'call_123',
-                        'type' => 'function',
-                        'function' => ['name' => 'FixedNumberGenerator', 'arguments' => '{}'],
-                    ]],
-                ],
-                'finish_reason' => 'tool_calls',
-            ]],
-            'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
-        ]),
-        fakeOpenRouterResponse('The number is 72019'),
-    ])]);
-
-    (new ToolUsingAgent(fixed: true))->prompt('Generate a random number', provider: 'openrouter');
-
-    $followUp = json_decode((string) Http::recorded()[1][0]->body(), true);
-
-    expect(collect($followUp['messages'])->firstWhere('role', 'assistant')['reasoning_details'])->toBe($details);
-});
-
 test('streaming emits reasoning events', function (): void {
     Http::fake(['*' => Http::response(
         body: $this->ssePayload([
@@ -111,40 +71,6 @@ test('streaming emits reasoning events', function (): void {
         ->and($events[5])->toBeInstanceOf(TextStart::class)
         ->and($events[6])->toBeInstanceOf(TextDelta::class)->delta->toBe('Hello')
         ->and(ReasoningDelta::combine($events))->toBe('Let me think...');
-});
-
-test('a streamed tool call follow up replays the reasoning details it accumulated', function (): void {
-    Http::fake(['*' => Http::sequence([
-        Http::response(
-            body: $this->ssePayload([
-                $this->chatChunk(['role' => 'assistant', 'reasoning' => 'I should ', 'reasoning_details' => [['type' => 'reasoning.text', 'index' => 0, 'id' => 'rs_1', 'text' => 'I should ']]]),
-                $this->chatChunk(['reasoning' => 'call the tool.', 'reasoning_details' => [['type' => 'reasoning.text', 'index' => 0, 'text' => 'call the tool.', 'signature' => 'sig']]]),
-                $this->chatChunkToolCallStart(0, 'call_123', 'FixedNumberGenerator'),
-                $this->chatChunkToolCallDelta(0, '{}'),
-                $this->chatChunkFinish('tool_calls', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
-            ]),
-            status: 200,
-            headers: ['Content-Type' => 'text/event-stream'],
-        ),
-        Http::response(
-            body: $this->ssePayload([
-                $this->chatChunk(['role' => 'assistant', 'content' => 'The number is 72019']),
-                $this->chatChunkFinish('stop', ['prompt_tokens' => 1, 'completion_tokens' => 1]),
-            ]),
-            status: 200,
-            headers: ['Content-Type' => 'text/event-stream'],
-        ),
-    ])]);
-
-    foreach (agent(tools: [new FixedNumberGenerator])->stream('Generate a random number', provider: 'openrouter') as $event) {
-        //
-    }
-
-    $followUp = json_decode((string) Http::recorded()[1][0]->body(), true);
-
-    expect(collect($followUp['messages'])->firstWhere('role', 'assistant')['reasoning_details'])->toBe([
-        ['type' => 'reasoning.text', 'index' => 0, 'id' => 'rs_1', 'text' => 'I should call the tool.', 'signature' => 'sig'],
-    ]);
 });
 
 test('streamed reasoning details drive the reasoning events when no plaintext reasoning is sent', function (): void {
@@ -186,41 +112,4 @@ test('an encrypted reasoning detail drives no reasoning events', function (): vo
 
     expect(collect($events)->whereInstanceOf(ReasoningStart::class))->toBeEmpty()
         ->and(ReasoningDelta::combine($events))->toBe('');
-});
-
-test('a streamed tool call follow up replays the reasoning details in arrival order', function (): void {
-    Http::fake(['*' => Http::sequence([
-        Http::response(
-            body: $this->ssePayload([
-                $this->chatChunk(['role' => 'assistant', 'reasoning_details' => [['type' => 'reasoning.text', 'index' => 1, 'text' => 'Sent first.']]]),
-                $this->chatChunk(['reasoning_details' => [['type' => 'reasoning.text', 'index' => 0, 'text' => 'Sent second.']]]),
-                $this->chatChunk(['reasoning_details' => [['type' => 'reasoning.summary', 'summary' => 'No index.']]]),
-                $this->chatChunkToolCallStart(0, 'call_123', 'FixedNumberGenerator'),
-                $this->chatChunkToolCallDelta(0, '{}'),
-                $this->chatChunkFinish('tool_calls', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
-            ]),
-            status: 200,
-            headers: ['Content-Type' => 'text/event-stream'],
-        ),
-        Http::response(
-            body: $this->ssePayload([
-                $this->chatChunk(['role' => 'assistant', 'content' => 'The number is 72019']),
-                $this->chatChunkFinish('stop', ['prompt_tokens' => 1, 'completion_tokens' => 1]),
-            ]),
-            status: 200,
-            headers: ['Content-Type' => 'text/event-stream'],
-        ),
-    ])]);
-
-    foreach (agent(tools: [new FixedNumberGenerator])->stream('Generate a random number', provider: 'openrouter') as $event) {
-        //
-    }
-
-    $followUp = json_decode((string) Http::recorded()[1][0]->body(), true);
-
-    expect(collect($followUp['messages'])->firstWhere('role', 'assistant')['reasoning_details'])->toBe([
-        ['type' => 'reasoning.text', 'index' => 1, 'text' => 'Sent first.'],
-        ['type' => 'reasoning.text', 'index' => 0, 'text' => 'Sent second.'],
-        ['type' => 'reasoning.summary', 'summary' => 'No index.'],
-    ]);
 });
