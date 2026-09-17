@@ -1,7 +1,6 @@
 <?php
 
 use GuzzleHttp\Promise\PromiseInterface;
-use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
@@ -9,7 +8,6 @@ use Laravel\Ai\Streaming\Events\ReasoningStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Tests\Fixtures\Agents\AssistantAgent;
-use Tests\Fixtures\Agents\RememberingAssistantAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
@@ -147,31 +145,6 @@ test('a streamed tool call follow up replays the reasoning details it accumulate
     expect(collect($followUp['messages'])->firstWhere('role', 'assistant')['reasoning_details'])->toBe([
         ['type' => 'reasoning.text', 'index' => 0, 'id' => 'rs_1', 'text' => 'I should call the tool.', 'signature' => 'sig'],
     ]);
-});
-
-test('continuing a conversation replays the reasoning details of the completed turn', function (): void {
-    Config::set('ai.conversations.generate_title', false);
-
-    $details = [
-        ['type' => 'reasoning.text', 'id' => 'rs_1', 'format' => 'anthropic-claude-v1', 'index' => 0, 'text' => 'They asked for a greeting.', 'signature' => 'sig'],
-    ];
-
-    Http::fake(['*' => Http::sequence([
-        fakeOpenRouterReasonedResponse(['reasoning_details' => $details]),
-        fakeOpenRouterResponse('Hello again'),
-    ])]);
-
-    $user = (object) ['id' => 1];
-
-    $first = (new RememberingAssistantAgent)->forUser($user)->prompt('Hi', provider: 'openrouter');
-
-    (new RememberingAssistantAgent)
-        ->continue($first->conversationId, $user)
-        ->prompt('Hi again', provider: 'openrouter');
-
-    $followUp = json_decode((string) Http::recorded()[1][0]->body(), true);
-
-    expect(collect($followUp['messages'])->firstWhere('role', 'assistant')['reasoning_details'])->toBe($details);
 });
 
 test('streamed reasoning details drive the reasoning events when no plaintext reasoning is sent', function (): void {

@@ -1,6 +1,5 @@
 <?php
 
-use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
@@ -8,7 +7,6 @@ use Laravel\Ai\Streaming\Events\ReasoningStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Tests\Fixtures\Agents\AssistantAgent;
-use Tests\Fixtures\Agents\RememberingAssistantAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
@@ -124,73 +122,6 @@ test('a streamed tool call follow up replays the thinking it accumulated', funct
 
     expect(collect($followUp['messages'])->firstWhere('role', 'assistant')['content'])->toBe([
         ['type' => 'thinking', 'thinking' => [['type' => 'text', 'text' => 'I should call the tool.']]],
-    ]);
-});
-
-test('continuing a conversation replays the thinking chunks of the completed turn', function (): void {
-    Config::set('ai.conversations.generate_title', false);
-
-    Http::fake(['*' => Http::sequence([
-        $this->fakeTextResponse([
-            ['type' => 'thinking', 'thinking' => [['type' => 'text', 'text' => 'They asked for a greeting.']]],
-            ['type' => 'text', 'text' => 'Hello'],
-        ]),
-        $this->fakeTextResponse('Hello again'),
-    ])]);
-
-    $user = (object) ['id' => 1];
-
-    $first = (new RememberingAssistantAgent)->forUser($user)->prompt('Hi', provider: 'mistral');
-
-    (new RememberingAssistantAgent)
-        ->continue($first->conversationId, $user)
-        ->prompt('Hi again', provider: 'mistral');
-
-    $followUp = json_decode((string) Http::recorded()[1][0]->body(), true);
-
-    expect(collect($followUp['messages'])->firstWhere('role', 'assistant')['content'])->toBe([
-        ['type' => 'thinking', 'thinking' => [['type' => 'text', 'text' => 'They asked for a greeting.']]],
-        ['type' => 'text', 'text' => 'Hello'],
-    ]);
-});
-
-test('continuing a conversation replays the thinking chunks of a completed streamed turn', function (): void {
-    Config::set('ai.conversations.generate_title', false);
-
-    $chunk = fn (array $delta, ?string $finishReason = null, ?array $usage = null): array => array_filter([
-        'id' => 'c1',
-        'model' => 'magistral-medium-latest',
-        'choices' => [['index' => 0, 'delta' => $delta, 'finish_reason' => $finishReason]],
-        'usage' => $usage,
-    ]);
-
-    Http::fake(['*' => Http::sequence([
-        Http::response(
-            body: $this->ssePayload([
-                $chunk(['role' => 'assistant', 'content' => [['type' => 'thinking', 'thinking' => [['type' => 'text', 'text' => 'They asked for a greeting.']]]]]),
-                $chunk(['content' => 'Hello']),
-                $chunk([], 'stop', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
-            ]),
-            status: 200,
-            headers: ['Content-Type' => 'text/event-stream'],
-        ),
-        $this->fakeTextResponse('Hello again'),
-    ])]);
-
-    $user = (object) ['id' => 1];
-
-    $first = (new RememberingAssistantAgent)->forUser($user)->stream('Hi', provider: 'mistral');
-    iterator_to_array($first);
-
-    (new RememberingAssistantAgent)
-        ->continue($first->conversationId, $user)
-        ->prompt('Hi again', provider: 'mistral');
-
-    $followUp = json_decode((string) Http::recorded()[1][0]->body(), true);
-
-    expect(collect($followUp['messages'])->firstWhere('role', 'assistant')['content'])->toBe([
-        ['type' => 'thinking', 'thinking' => [['type' => 'text', 'text' => 'They asked for a greeting.']]],
-        ['type' => 'text', 'text' => 'Hello'],
     ]);
 });
 

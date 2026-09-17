@@ -7,15 +7,11 @@ use Laravel\Ai\Responses\Data\Usage;
 
 class StreamEnd extends StreamEvent
 {
-    /**
-     * @param  array<int, array{blocks: array<array-key, mixed>, tool_call_ids: array<int, string>}>  $steps  every assistant step of the turn; never serialized to clients
-     */
     public function __construct(
         public string $id,
         public string $reason,
         public Usage $usage,
         public int $timestamp,
-        public array $steps = [],
     ) {
         //
     }

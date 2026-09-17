@@ -16,28 +16,19 @@ function agentResponseWithSteps(): AgentResponse
         ]));
 }
 
-test('provider steps carry the blocks and tool call ids of every assistant step', function (): void {
-    expect(agentResponseWithSteps()->providerSteps())->toBe([
+test('a paused turn exposes the blocks and tool call ids of every assistant step', function (): void {
+    $response = agentResponseWithSteps()
+        ->withPendingApprovals(collect([new PendingApproval('call-1', 'DeleteFile', [], 'Deletes a file')]));
+
+    expect($response->pausedSteps())->toBe([
         ['blocks' => [['type' => 'thinking', 'signature' => 'sig-0']], 'tool_call_ids' => ['call-0']],
         ['blocks' => [['type' => 'thinking', 'signature' => 'sig-1']], 'tool_call_ids' => ['call-1']],
-    ]);
+    ])->and($response->pausedProviderContentBlocks())->toBe([['type' => 'thinking', 'signature' => 'sig-1']]);
 });
 
-test('a turn that produced no provider blocks has no provider steps', function (): void {
-    $response = (new AgentResponse('invocation-id', 'Hello', new Usage, new Meta))
-        ->withMessages(collect([new AssistantMessage('Hello')]));
-
-    expect($response->providerSteps())->toBe([]);
-});
-
-test('the deprecated paused accessors return the turn state only while approvals are pending', function (): void {
+test('a turn that completed without pausing exposes no replay state', function (): void {
     $response = agentResponseWithSteps();
 
     expect($response->pausedSteps())->toBe([])
         ->and($response->pausedProviderContentBlocks())->toBe([]);
-
-    $response->withPendingApprovals(collect([new PendingApproval('call-1', 'DeleteFile', [], 'Deletes a file')]));
-
-    expect($response->pausedSteps())->toBe($response->providerSteps())
-        ->and($response->pausedProviderContentBlocks())->toBe([['type' => 'thinking', 'signature' => 'sig-1']]);
 });

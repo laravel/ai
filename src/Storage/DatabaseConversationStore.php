@@ -242,7 +242,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     }
 
     /**
-     * Build the message meta payload, tucking the turn's raw provider blocks alongside the response meta.
+     * Build the message meta payload, tucking a paused turn's raw provider blocks alongside the response meta.
      *
      * @return array<string, mixed>
      */
@@ -250,8 +250,8 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     {
         $meta = (array) json_decode(json_encode($response->meta), true);
 
-        if (filled($providerSteps = $response->providerSteps())) {
-            $meta['provider_steps'] = $providerSteps;
+        if (filled($response->pausedProviderContentBlocks())) {
+            $meta['provider_steps'] = $response->pausedSteps();
         }
 
         if (filled($response->reasoning)) {
@@ -305,13 +305,13 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
                     $messages = [new ToolResultMessage($toolResults->map(ToolResult::fromArray(...)))];
 
                     if (filled($record->content)) {
-                        $messages = array_merge($messages, $this->reconstructAssistantTurn($record));
+                        $messages[] = new AssistantMessage($record->content);
                     }
 
                     return $messages;
                 }
 
-                return $this->reconstructAssistantTurn($record);
+                return [new AssistantMessage($record->content)];
             })
             ->skipWhile(fn (Message $message) => $message instanceof ToolResultMessage)
             ->values();
@@ -410,8 +410,8 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
         $provider = $meta['provider'] ?? null;
 
-        if (filled($providerSteps = $meta['provider_steps'] ?? [])) {
-            return array_merge($messages, $this->reconstructProviderTurn($record, $providerSteps, $toolCalls, $ownResults, $provider));
+        if ($isPause && filled($providerSteps = $meta['provider_steps'] ?? [])) {
+            return array_merge($messages, $this->reconstructPausedTurn($record, $providerSteps, $toolCalls, $ownResults, $provider));
         }
 
         // Rows written before per-step replay state carry only the paused step's blocks, so the whole turn replays as one message...
@@ -446,30 +446,14 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     }
 
     /**
-     * Rebuild a stored assistant turn that made no tool calls, keeping the raw provider blocks each step produced.
+     * Replay a paused turn one assistant step at a time, each carrying the raw provider blocks it produced.
      *
-     * @return array<int, Message>
-     */
-    protected function reconstructAssistantTurn(object $record): array
-    {
-        $meta = (array) json_decode($record->meta ?? '[]', true);
-
-        if (filled($providerSteps = $meta['provider_steps'] ?? [])) {
-            return $this->reconstructProviderTurn($record, $providerSteps, new Collection, new Collection, $meta['provider'] ?? null);
-        }
-
-        return [new AssistantMessage($record->content)];
-    }
-
-    /**
-     * Replay a turn one assistant step at a time, each carrying the raw provider blocks it produced.
-     *
-     * @param  array<int, array{blocks?: array<array-key, mixed>, tool_call_ids?: array<int, string>}>  $providerSteps
+     * @param  array<int, array{blocks?: array<int, array<string, mixed>>, tool_call_ids?: array<int, string>}>  $providerSteps
      * @param  Collection<int, array<string, mixed>>  $toolCalls
      * @param  Collection<int, array<string, mixed>>  $ownResults
      * @return array<int, Message>
      */
-    protected function reconstructProviderTurn(object $record, array $providerSteps, Collection $toolCalls, Collection $ownResults, ?string $provider): array
+    protected function reconstructPausedTurn(object $record, array $providerSteps, Collection $toolCalls, Collection $ownResults, ?string $provider): array
     {
         $callsById = $toolCalls->keyBy('id');
         $resultsById = $ownResults->keyBy('id');

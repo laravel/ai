@@ -81,41 +81,30 @@ class AgentResponse extends TextResponse
     }
 
     /**
-     * Get every assistant step of the turn with the raw provider state needed to replay it.
+     * Get every assistant step of a paused turn with the raw provider state needed to replay it.
      *
-     * @return array<int, array{blocks: array<array-key, mixed>, tool_call_ids: array<int, string>}>
+     * @return array<int, array{blocks: array<int, array<string, mixed>>, tool_call_ids: array<int, string>}>
      */
-    public function providerSteps(): array
+    public function pausedSteps(): array
     {
-        $steps = $this->messages
+        if (! $this->hasPendingApprovals()) {
+            return [];
+        }
+
+        return $this->messages
             ->whereInstanceOf(AssistantMessage::class)
             ->map(fn (AssistantMessage $message): array => [
                 'blocks' => $message->providerContentBlocks,
                 'tool_call_ids' => $message->toolCalls->pluck('id')->all(),
             ])
-            ->values();
-
-        return $steps->contains(fn (array $step): bool => filled($step['blocks'])) ? $steps->all() : [];
-    }
-
-    /**
-     * Get every assistant step of a paused turn with the raw provider state needed to replay it.
-     *
-     * @return array<int, array{blocks: array<array-key, mixed>, tool_call_ids: array<int, string>}>
-     *
-     * @deprecated Use providerSteps().
-     */
-    public function pausedSteps(): array
-    {
-        return $this->hasPendingApprovals() ? $this->providerSteps() : [];
+            ->values()
+            ->all();
     }
 
     /**
      * Get the raw provider replay state for the paused assistant turn, if any.
      *
-     * @return array<array-key, mixed>
-     *
-     * @deprecated Use providerSteps().
+     * @return array<int, array<string, mixed>>
      */
     public function pausedProviderContentBlocks(): array
     {
