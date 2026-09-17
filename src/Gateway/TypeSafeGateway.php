@@ -4,15 +4,16 @@ namespace Laravel\Ai\Gateway;
 
 use Illuminate\Http\Client\PendingRequest;
 use Laravel\Ai\Classification\Boolean;
-use Laravel\Ai\Classification\Category;
+use Laravel\Ai\Classification\Choice;
 use Laravel\Ai\Classification\Score;
 use Laravel\Ai\Contracts\Gateway\ClassificationGateway;
 use Laravel\Ai\Contracts\Providers\ClassificationProvider;
 use Laravel\Ai\Contracts\Question;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Responses\ClassificationResponse;
+use Laravel\Ai\Responses\Data\Answer;
 use Laravel\Ai\Responses\Data\BooleanAnswer;
-use Laravel\Ai\Responses\Data\CategoryAnswer;
+use Laravel\Ai\Responses\Data\ChoiceAnswer;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ScoreAnswer;
 use Laravel\Ai\Responses\Data\Usage;
@@ -72,11 +73,12 @@ class TypeSafeGateway implements ClassificationGateway
     protected function mapQuestion(Question $question): array
     {
         return match (true) {
-            $question instanceof Boolean => [
+            $question instanceof Boolean => array_filter([
                 'type' => 'noul',
                 'instructions' => $question->instructions,
-            ],
-            $question instanceof Category => [
+                'criteria' => $question->criteria,
+            ], fn ($value) => $value !== null),
+            $question instanceof Choice => [
                 'type' => 'choice',
                 'instructions' => $question->instructions,
                 'criteria' => $question->options,
@@ -93,11 +95,11 @@ class TypeSafeGateway implements ClassificationGateway
     /**
      * Map a System One answer to an answer object, skipping unknown answer types.
      */
-    protected function mapAnswer(array $answer): BooleanAnswer|CategoryAnswer|ScoreAnswer|null
+    protected function mapAnswer(array $answer): ?Answer
     {
         return match ($answer['type'] ?? null) {
             'noul' => new BooleanAnswer($answer['noul']),
-            'choice' => new CategoryAnswer($answer['choice'], $answer['probabilities'], $answer['confidence'] ?? null),
+            'choice' => new ChoiceAnswer($answer['choice'], $answer['probabilities'], $answer['confidence'] ?? null),
             'score' => new ScoreAnswer(
                 $answer['score'],
                 $this->withIntegerKeys($answer['probabilities']),
@@ -145,7 +147,6 @@ class TypeSafeGateway implements ClassificationGateway
      */
     protected function overloadedStatusCodes(): array
     {
-        // 529 is TypeSafe's own "overloaded" status, plus the shared transient gateway and Cloudflare codes.
         return [529, 502, 503, 504, 520, 522, 524];
     }
 }

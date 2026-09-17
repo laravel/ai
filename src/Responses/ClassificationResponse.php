@@ -9,10 +9,8 @@ use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use IteratorAggregate;
 use JsonSerializable;
-use Laravel\Ai\Responses\Data\BooleanAnswer;
-use Laravel\Ai\Responses\Data\CategoryAnswer;
+use Laravel\Ai\Responses\Data\Answer;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\ScoreAnswer;
 use Laravel\Ai\Responses\Data\Usage;
 use LogicException;
 use Traversable;
@@ -22,7 +20,7 @@ class ClassificationResponse implements Arrayable, ArrayAccess, Countable, Itera
     /**
      * Create a new classification response instance.
      *
-     * @param  array<string, BooleanAnswer|CategoryAnswer|ScoreAnswer>  $answers
+     * @param  array<string, Answer>  $answers
      */
     public function __construct(
         public readonly array $answers,
@@ -35,7 +33,7 @@ class ClassificationResponse implements Arrayable, ArrayAccess, Countable, Itera
      *
      * @throws InvalidArgumentException if no answer exists for the key.
      */
-    public function answer(string $key): BooleanAnswer|CategoryAnswer|ScoreAnswer
+    public function answer(string $key): Answer
     {
         return $this->answers[$key] ?? throw new InvalidArgumentException("No answer was returned for question [{$key}].");
     }
@@ -43,7 +41,7 @@ class ClassificationResponse implements Arrayable, ArrayAccess, Countable, Itera
     /**
      * Get the answers as a collection.
      *
-     * @return Collection<string, BooleanAnswer|CategoryAnswer|ScoreAnswer>
+     * @return Collection<string, Answer>
      */
     public function collect(): Collection
     {
@@ -81,7 +79,7 @@ class ClassificationResponse implements Arrayable, ArrayAccess, Countable, Itera
     /**
      * Get an iterator for the answers.
      *
-     * @return Traversable<string, BooleanAnswer|CategoryAnswer|ScoreAnswer>
+     * @return Traversable<string, Answer>
      */
     public function getIterator(): Traversable
     {
@@ -99,7 +97,7 @@ class ClassificationResponse implements Arrayable, ArrayAccess, Countable, Itera
     /**
      * Get the answer for the given key.
      */
-    public function offsetGet(mixed $offset): BooleanAnswer|CategoryAnswer|ScoreAnswer
+    public function offsetGet(mixed $offset): Answer
     {
         return $this->answer($offset);
     }

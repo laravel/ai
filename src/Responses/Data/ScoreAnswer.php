@@ -2,10 +2,7 @@
 
 namespace Laravel\Ai\Responses\Data;
 
-use Illuminate\Contracts\Support\Arrayable;
-use JsonSerializable;
-
-class ScoreAnswer implements Arrayable, JsonSerializable
+class ScoreAnswer extends Answer
 {
     /**
      * Create a new score answer instance.
@@ -31,6 +28,24 @@ class ScoreAnswer implements Arrayable, JsonSerializable
     }
 
     /**
+     * Get the description of the most probable level.
+     *
+     * @return string|array<string, mixed>|null
+     */
+    public function label(): string|array|null
+    {
+        return $this->legend[$this->level()] ?? null;
+    }
+
+    /**
+     * Get the score as a fraction of the highest level.
+     */
+    public function normalized(): float
+    {
+        return count($this->legend) > 1 ? $this->score / (count($this->legend) - 1) : 0.0;
+    }
+
+    /**
      * Get the instance as an array.
      */
     public function toArray(): array
@@ -41,13 +56,5 @@ class ScoreAnswer implements Arrayable, JsonSerializable
             'legend' => $this->legend,
             'confidence' => $this->confidence,
         ];
-    }
-
-    /**
-     * Get the JSON serializable representation of the instance.
-     */
-    public function jsonSerialize(): mixed
-    {
-        return $this->toArray();
     }
 }

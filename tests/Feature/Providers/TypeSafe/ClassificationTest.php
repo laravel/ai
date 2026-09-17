@@ -5,12 +5,12 @@ use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Classification;
 use Laravel\Ai\Classification\Boolean;
-use Laravel\Ai\Classification\Category;
+use Laravel\Ai\Classification\Choice;
 use Laravel\Ai\Classification\Score;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Responses\Data\BooleanAnswer;
-use Laravel\Ai\Responses\Data\CategoryAnswer;
+use Laravel\Ai\Responses\Data\ChoiceAnswer;
 use Laravel\Ai\Responses\Data\ScoreAnswer;
 
 beforeEach(function (): void {
@@ -24,7 +24,7 @@ function triageQuestions(): array
 {
     return [
         'is_urgent' => new Boolean('Does this message convey urgency?'),
-        'department' => new Category('Which team should handle this?', [
+        'department' => new Choice('Which team should handle this?', [
             'billing' => 'Payments, invoicing, refunds',
             'technical' => 'Bugs, outages, integrations',
             'sales' => null,
@@ -89,6 +89,23 @@ test('classification request maps questions to the system one wire format', func
     });
 });
 
+test('boolean criteria are sent when given', function (): void {
+    Http::fake(['*' => Http::response(fakeTypeSafeResponse())]);
+
+    Classification::of('Build finished')
+        ->question('passed', new Boolean('Did the build succeed?', [
+            'true' => 'exit code 0',
+            'false' => 'any non-zero exit code',
+        ]))
+        ->classify(provider: 'typesafe');
+
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['questions']['passed'] === [
+        'type' => 'noul',
+        'instructions' => 'Did the build succeed?',
+        'criteria' => ['true' => 'exit code 0', 'false' => 'any non-zero exit code'],
+    ]);
+});
+
 test('structured state is sent as an object', function (): void {
     Http::fake(['*' => Http::response(fakeTypeSafeResponse())]);
 
@@ -109,15 +126,16 @@ test('classification response is parsed into typed answers', function (): void {
         ->and($response['is_urgent']->probability)->toBe(0.92)
         ->and($response['is_urgent']->isTrue())->toBeTrue()
         ->and($response['is_urgent']->isTrue(0.95))->toBeFalse()
-        ->and($response['department'])->toBeInstanceOf(CategoryAnswer::class)
-        ->and($response['department']->category)->toBe('technical')
+        ->and($response['department'])->toBeInstanceOf(ChoiceAnswer::class)
+        ->and($response['department']->choice)->toBe('technical')
         ->and($response['department']->probabilityOf('billing'))->toBe(0.08)
         ->and($response['department']->confidence)->toBe(0.82)
         ->and($response['frustration'])->toBeInstanceOf(ScoreAnswer::class)
         ->and($response['frustration']->score)->toBe(1.6)
         ->and($response['frustration']->level())->toBe(2)
         ->and($response['frustration']->probabilities)->toBe([0 => 0.05, 1 => 0.3, 2 => 0.65])
-        ->and($response['frustration']->legend[1])->toBe('Frustrated but civil')
+        ->and($response['frustration']->label())->toBe('Very angry')
+        ->and($response['frustration']->normalized())->toBe(0.8)
         ->and($response->usage->promptTokens)->toBe(312)
         ->and($response->usage->completionTokens)->toBe(48)
         ->and($response->meta->provider)->toBe('typesafe')

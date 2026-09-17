@@ -2,19 +2,16 @@
 
 namespace Laravel\Ai\Responses\Data;
 
-use Illuminate\Contracts\Support\Arrayable;
-use JsonSerializable;
-
-class CategoryAnswer implements Arrayable, JsonSerializable
+class ChoiceAnswer extends Answer
 {
     /**
-     * Create a new category answer instance.
+     * Create a new choice answer instance.
      *
      * @param  array<string, float>  $probabilities
      * @param  float|null  $confidence  Null when the provider cannot measure the distribution's certainty.
      */
     public function __construct(
-        public readonly string $category,
+        public readonly string $choice,
         public readonly array $probabilities,
         public readonly ?float $confidence = null,
     ) {}
@@ -33,17 +30,9 @@ class CategoryAnswer implements Arrayable, JsonSerializable
     public function toArray(): array
     {
         return [
-            'category' => $this->category,
+            'choice' => $this->choice,
             'probabilities' => $this->probabilities,
             'confidence' => $this->confidence,
         ];
-    }
-
-    /**
-     * Get the JSON serializable representation of the instance.
-     */
-    public function jsonSerialize(): mixed
-    {
-        return $this->toArray();
     }
 }

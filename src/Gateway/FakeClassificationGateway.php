@@ -4,15 +4,16 @@ namespace Laravel\Ai\Gateway;
 
 use Closure;
 use Laravel\Ai\Classification\Boolean;
-use Laravel\Ai\Classification\Category;
+use Laravel\Ai\Classification\Choice;
 use Laravel\Ai\Classification\Score;
 use Laravel\Ai\Contracts\Gateway\ClassificationGateway;
 use Laravel\Ai\Contracts\Providers\ClassificationProvider;
 use Laravel\Ai\Contracts\Question;
 use Laravel\Ai\Prompts\ClassificationPrompt;
 use Laravel\Ai\Responses\ClassificationResponse;
+use Laravel\Ai\Responses\Data\Answer;
 use Laravel\Ai\Responses\Data\BooleanAnswer;
-use Laravel\Ai\Responses\Data\CategoryAnswer;
+use Laravel\Ai\Responses\Data\ChoiceAnswer;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ScoreAnswer;
 use Laravel\Ai\Responses\Data\Usage;
@@ -106,11 +107,11 @@ class FakeClassificationGateway implements ClassificationGateway
     /**
      * Generate a shape-valid fake answer for the given question.
      */
-    protected function generateFakeAnswer(Question $question): BooleanAnswer|CategoryAnswer|ScoreAnswer
+    protected function generateFakeAnswer(Question $question): Answer
     {
         return match (true) {
             $question instanceof Boolean => new BooleanAnswer(round(mt_rand() / mt_getrandmax(), 3)),
-            $question instanceof Category => $this->fakeCategoryAnswer(array_keys($question->options)),
+            $question instanceof Choice => $this->fakeChoiceAnswer(array_keys($question->options)),
             $question instanceof Score => $this->fakeScoreAnswer($question->levels),
         };
     }
@@ -118,11 +119,11 @@ class FakeClassificationGateway implements ClassificationGateway
     /**
      * @param  list<string>  $options
      */
-    protected function fakeCategoryAnswer(array $options): CategoryAnswer
+    protected function fakeChoiceAnswer(array $options): ChoiceAnswer
     {
         $probabilities = $this->randomDistribution($options);
 
-        return new CategoryAnswer(
+        return new ChoiceAnswer(
             array_search(max($probabilities), $probabilities, true),
             $probabilities,
             round(max($probabilities), 3),

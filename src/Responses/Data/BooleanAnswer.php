@@ -2,10 +2,7 @@
 
 namespace Laravel\Ai\Responses\Data;
 
-use Illuminate\Contracts\Support\Arrayable;
-use JsonSerializable;
-
-class BooleanAnswer implements Arrayable, JsonSerializable
+class BooleanAnswer extends Answer
 {
     /**
      * Create a new boolean answer instance.
@@ -30,13 +27,5 @@ class BooleanAnswer implements Arrayable, JsonSerializable
     public function toArray(): array
     {
         return ['probability' => $this->probability];
-    }
-
-    /**
-     * Get the JSON serializable representation of the instance.
-     */
-    public function jsonSerialize(): mixed
-    {
-        return $this->toArray();
     }
 }

@@ -5,7 +5,7 @@ namespace Laravel\Ai\Classification;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Question;
 
-final readonly class Category implements Question
+final readonly class Choice implements Question
 {
     /**
      * Create a new single-choice question whose answer is one of the given options.
@@ -20,12 +20,12 @@ final readonly class Category implements Question
         public array $options,
     ) {
         if (count($options) < 2) {
-            throw new InvalidArgumentException('A category question requires at least two options.');
+            throw new InvalidArgumentException('A choice question requires at least two options.');
         }
 
         foreach (array_keys($options) as $option) {
             if (! is_string($option)) {
-                throw new InvalidArgumentException('Category options must be keyed by option name.');
+                throw new InvalidArgumentException('Choice options must be keyed by option name.');
             }
         }
     }
@@ -36,7 +36,7 @@ final readonly class Category implements Question
     public function toArray(): array
     {
         return [
-            'type' => 'category',
+            'type' => 'choice',
             'instructions' => $this->instructions,
             'options' => $this->options,
         ];
