@@ -3,15 +3,20 @@
 namespace Laravel\Ai\Streaming\Events;
 
 use Illuminate\Support\Collection;
+use Laravel\Ai\Responses\Data\Step;
 use Laravel\Ai\Responses\Data\Usage;
 
 class StreamEnd extends StreamEvent
 {
+    /**
+     * @param  Collection<int, Step>  $steps  replay state for the completed turn; never serialized to clients
+     */
     public function __construct(
         public string $id,
         public string $reason,
         public Usage $usage,
         public int $timestamp,
+        public Collection $steps = new Collection,
     ) {
         //
     }

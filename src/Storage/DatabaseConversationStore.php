@@ -23,6 +23,7 @@ use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Responses\Data\Step;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 
@@ -100,8 +101,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             'role' => 'user',
             'content' => $message->content,
             'attachments' => $message->attachments->toJson(),
-            'tool_calls' => '[]',
-            'tool_results' => '[]',
+            'steps' => '[]',
             'usage' => '[]',
             'meta' => '[]',
             'approval_state' => null,
@@ -121,16 +121,10 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
         $now = now();
 
-        $toolResults = $response->toolResults->values();
+        $steps = $this->stepsFor($prompt, $response);
 
-        if ($prompt->hasApprovalDecisions()) {
-            $existing = $this->existingToolResultIds($conversationId);
-
-            $toolResults = $toolResults->reject(fn (ToolResult $result) => in_array($result->id, $existing, true))->values();
-
-            if (blank($response->text) && $response->toolCalls->isEmpty() && $toolResults->isEmpty()) {
-                return null;
-            }
+        if ($prompt->hasApprovalDecisions() && blank($response->text) && $steps->every(fn (array $step) => $step['tool_calls'] === [] && $step['tool_results'] === [])) {
+            return null;
         }
 
         $this->table($this->messagesTable())->insert($this->messageAttributes($messageId, $conversationId, $participantType, $participantId, $now, [
@@ -138,8 +132,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             'role' => 'assistant',
             'content' => $response->text,
             'attachments' => '[]',
-            'tool_calls' => json_encode($response->toolCalls->values()),
-            'tool_results' => json_encode($toolResults),
+            'steps' => $steps->toJson(),
             'usage' => json_encode($response->usage),
             'meta' => json_encode($this->messageMeta($response)),
             'approval_state' => $this->approvalState($response),
@@ -151,21 +144,28 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     }
 
     /**
-     * Get every tool-result ID recorded on the conversation's approval-paused rows, the only rows a resume can duplicate.
+     * Serialize the turn's steps, one entry per model round-trip.
      *
-     * @return array<int, string>
+     * @return Collection<int, array{content: string, tool_calls: array, tool_results: array, provider_blocks: array}>
      */
-    protected function existingToolResultIds(string $conversationId): array
+    protected function stepsFor(AgentPrompt $prompt, AgentResponse $response): Collection
     {
-        return $this->table($this->messagesTable())
-            ->where('conversation_id', $conversationId)
-            ->where('role', 'assistant')
-            ->whereNotNull('approval_state')
-            ->where('tool_results', '!=', '[]')
-            ->pluck('tool_results')
-            ->flatMap(fn ($results) => collect(json_decode($results, true))->pluck('id'))
-            ->filter()
-            ->all();
+        if ($response->steps->isNotEmpty()) {
+            return $response->steps->values()->map(fn (Step $step): array => [
+                'content' => $step->text,
+                'tool_calls' => array_values($step->toolCalls),
+                'tool_results' => array_values($step->toolResults),
+                'provider_blocks' => $step->providerContentBlocks,
+            ]);
+        }
+
+        // A resume that ran no step only carries the approval results storeApprovalResults() already wrote to the paused row...
+        return collect([[
+            'content' => $response->text,
+            'tool_calls' => $response->toolCalls->values()->all(),
+            'tool_results' => $prompt->hasApprovalDecisions() ? [] : $response->toolResults->values()->all(),
+            'provider_blocks' => [],
+        ]]);
     }
 
     /**
@@ -203,7 +203,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     {
         $reasons = collect(((array) json_decode($record->approval_state ?? 'null', true))['pending'] ?? []);
 
-        return collect(json_decode($record->tool_calls ?? '[]', true) ?: [])
+        return $this->decodedSteps($record)->flatMap(fn (array $step) => $step['tool_calls'])
             ->filter(fn (array $toolCall) => $reasons->has($toolCall['id'] ?? ''))
             ->map(fn (array $toolCall) => new PendingApproval(
                 $toolCall['id'],
@@ -242,17 +242,13 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     }
 
     /**
-     * Build the message meta payload, tucking a paused turn's raw provider blocks alongside the response meta.
+     * Build the message meta payload from the response meta.
      *
      * @return array<string, mixed>
      */
     protected function messageMeta(AgentResponse $response): array
     {
         $meta = (array) json_decode(json_encode($response->meta), true);
-
-        if (filled($response->pausedProviderContentBlocks())) {
-            $meta['provider_steps'] = $response->pausedSteps();
-        }
 
         if (filled($response->reasoning)) {
             $meta['reasoning'] = $response->reasoning;
@@ -276,45 +272,87 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             ->reverse()
             ->values();
 
-        // A call resolved after an approval pause lands on a later row than the call, so gather every result ID across the window to keep those calls while dropping legacy dangling ones...
-        $resolvedCallIds = $records
-            ->flatMap(fn ($record) => collect(json_decode((string) $record->tool_results, true))->pluck('id'))
-            ->filter()
-            ->all();
+        $replayFrom = $this->rawBlocksReplayFrom($records);
 
-        return $records
-            ->flatMap(function ($record) use ($resolvedCallIds): array {
-                $toolCalls = collect(json_decode((string) $record->tool_calls, true))->values();
-                $toolResults = collect(json_decode((string) $record->tool_results, true))->values();
+        return $records->flatMap(fn (object $record, int $index): array => $record->role === 'user'
+            ? [$this->userMessageFrom($record)]
+            : $this->assistantMessagesFrom($record, $index >= $replayFrom));
+    }
 
-                if ($record->role === 'user') {
-                    $attachments = $this->rehydrateAttachments($record->attachments);
+    /**
+     * Get the index of the first row whose raw provider blocks are replayed, or a past-the-end index when none are.
+     *
+     * @param  Collection<int, object>  $records
+     */
+    protected function rawBlocksReplayFrom(Collection $records): int
+    {
+        // Providers bind replayed blocks to the prefix they were produced against, so only the turn still awaiting a decision replays them, back to its user message...
+        if ($records->last()?->role !== 'assistant' || $this->pausedCallIds($records->last()) === []) {
+            return $records->count();
+        }
 
-                    if ($attachments->isNotEmpty()) {
-                        return [new UserMessage($record->content, $attachments)];
-                    }
+        $lastUser = $records->reverse()->search(fn (object $record): bool => $record->role === 'user');
 
-                    return [new Message('user', $record->content)];
-                }
+        return $lastUser === false ? 0 : $lastUser + 1;
+    }
 
-                if ($toolCalls->isNotEmpty()) {
-                    return $this->reconstructToolTurn($record, $toolCalls, $toolResults, $resolvedCallIds);
-                }
+    /**
+     * Rebuild a stored user turn.
+     */
+    protected function userMessageFrom(object $record): Message
+    {
+        $attachments = $this->rehydrateAttachments($record->attachments);
 
-                if ($toolResults->isNotEmpty()) {
-                    $messages = [new ToolResultMessage($toolResults->map(ToolResult::fromArray(...)))];
+        return $attachments->isNotEmpty()
+            ? new UserMessage($record->content, $attachments)
+            : new Message('user', $record->content);
+    }
 
-                    if (filled($record->content)) {
-                        $messages[] = new AssistantMessage($record->content);
-                    }
+    /**
+     * Rebuild a stored assistant turn step by step, so every tool result answers the message that made its call.
+     *
+     * @return array<int, Message>
+     */
+    protected function assistantMessagesFrom(object $record, bool $replayRawBlocks): array
+    {
+        $pending = $this->pausedCallIds($record);
+        $provider = json_decode($record->meta ?? '{}', true)['provider'] ?? null;
 
-                    return $messages;
-                }
+        return $this->decodedSteps($record)->flatMap(function (array $step) use ($pending, $provider, $replayRawBlocks): array {
+            $answered = array_column($step['tool_results'], 'id');
 
-                return [new AssistantMessage($record->content)];
-            })
-            ->skipWhile(fn (Message $message) => $message instanceof ToolResultMessage)
-            ->values();
+            $toolCalls = collect($step['tool_calls'])
+                ->filter(fn (array $toolCall) => in_array($toolCall['id'] ?? null, $answered, true) || in_array($toolCall['id'] ?? null, $pending, true))
+                ->map(ToolCall::fromArray(...))
+                ->values();
+
+            $providerBlocks = $replayRawBlocks ? $step['provider_blocks'] : [];
+
+            $messages = $step['content'] === '' && $toolCalls->isEmpty() && $providerBlocks === []
+                ? []
+                : [new AssistantMessage($step['content'], $toolCalls, $providerBlocks, $provider)];
+
+            if ($step['tool_results'] !== []) {
+                $messages[] = new ToolResultMessage(collect($step['tool_results'])->map(ToolResult::fromArray(...))->values());
+            }
+
+            return $messages;
+        })->all();
+    }
+
+    /**
+     * Decode a stored row's steps.
+     *
+     * @return Collection<int, array{content: string, tool_calls: array, tool_results: array, provider_blocks: array}>
+     */
+    protected function decodedSteps(object $record): Collection
+    {
+        return collect(json_decode($record->steps ?? '[]', true) ?: [])->map(fn (array $step): array => [
+            'content' => (string) ($step['content'] ?? ''),
+            'tool_calls' => array_values($step['tool_calls'] ?? []),
+            'tool_results' => array_values($step['tool_results'] ?? []),
+            'provider_blocks' => $step['provider_blocks'] ?? [],
+        ])->values();
     }
 
     /**
@@ -338,147 +376,23 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     public function pendingApprovalsFor(string $conversationId): array
     {
-        /** @var object{tool_calls: string, tool_results: string, approval_state: ?string}|null $newest */
         $newest = $this->table($this->messagesTable())
             ->where('conversation_id', $conversationId)
             ->orderByDesc('id')
-            ->first(['tool_calls', 'tool_results', 'approval_state']);
+            ->first(['steps', 'approval_state']);
 
-        if ($newest === null) {
+        if ($newest === null || $this->pausedCallIds($newest) === []) {
             return [];
         }
 
-        $reasons = collect(data_get(json_decode($newest->approval_state ?? '{}', true), 'pending'));
+        $answered = $this->decodedSteps($newest)
+            ->flatMap(fn (array $step) => array_column($step['tool_results'], 'id'))
+            ->all();
 
-        if ($reasons->isEmpty()) {
-            return [];
-        }
-
-        $answered = Collection::fromJson($newest->tool_results)->pluck('id');
-
-        return Collection::fromJson($newest->tool_calls)
-            ->map(ToolCall::fromArray(...))
-            ->filter(fn (ToolCall $toolCall) => $reasons->has($toolCall->id) && $answered->doesntContain($toolCall->id))
-            ->map(fn (ToolCall $toolCall) => new PendingApproval(
-                $toolCall->id,
-                $toolCall->name,
-                $toolCall->arguments,
-                $reasons->get($toolCall->id),
-            ))
+        return $this->pendingApprovalsIn($newest)
+            ->reject(fn (PendingApproval $approval) => in_array($approval->id, $answered, true))
             ->values()
             ->all();
-    }
-
-    /**
-     * Rebuild the messages for a stored assistant turn that made tool calls, keeping a pause distinct from a completed turn.
-     *
-     * @param  Collection<int, array<string, mixed>>  $toolCalls
-     * @param  Collection<int, array<string, mixed>>  $toolResults
-     * @param  array<int, string>  $resolvedCallIds  Ids of calls answered anywhere in the window.
-     * @return array<int, Message>
-     */
-    protected function reconstructToolTurn(object $record, Collection $toolCalls, Collection $toolResults, array $resolvedCallIds = []): array
-    {
-        $callIds = $toolCalls->pluck('id')->all();
-
-        [$priorResults, $ownResults] = $toolResults->partition(
-            fn (array $toolResult) => ! in_array($toolResult['id'], $callIds, true)
-        );
-
-        $resultsById = $ownResults->keyBy('id');
-
-        [$resolvedCalls, $pendingCalls] = $toolCalls->partition(
-            fn (array $toolCall) => filled($toolCall['id'] ?? null) && $resultsById->has($toolCall['id'])
-        );
-
-        $ownResults = $resolvedCalls->map(fn (array $toolCall) => $resultsById[$toolCall['id']])->values();
-        $resolvedCalls = $resolvedCalls->values();
-        $pendingCalls = $pendingCalls->values();
-
-        $pausedCallIds = $this->pausedCallIds($record);
-
-        $isPause = $pendingCalls->isNotEmpty()
-            && $pendingCalls->every(fn (array $toolCall) => in_array($toolCall['id'], $pausedCallIds, true));
-
-        $messages = [];
-
-        if ($priorResults->isNotEmpty()) {
-            $messages[] = new ToolResultMessage($priorResults->map(ToolResult::fromArray(...))->values());
-        }
-
-        $meta = (array) json_decode($record->meta ?? '[]', true);
-
-        $provider = $meta['provider'] ?? null;
-
-        if ($isPause && filled($providerSteps = $meta['provider_steps'] ?? [])) {
-            return array_merge($messages, $this->reconstructPausedTurn($record, $providerSteps, $toolCalls, $ownResults, $provider));
-        }
-
-        // Rows written before per-step replay state carry only the paused step's blocks, so the whole turn replays as one message...
-        if ($isPause && filled($providerContentBlocks = $meta['provider_content_blocks'] ?? [])) {
-            $messages[] = new AssistantMessage($record->content, $toolCalls->map(ToolCall::fromArray(...))->values(), $providerContentBlocks, $provider);
-
-            if ($ownResults->isNotEmpty()) {
-                $messages[] = new ToolResultMessage($ownResults->map(ToolResult::fromArray(...))->values());
-            }
-
-            return $messages;
-        }
-
-        // Calls already answered this turn are replayed with their results...
-        if ($resolvedCalls->isNotEmpty()) {
-            $messages[] = new AssistantMessage('', $resolvedCalls->map(ToolCall::fromArray(...))->values());
-            $messages[] = new ToolResultMessage($ownResults->map(ToolResult::fromArray(...))->values());
-        }
-
-        $keptCalls = $pendingCalls->filter(
-            fn (array $toolCall) => in_array($toolCall['id'], $pausedCallIds, true)
-                || in_array($toolCall['id'], $resolvedCallIds, true)
-        )->values();
-
-        if ($keptCalls->isNotEmpty()) {
-            $messages[] = new AssistantMessage($record->content, $keptCalls->map(ToolCall::fromArray(...))->values());
-        } elseif (filled($record->content)) {
-            $messages[] = new AssistantMessage($record->content);
-        }
-
-        return $messages;
-    }
-
-    /**
-     * Replay a paused turn one assistant step at a time, each carrying the raw provider blocks it produced.
-     *
-     * @param  array<int, array{blocks?: array<int, array<string, mixed>>, tool_call_ids?: array<int, string>}>  $providerSteps
-     * @param  Collection<int, array<string, mixed>>  $toolCalls
-     * @param  Collection<int, array<string, mixed>>  $ownResults
-     * @return array<int, Message>
-     */
-    protected function reconstructPausedTurn(object $record, array $providerSteps, Collection $toolCalls, Collection $ownResults, ?string $provider): array
-    {
-        $callsById = $toolCalls->keyBy('id');
-        $resultsById = $ownResults->keyBy('id');
-        $lastStep = array_key_last($providerSteps);
-
-        $messages = [];
-
-        foreach ($providerSteps as $index => $step) {
-            $stepCallIds = collect($step['tool_call_ids'] ?? []);
-
-            $messages[] = new AssistantMessage(
-                $index === $lastStep ? $record->content : '',
-                $stepCallIds->map(fn (string $id) => $callsById[$id] ?? null)->filter()->map(ToolCall::fromArray(...))->values(),
-                $step['blocks'] ?? [],
-                $provider,
-            );
-
-            $stepResults = $stepCallIds->map(fn (string $id) => $resultsById[$id] ?? null)->filter()->values();
-
-            if ($stepResults->isNotEmpty()) {
-                $messages[] = new ToolResultMessage($stepResults->map(ToolResult::fromArray(...))->values());
-            }
-        }
-
-        return $messages;
     }
 
     /**
@@ -546,19 +460,25 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
                 );
             }
 
-            $existing = collect(json_decode($row->tool_results, true) ?: []);
+            $steps = $this->decodedSteps($row)->map(function (array $step) use ($toolResults): array {
+                $callIds = array_column($step['tool_calls'], 'id');
+                $answered = array_column($step['tool_results'], 'id');
 
-            $merged = $existing->merge(
-                collect($toolResults)->reject(fn (ToolResult $result) => $existing->contains('id', $result->id))
-            );
+                foreach ($toolResults as $result) {
+                    if (in_array($result->id, $callIds, true) && ! in_array($result->id, $answered, true)) {
+                        $step['tool_results'][] = $result;
+                    }
+                }
+
+                return $step;
+            });
 
             $pending = collect(((array) json_decode($row->approval_state ?? 'null', true))['pending'] ?? [])->except($resultIds);
 
-            // Keep the marker after resolution so the resume dedup scan stays bounded to ever-paused rows, while each call's outcome lives in the merged tool results...
             $this->table($this->messagesTable())
                 ->where('id', $row->id)
                 ->update([
-                    'tool_results' => $merged->values()->toJson(),
+                    'steps' => $steps->toJson(),
                     'approval_state' => json_encode(['pending' => $pending->all()]),
                     'updated_at' => now(),
                 ]);

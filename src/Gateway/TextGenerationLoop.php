@@ -261,8 +261,6 @@ class TextGenerationLoop
             $allMessages = $this->settleAbandonedToolCalls($messages);
         }
 
-        $providerSteps = [];
-
         for ($step = 0; $step < $maxSteps; $step++) {
             $pending = new PendingStep(
                 number: $step,
@@ -359,11 +357,6 @@ class TextGenerationLoop
 
             $allMessages[] = $this->buildAssistantMessage($result);
 
-            $providerSteps[] = [
-                'blocks' => $result->providerContentBlocks,
-                'tool_call_ids' => array_map(fn (ToolCall $toolCall): string => $toolCall->id, $result->toolCalls),
-            ];
-
             if (filled($toolResults)) {
                 $allMessages[] = new ToolResultMessage(collect($toolResults));
             }
@@ -373,8 +366,7 @@ class TextGenerationLoop
                     $this->generateEventId(),
                     $pendingApprovals,
                     time(),
-                    $providerSteps,
-                    $result->providerContentBlocks,
+                    $steps,
                 ))->withInvocationId($invocationId);
 
                 break;
@@ -394,6 +386,7 @@ class TextGenerationLoop
             ($finalReason ?? FinishReason::Stop)->value,
             $accumulatedUsage,
             time(),
+            $steps,
         ))->withInvocationId($invocationId);
     }
 
@@ -988,6 +981,7 @@ class TextGenerationLoop
             $result->usage,
             $result->meta,
             $result->reasoning,
+            $result->providerContentBlocks,
         ))->withRawResponse($result->raw);
     }
 

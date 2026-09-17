@@ -87,8 +87,7 @@ test('conversation can retrieve messages using relationship', function (): void 
             'role' => 'user',
             'content' => 'Hello',
             'attachments' => '[]',
-            'tool_calls' => '[]',
-            'tool_results' => '[]',
+            'steps' => '[]',
             'usage' => '[]',
             'meta' => '[]',
             'created_at' => now(),
@@ -99,6 +98,42 @@ test('conversation can retrieve messages using relationship', function (): void 
     expect($conversation->messages)->toHaveCount(1)
         ->and($conversation->messages->first()->content)->toBe('Hello')
         ->and($conversation->messages->first()->attachments)->toBeArray();
+});
+
+test('message tool calls and results flatten across steps in order and serialize with the model', function (): void {
+    $user = ConversationRelationshipUser::create(['name' => 'Taylor']);
+
+    $conversation = Conversation::create([
+        'id' => 'conversation-1',
+        'participant_type' => $user->getMorphClass(),
+        'participant_id' => $user->id,
+        'title' => 'Conversation',
+    ]);
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversation->id,
+        'participant_type' => $user->getMorphClass(),
+        'participant_id' => $user->id,
+        'agent' => 'Agent',
+        'role' => 'assistant',
+        'content' => 'Done',
+        'attachments' => '[]',
+        'steps' => json_encode([
+            ['content' => '', 'tool_calls' => [['id' => 'call-1', 'name' => 'a', 'arguments' => []]], 'tool_results' => [['id' => 'call-1', 'name' => 'a', 'arguments' => [], 'result' => 'x']], 'provider_blocks' => []],
+            ['content' => 'Done', 'tool_calls' => [['id' => 'call-2', 'name' => 'b', 'arguments' => []]], 'tool_results' => [['id' => 'call-2', 'name' => 'b', 'arguments' => [], 'result' => 'y']], 'provider_blocks' => []],
+        ]),
+        'usage' => '[]',
+        'meta' => '[]',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $message = $conversation->messages->first();
+
+    expect(array_column($message->tool_calls, 'id'))->toBe(['call-1', 'call-2'])
+        ->and(array_column($message->tool_results, 'id'))->toBe(['call-1', 'call-2'])
+        ->and($message->toArray())->toHaveKeys(['tool_calls', 'tool_results']);
 });
 
 test('conversation can retrieve its participant using relationship', function (): void {

@@ -13,6 +13,7 @@ class Step implements Arrayable, JsonSerializable
     /**
      * @param  array<int, ToolCall>  $toolCalls
      * @param  array<int, ToolResult>  $toolResults
+     * @param  array<int, array<string, mixed>>  $providerContentBlocks
      */
     public function __construct(
         public string $text,
@@ -22,6 +23,7 @@ class Step implements Arrayable, JsonSerializable
         public Usage $usage,
         public Meta $meta,
         public string $reasoning = '',
+        public array $providerContentBlocks = [],
     ) {}
 
     /**
@@ -37,6 +39,7 @@ class Step implements Arrayable, JsonSerializable
             'usage' => $this->usage,
             'meta' => $this->meta,
             'reasoning' => $this->reasoning,
+            'provider_blocks' => $this->providerContentBlocks,
         ];
     }
 

@@ -4,7 +4,6 @@ namespace Laravel\Ai\Responses;
 
 use Illuminate\Support\Collection;
 use Laravel\Ai\Approvals\PendingApproval;
-use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
 
@@ -78,40 +77,5 @@ class AgentResponse extends TextResponse
         $callback($this);
 
         return $this;
-    }
-
-    /**
-     * Get every assistant step of a paused turn with the raw provider state needed to replay it.
-     *
-     * @return array<int, array{blocks: array<int, array<string, mixed>>, tool_call_ids: array<int, string>}>
-     */
-    public function pausedSteps(): array
-    {
-        if (! $this->hasPendingApprovals()) {
-            return [];
-        }
-
-        return $this->messages
-            ->whereInstanceOf(AssistantMessage::class)
-            ->map(fn (AssistantMessage $message): array => [
-                'blocks' => $message->providerContentBlocks,
-                'tool_call_ids' => $message->toolCalls->pluck('id')->all(),
-            ])
-            ->values()
-            ->all();
-    }
-
-    /**
-     * Get the raw provider replay state for the paused assistant turn, if any.
-     *
-     * @return array<int, array<string, mixed>>
-     */
-    public function pausedProviderContentBlocks(): array
-    {
-        if (! $this->hasPendingApprovals()) {
-            return [];
-        }
-
-        return $this->messages->whereInstanceOf(AssistantMessage::class)->last()?->providerContentBlocks ?? [];
     }
 }

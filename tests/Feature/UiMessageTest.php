@@ -397,8 +397,7 @@ describe('hydrating useChat from stored messages', function () {
                 'id' => 'msg-2',
                 'role' => 'assistant',
                 'content' => null,
-                'tool_calls' => [['id' => 'call-1', 'name' => 'getWeather', 'arguments' => ['city' => 'Lisbon']]],
-                'tool_results' => [['id' => 'call-1', 'name' => 'getWeather', 'arguments' => ['city' => 'Lisbon'], 'result' => 'Sunny']],
+                'steps' => [['tool_calls' => [['id' => 'call-1', 'name' => 'getWeather', 'arguments' => ['city' => 'Lisbon']]], 'tool_results' => [['id' => 'call-1', 'name' => 'getWeather', 'arguments' => ['city' => 'Lisbon'], 'result' => 'Sunny']]]],
             ]),
         ]);
 
@@ -417,8 +416,7 @@ describe('hydrating useChat from stored messages', function () {
                 'id' => 'msg-2',
                 'role' => 'assistant',
                 'content' => null,
-                'tool_calls' => [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt']]],
-                'tool_results' => [],
+                'steps' => [['tool_calls' => [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt']]], 'tool_results' => []]],
                 'approval_state' => ['pending' => ['call-1' => 'Deletes a file.']],
             ]),
         ]);
@@ -433,8 +431,7 @@ describe('hydrating useChat from stored messages', function () {
                 'id' => 'msg-2',
                 'role' => 'assistant',
                 'content' => null,
-                'tool_calls' => [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt']]],
-                'tool_results' => [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt'], 'result' => null, 'denied' => true]],
+                'steps' => [['tool_calls' => [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt']]], 'tool_results' => [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt'], 'result' => null, 'denied' => true]]]],
                 'approval_state' => ['pending' => []],
             ]),
         ]);

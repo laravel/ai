@@ -18,8 +18,7 @@ class StoredMessage implements Arrayable, JsonSerializable
     /**
      * @param  array<string, mixed>  $usage
      * @param  array<string, mixed>  $meta
-     * @param  list<array<string, mixed>>  $toolCalls
-     * @param  list<array<string, mixed>>  $toolResults
+     * @param  list<array<string, mixed>>  $steps
      * @param  array<string, mixed>|null  $approvalState
      * @param  list<array<string, mixed>>  $attachments
      */
@@ -30,8 +29,7 @@ class StoredMessage implements Arrayable, JsonSerializable
         public ?CarbonInterface $createdAt = null,
         public array $usage = [],
         public array $meta = [],
-        public array $toolCalls = [],
-        public array $toolResults = [],
+        public array $steps = [],
         public ?array $approvalState = null,
         public array $attachments = [],
     ) {}
@@ -50,8 +48,7 @@ class StoredMessage implements Arrayable, JsonSerializable
             createdAt: blank($record['created_at'] ?? null) ? null : Carbon::parse($record['created_at']),
             usage: static::decoded($record['usage'] ?? null),
             meta: static::decoded($record['meta'] ?? null),
-            toolCalls: array_values(static::decoded($record['tool_calls'] ?? null)),
-            toolResults: array_values(static::decoded($record['tool_results'] ?? null)),
+            steps: array_values(static::decoded($record['steps'] ?? null)),
             approvalState: blank($record['approval_state'] ?? null) ? null : static::decoded($record['approval_state']),
             attachments: array_values(static::decoded($record['attachments'] ?? null)),
         );
@@ -71,8 +68,7 @@ class StoredMessage implements Arrayable, JsonSerializable
             'created_at' => $this->createdAt?->toJSON(),
             'usage' => $this->usage,
             'meta' => $this->meta,
-            'tool_calls' => $this->toolCalls,
-            'tool_results' => $this->toolResults,
+            'steps' => $this->steps,
             'approval_state' => $this->approvalState,
             'attachments' => $this->attachments,
         ];
@@ -84,6 +80,26 @@ class StoredMessage implements Arrayable, JsonSerializable
     public function jsonSerialize(): array
     {
         return $this->toArray();
+    }
+
+    /**
+     * The tool calls made across every step of the turn, in step order.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function toolCalls(): array
+    {
+        return array_merge([], ...array_column($this->steps, 'tool_calls'));
+    }
+
+    /**
+     * The tool results recorded across every step of the turn, in step order.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function toolResults(): array
+    {
+        return array_merge([], ...array_column($this->steps, 'tool_results'));
     }
 
     /**
