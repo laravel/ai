@@ -441,3 +441,31 @@ describe('usage tracking', function (): void {
         'RECITATION maps to ContentFilter' => ['RECITATION', FinishReason::ContentFilter],
     ]);
 });
+
+test('streaming converts grounding byte offsets into character offsets', function (): void {
+    $finalChunk = $this->geminiChunkWithUsage([['text' => ' won.']], 10, 5);
+    $finalChunk['candidates'][0]['groundingMetadata'] = [
+        'groundingChunks' => [
+            ['web' => ['uri' => 'https://example.com/cafe', 'title' => 'Café']],
+        ],
+        'groundingSupports' => [
+            ['segment' => ['startIndex' => 0, 'endIndex' => 10], 'groundingChunkIndices' => [0]],
+        ],
+    ];
+
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response(
+            body: $this->ssePayload([
+                $this->geminiChunk([['text' => 'Café Ärger']]),
+                $finalChunk,
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $citations = array_values(array_filter($this->collectStreamEvents(), fn ($e): bool => $e instanceof CitationEvent));
+
+    expect($citations[0]->citation->ranges->all())->toBe([['start' => 0, 'end' => 8]])
+        ->and($citations[0]->citation->endIndex)->toBe(8);
+});
