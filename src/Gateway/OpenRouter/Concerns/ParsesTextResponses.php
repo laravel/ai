@@ -11,6 +11,7 @@ use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Responses\Data\UrlCitation;
 use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
@@ -66,11 +67,13 @@ trait ParsesTextResponses
     }
 
     /**
-     * Extract URL citations from the message annotations array.
+     * Extract URL citations from the message annotations array, merging into the given citations.
+     *
+     * @param  Collection<int, UrlCitation>|null  $citations
      */
-    protected function extractCitations(array $message): Collection
+    protected function extractCitations(array $message, ?Collection $citations = null): Collection
     {
-        $citations = new Collection;
+        $citations ??= new Collection;
 
         foreach ($message['annotations'] ?? [] as $annotation) {
             $urlCitation = $annotation['url_citation'] ?? [];

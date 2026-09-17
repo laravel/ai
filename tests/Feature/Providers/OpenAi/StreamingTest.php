@@ -15,6 +15,7 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
+use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 
 beforeEach(function (): void {
@@ -55,10 +56,20 @@ test('streaming emits citation events for web search url citations', function ()
             body: $this->ssePayload([
                 $this->responseCreated(),
                 $this->outputTextDelta('Here are sources'),
-                ['type' => 'response.output_text.annotation.added', 'item_id' => 'msg_1', 'output_index' => 0, 'content_index' => 0, 'annotation_index' => 0, 'annotation' => ['type' => 'url_citation', 'url' => 'https://example.com/one', 'title' => 'Example One', 'start_index' => 0, 'end_index' => 10]],
-                ['type' => 'response.output_text.annotation.added', 'item_id' => 'msg_1', 'output_index' => 0, 'content_index' => 0, 'annotation_index' => 1, 'annotation' => ['type' => 'url_citation', 'url' => 'https://example.com/two', 'title' => 'Example Two', 'start_index' => 11, 'end_index' => 25]],
                 $this->outputTextDone('Here are sources'),
-                $this->responseCompleted(10, 5),
+                $this->responseCompleted(10, 5, output: [[
+                    'type' => 'message',
+                    'status' => 'completed',
+                    'role' => 'assistant',
+                    'content' => [[
+                        'type' => 'output_text',
+                        'text' => 'Here are sources',
+                        'annotations' => [
+                            ['type' => 'url_citation', 'url' => 'https://example.com/one', 'title' => 'Example One', 'start_index' => 0, 'end_index' => 10],
+                            ['type' => 'url_citation', 'url' => 'https://example.com/two', 'title' => 'Example Two', 'start_index' => 11, 'end_index' => 25],
+                        ],
+                    ]],
+                ]]),
             ]),
             status: 200,
             headers: ['Content-Type' => 'text/event-stream'],
@@ -272,6 +283,86 @@ test('streaming finish reason maps correctly', function (string $status, string 
     'unknown status maps to Unknown' => ['mystery_status', 'message', FinishReason::Unknown],
     'completed unknown type maps to Unknown' => ['completed', 'mystery_output', FinishReason::Unknown],
 ]);
+
+test('streaming emits one citation per url carrying every range it supports', function (): void {
+    Http::fake([
+        'api.openai.com/*' => Http::response(
+            body: $this->ssePayload([
+                $this->responseCreated(),
+                $this->outputTextDelta('Here are sources'),
+                $this->outputTextDone('Here are sources'),
+                $this->responseCompleted(10, 5, output: [[
+                    'type' => 'message',
+                    'status' => 'completed',
+                    'content' => [[
+                        'type' => 'output_text',
+                        'text' => 'Here are sources',
+                        'annotations' => [
+                            ['type' => 'url_citation', 'url' => 'https://example.com/a', 'title' => 'A', 'start_index' => 0, 'end_index' => 5],
+                            ['type' => 'url_citation', 'url' => 'https://example.com/a', 'title' => 'A', 'start_index' => 6, 'end_index' => 9],
+                        ],
+                    ]],
+                ]]),
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $citations = array_values(array_filter($this->collectStreamEvents(), fn ($e): bool => $e instanceof CitationEvent));
+
+    expect($citations)->toHaveCount(1)
+        ->and($citations[0]->citation->url)->toBe('https://example.com/a')
+        ->and($citations[0]->citation->ranges->all())->toBe([['start' => 0, 'end' => 5], ['start' => 6, 'end' => 9]]);
+});
+
+test('streamed citations match the citations a non streamed run reports', function (): void {
+    $output = [[
+        'type' => 'message',
+        'status' => 'completed',
+        'content' => [[
+            'type' => 'output_text',
+            'text' => 'Here are sources',
+            'annotations' => [
+                ['type' => 'url_citation', 'url' => 'https://example.com/a', 'title' => 'A', 'start_index' => 0, 'end_index' => 5],
+                ['type' => 'url_citation', 'url' => 'https://example.com/b', 'title' => 'B', 'start_index' => 6, 'end_index' => 9],
+                ['type' => 'url_citation', 'url' => 'https://example.com/a', 'title' => 'A', 'start_index' => 10, 'end_index' => 16],
+            ],
+        ]],
+    ]];
+
+    Http::fake([
+        'api.openai.com/*' => Http::sequence()
+            ->push(
+                $this->ssePayload([
+                    $this->responseCreated(),
+                    $this->outputTextDelta('Here are sources'),
+                    $this->outputTextDone('Here are sources'),
+                    $this->responseCompleted(10, 5, output: $output),
+                ]),
+                200,
+                ['Content-Type' => 'text/event-stream'],
+            )
+            ->push([
+                'id' => 'resp_1',
+                'status' => 'completed',
+                'model' => 'gpt-5.4',
+                'output' => $output,
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+    ]);
+
+    $stream = (new AssistantAgent)->stream('Hello', provider: 'openai');
+
+    foreach ($stream as $event) {
+        //
+    }
+
+    $prompted = (new AssistantAgent)->prompt('Hello', provider: 'openai');
+
+    expect($stream->citations->map->toArray()->all())
+        ->toBe($prompted->meta->citations->map->toArray()->all());
+});
 
 test('streaming captures cache write tokens from response completed', function (): void {
     Http::fake([
