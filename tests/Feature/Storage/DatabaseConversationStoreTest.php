@@ -469,6 +469,44 @@ test('it round trips tool result failure status through storage', function (): v
         ->and($result->error())->toBe('Tool not found');
 });
 
+test('it stores a tool result without the arguments its call already carries', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        'Write the file',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $response = (new AgentResponse('invocation-1', 'Wrote it.', new Usage, new Meta('openai', 'gpt-5')))
+        ->withSteps(collect([new Step(
+            'Wrote it.',
+            [new ToolCall('call-1', 'WriteFile', ['path' => 'a.txt', 'contents' => 'alpha'], 'result-1')],
+            [new ToolResult('call-1', 'WriteFile', ['path' => 'a.txt', 'contents' => 'alpha'], 'Wrote 5 bytes.', 'result-1')],
+            FinishReason::Stop,
+            new Usage,
+            new Meta('openai', 'gpt-5'),
+        )]));
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $stored = DB::table('agent_conversation_messages')->where('role', 'assistant')->value('steps');
+
+    expect(json_decode($stored, true)[0]['tool_results'][0])->not->toHaveKey('arguments')
+        ->and(json_decode($stored, true)[0]['tool_calls'][0]['arguments'])->toBe(['path' => 'a.txt', 'contents' => 'alpha']);
+
+    $result = $store->getLatestConversationMessages($conversationId, 10)
+        ->first(fn (Message $message): bool => $message instanceof ToolResultMessage)
+        ?->toolResults
+        ->first();
+
+    expect($result->arguments)->toBe(['path' => 'a.txt', 'contents' => 'alpha'])
+        ->and($result->result)->toBe('Wrote 5 bytes.')
+        ->and($result->resultId)->toBe('result-1');
+});
+
 test('it treats tool results stored before the failed flag as successful', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
