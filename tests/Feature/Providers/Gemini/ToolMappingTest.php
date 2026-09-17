@@ -155,7 +155,7 @@ test('tool without a name() method falls back to class basename', function (): v
     });
 });
 
-test('provider tools are sent without function_calling_config', function (): void {
+test('provider tools are sent without functionCallingConfig', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('ok'),
     ]);
@@ -171,11 +171,11 @@ test('provider tools are sent without function_calling_config', function (): voi
 
         return isset($tools[0]['fileSearch']['fileSearchStoreNames'])
             && $tools[0]['fileSearch']['fileSearchStoreNames'] === ['fileSearchStores/store123']
-            && ! isset($body['tool_config']);
+            && ! isset($body['toolConfig']);
     });
 });
 
-test('mixed function and provider tools are sent without tool_config', function (): void {
+test('mixed function and provider tools are sent without toolConfig', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('ok'),
     ]);
@@ -194,7 +194,7 @@ test('mixed function and provider tools are sent without tool_config', function 
 
         return $hasFunctionDeclarations
             && $hasGoogleSearch
-            && ! isset($body['tool_config']);
+            && ! isset($body['toolConfig']);
     });
 });
 
