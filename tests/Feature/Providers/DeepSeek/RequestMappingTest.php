@@ -261,7 +261,7 @@ test('response usage includes cache hit and reasoning tokens', function (): void
         ->and($response->usage->reasoningTokens)->toBe(15);
 });
 
-test('reasoning content from deepseek-reasoner is ignored, only content surfaces', function (): void {
+test('reasoning content from deepseek-reasoner is kept out of the answer text', function (): void {
     Http::fake(['*' => Http::response([
         'id' => 'chatcmpl-reasoner-1',
         'object' => 'chat.completion',
@@ -283,7 +283,8 @@ test('reasoning content from deepseek-reasoner is ignored, only content surfaces
 
     $response = agent()->prompt('What is 2+2?', provider: 'deepseek', model: 'deepseek-reasoner');
 
-    expect($response->text)->toBe('The answer is 4.');
+    expect($response->text)->toBe('The answer is 4.')
+        ->and($response->reasoning)->toBe('Let me think... 2+2 = 4');
 });
 
 test('local image attachment without explicit mime type detects mime from file', function (): void {

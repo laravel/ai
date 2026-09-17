@@ -10,6 +10,9 @@ use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\Error;
+use Laravel\Ai\Streaming\Events\ReasoningDelta;
+use Laravel\Ai\Streaming\Events\ReasoningEnd;
+use Laravel\Ai\Streaming\Events\ReasoningStart;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
@@ -27,6 +30,8 @@ trait HandlesTextStreaming
         $streamBody,
     ): Generator {
         $messageId = $this->generateEventId();
+        $reasoningId = null;
+        $currentReasoning = '';
         $streamStartEmitted = false;
         $textStartEmitted = false;
         $currentText = '';
@@ -73,7 +78,39 @@ trait HandlesTextStreaming
                 ))->withInvocationId($invocationId);
             }
 
+            $thinking = $this->extractStreamedThinking($delta['content'] ?? '');
             $content = $this->extractContentText($delta['content'] ?? '');
+
+            if ($reasoningId !== null && ($content !== '' || isset($delta['tool_calls']))) {
+                yield (new ReasoningEnd(
+                    $this->generateEventId(),
+                    $reasoningId,
+                    time(),
+                ))->withInvocationId($invocationId);
+
+                $reasoningId = null;
+            }
+
+            if ($thinking !== '') {
+                if ($reasoningId === null) {
+                    $reasoningId = $this->generateEventId();
+
+                    yield (new ReasoningStart(
+                        $this->generateEventId(),
+                        $reasoningId,
+                        time(),
+                    ))->withInvocationId($invocationId);
+                }
+
+                $currentReasoning .= $thinking;
+
+                yield (new ReasoningDelta(
+                    $this->generateEventId(),
+                    $reasoningId,
+                    $thinking,
+                    time(),
+                ))->withInvocationId($invocationId);
+            }
 
             if ($content !== '') {
                 if (! $textStartEmitted) {
@@ -123,6 +160,14 @@ trait HandlesTextStreaming
             }
         }
 
+        if ($reasoningId !== null) {
+            yield (new ReasoningEnd(
+                $this->generateEventId(),
+                $reasoningId,
+                time(),
+            ))->withInvocationId($invocationId);
+        }
+
         if ($textStartEmitted) {
             yield (new TextEnd(
                 $this->generateEventId(),
@@ -156,7 +201,40 @@ trait HandlesTextStreaming
             finishReason: $this->extractFinishReason(['finish_reason' => $finishReason ?? '']),
             usage: $usage ?? new Usage(0, 0),
             meta: new Meta($provider->name(), $responseModel),
+            providerContentBlocks: $this->replayableContent($currentReasoning, $currentText),
         );
+    }
+
+    /**
+     * Extract the thinking text from a streamed content delta.
+     */
+    protected function extractStreamedThinking(mixed $content): string
+    {
+        if (! is_array($content)) {
+            return '';
+        }
+
+        return implode('', array_map(
+            fn (array $chunk): string => $this->extractContentText($chunk['thinking'] ?? []),
+            array_filter($content, fn (mixed $chunk): bool => is_array($chunk) && ($chunk['type'] ?? '') === 'thinking'),
+        ));
+    }
+
+    /**
+     * Rebuild the assistant content chunks Mistral requires replayed after a reasoned step.
+     *
+     * @return array<string, mixed>
+     */
+    protected function replayableContent(string $reasoning, string $text): array
+    {
+        if ($reasoning === '') {
+            return [];
+        }
+
+        return ['content' => [
+            ['type' => 'thinking', 'thinking' => [['type' => 'text', 'text' => $reasoning]]],
+            ...$text === '' ? [] : [['type' => 'text', 'text' => $text]],
+        ]];
     }
 
     /**

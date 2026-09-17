@@ -12,6 +12,9 @@ use Laravel\Ai\Responses\Data\UrlCitation;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
+use Laravel\Ai\Streaming\Events\ReasoningDelta;
+use Laravel\Ai\Streaming\Events\ReasoningEnd;
+use Laravel\Ai\Streaming\Events\ReasoningStart;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
@@ -29,6 +32,8 @@ trait HandlesTextStreaming
         $streamBody,
     ): Generator {
         $messageId = $this->generateEventId();
+        $reasoningId = null;
+        $reasoningDetails = [];
         $streamModel = $model;
         $streamStartEmitted = false;
         $textStartEmitted = false;
@@ -86,6 +91,42 @@ trait HandlesTextStreaming
                     $this->generateEventId(),
                     $provider->name(),
                     $streamModel,
+                    time(),
+                ))->withInvocationId($invocationId);
+            }
+
+            foreach ($delta['reasoning_details'] ?? [] as $position => $detail) {
+                $reasoningDetails[$detail['index'] ?? $position] = $this->mergeReasoningDetail(
+                    $reasoningDetails[$detail['index'] ?? $position] ?? [],
+                    $detail,
+                );
+            }
+
+            if ($reasoningId !== null && ((isset($delta['content']) && $delta['content'] !== '') || isset($delta['tool_calls']))) {
+                yield (new ReasoningEnd(
+                    $this->generateEventId(),
+                    $reasoningId,
+                    time(),
+                ))->withInvocationId($invocationId);
+
+                $reasoningId = null;
+            }
+
+            if (isset($delta['reasoning']) && $delta['reasoning'] !== '') {
+                if ($reasoningId === null) {
+                    $reasoningId = $this->generateEventId();
+
+                    yield (new ReasoningStart(
+                        $this->generateEventId(),
+                        $reasoningId,
+                        time(),
+                    ))->withInvocationId($invocationId);
+                }
+
+                yield (new ReasoningDelta(
+                    $this->generateEventId(),
+                    $reasoningId,
+                    $delta['reasoning'],
                     time(),
                 ))->withInvocationId($invocationId);
             }
@@ -158,6 +199,14 @@ trait HandlesTextStreaming
             }
         }
 
+        if ($reasoningId !== null) {
+            yield (new ReasoningEnd(
+                $this->generateEventId(),
+                $reasoningId,
+                time(),
+            ))->withInvocationId($invocationId);
+        }
+
         if ($textStartEmitted) {
             yield (new TextEnd(
                 $this->generateEventId(),
@@ -191,7 +240,26 @@ trait HandlesTextStreaming
             finishReason: $this->extractFinishReason(['finish_reason' => $finishReason ?? '']),
             usage: $usage ?? new Usage(0, 0),
             meta: new Meta($provider->name(), $streamModel),
+            providerContentBlocks: $reasoningDetails ? ['reasoning_details' => array_values($reasoningDetails)] : [],
         );
+    }
+
+    /**
+     * Merge a streamed reasoning detail chunk into the detail accumulated so far.
+     *
+     * @return array<string, mixed>
+     */
+    protected function mergeReasoningDetail(array $accumulated, array $detail): array
+    {
+        $merged = [...$accumulated, ...$detail];
+
+        foreach (['text', 'summary', 'data'] as $field) {
+            if (isset($detail[$field])) {
+                $merged[$field] = ($accumulated[$field] ?? '').$detail[$field];
+            }
+        }
+
+        return $merged;
     }
 
     /**

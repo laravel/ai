@@ -41,14 +41,14 @@ trait XaiHelpers
             'object' => 'response',
             'status' => 'completed',
             'model' => 'grok-4-1-fast-reasoning',
-            'output' => [...$reasoningItems, [
+            'output' => [[
                 'type' => 'message',
                 'status' => 'completed',
                 'role' => 'assistant',
                 'content' => [
                     ['type' => 'output_text', 'text' => $text, 'annotations' => []],
                 ],
-            ]],
+            ], ...$reasoningItems],
             'usage' => [
                 'input_tokens' => 10,
                 'output_tokens' => 5,

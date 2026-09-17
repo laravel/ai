@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\OpenRouter\Concerns;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
+use Laravel\Ai\Gateway\Concerns\JoinsReasoning;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
@@ -15,7 +16,7 @@ use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
 {
-    use DecodesStructuredOutput;
+    use DecodesStructuredOutput, JoinsReasoning;
 
     /**
      * Validate the OpenRouter response data.
@@ -47,6 +48,7 @@ trait ParsesTextResponses
 
         $text = $message['content'] ?? '';
         $citations = $this->extractCitations($message);
+        $reasoningDetails = $message['reasoning_details'] ?? [];
 
         $toolCalls = array_map(fn (array $toolCall): ToolCall => new ToolCall(
             $toolCall['id'] ?? '',
@@ -62,6 +64,23 @@ trait ParsesTextResponses
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model, $citations),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
+            providerContentBlocks: $reasoningDetails ? ['reasoning_details' => $reasoningDetails] : [],
+            reasoning: $this->extractReasoning($message),
+        );
+    }
+
+    /**
+     * Extract the reasoning text from an assistant message.
+     */
+    protected function extractReasoning(array $message): string
+    {
+        if (filled($message['reasoning'] ?? '')) {
+            return (string) $message['reasoning'];
+        }
+
+        return $this->joinReasoning(
+            (new Collection($message['reasoning_details'] ?? []))
+                ->map(fn (array $detail): string => (string) ($detail['text'] ?? $detail['summary'] ?? ''))
         );
     }
 

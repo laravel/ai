@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\Mistral\Concerns;
 
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
+use Laravel\Ai\Gateway\Concerns\JoinsReasoning;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
@@ -13,7 +14,7 @@ use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
 {
-    use DecodesStructuredOutput;
+    use DecodesStructuredOutput, JoinsReasoning;
 
     /**
      * Validate the Mistral response data.
@@ -43,7 +44,8 @@ trait ParsesTextResponses
         $message = $choice['message'] ?? [];
         $model = $data['model'] ?? '';
 
-        $text = $this->extractContentText($message['content'] ?? '');
+        $content = $message['content'] ?? '';
+        $text = $this->extractContentText($content);
         $rawToolCalls = $message['tool_calls'] ?? [];
 
         $toolCalls = array_map(fn (array $toolCall): ToolCall => new ToolCall(
@@ -60,7 +62,24 @@ trait ParsesTextResponses
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
+            providerContentBlocks: is_array($content) ? ['content' => $content] : [],
+            reasoning: $this->extractReasoning($content),
         );
+    }
+
+    /**
+     * Extract the reasoning text from the thinking chunks of a message content value.
+     */
+    protected function extractReasoning(mixed $content): string
+    {
+        if (! is_array($content)) {
+            return '';
+        }
+
+        return $this->joinReasoning(array_map(
+            fn (array $chunk): string => $this->extractContentText($chunk['thinking'] ?? []),
+            array_filter($content, fn (mixed $chunk): bool => is_array($chunk) && ($chunk['type'] ?? '') === 'thinking'),
+        ));
     }
 
     /**

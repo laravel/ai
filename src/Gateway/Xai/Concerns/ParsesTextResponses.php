@@ -79,13 +79,9 @@ trait ParsesTextResponses
      */
     protected function extractText(array $output): string
     {
-        $lastOutput = last($output);
+        $message = (new Collection($output))->where('type', 'message')->last();
 
-        if (is_array($lastOutput)) {
-            return $lastOutput['content'][0]['text'] ?? '';
-        }
-
-        return '';
+        return $message['content'][0]['text'] ?? '';
     }
 
     /**
@@ -140,7 +136,10 @@ trait ParsesTextResponses
      */
     protected function extractFinishReason(array $data): FinishReason
     {
-        $lastOutput = last($data['output'] ?? []);
+        $lastOutput = (new Collection($data['output'] ?? []))
+            ->reject(fn (array $item): bool => ($item['type'] ?? '') === 'reasoning')
+            ->last() ?? [];
+
         $status = $lastOutput['status'] ?? $data['status'] ?? '';
         $type = $lastOutput['type'] ?? '';
 

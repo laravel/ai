@@ -1,7 +1,10 @@
 <?php
 
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\OpenAiAgent;
+use Tests\Fixtures\Agents\RememberingApprovableAgent;
+use Tests\Fixtures\Agents\StructuredAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
 beforeEach(function (): void {
@@ -105,4 +108,49 @@ test('a response without reasoning leaves the reasoning empty', function (): voi
     ]);
 
     expect((new OpenAiAgent)->prompt('Hello')->reasoning)->toBe('');
+});
+
+test('a structured response carries the reasoning that produced it', function (): void {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiReasonedResponse(
+            [openAiReasoningItem('rs_1', 'Gold is Au.')],
+            '{"symbol": "Au"}',
+        ),
+    ]);
+
+    $response = (new StructuredAgent)->prompt('Symbol for gold?', provider: 'openai');
+
+    expect($response->reasoning)->toBe('Gold is Au.')
+        ->and($response->structured)->toBe(['symbol' => 'Au']);
+});
+
+test('a response paused on a tool approval carries the reasoning so far', function (): void {
+    Config::set('ai.conversations.generate_title', false);
+
+    Http::fake([
+        'api.openai.com/*' => Http::response([
+            'id' => 'resp_tool_123',
+            'status' => 'completed',
+            'model' => 'gpt-5.4',
+            'output' => [
+                openAiReasoningItem('rs_1', 'I need approval first.'),
+                [
+                    'type' => 'function_call',
+                    'id' => 'fc_123',
+                    'call_id' => 'call_123',
+                    'name' => 'ApprovableNumberGenerator',
+                    'arguments' => '{}',
+                    'status' => 'completed',
+                ],
+            ],
+            'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+        ]),
+    ]);
+
+    $paused = (new RememberingApprovableAgent)
+        ->forUser((object) ['id' => 1])
+        ->prompt('Generate a number', provider: 'openai');
+
+    expect($paused->hasPendingApprovals())->toBeTrue()
+        ->and($paused->reasoning)->toBe('I need approval first.');
 });

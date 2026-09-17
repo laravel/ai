@@ -72,13 +72,29 @@ trait MapsChatCompletionMessages
             $msg['content'] = $message->content;
         }
 
-        if ($message instanceof AssistantMessage && $message->toolCalls->isNotEmpty()) {
+        if (! $message instanceof AssistantMessage) {
+            $chatMessages[] = $msg;
+
+            return;
+        }
+
+        if ($message->toolCalls->isNotEmpty()) {
             $msg['tool_calls'] = $message->toolCalls->map(
                 fn (ToolCall $toolCall) => $this->serializeToolCallToChat($toolCall)
             )->all();
         }
 
-        $chatMessages[] = $msg;
+        $chatMessages[] = [...$msg, ...$this->assistantReplayFields($message)];
+    }
+
+    /**
+     * Get the provider specific fields to replay on an assistant message.
+     *
+     * @return array<string, mixed>
+     */
+    protected function assistantReplayFields(AssistantMessage $message): array
+    {
+        return [];
     }
 
     /**

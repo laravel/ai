@@ -62,6 +62,7 @@ trait ParsesTextResponses
             usage: $usage,
             meta: new Meta($provider->name(), $model),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
+            reasoning: (string) ($message['reasoning'] ?? ''),
         );
     }
 

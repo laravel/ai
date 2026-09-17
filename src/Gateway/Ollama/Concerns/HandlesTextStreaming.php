@@ -11,6 +11,9 @@ use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\Error;
+use Laravel\Ai\Streaming\Events\ReasoningDelta;
+use Laravel\Ai\Streaming\Events\ReasoningEnd;
+use Laravel\Ai\Streaming\Events\ReasoningStart;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
@@ -32,6 +35,7 @@ trait HandlesTextStreaming
         $streamBody,
     ): Generator {
         $messageId = $this->generateEventId();
+        $reasoningId = null;
         $streamStartEmitted = false;
         $textStartEmitted = false;
         $currentText = '';
@@ -67,7 +71,37 @@ trait HandlesTextStreaming
                 ))->withInvocationId($invocationId);
             }
 
+            $thinking = $data['message']['thinking'] ?? '';
             $content = $data['message']['content'] ?? '';
+
+            if ($reasoningId !== null && ($content !== '' || ! empty($data['message']['tool_calls']))) {
+                yield (new ReasoningEnd(
+                    $this->generateEventId(),
+                    $reasoningId,
+                    time(),
+                ))->withInvocationId($invocationId);
+
+                $reasoningId = null;
+            }
+
+            if ($thinking !== '') {
+                if ($reasoningId === null) {
+                    $reasoningId = $this->generateEventId();
+
+                    yield (new ReasoningStart(
+                        $this->generateEventId(),
+                        $reasoningId,
+                        time(),
+                    ))->withInvocationId($invocationId);
+                }
+
+                yield (new ReasoningDelta(
+                    $this->generateEventId(),
+                    $reasoningId,
+                    $thinking,
+                    time(),
+                ))->withInvocationId($invocationId);
+            }
 
             if ($content !== '') {
                 if (! $textStartEmitted) {
@@ -141,6 +175,14 @@ trait HandlesTextStreaming
 
                 break;
             }
+        }
+
+        if ($reasoningId !== null) {
+            yield (new ReasoningEnd(
+                $this->generateEventId(),
+                $reasoningId,
+                time(),
+            ))->withInvocationId($invocationId);
         }
 
         if ($textStartEmitted) {
