@@ -5,6 +5,7 @@ namespace Laravel\Ai\Storage;
 use Illuminate\Contracts\Pagination\CursorPaginator;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Pagination\Cursor;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -153,7 +154,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
         if ($response->steps->isNotEmpty()) {
             return $response->steps->values()->map(fn (Step $step): array => [
                 'tool_calls' => array_values($step->toolCalls),
-                'tool_results' => array_values($step->toolResults),
+                'tool_results' => $this->storedResults($step->toolResults),
                 'provider_blocks' => $step->providerContentBlocks,
             ]);
         }
@@ -161,7 +162,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
         // A resume that ran no step only carries the approval results storeApprovalResults() already wrote to the paused row...
         return collect([[
             'tool_calls' => $response->toolCalls->values()->all(),
-            'tool_results' => $prompt->hasApprovalDecisions() ? [] : $response->toolResults->values()->all(),
+            'tool_results' => $prompt->hasApprovalDecisions() ? [] : $this->storedResults($response->toolResults),
             'provider_blocks' => [],
         ]]);
     }
@@ -355,6 +356,8 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
                 ->map(ToolCall::fromArray(...))
                 ->values();
 
+            $arguments = array_column($step['tool_calls'], 'arguments', 'id');
+
             $providerBlocks = $replayRawBlocks ? $step['provider_blocks'] : [];
 
             $isBlank = $content === '' && $toolCalls->isEmpty() && $providerBlocks === [];
@@ -362,11 +365,28 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             $messages = $isBlank ? [] : [new AssistantMessage($content, $toolCalls, $providerBlocks, $provider)];
 
             if ($step['tool_results'] !== []) {
-                $messages[] = new ToolResultMessage(collect($step['tool_results'])->map(ToolResult::fromArray(...))->values());
+                $messages[] = new ToolResultMessage(collect($step['tool_results'])->map(fn (array $result): ToolResult => ToolResult::fromArray([
+                    ...$result,
+                    'arguments' => $result['arguments'] ?? $arguments[$result['id'] ?? ''] ?? [],
+                ]))->values());
             }
 
             return $messages;
         })->all();
+    }
+
+    /**
+     * Serialize a step's tool results, dropping the arguments its own tool calls already carry.
+     *
+     * @param  iterable<int, ToolResult>  $toolResults
+     * @return list<array<string, mixed>>
+     */
+    protected function storedResults(iterable $toolResults): array
+    {
+        return collect($toolResults)
+            ->map(fn (ToolResult $result): array => Arr::except($result->toArray(), 'arguments'))
+            ->values()
+            ->all();
     }
 
     /**
@@ -494,7 +514,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
                 foreach ($toolResults as $result) {
                     if (in_array($result->id, $callIds, true) && ! in_array($result->id, $answered, true)) {
-                        $step['tool_results'][] = $result;
+                        $step['tool_results'][] = Arr::except($result->toArray(), 'arguments');
                     }
                 }
 
