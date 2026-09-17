@@ -146,13 +146,12 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     /**
      * Serialize the turn's steps, one entry per model round-trip.
      *
-     * @return Collection<int, array{content: string, tool_calls: array, tool_results: array, provider_blocks: array}>
+     * @return Collection<int, array{tool_calls: array, tool_results: array, provider_blocks: array}>
      */
     protected function stepsFor(AgentPrompt $prompt, AgentResponse $response): Collection
     {
         if ($response->steps->isNotEmpty()) {
             return $response->steps->values()->map(fn (Step $step): array => [
-                'content' => $step->text,
                 'tool_calls' => array_values($step->toolCalls),
                 'tool_results' => array_values($step->toolResults),
                 'provider_blocks' => $step->providerContentBlocks,
@@ -161,7 +160,6 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
         // A resume that ran no step only carries the approval results storeApprovalResults() already wrote to the paused row...
         return collect([[
-            'content' => $response->text,
             'tool_calls' => $response->toolCalls->values()->all(),
             'tool_results' => $prompt->hasApprovalDecisions() ? [] : $response->toolResults->values()->all(),
             'provider_blocks' => [],
@@ -344,8 +342,12 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     {
         $pending = $this->pausedCallIds($record);
         $provider = $this->decoded($record->meta)['provider'] ?? null;
+        $steps = $this->decodedSteps($record);
+        $lastStep = $steps->count() - 1;
 
-        return $this->decodedSteps($record)->flatMap(function (array $step) use ($pending, $provider, $replayRawBlocks): array {
+        return $steps->flatMap(function (array $step, int $index) use ($pending, $provider, $replayRawBlocks, $lastStep, $record): array {
+            $content = $index === $lastStep ? (string) $record->content : '';
+
             $replayable = [...array_column($step['tool_results'], 'id'), ...$pending];
 
             $toolCalls = collect($step['tool_calls'])
@@ -355,9 +357,9 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
             $providerBlocks = $replayRawBlocks ? $step['provider_blocks'] : [];
 
-            $isBlank = $step['content'] === '' && $toolCalls->isEmpty() && $providerBlocks === [];
+            $isBlank = $content === '' && $toolCalls->isEmpty() && $providerBlocks === [];
 
-            $messages = $isBlank ? [] : [new AssistantMessage($step['content'], $toolCalls, $providerBlocks, $provider)];
+            $messages = $isBlank ? [] : [new AssistantMessage($content, $toolCalls, $providerBlocks, $provider)];
 
             if ($step['tool_results'] !== []) {
                 $messages[] = new ToolResultMessage(collect($step['tool_results'])->map(ToolResult::fromArray(...))->values());
@@ -370,12 +372,11 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     /**
      * Decode a stored row's steps.
      *
-     * @return Collection<int, array{content: string, tool_calls: array, tool_results: array, provider_blocks: array}>
+     * @return Collection<int, array{tool_calls: array, tool_results: array, provider_blocks: array}>
      */
     protected function decodedSteps(object $record): Collection
     {
         return collect($this->decoded($record->steps))->map(fn (array $step): array => [
-            'content' => (string) ($step['content'] ?? ''),
             'tool_calls' => array_values($step['tool_calls'] ?? []),
             'tool_results' => array_values($step['tool_results'] ?? []),
             'provider_blocks' => $step['provider_blocks'] ?? [],

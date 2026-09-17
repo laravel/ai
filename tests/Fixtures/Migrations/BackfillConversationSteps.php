@@ -107,15 +107,12 @@ class BackfillConversationSteps extends AiMigration
         $providerSteps = $meta['provider_steps'] ?? null;
 
         if (is_array($providerSteps) && $providerSteps !== []) {
-            $last = array_key_last($providerSteps);
-
             $steps = [];
 
-            foreach (array_values($providerSteps) as $index => $providerStep) {
+            foreach ($providerSteps as $providerStep) {
                 $ids = $providerStep['tool_call_ids'] ?? [];
 
                 $steps[] = [
-                    'content' => $index === $last ? (string) $row->content : '',
                     'tool_calls' => array_values(array_filter($calls, fn (array $call) => in_array($call['id'] ?? null, $ids, true))),
                     'tool_results' => [],
                     'provider_blocks' => $providerStep['blocks'] ?? [],
@@ -123,7 +120,6 @@ class BackfillConversationSteps extends AiMigration
             }
         } else {
             $steps = [[
-                'content' => (string) $row->content,
                 'tool_calls' => $calls,
                 'tool_results' => [],
                 'provider_blocks' => $meta['provider_content_blocks'] ?? [],

@@ -151,7 +151,7 @@ test('it decodes the stored JSON columns', function (): void {
         ...storedConversationMessageAttributes('message-001', $conversationId, 'Saved the note.'),
         'role' => 'assistant',
         'meta' => json_encode(['provider' => 'openai', 'citations' => [['url' => 'https://laravel.com']]]),
-        'steps' => json_encode([assistantStep([['id' => 'call-1', 'name' => 'save_note', 'arguments' => ['a' => 1]]], content: 'Saved the note.')]),
+        'steps' => json_encode([assistantStep([['id' => 'call-1', 'name' => 'save_note', 'arguments' => ['a' => 1]]])]),
         'usage' => json_encode(['input_tokens' => 12]),
     ]);
 
@@ -159,7 +159,6 @@ test('it decodes the stored JSON columns', function (): void {
 
     expect($message->meta['provider'])->toBe('openai')
         ->and($message->meta['citations'][0]['url'])->toBe('https://laravel.com')
-        ->and($message->steps[0]['content'])->toBe('Saved the note.')
         ->and($message->toolCalls()[0]['name'])->toBe('save_note')
         ->and($message->usage['input_tokens'])->toBe(12)
         ->and($message->toolResults())->toBe([])
@@ -309,9 +308,8 @@ test('it stores one step per model round-trip from a remembered agent prompt', f
     expect(DB::table('agent_conversation_messages')->where('role', 'user')->value('steps'))->toBe('[]')
         ->and($record->content)->toBe('The number is 72019')
         ->and($record->steps)->json()->toHaveCount(2)->sequence(
-            fn ($step) => $step->toMatchArray(['content' => ''])
-                ->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'call_123', 'name' => 'FixedNumberGenerator']),
-            fn ($step) => $step->toMatchArray(['content' => 'The number is 72019', 'tool_calls' => [], 'tool_results' => []]),
+            fn ($step) => $step->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'call_123', 'name' => 'FixedNumberGenerator']),
+            fn ($step) => $step->toMatchArray(['tool_calls' => [], 'tool_results' => []]),
         )
         ->and($record->steps)->json()->{'0'}->tool_results->toHaveCount(1)->each->toMatchArray(['id' => 'call_123', 'result' => '72019']);
 });
@@ -410,7 +408,7 @@ test('it stores a response built without steps as a single step of lists', funct
 
     $steps = DB::table('agent_conversation_messages')->where('role', 'assistant')->value('steps');
 
-    expect($steps)->json()->toHaveCount(1)->{'0'}->toMatchArray(['content' => 'The order has shipped.'])
+    expect($steps)->json()->toHaveCount(1)
         ->and($steps)->json()->{'0'}->tool_calls->toBeList()->toHaveCount(2)
         ->and($steps)->json()->{'0'}->tool_results->toBeList()->sequence(
             fn ($result) => $result->id->toBe('call-1'),
@@ -535,9 +533,8 @@ test('it replays a completed multi-step turn with each result answering its own 
         assistantStep(
             [['id' => 'call-2', 'name' => 'delete_file', 'arguments' => ['path' => 'b']]],
             [['id' => 'call-2', 'name' => 'delete_file', 'arguments' => ['path' => 'b'], 'result' => 'Deleted b']],
-            'Read a, now deleting b',
         ),
-        assistantStep(content: 'Done.'),
+        assistantStep(),
     ]);
 
     $messages = $store->getLatestConversationMessages($conversationId, 10);
@@ -547,7 +544,7 @@ test('it replays a completed multi-step turn with each result answering its own 
             ->toolCalls->toHaveCount(1)->each->toMatchObject(['id' => 'call-1', 'resultId' => 'result-1']),
         fn ($message) => $message->toBeInstanceOf(ToolResultMessage::class)
             ->toolResults->toHaveCount(1)->each->toMatchObject(['id' => 'call-1', 'resultId' => 'result-1']),
-        fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->toMatchObject(['content' => 'Read a, now deleting b'])
+        fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->toMatchObject(['content' => ''])
             ->toolCalls->toHaveCount(1)->each->toMatchObject(['id' => 'call-2']),
         fn ($message) => $message->toBeInstanceOf(ToolResultMessage::class)->toolResults->toHaveCount(1)->each->toMatchObject(['id' => 'call-2']),
         fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->toMatchObject(['content' => 'Done.'])->toolCalls->toBeEmpty(),
@@ -566,7 +563,6 @@ test('it drops the unexecuted calls of a step-limited tail but keeps its text', 
         assistantStep(
             [['id' => 'call-2', 'name' => 'lookup_carrier', 'arguments' => ['id' => 1]]],
             [],
-            'I ran out of steps.',
             [['type' => 'text', 'text' => 'I ran out of steps.'], ['type' => 'tool_use', 'id' => 'call-2']],
         ),
     ], meta: ['provider' => 'anthropic']);
@@ -590,7 +586,7 @@ test('it replays a completed turn without its provider blocks', function (): voi
             [['id' => 'call-1', 'name' => 'read_file', 'arguments' => ['path' => 'a'], 'result' => 'contents of a']],
             providerBlocks: [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1']],
         ),
-        assistantStep(content: 'Read a and b', providerBlocks: [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'text', 'text' => 'Read a and b']]),
+        assistantStep(providerBlocks: [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'text', 'text' => 'Read a and b']]),
     ], meta: ['provider' => 'anthropic']);
 
     $messages = $store->getLatestConversationMessages($conversationId, 10);
@@ -607,7 +603,7 @@ test('it replays raw provider blocks only from the paused turn, not the complete
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
 
     insertAssistantTurn($conversationId, 'message-1', 'Read a', [
-        assistantStep(content: 'Read a', providerBlocks: [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'text', 'text' => 'Read a']]),
+        assistantStep(providerBlocks: [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'text', 'text' => 'Read a']]),
     ], meta: ['provider' => 'anthropic']);
     DB::table('agent_conversation_messages')->insert(storedConversationMessageAttributes('message-2', $conversationId, 'Now delete b'));
     insertAssistantTurn($conversationId, 'message-3', '', [
@@ -664,7 +660,6 @@ test('it replays a multi-step pause with each step carrying its own provider blo
         assistantStep(
             [['id' => 'call-2', 'name' => 'delete_file', 'arguments' => ['path' => 'b']]],
             [],
-            'Let me delete b too',
             [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'tool_use', 'id' => 'call-2']],
         ),
     ], ['pending' => ['call-2' => null]], ['provider' => 'anthropic']);
@@ -696,7 +691,6 @@ test('it keeps an executed call and a pending call together on a mixed pause ste
                 ['id' => 'call-2', 'name' => 'delete_file', 'arguments' => ['path' => 'b']],
             ],
             [['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'a'], 'result' => 'Deleted a']],
-            'Let me delete b too',
         ),
     ], ['pending' => ['call-2' => null]]);
 
@@ -735,9 +729,9 @@ test('it writes the steps of a paused turn with their provider blocks and keeps 
     $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
 
     expect($record->steps)->json()->toHaveCount(2)->sequence(
-        fn ($step) => $step->toMatchArray(['content' => '', 'provider_blocks' => [['type' => 'tool_use', 'id' => 'call-0']]])
+        fn ($step) => $step->toMatchArray(['provider_blocks' => [['type' => 'tool_use', 'id' => 'call-0']]])
             ->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'call-0']),
-        fn ($step) => $step->toMatchArray(['content' => 'Let me think about that', 'tool_results' => [], 'provider_blocks' => [['type' => 'thinking', 'signature' => 'sig-1']]])
+        fn ($step) => $step->toMatchArray(['tool_results' => [], 'provider_blocks' => [['type' => 'thinking', 'signature' => 'sig-1']]])
             ->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'call-1']),
     )
         ->and($record->steps)->json()->{'0'}->tool_results->toHaveCount(1)->each->toMatchArray(['id' => 'call-0', 'result' => 'contents'])
@@ -800,10 +794,10 @@ test('it writes the steps a completed stream carried on its stream end', functio
     $steps = DB::table('agent_conversation_messages')->where('role', 'assistant')->value('steps');
 
     expect($steps)->json()->toHaveCount(2)->sequence(
-        fn ($step) => $step->toMatchArray(['content' => '', 'provider_blocks' => [['type' => 'tool_use', 'id' => 'call-1']]])
+        fn ($step) => $step->toMatchArray(['provider_blocks' => [['type' => 'tool_use', 'id' => 'call-1']]])
             ->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'call-1'])
             ->tool_results->toHaveCount(1)->each->toMatchArray(['id' => 'call-1', 'result' => 'contents']),
-        fn ($step) => $step->toMatchArray(['content' => 'Done.', 'tool_calls' => [], 'tool_results' => [], 'provider_blocks' => [['type' => 'text', 'text' => 'Done.']]]),
+        fn ($step) => $step->toMatchArray(['tool_calls' => [], 'tool_results' => [], 'provider_blocks' => [['type' => 'text', 'text' => 'Done.']]]),
     );
 });
 
@@ -892,7 +886,7 @@ test('it replays a resumed pause as the paused call, its result, then the resume
     ]);
 
     insertAssistantTurn($conversationId, 'message-2', 'Let me delete b too', [
-        assistantStep([['id' => 'call-2', 'name' => 'delete_file', 'arguments' => ['path' => 'b']]], [], 'Let me delete b too'),
+        assistantStep([['id' => 'call-2', 'name' => 'delete_file', 'arguments' => ['path' => 'b']]]),
     ], ['pending' => ['call-2' => null]]);
 
     $messages = $store->getLatestConversationMessages($conversationId, 10);
@@ -1358,9 +1352,9 @@ function storedConversationMessageAttributes(string $id, string $conversationId,
  * @param  list<array<string, mixed>>  $providerBlocks
  * @return array<string, mixed>
  */
-function assistantStep(array $toolCalls = [], array $toolResults = [], string $content = '', array $providerBlocks = []): array
+function assistantStep(array $toolCalls = [], array $toolResults = [], array $providerBlocks = []): array
 {
-    return ['content' => $content, 'tool_calls' => $toolCalls, 'tool_results' => $toolResults, 'provider_blocks' => $providerBlocks];
+    return ['tool_calls' => $toolCalls, 'tool_results' => $toolResults, 'provider_blocks' => $providerBlocks];
 }
 
 /**
@@ -1390,5 +1384,5 @@ function insertStoredConversationMessages(string $conversationId, array $ids): v
 /** @param  list<array<string, mixed>>  $toolCalls */
 function insertPausedConversationTurn(string $conversationId, string $id, array $toolCalls, array $pending): void
 {
-    insertAssistantTurn($conversationId, $id, 'Waiting on you.', [assistantStep($toolCalls, content: 'Waiting on you.')], ['pending' => $pending]);
+    insertAssistantTurn($conversationId, $id, 'Waiting on you.', [assistantStep($toolCalls)], ['pending' => $pending]);
 }

@@ -941,15 +941,11 @@ test('a completed two-step turn replays step by step on the next prompt', functi
 
     expect($history)->toHaveCount(7)->sequence(
         fn ($message) => $message->toMatchArray(['role' => 'user']),
-        fn ($message) => $message->toMatchArray(['role' => 'assistant'])->content->sequence(
-            fn ($block) => $block->toMatchArray(['type' => 'text', 'text' => 'First number']),
-            fn ($block) => $block->toMatchArray(['type' => 'tool_use', 'id' => 'toolu_1']),
-        ),
+        fn ($message) => $message->toMatchArray(['role' => 'assistant'])->content->toHaveCount(1)
+            ->each->toMatchArray(['type' => 'tool_use', 'id' => 'toolu_1']),
         fn ($message) => $message->toMatchArray(['role' => 'user'])->content->toHaveCount(1)->each->toMatchArray(['type' => 'tool_result', 'tool_use_id' => 'toolu_1']),
-        fn ($message) => $message->toMatchArray(['role' => 'assistant'])->content->sequence(
-            fn ($block) => $block->toMatchArray(['type' => 'text', 'text' => 'Second number']),
-            fn ($block) => $block->toMatchArray(['type' => 'tool_use', 'id' => 'toolu_2']),
-        ),
+        fn ($message) => $message->toMatchArray(['role' => 'assistant'])->content->toHaveCount(1)
+            ->each->toMatchArray(['type' => 'tool_use', 'id' => 'toolu_2']),
         fn ($message) => $message->toMatchArray(['role' => 'user'])->content->toHaveCount(1)->each->toMatchArray(['type' => 'tool_result', 'tool_use_id' => 'toolu_2']),
         fn ($message) => $message->toMatchArray(['role' => 'assistant'])->content->each->toMatchArray(['type' => 'text', 'text' => 'The numbers are 72019 and 72019.']),
         fn ($message) => $message->toMatchArray(['role' => 'user'])->content->each->toMatchArray(['type' => 'text', 'text' => 'Are you sure?']),
