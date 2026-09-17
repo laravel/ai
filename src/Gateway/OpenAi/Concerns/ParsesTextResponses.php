@@ -5,17 +5,17 @@ namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
+use Laravel\Ai\Gateway\Concerns\MergesCitations;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
-use Laravel\Ai\Responses\Data\UrlCitation;
 use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
 {
-    use DecodesStructuredOutput;
+    use DecodesStructuredOutput, MergesCitations;
 
     /**
      * Validate the OpenAI response data.
@@ -90,16 +90,14 @@ trait ParsesTextResponses
 
             foreach ($item['content'] ?? [] as $content) {
                 foreach ($content['annotations'] ?? [] as $annotation) {
-                    if (($annotation['type'] ?? '') !== 'url_citation') {
+                    if (($annotation['type'] ?? '') !== 'url_citation' || empty($annotation['url'])) {
                         continue;
                     }
 
-                    $citations->push(new UrlCitation(
-                        $annotation['url'] ?? '',
-                        $annotation['title'] ?? null,
+                    $this->mergeCitation($citations, $annotation['url'], $annotation['title'] ?? null)->addRange(
                         isset($annotation['start_index']) ? (int) $annotation['start_index'] : null,
                         isset($annotation['end_index']) ? (int) $annotation['end_index'] : null,
-                    ));
+                    );
                 }
             }
         }
