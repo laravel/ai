@@ -13,7 +13,6 @@ readonly class Usage implements Arrayable, JsonSerializable
      * @param  int|null  $cacheReadInputTokens  Subset of the input tokens read from a prompt cache, or null when unreported.
      * @param  int|null  $cacheWriteInputTokens  Subset of the input tokens written to a prompt cache, or null when unreported.
      * @param  int|null  $reasoningTokens  Subset of the output tokens spent on reasoning, or null when unreported.
-     * @param  array<string, mixed>  $raw  The provider's usage payload as returned.
      */
     public function __construct(
         public int $inputTokens = 0,
@@ -21,7 +20,6 @@ readonly class Usage implements Arrayable, JsonSerializable
         public ?int $cacheReadInputTokens = null,
         public ?int $cacheWriteInputTokens = null,
         public ?int $reasoningTokens = null,
-        public array $raw = [],
     ) {}
 
     /**

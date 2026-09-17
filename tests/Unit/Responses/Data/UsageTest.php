@@ -9,8 +9,7 @@ test('usage defaults to zero tokens and unreported details', function (): void {
         ->and($usage->outputTokens)->toBe(0)
         ->and($usage->cacheReadInputTokens)->toBeNull()
         ->and($usage->cacheWriteInputTokens)->toBeNull()
-        ->and($usage->reasoningTokens)->toBeNull()
-        ->and($usage->raw)->toBe([]);
+        ->and($usage->reasoningTokens)->toBeNull();
 });
 
 test('usage derives totals from the inclusive input and output counts', function (): void {
@@ -24,8 +23,8 @@ test('usage treats unreported cache counts as zero when deriving the uncached in
     expect((new Usage(100, 50))->uncachedInputTokens())->toBe(100);
 });
 
-test('usage add sums every count and drops the raw payload', function (): void {
-    $combined = (new Usage(100, 50, 10, 25, 5, ['a' => 1]))->add(new Usage(50, 25, 5, 10, 0, ['b' => 2]));
+test('usage add sums every count', function (): void {
+    $combined = (new Usage(100, 50, 10, 25, 5))->add(new Usage(50, 25, 5, 10, 0));
 
     expect($combined)->toEqual(new Usage(150, 75, 15, 35, 5));
 });
@@ -38,8 +37,8 @@ test('usage add keeps a detail null only when neither side reported it', functio
         ->and($combined->cacheWriteInputTokens)->toBeNull();
 });
 
-test('usage to array serializes the counts without the raw payload', function (): void {
-    $usage = new Usage(100, 50, 10, 25, null, ['input_tokens' => 100]);
+test('usage to array serializes every count', function (): void {
+    $usage = new Usage(100, 50, 10, 25, null);
 
     expect($usage->toArray())->toBe([
         'input_tokens' => 100,

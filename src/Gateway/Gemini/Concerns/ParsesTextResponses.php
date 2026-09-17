@@ -212,7 +212,6 @@ trait ParsesTextResponses
             outputTokens: ($usage['candidatesTokenCount'] ?? 0) + ($reasoningTokens ?? 0),
             cacheReadInputTokens: $usage['cachedContentTokenCount'] ?? null,
             reasoningTokens: $reasoningTokens,
-            raw: $usage,
         );
     }
 

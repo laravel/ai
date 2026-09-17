@@ -220,6 +220,28 @@ test('response usage is correctly parsed', function (): void {
         ->and($response->usage->outputTokens)->toBe(5);
 });
 
+test('response usage reports cached prompt tokens', function (): void {
+    Http::fake(['*' => Http::response([
+        'model' => 'mistral-medium-latest',
+        'choices' => [[
+            'index' => 0,
+            'message' => ['role' => 'assistant', 'content' => 'Hello'],
+            'finish_reason' => 'stop',
+        ]],
+        'usage' => [
+            'prompt_tokens' => 1013,
+            'completion_tokens' => 30,
+            'prompt_tokens_details' => ['cached_tokens' => 1008],
+        ],
+    ])]);
+
+    $response = agent()->prompt('Hello', provider: 'mistral');
+
+    expect($response->usage->inputTokens)->toBe(1013)
+        ->and($response->usage->cacheReadInputTokens)->toBe(1008)
+        ->and($response->usage->uncachedInputTokens())->toBe(5);
+});
+
 test('structured response is correctly parsed', function (): void {
     Http::fake(['*' => $this->fakeStructuredResponse('{"symbol": "Au"}')]);
 

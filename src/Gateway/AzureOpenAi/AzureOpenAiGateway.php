@@ -126,7 +126,6 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, StepTextGate
             inputTokens: $usage['input_tokens'] ?? 0,
             outputTokens: $usage['output_tokens'] ?? 0,
             cacheReadInputTokens: $usage['input_tokens_details']['cached_tokens'] ?? null,
-            raw: $usage,
         );
     }
 

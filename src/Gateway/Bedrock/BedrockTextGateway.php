@@ -157,10 +157,11 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
     }
 
     /**
-     * Extract usage data from a Converse usage payload.
+     * Extract usage data from a Converse response.
      */
-    protected function extractUsage(array $usage): Usage
+    protected function extractUsage(array $data): Usage
     {
+        $usage = $data['usage'] ?? [];
         $cacheReadTokens = $usage['cacheReadInputTokens'] ?? null;
         $cacheWriteTokens = $usage['cacheWriteInputTokens'] ?? null;
 
@@ -169,7 +170,6 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             outputTokens: $usage['outputTokens'] ?? 0,
             cacheReadInputTokens: $cacheReadTokens,
             cacheWriteInputTokens: $cacheWriteTokens,
-            raw: $usage,
         );
     }
 
@@ -178,7 +178,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
      */
     protected function parseTextResponse(array $result, TextProvider $provider, string $model, bool $structured): StepResponse
     {
-        $usage = $this->extractUsage($result['usage'] ?? []);
+        $usage = $this->extractUsage($result);
 
         $output = '';
         $toolCalls = [];
@@ -461,7 +461,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             }
 
             if (isset($event['metadata']['usage'])) {
-                $totalUsage = $totalUsage->add($this->extractUsage($event['metadata']['usage']));
+                $totalUsage = $totalUsage->add($this->extractUsage($event['metadata']));
             }
         }
 

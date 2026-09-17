@@ -183,7 +183,6 @@ trait ParsesTextResponses
             cacheReadInputTokens: $cacheReadTokens,
             cacheWriteInputTokens: $cacheWriteTokens,
             reasoningTokens: $usage['output_tokens_details']['thinking_tokens'] ?? null,
-            raw: $usage,
         );
     }
 

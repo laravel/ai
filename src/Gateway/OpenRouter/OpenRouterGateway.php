@@ -150,7 +150,7 @@ class OpenRouterGateway implements Gateway, RerankingGateway, StepTextGateway
 
         return new ImageResponse(
             $images,
-            new Usage($usage['prompt_tokens'] ?? 0, $usage['completion_tokens'] ?? 0, raw: $usage),
+            new Usage($usage['prompt_tokens'] ?? 0, $usage['completion_tokens'] ?? 0),
             new Meta($provider->name(), $data['model'] ?? $model),
         );
     }
@@ -305,7 +305,6 @@ class OpenRouterGateway implements Gateway, RerankingGateway, StepTextGateway
             new Usage(
                 Arr::get($data, 'usage.input_tokens', 0),
                 Arr::get($data, 'usage.output_tokens', 0),
-                raw: $data['usage'] ?? [],
             ),
             new Meta($provider->name(), $model),
         );

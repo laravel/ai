@@ -173,6 +173,24 @@ test('response usage is correctly parsed', function (): void {
         ->and($response->usage->outputTokens)->toBe(5);
 });
 
+test('response usage reports cached prompt tokens', function (): void {
+    Http::fake(['*' => Http::response([
+        'model' => 'llama3.1:8b',
+        'message' => ['role' => 'assistant', 'content' => 'Hello'],
+        'done_reason' => 'stop',
+        'done' => true,
+        'prompt_eval_count' => 100,
+        'prompt_eval_cached_count' => 80,
+        'eval_count' => 5,
+    ])]);
+
+    $response = agent()->prompt('Hello', provider: 'ollama');
+
+    expect($response->usage->inputTokens)->toBe(100)
+        ->and($response->usage->cacheReadInputTokens)->toBe(80)
+        ->and($response->usage->uncachedInputTokens())->toBe(20);
+});
+
 test('structured response is correctly parsed', function (): void {
     Http::fake(['*' => $this->fakeStructuredResponse('{"symbol": "Au"}')]);
 

@@ -75,7 +75,6 @@ trait ParsesTextResponses
             outputTokens: $usage['completion_tokens'] ?? 0,
             cacheReadInputTokens: $usage['prompt_tokens_details']['cached_tokens'] ?? null,
             reasoningTokens: $usage['completion_tokens_details']['reasoning_tokens'] ?? null,
-            raw: $usage,
         );
     }
 

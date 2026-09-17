@@ -127,7 +127,6 @@ trait ParsesTextResponses
             outputTokens: $usage['output_tokens'] ?? 0,
             cacheReadInputTokens: $usage['input_tokens_details']['cached_tokens'] ?? null,
             reasoningTokens: $usage['output_tokens_details']['reasoning_tokens'] ?? null,
-            raw: $usage,
         );
     }
 
