@@ -8,7 +8,7 @@ use JsonSerializable;
 
 class UrlCitation extends Citation implements Arrayable, JsonSerializable
 {
-    /** @var Collection<int, array{start: int, end: int}> */
+    /** @var Collection<int, array{startIndex: int, endIndex: int}> */
     public Collection $ranges;
 
     public function __construct(
@@ -20,12 +20,12 @@ class UrlCitation extends Citation implements Arrayable, JsonSerializable
         parent::__construct($title);
 
         $this->ranges = new Collection(
-            $startIndex !== null && $endIndex !== null ? [['start' => $startIndex, 'end' => $endIndex]] : [],
+            $startIndex !== null && $endIndex !== null ? [['startIndex' => $startIndex, 'endIndex' => $endIndex]] : [],
         );
     }
 
     /**
-     * Add a character range of the response text that this citation supports.
+     * Add a range of the response text this citation supports, in the reporting provider's own index units.
      */
     public function addRange(?int $startIndex, ?int $endIndex): void
     {
@@ -33,11 +33,11 @@ class UrlCitation extends Citation implements Arrayable, JsonSerializable
             return;
         }
 
-        if ($this->ranges->contains(fn (array $range): bool => $range['start'] === $startIndex && $range['end'] === $endIndex)) {
+        if ($this->ranges->contains(fn (array $range): bool => $range['startIndex'] === $startIndex && $range['endIndex'] === $endIndex)) {
             return;
         }
 
-        $this->ranges[] = ['start' => $startIndex, 'end' => $endIndex];
+        $this->ranges[] = ['startIndex' => $startIndex, 'endIndex' => $endIndex];
 
         if ($this->ranges->count() === 1) {
             $this->startIndex = $startIndex;
@@ -55,7 +55,10 @@ class UrlCitation extends Citation implements Arrayable, JsonSerializable
             'title' => $this->title,
             'start_index' => $this->startIndex,
             'end_index' => $this->endIndex,
-            'ranges' => $this->ranges->values()->all(),
+            'ranges' => $this->ranges->values()->map(fn (array $range): array => [
+                'start_index' => $range['startIndex'],
+                'end_index' => $range['endIndex'],
+            ])->all(),
         ];
     }
 

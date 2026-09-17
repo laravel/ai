@@ -368,6 +368,113 @@ test('web search citations omit span indices when not provided', function (): vo
         ->and($response->meta->citations[0]->endIndex)->toBeNull();
 });
 
+test('web search citations deduplicate by url and accumulate ranges', function (): void {
+    Http::fake(['*' => Http::response([
+        'id' => 'chatcmpl-123',
+        'object' => 'chat.completion',
+        'model' => 'anthropic/claude-sonnet-4.6',
+        'choices' => [[
+            'index' => 0,
+            'message' => [
+                'role' => 'assistant',
+                'content' => 'Paris is the capital of France. Paris is also its largest city.',
+                'annotations' => [
+                    [
+                        'type' => 'url_citation',
+                        'url_citation' => [
+                            'url' => 'https://example.com/paris',
+                            'title' => 'Paris - Wikipedia',
+                            'start_index' => 0,
+                            'end_index' => 30,
+                        ],
+                    ],
+                    [
+                        'type' => 'url_citation',
+                        'url_citation' => [
+                            'url' => 'https://example.com/france',
+                            'title' => 'France - Wikipedia',
+                            'start_index' => 31,
+                            'end_index' => 50,
+                        ],
+                    ],
+                    [
+                        'type' => 'url_citation',
+                        'url_citation' => [
+                            'url' => 'https://example.com/paris',
+                            'title' => 'Paris - Wikipedia',
+                            'start_index' => 51,
+                            'end_index' => 62,
+                        ],
+                    ],
+                ],
+            ],
+            'finish_reason' => 'stop',
+        ]],
+        'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
+    ])]);
+
+    $response = agent()->prompt('What is the capital of France?', provider: 'openrouter');
+
+    expect($response->meta->citations)->toHaveCount(2)
+        ->and($response->meta->citations[0]->url)->toBe('https://example.com/paris')
+        ->and($response->meta->citations[0]->startIndex)->toBe(0)
+        ->and($response->meta->citations[0]->endIndex)->toBe(30)
+        ->and($response->meta->citations[0]->ranges->all())->toBe([['startIndex' => 0, 'endIndex' => 30], ['startIndex' => 51, 'endIndex' => 62]])
+        ->and($response->meta->citations[1]->url)->toBe('https://example.com/france')
+        ->and($response->meta->citations[1]->ranges->all())->toBe([['startIndex' => 31, 'endIndex' => 50]]);
+});
+
+test('web search citations skip annotations that carry no url', function (): void {
+    Http::fake(['*' => Http::response([
+        'id' => 'chatcmpl-123',
+        'object' => 'chat.completion',
+        'model' => 'anthropic/claude-sonnet-4.6',
+        'choices' => [[
+            'index' => 0,
+            'message' => [
+                'role' => 'assistant',
+                'content' => 'Paris is the capital of France.',
+                'annotations' => [
+                    [
+                        'type' => 'url_citation',
+                        'url_citation' => [
+                            'title' => 'Missing',
+                            'start_index' => 0,
+                            'end_index' => 10,
+                        ],
+                    ],
+                    [
+                        'type' => 'url_citation',
+                        'url_citation' => [
+                            'url' => '',
+                            'title' => 'Blank',
+                            'start_index' => 11,
+                            'end_index' => 20,
+                        ],
+                    ],
+                    [
+                        'type' => 'url_citation',
+                        'url_citation' => [
+                            'url' => 'https://example.com/paris',
+                            'title' => 'Paris - Wikipedia',
+                            'start_index' => 21,
+                            'end_index' => 30,
+                        ],
+                    ],
+                ],
+            ],
+            'finish_reason' => 'stop',
+        ]],
+        'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
+    ])]);
+
+    $response = agent()->prompt('What is the capital of France?', provider: 'openrouter');
+
+    expect($response->meta->citations)->toHaveCount(1)
+        ->and($response->meta->citations[0]->url)->toBe('https://example.com/paris')
+        ->and($response->meta->citations[0]->ranges->all())->toBe([['startIndex' => 21, 'endIndex' => 30]]);
+});
+
 test('response with no annotations has empty citations collection', function (): void {
     Http::fake(['*' => fakeOpenRouterResponse('Hello')]);
 

@@ -26,7 +26,7 @@ test('url citation to array returns all fields', function (): void {
         'title' => 'Laravel',
         'start_index' => 0,
         'end_index' => 7,
-        'ranges' => [['start' => 0, 'end' => 7]],
+        'ranges' => [['start_index' => 0, 'end_index' => 7]],
     ]);
 });
 
@@ -45,7 +45,7 @@ test('url citation json serialize returns to array', function (): void {
 test('url citation initializes ranges from constructor indices', function (): void {
     $citation = new UrlCitation('https://example.com', startIndex: 5, endIndex: 15);
 
-    expect($citation->ranges->all())->toBe([['start' => 5, 'end' => 15]]);
+    expect($citation->ranges->all())->toBe([['startIndex' => 5, 'endIndex' => 15]]);
 });
 
 test('url citation has empty ranges when no indices given', function (): void {
@@ -61,7 +61,7 @@ test('url citation addRange adds a range and sets startIndex and endIndex on fir
 
     expect($citation->startIndex)->toBe(10)
         ->and($citation->endIndex)->toBe(20)
-        ->and($citation->ranges->all())->toBe([['start' => 10, 'end' => 20]]);
+        ->and($citation->ranges->all())->toBe([['startIndex' => 10, 'endIndex' => 20]]);
 });
 
 test('url citation addRange accumulates multiple ranges', function (): void {
@@ -70,7 +70,7 @@ test('url citation addRange accumulates multiple ranges', function (): void {
     $citation->addRange(0, 10);
     $citation->addRange(20, 30);
 
-    expect($citation->ranges->all())->toBe([['start' => 0, 'end' => 10], ['start' => 20, 'end' => 30]])
+    expect($citation->ranges->all())->toBe([['startIndex' => 0, 'endIndex' => 10], ['startIndex' => 20, 'endIndex' => 30]])
         ->and($citation->startIndex)->toBe(0)
         ->and($citation->endIndex)->toBe(10);
 });

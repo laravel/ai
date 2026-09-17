@@ -1588,7 +1588,6 @@ test('it records the sources a streamed turn cited into the message meta', funct
 
     $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
 
-    // Every mention is stored, matching what a generated turn records for the same answer...
     expect(json_decode((string) $record->meta, true)['citations'])->toBe([
         ['url' => 'https://laravel.com/docs/mcp', 'title' => 'Laravel MCP', 'start_index' => null, 'end_index' => null, 'ranges' => []],
         ['url' => 'https://laravel.com/docs/mcp', 'title' => 'Laravel MCP', 'start_index' => null, 'end_index' => null, 'ranges' => []],

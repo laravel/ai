@@ -306,10 +306,10 @@ test('citations deduplicate by url and accumulate ranges', function (): void {
         ->and($response->meta->citations[0]->url)->toBe('https://example.com/one')
         ->and($response->meta->citations[0]->startIndex)->toBe(0)
         ->and($response->meta->citations[0]->endIndex)->toBe(10)
-        ->and($response->meta->citations[0]->ranges->all())->toBe([['start' => 0, 'end' => 10], ['start' => 26, 'end' => 40]])
+        ->and($response->meta->citations[0]->ranges->all())->toBe([['startIndex' => 0, 'endIndex' => 10], ['startIndex' => 26, 'endIndex' => 40]])
         ->and($response->meta->citations[1]->url)->toBe('https://example.com/two')
         ->and($response->meta->citations[1]->startIndex)->toBe(11)
-        ->and($response->meta->citations[1]->ranges->all())->toBe([['start' => 11, 'end' => 25]]);
+        ->and($response->meta->citations[1]->ranges->all())->toBe([['startIndex' => 11, 'endIndex' => 25]]);
 });
 
 test('citations omit span indices when not provided by the api', function (): void {
@@ -346,6 +346,56 @@ test('citations omit span indices when not provided by the api', function (): vo
         ->and($response->meta->citations[0]->url)->toBe('https://example.com/a')
         ->and($response->meta->citations[0]->startIndex)->toBeNull()
         ->and($response->meta->citations[0]->endIndex)->toBeNull();
+});
+
+test('citations skip annotations that carry no url', function (): void {
+    Http::fake(['*' => Http::response([
+        'id' => 'resp_123',
+        'object' => 'response',
+        'status' => 'completed',
+        'model' => 'grok-4-1-fast-reasoning',
+        'output' => [[
+            'type' => 'message',
+            'status' => 'completed',
+            'role' => 'assistant',
+            'content' => [[
+                'type' => 'output_text',
+                'text' => 'Sources',
+                'annotations' => [
+                    [
+                        'type' => 'url_citation',
+                        'title' => 'Missing',
+                        'start_index' => 0,
+                        'end_index' => 10,
+                    ],
+                    [
+                        'type' => 'url_citation',
+                        'url' => '',
+                        'title' => 'Blank',
+                        'start_index' => 11,
+                        'end_index' => 20,
+                    ],
+                    [
+                        'type' => 'url_citation',
+                        'url' => 'https://example.com/a',
+                        'title' => 'A',
+                        'start_index' => 21,
+                        'end_index' => 30,
+                    ],
+                ],
+            ]],
+        ]],
+        'usage' => [
+            'input_tokens' => 10,
+            'output_tokens' => 5,
+        ],
+    ])]);
+
+    $response = agent()->prompt('Give me sources', provider: 'xai');
+
+    expect($response->meta->citations)->toHaveCount(1)
+        ->and($response->meta->citations[0]->url)->toBe('https://example.com/a')
+        ->and($response->meta->citations[0]->ranges->all())->toBe([['startIndex' => 21, 'endIndex' => 30]]);
 });
 
 function fakeXaiRequestMappingResponse(string $text): PromiseInterface
