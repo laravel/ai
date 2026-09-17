@@ -19,6 +19,7 @@ return [
     'default_for_transcription' => 'openai',
     'default_for_embeddings' => 'openai',
     'default_for_reranking' => 'cohere',
+    'default_for_classification' => 'typesafe',
 
     /*
     |--------------------------------------------------------------------------
@@ -142,6 +143,11 @@ return [
         'openrouter' => [
             'driver' => 'openrouter',
             'key' => env('OPENROUTER_API_KEY'),
+        ],
+
+        'typesafe' => [
+            'driver' => 'typesafe',
+            'key' => env('TYPESAFE_API_KEY'),
         ],
 
         'voyageai' => [

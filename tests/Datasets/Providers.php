@@ -61,6 +61,10 @@ dataset('reranking-providers', [
     'voyageai' => ['voyageai', 'VOYAGEAI_API_KEY'],
 ]);
 
+dataset('classification-providers', [
+    'typesafe' => ['typesafe', 'TYPESAFE_API_KEY'],
+]);
+
 dataset('agent-providers', [
     'anthropic' => ['anthropic', 'ANTHROPIC_API_KEY', 'claude-haiku-4-5-20251001'],
     'azure' => ['azure', 'AZURE_OPENAI_API_KEY', 'gpt-5.4-mini'],
