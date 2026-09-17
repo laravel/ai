@@ -60,7 +60,7 @@ class ConversationMessage extends Model
      */
     protected function toolCalls(): Attribute
     {
-        return Attribute::get(fn (): array => Arr::collapse(array_column($this->steps ?? [], 'invocations')));
+        return Attribute::get(fn (): array => Arr::collapse(array_column($this->steps ?? [], 'tool_calls')));
     }
 
     /**
@@ -70,7 +70,7 @@ class ConversationMessage extends Model
     {
         return Attribute::get(fn (): array => array_values(array_filter(
             $this->tool_calls,
-            fn (array $invocation): bool => array_key_exists('result', $invocation),
+            fn (array $toolCall): bool => array_key_exists('result', $toolCall),
         )));
     }
 

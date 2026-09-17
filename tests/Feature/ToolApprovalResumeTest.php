@@ -59,7 +59,7 @@ test('a remembered agent pauses for approval, persists the tool_use, and resumes
         ->latest('id')
         ->first();
 
-    expect($assistantRow->steps)->json()->toHaveCount(1)->{'0'}->invocations
+    expect($assistantRow->steps)->json()->toHaveCount(1)->{'0'}->tool_calls
         ->toHaveCount(1)->each->toMatchArray(['id' => 'toolu_1'])->each->not->toHaveKey('result');
 
     $resumed = (new RememberingApprovableAgent)
@@ -119,7 +119,7 @@ test('an ownerless remembered agent pauses for approval and resumes without a pa
 
     expect($assistantRow->participant_type)->toBeNull()
         ->and($assistantRow->participant_id)->toBeNull()
-        ->and($assistantRow->steps)->json()->toHaveCount(1)->{'0'}->invocations
+        ->and($assistantRow->steps)->json()->toHaveCount(1)->{'0'}->tool_calls
         ->toHaveCount(1)->each->toMatchArray(['id' => 'toolu_1'])->each->not->toHaveKey('result');
 
     $resumed = (new RememberingApprovableAgent)
@@ -292,8 +292,8 @@ test('a streamed multi-step pause stores every step so the resume replays each o
     $steps = DB::table('agent_conversation_messages')->where('role', 'assistant')->value('steps');
 
     expect($steps)->json()->toHaveCount(2)->sequence(
-        fn ($step) => $step->invocations->toHaveCount(1)->each->toMatchArray(['id' => 'toolu_1']),
-        fn ($step) => $step->invocations->toHaveCount(1)->each->toMatchArray(['id' => 'toolu_2']),
+        fn ($step) => $step->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'toolu_1']),
+        fn ($step) => $step->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'toolu_2']),
     )
         ->and($steps)->json()->{'0'}->provider_blocks->{'0'}->toMatchArray(['signature' => 'signature-1'])
         ->and($steps)->json()->{'1'}->provider_blocks->{'0'}->toMatchArray(['signature' => 'signature-2']);
@@ -698,7 +698,7 @@ test('a successful resume records the approved result exactly once across histor
     $recorded = DB::table('agent_conversation_messages')
         ->where('conversation_id', $paused->conversationId)
         ->pluck('steps')
-        ->flatMap(fn ($steps) => collect(json_decode($steps, true))->flatMap(fn ($step) => collect($step['invocations'])->filter(fn (array $invocation) => array_key_exists('result', $invocation))->pluck('id')))
+        ->flatMap(fn ($steps) => collect(json_decode($steps, true))->flatMap(fn ($step) => collect($step['tool_calls'])->filter(fn (array $toolCall) => array_key_exists('result', $toolCall))->pluck('id')))
         ->filter(fn ($id) => $id === 'toolu_1');
 
     expect($recorded)->toHaveCount(1);
@@ -740,7 +740,7 @@ test('a rejected resume stores and rehydrates the tool result as denied', functi
         ->latest('id')
         ->first();
 
-    expect($assistantRow->steps)->json()->{'0'}->invocations->toHaveCount(1)->each->toMatchArray(['denied' => true]);
+    expect($assistantRow->steps)->json()->{'0'}->tool_calls->toHaveCount(1)->each->toMatchArray(['denied' => true]);
 
     $store = new DatabaseConversationStore;
     $messages = $store->getLatestConversationMessages($paused->conversationId, 10);
@@ -784,7 +784,7 @@ test('a wildcard rejection resume records the denial once, on the paused row', f
         ->get();
 
     expect($assistantRows)->toHaveCount(1)
-        ->and($assistantRows->first()->steps)->json()->{'0'}->invocations->toHaveCount(1)->each->toMatchArray(['id' => 'toolu_1', 'denied' => true]);
+        ->and($assistantRows->first()->steps)->json()->{'0'}->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'toolu_1', 'denied' => true]);
 
     $messages = (new DatabaseConversationStore)->getLatestConversationMessages($paused->conversationId, 10);
 

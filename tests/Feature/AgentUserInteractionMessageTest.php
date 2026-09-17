@@ -322,7 +322,7 @@ describe('hydrating AG-UI from stored messages', function () {
             yield new ConversationMessage([
                 'id' => 'msg-2',
                 'role' => 'assistant',
-                'steps' => [['invocations' => [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt']]]]],
+                'steps' => [['tool_calls' => [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt']]]]],
                 'approval_state' => ['pending' => ['call-1' => 'Deletes a file.']],
             ]);
         })());
@@ -352,7 +352,7 @@ describe('hydrating AG-UI from stored messages', function () {
                 'id' => 'msg-2',
                 'role' => 'assistant',
                 'content' => null,
-                'steps' => [['invocations' => [['id' => 'call-1', 'name' => 'getWeather', 'arguments' => ['city' => 'Lisbon'], 'result' => 'Sunny', 'result_id' => 'result-1']]]],
+                'steps' => [['tool_calls' => [['id' => 'call-1', 'name' => 'getWeather', 'arguments' => ['city' => 'Lisbon'], 'result' => 'Sunny', 'result_id' => 'result-1']]]],
             ]),
         ])['messages'];
 
@@ -375,7 +375,7 @@ describe('hydrating AG-UI from stored messages', function () {
             new ConversationMessage([
                 'id' => 'msg-1',
                 'role' => 'assistant',
-                'steps' => [['invocations' => [['id' => 'call-1', 'name' => 'getWeather', 'arguments' => ['city' => 'Lisbon'], 'result' => 'Sunny']]]],
+                'steps' => [['tool_calls' => [['id' => 'call-1', 'name' => 'getWeather', 'arguments' => ['city' => 'Lisbon'], 'result' => 'Sunny']]]],
             ]),
             new ConversationMessage([
                 'id' => 'msg-2',
@@ -397,7 +397,7 @@ describe('hydrating AG-UI from stored messages', function () {
             new ConversationMessage([
                 'id' => 'msg-2',
                 'role' => 'assistant',
-                'steps' => [['invocations' => [['id' => 'call-1', 'name' => 'getWeather', 'arguments' => [], 'result' => ['temp' => 21]]]]],
+                'steps' => [['tool_calls' => [['id' => 'call-1', 'name' => 'getWeather', 'arguments' => [], 'result' => ['temp' => 21]]]]],
             ]),
         ])['messages'];
 
@@ -410,7 +410,7 @@ describe('hydrating AG-UI from stored messages', function () {
             new ConversationMessage([
                 'id' => 'msg-2',
                 'role' => 'assistant',
-                'steps' => [['invocations' => [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt'], 'result' => null, 'denied' => true]]]],
+                'steps' => [['tool_calls' => [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt'], 'result' => null, 'denied' => true]]]],
                 'approval_state' => ['pending' => []],
             ]),
         ])['messages'];
@@ -425,7 +425,7 @@ describe('hydrating AG-UI from stored messages', function () {
             new ConversationMessage([
                 'id' => 'msg-2',
                 'role' => 'assistant',
-                'steps' => [['invocations' => [['id' => 'call-1', 'name' => 'ReadFile', 'arguments' => ['path' => 'a.txt'], 'result' => 'The tool call failed: boom.', 'failed' => true]]]],
+                'steps' => [['tool_calls' => [['id' => 'call-1', 'name' => 'ReadFile', 'arguments' => ['path' => 'a.txt'], 'result' => 'The tool call failed: boom.', 'failed' => true]]]],
             ]),
         ])['messages'];
 
@@ -438,7 +438,7 @@ describe('hydrating AG-UI from stored messages', function () {
             new ConversationMessage([
                 'id' => 'msg-2',
                 'role' => 'assistant',
-                'steps' => [['invocations' => [
+                'steps' => [['tool_calls' => [
                     ['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt']],
                     ['id' => 'call-2', 'name' => 'DeleteFile', 'arguments' => ['path' => 'b.txt']],
                 ]]],
@@ -563,7 +563,7 @@ describe('hydrating AG-UI from stored messages', function () {
                 'id' => 'msg-2',
                 'role' => 'assistant',
                 'content' => 'It is sunny.',
-                'steps' => [['invocations' => [['id' => 'call-1', 'name' => 'getWeather', 'arguments' => ['city' => 'Lisbon'], 'result' => 'Sunny']]]],
+                'steps' => [['tool_calls' => [['id' => 'call-1', 'name' => 'getWeather', 'arguments' => ['city' => 'Lisbon'], 'result' => 'Sunny']]]],
             ]),
         ]);
 

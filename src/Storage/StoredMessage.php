@@ -90,7 +90,7 @@ class StoredMessage implements Arrayable, JsonSerializable
      */
     public function toolCalls(): array
     {
-        return Arr::collapse(array_column($this->steps, 'invocations'));
+        return Arr::collapse(array_column($this->steps, 'tool_calls'));
     }
 
     /**
@@ -102,7 +102,7 @@ class StoredMessage implements Arrayable, JsonSerializable
     {
         return array_values(array_filter(
             $this->toolCalls(),
-            fn (array $invocation): bool => array_key_exists('result', $invocation),
+            fn (array $toolCall): bool => array_key_exists('result', $toolCall),
         ));
     }
 
