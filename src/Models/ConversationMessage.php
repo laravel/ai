@@ -60,7 +60,7 @@ class ConversationMessage extends Model
      */
     protected function toolCalls(): Attribute
     {
-        return Attribute::get(fn (): array => Arr::collapse(array_column($this->steps ?? [], 'tool_calls')));
+        return Attribute::get(fn (): array => Arr::collapse(array_column($this->steps ?? [], 'invocations')));
     }
 
     /**
@@ -68,7 +68,10 @@ class ConversationMessage extends Model
      */
     protected function toolResults(): Attribute
     {
-        return Attribute::get(fn (): array => Arr::collapse(array_column($this->steps ?? [], 'tool_results')));
+        return Attribute::get(fn (): array => array_values(array_filter(
+            $this->tool_calls,
+            fn (array $invocation): bool => array_key_exists('result', $invocation),
+        )));
     }
 
     /**

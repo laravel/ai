@@ -308,10 +308,9 @@ test('it stores one step per model round-trip from a remembered agent prompt', f
     expect(DB::table('agent_conversation_messages')->where('role', 'user')->value('steps'))->toBe('[]')
         ->and($record->content)->toBe('The number is 72019')
         ->and($record->steps)->json()->toHaveCount(2)->sequence(
-            fn ($step) => $step->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'call_123', 'name' => 'FixedNumberGenerator']),
-            fn ($step) => $step->toMatchArray(['tool_calls' => [], 'tool_results' => []]),
-        )
-        ->and($record->steps)->json()->{'0'}->tool_results->toHaveCount(1)->each->toMatchArray(['id' => 'call_123', 'result' => '72019']);
+            fn ($step) => $step->invocations->toHaveCount(1)->each->toMatchArray(['id' => 'call_123', 'name' => 'FixedNumberGenerator', 'result' => '72019']),
+            fn ($step) => $step->toMatchArray(['invocations' => []]),
+        );
 });
 
 test('it stores a response built without steps as a single step of lists', function (): void {
@@ -341,10 +340,9 @@ test('it stores a response built without steps as a single step of lists', funct
     $steps = DB::table('agent_conversation_messages')->where('role', 'assistant')->value('steps');
 
     expect($steps)->json()->toHaveCount(1)
-        ->and($steps)->json()->{'0'}->tool_calls->toBeList()->toHaveCount(2)
-        ->and($steps)->json()->{'0'}->tool_results->toBeList()->sequence(
-            fn ($result) => $result->id->toBe('call-1'),
-            fn ($result) => $result->id->toBe('call-2'),
+        ->and($steps)->json()->{'0'}->invocations->toBeList()->sequence(
+            fn ($invocation) => $invocation->id->toBe('call-1')->result->toBe(['status' => 'shipped']),
+            fn ($invocation) => $invocation->id->toBe('call-2')->result->toBe(['carrier' => 'UPS']),
         );
 });
 
@@ -426,8 +424,14 @@ test('it stores a tool result without the arguments its call already carries', f
 
     $stored = DB::table('agent_conversation_messages')->where('role', 'assistant')->value('steps');
 
-    expect(json_decode($stored, true)[0]['tool_results'][0])->not->toHaveKey('arguments')
-        ->and(json_decode($stored, true)[0]['tool_calls'][0]['arguments'])->toBe(['path' => 'a.txt', 'contents' => 'alpha']);
+    expect(json_decode($stored, true)[0]['invocations'])->toHaveCount(1)
+        ->and(json_decode($stored, true)[0]['invocations'][0])->toMatchArray([
+            'id' => 'call-1',
+            'name' => 'WriteFile',
+            'arguments' => ['path' => 'a.txt', 'contents' => 'alpha'],
+            'result' => 'Wrote 5 bytes.',
+            'result_id' => 'result-1',
+        ]);
 
     $result = $store->getLatestConversationMessages($conversationId, 10)
         ->first(fn (Message $message): bool => $message instanceof ToolResultMessage)
@@ -700,11 +704,11 @@ test('it writes the steps of a paused turn with their provider blocks and keeps 
 
     expect($record->steps)->json()->toHaveCount(2)->sequence(
         fn ($step) => $step->toMatchArray(['provider_blocks' => [['type' => 'tool_use', 'id' => 'call-0']]])
-            ->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'call-0']),
-        fn ($step) => $step->toMatchArray(['tool_results' => [], 'provider_blocks' => [['type' => 'thinking', 'signature' => 'sig-1']]])
-            ->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'call-1']),
+            ->invocations->toHaveCount(1)->each->toMatchArray(['id' => 'call-0', 'result' => 'contents']),
+        fn ($step) => $step->toMatchArray(['provider_blocks' => [['type' => 'thinking', 'signature' => 'sig-1']]])
+            ->invocations->toHaveCount(1)->each->toMatchArray(['id' => 'call-1'])->each->not->toHaveKey('result'),
     )
-        ->and($record->steps)->json()->{'0'}->tool_results->toHaveCount(1)->each->toMatchArray(['id' => 'call-0', 'result' => 'contents'])
+        ->and($record->steps)->json()->{'0'}->invocations->toHaveCount(1)
         ->and($record->meta)->json()->toBe(['provider' => 'anthropic', 'model' => null, 'citations' => []])
         ->and($record->approval_state)->json()->toBe(['pending' => ['call-1' => 'Deletes a file']]);
 });
@@ -733,8 +737,8 @@ test('it writes the steps a paused stream carried on its approval request', func
 
     $steps = DB::table('agent_conversation_messages')->where('role', 'assistant')->value('steps');
 
-    expect($steps)->json()->toHaveCount(1)->{'0'}->toMatchArray(['tool_results' => [], 'provider_blocks' => [['type' => 'thinking', 'signature' => 'sig-1']]])
-        ->and($steps)->json()->{'0'}->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'call-1']);
+    expect($steps)->json()->toHaveCount(1)->{'0'}->toMatchArray(['provider_blocks' => [['type' => 'thinking', 'signature' => 'sig-1']]])
+        ->and($steps)->json()->{'0'}->invocations->toHaveCount(1)->each->toMatchArray(['id' => 'call-1'])->each->not->toHaveKey('result');
 });
 
 test('it writes the steps a completed stream carried on its stream end', function (): void {
@@ -765,9 +769,8 @@ test('it writes the steps a completed stream carried on its stream end', functio
 
     expect($steps)->json()->toHaveCount(2)->sequence(
         fn ($step) => $step->toMatchArray(['provider_blocks' => [['type' => 'tool_use', 'id' => 'call-1']]])
-            ->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'call-1'])
-            ->tool_results->toHaveCount(1)->each->toMatchArray(['id' => 'call-1', 'result' => 'contents']),
-        fn ($step) => $step->toMatchArray(['tool_calls' => [], 'tool_results' => [], 'provider_blocks' => [['type' => 'text', 'text' => 'Done.']]]),
+            ->invocations->toHaveCount(1)->each->toMatchArray(['id' => 'call-1', 'result' => 'contents']),
+        fn ($step) => $step->toMatchArray(['invocations' => [], 'provider_blocks' => [['type' => 'text', 'text' => 'Done.']]]),
     );
 });
 
@@ -835,12 +838,33 @@ test('resolving approval results writes each outcome into the step that made the
     expect($partial)->toBe(['pending' => ['call-2' => 'Deletes y']])
         ->and($row->approval_state)->json()->toBe(['pending' => []])
         ->and($row->steps)->json()->sequence(
-            fn ($step) => $step->tool_results->toHaveCount(1)->each->toMatchArray(['id' => 'call-0']),
-            fn ($step) => $step->tool_results->toHaveCount(2)->sequence(
-                fn ($result) => $result->toMatchArray(['id' => 'call-1'])->not->toHaveKey('denied'),
-                fn ($result) => $result->toMatchArray(['id' => 'call-2', 'denied' => true]),
+            fn ($step) => $step->invocations->toHaveCount(1)->each->toMatchArray(['id' => 'call-0']),
+            fn ($step) => $step->invocations->toHaveCount(2)->sequence(
+                fn ($invocation) => $invocation->toMatchArray(['id' => 'call-1'])->not->toHaveKey('denied'),
+                fn ($invocation) => $invocation->toMatchArray(['id' => 'call-2', 'denied' => true]),
             ),
         );
+});
+
+test('resolving an edited approval records the arguments the tool actually ran with', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    insertAssistantTurn($conversationId, 'message-1', '', [
+        assistantStep([['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'x']]]),
+    ], ['pending' => ['call-1' => 'Deletes x']]);
+
+    $store->storeApprovalResults($conversationId, 'user', 1, [
+        new ToolResult('call-1', 'delete_file', ['path' => 'y'], 'Deleted y'),
+    ]);
+
+    $steps = DB::table('agent_conversation_messages')->where('id', 'message-1')->value('steps');
+
+    expect($steps)->json()->{'0'}->invocations->toHaveCount(1)->each->toMatchArray([
+        'id' => 'call-1',
+        'arguments' => ['path' => 'y'],
+        'result' => 'Deleted y',
+    ]);
 });
 
 test('it replays a resumed pause as the paused call, its result, then the resume turn', function (): void {
@@ -1324,7 +1348,15 @@ function storedConversationMessageAttributes(string $id, string $conversationId,
  */
 function assistantStep(array $toolCalls = [], array $toolResults = [], array $providerBlocks = []): array
 {
-    return ['tool_calls' => $toolCalls, 'tool_results' => $toolResults, 'provider_blocks' => $providerBlocks];
+    $results = collect($toolResults)->keyBy('id');
+
+    return [
+        'invocations' => array_map(fn (array $call): array => [
+            ...$call,
+            ...array_intersect_key($results[$call['id']] ?? [], array_flip(['result', 'denied', 'failed'])),
+        ], $toolCalls),
+        'provider_blocks' => $providerBlocks,
+    ];
 }
 
 /**
