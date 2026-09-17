@@ -300,19 +300,19 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             ->reverse()
             ->values();
 
-        $replayFrom = $this->rawBlocksReplayFrom($records);
+        $replayFrom = $this->pausedTurnStartIndex($records);
 
         return $records->flatMap(fn (object $record, int $index): array => $record->role === 'user'
             ? [$this->userMessageFrom($record)]
-            : $this->assistantMessagesFrom($record, $index >= $replayFrom));
+            : $this->assistantTurnFrom($record, replayRawBlocks: $index >= $replayFrom));
     }
 
     /**
-     * Get the index of the first row whose raw provider blocks are replayed, or a past-the-end index when none are.
+     * Get the index the turn awaiting a decision starts at, or a past-the-end index when no turn is paused.
      *
      * @param  Collection<int, object>  $records
      */
-    protected function rawBlocksReplayFrom(Collection $records): int
+    protected function pausedTurnStartIndex(Collection $records): int
     {
         if (! $this->awaitsDecision($records->last())) {
             return $records->count();
@@ -340,24 +340,24 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      *
      * @return array<int, Message>
      */
-    protected function assistantMessagesFrom(object $record, bool $replayRawBlocks): array
+    protected function assistantTurnFrom(object $record, bool $replayRawBlocks): array
     {
         $pending = $this->pausedCallIds($record);
         $provider = $this->decoded($record->meta)['provider'] ?? null;
 
         return $this->decodedSteps($record)->flatMap(function (array $step) use ($pending, $provider, $replayRawBlocks): array {
-            $answered = array_column($step['tool_results'], 'id');
+            $replayable = [...array_column($step['tool_results'], 'id'), ...$pending];
 
             $toolCalls = collect($step['tool_calls'])
-                ->filter(fn (array $toolCall) => in_array($toolCall['id'] ?? null, $answered, true) || in_array($toolCall['id'] ?? null, $pending, true))
+                ->filter(fn (array $toolCall) => in_array($toolCall['id'] ?? null, $replayable, true))
                 ->map(ToolCall::fromArray(...))
                 ->values();
 
             $providerBlocks = $replayRawBlocks ? $step['provider_blocks'] : [];
 
-            $messages = $step['content'] === '' && $toolCalls->isEmpty() && $providerBlocks === []
-                ? []
-                : [new AssistantMessage($step['content'], $toolCalls, $providerBlocks, $provider)];
+            $isBlank = $step['content'] === '' && $toolCalls->isEmpty() && $providerBlocks === [];
+
+            $messages = $isBlank ? [] : [new AssistantMessage($step['content'], $toolCalls, $providerBlocks, $provider)];
 
             if ($step['tool_results'] !== []) {
                 $messages[] = new ToolResultMessage(collect($step['tool_results'])->map(ToolResult::fromArray(...))->values());

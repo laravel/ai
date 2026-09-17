@@ -4,6 +4,7 @@ namespace Laravel\Ai\Storage;
 
 use Carbon\CarbonInterface;
 use Illuminate\Contracts\Support\Arrayable;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use JsonSerializable;
 
@@ -89,7 +90,7 @@ class StoredMessage implements Arrayable, JsonSerializable
      */
     public function toolCalls(): array
     {
-        return array_merge([], ...array_column($this->steps, 'tool_calls'));
+        return Arr::collapse(array_column($this->steps, 'tool_calls'));
     }
 
     /**
@@ -99,7 +100,7 @@ class StoredMessage implements Arrayable, JsonSerializable
      */
     public function toolResults(): array
     {
-        return array_merge([], ...array_column($this->steps, 'tool_results'));
+        return Arr::collapse(array_column($this->steps, 'tool_results'));
     }
 
     /**
