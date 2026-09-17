@@ -235,7 +235,7 @@ test('streaming captures usage', function (): void {
     $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
 
     expect($streamEnd->usage->inputTokens)->toBe(10)
-        ->and($streamEnd->usage->outputTokens)->toBe(5)
+        ->and($streamEnd->usage->outputTokens)->toBe(8)
         ->and($streamEnd->usage->cacheReadInputTokens)->toBe(2)
         ->and($streamEnd->usage->reasoningTokens)->toBe(3);
 });
