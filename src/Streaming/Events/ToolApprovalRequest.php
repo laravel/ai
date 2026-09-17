@@ -10,12 +10,14 @@ class ToolApprovalRequest extends StreamEvent
     /**
      * @param  Collection<int, PendingApproval>  $pendingApprovals
      * @param  array<int, array{blocks: array<array-key, mixed>, tool_call_ids: array<int, string>}>  $steps  every assistant step of the paused turn, in order; never serialized to clients
+     * @param  array<array-key, mixed>  $providerContentBlocks  raw provider replay state for the paused turn; never serialized to clients
      */
     public function __construct(
         public string $id,
         public Collection $pendingApprovals,
         public int $timestamp,
         public array $steps = [],
+        public array $providerContentBlocks = [],
     ) {}
 
     /**

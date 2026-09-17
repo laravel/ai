@@ -14,7 +14,7 @@ trait MapsMessages
     /**
      * Map the given Laravel messages to Chat Completions messages format.
      */
-    protected function mapMessagesToChat(array $messages, ?string $instructions = null): array
+    protected function mapMessagesToChat(array $messages, ?string $instructions = null, bool $replaysReasoning = false): array
     {
         $chatMessages = [];
 
@@ -30,7 +30,7 @@ trait MapsMessages
 
             match ($message->role) {
                 MessageRole::User => $this->mapUserMessage($message, $chatMessages),
-                MessageRole::Assistant => $this->mapAssistantMessage($message, $chatMessages),
+                MessageRole::Assistant => $this->mapAssistantMessage($message, $chatMessages, $replaysReasoning),
                 MessageRole::ToolResult => $this->mapToolResultMessage($message, $chatMessages),
             };
         }
@@ -64,7 +64,7 @@ trait MapsMessages
     /**
      * Map an assistant message to Chat Completions format.
      */
-    protected function mapAssistantMessage(AssistantMessage|Message $message, array &$chatMessages): void
+    protected function mapAssistantMessage(AssistantMessage|Message $message, array &$chatMessages, bool $replaysReasoning = false): void
     {
         $msg = ['role' => 'assistant'];
 
@@ -78,12 +78,16 @@ trait MapsMessages
             return;
         }
 
+        $reasoning = $message->providerContentBlocks['reasoning_content'] ?? '';
+
         if ($message->toolCalls->isNotEmpty()) {
             $msg['tool_calls'] = $message->toolCalls->map(
                 fn (ToolCall $toolCall) => $this->serializeToolCallToChat($toolCall)
             )->all();
 
-            $msg['reasoning_content'] = $message->providerContentBlocks['reasoning_content'] ?? '';
+            $msg['reasoning_content'] = $reasoning;
+        } elseif ($replaysReasoning && filled($reasoning)) {
+            $msg['reasoning_content'] = $reasoning;
         }
 
         $chatMessages[] = $msg;

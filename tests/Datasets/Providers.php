@@ -104,3 +104,15 @@ dataset('code-execution-providers', [
     'gemini' => ['gemini', 'GEMINI_API_KEY', 'gemini-3.1-flash-lite'],
     'xai' => ['xai', 'XAI_API_KEY', 'grok-4.6'],
 ]);
+
+dataset('reasoning-providers', [
+    'anthropic' => ['anthropic', 'ANTHROPIC_API_KEY', 'claude-haiku-4-5-20251001', ['thinking' => ['type' => 'enabled', 'budget_tokens' => 2000], 'max_tokens' => 4000]],
+    'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4-nano', ['reasoning' => ['effort' => 'high', 'summary' => 'auto']]],
+    'gemini' => ['gemini', 'GEMINI_API_KEY', 'gemini-3.1-flash-lite', ['thinkingConfig' => ['includeThoughts' => true, 'thinkingBudget' => 2048]]],
+    'xai' => ['xai', 'XAI_API_KEY', 'grok-4.6', ['reasoning' => ['summary' => 'auto']]],
+    'deepseek' => ['deepseek', 'DEEPSEEK_API_KEY', 'deepseek-reasoner', []],
+    'groq' => ['groq', 'GROQ_API_KEY', 'openai/gpt-oss-20b', []],
+    'mistral' => ['mistral', 'MISTRAL_API_KEY', 'magistral-medium-latest', []],
+    'ollama' => ['ollama', 'OLLAMA_API_KEY', 'gpt-oss:20b', ['think' => true]],
+    'openrouter' => ['openrouter', 'OPENROUTER_API_KEY', 'anthropic/claude-haiku-4.5', ['reasoning' => ['max_tokens' => 2000]]],
+]);

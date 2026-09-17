@@ -97,4 +97,32 @@ class AgentResponse extends TextResponse
 
         return $steps->contains(fn (array $step): bool => filled($step['blocks'])) ? $steps->all() : [];
     }
+
+    /**
+     * Get every assistant step of a paused turn with the raw provider state needed to replay it.
+     *
+     * @return array<int, array{blocks: array<array-key, mixed>, tool_call_ids: array<int, string>}>
+     *
+     * @deprecated Use providerSteps().
+     */
+    public function pausedSteps(): array
+    {
+        return $this->hasPendingApprovals() ? $this->providerSteps() : [];
+    }
+
+    /**
+     * Get the raw provider replay state for the paused assistant turn, if any.
+     *
+     * @return array<array-key, mixed>
+     *
+     * @deprecated Use providerSteps().
+     */
+    public function pausedProviderContentBlocks(): array
+    {
+        if (! $this->hasPendingApprovals()) {
+            return [];
+        }
+
+        return $this->messages->whereInstanceOf(AssistantMessage::class)->last()?->providerContentBlocks ?? [];
+    }
 }

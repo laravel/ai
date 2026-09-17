@@ -174,12 +174,54 @@ test('continuing a conversation replays the reasoning details of the completed t
     expect(collect($followUp['messages'])->firstWhere('role', 'assistant')['reasoning_details'])->toBe($details);
 });
 
-test('a streamed tool call follow up replays the reasoning details in index order', function (): void {
+test('streamed reasoning details drive the reasoning events when no plaintext reasoning is sent', function (): void {
+    Http::fake(['*' => Http::response(
+        body: $this->ssePayload([
+            $this->chatChunk(['role' => 'assistant', 'reasoning_details' => [['type' => 'reasoning.text', 'index' => 0, 'text' => 'Let me ']]]),
+            $this->chatChunk(['reasoning_details' => [['type' => 'reasoning.text', 'index' => 0, 'text' => 'think...']]]),
+            $this->chatChunk(['reasoning_details' => [['type' => 'reasoning.summary', 'index' => 1, 'summary' => 'I decided.']]]),
+            $this->chatChunk(['content' => 'Hello']),
+            $this->chatChunkFinish('stop', ['prompt_tokens' => 1, 'completion_tokens' => 1]),
+        ]),
+        status: 200,
+        headers: ['Content-Type' => 'text/event-stream'],
+    )]);
+
+    $events = $this->collectStreamEvents();
+
+    expect($events[1])->toBeInstanceOf(ReasoningStart::class)
+        ->and($events[2])->toBeInstanceOf(ReasoningDelta::class)->delta->toBe('Let me ')
+        ->and($events[3])->toBeInstanceOf(ReasoningDelta::class)->delta->toBe('think...')
+        ->and($events[4])->toBeInstanceOf(ReasoningDelta::class)->delta->toBe('I decided.')
+        ->and($events[5])->toBeInstanceOf(ReasoningEnd::class)
+        ->and($events[6])->toBeInstanceOf(TextStart::class)
+        ->and(ReasoningDelta::combine($events))->toBe('Let me think...I decided.');
+});
+
+test('an encrypted reasoning detail drives no reasoning events', function (): void {
+    Http::fake(['*' => Http::response(
+        body: $this->ssePayload([
+            $this->chatChunk(['role' => 'assistant', 'reasoning_details' => [['type' => 'reasoning.encrypted', 'index' => 0, 'data' => 'ciphertext']]]),
+            $this->chatChunk(['content' => 'Hello']),
+            $this->chatChunkFinish('stop', ['prompt_tokens' => 1, 'completion_tokens' => 1]),
+        ]),
+        status: 200,
+        headers: ['Content-Type' => 'text/event-stream'],
+    )]);
+
+    $events = $this->collectStreamEvents();
+
+    expect(collect($events)->whereInstanceOf(ReasoningStart::class))->toBeEmpty()
+        ->and(ReasoningDelta::combine($events))->toBe('');
+});
+
+test('a streamed tool call follow up replays the reasoning details in arrival order', function (): void {
     Http::fake(['*' => Http::sequence([
         Http::response(
             body: $this->ssePayload([
-                $this->chatChunk(['role' => 'assistant', 'reasoning_details' => [['type' => 'reasoning.text', 'index' => 1, 'text' => 'Second.']]]),
-                $this->chatChunk(['reasoning_details' => [['type' => 'reasoning.text', 'index' => 0, 'text' => 'First.']]]),
+                $this->chatChunk(['role' => 'assistant', 'reasoning_details' => [['type' => 'reasoning.text', 'index' => 1, 'text' => 'Sent first.']]]),
+                $this->chatChunk(['reasoning_details' => [['type' => 'reasoning.text', 'index' => 0, 'text' => 'Sent second.']]]),
+                $this->chatChunk(['reasoning_details' => [['type' => 'reasoning.summary', 'summary' => 'No index.']]]),
                 $this->chatChunkToolCallStart(0, 'call_123', 'FixedNumberGenerator'),
                 $this->chatChunkToolCallDelta(0, '{}'),
                 $this->chatChunkFinish('tool_calls', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
@@ -204,7 +246,8 @@ test('a streamed tool call follow up replays the reasoning details in index orde
     $followUp = json_decode((string) Http::recorded()[1][0]->body(), true);
 
     expect(collect($followUp['messages'])->firstWhere('role', 'assistant')['reasoning_details'])->toBe([
-        ['type' => 'reasoning.text', 'index' => 0, 'text' => 'First.'],
-        ['type' => 'reasoning.text', 'index' => 1, 'text' => 'Second.'],
+        ['type' => 'reasoning.text', 'index' => 1, 'text' => 'Sent first.'],
+        ['type' => 'reasoning.text', 'index' => 0, 'text' => 'Sent second.'],
+        ['type' => 'reasoning.summary', 'summary' => 'No index.'],
     ]);
 });

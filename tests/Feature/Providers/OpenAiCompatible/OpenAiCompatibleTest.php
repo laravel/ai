@@ -327,16 +327,6 @@ test('named instances resolve provider options by their instance name', function
         && data_get(json_decode($request->body(), true), 'top_k') === 10);
 });
 
-function configureOpenAiCompatible(): void
-{
-    config(['ai.providers.openai-compatible' => [
-        'driver' => 'openai-compatible',
-        'url' => 'http://localhost:1234/v1',
-        'key' => 'test-key',
-        'models' => ['text' => ['default' => 'local-model']],
-    ]]);
-}
-
 function fakeOpenAiCompatibleResponse(string $content)
 {
     return Http::response([

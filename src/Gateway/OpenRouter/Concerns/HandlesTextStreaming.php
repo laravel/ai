@@ -96,13 +96,18 @@ trait HandlesTextStreaming
             }
 
             foreach ($delta['reasoning_details'] ?? [] as $position => $detail) {
-                $reasoningDetails[$detail['index'] ?? $position] = $this->mergeReasoningDetail(
-                    $reasoningDetails[$detail['index'] ?? $position] ?? [],
-                    $detail,
-                );
+                $key = isset($detail['index']) ? 'i'.$detail['index'] : 'p'.$position;
+
+                $reasoningDetails[$key] = $this->mergeReasoningDetail($reasoningDetails[$key] ?? [], $detail);
             }
 
-            if (isset($delta['reasoning']) && $delta['reasoning'] !== '') {
+            $reasoning = $delta['reasoning'] ?? '';
+
+            if ($reasoning === '') {
+                $reasoning = $this->reasoningTextIn($delta['reasoning_details'] ?? []);
+            }
+
+            if ($reasoning !== '') {
                 if ($reasoningId === null) {
                     $reasoningId = $this->generateEventId();
 
@@ -116,7 +121,7 @@ trait HandlesTextStreaming
                 yield (new ReasoningDelta(
                     $this->generateEventId(),
                     $reasoningId,
-                    $delta['reasoning'],
+                    $reasoning,
                     time(),
                 ))->withInvocationId($invocationId);
             }
@@ -234,8 +239,6 @@ trait HandlesTextStreaming
             }
         }
 
-        ksort($reasoningDetails);
-
         return new StepResponse(
             text: $currentText,
             toolCalls: $toolCalls,
@@ -244,6 +247,19 @@ trait HandlesTextStreaming
             meta: new Meta($provider->name(), $streamModel),
             providerContentBlocks: $reasoningDetails ? ['reasoning_details' => array_values($reasoningDetails)] : [],
         );
+    }
+
+    /**
+     * Get the human readable reasoning carried by a delta's reasoning details.
+     *
+     * @param  array<int, array<string, mixed>>  $details
+     */
+    protected function reasoningTextIn(array $details): string
+    {
+        return implode('', array_map(
+            fn (array $detail): string => (string) ($detail['text'] ?? $detail['summary'] ?? ''),
+            $details,
+        ));
     }
 
     /**

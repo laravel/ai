@@ -178,6 +178,16 @@ function fakeAzureResponse(string $text = 'Hello'): PromiseInterface
     ]);
 }
 
+function configureOpenAiCompatible(): void
+{
+    config(['ai.providers.openai-compatible' => [
+        'driver' => 'openai-compatible',
+        'url' => 'http://localhost:1234/v1',
+        'key' => 'test-key',
+        'models' => ['text' => ['default' => 'local-model']],
+    ]]);
+}
+
 function fakeOpenAiResponse(string $text = 'Hello'): PromiseInterface
 {
     return Http::response([

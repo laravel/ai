@@ -418,3 +418,54 @@ test('openai replays echoed output blocks on a store=false tool-call continuatio
     expect($response['number'])->toBe(72019)
         ->and($response->toolCalls)->toHaveCount(1);
 });
+
+test('agents surface the reasoning a prompted turn produced', function (string $provider, string $apiKey, string $model, array $options): void {
+    requiresApiKey($apiKey);
+
+    $response = reasoningAgent($options)->prompt(
+        reasoningPrompt(),
+        provider: $provider,
+        model: $model,
+    );
+
+    expect($response->reasoning)->not->toBe('')
+        ->and($response->text)->toContain('10')
+        ->and($response->steps->last()->reasoning)->not->toBe('');
+})->with('reasoning-providers');
+
+test('agents surface the same reasoning whether prompted or streamed', function (string $provider, string $apiKey, string $model, array $options): void {
+    requiresApiKey($apiKey);
+
+    $streamed = reasoningAgent($options)->stream(reasoningPrompt(), provider: $provider, model: $model);
+
+    iterator_to_array($streamed);
+
+    expect($streamed->reasoning)->not->toBe('')
+        ->and($streamed->text)->toContain('10');
+})->with('reasoning-providers');
+
+function reasoningPrompt(): string
+{
+    return 'Box A has twice as many balls as box B. Box C has five fewer balls than box A. '
+        .'The three boxes hold 45 balls in total. How many balls are in box B? Answer with just the number.';
+}
+
+function reasoningAgent(array $options): object
+{
+    return new class($options) implements Agent, HasProviderOptions
+    {
+        use Promptable;
+
+        public function __construct(public array $options) {}
+
+        public function instructions(): string
+        {
+            return 'You are a helpful assistant that responds extremely concisely to all queries.';
+        }
+
+        public function providerOptions(Lab|string $provider): array
+        {
+            return $this->options;
+        }
+    };
+}

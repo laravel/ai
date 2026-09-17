@@ -374,6 +374,7 @@ class TextGenerationLoop
                     $pendingApprovals,
                     time(),
                     $providerSteps,
+                    $result->providerContentBlocks,
                 ))->withInvocationId($invocationId);
 
                 break;
